@@ -49,7 +49,7 @@ compiled kernel launched directly after the first launch; `screen` where Triton 
 buffer by one driver copy; filler rows zeroed only where an earlier call wrote them; the stream from torch's raw accessor.
 The filler bookkeeping holds while no call has run under graphs (`eager_only`).
 
-The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
+The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`protocols.pouw.pearl_c.lanes`):
 ``deferred`` hashes tiles on a side lane beside the next calls, ``deferred-a`` A's tree too where the kernel splits A's
 commitment; the commitments are the serial schedule's.  With ``hashing`` off (``pearlc-nohash``) a call skips A's tree, E_A's
 lines, the leaves and the records, for the time split.  ``hashing`` may change between passes, never within.
@@ -408,7 +408,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             stream.wait_stream(lane.stream)
 
     def eager_forward(self) -> None:
-        """The open pass's forward runs eagerly under a whole-step arm (`pouw_pearl_c_whole.WholeStep`: a batch its graphs
+        """The open pass's forward runs eagerly under a whole-step arm (`protocols.pouw.pearl_c.whole.WholeStep`: a batch its graphs
         lack, a prefill's or a mixed step's): with `whole_eager`, and before the pass's first call, the pass runs under that
         schedule, so its calls' tile hashing and A trees go on side lanes beside their GEMMs, and the next `begin` puts the
         pass's own schedule back.  The commitments are the pass's schedule's."""

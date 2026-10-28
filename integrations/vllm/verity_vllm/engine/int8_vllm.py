@@ -15,7 +15,7 @@ routing, the activation and the combine), and its shared experts are linear laye
 (the embedding is a gather, attention keeps its KV cache unquantized).  The method computes
 `engine.int8_exact.plain_linear` as a ``verity_int8::row_quant`` then a ``verity_int8::scaled_mm`` call (`engine.int8_ops.linear`) and counts its calls, so `int8_exact.applied_record` shows which linear ran what.  After
 both ops it hands the call's served values to `Int8PlainLinearMethod.observe`, a no-op a protocol option wraps (PoUW's H1,
-`protocol_options.pouw_h1`): the layer it was handed, the s8 rows and per-token scales (what the Commit taps as
+`protocols.pouw.h1`): the layer it was handed, the s8 rows and per-token scales (what the Commit taps as
 ``Int8RowQuant_v1``) and y.  With ``zy_rows`` set (H1's T, which the option sets on the layers it commits) the product is
 ``verity_int8::scaled_mm_zy`` over that many slots instead (`int8_ops.linear_zy`): the same y, and from the same accumulator
 the call's z/y records, which ``observe`` gets as its z; a call of more rows than T serves through ``scaled_mm``.  Loading

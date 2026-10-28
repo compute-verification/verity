@@ -104,7 +104,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
             "target": dict(eng.target) if eng.target else None,
             # the workload's whole engine block: what a served Commit holds its engine's switches to (`engine.served.declared`)
             "engine": eng.to_json(),
-            # each enabled protocol's settings (`protocol_options.load_settings`), never hashed: the capture and the Commit install from it
+            # each enabled protocol's settings (`protocols.load_settings`), never hashed: the capture and the Commit install from it
             "protocols_config": dict(doc["protocols_config"]) if isinstance(doc.get("protocols_config"), dict) else None,
             "sha256": hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
 

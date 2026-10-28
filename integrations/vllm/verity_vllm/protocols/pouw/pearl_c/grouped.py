@@ -20,15 +20,15 @@ records and keys (`grouped.Grouped.meta`), the expert map, the gathered rows' ro
 call's byte offsets in the pass's buffers (`OFFS_BYTES`).  A layout's table is made once, and each call fills in its keys,
 its leaves' address and its offsets in a pinned host slot (`_Group.table`), uploaded in one copy.  The call stages x as FP32
 behind a zero row, and its steps read it from there: A's rows into their segments (one gather by the layout's row sources,
-`_Call.src`, a filler row the zero row), the launches, and with hashing one scatter (`pouw_pearl_c_screen.scatter_into`)
+`_Call.src`, a filler row the zero row), the launches, and with hashing one scatter (`protocols.pouw.pearl_c.screen.scatter_into`)
 that screens the rows, at their rows of A, into the pass's flags and copies the units' A roots into the pass at the table's
 offsets.  So no step reads anything of the call's but the table, its layout's row sources and the staged x, and with ``graphs``
 each lane's steps are captured as a CUDA graph at a layout's second call and replayed by the driver after (`_replay`),
-as a dense call's lane graphs are (`pouw_pearl_c_graphs`).  A layout's graphs serve only calls of the same counts; any
+as a dense call's lane graphs are (`protocols.pouw.pearl_c.graphs`).  A layout's graphs serve only calls of the same counts; any
 other call runs the same steps eagerly.  vLLM's own capture of a forward can't take a grouped call (its counts are the
 host's), and a call inside one is refused.
 
-The run's schedule places the call's steps on its lanes as it does a dense call's (`pouw_pearl_c_lanes`): the main lane (the
+The run's schedule places the call's steps on its lanes as it does a dense call's (`protocols.pouw.pearl_c.lanes`): the main lane (the
 run's own at the greatest priority, joined to the caller's stream by events, or the caller's), and with hashing, the run's
 next side lane for the schedule's side groups.  Under ``deferred`` that is the tile leaves, behind an event at the main lane's
 end; under ``deferred-a`` A's tree too, where the cubin has pd_tree_g (`grouped.has_tree`): the commitment is then split

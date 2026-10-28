@@ -272,7 +272,7 @@ def int7_linear(x: np.ndarray, w: np.ndarray, n: int) -> tuple[np.ndarray, np.nd
 
 
 def dequant(z: np.ndarray, s: np.ndarray, t: np.ndarray, bias: Sequence[int]) -> list[int]:
-    """The circuit's dequantization of a row (`pouw_native.dequant`): y_j = bf16(fp32(s)·fp32(t_j)·Z_j) + bias_j."""
+    """The circuit's dequantization of a row (`protocols.pouw.native.dequant`): y_j = bf16(fp32(s)·fp32(t_j)·Z_j) + bias_j."""
     y = PN.dequant(np.asarray(z, np.int64).astype(np.uint32), s.view(np.uint32)[0], t.view(np.uint32), np.asarray(bias, np.uint32))
     return [int(v) for v in y]
 

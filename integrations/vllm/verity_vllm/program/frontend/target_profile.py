@@ -145,7 +145,7 @@ class TargetProfile:
                            sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
                            whole set in its one spelling, sampled proofs included (a profile is the target of sampled proofs' Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
-                           committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
+                           committer (`protocols.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
     ir                  -> the circuit profile the Program is written in (a Program static, declared-and-bound, never attested).  None = word
                            (every Call of the Definition its derive rule binds, on w-bit values).  `"boolean"` = the same Calls,

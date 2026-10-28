@@ -16,7 +16,7 @@ A slot of id -1 (`UNROUTED`, vLLM's id for no expert) goes to no expert, its y z
 
 Every (expert, projection) is called on every forward, an expert no token routed to on zero rows: an `ExpertGemm` hands a
 zero-row call to ``observe`` too (s8 rows [0, K], scales [0], y [0, N]), so the calls of a step are the same E pairs in the
-same order whatever the routing, the static layout H1 keeps (`protocol_options.pouw_h1`, one call per (step, linear)); its
+same order whatever the routing, the static layout H1 keeps (`protocols.pouw.h1`, one call per (step, linear)); its
 zero rows commit as empty slots and no GEMM runs.  Each call's rows are its batch rows (``site.tokens``, set before the
 call), so a listener reads which tokens an expert's rows are.  A row's value reads only that row, as a dense linear's, so
 an expert's output for a token does not depend on which other tokens it got.

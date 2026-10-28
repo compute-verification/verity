@@ -83,7 +83,7 @@ def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, open
              pass_index: int | None = None) -> Epoch:
     """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
     `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
-    (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
+    (the auditor host's, `protocols.pouw.h1.window.open_session`) under the same rules: every weight committed and only those, the
     commitment a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the opening that coin,
     opening against it after the salt epoch's root (`challenger.live_reason`), `salt.epoch_open_root` of the weights' root
     W and `pass_index`, the epoch's number k over W, an integer in [0, 2^64).  Either is refused with `DomainError`; a
@@ -167,7 +167,7 @@ def _event() -> Any:
 
 
 class _Driver:
-    """The CUDA driver calls a lane graph's replay makes on raw handles (`pouw_pearl_c_lanes`): graph launches, event records
+    """The CUDA driver calls a lane graph's replay makes on raw handles (`protocols.pouw.pearl_c.lanes`): graph launches, event records
     and waits, and the slot's copy, each a few µs fewer than through torch, which looks up the device and the current stream
     around each.  `cu` is the kernel's driver library (``run.Dev.cu``); a call that fails raises with the driver's code."""
 
@@ -294,7 +294,7 @@ def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], b
 
 def write_manifest(d: Path, head: dict, weights: dict[str, dict], matmuls: list[dict]) -> Path:
     """The pass's manifest, which `verify_run.py` reads: `head` (the scheme and its arguments, the epoch's coin commitment
-    and its salt coin's opening, the salt, the live session that gave it if one did (`pouw_pearl_c_manifest.session_head`),
+    and its salt coin's opening, the salt, the live session that gave it if one did (`protocols.pouw.pearl_c.manifest.session_head`),
     the records root, the commitment, the leaves and the tile tree), every weight (n, k, root, excluded B rows, its rows and
     tree levels) and every matmul in order (index, m, k, n, weight, real rows, |K|, excluded A rows, A's root, rows and tree
     levels).  Trees are the device's layout: level 0 padded to a power of two, then each level above it, 64 bytes a node; the

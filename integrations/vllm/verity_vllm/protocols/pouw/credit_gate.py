@@ -2,7 +2,7 @@
 the linear hands back to vLLM is the credited kernel's own output, the same GEMM invocation that wrote the credited z, and
 no other GEMM ran for that linear.  Pearl-C's e2e gate holds served y to its own ``run.gemm``
 (`benchmarks/pouw/pearl_c_vllm/e2e.py`); this is the same rule for H1, read from the call's trace.  H1 adds the value
-check of the z it commits (`pouw_h1_records.reason`, refused as ``credit: z-records: ...``): its z/y records'
+check of the z it commits (`protocols.pouw.h1.records.reason`, refused as ``credit: z-records: ...``): its z/y records'
 y is dq of their z and the served y is theirs.
 
 * **The trace** (`Trace`): a `TorchDispatchMode` around one linear call (its ``apply``).  Every op the dispatcher sees is

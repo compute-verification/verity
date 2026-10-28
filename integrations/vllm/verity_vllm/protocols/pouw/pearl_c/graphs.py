@@ -4,11 +4,11 @@ weight's device slot, which a forward's first call fills for the whole forward i
 uploads its own), and in its last launch screens its rows into the pass's flags and copies its leaves and A root there.  The same kernels write the same bytes as
 the eager steps, which the e2e's ``graphs`` gate holds.
 
-Under a schedule with a side lane (`pouw_pearl_c_lanes`), a call of decode's rows keeps its lanes and ring but replays each
+Under a schedule with a side lane (`protocols.pouw.pearl_c.lanes`), a call of decode's rows keeps its lanes and ring but replays each
 lane's steps as one graph (`_lane_graph`), one pair a pipeline and ring set: the main lane's, ending with a scatter of its
 flags (and A's root, where A's tree stays there), and the side lane's, ending with a scatter of the leaves; where the tree
 runs off the main lane, the main graph records an external event after the per-row keying, and the tree, ending with a
-scatter of A's root, is a graph of its own, which the side lane running A's tree (`pouw_pearl_c_lanes.TREE_APART_ROWS`)
+scatter of A's root, is a graph of its own, which the side lane running A's tree (`protocols.pouw.pearl_c.lanes.TREE_APART_ROWS`)
 replays behind that event.  The main
 graph runs ``stats_a`` (and the screen's scatter, where A's tree is aside) on a branch of its own beside the per-row
 keying, joined before the forming reads A's scales and at the graph's end.  Every graph reads
@@ -17,7 +17,7 @@ the set's other buffers do.  The driver replays them (`_Driver`, on the graphs' 
 events' handles), so the call's host work is a few launches, and the next call's main lane runs beside this one's side
 lane, as eagerly.
 
-Inside vLLM's own capture of a whole decode forward (`pouw_pearl_c_whole`, between `whole_capture_begin` and
+Inside vLLM's own capture of a whole decode forward (`protocols.pouw.pearl_c.whole`, between `whole_capture_begin` and
 `whole_capture_end`), a call launches the same steps into vLLM's capture instead, and is recorded; at each replay of that
 forward no call's Python runs, so the forward's host work is done at once, around vLLM's launch of the replay: before it,
 `whole_replay` uploads its slots; after it, while the GPU runs the forward, `whole_replayed` appends its matmuls, tiles and
@@ -34,7 +34,7 @@ forward's last call joins its own before vLLM's capture ends.  The same kernels 
 the serial capture's.
 
 With ``whole_defer_a`` too, where the kernel's pipeline splits A's commitment (``rows_a``, then ``tree_seed_a``, A's tree;
-`pouw_pearl_c_lanes`' ``deferred-a`` split, with no padding rows' E_A lines), a whole capture forks each call's A tree
+`protocols.pouw.pearl_c.lanes`' ``deferred-a`` split, with no padding rows' E_A lines), a whole capture forks each call's A tree
 after its per-row keying onto a tree stream of the run's own, beside the call's forming and GEMM, which read nothing the
 tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps' scatter, which copies
 A's root to the pass (the tile hashing before it reads nothing the tree writes, and runs beside it: `TILES_BESIDE_TREE`),

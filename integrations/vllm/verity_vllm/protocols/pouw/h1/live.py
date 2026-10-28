@@ -2,7 +2,7 @@
 the proof block that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
 public max_tokens.
 
-* **The tables.** With the Commit (`pouw_h1_served.Served`'s ``tap``) a window registers its round tables as values of
+* **The tables.** With the Commit (`protocols.pouw.h1.served.Served`'s ``tap``) a window registers its round tables as values of
   the live Program, under the window Program's digest as its other values (`Served._tree`):
 
   * round 0's request table ``<prefix>requests@0`` (`live_reads.REQUESTS`): T rows, its entries' headers in admission order
@@ -17,10 +17,10 @@ public max_tokens.
     round s's segments (`Served.segments`), so round s's root commits it before its coin (`credit._a_link`).
 
   Each is its round's table: round 0's ``request_table`` and round s's ``slots`` are their roots, in place of the hiding
-  tables (`pouw_h1_requests.request_table`, `slot_table`). Their leaves open in ``live@<s>``'s proof, not one by one:
-  `pouw_h1.H1Run.open_request` and `open_slot` refuse them (`Table`). Row j's salt is the run's key's at `nonce`.
-* **m_s** is step s's served rows, the scheduler's: its batch's rows (`pouw_h1.H1Run.owners`). Under CUDA graphs a call's
-  A rows are padded to the graph's size, past them (`pouw_h1.Call.pad`), and those rows are no slot of the step's.
+  tables (`protocols.pouw.h1.requests.request_table`, `slot_table`). Their leaves open in ``live@<s>``'s proof, not one by one:
+  `protocols.pouw.h1.H1Run.open_request` and `open_slot` refuse them (`Table`). Row j's salt is the run's key's at `nonce`.
+* **m_s** is step s's served rows, the scheduler's: its batch's rows (`protocols.pouw.h1.H1Run.owners`). Under CUDA graphs a call's
+  A rows are padded to the graph's size, past them (`protocols.pouw.h1.Call.pad`), and those rows are no slot of the step's.
 * **The statements.** ``live@<s>`` is proof block s of the live Program (`live.program_v2` of T, the window's S and its prefix),
   on round s's slot table, the request headers, the public m_s, the public round s and the public caps (`caps`: round 0's
   requests' max_tokens, the fixed length the period's open commits): `statement` gives its rows and its ``--registered``
@@ -51,7 +51,7 @@ SLOTS, REQUESTS = LR.SLOTS, LR.REQUESTS
 
 
 def nonce(base: int, name: str, s: int) -> int:
-    """Row 0's salt nonce of a live table, from the window's live nonce ``base`` (`pouw_h1_served.LIVE_NONCE`):
+    """Row 0's salt nonce of a live table, from the window's live nonce ``base`` (`protocols.pouw.h1.served.LIVE_NONCE`):
     ``requests@0``'s is ``base``, ``slots@<s>``'s ``base + 1 + s``."""
     return base if name == LR.REQUESTS else base + 1 + int(s)
 
@@ -87,7 +87,7 @@ def slot_words(owners: Sequence[int | None], rows: int) -> np.ndarray:
 
 
 class Table:
-    """A live table as `pouw_h1.H1Run` holds a round's request or slot table: its registered value (``registered``) and
+    """A live table as `protocols.pouw.h1.H1Run` holds a round's request or slot table: its registered value (``registered``) and
     its ``commitment``, and no leaf opened one by one."""
 
     def __init__(self, registered: Any) -> None:
@@ -128,7 +128,7 @@ def table(served: Any, run: Any, name: str, r: int, base: int, session: str) -> 
 
 def admission_gap(run: Any) -> str | None:
     """Why the window's ``live@<s>`` can't be stated: it reads round 0's request table every round, so a window that admits
-    per round (`pouw_h1_requests.PER_ROUND`) isn't served yet; None for a round-0 window."""
+    per round (`protocols.pouw.h1.requests.PER_ROUND`) isn't served yet; None for a round-0 window."""
     if run.admission == RQ.ROUND0:
         return None
     return (f"{run.entry}: live@<s> reads round 0's request table every round, and per-round admission (admission = "
@@ -136,7 +136,7 @@ def admission_gap(run: Any) -> str | None:
 
 
 def m_of(run: Any, s: int) -> int:
-    """Step s's served rows m_s (`pouw_h1.H1Run.step_rows`)."""
+    """Step s's served rows m_s (`protocols.pouw.h1.H1Run.step_rows`)."""
     return run.step_rows()[s]
 
 

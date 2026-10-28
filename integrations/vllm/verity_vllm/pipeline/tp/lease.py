@@ -57,7 +57,7 @@ def _parallel_state() -> Any:
 
 
 def _replaced(st: dict[str, Any]) -> set[int]:
-    """The model's tensors that the rank's weights (``st["weights"]``, a `protocol_options.WeightsView` when `acquire.as_loaded` or an
+    """The model's tensors that the rank's weights (``st["weights"]``, a `protocols.WeightsView` when `acquire.as_loaded` or an
     option replaced some) read from elsewhere: every reader after the release reads those names from the view's host tensors."""
     plain = getattr(st.get("weights"), "plaintext", None) or {}
     model = st["eng"].model

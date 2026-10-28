@@ -1,7 +1,7 @@
 """`ncp-v2` on the device: the unit functions under `pouw_cuda/` (`ncp2.cuh`), and the gate that holds any build of them to
-`pouw_native`, leaf for leaf.
+`protocols.pouw.native`, leaf for leaf.
 
-`ncp2.cuh` computes each unit's values as `pouw_native` does (the noise from SHAKE256, X and Y, route U's checkpoints, the
+`ncp2.cuh` computes each unit's values as `protocols.pouw.native` does (the noise from SHAKE256, X and Y, route U's checkpoints, the
 exact dequantization and each unit's SHA-256 leaf), in functions that compile for the host and the device. `host()` builds
 them for the CPU with the system C++ compiler, keyed by what it compiles, and `commit_call` commits a call through that
 build; `device()` builds `ncp2_kernels.cu` with nvcc, whose committer calls the same functions and is driven the same way.
@@ -253,7 +253,7 @@ def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host", flags:
     """One call committed by the ``on`` build: "host" (`ncp2.cuh`), "twin" (`ncp2_fast.cuh`, the serving kernel's CPU twin),
     "device" (`ncp2_kernels.cu`) or "fused" (`ncp2_fused.cu`); the twin and device records carry their own units root. Its
     weight side is ``side``, whose Y unit leaves the build's must be, or made from the build's when None (`side_of`). A record
-    opens units through `pouw_native`. ``flags`` are the fused build's (`ncp2_fused`)."""
+    opens units through `protocols.pouw.native`. ``flags`` are the fused build's (`ncp2_fused`)."""
     return _commit(on, index, scheme, call, flags, side)[0]
 
 

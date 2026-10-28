@@ -91,7 +91,7 @@ def _scaled_mm_cuda(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: t
     return int8_fused.product(xq, s_a, w, s_w)
 
 
-# Defined through a Library, not `custom_op`: `protocol_options.credit_gate`'s trace runs a custom op's Python body inside
+# Defined through a Library, not `custom_op`: `protocols.pouw.credit_gate`'s trace runs a custom op's Python body inside
 # itself, where the CUDA body's Triton GEMM is no dispatcher op and would count as no GEMM; an op with no Python
 # implementation it sees is one GEMM, whose outputs (y and zy) it wrote.
 _LIB = torch.library.Library(LIBRARY, "FRAGMENT")

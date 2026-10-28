@@ -1,7 +1,7 @@
 """A row of a served H1 window's registered tree, rebuilt from what the prover kept: the served trees a window
-saves (`pouw_h1_handoff.suspend`) keep no rows (`pouw_h1_registered.Rows`), so an opening of a drawn proof block's row takes its
-words from the prover's directory (`pouw_h1_prover`: each call's A codes, scales and z/y records) and the saved state (each
-linear's weight), as `pouw_h1_served.Served` committed them, and holds them to the tree's ``b || c`` at the row.
+saves (`protocols.pouw.h1.handoff.suspend`) keep no rows (`protocols.pouw.h1.registered.Rows`), so an opening of a drawn proof block's row takes its
+words from the prover's directory (`protocols.pouw.h1.prover`: each call's A codes, scales and z/y records) and the saved state (each
+linear's weight), as `protocols.pouw.h1.served.Served` committed them, and holds them to the tree's ``b || c`` at the row.
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ def kept_row(directory: str | Path, state: Mapping[str, Any], calls: Sequence[Ma
     """Row `row`'s u16 words of the window's served value `value` (``<prefix>a/<K>@<s>``, ``<prefix>zy@<c>`` or
     ``<prefix>b/<K>``), rebuilt from the prover's `directory` and the saved window's `state` as `Served.commit` laid it
     out: step s's A table of K is its calls of K's rows over the Program's M slots each (`Served.a_words`), call c's z
-    table its records over M slots (`pouw_h1_served.record_words`), ``b/<K>`` K's linears' weight rows in turn (the
+    table its records over M slots (`protocols.pouw.h1.served.record_words`), ``b/<K>`` K's linears' weight rows in turn (the
     state's weights). An empty call kept nothing: zero codes of scale 0, zero records. `calls` are the record's manifest
     rows. ValueError on a value of no such form."""
     _kind, served, _layers = state["served"]

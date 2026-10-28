@@ -1,22 +1,22 @@
 """An H1 window's private prover state (DRAWN1): what opening a drawn proof block's committed values needs after the
-window's close, kept in a directory of the prover's own (`pouw_h1.H1Run`'s ``prover``), owner-only (0700, each file 0600),
+window's close, kept in a directory of the prover's own (`protocols.pouw.h1.H1Run`'s ``prover``), owner-only (0700, each file 0600),
 never under a run's ``$OUT`` or any published path. The serving node keeps it (`research keep`), and its holder alone reads it.
 
 * **What it keeps.** `keep_key`: the run's hm96 salt key (`KEY`, 32 bytes), from which the salt of every hiding leaf of
-  the window is drawn: its request, slot, A and z tables' (`pouw_h1_requests.hiding_rows`) and its served trees' rows
-  (`audit.hm96_salt` at `pouw_h1_served.nonce`). `keep_call`: each served call's m s8 rows, their f32 scales and its z/y
-  records (`pouw_h1_records`, one a proof block), as ``calls/<index>.npz``. An empty call keeps nothing: its A table is T zero
-  rows and its z table zero records. A handed-off window (`pouw_h1_handoff`) also keeps its saved state in `STATE`: its
+  the window is drawn: its request, slot, A and z tables' (`protocols.pouw.h1.requests.hiding_rows`) and its served trees' rows
+  (`audit.hm96_salt` at `protocols.pouw.h1.served.nonce`). `keep_call`: each served call's m s8 rows, their f32 scales and its z/y
+  records (`protocols.pouw.h1.records`, one a proof block), as ``calls/<index>.npz``. An empty call keeps nothing: its A table is T zero
+  rows and its z table zero records. A handed-off window (`protocols.pouw.h1.handoff`) also keeps its saved state in `STATE`: its
   round log, request entries, slot owners, and each call's A codes and each linear's weight codes (the window's ``a/<K>``
   and ``b/<K>`` rows).
 * **Opening a drawn proof block.** Proof block u of the window is proof block u - base of the call whose manifest row has base ≤ u < base +
   units (`locate`). `open_call` rebuilds that call's A table and z table from the kept rows, scales and records under the
-  key, the Program salt (from the record's salt coin, `pouw_h1_challenger.program_salt_of`) and the call's
+  key, the Program salt (from the record's salt coin, `protocols.pouw.h1.challenger.program_salt_of`) and the call's
   nonces, and refuses either whose root isn't the one its manifest row carries, which its round's root commits. Then
   ``z.open(u - base)`` is the proof block's record (z then y) with its salt and path, and ``a.open(i)`` slot i's A row and scale
   (the proof block's row tile is slots 32·r .. 32·r + 31). Its ``a/<K>`` rows are its call's block of the window's A value
-  (`pouw_h1_served.layout`), its codes the A table's padded to the Program's slot, and its ``b/<K>`` rows its linear's weight
-  rows, each salted at `pouw_h1_served.nonce`; their trees are the ones the record's ``served`` entries name.
+  (`protocols.pouw.h1.served.layout`), its codes the A table's padded to the Program's slot, and its ``b/<K>`` rows its linear's weight
+  rows, each salted at `protocols.pouw.h1.served.nonce`; their trees are the ones the record's ``served`` entries name.
 """
 from __future__ import annotations
 
@@ -84,8 +84,8 @@ class Opened:
 
 
 def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt: bytes) -> Opened:
-    """Call `index` of the window `record` (`pouw_h1.CALLS_FILE`), its tables rebuilt from the prover's directory under
-    the window's Program salt `salt` (`pouw_h1_challenger.program_salt_of` its commitment): refused (ValueError) when a
+    """Call `index` of the window `record` (`protocols.pouw.h1.CALLS_FILE`), its tables rebuilt from the prover's directory under
+    the window's Program salt `salt` (`protocols.pouw.h1.challenger.program_salt_of` its commitment): refused (ValueError) when a
     rebuilt table's root isn't the one the call's manifest row carries."""
     from verity.core.protocols.pouw.protocol import tagged
 

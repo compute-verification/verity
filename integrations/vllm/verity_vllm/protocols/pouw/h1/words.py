@@ -1,4 +1,4 @@
-"""H1's served rows as their ``hm96-sha512/row/v2`` bit rows' u16 words (`pouw_h1_served`'s tables): a call's A rows
+"""H1's served rows as their ``hm96-sha512/row/v2`` bit rows' u16 words (`protocols.pouw.h1.served`'s tables): a call's A rows
 (`row_words`, as K's chunks `chunk_words`), a step's input ids (`ids_words`), a call's receipts (`receipt_words`) and its
 z/y records (`record_words`, `zy_words`)."""
 from __future__ import annotations
@@ -70,7 +70,7 @@ def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]
 
 
 def zy_words(records: np.ndarray, rows: int, n: int, slots: int, tile: tuple[int, int]) -> np.ndarray:
-    """`record_words` of a call's records (`pouw_h1_records`' [units, ZY_BYTES] over ``rows`` slots): where the Program's
+    """`record_words` of a call's records (`protocols.pouw.h1.records`' [units, ZY_BYTES] over ``rows`` slots): where the Program's
     tile is the records' unit and they cover all ``slots``, the records' own bytes as u16 words, the same words without
     taking them apart."""
     if tuple(tile) == ZR.UNIT and rows == slots:

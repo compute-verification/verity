@@ -5,9 +5,9 @@ first call's tiles tampered.
         [--challenger HOST:PORT --session '{"session": ..., "seq": ..., "root": ..., "commitment": ..., "secret": ...}']
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
-committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
+committed natively as it is served (`protocols.pouw.native`), under an epoch whose salt is the salt coin of the
 auditor host's challenger at ``--challenger``, in the session the gate opened for the window (``--session``, the
-gate's answer, `protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt
+gate's answer, `protocols.pouw.h1.challenger`), opened after the weights' root. Without ``--challenger`` the salt
 is the command's own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0, its coins the Lean verifier of
 record's, `pouw.verifier.coins`): the command is then its run's auditor, and the run is a measurement, not a window any
 verifier credits. Once the engine closes, the circuit replay (`check.replay.pouw_circuit.replay`) runs twice, the run's

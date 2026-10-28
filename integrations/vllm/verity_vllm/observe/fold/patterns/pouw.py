@@ -1,7 +1,7 @@
 """PoUW's executed linears: the host executor's own record of each call, never a device launch.
 
 Under ``pouw:ncp-v2`` each linear layer's ``apply`` is PoUW's executor. It computes the call on the host and returns its served
-y as one dispatcher op, ``verity_pouw.ncp_linear(x, weight, bias, entry, w)`` (`protocol_options.pouw.ncp_linear_op`), so an
+y as one dispatcher op, ``verity_pouw.ncp_linear(x, weight, bias, entry, w)`` (`protocols.pouw.ncp_linear_op`), so an
 observer records the op with its operands and output and nothing of the host work inside it. `PouwLinear` folds that record
 into the call's served rows, the Definitions the Build binds the same linear to under the same target (`TritonGemmRule`). Every
 other GEMM stays the Triton launch's (`gemm.GemmLaunch`). `with_protocols` adds the pattern to a run's profile when its capture

@@ -1,6 +1,6 @@
-"""The served window's registration for its prover (`pouw_h1_served`'s, which re-exports these): its registered trees
+"""The served window's registration for its prover (`protocols.pouw.h1.served`'s, which re-exports these): its registered trees
 (`trees`), each call's verifier ``--registered`` file (`reads_file`), and one record's ``registered`` entries held to the
-prover's earlier records (`register`), each file named `file_name`. It imports nothing of `pouw_h1_served`: a run's
+prover's earlier records (`register`), each file named `file_name`. It imports nothing of `protocols.pouw.h1.served`: a run's
 ``served`` is its `Served`, read once the window is closed."""
 from __future__ import annotations
 

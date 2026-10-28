@@ -91,7 +91,7 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
                   whole_prefetch_b: bool = False, whole_shape_joins: bool = False) -> None:
     """Refuse a whole capture's options, and a pass end's, where `kernel` or the others can't run them.  `whole_defer_a`
     (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A tree within a whole
-    capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A scales there beside its
+    capture (`protocols.pouw.pearl_c.graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A scales there beside its
     A commitment; `whole_tree_sm` (with `whole_defer_a`) launches the call's GEMMs beside its A tree with one persistent CTA
     fewer, leaving the tree's CTA its SM; `whole_shape_joins` (with `whole_defer`) joins a call's side steps only before
     the next call of its shape; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;

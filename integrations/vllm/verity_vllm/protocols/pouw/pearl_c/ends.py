@@ -1,7 +1,7 @@
 """The Pearl-C device path's passes (`pouw_pearl_c_device.PearlCDeviceRun`'s): a pass's state (`_Pass`) and its end
 (`PassEnds`): one tile tree over every leaf under `audit.transcript_domain`, A's roots and the screen's counts as the pass's
 commitment, and a retained pass's files and manifest (`write_manifest`).  A lagged end's readback and tree aside are
-`pouw_pearl_c_lanes.LaneCalls`' (`settle`, `_end_aside`, `_ended`).
+`protocols.pouw.pearl_c.lanes.LaneCalls`' (`settle`, `_end_aside`, `_ended`).
 """
 from __future__ import annotations
 

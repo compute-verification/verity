@@ -1,5 +1,5 @@
 """Pearl-C's decode forward replayed as one CUDA graph: vLLM's own (Model Runner V2's FULL graphs of the decode batch),
-captured with every call's graph steps (`pouw_pearl_c_graphs`) inside it, so a decode step launches one graph instead of one
+captured with every call's graph steps (`protocols.pouw.pearl_c.graphs`) inside it, so a decode step launches one graph instead of one
 per call, and runs no call's Python.
 
 vLLM captures one set of graphs at start, over what its linears ran then (its own apply).  `WholeStep` keeps a set per key:

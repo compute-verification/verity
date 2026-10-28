@@ -1,5 +1,5 @@
-"""The Triton kernels of the Pearl-C device path's liveness screen (`pouw_pearl_c_screen`, which imports this module at
-first use: Triton is needed only there): ``screen``, `pouw_pearl_c_screen.screen` as one program a row; and ``scatter``, a
+"""The Triton kernels of the Pearl-C device path's liveness screen (`protocols.pouw.pearl_c.screen`, which imports this module at
+first use: Triton is needed only there): ``screen``, `protocols.pouw.pearl_c.screen.screen` as one program a row; and ``scatter``, a
 CUDA graph's last step, which screens the call's rows into the pass and copies its leaves and A root there, in one launch.
 Both run ``screen_row``, one row's screen.
 

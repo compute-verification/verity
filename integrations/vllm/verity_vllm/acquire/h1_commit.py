@@ -1,12 +1,12 @@
 """The Commit in H1's serving engine, installed: the committer (`committer`, the windowed collector under
 rows-sha512: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the int8 source at each linear H1 records, the
 step-input port that gives each step's input ids, and the tap that keeps what the Commit acquired for H1
-(`protocol_options.pouw_h1_commit.CommitTap`). Here in ``acquire`` because it builds the int8 source; `pouw_h1_commit`
+(`protocols.pouw.h1.commit.CommitTap`). Here in ``acquire`` because it builds the int8 source; `protocols.pouw.h1.commit`
 holds the tap and the values and imports nothing from ``acquire``. On a server that commits already (serve-openai's
 rows-sha512 collector), `tap` puts H1's tap on that Commit instead.
 
 A MoE layer's routed experts (`engine.int8_experts.ExpertSite`) are no modules: each expert projection's site is
-named as H1 names it (`pouw_h1_hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
+named as H1 names it (`protocols.pouw.h1.hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
 acquired under that name inside the call (`ExpertGemm.apply`), as `Int8ExpertsMethod` runs every expert on every forward:
 an expert no token routed to is a call of zero rows, acquired as its zero rows [0, K] and scales [0]."""
 from __future__ import annotations
@@ -75,8 +75,8 @@ def _linears(model: Any, layers: Sequence[Any]) -> tuple[list[str], dict[str, An
 
 def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     """The int8 source (`H1Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
-    linears, `pouw_h1_hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
-    and a routed expert by its H1 name (`pouw_h1_hooks.expert_names`)."""
+    linears, `protocols.pouw.h1.hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
+    and a routed expert by its H1 name (`protocols.pouw.h1.hooks.expert_names`)."""
     modules, experts = _linears(model, layers)
     return H1Source(com, model, modules, experts)
 
@@ -115,7 +115,7 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: 
 
 def committer(engine: Any, run_id: str) -> Any:
     """H1's committer on ``engine``, its run ``run_id``: the declared Commit's (`pipeline.commit`'s native_collect_v2b, built
-    as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`pouw_h1_commit.SCHEME`). It retains
+    as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`protocols.pouw.h1.commit.SCHEME`). It retains
     its values nowhere unless VERITY_RETAIN says otherwise: H1 reads them from its tap, and the windowed collector retains
     none on the device."""
     from verity_vllm import settings
@@ -179,8 +179,8 @@ def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, run
 
 
 class RankCommit(RankExtension):
-    """`pouw_h1_ranks.RankExtension` with the Commit on the rank (`h1rank_commit`), the ``worker_extension_cls``
-    `pouw_h1_ranks.COMMIT_EXTENSION`; here because it attaches the int8 source. The holder releases it with the rank
+    """`protocols.pouw.h1.ranks.RankExtension` with the Commit on the rank (`h1rank_commit`), the ``worker_extension_cls``
+    `protocols.pouw.h1.ranks.COMMIT_EXTENSION`; here because it attaches the int8 source. The holder releases it with the rank
     (`RankExtension.h1rank_release`)."""
 
     def _h1rank_engine(self, model: Any, cp: Mapping[str, Any]) -> Any:
@@ -194,7 +194,7 @@ class RankCommit(RankExtension):
 
     def h1rank_commit(self, cp: Mapping[str, Any] | None = None, run_id: str = "h1") -> dict[str, Any]:
         """The Commit on this rank (`attach`, its run ``run_id`` named with the rank's first linear), its tap a
-        `pouw_h1_ranks.RankTap` naming each of the rank's H1 linears as the window does; returns the committer's name, its
+        `protocols.pouw.h1.ranks.RankTap` naming each of the rank's H1 linears as the window does; returns the committer's name, its
         scheme and the port it acquires the step's input ids under. A site the rank's source acquires that the window has
         no name for (a routed expert's included) is refused: under its rank-local name it would meet no call, or another
         rank's site of the same name."""

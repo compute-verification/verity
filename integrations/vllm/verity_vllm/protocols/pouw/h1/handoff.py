@@ -2,21 +2,21 @@
 serves: `H1Run.close` commits the window's empty calls, their tables and its rounds on the CPU, and the serving process's
 GPU lease ends only when it exits.
 
-* **The window.** Once its last step is served, the serving process saves its `pouw_h1.H1Run` as it stands (`suspend`):
+* **The window.** Once its last step is served, the serving process saves its `protocols.pouw.h1.H1Run` as it stands (`suspend`):
   its calls and their tables, its round log with each coin, its request entries and slot owners, its receipts, verdicts
-  and retained calls, its hm96 salt key, and its `pouw_h1_served.Served` (each call's registered tables, each linear's
+  and retained calls, its hm96 salt key, and its `protocols.pouw.h1.served.Served` (each call's registered tables, each linear's
   weight codes), every tensor as its host copy. `resume` rebuilds it in another process, each round's request and slot
   table again from the entries, owners, salt and key, and the window Program from its public shapes and key
-  (`pouw_h1_served.declared`), and refuses a table whose root isn't the one its round's root is over, or a Program whose
+  (`protocols.pouw.h1.served.declared`), and refuses a table whose root isn't the one its round's root is over, or a Program whose
   digest isn't the one its tables were registered under.
   It drops the run's listeners (the resuming process adds its own) and its opener (the salt is open). A window with the
-  Commit in its engine (`pouw_h1_commit`) doesn't hand off.
+  Commit in its engine (`protocols.pouw.h1.commit`) doesn't hand off.
 * **The session's stream.** The window's coins come from one session on the auditor host's challenger, one TCP stream
   that its hello opened (`remote`), and a stream is never opened twice for a session. The serving process hands the
   stream's descriptor (SCM_RIGHTS) to a holder outside its lease (`send_stream`, `Holder`), which passes it on to the
   resuming process; its client (`Resumed`) is the session past its hello, its commitment the one the hello was answered
   with. Every frame is a request and its answer, so the hand-off falls between two of them.
-* **What is unchanged.** The resuming process runs the same `close` and release (`pouw_h1_window.finish`) the serving
+* **What is unchanged.** The resuming process runs the same `close` and release (`protocols.pouw.h1.window.finish`) the serving
   process would have: the same empty calls, tables, rounds, trees and draw, each committed when it would have been, and
   each coin opened after the same roots, on the same session. Nothing opens in the gap: the next frame is the round coin
   of the first step past the last served one.

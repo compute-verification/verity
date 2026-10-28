@@ -93,7 +93,7 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
 
 def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
     """The protocol options' serving context for resolved options, None when none is enabled; ``ValueError`` names every
-    refusal, before any engine exists.  The settings an adapter takes from the built engine (`protocol_options.engine_fills`)
+    refusal, before any engine exists.  The settings an adapter takes from the built engine (`protocols.engine_fills`)
     are named in its ``filled`` and read as set until `LLM` fills them."""
     enabled = config.parse_protocols(opts["protocols"])
     if not enabled:
@@ -180,7 +180,7 @@ class LLM:
       (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
       A set the options refuse raises ``ValueError`` before the engine is built.  Sampled proofs runs in the Commit stage
       of a row, not here.  Settings an option takes from the engine are filled from this one after the build
-      (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
+      (`protocols.from_engine`), and one it can't fill there is refused by name: PoUW's H1
       (``protocols="pouw:eps1-sm120-h1fx1", protocols_config={"pouw": {"rows": T, "steps": S}}``) gets the engine's
       model runner and, without a ``challenger``, in-process coins, which credit nothing.
     * ``protocols_config`` (dict): each enabled protocol's settings, ``{name: {...}}``; never hashed.

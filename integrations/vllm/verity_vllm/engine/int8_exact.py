@@ -44,7 +44,7 @@ W_MAX = TOP
 MIN_ROWS = 17
 MAX_K = (2 ** 31 - 1) // (TOP * W_MAX)
 ARM = INT8_ARM
-#: H1's receipt unit (`pouw_h1.TILE`): a record's slot rows by weight rows
+#: H1's receipt unit (`protocols.pouw.h1.TILE`): a record's slot rows by weight rows
 UNIT = (32, 32)
 #: a unit's record: its z, s32, then its y, bf16
 ZY_BYTES = 6 * UNIT[0] * UNIT[1]

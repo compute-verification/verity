@@ -12,12 +12,12 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   their tag's and domain's constant prefix (`merkle._hash`'s message), so a row costs a few short SHA-512 calls.
 * **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are drawn again on read
   (`Salts`), and the rows are kept only with ``keep_rows`` (`Rows`): a window's call tables and its own ``b/<K>`` are
-  rebuilt by the prover from what it keeps (`pouw_h1_prover.keep_call`, its weights), so `Served` keeps none of their
+  rebuilt by the prover from what it keeps (`protocols.pouw.h1.prover.keep_call`, its weights), so `Served` keeps none of their
   rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
   Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
 * **On the GPU**: where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
-  (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
+  (`protocols.pouw.h1.registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
   the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
   NumPy path above is the reference the device is held to
   (``tests/protocols/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
@@ -162,7 +162,7 @@ class Salts(Sequence):
 
 class Rows(Sequence):
     """A registered value's rows: item j row j's words as ints (a slice, the words ``(·, W)`` u16; `at`, any rows' words),
-    when kept; else every read refused, the prover rebuilding them from what it keeps (`pouw_h1_prover`)."""
+    when kept; else every read refused, the prover rebuilding them from what it keeps (`protocols.pouw.h1.prover`)."""
 
     def __init__(self, words: np.ndarray | None, n: int) -> None:
         self.words, self.n = words, int(n)
@@ -190,7 +190,7 @@ class Rows(Sequence):
 
 
 def path() -> str:
-    """Where `commit` hashes, `MODE`'s choice: ``"gpu"`` (`pouw_h1_registered_device`, refused where it can't run),
+    """Where `commit` hashes, `MODE`'s choice: ``"gpu"`` (`protocols.pouw.h1.registered_device`, refused where it can't run),
     ``"numpy"``, or by default ``"auto"``, the GPU where this process has CUDA through torch and the kernels build for its
     device, else NumPy. Both register the same bytes; NumPy is the reference."""
     mode = MODE
