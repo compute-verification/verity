@@ -14,11 +14,13 @@ verifier's form, at its own Flock statement, an index below V*'s count and its o
 one part per index, each accepted under `--zk` without an identifier, no two sessions on one coin key. Which
 statement `S` stages (`readX`, the staging message) is the run's, not the composition's.
 
-That the parts' sessions are one run of `RecDeploy.V` is the open condition C10 `OneRun`: one session per part, every
-session the coin server opened for the statement's parts recorded, and the staging before the first part's Hello.
-`rec-compose` sees only the sessions the prover hands it, so a part retried until it accepts passes. `OneRun` needs
-the service's interactive-run record, a later PR; until it holds, `composed_parts` gives one shared set and fresh
-keys, and the recursive verdict is not a claim a guarantee backs.
+That the parts' sessions are one run of `RecDeploy.V` is condition C10 `OneRun`: one session per part, every session
+the challenger opened for the statement's parts recorded, and the staging before the first part's Hello.
+`rec-compose` reads it from the challenger's interactive-run record (`RecCompose.checkRun`, `RecCompose.OneRun`), and
+`composed_run` carries it to the parts' runs (`OneRunOf`): `composed_parts`' shared set `S` is what the record staged
+before any session opened, and the parts' sessions are exactly the ones it opened, one per V* statement, so a part
+retried until it accepts is refused. That the record is the challenger's, and that the challenger logs every `Hello` it
+answers, is the auditor-trusted challenger's (`trusted-host`), as its other records are.
 -/
 
 namespace RecDeploy
@@ -112,5 +114,52 @@ theorem composed_parts {n : ℕ} {rows inner : String} {ps : List PartRun}
     have e := RecRaw.ofShared_shared (w := p.w) hj
     rw [show p.w.shared = S from hsh] at e
     exact e.symm
+
+/-- **The parts' runs are one run of the challenger's record** `evs` (C10 `OneRun` at the parts): the record stages
+`rows` and the shared set `S` first, before any session opens, then opens exactly one session for each of V*'s `n`
+statements and none for another, each the session of a part at that index (on that part's coin key), with every part's
+session among them, and closes last. -/
+def OneRunOf (n : ℕ) (rows : String) (S : RecShared) (ps : List PartRun) (evs : List RecCompose.Event) : Prop :=
+  ∃ opens : List RecCompose.Opened,
+    evs = RecCompose.Event.stage rows S.digests :: (opens.map RecCompose.Event.opened ++ [RecCompose.Event.close]) ∧
+    (∀ o ∈ opens, o.part < n) ∧ (∀ j, j < n → (opens.map (·.part)).count j = 1) ∧
+    (∀ o ∈ opens, ∃ p ∈ ps, p.w.recPart = some o.part ∧ p.coinKey = some o.coinKey) ∧
+    (∀ p ∈ ps, ∃ o ∈ opens, p.w.recPart = some o.part ∧ p.coinKey = some o.coinKey)
+
+/-- **`rec-compose` holds the parts to one run** (C10 `OneRun`): where it accepts the verdicts the parts' runs wrote
+and the challenger's interactive-run record `evs` (`RecCompose.check_oneRun` proves both of every composition it
+accepts), either two of the parts' shared files are distinct with one SHA-512, or `composed_parts`' one shared set `S`
+is what the record staged before any session opened, and the parts' sessions are exactly the sessions the record
+opened, one per V* statement: a part retried, or a session opened that no part is, is not in what it accepts. -/
+theorem composed_run {n : ℕ} {rows inner : String} {ps : List PartRun} {evs : List RecCompose.Event}
+    (h : RecCompose.Accepts n rows inner (ps.map (·.view.verdict)))
+    (hr : RecCompose.OneRun n rows (ps.map (·.view.verdict)) evs) :
+    Collides (ps.map PartRun.view) ∨ ∃ S : RecShared, S.Form ∧ S.recInner.map RecCompose.digest = some inner ∧
+      S.recRows.map RecCompose.digest = some rows ∧ ps.length = n ∧
+      (∀ j, j < n → (ps.map (·.w.recPart)).count (some j) = 1) ∧ (ps.map (·.coinKey)).Nodup ∧
+      (∀ p ∈ ps, (∃ s, s < n ∧ p.w = RecRaw.ofShared S p.w.base s p.w.recBindings) ∧ p.accepted = true ∧
+        p.w.base.zk = true ∧ p.identifier = false ∧ p.coinKey.isSome) ∧
+      OneRunOf n rows S ps evs := by
+  rcases composed_parts h with hc | ⟨S, hS, hi, hrows, hl, hidx, hk, hall⟩
+  · exact .inl hc
+  obtain ⟨sh, opens, hevs, hsh, hb, honce, hop, hrec⟩ := hr
+  have hpos : 0 < n := h.1
+  obtain _ | ⟨p0, rest⟩ := ps
+  · simp at hl
+    omega
+  have hshared : ∀ p ∈ p0 :: rest, p.w.shared = S := by
+    intro p hp
+    obtain ⟨⟨s, _, e⟩, _⟩ := hall p hp
+    rw [e]
+    rfl
+  have hsh0 := hsh _ (List.mem_map_of_mem (f := (·.view.verdict)) List.mem_cons_self)
+  simp only [PartRun.view, PartView.verdict, Option.some.injEq] at hsh0
+  rw [hshared p0 List.mem_cons_self] at hsh0
+  subst hsh0
+  refine .inr ⟨S, hS, hi, hrows, hl, hidx, hk, hall, opens, hevs, hb, honce, fun o ho => ?_, fun p hp => ?_⟩
+  · obtain ⟨v, hv, hpart, hkey⟩ := hop o ho
+    obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hv
+    exact ⟨p, hp, hpart, hkey⟩
+  · exact hrec _ (List.mem_map_of_mem hp)
 
 end RecDeploy
