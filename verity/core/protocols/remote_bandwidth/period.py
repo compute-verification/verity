@@ -214,20 +214,42 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
                    clock=clock, sleep_until=sleep_until)
 
 
+def opened(reg: audit.Registration, coins: bytes, clock: Callable[[], int], *, not_before: int, windows: int, passes: int,
+           samples: int, window_ns: int, deadline_ns: int) -> audit.Session:
+    """The verifier's session over the store `reg` registers, on `clock`, its challenger's coins drawn from `coins`."""
+    params = audit.Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=passes, window_ns=window_ns,
+                          codec=reg.codec, receipt=reg.receipt, rows=reg.rows)
+    challenger = C.local(reg.digest, 0, windows, _Stream(coins, reg.node), clock=lambda: clock() / 1e9)
+    return audit.Session(params, reg, None, challenger, not_before_ns=not_before, clock=clock)
+
+
+def case_of(s: audit.Session, events: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """The core case `RemoteAudit.Protocol` replays: session `s`'s registration, every coin its challenger committed to
+    (each one it didn't release opened now), its log `events` and its parameters."""
+    params, challenger = s.params, s.coins
+    committed = []
+    for label, n in ((C.CHALLENGE, params.windows), (C.OPENINGS, C.openings_coins(params.windows))):
+        got = {o.index: o for o in challenger.opened(label)}
+        committed += [C.coin(got[j] if j in got else challenger.challenger.open(label, j, b"")) for j in range(n)]
+    p = {"deadline_ns": params.deadline_ns, "deferred": params.deferred, "lifetime": params.lifetime,
+         "min_passes": params.min_passes, "pace": None, "samples": params.samples, "window_ns": params.window_ns,
+         "windows": params.windows}
+    evidence = {"append_coins": [], "coins": [c.hex() for c in committed], "events": list(events)}
+    return {"commitment": canonical_json_bytes(registration_json(s.registration)).hex(),
+            "evidence": canonical_json_bytes(evidence).hex(), "params": {"not_before_ns": s.not_before_ns, "params": p}}
+
+
 def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
             window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
     registration it draws from `coins`, its challenger's coins, its clock and its log, which are the case."""
-    name = node.encode()
     n, root = prover.register()
-    reg = audit.register(coins, name, n, root, codec_)
-    params = audit.Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=passes, window_ns=window_ns,
-                          codec=reg.codec, receipt=reg.receipt, rows=reg.rows)
-    held, not_before = _Held(), clock()
-    challenger = C.local(reg.digest, 0, windows, _Stream(coins, name), clock=lambda: held.now / 1e9)
-    s = audit.Session(params, reg, None, challenger, not_before_ns=not_before, clock=held)
+    reg = audit.register(coins, node.encode(), n, root, codec_)
+    held = _Held()
+    s = opened(reg, coins, held, not_before=clock(), windows=windows, passes=passes, samples=samples,
+               window_ns=window_ns, deadline_ns=deadline_ns)
     prover.hold(reg)
     events: list[dict[str, Any]] = []
 
@@ -252,23 +274,13 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
         draws = call({"kind": "close", "t": t}, lambda: s.close(t), None if s.windows[t].final else d + 1)
         if isinstance(draws, audit.Verdict):
             break
-        opened = prover.open(t, s.windows[t].draws)
-        v = call({"kind": "verify", "t": t, "openings": [opening_json(o) for o in opened]}, lambda: s.verify(t, opened))
+        got = prover.open(t, s.windows[t].draws)
+        v = call({"kind": "verify", "t": t, "openings": [opening_json(o) for o in got]}, lambda: s.verify(t, got))
         if not v.accepted:
             break
     if s.outcome is not None:
         prover.end(*s.disclose())
-    committed = []
-    for label, n in ((C.CHALLENGE, params.windows), (C.OPENINGS, C.openings_coins(params.windows))):
-        got = {o.index: o for o in challenger.opened(label)}
-        committed += [C.coin(got[j] if j in got else challenger.challenger.open(label, j, b"")) for j in range(n)]
-    p = {"deadline_ns": params.deadline_ns, "deferred": params.deferred, "lifetime": params.lifetime,
-         "min_passes": params.min_passes, "pace": None, "samples": params.samples, "window_ns": params.window_ns,
-         "windows": params.windows}
-    evidence = {"append_coins": [], "coins": [c.hex() for c in committed], "events": events}
-    case = {"commitment": canonical_json_bytes(registration_json(reg)).hex(),
-            "evidence": canonical_json_bytes(evidence).hex(), "params": {"not_before_ns": not_before, "params": p}}
-    return Period(answer(s), case)
+    return Period(answer(s), case_of(s, events))
 
 
 def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -313,5 +325,5 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer_
 
 
-__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "certified", "leg", "payloads", "records",
-           "registration_json", "registration_of", "run", "serve", "session"]
+__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "case_of", "certified", "leg", "opened", "payloads",
+           "records", "registration_json", "registration_of", "run", "serve", "session"]
