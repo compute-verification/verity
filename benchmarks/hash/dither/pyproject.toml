@@ -6,4 +6,4 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # The modules read their variables through this directory's registry (settings.py), on verity_config.settings.
-inputs = ["tools/config/verity_config"]
+inputs = ["tools/config/verity_config", "verity/__init__.py", "verity/settings.py"]
