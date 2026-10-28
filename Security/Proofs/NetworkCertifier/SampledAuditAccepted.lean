@@ -349,8 +349,8 @@ theorem classesPa_eq_zero : ∀ (rs : List OneStage) (cs : List (List (List (Lis
         have h0 : OneStage.Pa (strataSizes c) .all (window o c.flatten.length B) = 0 := by
           simpa [OneStage.Pa] using hw
         rw [h0, zero_mul]
-      all_goals exact absurd
-        (Finset.disjoint_union_right.2 ⟨Finset.disjoint_empty_right B, h2⟩ :
+      all_goals
+        exact absurd (Finset.disjoint_union_right.2 ⟨Finset.disjoint_empty_right B, h2⟩ :
           Disjoint B (∅ ∪ allSlotsFrom rs cs (o + c.flatten.length))) h
     · rw [classesPa_eq_zero rs cs _ B h2, mul_zero]
 
