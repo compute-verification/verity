@@ -20,7 +20,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import served_util as su  # noqa: E402
+import served_util as su
 
 
 def frame(e: dict) -> str:
