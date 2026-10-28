@@ -143,9 +143,10 @@ else is a theorem or a named gap.
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
 | Learning, 2: no cheap way around it | Any way of reaching the target, at a cost worth ruling out, repeatedly combines freshly trained weights with fresh per-token values. | `Nci.Assumptions.CoversEfficientMethods` | Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
-That each use of a weight needs its own token's context is a checkable wiring property of the training circuit: every
-gate a use requires reaches, inside that use's own upstream computation, the operand the use reads. It is named in the
-lock (`Nci.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the overhead lower bound assumes
+For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
+upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
+reaches, inside that use's own upstream computation, the operand the use reads. It is named in the lock
+(`Nci.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the overhead lower bound assumes
 about learning, and they are where its scientific content lies; the second is the least certain.
 
 ### 1. The proofs of the sampled proof blocks
@@ -296,10 +297,16 @@ $$ \mathrm{overhead}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{\Omega_*}{C_{\m
 times the GPU-hours it costs unmonitored, up to probability η. No Lean states this bound: it is derived in prose
 (`Security/README.md`, part 4) from the local bounds, `Verity.Guarantees.Counting` and `Nci.Guarantees.CapabilityFloor`.
 
-- Ω_* is the training work any covered method needs.
+- Ω_* is the weighted count of analysed computation any covered method needs.
 - C_ref is a demonstrated reference run's GPU-hours.
 - f is the share of capacity outside correct credited work of the registered circuit, and ζ̄ the rate at which work can be done there.
-- q/c is the most training work one verified inference block of c gates can do, per gate.
+- q/c is the most of that count one verified inference block of c gates can do, per gate. The canonical form keeps
+  the sum of the blocks' caps; replacing it by (q/c)(1 − f) needs the accounting to tie each qualifying block to
+  credited actual computation.
+- With Ω_ref the reference's count in the same convention, ζ_ref = Ω_ref/C_ref and the floor Ω_* ≥ Ω_ref/α, the bound
+  is 1/(α[(ζ̄/ζ_ref)·f + y]), y = (q/(c·ζ_ref))(1 − f) the declared yield. Only under reference efficiency, ζ̄ = ζ_ref, is
+  it 1/(α(f + y)). The unregistered share s ≤ f limits what the bound can certify; it doesn't predict the actual
+  slowdown.
 
 **Conditional on three things not in place yet:**
 
@@ -312,13 +319,14 @@ inference-only policy divides the registered circuit into inference blocks of c 
 block can import information, spending its fresh bits, or reconstruct it, spending its gates.
 
 - Fresh weights are hard to hold, so a block holds few of them.
-- Each use of a weight needs its own token's context, so a block serves few uses.
+- For certified uses, a block must import each use's context or perform its upstream computation, so a block serves
+  few uses.
 - So verified work does little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps
   small.
 
-The per-block cap is about h·(k + c/g) weighted weight-uses, h the bits of fresh weights a block can hold and g the gates
-a use's context takes to rebuild. When rebuilding that context needs more fresh weights than a block holds, the cap falls
-to h·k.
+The per-block cap is about h·(k + c/g) weighted weight-uses, h the price of fresh weights the description premise lets a
+block hold (not a storage bound) and g the gates a use's certified upstream computation takes. When reconstructing that
+computation would expose updated weights priced above h, the cap falls to h·k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
 the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
@@ -380,16 +388,25 @@ unregistered share, the prices), each labelled with its source in the calculator
 
 ### Promising directions
 
-- **Measure update prices.** Hardness of fresh weights is the argument's one information premise. Measure it on real
-  fine-tunes: bits per updated weight, for adversarially chosen sets, against decoders that may use the registered model,
-  low-rank fits and short replays within the block's time.
-- **Measure the width of a use.** The minimal premises charge one fresh bit per use, which makes the per-block cap grow
-  like k². How many bits of a token's upstream values a block must import before rebuilding the rest becomes cheap is a
-  local description length of the operand given what the block holds. If it is near a token's hidden state, the cap
-  becomes linear in k and the overhead large. This is the measurement worth most.
+- **One meaningful instantiation of the local premises.** One instance satisfying them simultaneously: a block-extraction
+  capability at the protocol's decoder budget, a positive information rate, a checked dependency certificate, and
+  parameters giving a nontrivial cap. Today's witnesses only show the premises consistent. A failed instantiation says
+  which premise breaks.
+- **Attack update prices.** Hardness of fresh weights is a computational hypothesis. Attack it on real fine-tunes with
+  reconstruction procedures: decoders that may use the registered model, low-rank fits and short replays within the
+  block's time, on adversarially chosen sets of updated weights. A successful compression is an upper bound on the price
+  and refutes a claimed one; failed attacks don't measure the universal lower bound.
+- **Check the certificate.** The upstream structure is a property to check on a specified training circuit, then to
+  prove for the claimed family of implementations.
+- **The import cost of a use.** The minimal premises charge one fresh bit per imported use, and the cap grows like k². A
+  justified joint input cost of b bits per use improves it to about k²/b: the coefficient, not the growth. A linear cap
+  needs another structural fact, such as fan-out limiting products by the activation coordinates a block can obtain.
+  The question is the justified joint cost of supporting additional uses and which structural bound it enables; a
+  hidden state's literal width is not that cost.
 - **Choose (c, k) per block type.** The caps bind only when a block's own capacity is well above what its fresh bits
-  allow. Decoding reads earlier tokens' cached keys and values as fresh input, so how k counts them decides whether any
-  cap bites.
+  allow. The execution's boundaries fix what counts: unregistered values crossing a boundary count by the bits they
+  represent, a compressed code as the code with its decoding in gates, and values rebuilt inside in gates. For decoding,
+  whether cached keys and values cost fresh bits or gates is the cheapest admissible placement's question.
 - **Weight the structure.** With per-weight prices and per-use weights fixed, the strongest bound the wiring property
   gives is a linear program over the weights. Solving it on the training circuit replaces "every value is hard" with
   "enough priced, structurally supported work".

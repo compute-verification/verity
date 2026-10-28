@@ -180,10 +180,16 @@ hardness.
 
 ## The frontier
 
-- **A use's width.** The dependency bounds charge one fresh bit per use, which is why their caps grow like k². How
-  many bits of a token's upstream values a block must import before rebuilding the rest becomes cheap is a local
-  description length of the operand given what the block holds. Near a hidden state's size, the cap becomes linear in k.
-  This is the measurement worth most.
+- **One meaningful instantiation.** The witnesses so far show the premises consistent, at a decoder that compresses
+  nothing. The next advance is one instance satisfying them simultaneously: a block-extraction capability at the
+  protocol's decoder budget, a positive information rate, a checked dependency certificate, and parameters giving a
+  nontrivial cap. A failed instantiation says concretely which premise breaks.
+- **A use's import cost.** The dependency bounds charge one fresh bit per imported use. A justified joint input cost of
+  b bits per use gives h_w·(k/b + c/g), and without reconstruction about k²/b: a larger b improves the coefficient, not
+  the quadratic growth. A cap linear in k needs another structural fact, such as fan-out limiting products by the
+  activation coordinates a block can obtain. A hidden state's literal width is not that cost: compression, shared
+  descriptions and reconstruction from what the block holds all lower it. The question is the justified joint input
+  cost of supporting additional uses, and which structural bound it enables.
 - **An output budget.** With a bound on a block's outgoing bits as well (onsite's network certification bounds a
   server's traffic), the Loomis–Whitney inequality bounds a matrix product's work by the square root of the product of
   its three projections, a cap between the rectangle and fan-out bounds.

@@ -7,9 +7,14 @@ slowdown a secret training run suffers, with its symbols and where each step sta
 
 ## The security argument
 
-This is a conditional argument, not yet a proved theorem. Its scientific content is hypotheses about learning:
-information premises, which structural arguments turn into local bounds, and one coverage assumption. The protocol's
-part is to make them matter. The question it rests on:
+This is a conditional argument, not yet a proved theorem. It separates a learning hypothesis from enforcement.
+Coverage says that sufficiently cheap successful methods require a minimum weighted count of analysed computation.
+Local description and dependency arguments bound how much of that count an inference block can contain: the block must
+import the required information or reconstruct it within its gate budget. Protocol accounting then bounds the
+contribution of correctly executed inference blocks and charges every remaining contribution separately. Comparing
+their combined capacity with the required count gives the slowdown bound. Verification establishes execution, not
+uselessness for learning: the local bounds are what limit how much verified execution can help with the target. The
+question it rests on:
 
 > What property of a capability-acquiring computation forces it to integrate information that can't be cheaply
 > regenerated within small computational compartments that receive little input?
@@ -35,7 +40,10 @@ $$ \underbrace{\Omega_*}_{\text{required for covered success}} \;\le\;
    \underbrace{\sum_{I \in \mathcal I_{\mathrm{good}}} q_I}_{\text{possible inside the good blocks}} \;+\;
    \underbrace{Q_{\mathrm{rem}}}_{\text{everything else}} $$
 
-Ω_* comes from part 1, each q_I from part 2 and Q_rem from part 3. Part 4 divides by rates; it adds no assumption.
+Ω_* comes from part 1, each q_I from part 2 and Q_rem from part 3; this inequality is the canonical statement, and
+part 4's slowdown is a consequence of it, not a further source of difficulty. All three terms are one **weighted
+count** in one convention: the product arguments count weighted multiplications, the recovery argument counts output
+observations, and an application of the argument fixes one convention for Ω_*, every q_I and Q_rem.
 
 The numbers come from the slowdown calculator (`benchmarks/rho`), not from this file.
 
@@ -70,8 +78,8 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   - Φ_cred, the rate PoUW credits as declared work, and the **declared utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
   - Φ_D, the rate of correct credited declared work;
-  - q_I, the most weighted counted multiplications inference block I computes whole (part 2); ζ̄ and the counts below
-    use the same weights.
+  - q_I, the most of the weighted count inference block I computes whole (part 2); ζ̄ and the counts below use the same
+    convention.
 - **Updated state.** The trained model's parameter slots i, each with its eligible versions (one per optimizer step
   that writes it) and a **price** p_i in bits: what a joint description of it costs, not its storage width.
 - **Counted multiplication**: a product of a version of an updated slot and the operand of a **use** j (one token
@@ -223,10 +231,12 @@ every required gate reaches, inside A_j, a gate the consumer's finishing gates r
 - **weighted products** (`Nci.Guarantees.WeightedProductCap`): weighting product (i, j) by p_i·ω_j, a block's weighted
   products are at most the held slot budget h_w times its served weight.
 
-Together, with Ω_I the block's weighted products,
+These hold for the counted uses with an upstream certificate: for those, the block must import the specified context or
+perform the certified upstream computation. The held budget h_w is not a storage bound; it is what the description
+premise allows. Together, with Ω_I the block's weighted products,
 
 $$ \Omega_I \;\le\; h_w\Big(k + \frac{c}{g}\Big), \qquad\text{and}\qquad \Omega_I \;\le\; h_w\,k
-   \ \text{ when recomputing needs more state than } h_w. $$
+   \ \text{ when reconstructing the certified upstream computation would expose updated items priced above } h_w. $$
 
 The bound degrades with the gate budget instead of failing at a threshold: importing spends fresh bits, reconstructing
 spends gates. The g gates are the analysed implementation's certificate, not a lower bound on every algorithm computing
@@ -249,9 +259,20 @@ used so far:
 | activation hardness | incidence, fan-out only | a_out·h_x/β_x |
 | a recoverable hard source | outputs | (k' + δ + amb)/β_v |
 
-An assembly counts only when its premises hold for the same blocks; the smallest valid cap wins, and a refuted premise
-contributes nothing. Since the first rows are about k², they bind only when a block's own capacity c·ζ̄ is well above
-k²/β_w. The threaded read costs (`Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`), under which
+An assembly counts only when its premises hold for the same blocks, and a refuted premise contributes nothing. The
+smallest valid cap wins only among caps on the same count: a price-weighted product cap, an unweighted product cap and
+a recovery-output cap bound different counts, so they are compared only after conversion to one convention, or applied
+separately, each with its own coverage statement. Since the first rows are about k², they bind only when a block's own
+capacity c·ζ̄ is well above k²/β_w. A justified joint input cost of b bits per imported use gives
+Ω_I ≤ h_w·(k/b + c/g), and without reconstruction h_w·k/b ≈ k²/b: a larger b improves the coefficient, not the
+quadratic growth. A cap linear in k needs another structural fact, such as a fan-out bound that limits products by the
+activation coordinates a block can obtain, with no independently growing held-weight factor.
+
+**The budgets are fixed by the execution's boundaries, not chosen per data type.** Unregistered values crossing a
+block's boundary count by the bits they represent; a compressed code counts as the code, and decoding it spends gates;
+values reconstructed inside the block spend gates. For decoding, whether cached keys and values cost fresh bits or gates
+is a question of the cheapest admissible placement and reconstruction, not of which data the argument elects to
+charge. The threaded read costs (`Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`), under which
 `Nci.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), assume read costs rather than
 derive them; they are a candidate sufficient condition, not part of the repertoire.
 
@@ -289,17 +310,19 @@ one of two parts:
 Credit isn't counted twice, and padding isn't evidence that hardware ran anything. The remainder does at most ζ̄
 counted multiplications per unit of its fleet-time, so Q_rem ≤ ζ̄·(Φ − Φ_D)·|J| (remote). ζ̄ is a justified ceiling,
 not a reference's achieved rate: a reference execution shows what is feasible, not what is optimal. **Reference
-efficiency**, ζ̄ = ζ_ref with ζ_ref = M_ref/C_ref the reference's rate, is a hypothesis; at peak, ζ̄ = ζ_ref/MFU₀.
+efficiency**, ζ̄ = ζ_ref with ζ_ref = Ω_ref/C_ref the reference's weighted count over its fleet-time, is a hypothesis;
+at peak, ζ̄ = ζ_ref/MFU₀.
 
 ### Part 4: so reaching the target takes more fleet-time
 
 The **slowdown** ρ(𝒢, η) is T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), T_𝒢(η; ·) the least fleet-time at which some computation in the set
 reaches the target with probability above η, and **fleet-time** elapsed time times Φ, registered and unregistered.
 
-**Remote.** A covered successful computation carries a weighted total of at least Ω_* counted multiplications
-(part 1; with every weight 1, the plain count). The good blocks number at most Φ_D·|J|/c and each does at most q
-(part 2), and the remainder at most Q_rem (part 3). With f = 1 − Φ_D/Φ the
-share of capacity outside correct credited declared work,
+**Remote.** A covered successful computation carries a weighted count of at least Ω_* (part 1; with every weight 1,
+the plain count). The good blocks do at most Σ_I q_I (part 2), and the remainder at most Q_rem (part 3). Replacing the
+sum by (q/c)·Φ_D·|J| needs the accounting to show that the qualifying blocks have exactly c gates and correspond one to
+one to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform
+cap q, and f = 1 − Φ_D/Φ the share of capacity outside correct credited declared work,
 
 $$ \Omega_* \;\le\; \Big(\frac{q}{c}\,\Phi_D + \bar\zeta\,(\Phi - \Phi_D)\Big)\,|J|
    \quad\Longrightarrow\quad
@@ -311,14 +334,22 @@ over 𝒜 (the utilization policy bounds it),
 $$ \rho \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
 
 up to probability η: by coverage, computations without the covered structure reach the target below T_max with probability
-at most η (`Nci.Guarantees.CapabilityFloor`). With the earlier work floor, Ω_* = ζ_ref·C_ref/α, and reference efficiency
-this is 1/(α·[f + y]), y = (q/(c·ζ_ref))·(1 − f) the declared yield as a share. Without part 2, q/c could reach ζ̄ and
+at most η (`Nci.Guarantees.CapabilityFloor`). Let Ω_ref be the reference's count in the same convention and
+ζ_ref = Ω_ref/C_ref. Under the required-count floor Ω_* ≥ Ω_ref/α,
+
+$$ \rho \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, \qquad
+   y = \frac{q}{c\,\zeta_{\mathrm{ref}}}\,(1 - f), $$
+
+y the declared yield as a share. The ratio ζ̄/ζ_ref keeps the reference's achieved rate apart from the ceiling on every
+residual computation; only reference efficiency (ζ̄ = ζ_ref) reduces the bound to 1/(α·[f + y]). The unregistered share
+s ≤ f limits what this bound can certify, to at most 1/(α·(ζ̄/ζ_ref)·s); without a matching construction it says
+nothing about the actual slowdown. Without part 2, q/c could reach ζ̄ and
 the bound falls to Ω_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps declared work from being training.
 
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
-most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S counted multiplications,
+most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S of the weighted count,
 declared and residual together. When k_S is large enough for a server block to hold a token's whole path, the cap is
-void and onsite gives remote's bound.
+void, and the available onsite bound reduces to the remote bound.
 
 ### What the argument doesn't assume
 
