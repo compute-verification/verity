@@ -238,7 +238,7 @@ def test_composite_reads_each_case_as_a_piece_of_the_windows_record(tmp_path, ca
     ("alpha-under", "reject", "the division does not comply: inference block 0 reads more than α bits of fresh input "
                               "per gate"),
 ])
-def test_the_lean_check_accepts_the_registration_case_at_its_budgets_and_not_past_them(
+def test_the_lean_check_accepts_the_inference_only_case_at_its_budgets_and_not_past_them(
         tmp_path, capsys, inference_only_exe, toy_v1, change, verdict, reason):
     """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `nci_reference`'s),
     `inference-only check` accepts; one gate or one bit under, it rejects naming the budget. Its answer names the
@@ -269,7 +269,7 @@ def test_the_lean_check_accepts_the_registration_case_at_its_budgets_and_not_pas
     ("evidence-key", "evidence: the keys of the evidence are not owner, provenance, theta"),
     ("log-repeat", "trusted"),
 ])
-def test_the_lean_check_refuses_a_tampered_registration_case(tmp_path, inference_only_exe, change, reason):
+def test_the_lean_check_refuses_a_tampered_inference_only_case(tmp_path, inference_only_exe, change, reason):
     program, query = toy()
     v1 = v1_case(program, query)
     case = SC.inference_only_case(v1, 10**9, 10**12)
@@ -316,7 +316,7 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
     ("no-alpha-gamma", "α and Γ are the policy's, not the run's: pass --alpha and --gamma"),
     ("gamma-bool", "Γ is a natural"),
 ])
-def test_the_producer_refuses_a_registration_case_that_would_not_be_the_windows(tmp_path, capsys, change, reason):
+def test_the_producer_refuses_an_inference_only_case_that_would_not_be_the_windows(tmp_path, capsys, change, reason):
     """Refused before any Lean runs, with v2's case still written: the record naming another Program than v1's params,
     a previous record with no log or a log that doesn't chain to it, α and Γ not given."""
     program, query = toy()
@@ -350,9 +350,9 @@ def test_the_producer_refuses_a_registration_case_that_would_not_be_the_windows(
 ])
 def test_from_division_reads_alpha_and_gamma_off_the_checks_profile(tmp_path, capsys, profile, verdict, reason):
     """With ``--from-division``, Γ is the largest block's gates and α the most fresh-input bits a gate of any block, from
-    the check's profile at no budget; the CASE line publishes only those numbers, and the case's private
-    ``policy.json`` says where they come from. A rejection there, or a profile with no blocks or a block of no gates,
-    is refused before the case is checked."""
+    the check's profile at no budget. The CASE line publishes neither (on a one-block window they'd be its block's gates
+    and fresh-input bits): they stay in the case's private ``policy.json``, beside where they come from. A rejection
+    there, or a profile with no blocks or a block of no gates, is refused before the case is checked."""
     program, query = toy()
     v1 = v1_case(program, query)
     d = digest_of(v1)
@@ -362,7 +362,7 @@ def test_from_division_reads_alpha_and_gamma_off_the_checks_profile(tmp_path, ca
                                                                  | {"profile": profile}))
     if reason is None:
         assert rc == 0 and refused == [], out
-        assert [c.get("alpha_gamma") for c in cases] == [None, [[2, 3], 10]]
+        assert [sorted(c) for c in cases] == [["dir", "protocol", "verdict"]] * 2
         assert SC.FROM_DIVISION not in out
         d = tmp_path / "private" / "inference-only"
         params = json.loads((d / "case.json").read_text())["params"]
@@ -384,10 +384,13 @@ def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys
                                   "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(toy_v1))))
     assert rc == 0 and refused == [], out
     f = Fraction(bits, gates)
-    assert [(c["verdict"], c.get("alpha_gamma")) for c in cases if c["protocol"] == INF] == [
-        ("accept", [[f.numerator, f.denominator], gates])]
-    params = json.loads((tmp_path / "private" / "inference-only" / "case.json").read_text())["params"]
+    assert [(sorted(c), c["verdict"]) for c in cases if c["protocol"] == INF] == [(["dir", "protocol", "verdict"],
+                                                                                    "accept")]
+    d = tmp_path / "private" / "inference-only"
+    params = json.loads((d / "case.json").read_text())["params"]
     assert (params["alpha"], params["gamma"]) == ([f.numerator, f.denominator], gates)
+    assert json.loads((d / "policy.json").read_text()) == {"alpha": [f.numerator, f.denominator], "gamma": gates,
+                                                           "read": SC.FROM_DIVISION}
 
 
 def test_the_parameters_are_the_population_programs_and_no_other_programs():
@@ -505,7 +508,7 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 
 @lean
 @pytest.mark.slow
-def test_the_registration_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tmp_path, inference_only_exe):
+def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tmp_path, inference_only_exe):
     """The 4,32,4 class's window circuit (TINY on the H200: about 85 s and 3 GB to build) as the served window's audit
     holds it, its population program over the class's templates: the inference-only case `inference_only_case` makes from
     it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
