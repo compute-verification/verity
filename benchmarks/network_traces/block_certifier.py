@@ -3,7 +3,7 @@
 re-decides an answer by before it writes the entry.
 
 * `check`: ``network-period check`` on a case (`NetworkCheck.Period`'s formats: its ``params``, ``commitment`` and
-  ``evidence``), its answer.
+  ``evidence``, and in the clock form its ``blobs``, the files the link-windows' proofs name), its answer.
 * `block_leg`: a period's accepted answer, in the clock form or the rows form, as the block record's certifier entry: K
   in bits, its error the answer's exact ``eps``, and the certificate at δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most
   δ (`BLOCK_DELTAS`).
@@ -31,7 +31,8 @@ BLOCK_ERROR_FROM = "quantity.eps"
 
 
 def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
-    """``network-period check`` on the case: its answer."""
+    """``network-period check`` on the case: its answer, the case's ``blobs`` (paths: in the clock form the files
+    each link-window's one-stage v2 proof names) its BLOB arguments."""
     with tempfile.TemporaryDirectory() as d:
         files = []
         for name, data in (("params.json", canonical_json(case["params"])),
@@ -39,7 +40,7 @@ def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
                            ("evidence.json", bytes.fromhex(case["evidence"]))):
             (Path(d) / name).write_bytes(data)
             files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files], capture_output=True, text=True)
+        p = subprocess.run([exe, "check", *files, *map(str, case.get("blobs") or ())], capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
         raise RuntimeError(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])

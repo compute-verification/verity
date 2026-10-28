@@ -25,7 +25,7 @@
    "imports": [
     "CoreProtocol.Protocol",
     "CoreProtocol.Profile",
-    "Flock.Hash",
+    "Flock.WindowRecord",
     "PouwCheck.Json",
     "PouwCheck.Tile",
     "PouwWindow.Length",
@@ -103,8 +103,13 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
+  "PouwCheck.Fill": {
+   "imports": ["PouwCheck.Credit"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
   "PouwCheck.Period": {
-   "imports": ["CoreProtocol.Cli", "PouwCheck.Credit"],
+   "imports": ["CoreProtocol.Cli", "PouwCheck.Credit", "PouwCheck.Fill"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }

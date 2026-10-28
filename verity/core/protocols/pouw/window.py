@@ -44,8 +44,8 @@ is its tiles, the filler covers the rest, every call's -h3 root is the pass's, t
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
 holds those to the entries.  It is not proved yet: no Program states it.
 
-**The layout for gates** is specified in PoUW's PROTOCOL.md,
-"The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
+**The layout for gates** is Lean's `PouwWindow` (`lean/window`): the entry row (`Entry`, 336 bytes), the side rows
+(`side_row`), the dense side trees of 2^D
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
@@ -356,10 +356,10 @@ ROW_STEP = 16
 
 @dataclass(frozen=True)
 class Entry:
-    """One entry of the window root, as its committed bit row holds it (PROTOCOL.md's layout): its kind, its tile range
-    [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, a call's record's SHA-512, and where the call
-    sits in its pass: its first tile there `tile0`, its tile columns `cols` = ⌈n/64⌉ and its rows `m`.  `row` and
-    `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
+    """One entry of the sampling block's root, as its committed bit row holds it (`PouwWindow.Entry`): its kind, its
+    tile range [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, a call's record's SHA-512, and
+    where the call sits in its pass: its first tile there `tile0`, its tile columns `cols` = ⌈n/64⌉ and its rows `m`.
+    `row` and `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
 
     kind: str
     lo: int = 0

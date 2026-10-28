@@ -65,8 +65,8 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| PoUW (its period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
-| PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| PoUW (its period credit: the period's sampling blocks credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
+| PoUW (its sampling block check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | the inference-only policy (its check: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
@@ -139,10 +139,11 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 Lean to:
 
 - PoUW: `core_check.case`, and for its period `period_check.case`;
-- sampled proofs: v2's framing over the one-stage difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2
-  decides without a session's proof;
-- network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
-  one-stage's answers, on small signed periods from its `build`;
+- sampled proofs: v2's framing over the one-stage difftest's `one_stage` and decoders, `one_stage_zk_case.answer`, on
+  the cases v2 decides without a session's proof;
+- network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates,
+  one-stage's answers on the compute audits and v2 on each sampling block's proof, on small signed periods from its
+  `build`;
 - the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_baseline`) behind
   the protocol's decoders, on θ's provenance difftest's declarations with at most one change, from its `drawn`, or on
   the one-stage audit's own declared circuit and record (`policy_on`);

@@ -60,7 +60,7 @@ partials first, so a registered value of that name is not read. -/
 def roots? (registration produced : Json) (lanes words : Nat) (schema : String) :
     Except String (List (String × Flock.Registered.Port)) := do
   let program ← Flock.J.str registration "program" "the registration"
-  let digest ← SampledProofs.Record.registrationDigest registration
+  let digest ← Flock.WindowRecord.digestHex registration
   let dom ← SampledProofs.Produced.domain program PARTIALS words lanes 16 digest
   let some p := (← Flock.J.arr produced "produced" "the produced record").find? fun e =>
       (e.getObjValAs? String "value").toOption == some PARTIALS

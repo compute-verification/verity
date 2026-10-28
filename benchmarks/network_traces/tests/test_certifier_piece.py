@@ -154,7 +154,8 @@ def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None
 def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_the_block_record(tmp_path, warden,
                                                                                                 period, capsys,
                                                                                                 monkeypatch):
-    accept = period.reference(period.case("accept", 1, "clock"))
+    monkeypatch.setattr(period, "_proved", lambda *a: None)
+    accept = period.reference(period.build("honest", 1, small=True))
     assert accept["verdict"] == "accept" and accept["protocol"] == CP.PROTOCOL
     d = _serve_dir(tmp_path / "serve", warden)
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, _chain_out(tmp_path / "chain", "accepted", warden["w"]),
