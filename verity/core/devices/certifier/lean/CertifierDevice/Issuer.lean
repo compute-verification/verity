@@ -1,5 +1,6 @@
 import CertifierDevice.Driver
 import Lms.Sign
+import NetworkCheck.Check
 
 /-!
 # The issuer: one network certificate per closed link-window
@@ -8,7 +9,7 @@ The executable form of `certificate.py`'s `Issuer`, `Certificate` and `Certified
 under the grid's `parameters_digest`) and digest, that digest hidden under `salt_c`, 64 bytes of the certifier's own
 coins drawn for the record (`certificateDigest`), the message that binds the hidden digest to the key, the certifier
 session and the link-window (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
-encodings are `NetworkCheck`'s and the signature `Lms`'s.
+encodings are `NetworkCheck`'s, the certificate `NetworkCheck.Check.Certificate` and the signature `Lms`'s.
 
 Which leaf signs, and which session ids the key has started, is the signer's state (`lms.LeafState.reserve` and
 `start`), which stays with the host: `Issuer.certify` is pure given the salt and the reservation's result, and
@@ -42,15 +43,7 @@ the other only on a SHA-512 collision.
 namespace CertifierDevice
 
 open NetworkCheck (Direction RecordHead)
-
-/-- `certificate.Certificate`. -/
-structure Certificate where
-  keyId : ByteArray
-  link : String
-  direction : Direction
-  window : Nat
-  digest : ByteArray
-  signature : ByteArray
+open NetworkCheck.Check (Certificate)
 
 /-- `certificate.CertifiedRecord`: the record head, the salt the certifier drew for it (`salt_c`) and the certificate,
 which signs the head's digest hidden under that salt. -/
