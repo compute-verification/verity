@@ -617,8 +617,6 @@ def test_the_joint_rounds_refuse_a_store_under_pous_s_own_salt(tmp_path):
     from types import SimpleNamespace
     with pytest.raises(ValueError, match="under PoUS's own salt, which the bandwidth verifier refuses"):
         J.store_setup("libbwtag.so", None, SimpleNamespace(params=None, device=None), "GPU-x", tmp_path)
-    with pytest.raises(ValueError, match="no registered P2 params"):
-        J.store_setup("libbwtag.so", None, SimpleNamespace(device=DEVICE), "GPU-x", tmp_path)
 
 
 class _Chain:

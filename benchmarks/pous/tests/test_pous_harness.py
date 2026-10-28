@@ -1,7 +1,7 @@
 """The POUS-only harness (`benchmarks/pous/band_gpu/harness.py`, `bench.py --impl band-gpu`) on CPU: the band's reference codec
 stands in for the GPU twin on CPU tensors, a Python thread for the native responder (its wire format), and the memory
-challenger is the harness's own `memory_challenger.py` process.  The harness's timer is injected and the memory
-challenger runs on its logical clock (`--clock logical`: each answer's time is the responder's reported one), so no
+challenger is `memory_challenger/live.py`'s process under the PoUS tests' test signer.  The harness's timer is injected and
+the memory challenger runs on its logical clock (`--clock logical`: each answer's time is the responder's reported one), so no
 outcome here depends on a clock or on the machine's load: what is checked is that each step runs and each gate and
 control decides, not the numbers."""
 from __future__ import annotations
@@ -29,7 +29,7 @@ BENCH = ROOT / "benchmarks" / "pous"
 BAND = "band-chain/d12/v1"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
 SEED = "5eed" * 8
-"""`memory_challenger.py --seed`: the audits' challenges, and so the controls' verdicts, are fixed."""
+"""`memory_challenger/live.py --seed`: each session's secret and id, and so its sample and the controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -101,7 +101,7 @@ def _backend(params, flip_last: bool = False):
     from verity.core.protocols.pous.labels import salt_value, tag
 
     harness = _harness()
-    from band_gpu.memory_challenger import scheme_of
+    from memory_challenger.live import scheme_of
 
     at = lambda d: schemes.Band(type(params)(params.blocks_per_segment, params.m, d, 64))  # noqa: E731
     sch = scheme_of(at(params.d).name, at(params.d).params)
@@ -163,8 +163,9 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     gates = body["gates"]
     assert body["segments"] == 3 and body["blocks"] == 48 and body["weight_bytes"] == 2560
     for g in ("vector", "reference_encode", "round_trip", "decode_after_timing", "timed_audit", "value_control", "late_control",
-              "recompute_control", "segment_tags"):
+              "recompute_control", "segment_tags", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
+    assert "signer" not in gates
     assert set(body["implementation"]["decode_paths"]) == {"gates", "loop", "audits"}   # the CPU stand-in runs no dense decode
     assert body["pous_arm_graphed"] is False and body["metrics"]["loop"]["decode_memory"] is None
     assert gates["reference_encode"]["segments"] == [0, 2]
@@ -174,15 +175,17 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     honest, value, late, rec = m["audit"], m["value_control"], m["late_control"], m["recompute_control"]
     from verity.core.protocols.pous import audit
 
-    assert honest["audits_accepted"] == 2 and honest["k"] == audit.CHALLENGES and honest["responder"]["answered"] == 2 * audit.CHALLENGES
+    assert honest["audits_accepted_under_signer"] == 2 and honest["k"] == audit.CHALLENGES
+    assert honest["responder"]["answered"] == 2 * audit.CHALLENGES
+    assert honest["audits_accepted"] == 0 and honest["signer"]["test"]                   # a test-signed session: fail closed
     assert set(honest["margin_s"]) >= {"min", "p50", "max"} and honest["limit_ns"] > honest["deadline_ns"]
     limit = m["calibration"]["limit_ns"]
     assert honest["limit_fixed_before_load"] and honest["limit_ns"] == limit == m["deadline"]["limit_ns"]      # one limit for all
     assert m["deadline"]["allowance_kind"] == "loopback" and late["limit_ns"] == rec["limit_ns"] == limit
-    assert len(honest["records"]) == 2 and all(len(r["source"]) == 64 and len(r["answers"]) == audit.CHALLENGES
+    assert len(honest["records"]) == 2 and all(len(r["public"]["openings"]) == len(r["answers"]) == audit.CHALLENGES
                                                for r in honest["records"])                                    # re-derivable
-    assert value["audits_accepted"] == 0 and value["wrong"] > 0                                               # rejects on value
-    assert late["audits_accepted"] == 0 and late["late"] > 0 and late["wrong"] == 0                           # rejects on time
+    assert value["audits_accepted_under_signer"] == 0 and value["wrong"] > 0                                  # rejects on value
+    assert late["audits_accepted_under_signer"] == 0 and late["late"] > 0 and late["wrong"] == 0              # rejects on time
     assert rec["wrong"] == 0 and rec["late"] > 0 and rec["dropped_blocks"] == 3                               # recomputed right, late
     assert rec["margin_s"]["min"] < 0 and "cliff" in rec["pattern"]
     assert rec["recomputed_answers"] > 0 and rec["device_margin_s"]["max"] == (limit - 1_000_000) / 1e9     # the timer's 1 ms
@@ -193,7 +196,7 @@ def test_the_harness_runs_every_step_and_its_gates_decide(tmp_path):
     assert m["step_floor"] is None and m["nvme"]["block_read_s"]["n"] == 8 and not list(nvme.iterdir())
     names = {r["name"] for r in body["measurements"]}
     assert {"encode_GBps", "decode_overhead_T1", "decode_overhead_T8", "audit_margin_min_s", "nvme_block_read_p99.9_s"} <= names
-    assert body["profile"] is not None and not body["profile"]["certified"]
+    assert body["profile"] is None                                    # the verdict accepted no test-signed session
 
 
 def test_a_wrong_encoding_stops_the_run_before_anything_is_timed(tmp_path):
@@ -262,7 +265,7 @@ def test_band_d_builds_the_band_at_that_in_degree_with_its_certificate_cliff_the
     from verity.core.protocols.pous import band, schemes
 
     harness = _harness()
-    from band_gpu.memory_challenger import params_of, scheme_of
+    from memory_challenger.live import params_of, scheme_of
 
     small = harness.with_in_degree(_small(), 6)
     sch = scheme_of("band-chain/d6/v1", small)
@@ -290,8 +293,9 @@ def test_the_harness_runs_the_band_at_d6_and_records_d(tmp_path):
     body = _bench().BandGpu().run(_args(tmp_path, band_d=6), WS, tmp_path, backend=_backend(harness.with_in_degree(params, 6)),
                                   base=params, vectors=_vectors(params))
     gates, m = body["gates"], body["metrics"]
-    assert body["scheme"] == "band-chain/d6/v1" and body["scheme_params"]["d"] == 6 and body["profile"]["params"]["d"] == 6
-    for g in ("vector", "reference_encode", "round_trip", "timed_audit", "value_control", "late_control", "recompute_control"):
+    assert body["scheme"] == "band-chain/d6/v1" and body["scheme_params"]["d"] == 6 and m["audit"]["scheme"] == "band-chain/d6/v1"
+    for g in ("vector", "reference_encode", "round_trip", "timed_audit", "value_control", "late_control", "recompute_control",
+              "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert gates["vector"]["d"] == 12                                       # the pinned vector, at the registered d
     assert m["recompute_control"]["dropped_blocks"] == 3 * 2 and "every 7-th" in m["recompute_control"]["pattern"]
@@ -333,7 +337,7 @@ def test_audits_0_runs_the_band_untimed_with_no_limit_audit_or_control_and_says_
 def test_bench_labels_an_untimed_result_and_refuses_audits_0_where_it_would_pass_vacuously(tmp_path, monkeypatch):
     bench = _bench()
     common = ["--weight-set", "qwen2.5-0.5b/linears+head", "--hardware", "cpu", "--out", str(tmp_path)]
-    with pytest.raises(SystemExit, match="only band-gpu and the P2 arms run untimed"):
+    with pytest.raises(SystemExit, match="only band-gpu and p2-v3-mc-gpu run untimed"):
         bench.main(["--impl", "reference", "--audits", "0", *common])
 
     class Untimed:
@@ -390,20 +394,22 @@ def test_the_control_responder_holds_only_the_late_controls_answers():
     assert got[1] == (0, 1_000, c_host[width:2 * width])
 
 
-def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path):
-    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real draws fail now
-    and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
+def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_under_the_test_signer_alone(tmp_path):
+    """`--seed` fixes the CPU tests' sessions, since a control's gate is a statistical test that a fresh sample fails now
+    and then; a timed audit on the wall clock, or one S1's key signs, refuses it before reading anything, so its secrets
+    and session ids stay `os.urandom`'s."""
     _harness()
-    from band_gpu import memory_challenger as mc
+    from memory_challenger import live
 
     files = ["--ready", str(tmp_path / "ready.json"), "--leaves", str(tmp_path / "leaves.bin"), "--out", str(tmp_path / "out.json")]
-    with pytest.raises(SystemExit) as refused:
-        mc.main([*files, "--seed", SEED])
-    assert refused.value.code == 2 and not (tmp_path / "out.json").exists()
+    for extra in ([], ["--clock", "logical", "--signer", "lms"]):
+        with pytest.raises(SystemExit) as refused:
+            live.main([*files, "--seed", SEED, *extra])
+        assert refused.value.code == 2 and not (tmp_path / "out.json").exists()
     seed = bytes.fromhex(SEED)
-    with pytest.raises(ValueError, match="logical clock alone"):
-        mc.audit("127.0.0.1", 0, None, None, audits=1, pings=1, seed=seed)
-    assert len({mc.seeded_source(seed, j) for j in range(4)} | {mc.seeded_source(b"other", 0)}) == 5
+    with pytest.raises(ValueError, match="logical clock under the test signer alone"):
+        live.audit("127.0.0.1", 0, None, b"", b"", audits=1, pings=1, seed=seed)
+    assert len({live.seeded(seed, j) for j in range(4)} | {live.seeded(b"other", 0)}) == 5
 
 
 def test_the_band_recompute_xors_w_in_inside_its_timed_device_call():
@@ -655,11 +661,10 @@ def test_pod_sh_asks_nvidia_smi_about_the_runs_gpu_and_refuses_to_guess_one(tmp_
     assert rc.returncode == 2 and "name the run's GPU" in rc.stdout and calls == []
 
 
-def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
-    """PREPARE=1, run before the GPU lease: for p2-v3-mc-gpu, `lake build memory-challenger-verdict` in its Lean package
-    (lake from the user's elan here, /opt/elan's on the pod image) and exit, with no nvidia-smi query; for p2-v3-gpu,
-    `lake build pous-timed-audit` in pous_check where its lakefile declares one; for another IMPL, nothing; a failed build
-    exits 3."""
+def test_pod_sh_prepare_builds_the_lean_verdict_and_touches_no_gpu(tmp_path):
+    """PREPARE=1, run before the GPU lease: for the memory challenger's arms (p2-v3-mc-gpu, band-gpu), `lake build
+    memory-challenger-verdict` in its Lean package (lake from the user's elan here, /opt/elan's on the pod image) and exit,
+    with no nvidia-smi query; for another IMPL, nothing; a failed build exits 3."""
     home = tmp_path / "home"
     lake = home / ".elan" / "bin" / "lake"
     lake.parent.mkdir(parents=True)
@@ -669,13 +674,11 @@ def test_pod_sh_prepare_builds_the_lean_verdicts_and_touches_no_gpu(tmp_path):
     assert rc.returncode == 0 and calls == []
     package = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "lean"
     assert (tmp_path / "lake-args").read_text() == f"{package} build memory-challenger-verdict\n"
-    rc, calls, _ = _pod_sh(tmp_path, "band", "GPU-a GPU-b", "PREPARE=1", HOME=str(home))
-    assert rc.returncode == 0 and calls == [] and (tmp_path / "lake-args").read_text().count("\n") == 1
-    check = ROOT / "verity" / "core" / "protocols" / "pous" / "check"
-    declared = 'name = "pous-timed-audit"' in (check / "lakefile.toml").read_text()
-    rc, calls, _ = _pod_sh(tmp_path, "strict", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-gpu", HOME=str(home))
+    rc, calls, _ = _pod_sh(tmp_path, "band", "GPU-a GPU-b", "PREPARE=1", HOME=str(home))           # _pod_sh's IMPL=band-gpu
     assert rc.returncode == 0 and calls == []
-    assert (tmp_path / "lake-args").read_text().splitlines()[1:] == ([f"{check} build pous-timed-audit"] if declared else [])
+    assert (tmp_path / "lake-args").read_text() == f"{package} build memory-challenger-verdict\n" * 2
+    rc, calls, _ = _pod_sh(tmp_path, "reference", "GPU-a GPU-b", "PREPARE=1", "IMPL=reference", HOME=str(home))
+    assert rc.returncode == 0 and calls == [] and (tmp_path / "lake-args").read_text().count("\n") == 2
     (tmp_path / "lake-args").unlink()
     rc, calls, _ = _pod_sh(tmp_path, "failed", "GPU-a GPU-b", "PREPARE=1", "IMPL=p2-v3-mc-gpu", HOME=str(home), LAKE_RC="1")
     assert rc.returncode == 3 and calls == []

@@ -1,4 +1,4 @@
-"""The band and P2 v1 side by side, from the two `bench-result.json` of one session (`pod.sh IMPL=side-by-side`): encode, the
+"""The band and P2 side by side, from the two `bench-result.json` of one session (`pod.sh IMPL=side-by-side`): encode, the
 decode pass and its overhead per `T`, the honest audit's answer times and margin against its limit, and the recompute control's
 margin, with each arm's gates.  An arm whose gates failed contributes no number (its measurements are withheld, as
 `bench.py` withholds them).

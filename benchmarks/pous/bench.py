@@ -15,7 +15,8 @@ Every implementation passes the same gates and reports the same metrics, written
   - The scheme's pinned conformance vectors (`verity/core/protocols/pous/tests/fixtures/schemes/<name>.json`), through
     `verity.core.protocols.pous.protocol`.
   - The implementation's own gates: known answers, and decoded blocks equal to the reference's.
-  - The timed audit, and a negative control where one block in ten is wrong.
+  - The timed audit by the memory challenger (`verity.core.protocols.pous.memory_challenger`), and a negative control where
+    one block in ten is wrong.
   - `certificate`: the scheme's certificate covers the audit's k and deadline.
 * **Metrics.**
   - The decode pass over the weight set: seconds, and EWB, which is weight bytes over the pass time.
@@ -23,36 +24,32 @@ Every implementation passes the same gates and reports the same metrics, written
   - The timed audit: accepted out of N, the worst answer, the limit.
   - The storage profile the certificate gives an accepted audit, with its gaps.
 
+The memory challenger signs each session with S1's LMS key in `--mc-lms-key DIR` (band-gpu, p2-v3-mc-gpu), every session's
+id in the session log `--mc-session-log FILE` (a file of its own); without a key the sessions are test-signed, so the
+verdict rejects them all (the `fail_closed` gate), the gates read the verdict under the test signer's own mapping, and no
+storage profile is issued.
+
 Implementations (`IMPLS`), each adding one class:
 
-* `reference`: `verity.core.protocols.pous` itself, the specification, over CPU processes. W is filled deterministically, since the
-  decode's cost does not depend on its bytes.
+* `reference`: `verity.core.protocols.pous` itself, the specification, over CPU processes, its timed audit by the memory
+  challenger in this process under the test signer. W is filled deterministically, since the decode's cost does not depend
+  on its bytes.
 * `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous` (#172, #188), from `--impl-tree`.
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
     record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
-* `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): its reference pinned by the spec's vectors, its GPU library
-  (decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
-  at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): the spec's P2 is
-  not a `verity.core.protocols.pous` registered scheme, whose P2 is the MVP's `p2-16448/v4` (the spec's
-  counter-mode SHA-512 keys, its 24-byte salt and leaves) and `p2-16448/v2` (ChaCha8 keys).
-* `p2-v3-gpu`: the same kernels and steps, under the registered P2's framing (`p2-16448/v4`: its commitment, salt, key prefix and leaves,
-  `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
-  certificate (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover.
-* `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
-  `Δ + RTT_ALLOWANCE_CAP_NS`, with a tampered-block and a bad-signature control beside the others.  Its sessions are signed
-  with S1's LMS key in `--mc-lms-key DIR`, every session's id in the session log `--mc-session-log FILE` (a file of its
-  own); without a key they are test-signed, so the verdict rejects them all (its `fail_closed` gate), and it issues no
-  storage profile.
+* `p2-v3-mc-gpu`: P2's GPU library (`p2_v1/`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by
+  two roots), its kernels pinned by the spec's vectors, under the registered P2 (`p2-16448/v4`: its commitment, salt and
+  key prefix, `p2_v1/harness.py`'s `Store`), and the same harness steps as `band-gpu` at k = 105, so the two compare side by
+  side (`side_by_side.py`).  The memory challenger (`memory_challenger/live.py --strict`) audits at
+  `Δ + RTT_ALLOWANCE_CAP_NS` and refuses any `k` or limit no certificate covers, with a tampered-block and a bad-signature
+  control beside the others.  It is its own scheme (`--scheme` is ignored).
 * `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
   (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
   encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
-* `band-gpu`: the same kernels, moved into `band_gpu/` with no vLLM dependency, the whole-chain decode on lane pairs
-  (`harness.KERNELS`), run by the POUS-only harness (`band_gpu/harness.py`): kernel gates that stop the run when they fail,
-  encode GB/s, `C` resident, decode overhead on a synthetic loop of the weight set's GEMMs (CUDA-graphed where capturable),
-  the limit fixed before any load, timed audits under that loop with value, late and recompute controls, the `Π₂` step
-  floor (an upper bound on a whole call, not on an attacker's answer: `band_gpu/harness.py`, step 6), and optionally one
-  block's read latency from NVMe.
+  the limit fixed before any load, timed audits by the memory challenger under that loop with value, late and recompute
+  controls, the `Π₂` step floor (an upper bound on a whole call, not on an attacker's answer: `band_gpu/harness.py`, step
+  6), and optionally one block's read latency from NVMe.
 """
 
 from __future__ import annotations
@@ -180,7 +177,8 @@ def _decode_job(job: tuple[str, int, str, int, int, list[bytes]]) -> tuple[int, 
 
 
 class Reference:
-    """`verity.core.protocols.pous` itself: encode and decode on CPU processes, `vk` and the timed audit through `verity.core.protocols.pous.protocol`."""
+    """`verity.core.protocols.pous` itself: encode and decode on CPU processes, `vk` through `verity.core.protocols.pous.protocol`,
+    and the timed audit by the memory challenger in this process (`_audits`)."""
 
     name = "reference"
 
@@ -207,9 +205,12 @@ class Reference:
         vk = protocol.verifier_key(scheme, commitment, SALT, w=w_segments, encoded=c)
         vk_s = time.perf_counter() - t
         blocks = [b for seg in c for b in seg]
-        honest = self._audits(protocol, scheme, vk, blocks.__getitem__, a.audits, a.rtt_allowance_ns)
+        from verity.core.protocols.pous.memory_challenger import block_digest
+
+        digests = [block_digest(b) for b in blocks]
+        honest = self._audits(scheme, vk.root, digests, blocks.__getitem__, a.audits, a.rtt_allowance_ns)
         wrong = [bytes(len(b)) if i % 10 == 0 else b for i, b in enumerate(blocks)]
-        negative = self._audits(protocol, scheme, vk, wrong.__getitem__, a.audits, a.rtt_allowance_ns)
+        negative = self._audits(scheme, vk.root, digests, wrong.__getitem__, a.audits, a.rtt_allowance_ns)
         k, limit = honest["k"], honest["limit_ns"]
         gate, gaps = certificate_gate(scheme, k, limit)
         from verity.core.protocols.pous import dense as dense_codec
@@ -221,25 +222,51 @@ class Reference:
             "implementation": {"name": self.name, "commit": a.impl_commit, "workers": a.workers},
             "segments": n, "segments_of_weight_set": segments, "blocks": scheme.params.blocks, "weight_bytes": used,
             "gates": {"round_trip": {"passed": all(ok for _, ok, _ in dec)}, "certificate": gate, "segment_tags": tags,
-                      "timed_audit": {"passed": honest["accepted"] == honest["audits"]},
-                      "negative_control": {"passed": negative["accepted"] == 0, "accepted": negative["accepted"]}},
+                      "timed_audit": {"passed": honest["accepted_under_signer"] == honest["audits"]},
+                      "negative_control": {"passed": negative["accepted_under_signer"] == 0,
+                                           "accepted": negative["accepted_under_signer"]},
+                      "fail_closed": {"passed": honest["accepted"] == negative["accepted"] == 0,
+                                      "note": "memory_challenger.SCHEMES accepts no test-signed session, so no storage "
+                                              "profile is issued"}},
             "metrics": {"decode_pass_s": decode_wall, "ewb": used / decode_wall,
                         "decode_s_per_segment": statistics.median(dt for _, _, dt in dec),
                         "encode_pass_s": encode_wall, "encode_s_per_segment": statistics.median(dt for _, _, dt in enc),
                         "vk_s": vk_s, "audit": honest, "negative_audit": negative},
-            "profile": profile_json(scheme, k, limit, gaps) if honest["accepted"] else None,
+            "profile": profile_json(scheme, k, limit, gaps) if honest["audits"] and honest["accepted"] == honest["audits"] else None,
         }
 
     @staticmethod
-    def _audits(protocol, scheme, vk, block, audits: int, rtt_ns: int) -> dict[str, Any]:
-        results = []
-        for j in range(audits):
-            v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(f"bench-audit/{j}".encode(), vk), rtt_allowance_ns=rtt_ns,
-                                  experimental=True)   # an experimental scheme's profile says so
-            results.append(v.run(protocol.responder(scheme, block)))
-        elapsed = [x.elapsed_ns for r in results for x in r.answers]
-        return {"audits": audits, "accepted": sum(r.accepted for r in results), "k": v.k, "limit_ns": v.limit_ns,
-                "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}
+    def _audits(scheme, root: bytes, digests: list[bytes], block, audits: int, rtt_ns: int) -> dict[str, Any]:
+        """`audits` sessions of the memory challenger against `block(i)`, test-signed, each judged against `digests` by
+        `memory_challenger.verdict` and by the same verdict under the test signer's own mapping."""
+        import tempfile
+
+        sys.path.insert(0, str(HERE))
+        from memory_challenger.live import session_log, signer_schemes, test_signer
+
+        from verity.core.protocols.pous import audit as pous_audit
+        from verity.core.protocols.pous import memory_challenger as mc
+
+        cert = scheme.certificate
+        k = cert.k if cert is not None else pous_audit.CHALLENGES
+        limit = pous_audit.DEADLINE_NS + rtt_ns
+        p = scheme.params
+        accepted = under_signer = 0
+        elapsed: list[int] = []
+        with tempfile.TemporaryDirectory(prefix="pous-bench-") as scratch:
+            sig = test_signer().TestSigner(os.urandom(32), height=max(1, (max(1, audits) - 1).bit_length()),
+                                           directory=scratch)
+            log, schemes = session_log(Path(scratch) / "sessions", True), signer_schemes(sig.scheme)
+            for _ in range(audits):
+                c = mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), p.blocks, k), sig, log=log,
+                                        limit_ns=limit, block_bytes=p.block_bytes, binding=root)
+                signed = c.run(block)
+                args = (signed, c.commitment, c.openings(), digests.__getitem__)
+                accepted += mc.verdict(*args, trusted={sig.public_key}).accepted
+                under_signer += mc.verdict(*args, trusted={sig.public_key}, schemes=schemes).accepted
+                elapsed += [r.elapsed_ns for r in signed.rounds]
+        return {"audits": audits, "accepted": accepted, "accepted_under_signer": under_signer, "k": k, "limit_ns": limit,
+                "signer": sig.scheme, "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}
 
 
 # ---------------------------------------------------------------------------------------------------------- vllm-gpu (#188)
@@ -326,37 +353,19 @@ class BandGpu:
         k, limit = int(audit.get("k") or 0), int(audit.get("limit_ns") or 0)
         gate, gaps = certificate_gate(scheme, k, limit)
         body["gates"]["certificate"] = gate
-        body["profile"] = profile_json(scheme, k, limit, gaps + extra) if body["gates"]["timed_audit"]["passed"] else None
+        issued = body["gates"]["timed_audit"]["passed"] and audit.get("audits_accepted") == audit.get("audits")
+        body["profile"] = profile_json(scheme, k, limit, gaps + extra) if issued else None
         return body
 
 
-# ---------------------------------------------------------------------------------------------------------- p2-v1-gpu
+# ---------------------------------------------------------------------------------------------------------- p2-v3-mc-gpu
 
-class P2V1Gpu:
-    """P2's GPU kernels (`p2_v1/`) through P2's arm of the POUS-only harness (`p2_v1/harness.py`)."""
+class P2V3McGpu:
+    """P2's GPU kernels (`p2_v1/`) under the registered P2 (`schemes.p2.P2`, `p2-16448/v4`) through P2's arm of the
+    POUS-only harness (`p2_v1/harness.py`), audited by the memory challenger."""
 
-    name = "p2-v1-gpu"
-    own_scheme = "p2/v4"
+    name = "p2-v3-mc-gpu"
     experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"
-
-    def conformance_gate(self) -> dict[str, Any]:
-        sys.path.insert(0, str(HERE))
-        from p2_v1 import reference
-
-        return reference.conformance()
-
-    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
-        sys.path.insert(0, str(HERE))
-        from p2_v1 import harness
-
-        return harness.run(a, ws, out, w_segment=_w_segment, **kw)
-
-
-class P2V3Gpu(P2V1Gpu):
-    """The same kernels under the registered P2's framing (`schemes.p2.P2`, `p2-16448/v4`), audited by `protocol.TimedAudit`
-    (`p2_v1/harness.py`'s `V3`)."""
-
-    name = "p2-v3-gpu"
 
     @property
     def own_scheme(self) -> str:
@@ -390,26 +399,14 @@ class P2V3Gpu(P2V1Gpu):
         sys.path.insert(0, str(HERE))
         from p2_v1 import harness
 
-        return harness.run(a, ws, out, w_segment=_w_segment, framing=harness.V3, **kw)
+        return harness.run(a, ws, out, w_segment=_w_segment, **kw)
 
 
-class P2V3McGpu(P2V3Gpu):
-    """The same kernels and framing, audited by the memory challenger (`p2_v1/harness.py`'s `MC`)."""
-
-    name = "p2-v3-mc-gpu"
-
-    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
-        sys.path.insert(0, str(HERE))
-        from p2_v1 import harness
-
-        return harness.run(a, ws, out, w_segment=_w_segment, framing=harness.MC, **kw)
-
-
-IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2V3McGpu)}
+IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V3McGpu)}
 
 
 def main(argv: list[str] | None = None, **kw: Any) -> int:
-    """`kw` goes to the implementation's `run` (the P2 arms: `p2_v1.harness.run`'s `load`, from a caller hosting this harness
+    """`kw` goes to the implementation's `run` (p2-v3-mc-gpu: `p2_v1.harness.run`'s `load`, from a caller hosting this harness
     in its own process)."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--scheme", default="band-chain/d12/v1", help="a registered name (verity.core.protocols.pous.schemes)")
@@ -418,54 +415,54 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--hardware", required=True, help="a census hardware id (benchmarks/census/hardware.json), e.g. l40s-48gb/bf16")
     ap.add_argument("--out", required=True)
     ap.add_argument("--audits", type=int, default=20,
-                    help="timed audits per round; 0 (band-gpu, p2-v1-gpu): an untimed placement, which runs the gates, encode, "
+                    help="timed audits per round; 0 (band-gpu, p2-v3-mc-gpu): an untimed placement, which runs the gates, encode, "
                          "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory challenger's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
-    ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu: only the first N segments (0: all)")
+    ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v3-mc-gpu: only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
-    ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v1-gpu: the pous_native JIT build directory")
+    ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v3-mc-gpu: the pous_native JIT build directory")
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")
     ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over harness.KERNELS, as JSON (harness.SWITCHES)")
-    ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v1-gpu: the synthetic loop's token counts T")
-    ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v1-gpu: timed repetitions after one warm-up; every rep is recorded")
+    ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v3-mc-gpu: the synthetic loop's token counts T")
+    ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v3-mc-gpu: timed repetitions after one warm-up; every rep is recorded")
     ap.add_argument("--reference-segments", type=int, default=2, help="band-gpu: segments of C checked against verity.core.protocols.pous")
-    ap.add_argument("--pings", type=int, default=5000, help="band-gpu, p2-v1-gpu: round-trip calibration pings before and after the audits")
-    ap.add_argument("--k", type=int, default=0, help="band-gpu, p2-v1-gpu: challenges per audit (0: the certificate's)")
+    ap.add_argument("--pings", type=int, default=5000, help="band-gpu, p2-v3-mc-gpu: round-trip calibration pings before and after the audits")
+    ap.add_argument("--k", type=int, default=0, help="band-gpu, p2-v3-mc-gpu: challenges per audit (0: the certificate's)")
     ap.add_argument("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
-                    help="band-gpu, p2-v1-gpu: the calibration quantile added to the 0.5 ms deadline")
-    ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v1-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
+                    help="band-gpu, p2-v3-mc-gpu: the calibration quantile added to the 0.5 ms deadline")
+    ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v3-mc-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
-                    help="band-gpu, p2-v1-gpu: time answers on the memory challenger's clock (wall) or by the responder's reported time (logical)")
-    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the memory challenger process's core")
-    ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the responder thread's core")
-    ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v1-gpu: T of the POUS forwards run during the audit (0: none)")
+                    help="band-gpu, p2-v3-mc-gpu: time answers on the memory challenger's clock (wall) or by the responder's reported time (logical)")
+    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v3-mc-gpu: the memory challenger process's core")
+    ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v3-mc-gpu: the responder thread's core")
+    ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v3-mc-gpu: T of the POUS forwards run during the audit (0: none)")
     ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")
-    ap.add_argument("--nvme-dir", default="", help="band-gpu, p2-v1-gpu: also time one block's read of C from a file here (O_DIRECT)")
-    ap.add_argument("--nvme-samples", type=int, default=2000, help="band-gpu, p2-v1-gpu: block reads timed from --nvme-dir")
-    ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
+    ap.add_argument("--nvme-dir", default="", help="band-gpu, p2-v3-mc-gpu: also time one block's read of C from a file here (O_DIRECT)")
+    ap.add_argument("--nvme-samples", type=int, default=2000, help="band-gpu, p2-v3-mc-gpu: block reads timed from --nvme-dir")
+    ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v3-mc-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
-                    help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
+                    help="p2-v3-mc-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
     ap.add_argument("--p2-c-cache", default="",
-                    help="the P2 arms, with all of C encoded: keep C = Enc(W) in this directory and reuse it when the setup "
+                    help="p2-v3-mc-gpu, with all of C encoded: keep C = Enc(W) in this directory and reuse it when the setup "
                          "matches (a timed run of a large W then skips the encode an untimed run measured)")
     ap.add_argument("--mc-lms-key", default="",
-                    help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
+                    help="band-gpu, p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")
     ap.add_argument("--bandwidth-salt", default="",
-                    help="p2-v3-gpu, p2-v3-mc-gpu, joint runs only: set C up under the bandwidth audit's salt for this GPU (as "
+                    help="p2-v3-mc-gpu, joint runs only: set C up under the bandwidth audit's salt for this GPU (as "
                          "nvidia-smi's -i takes it), bandwidth.audit.draw_salt over W's commitment and the id the challenger "
                          "reads (audit.read_device), so the bandwidth verifier accepts C as the device's store; without it, "
                          "PoUS's own salt (protocol.draw_salt)")
     ap.add_argument("--mc-session-log", default="",
-                    help="p2-v3-mc-gpu with --mc-lms-key: the memory challenger's used-session log, a file of its own outside "
+                    help="band-gpu, p2-v3-mc-gpu with --mc-lms-key: the memory challenger's used-session log, a file of its own outside "
                          "the key's directory (made with a new key; for a key that exists, a missing log is refused)")
     ap.add_argument("--band-d", type=int, default=0,
                     help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "
                          "holds with its cliff at d")
     ap.add_argument("--gates-only", action="store_true",
-                    help="band-gpu, p2-v1-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
+                    help="band-gpu, p2-v3-mc-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -473,8 +470,8 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     t = time.perf_counter()
     from verity.core.protocols.pous import schemes as _schemes
 
-    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu", "p2-v3-gpu", "p2-v3-mc-gpu")):
-        raise SystemExit(f"--audits {a.audits}: only band-gpu and the P2 arms run untimed (--audits 0)")
+    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v3-mc-gpu")):
+        raise SystemExit(f"--audits {a.audits}: only band-gpu and p2-v3-mc-gpu run untimed (--audits 0)")
     if a.band_d:
         if a.impl != "band-gpu":
             raise SystemExit(f"--band-d is band-gpu's, not {a.impl}'s")

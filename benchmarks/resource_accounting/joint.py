@@ -627,10 +627,8 @@ class Device:
 
 def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) -> tuple[dict, Device, Challenger]:
     """At the harness's hook (`C` on the device, nothing running): the device as the challenger reads it, which must be the
-    one the store's salt binds (the harness's `--bandwidth-salt`), `vk` over `C` under the framing's registered P2
+    one the store's salt binds (the harness's `--bandwidth-salt`), `vk` over `C` under the store's registered P2
     (`fr.params`, `fr.salt`), the store's one prover and its challenger."""
-    if not hasattr(fr, "params"):
-        raise ValueError(f"{type(fr).__name__} has no registered P2 params: the joint rounds take p2-v3-gpu or p2-v3-mc-gpu")
     if getattr(fr, "device", None) is None:
         raise ValueError("the store is under PoUS's own salt, which the bandwidth verifier refuses: the joint rounds take the "
                          "harness's --bandwidth-salt (run.sh JOINT sets it)")

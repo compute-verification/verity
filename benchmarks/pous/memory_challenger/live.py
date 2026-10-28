@@ -1,8 +1,10 @@
-"""The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.core.protocols.pous.
-memory_challenger` against the responder, over the harness's responder wire (`band_gpu/memory_challenger.py`).
+"""The memory challenger's process in the harness's timed audit (`band-gpu`, `p2-v3-mc-gpu`):
+`verity.core.protocols.pous.memory_challenger` against the responder (`pous_native.cu`'s wire, or the harness's
+`ControlResponder`).
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
-        [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
+        [--pings N] [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only]
+        [--clock logical [--seed HEX]] [--strict]
         [--signer lms --lms-key DIR --session-log FILE [--keygen-workers N] | --signer test] [--sessions FILE]
 
 `READY.json` names the responder's port, the scheme, its manifest and the setup salt.  `DIGESTS.bin` is the `sha512/row/v2`
@@ -10,13 +12,21 @@ digest of every block of `C` (`memory_challenger.block_digest`), in block order:
 each round's `H(block)` against, the table a proof will replace (`answer_circuit.PousAnswerOpens_v1` opens `H(block)`
 against C's leaf).
 
-- **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
-  calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
-- **A session** draws a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
-  secret and commits its coin tree, every session's before the first round of any; it runs `k` rounds (the certificate's
-  `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
-  certificate covers (`covering_certificate`) before any round.  Every session's binding is `setup_root`, the root the setup
-  publishes for the `C*` of these digests under READY's salt (`VerifierKey.from_row_digests`), recorded as `setup_root`.
+- **The limit.** For P2 it is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any
+  load; the calibration (`--calibrate-only`) still measures the loopback round trip and records whether its quantile
+  (`--allowance`) fits under the cap.  A scheme with no cap (the band) takes `Δ` plus that measured quantile: the harness
+  calibrates with no load running and hands the limit to every audit (`--limit-ns`), which such a scheme requires.  The
+  allowance is a loopback one (`allowance_kind`): a remote memory challenger's round trip adds to it.
+- **A session** samples a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
+  secret and commits its coin tree, every session's before the first round of any; it runs `k` rounds (`--k`, else the
+  certificate's, else `audit.CHALLENGES`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a
+  `k` or limit no certificate covers (`covering_certificate`) before any round; without it the audit runs anyway and
+  `gaps` names what no certificate covers.  Every session's binding is `setup_root`, the root the setup publishes for the
+  `C*` of these digests under READY's salt (`VerifierKey.from_row_digests`), recorded as `setup_root`.
+- **Seeded sessions** (`--seed HEX`, with `--clock logical` and `--signer test` alone) take each session's secret and id
+  from the seed (`seeded`), so a CPU test's sample, and with it its controls' verdicts, is the same on every run: a
+  control's gate is a statistical test that a fresh sample fails now and then (a value control with every 10th block
+  zeroed misses them all in an audit of 105 with probability about 1e-5).
 - **The session log** (`--session-log FILE`, with `--signer lms`) is the memory challenger's `memory_challenger.SessionLog`:
   every session's id goes into it, fsynced, when the session commits, and a used id is refused.  It is a file of its own,
   refused inside `--lms-key`; it is made with a new key, and for a key that exists a missing log is refused (one made
@@ -42,7 +52,10 @@ against C's leaf).
 - **The signed sessions** go to `--sessions` (`sessions-<--out's name>` beside it) as the session loop ends, however it
   ends, before any verdict runs, and the Lean verdict is built and serving before the first session signs: a verdict that
   fails never takes signed sessions, or the key's leaves they spent, with it.
+- **Clocks.** `--clock wall` (the default) times each round on this process's monotonic clock.  `--clock logical` advances
+  the clock by each answer's reported server time alone (the CPU tests: no outcome there depends on the machine).
 
+Wire: a request is `<QQ` (op, argument); an answer is a 24-byte header `<QQQ` (status, device ns, server ns) and one block.
 Exit 0 when every session passes under the signer the run used, 1 otherwise.
 """
 from __future__ import annotations
@@ -54,29 +67,14 @@ import hashlib
 import importlib.util
 import json
 import os
+import socket
+import struct
 import sys
 import tempfile
 import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from band_gpu.memory_challenger import (  # noqa: E402
-    ALLOWANCE_KIND,
-    HEADER,
-    OP_CHALLENGE,
-    OP_PING,
-    LiveResponder,
-    LogicalClock,
-    calibrate,
-    calibrate_only,
-    cgroup_cpu,
-    params_of,
-    quantiles,
-    scheme_of,
-)
 
 ROOT = Path(__file__).resolve().parents[3]
 TEST_SIGNER = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py"
@@ -88,6 +86,148 @@ DISAGREE = "the Lean and Python verdicts disagree"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
 the challenger's own Python work (one 655.8 µs round 0 of 26 µs at the responder in `r20261006-061825-bba8`)."""
+OP_CHALLENGE, OP_PING, OP_CLOSE = 1, 2, 3
+HEADER = 24
+ALLOWANCE_KIND = "loopback"
+CALIBRATION_WARMUP_PINGS = 50
+
+
+def quantiles(xs: list[float]) -> dict[str, float]:
+    s = sorted(xs)
+    if not s:
+        return {}
+    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]  # noqa: E731
+    return {"n": len(s), "min": s[0], "p50": at(0.5), "p99": at(0.99), "p99.9": at(0.999), "max": s[-1]}
+
+
+class LogicalClock:
+    """A clock that advances only by what the responder reports (`--clock logical`)."""
+
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+
+def seeded(seed: bytes, j: int) -> tuple[bytes, bytes]:
+    """Session `j`'s challenger secret and session id under `--seed`."""
+    h = hashlib.sha512(b"verity-pous/bench/memory-challenger/seeded-session/v1\0" + seed + j.to_bytes(4, "big")).digest()
+    return h[:32], h[32:]
+
+
+def params_of(name: str, manifest: dict[str, Any]) -> Any:
+    """The scheme's geometry from its manifest: its fields, and nothing it does not give back as its own manifest.  A name
+    that is not registered is P2 at another width (a `p2` manifest), else the band at another in-degree."""
+    import dataclasses
+
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.band import BandParams
+
+    if name in schemes.REGISTRY:
+        cls = type(schemes.get(name).params)
+    else:
+        cls = schemes.P2Params if manifest.get("scheme") == "p2" else BandParams
+    names = {f.name for f in dataclasses.fields(cls)}
+    params = cls(**{k: v for k, v in manifest.items() if k in names})
+    if params.manifest() != manifest:
+        raise ValueError(f"{manifest} is not the manifest of {params!r}")
+    return params
+
+
+def scheme_of(name: str, params: Any) -> Any:
+    """The scheme `name` at `params`: a registered one, the band at another in-degree `d` (`band-chain/d{d}/v1`), or P2 at
+    another width (`p2-{w}/v3`, the CPU tests'): the registered class at those parameters, with no byte-format name
+    registered for it and no certificate."""
+    from verity.core.protocols.pous import schemes
+
+    if name in schemes.REGISTRY:
+        return schemes.get(name, params=params)
+    for cls in (schemes.Band, schemes.P2, schemes.P2ChaCha):
+        try:
+            scheme = cls(params)
+        except (TypeError, ValueError):
+            continue
+        if scheme.name == name:
+            return scheme
+    raise KeyError(f"no POUS scheme {name!r} at {params!r}")
+
+
+class LiveResponder:
+    """A connection to the responder, polled: the memory challenger never sleeps waiting for an answer.  With a
+    `LogicalClock`, each round trip advances it by the answer's reported server time instead of reading a clock."""
+
+    def __init__(self, host: str, port: int, block_bytes: int, clock: Callable[[], int] = time.perf_counter_ns) -> None:
+        self.clock = clock
+        self.sock = socket.create_connection((host, port))
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.sock.setblocking(False)
+        self.buf = bytearray(HEADER + block_bytes)
+        self.view = memoryview(self.buf)
+        self.device_ns = self.server_ns = 0
+
+    def roundtrip(self, op: int, arg: int) -> float:
+        """One request and its whole answer; its time in seconds."""
+        want, clock = len(self.buf), self.clock
+        t0 = clock()
+        self.sock.send(struct.pack("<QQ", op, arg))
+        got = 0
+        while got < want:
+            try:
+                n = self.sock.recv_into(self.view[got:], want - got)
+            except BlockingIOError:
+                continue
+            if n == 0:
+                raise ConnectionError("the responder closed the connection")
+            got += n
+        _, self.device_ns, self.server_ns = struct.unpack_from("<QQQ", self.buf, 0)
+        if isinstance(self.clock, LogicalClock):
+            self.clock.now += self.server_ns
+        return (clock() - t0) / 1e9
+
+    def close(self) -> None:
+        try:
+            self.sock.setblocking(True)
+            self.sock.sendall(struct.pack("<QQ", OP_CLOSE, 0))
+        finally:
+            self.sock.close()
+
+
+def cgroup_cpu() -> dict[str, int]:
+    """The container's CPU throttling counters (cgroup v2 `cpu.stat`): a throttled period stalls the responder and the
+    memory challenger."""
+    try:
+        with open("/sys/fs/cgroup/cpu.stat") as f:
+            stat = dict(line.split() for line in f if line.strip())
+    except OSError:
+        return {}
+    return {k: int(stat[k]) for k in ("nr_periods", "nr_throttled", "throttled_usec") if k in stat}
+
+
+def calibrate(r: LiveResponder, pings: int) -> list[float]:
+    """`pings` round trips (after `CALIBRATION_WARMUP_PINGS`), in seconds."""
+    for _ in range(CALIBRATION_WARMUP_PINGS):
+        r.roundtrip(OP_PING, 0)
+    return [r.roundtrip(OP_PING, 0) for _ in range(pings)]
+
+
+def limit_of(rtt: list[float], deadline_ns: int, allowance: str) -> dict[str, Any]:
+    q = quantiles(rtt)
+    allowance_ns = int(q[allowance] * 1e9)
+    return {"rtt_s": q, "allowance": allowance, "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": allowance_ns,
+            "deadline_ns": deadline_ns, "limit_ns": deadline_ns + allowance_ns}
+
+
+def calibrate_only(host: str, port: int, block_bytes: int, *, pings: int, cpu: int | None, allowance: str, deadline_ns: int,
+                   clock: Callable[[], int]) -> dict[str, Any]:
+    if cpu is not None:
+        os.sched_setaffinity(0, {cpu})
+    r = LiveResponder(host, port, block_bytes, clock)
+    try:
+        rtt = calibrate(r, pings)
+    finally:
+        r.close()
+    return {**limit_of(rtt, deadline_ns, allowance), "pings_raw_s": rtt}
 
 
 def test_signer() -> Any:
@@ -130,9 +270,12 @@ def write_sessions(path: str | os.PathLike, sig: Any, sessions: list[dict[str, A
     os.replace(tmp, p)
 
 
-def rtt_cap_ns() -> int:
+def rtt_cap_ns(params: Any) -> int | None:
+    """The round-trip allowance's cap, P2's (`p2.RTT_ALLOWANCE_CAP_NS`); None for a scheme that states none."""
+    from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.schemes import p2
-    return p2.RTT_ALLOWANCE_CAP_NS
+
+    return p2.RTT_ALLOWANCE_CAP_NS if isinstance(params, schemes.P2Params) else None
 
 
 def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = None) -> Any:
@@ -251,9 +394,10 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
     mapping (`signer_schemes`); every one must be rejected for its signature, and the unedited sessions must pass."""
     from verity.core.protocols.pous import memory_challenger as mc
 
-    schemes = signer_schemes(doc["signer"]["scheme"])
+    records = doc.get("records") or []
+    schemes = signer_schemes(doc["signer"]["scheme"]) if records else {}
     out = {"sessions": 0, "unedited_accepted": 0, "flipped_rejected": 0, "edited_rejected": 0}
-    for rec in doc.get("records") or []:
+    for rec in records:
         signed = mc.SignedSession.from_json(rec["witness"]["signed"])
         commitment = mc.SessionCommitment.from_json(rec["public"]["commitment"])
         openings = [mc.CoinOpening.from_json(o) for o in rec["public"]["openings"]]
@@ -282,12 +426,14 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
           cpu: int | None = None, allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
           clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test",
           lms_key: str | os.PathLike | None = None, keygen_workers: int = 1,
-          sessions_out: str | os.PathLike | None = None, session_log_path: str | os.PathLike | None = None) -> dict[str, Any]:
-    """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
-    ran, off the timed path.  The Lean verdict is made ready before any session signs (`lean_ready`), and the signed
-    sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
-    verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round; without one (the
-    test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed."""
+          sessions_out: str | os.PathLike | None = None, session_log_path: str | os.PathLike | None = None,
+          seed: bytes | None = None) -> dict[str, Any]:
+    """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the scheme's cap), each judged after
+    all of them ran, off the timed path.  The Lean verdict is made ready before any session signs (`lean_ready`), and the
+    signed sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before
+    any verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round; without one (the
+    test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed.  With
+    `seed` (the logical clock and the test signer alone), session `j`'s secret and id are `seeded(seed, j)`."""
     from verity.core.protocols.pous import audit as pous_audit
     from verity.core.protocols.pous import memory_challenger as mc
     from verity.core.protocols.pous.protocol import StorageProfile
@@ -298,21 +444,27 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
         raise ValueError("an LMS-signed audit takes the memory challenger's session log (--session-log FILE)")
     if lms_key is not None and Path(session_log_path).resolve().is_relative_to(Path(lms_key).resolve()):
         raise ValueError(f"the session log {session_log_path} is inside the key's directory {lms_key}: it is a file of its own")
+    if seed is not None and (signer != "test" or not isinstance(clock, LogicalClock)):
+        raise ValueError("seeded sessions run on the logical clock under the test signer alone: a timed audit's secrets "
+                         "and session ids are fresh from the OS")
     params = scheme.params
     blocks, nb = params.blocks, params.block_bytes
     if len(digests) != 64 * blocks:
         raise ValueError(f"{len(digests) // 64} block digests for a store of {blocks} blocks")
     deadline_ns = deadline_ns or pous_audit.DEADLINE_NS
-    cap = rtt_cap_ns()
+    cap = rtt_cap_ns(params)
     fixed = limit_ns is not None
+    if not fixed and cap is None:
+        raise ValueError(f"{scheme.name} states no round-trip cap: its audit takes the limit the calibration fixed (--limit-ns)")
     limit = limit_ns if fixed else deadline_ns + cap
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     binding = setup_root(params, salt, digests)
     base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records_tree": mc.RECORDS_TREE,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
-            "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
-            "k": k, "scheme": scheme.name, "setup_root": binding.hex()}
+            "allowance": "cap" if cap is not None else allowance, "allowance_kind": ALLOWANCE_KIND,
+            "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap, "k": k, "scheme": scheme.name,
+            "setup_root": binding.hex(), **({"seed": seed.hex()} if seed is not None else {})}
     gaps: tuple[str, ...] = ()
     try:
         cert = mc.covering_certificate(scheme, k, limit, experimental=True)
@@ -341,10 +493,11 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
         r = LiveResponder(host, port, nb, clock)
         cpu_before = cgroup_cpu()
         sessions = []
-        challengers = [mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k), sig, log=log,
+        coins = [seeded(seed, j) if seed is not None else (os.urandom(32), os.urandom(32)) for j in range(audits)]
+        challengers = [mc.MemoryChallenger(mc.CoinTree.draw(source, session, blocks, k), sig, log=log,
                                            limit_ns=limit, block_bytes=nb, binding=binding, clock=clock,
                                            resolution_ns=resolution)
-                       for _ in range(audits)]
+                       for source, session in coins]
         try:
             before = calibrate(r, pings)
             for c in challengers:
@@ -379,12 +532,14 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     accepted = first is not None and first["accepted"]
     profile = (StorageProfile(scheme.name, params.manifest(), blocks, params.m, k, limit, cert, gaps,
                               scheme.experimental).to_json() if accepted and cert is not None else None)
+    here = quantiles(before)
     return {**base, "gaps": list(gaps), "profile": profile,
             "signer": {"kind": signer, "scheme": sig.scheme, "public_key": sig.public_key.hex(),
                        "test": sig.scheme not in mc.SCHEMES, "key_load_s": key_load_s, "session_log": str(log.path),
                        "note": ("S1's LMS at lms.DEPLOYED, its leaf state on disk" if sig.scheme in mc.SCHEMES else
                                 "a test signer: memory_challenger.SCHEMES accepts no record it signs (fail closed)")},
-            "calibration_here": {"rtt_s": quantiles(before), "within_cap": quantiles(before).get("p99.9", 0) * 1e9 <= cap},
+            "calibration_here": {"rtt_s": here,
+                                 "within_cap": None if cap is None else here.get(allowance, 0) * 1e9 <= cap},
             "rtt_after_s": quantiles(after), "pings_raw_s": {"before": before, "after": after},
             "audit_of_record": None if first is None else {"accepted": first["accepted"],
                                                            "accepted_under_signer": first["accepted_under_signer"],
@@ -413,11 +568,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pings", type=int, default=5000)
     ap.add_argument("--k", type=int, default=None)
     ap.add_argument("--verifier-cpu", type=int, default=None)
-    ap.add_argument("--allowance", default="p99.9", choices=["p50", "p99.9", "max"], help="the calibration's quantile, recorded")
-    ap.add_argument("--deadline-ns", type=int, default=0)
-    ap.add_argument("--limit-ns", type=int, default=0, help="the limit fixed before any load (0: Δ + the RTT cap)")
-    ap.add_argument("--calibrate-only", action="store_true")
+    ap.add_argument("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
+                    help="the calibration's quantile: the allowance where the scheme states no cap, else recorded")
+    ap.add_argument("--deadline-ns", type=int, default=0, help="Δ (0: the protocol's 0.5 ms)")
+    ap.add_argument("--limit-ns", type=int, default=0,
+                    help="the limit fixed before any load (0: Δ + the scheme's RTT cap; a scheme with none requires it)")
+    ap.add_argument("--calibrate-only", action="store_true", help="measure the round trip and write the limit, audit nothing")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"])
+    ap.add_argument("--seed", default=None,
+                    help="derive each session's secret and id from this hex seed (--clock logical and --signer test only)")
     ap.add_argument("--strict", action="store_true", help="refuse a k or limit no certificate covers, before any round")
     ap.add_argument("--signer", default="test", choices=["lms", "test"])
     ap.add_argument("--lms-key", default=None, help="the S1 key's directory (--signer lms), made there when absent")
@@ -427,6 +586,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sessions", default=None,
                     help="where the signed sessions go before any verdict runs (default: sessions-<--out's name> beside it)")
     a = ap.parse_args(argv)
+    if a.seed is not None and (a.clock != "logical" or a.signer != "test"):
+        ap.error("--seed is for the logical clock's runs under the test signer alone")
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
     clock = LogicalClock() if a.clock == "logical" else time.perf_counter_ns
@@ -434,10 +595,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.calibrate_only:
         doc = calibrate_only("127.0.0.1", ready["port"], params.block_bytes, pings=a.pings, cpu=a.verifier_cpu,
                              allowance=a.allowance, deadline_ns=deadline, clock=clock)
-        cap = rtt_cap_ns()
-        doc = {**doc, "measured_allowance_ns": doc["rtt_allowance_ns"], "within_cap": doc["rtt_allowance_ns"] <= cap,
-               "allowance": "cap", "rtt_allowance_ns": cap, "limit_ns": deadline + cap, "clock": a.clock}
-        Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
+        cap = rtt_cap_ns(params)
+        if cap is not None:
+            doc = {**doc, "measured_allowance_ns": doc["rtt_allowance_ns"], "within_cap": doc["rtt_allowance_ns"] <= cap,
+                   "allowance": "cap", "rtt_allowance_ns": cap, "limit_ns": deadline + cap}
+        Path(a.out).write_text(json.dumps({**doc, "clock": a.clock}, indent=1) + "\n")
         return 0
     scheme = scheme_of(ready["scheme"], params)
     doc = {"clock": a.clock,
@@ -445,7 +607,8 @@ def main(argv: list[str] | None = None) -> int:
                    audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
                    limit_ns=a.limit_ns or None, clock=clock, strict=a.strict, signer=a.signer, lms_key=a.lms_key,
                    keygen_workers=a.keygen_workers, session_log_path=a.session_log,
-                   sessions_out=a.sessions or Path(a.out).with_name("sessions-" + Path(a.out).name))}
+                   sessions_out=a.sessions or Path(a.out).with_name("sessions-" + Path(a.out).name),
+                   seed=None if a.seed is None else bytes.fromhex(a.seed))}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["audits"] and doc["audits_accepted_under_signer"] == doc["audits"] else 1
 

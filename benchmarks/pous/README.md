@@ -42,7 +42,8 @@ Implementations:
     on plaintext, both forwards from a CUDA graph where the path is capturable, the plain arm's bandwidth against a measured
     device copy, and every T where it is launch-bound flagged; every rep is recorded;
   - the audit limit fixed before any load from a loopback calibration (labelled loopback: a remote memory challenger's round trip
-    adds to it), then timed audits against the native responder under PoUS forwards, and three controls against that one
+    adds to it), then the memory challenger's timed audits (`memory_challenger/live.py`) against the native responder
+    under PoUS forwards, and three controls against that one
     limit: a value control (one block in ten zeroed), a late control (one answer in ten held past the limit, which must
     reject on time alone; the only answers held), and a recompute control (a fraction of `C` dropped, each challenged dropped
     block recomputed on the device from its kept parents, `W`'s block XORed in on the device, as an adversary would: the limit
@@ -59,21 +60,22 @@ Implementations:
     call and rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team,
     4 Oct 2026, art:7617c8017e80). A floor that bounds the attacker must time that resume, not a whole call;
   - optionally (`--nvme-dir`), one block's read latency from NVMe;
-  - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
+  - what re-derives every number: every rep, each session's signed rounds and coin openings, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v1-gpu`: P2 v4, the specification (`verity/core/protocols/pous/p2/PROTOCOL.md`), in `p2_v1/`, with
+- `p2-v3-mc-gpu`: P2 (`verity/core/protocols/pous/p2/PROTOCOL.md`) as the registered `p2-16448/v4`, in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
   - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the counter-mode SHA-512 keys, the maps, the RFC
     6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (the file hash in the spec's §7);
-    `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
+    `wire.py` is `p2-audit-wire/v4`'s frames, and `vectors.py` regenerates every vector file in one command;
   - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
     use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
   - the kernel gates: the pinned vector through the device (keys, encode, decode), the round trip, sampled blocks against the
     reference's decode and keys, no kernel flag; a failed gate stops the run;
-  - audits at k = 105 (`p2_v1/memory_challenger.py`: v4 leaves, `verity/pous/p2-audit-challenge/v4`), against a limit fixed before load (spec
-    v4 caps the allowance at 354 µs), with the value, late and recompute controls (one block in ten of all of `C` dropped, each
-    re-encoded on demand from its decoded row `Dec(C_i)`, which is `W_i` in the encoded head);
+  - the memory challenger's audits (`memory_challenger/live.py --strict`: each block's digest, the registered scheme's
+    certificate), against a limit fixed before load (`Δ` plus spec v1.1's 354 µs cap on the allowance), with the value,
+    late and recompute controls (one block in ten of all of `C` dropped, each re-encoded on demand from its decoded row
+    `Dec(C_i)`, which is `W_i` in the encoded head), and the tampered and signature controls;
   - encode GB/s over the first `--p2-encode-blocks` blocks (the rest of `C` is random canonical blocks), and one block's two
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
@@ -113,7 +115,7 @@ research run --on <L40S pod> --project verity --source . --cwd source --send imp
 research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]
 research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
-  -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]      # band and P2 v1, then the table
+  -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]      # band and P2, then the table
 research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --campaign pous \
   -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2              # build check: both arms' kernel gates
 research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --campaign pous \
@@ -136,8 +138,8 @@ else the CUDA device's UUID). `pod.sh` refuses a GPU run on a node with several 
 `device` records the id queried (`nvidia_smi_id`), the `index`, `uuid` and `pci.bus_id` that answered, and the CUDA device's
 own index and UUID. Each `clocks-*.txt` starts with the same id and answer.
 
-`AUDITS=0` (`bench.py --audits 0`, band-gpu and p2-v1-gpu only) is for an untimed, preemptible placement. The gates, encode,
-the synthetic loop (decode overhead and bandwidth) and the step floor (P2 v1's SeqRoot root) run as in a timed run. No limit,
+`AUDITS=0` (`bench.py --audits 0`, band-gpu and p2-v3-mc-gpu only) is for an untimed, preemptible placement. The gates, encode,
+the synthetic loop (decode overhead and bandwidth) and the step floor (P2's SeqRoot root) run as in a timed run. No limit,
 audit or control runs, so there is no certificate gate and no storage profile. `bench-result.json` and `result.json`'s
 fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no audit or latency number is cited from it.
 

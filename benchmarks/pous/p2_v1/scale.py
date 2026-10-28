@@ -17,13 +17,14 @@
 - `gpu`: the device's encode throughput (`p2v1_encode`, two roots a label) at growing batches, each batch decoded back to
   its payloads and sampled labels held to `reference.decode`; and the decode rate, the setup check's device step.
 - `audit`: for each B = 2^e, a store of B uniformly random canonical labels on the device (every canonical label is the
-  encoding of its decode, and an answer's time does not depend on its bytes), the leaves the verifier keeps hashed by a
-  process pool, then the harness's honest timed audit (`p2_v1/memory_challenger.py`: k = 105, Δ = 0.5 ms plus the loopback
-  allowance fixed before it). Beside it: the device decode of all of `C` (the setup check's device step at B), the cost of
-  gathering a v4 RESPONSE's authentication path (log2 B siblings of 64 bytes) from a tree held in host memory, and a
-  loopback round trip at the sizes of a RESPONSE without and with that path. With `--fit-python`, vLLM serves the model in
-  FP8 (`quantization="fp8"`) in its own process beside the largest store, at growing batches, and the audit runs again
-  while it serves.
+  encoding of its decode, and an answer's time does not depend on its bytes), set up as the registered P2 (`p2-16448/v4`)
+  at B under a fresh salt, every block's digest hashed by a process pool, then the harness's honest timed audit by the
+  memory challenger (`memory_challenger/live.py`: Δ = 0.5 ms plus spec v1.1's 354 µs cap, its sessions signed by the PoUS
+  tests' test signer and judged under its mapping). Beside it: the device decode of all of `C` (the setup check's device
+  step at B), the cost of gathering a v4 RESPONSE's authentication path (log2 B siblings of 64 bytes) from a tree held in
+  host memory, and a loopback round trip at the sizes of a RESPONSE without and with that path. With `--fit-python`, vLLM
+  serves the model in FP8 (`quantization="fp8"`) in its own process beside the largest store, at growing batches, and the
+  audit runs again while it serves.
 """
 from __future__ import annotations
 
@@ -348,6 +349,12 @@ def gpu_cmd(a: argparse.Namespace) -> int:
 
 # --- the store at scale: leaves, the timed audit, paths, and a served model beside it ----------------------------------
 
+CALIBRATION = ("limit_ns", "rtt_allowance_ns", "allowance", "measured_allowance_ns", "within_cap")
+AUDIT = ("rc", "k", "limit_ns", "audits", "audits_accepted", "audits_accepted_under_signer", "answers", "late", "wrong",
+         "elapsed_s", "margin_s", "device_s", "server_s", "setup_root", "rtt_allowance_ns", "gaps")
+"""What the scale record keeps of the memory challenger's calibration and of each audit (`memory_challenger/live.py`)."""
+
+
 def _segment(seed: int, s: int) -> Any:
     """Segment `s` of the store: uniformly random 2,056-byte blocks with the top bit clear, so each is below p."""
     import numpy as np
@@ -358,20 +365,22 @@ def _segment(seed: int, s: int) -> Any:
     return seg
 
 
-def _leaves_job(job: tuple[int, int, bytes]) -> tuple[int, bytes]:
-    seed, s, salt = job
-    from p2_v1 import reference as R
+def _leaves_job(job: tuple[int, int]) -> tuple[int, bytes]:
+    seed, s = job
+    from verity.core.protocols.pous.memory_challenger import block_digest
 
     raw = _segment(seed, s).tobytes()
-    return s, b"".join(R.leaf(salt, s, v, raw[v * NB:(v + 1) * NB]) for v in range(BPS))
+    return s, b"".join(block_digest(raw[v * NB:(v + 1) * NB]) for v in range(BPS))
 
 
-def leaves_file(path: Path, seed: int, segments: int, salt: bytes, workers: int) -> float:
+def leaves_file(path: Path, seed: int, segments: int, workers: int) -> float:
+    """Every block's `sha512/row/v2` digest (`memory_challenger.block_digest`), in block order: what the memory
+    challenger's verdict checks each round against."""
     import multiprocessing as mp
 
     t0 = time.perf_counter()
     with mp.get_context("spawn").Pool(workers) as pool, path.open("wb") as f:
-        for _, leaves in pool.imap(_leaves_job, [(seed, s, salt) for s in range(segments)]):
+        for _, leaves in pool.imap(_leaves_job, [(seed, s) for s in range(segments)]):
             f.write(leaves)
     return time.perf_counter() - t0
 
@@ -527,10 +536,21 @@ def fit_driver_cmd(a: argparse.Namespace) -> int:
     return 0
 
 
+def store_fields(segments: int, salt: bytes) -> dict[str, Any]:
+    """READY's store fields for the memory challenger (`memory_challenger/live.py`): the registered P2 at `segments`
+    segments, set up under `salt`."""
+    from verity.core.protocols.pous import schemes
+
+    params = schemes.P2Params(WIDTH, C0, BPS, segments)
+    return {"salt": salt.hex(), "scheme": schemes.P2(params).name, "params": params.manifest()}
+
+
 def audit_cmd(a: argparse.Namespace) -> int:
     import numpy as np  # noqa: F401  (the leaf pool's)
 
     from p2_v1 import reference as R
+    from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.schemes import p2
 
     out, scratch = Path(a.out), Path(a.scratch)
     scratch.mkdir(parents=True, exist_ok=True)
@@ -540,10 +560,10 @@ def audit_cmd(a: argparse.Namespace) -> int:
     for e in exps:
         blocks = 1 << e
         segments = blocks // BPS
-        salt, model = os.urandom(32), os.urandom(64)
+        salt = os.urandom(p2.SALT_BITS // 8)
         leaves = scratch / f"leaves-2^{e}.bin"
-        hash_s = leaves_file(leaves, a.store_seed + e, segments, salt, a.workers)
-        stores[e] = {"blocks": blocks, "segments": segments, "salt": salt, "model": model, "leaves": leaves}
+        hash_s = leaves_file(leaves, a.store_seed + e, segments, a.workers)
+        stores[e] = {"blocks": blocks, "segments": segments, "salt": salt, "leaves": leaves}
         doc["stores"][str(e)] = {"blocks": blocks, "store_bytes": blocks * NB, "leaf_hash_s": hash_s,
                                  "leaf_hash_workers": a.workers, "leaf_hash_blocks_per_s": blocks / hash_s}
         dump(out, "audit.json", doc)
@@ -559,7 +579,7 @@ def audit_cmd(a: argparse.Namespace) -> int:
     free0, total = torch.cuda.mem_get_info(dev)
     doc["device"] = {**backend.facts(), "total_bytes": total, "free_before_bytes": free0}
     H.leave_reserved(a)
-    script = P2H.MEMORY_CHALLENGER
+    script = H.MEMORY_CHALLENGER
     c = None
     for e in exps:
         st, rec = stores[e], doc["stores"][str(e)]
@@ -575,7 +595,7 @@ def audit_cmd(a: argparse.Namespace) -> int:
         torch.cuda.synchronize()
         rec["fill_s"] = time.perf_counter() - t0
         rec["free_after_store_bytes"] = torch.cuda.mem_get_info(dev)[0]
-        bound = backend.bind(P, R.expand_prefix(st["salt"], P, st["model"]))
+        bound = backend.bind(P, p2.expand_prefix(schemes.P2Params(WIDTH, C0, BPS, segments), st["salt"]))
         chunk = min(blocks, 1 << 20)
         bound.decode(c[:chunk], 0)
         torch.cuda.synchronize()
@@ -589,15 +609,13 @@ def audit_cmd(a: argparse.Namespace) -> int:
         rec["decode_stored_GBps"] = blocks * NB / dec / 1e9
         rec["path"] = path_cost(blocks, a.path_reps, a.store_seed)
         dump(out, "audit.json", doc)
-        fields = {"salt": st["salt"].hex(), "model": st["model"].hex(), "manifest": P.manifest(), "payload_bytes": PAYLOAD}
+        fields = store_fields(segments, st["salt"])
         start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
         cal = H.calibrate_limit(start, fields, script, out, a, st["leaves"], f"calibrate-2^{e}")
         limit = int(cal.get("limit_ns") or 0)
         honest = H.audit_round(start, fields, script, st["leaves"], out, f"honest-2^{e}", a, None, limit)
-        rec["calibration"] = {k: cal.get(k) for k in ("limit_ns", "rtt_allowance_ns", "allowance") if k in cal}
-        rec["honest"] = {k: honest.get(k) for k in ("rc", "k", "limit_ns", "audits", "audits_accepted", "answers", "late",
-                                                     "wrong", "elapsed_s", "margin_s", "device_s", "server_s", "root",
-                                                     "rtt_allowance_ns")}
+        rec["calibration"] = {k: cal.get(k) for k in CALIBRATION if k in cal}
+        rec["honest"] = {k: honest.get(k) for k in AUDIT}
         dump(out, "audit.json", doc)
     h_max = exps[-1]
     sizes = sorted({NB + 24} | {NB + 24 + 2 + DIGEST * e for e in exps})
@@ -606,12 +624,19 @@ def audit_cmd(a: argparse.Namespace) -> int:
     if a.fit_python:
         doc["fit"] = fit_beside(a, backend, c, stores[h_max], out, scratch, script)
         dump(out, "audit.json", doc)
-    accepted = all(r.get("honest", {}).get("audits_accepted") == r.get("honest", {}).get("audits") for r in doc["stores"].values())
+    accepted = all(passed(r.get("honest") or {}) for r in doc["stores"].values())
     if a.fit_python:
-        beside = doc["fit"].get("audit_beside") or {}
-        accepted &= doc["fit"].get("driver_rc") == 0 and bool(beside) and beside.get("audits_accepted") == beside.get("audits")
-    print(json.dumps({e: {k: doc["stores"][e]["honest"].get(k) for k in ("audits_accepted", "late")} for e in doc["stores"]}))
+        accepted &= doc["fit"].get("driver_rc") == 0 and passed(doc["fit"].get("audit_beside") or {})
+    print(json.dumps({e: {k: doc["stores"][e]["honest"].get(k) for k in (H.ACCEPTED, "late")} for e in doc["stores"]}))
     return 0 if accepted else 1
+
+
+def passed(audit: dict[str, Any]) -> bool:
+    """Every session of `audit` accepted under its signer's own mapping (`band_gpu.harness.ACCEPTED`): the test signer's,
+    since the scale audit signs with it."""
+    from band_gpu import harness as H
+
+    return bool(audit.get("audits")) and audit.get(H.ACCEPTED) == audit["audits"]
 
 
 def fit_beside(a: argparse.Namespace, backend: Any, c: Any, st: dict[str, Any], out: Path, scratch: Path,
@@ -619,7 +644,6 @@ def fit_beside(a: argparse.Namespace, backend: Any, c: Any, st: dict[str, Any], 
     import torch
 
     from band_gpu import harness as H
-    from p2_v1 import reference as R
 
     # the decode passes' cached labels would otherwise count against vLLM: only the store and the responder stay
     torch.cuda.empty_cache()
@@ -646,14 +670,12 @@ def fit_beside(a: argparse.Namespace, backend: Any, c: Any, st: dict[str, Any], 
         while proc.poll() is None and not serving.exists():
             time.sleep(0.5)
         if serving.exists():
-            P = R.DEPLOYMENT.with_segments(st["segments"])
-            fields = {"salt": st["salt"].hex(), "model": st["model"].hex(), "manifest": P.manifest(), "payload_bytes": PAYLOAD}
+            fields = store_fields(st["segments"], st["salt"])
             start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
             cal = H.calibrate_limit(start, fields, script, out, a, st["leaves"], "calibrate-beside")
             beside = H.audit_round(start, fields, script, st["leaves"], out, "honest-beside", a, None,
                                    int(cal.get("limit_ns") or 0))
-            rec["audit_beside"] = {k: beside.get(k) for k in ("rc", "limit_ns", "audits", "audits_accepted", "answers", "late",
-                                                               "wrong", "elapsed_s", "margin_s", "device_s", "server_s")}
+            rec["audit_beside"] = {k: beside.get(k) for k in AUDIT}
             stop.write_text("1")
         rc = proc.wait()
     rec["driver_rc"] = rc

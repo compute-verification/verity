@@ -4,7 +4,7 @@ A tensor of W at W-offset `base`, `length` bytes long, lies in blocks `blocks_of
 [2054 j, 2054 j + 2054) as bytes 2 .. 2055 of its big-endian 2,056-byte row (`verity/core/protocols/pous/schemes/p2.py`,
 `p2-16448/v4`). A block's decode is `p2_v1.reference.decode` (the P2 spec's map, pinned by its vectors) with the
 registered scheme's keys (`schemes.p2.sha512_keys` under `schemes.p2.expand_prefix`), the pairing
-`benchmarks/pous/bench.py`'s `p2-v3-gpu` arm gates its kernels by. `staged` is what the kernel writes: every block's low
+`benchmarks/pous/bench.py`'s `p2-v3-mc-gpu` arm gates its kernels by. `staged` is what the kernel writes: every block's low
 2,054 bytes, codeword or not, and `refusals` what the registered reference refuses (`decode_segment`: c >= p, or a decode
 wider than the payload), which the kernel flags.
 """

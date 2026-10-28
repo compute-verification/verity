@@ -1,8 +1,7 @@
-"""P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
+"""P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v3-mc-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for the GPU
-library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory challenger process
-(`p2_v1/memory_challenger.py` for the spec's framing, `band_gpu/memory_challenger.py`'s `protocol.TimedAudit` for `p2-16448/v4`) on its
-logical clock, so no outcome depends on a clock."""
+library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the memory challenger's
+process (`memory_challenger/live.py`) on its logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
 
 import hashlib
@@ -23,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
 SEED = "5eed" * 8
-"""`band_gpu/memory_challenger.py --seed` for the `V3` arm: its challenges, and so its controls' verdicts, are fixed."""
+"""`memory_challenger/live.py --seed`: each session's secret and id, and so its sample and the controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -193,11 +192,19 @@ def test_the_spec_rtt_cap_is_the_schemes():
     assert R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS < p2.ROOT_CALL_NS <= R.DELTA_NS + R.MAX_RTT_ALLOWANCE_NS + 1_000
 
 
+def _arm(tmp_path, research: bool = True, **kw):
+    """`p2-v3-mc-gpu` at the kit's width on the CPU stand-ins, its sessions seeded; `research` (no certificate there)."""
+    return _bench().P2V3McGpu().run(_args(tmp_path, **{"k": 105, "seed": SEED, **kw}), WS, tmp_path, backend=_backend(),
+                                    params=_small(), research=research)
+
+
 def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
+    from verity.core.protocols.pous import schemes
+
     R, _, _ = _p2()
     nvme = tmp_path / "nvme"
     nvme.mkdir()
-    body = _bench().P2V1Gpu().run(_args(tmp_path, nvme_dir=str(nvme)), WS, tmp_path, backend=_backend(), params=_small())
+    body = _arm(tmp_path, nvme_dir=str(nvme))
     gates = body["gates"]
     assert body["segments"] == 3 and body["blocks"] == 192 and body["weight_bytes"] == 2560
     for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "timed_audit", "value_control", "late_control",
@@ -208,18 +215,18 @@ def test_the_p2_arm_runs_every_step_and_its_gates_decide(tmp_path):
     assert point["k"] and point["deadline"] and point["rtt_allowance"] and not point["blocks"]    # 192 < 2^8 at the test point
     m = body["metrics"]
     honest, value, late, rec = m["audit"], m["value_control"], m["late_control"], m["recompute_control"]
-    assert honest["audits_accepted"] == 2 and honest["k"] == R.K_AUDIT == 105 and honest["responder"]["answered"] == 2 * 105
+    assert honest["audits_accepted_under_signer"] == 2 and honest["k"] == R.K_AUDIT == 105
+    assert honest["responder"]["answered"] == 2 * 105
     limit = m["calibration"]["limit_ns"]
     assert honest["limit_fixed_before_load"] and honest["limit_ns"] == late["limit_ns"] == rec["limit_ns"] == limit
-    assert honest["allowance_kind"] == "loopback" and len(honest["source"]) == 64 and len(honest["records"]) == 2
-    assert value["audits_accepted"] == 0 and value["wrong"] > 0
-    assert late["audits_accepted"] == 0 and late["late"] > 0 and late["wrong"] == 0
+    assert honest["allowance_kind"] == "loopback" and len(honest["records"]) == 2
+    assert value["audits_accepted_under_signer"] == 0 and value["wrong"] > 0
+    assert late["audits_accepted_under_signer"] == 0 and late["late"] > 0 and late["wrong"] == 0
     assert rec["wrong"] == 0 and rec["late"] > 0 and rec["margin_s"]["min"] < 0 and rec["dropped_blocks"] == 20
     assert m["seqroot"]["root_s"] == 1e-3 / 2 and "upper bound" in m["seqroot"]["label"]
     assert m["loop"]["tokens"] == [1, 8] and set(m["loop"]["overhead"]) == {1, 8} and m["nvme"]["block_read_s"]["n"] == 8
-    assert body["setup"]["manifest"] == {"scheme": "p2", "w": 128, "c0": 173, "profile": "test-14B", "blocks_per_segment": 64,
-                                         "segments": 3}
-    assert not body["profile"]["certified"] and "P2–M1-SGI" in body["profile"]["experimental"]
+    assert body["setup"]["manifest"] == schemes.P2Params(128, 173, 64, 3).manifest()
+    assert body["profile"] is None                                    # the verdict accepted no test-signed session
     names = {r["name"] for r in body["measurements"]}
     assert {"encode_GBps", "decode_overhead_T1", "audit_margin_min_s", "recompute_margin_min_s", "seqroot_root_s"} <= names
 
@@ -228,8 +235,7 @@ def test_the_recompute_control_covers_c_past_its_encoded_head(tmp_path):
     """With only the first 64 of 192 blocks encoded (the rest random canonical, as on the device), every dropped block, in the
     head or past it, is re-encoded from its decoded row and answers correctly; the margin is the limit minus each recomputed
     answer's device time."""
-    body = _bench().P2V1Gpu().run(_args(tmp_path, p2_encode_blocks=64, audits=6), WS, tmp_path, backend=_backend(),
-                                  params=_small())
+    body = _arm(tmp_path, p2_encode_blocks=64, audits=6)
     m, gates = body["metrics"], body["gates"]
     assert m["encoded_blocks"] == 64 and gates["round_trip"]["blocks"] == 64
     rec = m["recompute_control"]
@@ -263,7 +269,7 @@ def test_the_p2_recompute_adversary_reencodes_every_dropped_block_of_c():
 
 
 def test_a_wrong_p2_kernel_stops_the_run_before_anything_is_timed(tmp_path):
-    body = _bench().P2V1Gpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(flip=True), params=_small())
+    body = _bench().P2V3McGpu().run(_args(tmp_path), WS, tmp_path, backend=_backend(flip=True), params=_small(), research=True)
     assert body["gates"]["vector"]["passed"] and not body["gates"]["round_trip"]["passed"]
     assert body["metrics"] is None and body["measurements"] == [] and "nothing was timed" in body["stopped"]
 
@@ -274,10 +280,10 @@ def test_the_vector_gate_holds_the_keys_to_the_pinned_v4_keys(tmp_path):
     import json
 
     _, harness, _ = _p2()
-    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
+    body = _bench().P2V3McGpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
     assert all(g["passed"] for g in body["gates"].values()), body["gates"]
     assert body["gates"]["vector"]["keys_version"] == 4 and body["gates"]["vector"]["keys_v4"]
-    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(says=1), params=_small())
+    body = _bench().P2V3McGpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(says=1), params=_small())
     assert not body["gates"]["vector"]["passed"] and not body["gates"]["vector"]["keys_v4"]
     keys = json.loads(harness.KEYS.read_text())
     small = _small()
@@ -289,8 +295,8 @@ def test_the_vector_gate_holds_the_keys_to_the_pinned_v4_keys(tmp_path):
 
 
 def test_gates_only_runs_the_kernel_gates_and_times_nothing(tmp_path):
-    body = _bench().P2V1Gpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
-    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags"}
+    body = _bench().P2V3McGpu().run(_args(tmp_path, gates_only=True), WS, tmp_path, backend=_backend(), params=_small())
+    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags", "codec"}
     assert all(g["passed"] for g in body["gates"].values())
     assert body["metrics"] is None and body["measurements"] == [] and "--gates-only" in body["stopped"]
 
@@ -299,9 +305,9 @@ def test_audits_0_runs_the_p2_arm_untimed_with_no_limit_audit_or_control_and_say
     _, harness, _ = _p2()
     monkeypatch.setattr(harness.H, "audit_round", lambda *a, **k: pytest.fail("an untimed run started an audit"))
     monkeypatch.setattr(harness.H, "calibrate_limit", lambda *a, **k: pytest.fail("an untimed run calibrated a limit"))
-    body = _bench().P2V1Gpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=_backend(), params=_small())
+    body = _bench().P2V3McGpu().run(_args(tmp_path, audits=0), WS, tmp_path, backend=_backend(), params=_small())
     assert body["timed"] is False and body["audits"] == "skipped (untimed placement)" and body["profile"] is None
-    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags"}
+    assert set(body["gates"]) == {"vector", "round_trip", "reference_decode", "kernel_flags", "codec"}
     assert all(g["passed"] for g in body["gates"].values())
     m = body["metrics"]
     assert m["timed"] is False and set(m["loop"]["overhead"]) == {1, 8} and m["seqroot"]["twice_limit_s"] is None
@@ -325,7 +331,7 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
     (tmp_path / "p").mkdir()
     band = _bench().BandGpu().run(band_t._args(tmp_path / "b"), band_t.WS, tmp_path / "b", backend=band_t._backend(bp), base=bp,
                                   vectors=band_t._vectors(bp))
-    p2 = _bench().P2V1Gpu().run(_args(tmp_path / "p"), WS, tmp_path / "p", backend=_backend(), params=_small())
+    p2 = _arm(tmp_path / "p")
     doc = lambda body, scheme, ok: json.loads(json.dumps({"scheme": scheme, "passed": ok, "weight_set": WS["id"], "hardware": "cpu",  # noqa: E731
                                                           "gates": body["gates"], "metrics": body["metrics"]}, default=str))
     both = sbs.table(doc(band, "band-chain/d12/v1", True), doc(p2, "p2/v4", True))
@@ -346,56 +352,52 @@ def test_side_by_side_tables_both_arms_and_withholds_a_failed_one(tmp_path, monk
 
 def test_the_registered_expander_given_the_specs_prefix_gives_every_pinned_key():
     bench = _bench()
-    assert bench.IMPLS["p2-v3-gpu"] is bench.P2V3Gpu and bench.IMPLS["p2-v1-gpu"] is bench.P2V1Gpu
-    got = bench.P2V3Gpu().conformance_gate()
+    assert bench.IMPLS["p2-v3-mc-gpu"] is bench.P2V3McGpu
+    got = bench.P2V3McGpu().conformance_gate()
     assert got["passed"], got
     assert {k for k in got["checks"] if k.startswith("expander/")} == {
         "expander/p2-v4/w64/0", "expander/p2-v4/w96/0", "expander/p2-v4/w128/0", "expander/p2-v4/w16448/0"}
 
 
-def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_challenger(tmp_path):
-    """Under `V3` the device's `C` is v3's encoding of `W` (v3's own codec decodes it back), the leaves are `vk`'s, and every
-    audit and control is `protocol.TimedAudit`'s.  At the test's 128-bit width P2 has no certificate, so the audit runs as a
-    research audit and says so."""
+def test_the_arm_serves_the_registered_encoding_under_pous_s_own_salt_and_seeds_its_sessions(tmp_path):
+    """The device's `C` is the registered scheme's encoding of `W` (its own codec decodes it back) under `protocol.draw_salt`'s
+    salt, the memory challenger's table is each block's digest, and under `--seed` each session's id is `live.seeded`'s.
+    At the test's 128-bit width P2 has no certificate, so the audit runs as a research audit and says so."""
     from verity.core.protocols.pous import protocol, schemes
-    from verity.core.protocols.pous.verifier import leaf_hash
+    from verity.core.protocols.pous.memory_challenger import block_digest
 
     _, harness, _ = _p2()
-    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small(), research=True)
+    live = _live()
+    body = _arm(tmp_path)
     gates, m = body["gates"], body["metrics"]
     for g in ("vector", "round_trip", "reference_decode", "kernel_flags", "codec", "timed_audit", "value_control",
-              "late_control", "recompute_control"):
+              "late_control", "recompute_control", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert "certificate" not in gates and gates["codec"]["codec"] == "p2-128/v4"
     params = schemes.P2Params(128, 173, 64, 3)
     setup = body["setup"]
     assert setup["scheme"] == "p2-128/v4" and setup["manifest"] == params.manifest() and len(bytes.fromhex(setup["salt"])) == 24
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_challenger": "band_gpu/memory_challenger.py",
-                                      "memory_challenger_args": []}
     w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
     commitment = protocol.commit(schemes.P2(params), w)
     salt = protocol.draw_salt(harness.SETUP_SOURCE, commitment)
     assert setup["w_commitment"] == commitment.hex() and setup["salt"] == salt.hex()
-    raw = (tmp_path / "leaves-p2.bin").read_bytes()
     encoded = protocol.encode(schemes.P2(params), w, salt)
-    assert raw == b"".join(leaf_hash(params, salt, s * 64 + j, b) for s, seg in enumerate(encoded) for j, b in enumerate(seg))
+    assert (tmp_path / "leaves-p2.bin").read_bytes() == b"".join(block_digest(b) for seg in encoded for b in seg)
     honest = m["audit"]
-    assert honest["scheme"] == "p2-128/v4" and honest["strict"] is False and honest["audits_accepted"] == 2
+    assert honest["scheme"] == "p2-128/v4" and honest["strict"] is False and honest["audits_accepted_under_signer"] == 2
     assert honest["k"] == 105 and any("no certificate" in g for g in honest["gaps"])
-    from band_gpu.memory_challenger import seeded_source
-    assert honest["seed"] == SEED and [r["source"] for r in honest["records"]] == [
-        seeded_source(bytes.fromhex(SEED), j).hex() for j in range(2)]
-    assert m["value_control"]["audits_accepted"] == 0 and m["late_control"]["audits_accepted"] == 0
+    assert honest["seed"] == SEED and [r["public"]["commitment"]["session"] for r in honest["records"]] == [
+        live.seeded(bytes.fromhex(SEED), j)[1].hex() for j in range(2)]
     assert m["recompute_control"]["wrong"] == 0 and m["recompute_control"]["recomputed_answers"] > 0
-    assert body["profile"]["scheme"] == "p2-128/v4" and not body["profile"]["certified"]
 
 
 def test_a_joint_runs_store_is_set_up_under_the_bandwidth_salt_of_its_device(tmp_path, monkeypatch):
     """`--bandwidth-salt GPU` sets `C` up under `bandwidth.audit.draw_salt` for the GPU's id as the challenger reads it, and
     P2's audit runs over that `C`, so the bandwidth verifier accepts the store P2 audits; a plain run's salt is PoUS's own
-    (the test above), and the switch refuses the frozen spec's framing."""
+    (the test above)."""
     from verity.core.protocols.bandwidth import audit
     from verity.core.protocols.pous import protocol, schemes
+    from verity.core.protocols.pous.memory_challenger import block_digest
     from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
 
     _, harness, _ = _p2()
@@ -403,8 +405,7 @@ def test_a_joint_runs_store_is_set_up_under_the_bandwidth_salt_of_its_device(tmp
     asked: list[str] = []
     monkeypatch.setattr(audit, "read_device", lambda gpu: asked.append(gpu) or device)
     gpu = "GPU-00010203-0405-0607-0809-0a0b0c0d0e0f"
-    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED, bandwidth_salt=gpu), WS, tmp_path, backend=_backend(),
-                                  params=_small(), research=True)
+    body = _arm(tmp_path, bandwidth_salt=gpu)
     assert asked == [gpu] and body["gates"]["timed_audit"]["passed"] and body["gates"]["codec"]["passed"]
     params = schemes.P2Params(128, 173, 64, 3)
     w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
@@ -414,9 +415,10 @@ def test_a_joint_runs_store_is_set_up_under_the_bandwidth_salt_of_its_device(tmp
     assert (setup["salt"], setup["salt_from"], setup["device"]) == (salt.hex(), "bandwidth", device.hex())
     assert salt != protocol.draw_salt(harness.SETUP_SOURCE, commitment)
     encoded = protocol.encode(schemes.P2(params), w, salt)
+    assert (tmp_path / "leaves-p2.bin").read_bytes() == b"".join(block_digest(b) for seg in encoded for b in seg)
     leaves = [leaf_hash(params, salt, s * 64 + j, b) for s, seg in enumerate(encoded) for j, b in enumerate(seg)]
-    assert (tmp_path / "leaves-p2.bin").read_bytes() == b"".join(leaves)
     vk = VerifierKey.from_leaves(params, salt, leaves)
+    assert body["metrics"]["audit"]["setup_root"] == vk.root.hex()
     (tmp_path / "state").mkdir()
     audit.ChallengerState.create(tmp_path / "state", vk)
     with audit.ChallengerState(tmp_path / "state", vk) as state:
@@ -425,103 +427,15 @@ def test_a_joint_runs_store_is_set_up_under_the_bandwidth_salt_of_its_device(tmp
         with pytest.raises(ValueError, match="not draw_salt's for this device"):
             audit.Verifier(vk, audit.Params("ro-blake3/v1", audit.SAMPLES, 1_200_000), b"secret", state,
                            device=bytes(16), commitment=commitment, salt_source=harness.SETUP_SOURCE)
-    with pytest.raises(SystemExit, match="registered P2 store"):
-        _bench().P2V1Gpu().run(_args(tmp_path / "v1", bandwidth_salt=gpu), WS, tmp_path / "v1", backend=_backend(),
-                               params=_small())
 
 
-def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
-    body = _bench().P2V3Gpu().run(_args(tmp_path, k=105, seed=SEED), WS, tmp_path, backend=_backend(), params=_small())
+def test_the_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fails(tmp_path):
+    body = _arm(tmp_path, research=False)
     gates, honest = body["gates"], body["metrics"]["audit"]
-    assert body["implementation"]["memory_challenger_args"] == ["--strict"]
-    assert "has no certificate" in honest["refused"] and honest["audits"] == 0 and honest["responder"]["answered"] == 0
+    assert body["implementation"]["memory_challenger_args"] == ["--strict", "--signer", "test"]
+    assert "no certificate of p2-128/v4 covers" in honest["refused"] and honest["audits"] == 0
+    assert honest["responder"]["answered"] == 0
     assert not gates["timed_audit"]["passed"] and not gates["certificate"]["passed"] and body["profile"] is None
-
-
-def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
-    """`band_gpu/memory_challenger.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), against a responder whose
-    blocks match `vk`'s leaves, on the logical clock (or `clock`): the memory challenger checks leaves, not codewords."""
-    import hashlib
-
-    sys.path.insert(0, str(BENCH))
-    from band_gpu import harness as H
-    from band_gpu import memory_challenger as live
-
-    from verity.core.protocols.pous import schemes
-    from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
-
-    scheme = schemes.get("p2-16448/v4")
-    params, salt = scheme.params, b"s" * 24
-    block = lambda i: hashlib.shake_256(i.to_bytes(4, "big")).digest(params.block_bytes)  # noqa: E731
-    vk = VerifierKey.from_leaves(params, salt, [leaf_hash(params, salt, i, block(i)) for i in range(params.blocks)])
-    responder = H.ControlResponder(params.block_bytes, lambda i: (block(i), 0, 1_000, 0))
-    try:
-        return live.audit("127.0.0.1", responder.port(), scheme, vk, audits=2, pings=20, limit_ns=limit_ns,
-                          clock=clock or live.LogicalClock(), research=False), responder.answered()
-    finally:
-        responder.stop()
-
-
-def test_protocol_memory_challenger_audits_p2_v3_at_the_rtt_cap_and_refuses_one_us_past_it(tmp_path):
-    """The end-to-end claim's memory challenger: `Δ + 354 µs` (spec v1.1's cap) is inside `P2SlackFamilyUncond`'s
-    certificate, so 105 challenges run and are accepted; `Δ + 355 µs` fits one 854,029 ns root call, so the memory challenger
-    refuses before sending any challenge."""
-    from verity.core.protocols.pous.schemes import p2
-
-    doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
-    assert doc["strict"] and "refused" not in doc and doc["audits_accepted"] == doc["audits"] == 2 and answered == 2 * 105
-    assert doc["k"] == 105 and doc["gaps"] == ["W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8"]
-    assert doc["profile"]["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
-    assert doc["profile"]["limit_ns"] == 854_000 and doc["profile"]["effective_rounds"] == 0
-    doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS + 1_000)
-    assert doc["audits"] == 0 and answered == 0 and doc["records"] == []
-    assert "Δ + RTT = 855000 ns fits 1 calls of 854029 ns" in doc["refused"]
-
-
-def test_the_host_trace_splits_each_slow_round_trip_into_where_its_time_went():
-    """A ping over `TRACE_OVER_NS` is kept; a challenge is kept when its round trip or the memory challenger's time for it is
-    over, and its split adds up: send, the wait for the first byte (the responder's reported time and the rest), the rest of
-    the answer, and the memory challenger's own work outside the round trip."""
-    sys.path.insert(0, str(BENCH))
-    from band_gpu import memory_challenger as live
-
-    ping, challenge = live.OP_PING, live.OP_CHALLENGE
-    log = [(ping, 0, 0, 1_000, 5_000, 6_000, 1_000, 2_000, 0),
-           (ping, 0, 10_000, 11_000, 90_000, 95_000, 70_000, 15_000, 0),
-           (challenge, 7, 100_000, 101_000, 140_000, 141_000, 3_000, 120_000, 30_000),
-           (challenge, 9, 200_000, 201_000, 210_000, 211_000, 1_000, 205_000, 5_000)]
-    records = [{"answers": [{"elapsed_ns": 600_000}, {"elapsed_ns": 12_000}]}]
-    trace = live.host_trace(log, records)
-    assert trace["clock"] == "CLOCK_MONOTONIC" and trace["roundtrips"] == 4 and trace["over_ns"] == live.TRACE_OVER_NS
-    slow_ping, slow_answer = trace["kept"]
-    assert slow_ping == {"kind": "ping", "start_ns": 10_000, "roundtrip_ns": 85_000, "send_ns": 1_000, "wait_ns": 79_000,
-                         "server_ns": 0, "responder_other_ns": 79_000, "recv_ns": 5_000, "poll_gap_ns": 70_000,
-                         "poll_gap_at_ns": 15_000}
-    assert slow_answer == {"kind": "challenge", "audit": 0, "round": 0, "index": 7, "elapsed_ns": 600_000,
-                           "outside_ns": 559_000, "start_ns": 100_000, "roundtrip_ns": 41_000, "send_ns": 1_000,
-                           "wait_ns": 39_000, "server_ns": 30_000, "responder_other_ns": 9_000, "recv_ns": 1_000,
-                           "poll_gap_ns": 3_000, "poll_gap_at_ns": 120_000}
-
-
-def test_a_wall_clock_audit_traces_every_round_trip_and_a_logical_one_none(tmp_path):
-    """On a clock that is not the logical one, the memory challenger logs every round trip (the pings before and after and
-    each answer, the 50 warm-up pings before each set included) and its thread's faults and context switches; each kept split
-    adds up to its round trip."""
-    import itertools
-
-    from verity.core.protocols.pous.schemes import p2
-
-    ticks = itertools.count(0, 7)
-    doc, answered = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS, clock=lambda: next(ticks))
-    assert doc["audits_accepted"] == 2 and answered == 2 * 105
-    trace = doc["host_trace"]
-    assert trace["roundtrips"] == 2 * (50 + 20) + 2 * 105
-    for row in trace["kept"]:
-        assert row["send_ns"] + row["wait_ns"] + row["recv_ns"] == row["roundtrip_ns"]
-        assert row["server_ns"] + row["responder_other_ns"] == row["wait_ns"]
-    assert set(doc["memory_challenger_rusage"]["after"]) == {"minflt", "majflt", "nvcsw", "nivcsw"}
-    doc, _ = _live_at_the_p2_point(tmp_path, 500_000 + p2.RTT_ALLOWANCE_CAP_NS)
-    assert "host_trace" not in doc
 
 
 def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_changed(tmp_path):
@@ -533,8 +447,7 @@ def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_
     def run(name: str) -> dict:
         out = tmp_path / name
         out.mkdir()
-        return _bench().P2V3Gpu().run(_args(out, k=105, seed=SEED, p2_c_cache=str(cache)), WS, out, backend=_backend(),
-                                      params=_small(), research=True)
+        return _arm(out, p2_c_cache=str(cache))
 
     first = run("first")
     rec = first["metrics"]["encode_cache"]
@@ -554,8 +467,8 @@ def test_a_cached_encoding_is_reused_for_its_own_setup_and_never_when_its_bytes_
     assert hashlib.sha256(data.read_bytes()).hexdigest() == rec["sha256"]
 
 
-def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_test_signer(tmp_path):
-    """Under `MC` every audit and control is the memory challenger's: its leaves are each block's `sha512/row/v2` digest,
+def test_the_memory_challenger_arm_audits_the_stores_blocks_and_fails_closed_under_its_test_signer(tmp_path):
+    """Every audit and control is the memory challenger's: its leaves are each block's `sha512/row/v2` digest,
     the honest sessions pass under the test signer's own mapping and every control is rejected under it (the tampered one
     for a flipped bit in a block's last byte, the bad-signature one for a flipped signature bit and for a receipt time
     edited after signing).  `memory_challenger.SCHEMES` accepts S1's scheme alone, so the real verdict rejects every test-signed session
@@ -600,11 +513,12 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
     from memory_challenger import live
 
     from verity.core.protocols.pous import schemes
+    from verity.core.protocols.pous.memory_challenger import block_digest
 
     scheme = schemes.get("p2-16448/v4")
     nb = scheme.params.block_bytes
     block = lambda i: i.to_bytes(8, "big") * (nb // 8)  # noqa: E731
-    digests = b"".join(_p2()[1].MC.leaf(None, i, block(i)) for i in range(scheme.params.blocks))
+    digests = b"".join(block_digest(block(i)) for i in range(scheme.params.blocks))
     responder = H.ControlResponder(nb, H.control_answers(b"".join(block(i) for i in range(scheme.params.blocks)), nb,
                                                          tamper=set(tamper)))
     try:
@@ -727,7 +641,7 @@ def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monke
     doc = json.loads((tmp_path / "sessions.json").read_text())
     assert doc["signer"]["scheme"].startswith(mc.TEST_PREFIX) and len(doc["sessions"]) == 2
     nb = schemes.get("p2-16448/v4").params.block_bytes
-    leaf = lambda i: _p2()[1].MC.leaf(None, i, i.to_bytes(8, "big") * (nb // 8))  # noqa: E731
+    leaf = lambda i: mc.block_digest(i.to_bytes(8, "big") * (nb // 8))  # noqa: E731
     for s in doc["sessions"]:
         signed = mc.SignedSession.from_json(s["signed"])
         assert len(s["reports"]) == len(signed.rounds) == 105

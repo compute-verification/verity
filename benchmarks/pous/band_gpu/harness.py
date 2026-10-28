@@ -20,7 +20,10 @@ One run, in order:
 4. **The limit, fixed before any load.** With no load running, the memory challenger calibrates its loopback round trip
    and fixes the limit `Δ + allowance`; every audit below is judged against that one limit, so rounds under load are
    comparable. The allowance is a loopback one (a remote memory challenger's round trip adds to it).
-5. **Timed audits** against the responder serving `C` from device memory:
+5. **Timed audits** by the memory challenger (`memory_challenger/live.py`) against the responder serving `C` from device
+   memory, each session signed with S1's LMS key in `--mc-lms-key DIR` (every session's id in `--mc-session-log FILE`),
+   else with the PoUS tests' test signer, whose sessions the verdict rejects (the `fail_closed` gate); the gates read the
+   verdict under the signer's own mapping:
    - the honest audit, under POUS forwards as load (completed forwards counted);
    - the value control: one block in ten of `C` zeroed, which must reject on the value;
    - the late control: one answer in ten held past the limit, which must reject on time (`late > 0`, `wrong = 0`), since the
@@ -37,8 +40,8 @@ One run, in order:
 7. **NVMe** (`--nvme-dir`, optional): one block's read latency from a file there.
 8. **Clocks.** The GPU's clocks, throttle reasons, temperature and power before and after, and the SM clock per timed step.
 
-`vk` is built from `C`'s leaves; gate 1's reference segments check `C` against `verity.core.protocols.pous`. The verifier's full private
-setup (it encodes all of `W` itself) is `bench.py --impl reference`'s.
+The memory challenger checks each answer against `C`'s block digests; gate 1's reference segments check `C` against
+`verity.core.protocols.pous`. The verifier's full private setup (it encodes all of `W` itself) is `bench.py --impl reference`'s.
 """
 from __future__ import annotations
 
@@ -63,7 +66,10 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-MEMORY_CHALLENGER = HERE / "memory_challenger.py"
+MEMORY_CHALLENGER = HERE.parent / "memory_challenger" / "live.py"
+ACCEPTED = "audits_accepted_under_signer"
+"""The audit document's count of accepted sessions that the gates read: the verdict under the signer's own mapping, which
+for S1's LMS is the verdict itself (the `signer` gate checks) and for the test signer every check but the scheme's."""
 SALT = bytes(range(24))
 VECTORS = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
@@ -123,7 +129,7 @@ def busy_wait(ns: int) -> None:
 
 
 class ControlResponder:
-    """A responder speaking `pous_native.cu`'s wire (`memory_challenger.py`), whose answer to each challenge the harness supplies through
+    """A responder speaking `pous_native.cu`'s wire (`memory_challenger/live.py`), whose answer to each challenge the harness supplies through
     `answer(i) -> (block, device_ns, server_ns, hold_ns)`.  With `real_delay`, an answer is held `hold_ns` before it is sent
     (`wait`, a busy-wait), so on the wall clock a late control's answer is really late; only the late control holds one: a
     recomputed answer has already spent its time when `answer` returns, so it is sent at once.  The CPU tests read the reported
@@ -427,7 +433,7 @@ def with_in_degree(base: Any, d: int) -> Any:
 
 
 def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
-    from .memory_challenger import scheme_of
+    from memory_challenger.live import scheme_of
 
     name, params, s, w_seg = job
     return s, b"".join(scheme_of(name, params).encode_segment(SALT, s, w_seg))
@@ -534,6 +540,29 @@ def _memory_challenger_cmd(script: Path, ready: Path, leaves: Path, result: Path
     return cmd + extra
 
 
+def signer_args(a: Any) -> tuple[str, ...]:
+    """The memory challenger's signer arguments: S1's LMS key in `--mc-lms-key DIR` with its session log
+    `--mc-session-log FILE`, else the test signer."""
+    key, log = getattr(a, "mc_lms_key", "") or "", getattr(a, "mc_session_log", "") or ""
+    if key and not log:
+        raise ValueError("--mc-lms-key takes --mc-session-log FILE: the memory challenger's used-session log")
+    return ("--signer", "lms", "--lms-key", key, "--session-log", log) if key else ("--signer", "test")
+
+
+def signer_gate(rounds: Sequence[dict[str, Any]], lms: bool) -> tuple[str, dict[str, Any]]:
+    """Under S1's LMS (`signer`): every round signed by it, and the verdict the gates read is the verdict itself.  Under
+    the test signer (`fail_closed`): the verdict accepted no session, honest or not, so no storage profile is issued."""
+    if lms:
+        return "signer", {"passed": all((d.get("signer") or {}).get("test") is False
+                                        and d.get("audits_accepted") == d.get(ACCEPTED) for d in rounds),
+                          "schemes": sorted({(d.get("signer") or {}).get("scheme") for d in rounds}, key=str),
+                          "note": "S1's LMS at lms.DEPLOYED: the verdict is the one under memory_challenger.SCHEMES"}
+    return "fail_closed", {"passed": all(d.get("audits_accepted") == 0 for d in rounds),
+                           "accepted": [d.get("audits_accepted") for d in rounds],
+                           "note": "memory_challenger.SCHEMES accepts no test-signed session: no session is accepted, "
+                                   "honest or not, and no storage profile is issued"}
+
+
 def _memory_challenger_env() -> dict[str, str]:
     paths = [str(ROOT), str(ROOT / "verity" / "core" / "protocols" / "pous"), os.environ.get("PYTHONPATH", "")]
     return {**os.environ, "PYTHONPATH": os.pathsep.join(p for p in paths if p)}
@@ -575,9 +604,8 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
                 extra: Sequence[str] = ()) -> dict[str, Any]:
     """One memory challenger process (`script`, with `extra` arguments) against the responder `start()` returns, judged
     against `limit_ns` when given, with `load` run until the memory challenger exits.  Every load call is synchronized
-    (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones.  The answers' blocks stay in
-    `audit-{tag}.json` beside `ready-{tag}.json`, where a replay of the verdict reads them, and out of the returned copy,
-    which the result embeds."""
+    (`sync`) so `forwards_completed` counts finished forwards, not enqueued ones.  The audit document stays in
+    `audit-{tag}.json` beside `ready-{tag}.json`, and its signed sessions in `sessions-audit-{tag}.json`."""
     responder = start()
     ready = out / f"ready-{tag}.json"
     ready.write_text(json.dumps({"port": int(responder.port()), **fields}))
@@ -597,10 +625,6 @@ def audit_round(start: Callable[[], Any], fields: dict[str, Any], script: Path, 
     counts = {"answered": int(responder.answered()), "pings": int(responder.pings())}
     responder.stop()
     doc = json.loads(result.read_text()) if result.exists() else {}
-    for r in doc.get("records") or ():
-        for a in r.get("answers") or () if isinstance(r, dict) else ():
-            if isinstance(a, dict):
-                a.pop("block", None)
     return {"rc": proc.returncode, "forwards_completed": completed, "responder": counts, **doc}
 
 
@@ -663,7 +687,7 @@ def recompute_gate(recompute: dict[str, Any]) -> dict[str, Any]:
     every recomputed answer is correct.  Whether a recompute beats the limit is the measured margin, not the gate."""
     hits = recompute.get("recomputed_answers") or 0
     return {"passed": recompute.get("wrong", 1) == 0 and bool(recompute.get("answers")) and hits > 0,
-            "audits_accepted": recompute.get("audits_accepted"), "late": recompute.get("late"), "recomputed_answers": hits,
+            "accepted": recompute.get(ACCEPTED), "late": recompute.get("late"), "recomputed_answers": hits,
             "note": "passes when some challenge hit a dropped block and every recomputed answer is correct; whether it beats "
                     "the limit is the measured margin, device_margin_s (from each recomputed answer's device time)"}
 
@@ -806,11 +830,11 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     """One harness run (the module docstring's steps).  `backend`, `base` (the scheme's geometry before `W` sizes it) and
     `vectors` replace the GPU kernels, the registered geometry and the pinned vectors (the CPU tests)."""
     import torch
+    from memory_challenger.live import scheme_of
     from verity.core.protocols.pous import schemes
-    from verity.core.protocols.pous.verifier import leaf_hash
+    from verity.core.protocols.pous.memory_challenger import block_digest
 
-    from .memory_challenger import scheme_of
-
+    extra = signer_args(a)
     base = base or schemes.get(a.scheme).params
     if getattr(a, "band_d", 0):
         base = with_in_degree(base, a.band_d)
@@ -899,20 +923,20 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         rows += [("nvme_block_read_p99.9_s", nvme["block_read_s"].get("p99.9"), "s")] if nvme else []
         return result(metrics, rows, ())
 
-    leaves = out / "leaves.bin"
-    leaves.write_bytes(b"".join(leaf_hash(p, SALT, i, c_host[i * width:(i + 1) * width]) for i in range(p.blocks)))
+    leaves = out / "digests.bin"
+    leaves.write_bytes(b"".join(block_digest(c_host[i * width:(i + 1) * width]) for i in range(p.blocks)))
     leave_reserved(a)
     fields = {"salt": SALT.hex(), "scheme": scheme.name, "params": scheme.params.manifest()}
     native_start = lambda: backend.responder(c, a.responder_cpu)  # noqa: E731
     sync = torch.cuda.synchronize if backend.device != "cpu" and torch.cuda.is_available() else None
-    cal = calibrate_limit(native_start, fields, MEMORY_CHALLENGER, out, a)     # P5: fix the limit with no load running
+    cal = calibrate_limit(native_start, fields, MEMORY_CHALLENGER, out, a, leaves)     # P5: fix the limit with no load running
     limit = int(cal.get("limit_ns") or 0)
     honest = audit_round(native_start, fields, MEMORY_CHALLENGER, leaves, out, "honest", a,
-                         (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync)
+                         (lambda: pous_forward(a.load_tokens)) if a.load_tokens else None, limit, sync, extra)
 
     def control(tag: str, answer: Callable[[int], tuple[bytes, int, int, int]]) -> dict[str, Any]:
         start = lambda: ControlResponder(width, answer, real_delay=a.clock == "wall")  # noqa: E731
-        return audit_round(start, fields, MEMORY_CHALLENGER, leaves, out, tag, a, None, limit)
+        return audit_round(start, fields, MEMORY_CHALLENGER, leaves, out, tag, a, None, limit, None, extra)
 
     value = control("value", control_answers(c_host, width, zero=set(range(0, p.blocks, 10))))
     late = control("late", control_answers(c_host, width, late_every=10, late_ns=limit + LATE_EXTRA_NS))
@@ -931,13 +955,15 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     nvme = nvme_probe(a.nvme_dir, c_host, width, a.nvme_samples) if a.nvme_dir else None
     facts["after"] = backend.facts()
 
-    gates["timed_audit"] = {"passed": honest.get("audits") == honest.get("audits_accepted") and bool(honest.get("audits")),
-                            "rc": honest["rc"]}
-    gates["value_control"] = {"passed": value.get("audits_accepted") == 0 and value.get("wrong", 0) > 0,
-                              "accepted": value.get("audits_accepted"), "wrong": value.get("wrong")}
-    gates["late_control"] = {"passed": late.get("audits_accepted") == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
-                             "accepted": late.get("audits_accepted"), "late": late.get("late"), "wrong": late.get("wrong")}
+    gates["timed_audit"] = {"passed": honest.get("audits") == honest.get(ACCEPTED) and bool(honest.get("audits")),
+                            "rc": honest["rc"], "accepted_by": ACCEPTED}
+    gates["value_control"] = {"passed": value.get(ACCEPTED) == 0 and value.get("wrong", 0) > 0,
+                              "accepted": value.get(ACCEPTED), "wrong": value.get("wrong")}
+    gates["late_control"] = {"passed": late.get(ACCEPTED) == 0 and late.get("late", 0) > 0 and late.get("wrong", 1) == 0,
+                             "accepted": late.get(ACCEPTED), "late": late.get("late"), "wrong": late.get("wrong")}
     gates["recompute_control"] = recompute_gate(recompute)
+    name, gate = signer_gate((honest, value, late, recompute_ctl), "--lms-key" in extra)
+    gates[name] = gate
     gaps = ()
     if step and step["below_certificate"]:
         gaps = (f"a Π₂ call took {step['min_s'] * 1e9:,.0f} ns on this device ({step['fastest']} kernel), under the "
