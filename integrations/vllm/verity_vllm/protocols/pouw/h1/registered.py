@@ -203,32 +203,46 @@ def path() -> str:
     return "gpu" if D.available() else "numpy"
 
 
-def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, keep_rows: bool = False,
+def _host(words: Any) -> np.ndarray:
+    if hasattr(words, "detach"):
+        import torch
+
+        t = words.detach()
+        return t.view(torch.uint8).cpu().numpy().view("<u2") if t.dtype == torch.uint16 else t.cpu().numpy()
+    return np.asarray(words)
+
+
+def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False,
            row_salts: bytes | None = None, schema: str = G.SCHEMA_V2, **binding: Any) -> G.Registered:
     """`registered.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
     concatenated, each used once) those, ``key`` and ``nonce`` unread. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
     embedding table's rows, hashed with NumPy wherever `path` says). ``binding``: the domain's other arguments
-    (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none. Hashed where `path` says."""
-    words = np.asarray(words)
-    if words.ndim != 2 or not words.shape[0] or not words.shape[1] or words.dtype != np.uint16:
-        raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
+    (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none. Hashed where `path` says;
+    ``words`` an array, or a u16 tensor, which the GPU path hashes where it is when that is a CUDA device and every
+    other path reads on the host."""
     if schema not in (G.SCHEMA_V2, G.SCHEMA_SEG):
         raise ValueError(f"rows of {schema!r}: {G.SCHEMA_V2} or {G.SCHEMA_SEG}")
-    n, w = words.shape
+    gpu = schema == G.SCHEMA_V2 and path() == "gpu"
+    if not (gpu and getattr(words, "is_cuda", False)):
+        words = _host(words)
+    if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or str(words.dtype) not in ("uint16",
+                                                                                                  "torch.uint16"):
+        raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
+    n, w = (int(d) for d in words.shape)
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
     given = None if row_salts is None else bytes(row_salts)
     fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
     if fixed is not None and (len(given) != 192 * n or len(set(fixed)) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
-    if schema == G.SCHEMA_V2 and path() == "gpu":
+    if gpu:
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
         bcs, levels = D.device_commit(words, key, nonce, given, dom.domain_id)
     else:
         bcs, levels = _numpy(words, key, nonce, given, dom.domain_id, schema)
     return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
-                        rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n),
+                        rows=Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n),
                         salts=Salts(key, nonce, n) if fixed is None else fixed,
                         bcs=bcs, levels=levels, schema=schema, **binding)
 
