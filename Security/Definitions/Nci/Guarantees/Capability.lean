@@ -1,6 +1,7 @@
 import Definitions.Nci.Guarantees.Capability.Budgets
 import Definitions.Nci.Guarantees.Capability.Incidence
 import Definitions.Nci.Guarantees.Capability.Dependency
+import Definitions.Nci.Guarantees.Capability.Fresh
 import Definitions.Nci.Guarantees.Capability.Witnesses
 
 /-!
@@ -9,7 +10,8 @@ import Definitions.Nci.Guarantees.Capability.Witnesses
 The statements a local bound is assembled from, one module per step of the argument:
 
 1. `Budgets`: information premise + a short view → what every block holds (`HeldBudget`, `StatHeldBudget`,
-   `RecoveredBudget`).
+   `RecoveredBudget`). `Fresh` puts an inference block's other fresh input into a budget's parameters: the advice into
+   `aBlk` (`BlockDescriptionAdvice`), what faulty proof blocks inject into `k` (`FaultyInjection`).
 2. `Incidence` and `Dependency`: a budget + a structure → a per-block cap on counted products (`IncidenceCap`,
    `OperandCapSeparate`, `OperandCapJoint`; `ImportOrRecompute`, `RecomputeByGates`, `RecomputeByState`,
    `WeightedProductCap`).

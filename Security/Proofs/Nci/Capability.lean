@@ -1,6 +1,7 @@
 import Proofs.Nci.Capability.Budgets
 import Proofs.Nci.Capability.Incidence
 import Proofs.Nci.Capability.Dependency
+import Proofs.Nci.Capability.Fresh
 import Proofs.Nci.Capability.Witnesses
 
 /-!
@@ -11,6 +12,7 @@ Each local bound of `Definitions.Nci.Guarantees.Capability`, proved over the voc
 * `Budgets`: `HeldBudget`, `StatHeldBudget`, `RecoveredBudget`;
 * `Incidence`: `IncidenceCap`, `OperandCapSeparate`, `OperandCapJoint`;
 * `Dependency`: `ImportOrRecompute`, `RecomputeByGates`, `RecomputeByState`, `WeightedProductCap`;
+* `Fresh`: `BlockDescriptionAdvice`, `FaultyInjection`;
 * `Items`: what they share about what a block holds;
 * `Witnesses`: each bound's honest and nontrivial witnesses at the toy circuit.
 
