@@ -258,8 +258,8 @@ theorem ThreadedThrottledSlots_rate :
       T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a →
         b_a * T.M.card ≤ α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed := by
   intro Γ α b_w b_a c d T σ dd e M hα hbw hba hdd hd hB hT hW
-  have h := ThreadedThrottledOnSlots_rate Γ α b_w b_a c d T σ dd e (PartialContainment.ofContainment M) hα hbw hba hdd hd
-    hB hT hW
+  have h := ThreadedThrottledOnSlots_rate Γ α b_w b_a c d T σ dd e (PartialContainment.ofContainment M) hα hbw hba hdd
+    hd hB hT hW
   rwa [ofContainment_S, Finset.inter_eq_left.2 T.M_computed] at h
 
 /-- **Theorem 2** (the thread draft, Appendix B): its `Slots` form at one slot per weight gate. -/

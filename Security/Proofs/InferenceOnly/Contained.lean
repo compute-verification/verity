@@ -44,7 +44,8 @@ theorem partialSumsIncompressible_of_support {D : Declaration} {θv : D.D.Transc
 /-- The partial-sum law on a reference circuit, in reads: `UpdatedMatMul` with its assumptions on the contained
 circuit `c`. -/
 theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Declaration) (ch : Chain c.D) (dd : ℕ)
-    (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ) (hP : CompliesRate Γ α d)
+    (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
+    (hP : CompliesRate Γ α d)
     (hB : Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M))
     (hA : Assumptions.ActivationsIncompressible c ch Γ (α * Γ) b_w b_a)
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ (α * Γ) b_w b_a) :

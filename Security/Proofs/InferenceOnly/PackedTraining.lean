@@ -192,8 +192,8 @@ theorem PackedIncompressibleContainedTrainingOn_rate :
         2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads c {v} : ℝ)) := by
   intro k Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX h hκ
   exact training_of_counts (le_max_of_le_right (by positivity))
-    (PackedIncompressibleContainedMatMulOn_rate k Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he
-      hP hB hX h) hκ (by exact_mod_cast card_products_le_dark_packed M ch)
+    (PackedIncompressibleContainedMatMulOn_rate k Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd
+      he hP hB hX h) hκ (by exact_mod_cast card_products_le_dark_packed M ch)
 
 theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleContainedMatMulOn := by
   intro p c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h

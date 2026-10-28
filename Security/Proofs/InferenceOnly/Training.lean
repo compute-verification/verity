@@ -162,7 +162,8 @@ theorem IncompressibleThreadedThrottledOn : Guarantees.IncompressibleThreadedThr
   exact ThreadedThrottledOn c k b_w b_a r d T dd e M hc hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
 theorem IncompressibleContainedTraining_rate :
-    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd : ℕ) (M : Containment c.D d.D),
+    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd : ℕ)
+      (M : Containment c.D d.D),
       0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
       Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) →
       Assumptions.TrainingIncompressible c ch T Γ (α * Γ) b_w b_a →
@@ -230,8 +231,8 @@ theorem IncompressibleContainedTrainingOn_rate :
         2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads c {v} : ℝ)) := by
   intro Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX h hκ
   exact training_of_counts (le_max_of_le_right (by positivity))
-    (IncompressibleContainedMatMulOn_rate Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX
-      h) hκ (by exact_mod_cast card_products_le_dark M ch)
+    (IncompressibleContainedMatMulOn_rate Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB
+      hX h) hκ (by exact_mod_cast card_products_le_dark M ch)
 
 theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTraining := by
   intro c k b_w b_a κ r d ch T dd M hc hk hbw hba hd hP hB h hκ

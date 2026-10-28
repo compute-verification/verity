@@ -11,8 +11,8 @@ at its rate, `InferenceOnly.CompliesRate c α`, at the gate budget `c = gamma` a
 bounds, `InferenceOnly.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
 (`Definitions/InferenceOnly/Guarantees/Threads.lean`), bound a complying declaration that contains a reference circuit.
 The statements here join the two, so that the check's verdict carries the bound: on every instance with a verdict whose
-`complies` is `true`, every such declaration `d` meets the bound's conclusion at `c` and the fresh-input budget `k = α c`,
-for every reference circuit `r` it contains, under the bound's premises.
+`complies` is `true`, every such declaration `d` meets the bound's conclusion at `c` and the fresh-input budget
+`k = α c`, for every reference circuit `r` it contains, under the bound's premises.
 
 * `Throttles`: `ThreadedThrottled`'s conclusion, for every `r` that `d` contains, `(dd, e)`-threaded at read cap `k`
   with its weights incompressible (`WeightsIncompressible`), with no fresh input of `r` in the registered information
@@ -47,7 +47,8 @@ def Throttled (j out : Json) : Prop :=
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : InferenceOnly.Threading r) (dd e : ℕ) (M : Verity.Containment r.D d.D),
+    ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : InferenceOnly.Threading r) (dd e : ℕ)
+      (M : Verity.Containment r.D d.D),
       0 < b_w → 0 < b_a → 0 < dd →
       InferenceOnly.Assumptions.BaselineRegistered r d (InferenceOnly.PartialContainment.ofContainment M) →
       T.Threaded c k dd e → InferenceOnly.Assumptions.WeightsIncompressible r T c k b_w b_a →
@@ -105,9 +106,9 @@ def ThrottledSlots (j out : Json) : Prop :=
         b_a * T.M.card ≤ α * T.bound k b_w dd e * d.D.size d.D.computed
 
 /-- **`Throttles` per parameter slot**: a verdict of compliance throttles every threaded reference circuit the
-declaration contains, if its weights are incompressible per parameter slot of a slot map `σ` and none of
-its fresh input registered (the named assumptions `WeightsIncompressibleSlots` and `BaselineRegistered`). On every instance
-with a verdict, the verdict is `ThrottledSlots`. -/
+declaration contains, if its weights are incompressible per parameter slot of a slot map `σ` and none of its fresh input
+registered (the named assumptions `WeightsIncompressibleSlots` and `BaselineRegistered`). On every instance with a
+verdict, the verdict is `ThrottledSlots`. -/
 def ThrottlesSlots : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → ThrottledSlots j out
 
