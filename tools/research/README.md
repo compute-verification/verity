@@ -139,7 +139,7 @@ among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothi
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
 it). From the remote's copy of the target, the truth rather than the checkout, it closes each open pull request whose head is on
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
-head branch unless an open one uses it. With `--push`, which whoever lands a train passes (Daniel, 1 Oct), a merge that lands is
+head branch unless an open one uses it. With `--push`, which whoever lands a train passes, a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
 after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
 bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
@@ -158,7 +158,7 @@ Since 12 Oct `research queue drive` moves `main`; the lander handles only what d
 fast-forwards `main` to the newest commit on `next` that the same gate accepts. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`). No PR waits on Daniel (16 Oct) or on a per-head grant (8 Oct). The branch holds the queue's state (each
+`pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
 conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
@@ -418,13 +418,9 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- The r20 campaign's numbers live in the store. `python -m
-  verity_numerical.bench.ledger_to_store [--store ROOT] [--dry-run]` imports
-  the frozen ledger once (labels on the attempt when the run is in the store,
-  else on a `ledger-row/v1` artifact; red-team verdicts as separate assertions;
-  idempotent). `python -m verity_numerical.bench.store_tables --diff-ledger
-  [--proof-class-by 'red-team-*']` rebuilds the like-for-like table from store
-  queries alone and diffs it row by row against `decision_tables.py`.
+- The r20 campaign's numbers live in the store: the frozen ledger was imported
+  once (labels on the attempt when the run is in the store, else on a
+  `ledger-row/v1` artifact; red-team verdicts as separate assertions).
 - Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
@@ -542,7 +538,7 @@ SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which
 ### The steward off the laptop
 
 `research notes watch` is the steward: liveness, reaping, deadlines,
-budgets, the daily render and scheduled runs (`notes.py`). Three flags let it run on any
+budgets and scheduled runs (`notes.py`). Three flags let it run on any
 always-on host (`steward.py`):
 
 - `--liveness git` (or `RESEARCH_LIVENESS=git`): a notes file's time is
@@ -558,8 +554,7 @@ always-on host (`steward.py`):
 - `research notes service systemd|launchd` prints the service definition
   (restart on exit and after a reboot; `watch --lease --standby`).
 
-Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[render]]` entries (the tables render, `render_lines`) and
-`[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
+Its schedule is `<notes root>/steward.toml`, re-read every pass: `[[run]]` entries, each a recorded run launched on a machine once a UTC day at or after `at`, or once an ISO week with
 `weekday` (`run_lines`):
 
 ~~~toml

@@ -1,7 +1,7 @@
 """`research run --on ... --wait`: `run --on` returns once the machine has started the run, so a loop of launches never serialized
 them (a compute-accounting worker held 5 GPUs against a 2-GPU budget, INF-36). `--wait` fetches the run's records until it ends and
-exits with its rc; an unreachable machine is waited out, for at most WAIT_CAP_S (no tool call may block more than 20 minutes,
-Daniel, 19 Oct)."""
+exits with its rc; an unreachable machine is waited out, for at most WAIT_CAP_S (no tool call may block more than 20
+minutes)."""
 from __future__ import annotations
 
 import json
@@ -72,7 +72,7 @@ def test_wait_returns_the_runs_own_exit_once_it_ends(tmp_path, capsys, end, rc):
 @pytest.mark.parametrize("max_s, fetch_s", [(waitcap.WAIT_CAP_S, 0.0), (waitcap.WAIT_CAP_S, 45.0), (300.0, 0.0)],
                          ids=["cap", "slow-fetches", "wait-max"])
 def test_wait_stops_at_its_cap_with_the_run_still_going_and_says_how_to_check_back(tmp_path, capsys, max_s, fetch_s):
-    """Agents that blocked in one long `--wait` looked silent and missed their wake-ups (Daniel, 19 Oct). The wait ends within its
+    """Agents that blocked in one long `--wait` looked silent and missed their wake-ups. The wait ends within its
     bound however long each fetch takes, cancels nothing, and exits STILL_GOING, which no other outcome of the wait gives."""
     rd = tmp_path / "r1"
     rd.mkdir()

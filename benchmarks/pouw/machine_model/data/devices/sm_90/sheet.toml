@@ -12,7 +12,7 @@ lean = "Security/Definitions/Accounting/Sheets/H200.lean"
 [fmax]
 mhz = 1980
 grade = "whitepaper (H100 SXM5), and measured"
-source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on vy-dc-h200 is 1980 MHz (EPS1 DC, note:20261017T0452Z-draft-eps1-dc)"
+source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on vy-dc-h200 is 1980 MHz (EPS1 DC)"
 
 [sms]
 value = 132
@@ -30,7 +30,7 @@ source = "CUDA C++ Programming Guide 12.9 §18.8.1 (CC 9.0): '4 warp schedulers 
 [uniform_issue]
 slots = 1
 grade = "measured only (no vendor document states it)"
-source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma: each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (RT-H200-EMP, dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6, note:20261019T0533Z-draft-rt-h200-emp), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90)"
+source = "no vendor document gives a uniform instruction's issue cost: Nsight Compute §2.3.6 defines the uniform pipe with no rate, and CUDA Binary Utilities §4.3 lists the Hopper uniform opcodes (integer only); measured at saturation beside an async wgmma: each uniform instruction costs 1.08 to 1.19 SMSP-cycles at issue 0.87 with no dual issue (dc/probes/sm90_emp.cu emp_pack3), and 0.984 of a slot beside a saturated lane stream (the census's UNI issue line, DC-90)"
 
 [clocks.tensor]
 label = "tensor boost clock"
@@ -111,7 +111,7 @@ tol = 0.5
 clock = "fp64"
 element_words = 2
 grade = "data sheet and whitepaper; per clock derived (figure over SMs and the FP64 clock) and measured"
-source = "H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (RT-ISA-1, unpriced90.cu, r20261019-085210-4776, note:20261019T0520Z-draft-rt-isa)"
+source = "H200 data sheet, H200 SXM: 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote); measured alone, DMMA.16x8x16 128 MACs an SM clock and DMMA.8x8x4 64, and beside a saturated wgmma s8 form t + s = 0.935 to 0.958, so f64 shares the tensor pipe's time with the other types (unpriced90.cu)"
 
 # A6's ω for each tensor class (`omega` in sheet.py), read off the PTX accumulator fragments.
 [omega]
@@ -139,7 +139,7 @@ source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 'warp shuffle
 [pipes.uniform]
 width = "3200000000/49027679"
 grade = "measured only (no vendor document states the uniform datapath's rate)"
-source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at 0.4999 uniform instructions a SMSP-cycle, at decision 76's 2% margin 1.96110716 SMSP-cycles each (r20261017-095350-02ff, r20261017-103944-a0bf, r20261017-112709-e43e, r20261017-113207-6aa4, r20261017-113541-675b); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
+source = "Nsight Compute §2.3.6 defines the uniform pipe ('a scalar unit') with no rate; the census's UP line (rows.csv): DC's uniform.cuh, the fastest of 11 forms alone (uz_128i) at 0.4999 uniform instructions a SMSP-cycle, at a 2% margin 1.96110716 SMSP-cycles each (five runs); the width counts a uniform instruction as a warp instruction's 32 results, as the pipe row reads a width"
 
 # Each DS-90 class: a tensor form (operand type, m, n, k, and the warps that issue one MMA: a wgmma's warpgroup is 4,
 # each warp's instruction a quarter of it; PTX ISA 9.4 §9.7.17), a pipe, or neither (issue only: FFMA at 128 results a

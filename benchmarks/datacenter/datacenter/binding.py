@@ -3,11 +3,11 @@
 A `Placement` puts each root node of the Program on a device at an engine step: each Call where it runs, each run input
 where it enters (the outside world, a block's own device, a trusted device), and each device maps its steps onto ticks of
 the trusted clock (`ticks`, strictly increasing). A registered input needs no device: registration put a copy of it in
-every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy
-(memory accounting, review 4). A registered value kept in one copy instead (`held`, or a registered parameter named in
-`place`) is moved to its readers in other blocks, and those crossings are bandwidth like any other. Every gate of a node
-is placed with it, so this is Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`, in #2399) at the
-census's grain: a gate's leaf and step are its node's. The placement is private and committed. A crossing is a census
+every block that reads it, before the epoch, as serving holds its weights and as the remote audit registers each copy.
+A registered value kept in one copy instead (`held`, or a registered parameter named in `place`) is moved to its readers
+in other blocks, and those crossings are bandwidth like any other. Every gate of a node is placed with it, so this is
+Lean's `Accounting.Placed` (and `Accounting.Requirement.Placement`) at the census's grain: a gate's leaf and step are its
+node's. The placement is private and committed. A crossing is a census
 value produced in one block and read in another; crossings are derived, never declared, since moving a value doesn't
 change it.
 

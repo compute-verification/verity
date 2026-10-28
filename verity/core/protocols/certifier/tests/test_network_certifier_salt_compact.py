@@ -1,6 +1,6 @@
-"""Red-team phase 8, target 3 (the salt at the head of the queue, and compact framing), CPU-only.
+"""The salt at the head of the queue, and compact framing, CPU-only.
 
-REDTEAM's seven cases (`cursor/redteam-phase8-certvarlen-061a` @d75f64a52e), with the two findings closed:
+Seven adversarial cases, with two gaps closed:
 
   a. `served.derive` (the body of `NetworkServedCounts_v1`) subtracts the window's `own` frames from bucket 0
      unconditionally, so the same traffic with the salt in bucket 1 derives other request ends and still passes the
@@ -9,7 +9,7 @@ REDTEAM's seven cases (`cursor/redteam-phase8-certvarlen-061a` @d75f64a52e), wit
   b. The compact record's ordinal is pinned to its connection's stream, its fill is zero and its token field is no
      wider than an id event's, but its finish is in band: `COMPACT_LAST` and `COMPACT_STOP` are flags of records the
      certifier commits whatever they say. `compact_finish_violations` holds them to the Commit's sampled ids (a stop
-     carries its EOS id, REDTEAM phase 12), the rule the I/O tie applies.
+     carries its EOS id), the rule the I/O tie applies.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Types.Dag
 import Flock.TmplComputes
 
 /-!
-# A template Definition whose rows are a typed layout's computes its type (PRF-133)
+# A template Definition whose rows are a typed layout's computes its type
 
 `Flock.TmplValue.defComputes_of_rows` proves `Tmpl.DefComputes` from any relational fact about a Definition's rows. The
 typed path has that fact for every layout `deriveChecked` accepts: `Types.Dag.layout_sound`, whose rows

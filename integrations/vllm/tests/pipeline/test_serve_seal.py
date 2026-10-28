@@ -211,7 +211,7 @@ def _store(d, s, opened: bool = False):
 
 
 def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
-    """The failing read of PROVE-PATH on serve-openai's w5 (r20261024-114918-57a0), (b0-1, step 1, gate_up_proj/out), and the rest
+    """PROVE-PATH's read on serve-openai's w5 (b0-1, step 1, gate_up_proj/out), and the rest
     of what the row's Programs read: a Gemm's `out`, RoPE's `query` / `key` (layer 1 through the row's alias), an RMSNorm's
     `norm_scale` and an `fa2.m1` member, each bound exactly as the Commit of record bound the same tensor."""
     fx, d, s = _sealed_parts(tmp_path, with_manifest=True)
@@ -233,7 +233,7 @@ def test_a_served_windows_identities_are_what_the_rows_programs_read(tmp_path):
 
 
 def test_without_the_rows_manifest_a_window_binds_raw_names(tmp_path):
-    """What r20261024-105002-1042's w5 sealed: no manifest, so a name is its identity, and the Programs' reads miss by name."""
+    """A window sealed with no manifest: so a name is its identity, and the Programs' reads miss by name."""
     _fx, d, s = _sealed_parts(tmp_path, with_manifest=False)
     r, _bmap, store = _store(d, s)
     assert r.manifest is None and store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "0")

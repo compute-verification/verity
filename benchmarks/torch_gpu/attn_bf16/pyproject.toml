@@ -1,4 +1,4 @@
-# attn_bf16, attention's exact BF16 GEMMs, fast and reference paths. Not a package: build.sh, session.sh and run.py run on a
+# attn_bf16, attention's exact BF16 GEMMs, fast and reference paths. Not a package: build.sh, run.sh and run.py run on a
 # CPU node and the card; tests/ checks here what a CPU can: the SASS gate, attn.py's kernel list and grid, and fixture.py's
 # words against the Definition's reference evaluator (`uv run tools/verity/check/suites.py benchmarks/torch_gpu/attn_bf16`).
 [tool.pytest.ini_options]

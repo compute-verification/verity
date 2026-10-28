@@ -246,6 +246,58 @@ def test_direct_dispatch_refuses_a_cpu_only_node_and_a_spec_without_max_minutes(
     assert _parser().parse_args(["run", "x"]).direct is None
 
 
+@pytest.mark.parametrize("node, gpu", [("vy-dc-h200", "h200"), ("vy-dc-b200", "b200")])
+def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_the_rtx(node, gpu):
+    """The Commit's width spec on an H200 and a B200 is the RTX PRO 6000's spec (arms, sweep, reps, model, engine
+    settings) on another GPU, the B200's on FlashAttention 2 as its Build's row declares, and `--direct` takes the DC VM's
+    one GPU through its slot and gpu-lease, the wait for other leases on the node inside the spec's max_minutes."""
+
+    from research.pods.nebius.slot_only import through_slot
+
+    root = Path(__file__).resolve().parents[3]
+    name = f"llama31-8b-fp8-1gpu-commit-served-width-{gpu}"
+    spec, rtx = resolve_spec(name), resolve_spec("llama31-8b-fp8-1gpu-commit-served-width")
+    assert (spec.arms, spec.arm_modules, spec.arm_settings, spec.sweep, spec.reps, spec.eager) == (
+        rtx.arms, rtx.arm_modules, rtx.arm_settings, rtx.sweep, rtx.reps, rtx.eager)
+    assert (spec.preset.gpu_id, spec.preset.model, spec.preset.revision, spec.preset.precision) == (
+        gpu, rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
+    attention = {"attention_backend": "FLASH_ATTN", "attention_config": {"flash_attn_version": 2}} if gpu == "b200" else {}
+    assert dict(spec.preset.engine_settings) == {**rtx.preset.engine_settings, **attention}
+    from verity_bench.vllm.runner import engine_args
+    assert {key: value for key, value in engine_args(spec.preset, "fp8", resident=False, eager=False).items()
+            if key.startswith("attention")} == attention
+    assert not {key for key in engine_args(rtx.preset, "fp8", resident=False, eager=False) if key.startswith("attention")}
+    assert [point.id for point in expand_sweep(spec.sweep.id)] == ["b1-p512-mixed", "b8-p512-mixed", "b32-p512-mixed"]
+
+    assert node in jobs.DIRECT_NODES
+    plan = jobs.make_plan(name, root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    commands = []
+    assert jobs.dispatch(plan, name, root=root, direct=node,
+                         execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    assert len(commands) == 3
+    for command in commands:
+        flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
+        assert flags[:4] == ["research", "run", "--on", node] and flags[flags.index("--timeout") + 1] == "120m"
+        assert through_slot(workload)
+        lease = workload[workload.index("--", 4) + 1:]
+        assert lease[:3] == ["gpu-lease", "1", "--wait"] and "--preemptible" in lease[:lease.index("--")]
+
+
+def test_the_launcher_finds_a_dc_vms_environment_after_the_others(tmp_path):
+    """The DC VMs' pinned-vLLM Python is $WORK/cp/venv312: the launcher takes it when none before it exists."""
+
+    root = Path(__file__).resolve().parents[3]
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    python = tmp_path / "cp" / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$0"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == str(python)
+
+
 def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
@@ -269,7 +321,7 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
 
 
 def test_the_launcher_finds_a_nodes_jobs_environment_without_verity_bench_venv(tmp_path):
-    """vy-nebius-2's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
+    """A jobs node's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
     VERITY_BENCH_VENV the launcher takes the first that exists, and refuses naming every path it tried."""
 
     root = Path(__file__).resolve().parents[3]
@@ -330,8 +382,8 @@ def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
 
     path = tmp_path / "spec.toml"
     path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
-        "[preset.engine_settings]\n", '[preset.engine_settings]\nattention_backend = "FLASH_ATTN"\n'))
-    refusal = f"unknown engine_settings ['attention_backend']; known: {list(ENGINE_SETTINGS)}"
+        "[preset.engine_settings]\n", '[preset.engine_settings]\nmoe_backend = "triton"\n'))
+    refusal = f"unknown engine_settings ['moe_backend']; known: {list(ENGINE_SETTINGS)}"
     with pytest.raises(ValueError, match=re.escape(refusal)):
         load_spec(path)
 
@@ -548,7 +600,7 @@ def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
 
 def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error():
     """A gate that fails in the worker (an arm's refusal) ends the worker's loop; the runner's cleanup then closes the
-    engine, and that close must not replace the gate's error with a connection error (r20261018-205649-abfc)."""
+    engine, and that close must not replace the gate's error with a connection error."""
 
     from verity_bench.vllm.runner import _ProcessEngine
 
@@ -601,7 +653,7 @@ def test_resident_engines_interleave_arms_rep_by_rep_and_discard_warmups():
 
 @pytest.mark.parametrize("resident_failure", [None, "candidate"])
 def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedule_keeps_them(resident_failure):
-    """A block engine's first timed rep after one warm-up was slow on the bandwidth arms:
+    """A `blocks` engine's first timed rep after one warm-up was slow on the bandwidth arms:
     the count is a spec knob in the identity, each engine runs all of them before it times anything, and each warm-up's
     own summary stays in the schedule."""
 
@@ -628,7 +680,7 @@ def test_every_engine_runs_the_warmups_before_its_first_timed_rep_and_the_schedu
 
 
 def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_never_did():
-    """r20261018-234437-5511's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
+    """A run's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
     happens to cover one host's stall is luck, so past `warmups` an engine warms until two consecutive runs agree."""
 
     from verity_bench.vllm.runner import _warm
@@ -690,7 +742,7 @@ def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
     assert "device" not in HostProbe().close()
 
 
-def test_resident_failure_falls_back_to_alternating_blocks():
+def test_resident_failure_falls_back_to_blocks():
     preset, points, arms = inputs()
     factory = FakeFactory(resident_failure="candidate")
     doc = run_benchmark(preset, arms, points, sweep="quick", reps=3, factory=factory, git_commit="abc")
@@ -790,7 +842,7 @@ def test_equal_kv_pools_pass_and_are_recorded_in_the_identity():
     }
 
 
-def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
+def test_blocks_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     settings = load_spec("llama31-8b-fp8-1gpu").preset.engine_settings
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
 
@@ -1045,7 +1097,7 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
     """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
     the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control.
-    A live run's coins name its session, its salt epoch and that epoch's root over the weights' root."""
+    A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
     from verity.core.protocols.pouw.salt import epoch_open_root
@@ -1421,7 +1473,7 @@ def bench(factory=None, *, arms=None, reps=2, points=None):
 
 @pytest.mark.parametrize("resident_failure", [None, "a"])
 def test_drift_over_the_run_cancels_in_every_arms_mean_over_even_reps(resident_failure):
-    """Red team, attack 1: each timed run is 1% slower than the one before (clocks, heat). Every arm's mean timed
+    """Each timed run is 1% slower than the one before (clocks, heat). Every arm's mean timed
     position is the same, so the means keep the arms' true 2x in either mode, and the paired ratios stay within the
     drift's second-order residue; blocks used to repeat its first cycle's order in the second, so the baseline always
     ran first and the last arm read 2.08x."""
@@ -1434,8 +1486,8 @@ def test_drift_over_the_run_cancels_in_every_arms_mean_over_even_reps(resident_f
         assert tpot[arm]["ratio_to_stock"]["mean"] == pytest.approx(2, rel=0.005)
 
 
-def test_a_block_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
-    """Red team, attacks 1 and 3: in blocks the gate's engine and the timed engines are different lifetimes, and the
+def test_a_blocks_engine_unlike_the_gated_one_fails_engine_identity_and_times_nothing_more():
+    """In `blocks` the gate's engine and the timed engines are different lifetimes, and the
     identity recorded the gated one's KV pool, so a timed engine with another pool went unnoticed."""
 
     factory = FakeFactory(resident_failure="candidate", kv_after_gate={"candidate": 491_376})
@@ -1446,7 +1498,7 @@ def test_a_block_engine_unlike_the_gated_one_fails_engine_identity_and_times_not
 
 
 def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unseen_device_work():
-    """Red team, attack 2: under async scheduling (output lag 1) a step's host time holds the previous forward's device
+    """Under async scheduling (output lag 1) a step's host time holds the previous forward's device
     time, so a decode-only step after a prefill carried the prefill: 1.1 s over 16 tokens instead of 0.4 s. Device
     work still running after the last step means the host steps missed it, and the metric is dropped."""
 
@@ -1465,7 +1517,7 @@ def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unse
 
 
 def test_validate_refuses_dropped_reordered_or_edited_reps():
-    """Red team, attack 3: a result's points are recomputed from its reps, so a caller can't drop a slow rep, reorder,
+    """A result's points are recomputed from its reps, so a caller can't drop a slow rep, reorder,
     edit a mean or change `reps` and still have `judge` accept it."""
 
     doc = bench(reps=3)
@@ -1489,7 +1541,7 @@ def test_validate_refuses_dropped_reordered_or_edited_reps():
 
 
 def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
-    """Red team, attack 3: `--allow precision` used to match every leaf named precision (each arm's as well as the
+    """`--allow precision` used to match every leaf named precision (each arm's as well as the
     preset's), and `--allow id` every arm id."""
 
     doc = bench()
@@ -1505,7 +1557,7 @@ def test_an_allow_hides_only_the_paths_it_names_and_judge_lists_what_it_hid():
 
 
 def test_table_merges_one_specs_point_results_only_when_their_identities_agree(tmp_path):
-    """Red team, attack 3: a dispatched spec runs each point as its own run, so a sweep's table is assembled from
+    """A dispatched spec runs each point as its own run, so a sweep's table is assembled from
     several results; `verity-bench table` refuses results whose identities differ anywhere but the point's own."""
 
     from verity_bench.cli import main
@@ -1534,7 +1586,7 @@ def test_table_merges_one_specs_point_results_only_when_their_identities_agree(t
 
 
 def test_an_arm_cannot_be_its_own_control():
-    """Red team, attack 4: its greedy gate would compare it with itself and always pass."""
+    """An arm that controlled itself would have its greedy gate compare it with itself and always pass."""
 
     with pytest.raises(ValueError, match="own control"):
         bench(arms=(Arm("stock-fp8", precision="fp8"), Arm("candidate", control="candidate")))
@@ -1542,7 +1594,7 @@ def test_an_arm_cannot_be_its_own_control():
 
 @pytest.mark.parametrize("kv_tokens", [{"candidate": None}, {"stock-fp8": None}, {"stock-fp8": None, "candidate": None}])
 def test_an_unreported_kv_pool_fails_the_gate(kv_tokens):
-    """Red team, attack 4: the kv-pool gate used to be skipped when either engine didn't report its pool."""
+    """The kv-pool gate used to be skipped when either engine didn't report its pool."""
 
     doc = bench(FakeFactory(kv_tokens=kv_tokens))
     [gate] = [g for g in doc["gates"] if g["kind"] == "kv-pool"]
@@ -1550,7 +1602,7 @@ def test_an_unreported_kv_pool_fails_the_gate(kv_tokens):
 
 
 def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
-    """Red team, attack 4: the greedy gate ran before timing only, so an arm could pass it and compute something else
+    """The greedy gate ran before timing only, so an arm could pass it and compute something else
     in its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"candidate": "other"}))
@@ -1577,7 +1629,7 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
 
 
 def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_baseline_rep():
-    """Red team, attack 5: from n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
+    """From n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
     rep was dropped from the ratio, which then averaged the other reps; n = 1 rendered like a measured interval."""
 
     from verity_bench.vllm.runner import _aggregate, _summary
@@ -1638,7 +1690,7 @@ def _attempt(run, identity, repo, *, validation="passed", rc=0, dirty=False, tre
 
 
 def test_resume_counts_only_a_clean_exited_passing_run_of_the_same_identity_and_commit(tmp_path):
-    """Red team, attacks 6 and 7: validation comes from result.json alone, so a run killed after writing it (rc 143,
+    """Validation comes from result.json alone, so a run killed after writing it (rc 143,
     preempted) read as passed, and so did a run from a dirty tree, whose code its commit doesn't name."""
 
     from research.store.local import LocalStore
@@ -1743,7 +1795,7 @@ def test_check_on_a_fresh_store_counts_the_points_the_remote_holds(tmp_path, mon
 
 
 def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tmp_path, monkeypatch):
-    """Red team, attack 7: a preempted point reruns whole; if it reran in its run directory and died before writing a
+    """A preempted point reruns whole; if it reran in its run directory and died before writing a
     new result.json, the earlier attempt's verdict would stand beside the new attempt's half-written files."""
 
     import verity_bench.cli as cli

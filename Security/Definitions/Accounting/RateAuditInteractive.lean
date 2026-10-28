@@ -8,8 +8,7 @@ import Definitions.Accounting.RateAuditJoint
 read as a function of the store, the certified stream, the oracle and every bit the chip has sent so far.
 `RateAudit.lean`'s side source already answers any function of the store and of what the chip sent, through the address
 the chip picks; what this game adds is answers that also depend on the certified stream and the oracle. This is the
-rest of the prover as the chip sees it in the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`,
-section 6): a peer, the host or a network that sees what the chip sends (the seed, partial tags, which words it wants)
+rest of the prover as the chip sees it in the actual-circuit model: a peer, the host or a network that sees what the chip sends (the seed, partial tags, which words it wants)
 and answers adaptively, as the table localization lays out, read bit by bit. Sends are not bounded, so the chip may send
 any number `e` of bits that depend on the seed. Every bit the chip reads from a side source still comes in over the
 side link and counts against `L`, with the certified stream's `ρ`. Its on-chip state and device memory are still laid

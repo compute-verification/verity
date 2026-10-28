@@ -1,4 +1,4 @@
-// R9 cmt-hidden: GPU-resident commitment over the M1 hidden-value stream / the H1 thread digests.
+// GPU-resident commitment over the M1 hidden-value stream / the H1 thread digests.
 //   chunk_leaves : one thread per 64-word chunk -> SHA-256(16-word header(chunk index, tag, geometry) || 64 stream words)
 //                  (bit-identical to hidden_stream.commit_stream's leaves)
 //   tree_level   : one thread per parent -> production node rule  h(NODE_PREFIX || left || u64be(32) || right)

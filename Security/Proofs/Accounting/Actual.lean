@@ -9,14 +9,8 @@ import Proofs.Accounting.Actual.Device
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.Bridges
 import Proofs.Accounting.Actual.Transducer
-import Proofs.Accounting.Actual.Ticks
-import Proofs.Accounting.Actual.Source
-import Proofs.Accounting.Actual.WipePool
-import Proofs.Accounting.Actual.WipeReadPool
-import Proofs.Accounting.Actual.WipeLag
-import Proofs.Accounting.Actual.WipeBridge
-import Proofs.Accounting.Actual.WipePrf
-import Proofs.Accounting.Actual.WipeDraw
+import Proofs.Accounting.Defs.Actual.Source
+import Proofs.Accounting.Actual.Sampler
 
 /-!
 # The actual circuit's guarantees
@@ -65,31 +59,10 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
   `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values
   (`acts_encard_le_links`; the `+ 1` is the content's length).
-* `Actual/Ticks.lean`: memory accounting's `held_tick` (a width-0 held gate at a coin-dependent tick, causal under
-  v2.2's state as seen) is closed by v2.4's content: no holding makes it causal from every tick (`held_tick_closed`),
-  and it admits one (`tick_holding`).
-* `Actual/Source.lean`: ingress by source adds over disjoint sources, and a cover of the outside bounds ingress; under
-  `Links`, ingress from a source is at most the capacity of the links joining it to `X`.
-* `Actual/WipePool.lean`: `WipePool`, the memory cap's lifetime pool as a lemma, by Ville's inequality over an
-  abstract run tree of a prover's wipes: on a tree meeting `UnheldFails`, every wipe passes with the un-held fractions
-  summing to at least `H` with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at
-  `H = ln(1/δ)/k`, at most `δ`. `UnheldFails` holds of every tree once each un-held set is empty, so it is no physical
-  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts.
-* `Actual/WipeReadPool.lean`: `WipeReadPool`, the pool per read on the challenger's verdicts, by Ville's inequality
-  on the coins: every read accepted with the un-answered fractions summing to at least `H` on at most `exp(−H)` of
-  them, under live verdicts alone.
-* `Actual/WipeLag.lean`: `WipeLag`, the contents of `X`'s state at `t` at most those at `s` times `2^{β_X (t − s)}`.
-* `Actual/WipeBridge.lean`: `AnsweredOfQuiet`, `a` answered blocks of a read on at most `|T| |C| C(|B|, a) 2^{-a b}`
-  of the coins, from the latency ceiling, the late-answer rule (`verdictBinds_of_lateAnswers`), quiet and live reads
-  and uniform labels; `WipeReadHeld`, the two composed with `WipeReadPool`: `K` narrow reads among accepted ones on
-  at most `exp(−K (1 − (a − 1)/|B|)) + n |T| 2^m C(|B|, a) 2^{-a b}` of the coins.
-* `Actual/WipePrf.lean`: `WipeReadHeldPrf`, `WipeReadHeld` on the deployed labels, one lifetime table `prf s` of the
-  wipes' labels for uniform secrets `s`, with no label assumption: a uniform table meets `UniformLabels` given the
-  devices' coins (`uniformLabels_table`), and the step to `prf s` adds the PRF's advantage against the distinguisher
-  that runs the system once and outputs the event.
-* `Actual/WipeDraw.lean`: `WipeReadHeldPrfDraw`, `WipeReadHeldPrf` on the deployed index draw too, each read's index
-  the deployed rejection sampler on its first word of a keyed function of the challenger's uniform coin secret, with no
-  index assumption: the step from uniform words adds the coin function's advantage against the distinguisher that
-  runs the system once, and the sampler adds `n (2^w mod N) / 2^w`, below `2^-54` at the deployed wipe
-  (`drawRejection_deployed`).
+* `Actual/Sampler.lean`: the deployed uniform sampler on one word (`Accounting.Actual.wordIndex`) accepts
+  `2^w − (2^w mod N)` words and gives each index at most `⌊2^w / N⌋` of them (`card_accepted`, `card_fiber_le`), with
+  the probability facts the remote audit's opening draw is proved with.
+
+The wipe is PoUS's streamed-label wipe (`Pous.StreamedWipe`, its guarantees `Pous.Guarantees.StreamedWipeMeetsFamily`
+and `StreamedWipeMeetsReads`), read through core's `Verity.Wipe.SurvivorBound`.
 -/

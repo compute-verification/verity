@@ -178,7 +178,9 @@ def test_a_gap_row_carries_the_cheapest_escape():
 
 
 def test_the_isa_reference_tables_are_whole():
-    t = json.loads((SC / "data" / "sass_isa_tables.json").read_text())["tables"]
+    p = SC / "data" / "sass_isa_tables.json"
+    assert p.is_file(), f"{p} isn't fetched: `uv run research data fetch-fixtures benchmarks/pouw/sass_census/data`"
+    t = json.loads(p.read_text())["tables"]
     assert {k: len(v) for k, v in t.items()} == {"hopper": 199, "blackwell": 253, "ampere": 166, "turing": 160}
     assert "DMMA" in t["hopper"] and "UTCIMMA" in t["blackwell"]
     assert diff_menu.isa_vocab("sm_90") is t["hopper"] or diff_menu.ISA_TABLE["sm_90"] == "hopper"

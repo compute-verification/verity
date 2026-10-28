@@ -27,6 +27,7 @@ import numpy as np
 
 import k32
 import probe as P
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 OPS = {"cvt_e2m1x2_f32": 0, "cvt_f16x2_e2m1x2": 1, "cvt_ue8m0x2_f32_rz": 2, "cvt_ue8m0x2_f32_rp": 3, "cvt_bf16x2_ue8m0x2": 4,
@@ -228,7 +229,7 @@ class FakeCast:
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON (reference)", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
-                "backend": "fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -243,8 +244,8 @@ def main(args) -> int:
     t_all = time.time()
     instr, op = args.instruction, OPS[args.instruction]
     arch = args.arch or "sm_120a"
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     so, nvcc = (None, "not built") if (args.fake_silicon and not P.shutil.which(P.nvcc_bin())) else P.build(arch, out, "cvt_fp4.cu")
     dev = FakeCast() if args.fake_silicon else (None if args.sass_only else CastDevice(so))
     identity = dev.identity() if dev is not None else {"device": None, "gpu_uuid": None, "driver": None, "compute_capability": None,
@@ -312,7 +313,7 @@ def main(args) -> int:
         results["clocks_end"] = dev.clocks(identity.get("gpu_uuid"))
     results.update(families=fams, gated_outputs=total_gated, mismatches=total_mism, seconds=round(time.time() - t_all, 1), failures=failures)
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         result = {
             "schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": run_id, "instruction": INSTRUCTION_ID[instr],

@@ -1,5 +1,5 @@
-"""The compile slice (`compile_slice.CompileSlice_v1`) on a served window: window 212 of vLLM's run
-r20261024-141912-8eb1, which `replay_vectors.py --slice 212` builds from the run's scheduler trace and its seal. Its three
+"""The compile slice (`compile_slice.CompileSlice_v1`) on a served window: window 212 of a vLLM run,
+which `replay_vectors.py --slice 212` builds from the run's scheduler trace and its seal. Its three
 requests' 14 decisions and 20 steps, at the served engine with the slice's sync ReplayStep_v1, whose schedule on this
 window is the served one (the encodings' `test_served_window.py`). `fixtures/compile_slice_w212.json` is the window at
 its own statics; `fixtures/compile_slice_w212_class.json` is the same window padded into the engine's public sizes
@@ -47,8 +47,8 @@ def _cases(x):
     """The honest unit and each negative: request 310 admitted a step early in the window row, a charge one below the
     advice's, request 309's prompt a token longer than certified, step 7's served rows missing request 309's, advice
     that leaves the last asked decision uncommitted (``cleared``: the window row keeps it; ``cleared-read``: the window
-    row drops it too, and the scan reads past the count), a carry-out other than the charge's carry', and REDTEAM
-    phase 10's six passes at w212 (``sixpass``: advice that registers a pass at every ask, its own scan's twenty, where
+    row drops it too, and the scan reads past the count), a carry-out other than the charge's carry', and six
+    passes at w212 (``sixpass``: advice that registers a pass at every ask, its own scan's twenty, where
     the served window admitted requests 309 and 310 at the seventh and fourteenth), with the served rows in ``srv`` and
     with its own. The last three read or commit more decisions than the window's own D = 14, so they are the class's
     only."""

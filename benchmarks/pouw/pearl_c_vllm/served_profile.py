@@ -37,7 +37,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+from verity_config.settings import of
+
+settings = of(__file__)
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 
 _CTX: dict = {}
 _LOG: list = []
@@ -115,7 +118,7 @@ def _instrument() -> None:
 
         model.register_forward_pre_hook(pre, with_kwargs=True)
         model.register_forward_hook(post)
-        out = Path(os.environ.get("OUT") or os.environ.get("RESEARCH_RUN_DIR", ".")) / f"generates-{group}.json"
+        out = Path(settings.OUT or settings.RESEARCH_RUN_DIR or ".") / f"generates-{group}.json"
         atexit.register(lambda: out.write_text(json.dumps(_LOG)))
         return llm
 
@@ -357,7 +360,7 @@ def main() -> None:
 
 
 if __name__ in ("__main__", "__mp_main__") and "--analyze" not in sys.argv:
-    here = os.environ.get("SERVED_TREE", os.getcwd())
+    here = settings.SERVED_TREE or os.getcwd()
     sys.path[:0] = [str(Path(here) / "benchmarks/pouw/pearl_c_vllm"), str(Path(here) / "benchmarks/pouw")]
     _instrument()
 

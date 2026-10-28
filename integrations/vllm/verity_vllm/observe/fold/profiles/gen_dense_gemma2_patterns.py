@@ -1,4 +1,4 @@
-"""[GEN dense / ov-dense] Gemma-2's eager-unfused ATen chain -> the lane's quarantined Definitions
+"""Gemma-2's eager-unfused ATen chain -> its quarantined Definitions
 (`verity_vllm.program.quarantine.dense`, one `SEMANTIC_ID` per module, each difftested on the pod).
 
 vLLM d9105ea80 runs `Gemma2ForCausalLM` in eager mode with `VLLM_BATCH_INVARIANT=1`; nothing of the norm / GeGLU / softcap
@@ -35,8 +35,8 @@ base patterns (`None`) or is reported with a reason.  `widened_source` (base hel
 widening of a bf16 view back into that view, so the `*Bf16` Definitions read the narrow source and the widened allocation
 receives no refs (an unexplained reader of it fails loudly in the fold, as designed).
 
-NOT here (and stated in the lane report): the FA2 softcap attention body (`Is_softcap=true` -> MUFU.TANH, MECHANISM GAP /
-new-primitive request) and the root class of `model.normalizer` (owner decision; the operand is resolved, the Root is not).
+NOT here: the FA2 softcap attention body (`Is_softcap=true` -> MUFU.TANH, MECHANISM GAP /
+new-primitive request) and the root class of `model.normalizer` (the operand is resolved, the Root is not).
 """
 from __future__ import annotations
 

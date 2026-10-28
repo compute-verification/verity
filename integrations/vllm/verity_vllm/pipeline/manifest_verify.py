@@ -8,7 +8,7 @@ compare digests (`verity_vllm.query.manifest.verify.verify`); write the `verity-
     verity-vllm manifest-verify --manifest D/manifest.json --out D/commit/manifest_verify.json \\
         --fixture workloads/<row>.json --programs-root D [--workload-digest WD]                     # B>=2
 
-Exit 0 iff the record's `ok`.  A verify FAIL is a Commit FAIL (EXEC-05: `required_value_coverage/manifest_of_record_verified` in
+Exit 0 iff the record's `ok`.  A verify FAIL is a Commit FAIL (`required_value_coverage/manifest_of_record_verified` in
 verdict.json), never a footnote.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.query.manifest.verify import verify
 
 
@@ -51,8 +51,8 @@ def rebuild(*, program: str | None = None, workload: str | None = None, fixture:
 class Options:
     manifest: str = option("--manifest", help="the manifest the Commit used (D/manifest.json)")
     program: str | None = option("--program", default=None, help="B=1: the Build's derive_step dir (build_request)")
-    workload: str | None = option("--workload", default=None, help="B=1: the sweep workload manifest the build used")
-    fixture: str | None = option("--fixture", default=None, help="B>=2: the workload manifest / fixture (as build-global)")
+    workload: str | None = option("--workload", type=workload_arg, default=None, help="B=1: the sweep workload manifest the build used")
+    fixture: str | None = option("--fixture", type=workload_arg, default=None, help="B>=2: the workload manifest / fixture (as build-global)")
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the Build dir holding the request Programs")
     workload_digest: str | None = option("--workload-digest", default=None,
                                          help="B>=2: GP-01's FULL workload digest (as build-global)")

@@ -122,6 +122,13 @@ def test_a_rows_sha512_records_stand_in_names_that_commitment_and_its_served_win
     assert refused(dict(deferred, **DRW.stand_in(root, man, "vllm-v1"))) == ["of", "link"]
     assert refused(dict(hook, commitment="vllm-v1")) == ["commitment"]
 
+    # the record's weights were registered under rows-sha512 as well: a SHA-512 tree, the one the hook's rows were opened against
+    wroot = r.row["commit"]["weight_registration"]["root"]
+    tree = json.loads((bundle / "weights" / "tree.json").read_text())
+    assert (tree["scheme"], tree["root"], len(bytes.fromhex(wroot))) == (step_rows.NAME, wroot, DRW.SERVED_ROOT)
+    assert DRW.source(hook, root, man, r.commitment, wroot)["weights_sha512"] is True
+    assert [k for k, v in DRW.source(hook, root, man, r.commitment, "ab" * 32).items() if not v] == ["weights_sha512"]
+
 
 def test_the_audits_source_check_takes_a_served_window_only_over_a_sha512_run_root_of_record():
     """`deferred_rows.source` on a served window over a 64-byte run root of record, and each field altered refused by its name: the

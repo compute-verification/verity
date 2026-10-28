@@ -151,7 +151,8 @@ def stats(xs: list[float]) -> dict | None:
     if not xs:
         return None
     s = sorted(xs)
-    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]
+    def at(q):
+        return s[min(len(s) - 1, int(q * len(s)))]
     return {"n": len(s), "mean": round(statistics.fmean(s), 4), "p50": round(at(0.5), 4), "p90": round(at(0.9), 4),
             "p99": round(at(0.99), 4), "max": round(s[-1], 4)}
 

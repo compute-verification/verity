@@ -115,8 +115,8 @@ def test_every_record_merges_with_the_driver():
 
 def test_every_fetching_package_has_a_pinned_bundle():
     """A Lake package that fetches dependencies has a bundle in `lean-deps.json` for its manifest's fetched entries and its
-    toolchain (`deps_key`), which is what `check`'s preflight on node 1 restores; without one main's full check can't start
-    (#1499, reverted). A change to a fetched entry needs its pin: a cold `lean_audit.py --export` run, then `--pin RUN`; a
+    toolchain (`deps_key`), which is what `check`'s preflight on node 1 restores; without one main's full check can't start.
+    A change to a fetched entry needs its pin: a cold `lean_audit.py --export` run, then `--pin RUN`; a
     `path` entry changes no key."""
     spec = importlib.util.spec_from_file_location("lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
     audit = importlib.util.module_from_spec(spec)
@@ -152,7 +152,7 @@ def test_proofs_require_the_security_package():
 
 def test_code_never_requires_the_security_analysis():
     """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
-    `Security/`: the analysis reads the code, never the reverse (Daniel's layout ruling of Oct 5)."""
+    `Security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside Security"
     bad = [f"{pkg.relative_to(ROOT)} requires {(pkg / r['path']).resolve().relative_to(ROOT)}"
@@ -162,7 +162,7 @@ def test_code_never_requires_the_security_analysis():
 
 def test_every_upstream_watch_is_scanned():
     """The audit's upstream pass reads only a lock's `scan` packages, so a `watch` list with nothing to scan checks none of
-    its entries and passes (red-team's B1 on the Lean move: the proofs' lock lost soundness's ArkLib scan). Each lock that
+    its entries and passes (a lock that loses its `scan` silently stops watching). Each lock that
     watches a dependency for its assumptions scans one, and the proofs' lock scans ArkLib."""
     bare = [str(p.relative_to(ROOT)) for p in sorted(ROOT.rglob("lean-audit.json")) if ".lake" not in p.parts
             and (up := json.loads(p.read_text()).get("upstream", {})).get("watch") and not up.get("scan")]
@@ -172,7 +172,7 @@ def test_every_upstream_watch_is_scanned():
 
 def test_every_open_conjecture_names_a_test_that_exists():
     """An open entry of a lock's `shape.conjectures` names its falsification test as a pytest node id, `PATH::NAME` from
-    the repository's root, and that file defines the test (Daniel, 8 Oct: each conjecture's test runs)."""
+    the repository's root, and that file defines the test, so each conjecture's test runs."""
     bad = []
     for p in sorted(ROOT.rglob("lean-audit.json")):
         if ".lake" in p.parts:

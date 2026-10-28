@@ -45,9 +45,9 @@
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
-  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--jobs N] [--json]
+  research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
   research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
-                                                   copy every registry entry (and its `previous` ids) to the public export bucket; --verify-url
+                                                   copy every registry entry (and its `previous` ids, and each --id) to the public export bucket; --verify-url
                                                    fetches them all back through a public front end into a scratch store, checking every byte
   research data doctor [--clean] [--runs-dir D]    stale store_publish_error.json files (run is an attempt here) vs real failures; --clean deletes the stale
   research data gc --cite DIR... --cache DIR [--apply --state FILE] [--report FILE] [--work DIR] [--jobs N]
@@ -63,7 +63,7 @@
   research data pending [--json]                   the write-through queue: what this store holds that the remote lacks (exit 1 if any)
   research data reconcile-attempts (RUN... | --all) [--apply] [--json]
                                                    local attempts that differ from the remote's write-once copy; --apply supersedes them (audited)
-  research data parity --fresh DIR [--render] [--json-out FILE]
+  research data parity --fresh DIR [--json-out FILE]
                                                    content parity against a store built from the remote alone (parity.py); exit 0 iff explained
   research data catalog [--json]                   catalog schema version vs the code's (older catalogs migrate forward on open; a newer one is
                                                    refused, exit 3, unless RESEARCH_CATALOG_IGNORE_VERSION=1), row counts per table
@@ -787,19 +787,16 @@ def cmd_refresh(argv: list[str]) -> int:
 
 def cmd_parity(argv: list[str]) -> int:
     """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
-    rows, and with `--render` the canonical tables.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
+    rows.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
     from . import parity as PA  # noqa: PLC0415
 
     ap = _ap("parity")
     ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
-    ap.add_argument("--render", action="store_true", help="also compare the daily render (tables + drilldowns) over the same records")
-    ap.add_argument("--render-source", default=None, metavar="TREE", help="the tree to render with (default: steward.toml [[render]] source)")
     ap.add_argument("--jobs", type=int, default=32, metavar="N")
     ap.add_argument("--json-out", metavar="FILE", help="write the full report (every difference and its cause) here")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
-    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), render=ns.render,
-                 log=None if ns.json else (lambda m: print(m, file=sys.stderr)), source=Path(ns.render_source) if ns.render_source else None)
+    rep = PA.run(store_root(ns.store), Path(ns.fresh), jobs=max(1, ns.jobs), log=None if ns.json else (lambda m: print(m, file=sys.stderr)))
     if ns.json_out:
         Path(ns.json_out).write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
     if ns.json:
@@ -1216,8 +1213,8 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
-    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block and any `--blobs`, to the public export
-    (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
+    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
+    public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
     from . import fetchset, fixtures as F  # noqa: PLC0415
@@ -1228,6 +1225,7 @@ def cmd_export(argv: list[str]) -> int:
     ap.add_argument("--dry-run", action="store_true", help="HEAD the export and report what would be uploaded")
     ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
     ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
+    ap.add_argument("--id", action="append", default=[], metavar="ART", help="also this artifact, which the registry doesn't hold; repeatable")
     ap.add_argument("--verify-url", default=None, metavar="URL", help="fetch everything back through URL and check it; export nothing")
     ap.add_argument("--jobs", type=int, default=fetchset.JOBS)
     ap.add_argument("--json", action="store_true")
@@ -1255,7 +1253,7 @@ def cmd_export(argv: list[str]) -> int:
         print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
         return 1
     rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
-                   jobs=ns.jobs, dry_run=ns.dry_run)
+                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run)
     if ns.json:
         _dump(rep)
     else:

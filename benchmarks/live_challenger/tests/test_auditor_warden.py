@@ -151,6 +151,33 @@ def test_one_warden_session_takes_the_gates_most_requests_at_height_13_in_an_hou
             {"requests": 1700, "minutes": 60, "height": 13}
 
 
+def test_a_warden_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
+    """A warden window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    so height 12's 4096 sign 819 windows and 1031 (55 minutes of the scan's 3.2 s windows) take 13; a load's heads come
+    first. 1559 requests at the gate's rate are `warden_windows` 1031 and fit 55 minutes at height 13, which the gate
+    takes; at 12 it refuses them with the height that fits, writing nothing, rather than run a session whose signer
+    runs out 819 windows in. The default height, 20, signs anything the gate takes."""
+    assert [A.warden_height(w) for w in (1, 204, 205, 819, 820, 1031, 1638, 1639)] == [10, 10, 11, 12, 13, 13, 13, 14]
+    assert A.warden_height(1031, heads=733) == 13
+    assert A.warden_height(819, heads=1) == 12 and A.warden_height(819, heads=2) == 13
+    assert (A.warden_windows(1559), A.warden_windows(1700), A.warden_windows(1700, scan=False)) == (1031, 1119, 60)
+    assert (A.warden_minutes(1559, 13), A.warden_minutes(1700)) == (55, 64)
+    long = REQUEST[:-1] + ["55", "--scan", "--prompts", "--requests", "1559", "--height"]
+    rc, out = gate(host, long + ["13"], stdin=b"[[1]]", started=[])
+    assert rc == 0 and {k: json.loads(out)[k] for k in ("requests", "minutes", "height")} == \
+        {"requests": 1559, "minutes": 55, "height": 13}
+    rc, out = gate(host, long + ["12"], stdin=b"[[1]]", started=[], token="cd34")
+    assert rc == 3 and json.loads(out)["refused"] == (
+        "--height 12: 1559 requests take 1031 link-windows, 5155 one-time signatures (5 a window), past the key's "
+        "4096: give --height 13 or more, or fewer --requests")
+    assert not (host.certifier / "c20261024T110000Z-cd34").exists()
+    rc, out = gate(host, REQUEST[:-1] + ["60", "--scan", "--requests", "1700", "--height", "12"], started=[],
+                   token="ef56")
+    assert rc == 3 and "give --height 13 or more" in json.loads(out)["refused"]
+    rc, out = gate(host, REQUEST[:-1] + ["64", "--scan", "--requests", "1700"], started=[], token="ab34")
+    assert rc == 0 and json.loads(out)["height"] == 20
+
+
 SALT_C = "5a" * 64
 CELL_SALTS = bytes(range(192))
 REGISTRATION = {"format": "verity-network-warden/registration/v2", "value": "warden/egress/0", "root": "ab" * 64}

@@ -30,7 +30,7 @@ One process writes `<out>/int8_exact_gpu.json` (and, with the linears in scope, 
             by pg_window, and each decode's window is checked against the K and V written in the earlier steps.
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY tests/engine/int8_exact_gpu.py --out DIR --at 2026-10-17T00:00:00Z --by LANE
+    $PY tests/engine/int8_exact_gpu.py --out DIR --at ISO_TIME --by LANE
 """
 from __future__ import annotations
 

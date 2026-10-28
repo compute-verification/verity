@@ -37,8 +37,8 @@ TEMPLATE_IDS = {
            "fb95db196ed9c54304c5a9acaf65cfa244252c9964fe6c7e0f93d6ca60aa5488d65664abd958baee233bb118b7969c275d0ec3cc9478a30762311d45e299a0e9"),
 }
 
-#: `P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8)))`, recorded before `h1_tile` took an architecture
-PROGRAM_64 = ("cabdc42f93c9a8387f5f19c29fc95e14714d8b624dbe81d2a69417be9f98499c8db7fc98b2a5917bac5d923c463b7170227dfcdfd88c68b88ec354479e5ff7aa")
+#: `P.program_digest(HW.program([("q", 64, 8)], [("q", 0)], 4, (4, 8)))`: a change to the window's layout moves it
+PROGRAM_64 = ("e009cbeb20775cd21cb183eab99a34432e130840d90a66b8110a34a776c05669d9043c3bdfbe78cc21570f8a9b8a27c925263e4e5cf8a544f11ff8d9053b0c17")
 
 
 def _template_id(k: int, definition, **arch) -> str:

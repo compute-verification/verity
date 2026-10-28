@@ -1,10 +1,6 @@
-"""[R9 ref lane, 2026-09-18] Reference integrity: the fail-closed rule R1 (`gates.fold_integrity` / `gate_R1` / `verdict`) and the
+"""Reference integrity: the fail-closed rule R1 (`gates.fold_integrity` / `gate_R1` / `verdict`) and the
 fold's recompute token-wiring fix (a preempted request's re-fed generated token wires to the TokenSelect output that produced it,
-or the fold fails loudly).
-
-Evidence the fixes answer: `out/gen/r8/aot-builder/corpus/last4/divergences.md` (qwen8: `fold errors 1 = TokenWiring 1`, the
-non-fatal fallback left `prompt_7[61]` in the re-fed row's `input_ids` slot; twin3c: 48 such rows wired to another request's
-samples) and `out/gen/r8/aot-builder/corpus/last4/gen/fold/qwen8/fold_summary.json` (`errors: 1`, still consumed as `--accepted`)."""
+or the fold fails loudly)."""
 
 from __future__ import annotations
 
@@ -127,7 +123,7 @@ def test_gate_R1_pass_on_a_clean_run_and_verdict_accepted(tmp_path):
 
 
 def test_gate_R1_synthetic_fold_record_with_errors_1_rejects(tmp_path):
-    """The regression the brief asks for: a record whose fold summary carries `errors: 1` (qwen8's shape) must not be ACCEPTED,
+    """A record whose fold summary carries `errors: 1` (qwen8's shape) must not be ACCEPTED,
     even when every frozen gate that does not look at the count would pass."""
     arts = passing_artifacts()
     fs = arts["fold_summary.json"]

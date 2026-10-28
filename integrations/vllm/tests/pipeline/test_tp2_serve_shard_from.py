@@ -1,7 +1,7 @@
-"""R16 tp TP-10 -- the pin's acceptance-set negative 'TP shard / reference mismatch' (`tp2_commit --serve-shard-from <rank>:<param>:<from_rank>`):
+"""The pin's acceptance-set negative 'TP shard / reference mismatch' (`tp2_commit --serve-shard-from <rank>:<param>:<from_rank>`):
 a rank serves ANOTHER rank's shard of one parameter, composed from the SAME pinned checkpoint.  Every served byte is a checkpoint byte and
 the multiset of shard digests over the world is unchanged -- a whole-tensor / whole-checkpoint hash cannot see it -- but the per-rank pin
-(MAN-09: served shard == the slice the rank Program's shard map prescribes) must FAIL naming exactly that parameter on exactly that rank.
+(served shard == the slice the rank Program's shard map prescribes) must FAIL naming exactly that parameter on exactly that rank.
 Engine-free: the same `weights_of_record.compose` / `check` the rank worker runs, on the synthetic checkpoint of test_weights_of_record."""
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 
 
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
-    """[TP-11, rev F-r16-19] the import path of record is written from the RUNNING process (sys.modules), not a static closure."""
+    """The import path of record is written from the RUNNING process (sys.modules), not a static closure."""
     from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     from verity_vllm.check import weights_of_record  # noqa: F401  -- imported here == must be listed
     r = repo_modules_loaded()
@@ -89,7 +89,7 @@ def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     assert r["native_collect_jit_sources"] == [] or all(f.endswith((".cpp", ".cu", ".h")) for f in r["native_collect_jit_sources"])
 
 
-# ---- [rev M-0460] the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------
+# ---- the decode-only (step-ranged) request-label swap negative ------------------------------------------------------------
 
 def test_swap_spec_all_steps_and_ranged():
     from verity_vllm.pipeline.tp.rank_worker import parse_swap_spec, swap_label
@@ -129,7 +129,7 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
     assert cnt(seen[1]) == cnt(step_rows[1])
 
 
-# ---- a negative that did not inject is an ERROR, never a PASS (measured b1_r16_tp12b 08:34Z: ':ulp' on a tree without parse_flip -> flipped 0 -> PASS)
+# ---- a negative that did not inject is an ERROR, never a PASS (':ulp' on a tree without parse_flip flips 0 -> PASS)
 
 def test_negative_not_applied_is_named_not_passed():
     from verity_vllm.pipeline.tp.negatives import negatives_applied

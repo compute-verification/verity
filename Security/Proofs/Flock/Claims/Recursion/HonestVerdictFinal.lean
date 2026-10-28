@@ -39,7 +39,7 @@ theorem goals_plain (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ 
     fun o _ hi _ hr => o.repWalk S h64 hP hi hr
   have hD := JsonRT.repDecodes_goal S h64 hP
   exact
-    { session := JsonRT.sessionRuns_goal S
+    { session := JsonRT.sessionRuns_goal
       sends := sendCount_goal H _
       linkFirst := linkFirst_goal H h64 _
       finalFits := JsonRT.finalFits_goal S h64 hP
@@ -93,7 +93,7 @@ theorem run_recordJ (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64
         Record.decodeJWith o.hs o.spec j =
           .ok (sessOf o.spec (Claims.hOf H) #[rb] (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) := by
   obtain ⟨st, hst, hsp, -, -⟩ := o.table
-  obtain ⟨hct, hsig, hdraw, -⟩ := stmtOk S o.toCase
+  obtain ⟨hct, hsig, hdraw, -⟩ := stmtOk o.toCase
   obtain ⟨hC, hR⟩ := hP o.toCase st (by rw [hst]; simp)
   have ht : o.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   have htabs : tabsOf #[st] = #[Setup.ofCircuit st] := by simp [tabsOf]

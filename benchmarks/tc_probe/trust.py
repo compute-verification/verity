@@ -48,7 +48,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from verity.ml.circuits.silicon import models as _models
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS, Instruction
@@ -215,18 +215,18 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
                              ("verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz",
                               "verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/summary.json"),
                              replay="tc-hopper-2026-09-07/special.reduced",
-                             note="veritor lane HP: Triton tl.dot -> wgmma m64n128k16 (HGMMA.64x128x16), 307,281,920 words; its 44,046 records "
+                             note="veritor: Triton tl.dot -> wgmma m64n128k16 (HGMMA.64x128x16), 307,281,920 words; its 44,046 records "
                                   "(14 families, non-finite included) replayed by tc_probe --replay-capture"),
     ),
     "sm89.mma.m16n8k32.e4m3": (
         IndependentReference("veritor-golden-ada-e4m3", "second-harness", ("verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json",),
-                             replay="golden/ada_e4m3_m16n8k32.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records (24.9M-element campaign)"),
+                             replay="golden/ada_e4m3_m16n8k32.json", note="veritor gpu/tensor-core-semantics RTX 4090 golden records"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye's Hopper FP8 simulator does not describe Ada (D10)"),
     ),
     "sm90.wgmma.m64n8k32.e4m3": (
         IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",),
                              replica="verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
-                             note="veritor lane QZ: Triton tl.dot -> wgmma m64n64k32, 144,543,744 words"),
+                             note="veritor: Triton tl.dot -> wgmma m64n64k32, 144,543,744 words"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
     ),
     "sm120.mma.m16n8k64.e2m1.nvf4": (
@@ -414,7 +414,7 @@ def all_subject_names() -> list[str]:
 @dataclass
 class HardwareRecord:
     """One hardware run of one instruction, normalised from any of the three formats the store holds (tc_probe's nested
-    ``tc_evidence``, tc_probe_fp4's flat meta, the WP1 ``bench-result/v1`` of ``tc_probe`` whose counts live in ``probe_results.json``)."""
+    ``tc_evidence``, tc_probe_fp4's flat meta, and ``tc_probe``'s legacy ``bench-result/v1``, whose counts live in ``probe_results.json``)."""
 
     id: str
     kind: str
@@ -621,7 +621,7 @@ def _params(model: Model | None) -> tuple | None:
 
 
 def _legacy_instruction(arch: str | None, pipeline: str | None) -> tuple[str | None, set[str]]:
-    """The registry instruction a WP1 ``tc_probe`` result (arch + pipeline name) measured, and every model name its mismatch count
+    """The registry instruction a legacy ``tc_probe`` result (arch + pipeline name) measured, and every model name its mismatch count
     stands for: the pipeline's own name plus the instruction's model when that model has identical parameters (the RTX 4090 runs
     compared the Ampere pipeline, which is Ada's under another name)."""
     sm = _sm(arch)
@@ -718,7 +718,7 @@ def _hardware_record(view: _StoreView, art_id: str, kind: str, meta: dict, refs:
             vals = [v for v in sm.values() if isinstance(v, int)]
             if vals:
                 rec.sass = {"single_instruction": max(vals) == 1, "count": max(vals), "expected": 1, "ok": None}
-    elif wf.get("probe") == "benchmarks/tc_probe/tc_probe.py":                 # WP1 tc_probe result recorded as bench-result/v1
+    elif wf.get("probe") == "benchmarks/tc_probe/tc_probe.py":                 # legacy tc_probe result recorded as bench-result/v1
         rec.legacy = True
         rec.sku, rec.arch, rec.seed = wf.get("device"), wf.get("arch"), _as_int(wf.get("seed"))
         derived, model_keys = _legacy_instruction(wf.get("arch"), wf.get("pipeline"))
@@ -876,7 +876,7 @@ def d_class(entry: dict) -> str:
 
 #: Input sets identified by a recipe digest pinned in the bench contract rather than by a repo fixture manifest (the FP8 Ada
 #: set is seeded: uniform finite E4M3 bytes from ``FP8_ADA_INSTANCES_SEED``).  target name -> the contract constant prefix; the
-#: constants ``<PREFIX>_INSTANCES_{DATASET,TIER,DIGEST}`` must all exist for the set to count (the Hopper ones once b-hopper lands them).
+#: constants ``<PREFIX>_INSTANCES_{DATASET,TIER,DIGEST}`` must all exist for the set to count.
 CONTRACT_INSTANCE_SETS: dict[str, str] = {
     "fp8-ada-mma-draft/2026-09-22": "FP8_ADA",
     "fp8-hopper-wgmma-draft/2026-09-22": "FP8_HOPPER",
@@ -1185,7 +1185,7 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
     legacy = [r for r in agreeing_anchor if r.legacy]
     if legacy:
         c.details["legacy_records"] = [r.id for r in legacy]
-        notes.append(f"P1 rests on {len(legacy)} WP1 tc_probe result(s) recorded as bench-result/v1 (no instruction/model_agrees labels; counts read from "
+        notes.append(f"P1 rests on {len(legacy)} legacy tc_probe result(s) recorded as bench-result/v1 (no instruction/model_agrees labels; counts read from "
                      "probe_results.json): re-registering them as tc-evidence/v1 would make the contract uniform")
     criteria.append(c)
 
@@ -1502,7 +1502,7 @@ def assess(target_name: str, store: Any, *, repo: str | os.PathLike[str] | None 
         invalidation_triggers=[dict(t) for t in INVALIDATION_TRIGGERS], relitigation_procedure=list(RELITIGATION_PROCEDURE),
         constants={"N_MIN": N_MIN, "HONEST_MIN": HONEST_MIN, "NEGATIVES_MIN": NEGATIVES_MIN, "canonical_families": {k: list(v) for k, v in CANONICAL_FAMILIES.items()},
                    "full_contract_proof_classes": list(FULL_CONTRACT_PROOF_CLASSES)},
-        generated_utc=_dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        generated_utc=_dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         previous_dossiers=[d["id"] for d in ev.dossiers if d.get("target") in subject.names], notes=notes,
         canaries=[{"id": r.id, "run_id": r.run_id, "passed": r.agrees(names), "elements": r.elements, "mismatches": r.mismatches_for(names),
                    "driver": r.driver, "nvcc": (r.nvcc or "")[:60] or None} for r in canaries],

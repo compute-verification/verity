@@ -1,4 +1,4 @@
-"""GEN batch SHARED-CODE: `run_config --engine-arg key=value` reaches every GPU stage command line and is recorded in run.json."""
+"""`run_config --engine-arg key=value` reaches every GPU stage command line and is recorded in run.json."""
 from __future__ import annotations
 
 from verity_vllm.pipeline import match as RC

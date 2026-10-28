@@ -79,9 +79,14 @@ def advice_trace(out: Path, engine: Any) -> Any:
     return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time).install(engine)
 
 
+#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
+#: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
+#: advice_trace.jsonl, windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+REQUEST_USERS = "request_users.jsonl"
+
 #: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
-MIRRORED = ("serve.json", "requests.jsonl", "windows.jsonl", "seals.jsonl", "step_trace.jsonl", "advice_trace.jsonl", "pauses.jsonl",
-            "summary.json", "remote_session.json", "memory_map.jsonl")
+MIRRORED = ("serve.json", "requests.jsonl", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "step_trace.jsonl",
+            "advice_trace.jsonl", "pauses.jsonl", "summary.json", "remote_session.json", "memory_map.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
@@ -187,7 +192,7 @@ class Ledger:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
-    release: Any = None                          # (the warden's run, its place in the release order), under --admit release-order
+    release: Any = None                          # (the network certifier's run, its place in the release order), under --admit release-order
     admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
@@ -229,7 +234,8 @@ class CommitWindows:
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
     ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
     opens on each window once its committer is installed and closes first at its close, before the committer comes off,
-    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``."""
+    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
+    is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -241,6 +247,8 @@ class CommitWindows:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
+        self._arm_pending: set[int] = set()              # the windows whose arm is still closing off the loop
+        self._awaiting: dict[int, dict[str, Any]] = {}   # ... and their lines, held until it ends
         self.request_cap = int(request_cap)              # --window-requests: at most this many distinct requests a window (0: any)
         self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
@@ -335,15 +343,36 @@ class CommitWindows:
             self.marks(self.window, "open")
 
     def _close_arm(self) -> None:
-        """The arm's window closed, before anything of the committer's: its outcome, or why it failed."""
+        """The arm's window closed, before anything of the committer's: its outcome, or why it failed. An arm that
+        releases off the loop hands back a `Future`, and the window's line waits for it (`_arm_closed`), not the loop."""
+        window = self.window
         try:
-            got = self.arm.close(self.window)
+            got = self.arm.close(window)
         except (ValueError, RuntimeError, OSError) as e:          # the window's visible failure; the Commit's close goes on
             got = {"error": f"close: {type(e).__name__}: {e}"[:500]}
-            if self.window not in self.arm_failed:
-                self.arm_failed.append(self.window)
+        if callable(getattr(got, "add_done_callback", None)):
+            with self._lock:
+                self._arm_pending.add(window)
+            got.add_done_callback(functools.partial(self._arm_closed, window))
+        else:
+            self._arm_closed(window, got)
+
+    def _arm_closed(self, window: int, got: Any) -> None:
+        """Window ``window``'s arm outcome, ``got`` or its `Future`'s: an error is a failed window's. Its line, if held for
+        it, is written now."""
+        if callable(getattr(got, "exception", None)):
+            e = got.exception()
+            got = got.result() if e is None else {"error": f"close: {type(e).__name__}: {e}"[:500]}
         with self._lock:
-            self._arm_out.setdefault(self.window, got)
+            if isinstance(got, Mapping) and "error" in got and window not in self.arm_failed:
+                self.arm_failed.append(window)
+            self._arm_out.setdefault(window, got)
+            self._arm_pending.discard(window)
+            rec = self._awaiting.pop(window, None)
+        if rec is not None:
+            self._write_window(rec)
+            if self.mirror is not None:
+                self.mirror()
 
     def stepped(self) -> None:
         """An engine step has returned: its committed steps ended now."""
@@ -498,12 +527,16 @@ class CommitWindows:
         return rec, job
 
     def _write_window(self, rec: dict[str, Any]) -> None:
+        """The window's line, with its arm's outcome; held while its arm is still closing (`_arm_closed` writes it)."""
         with self._lock:
+            if rec["window"] in self._arm_pending:
+                self._awaiting[rec["window"]] = rec
+                return
             if self.arm is not None:
                 rec["pouw_h1"] = self._arm_out.pop(rec["window"], None)
             self.records.append(rec)
-        with open(self.out / "windows.jsonl", "a") as fh:
-            fh.write(json.dumps(rec) + "\n")
+            with open(self.out / "windows.jsonl", "a") as fh:
+                fh.write(json.dumps(rec) + "\n")
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
         """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
@@ -632,8 +665,9 @@ class CommitWindows:
         return [self.ledgers.pop(e) for e in [e for e, led in self.ledgers.items() if led.finished]]
 
     def _check_finished(self, finished: Sequence[Ledger]) -> None:
-        """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl."""
-        with open(self.out / "requests.jsonl", "a") as fh:
+        """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
+        engine id and ``user`` a line of `REQUEST_USERS`."""
+        with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
             for led in finished:
                 eid = led.engine_id
                 rr = self.record.requests.get(eid)
@@ -646,12 +680,14 @@ class CommitWindows:
                     self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
                                          "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")
+                fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
 
     def summary(self) -> dict[str, Any]:
         """The windows closed so far; ``closing`` those whose finalize, off the loop, has yet to run (their requests unchecked)."""
         with self._lock:
             checked, records, seals = list(self.checked), list(self.records), list(self.seals)
             closing = {w: list(e) for w, e in self.closing.items()}
+            arm_closing = sorted(self._arm_pending)
         bad_req = [c for c in checked if not c["passed"]]
         bad_win = sorted({r["window"] for r in records if not r["passed"]} | {s["window"] for s in seals if "error" in s})
         queued = sum(1 for r in records if "row_dir" in (r.get("seal") or {}))
@@ -669,5 +705,7 @@ class CommitWindows:
                 "cache_hits": sum(1 for c in checked if c.get("cache_hit")),
                 "cached_positions": sum(int(c.get("cache_hit") or 0) for c in checked),
                 "unchecked": unchecked,
-                **({"pouw_h1": {**self.arm.summary(), "failed": self.arm_failed[:20]}} if self.arm is not None else {}),
-                "passed": bool(checked) and not bad_req and not bad_win and not unchecked and not closing and queued == len(seals)}
+                **({"pouw_h1": {**self.arm.summary(), "failed": self.arm_failed[:20], "closing": arm_closing}}
+                   if self.arm is not None else {}),
+                "passed": bool(checked) and not bad_req and not bad_win and not unchecked and not closing and not arm_closing
+                and queued == len(seals)}

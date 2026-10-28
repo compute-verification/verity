@@ -1,4 +1,4 @@
-"""[R15 tp, coord M-0481 C2 form (B), TP family] TPPartialSource.compare_match_oracle: every committed TP partial / MoE received output of a
+"""TPPartialSource.compare_match_oracle: every committed TP partial / MoE received output of a
 rank == the tp2_match capture recorder's stored collective input / output at the same (step, k), bit-for-bit, exhaustively over the family.
 Needs torch (torch.save/load of the oracle steps); CPU only.
 
@@ -125,7 +125,7 @@ def test_committed_step_without_a_stored_oracle_fails(tmp_path):
     assert r["verdict"] == "FAIL" and r["steps_without_oracle"] == [1] and r["steps_compared"] == 1 and r["equal"] == 3
 
 
-# ---------------------------------------------------------------------------------------------- rev-pm M-0585 TIP1 / TIP2 / TIP3
+# ---------------------------------------------------------------------------------------------- the oracle comparison's three refusals
 
 def test_tip1_oracle_step_the_committer_never_reached_fails_named(tmp_path):
     """N-A: the oracle stored steps 0 and 1 but the committer only reached step 0 -> exhaustive in both directions, FAIL naming step 1."""

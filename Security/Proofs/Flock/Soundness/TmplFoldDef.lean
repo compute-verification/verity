@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
-# The template fold's arithmetic (PRF-133, part 3, stage 2)
+# The template fold's arithmetic
 
 What `Tmpl.foldDef` relies on besides the call tree:
 

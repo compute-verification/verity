@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Audit.OneStage
 # Audits whose draw depends on the registration
 
 The pinned `audit L Reg session` draws `L.draw ω`, which can't see the registration `R`. A keyed draw whose context
-binds the registration, such as the PoUW window key's receipt digest (#423), is a law `L R` for each `R`. `auditReg L`
+binds the registration, such as the PoUW window key's receipt digest, is a law `L R` for each `R`. `auditReg L`
 is that game: registration `R`, then the coin of `L R`, then the session on `L R`'s draw.
 
 * `atReg σ`: the strategy of `audit (L (reg σ))` that registers `σ`'s `R` and plays its continuation.

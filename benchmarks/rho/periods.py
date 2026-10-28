@@ -18,7 +18,11 @@ scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each named
   premise of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap).
 
+`--measured CIRCUIT` evaluates them with a measured step's design in place of the FLOP model (`circuits.in_place`: its
+structure's `s_×` and its gates per FLOP), and sets the step beside the FLOP model first (`circuits.compare`).
+
     uv run python benchmarks/rho/periods.py                # Markdown on stdout
+    uv run python benchmarks/rho/periods.py --measured smollm2-135m-step
     research run -- python benchmarks/rho/periods.py --out "$OUT"   # and periods.md and periods.json in its $OUT
 """
 
@@ -27,10 +31,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from dataclasses import asdict
 from pathlib import Path
 
 import run
-from rho import analysis, lean, operating
+from rho import analysis, circuits, lean, operating
 from rho.classes import premise_status, premises
 from rho.envelopes import ROUTES
 from rho.params import Registry
@@ -95,7 +100,8 @@ def ranking(reg: Registry, name: str, swings: list[analysis.Swing]) -> list[dict
             standing = f"{reg[f'premise.{p}.standing']} ({reg[f'premise.{p}.beyond']} above its `credible_bits`)"
             out.append({"what": cited, "kind": "named premise", "open": True,
                         "range": [standing, "refuted"], "at": [base, v], "decades": _decades(base, v)})
-    v = analysis.at(reg, name, {"structure.reference.s_times": 1})
+    st = analysis.result(reg, name).scenario.structure.name
+    v = analysis.at(reg, name, {f"structure.{st}.s_times": 1})
     out.append({"what": "draft:no-straddle", "kind": "named premise", "open": True,
                 "range": ["assumed", "dropped (s_× = 1)"], "at": [base, v], "decades": _decades(base, v)})
     return sorted((x for x in out if x["decades"] > 0), key=lambda x: -x["decades"])
@@ -137,7 +143,32 @@ def _fleet_md(reg: Registry, fleets) -> str:
     return "; ".join(out)
 
 
-def markdown(reg: Registry, rows: list[dict], fleets=FLEETS) -> str:
+def measured_md(reg: Registry, m: circuits.Comparison) -> list[str]:
+    """A measured step beside the FLOP model (`circuits.compare`), and what `circuits.in_place` puts in its place."""
+    fmt = run.fmt
+    c = circuits.circuit(reg, m.circuit)
+    basis = reg[f"structure.{c.structure}.basis"]
+    return ["## The measured design", "",
+            (f"`circuit.{m.circuit}`, {c.definition} (one step of `run.{c.run}`, {fmt(m.flops)} FLOPs at "
+             f"`6 · n_active · tokens`), in place of the FLOP model: every scenario that names no structure takes "
+             f"`structure.{c.structure}` (`s_×` = {fmt(c.s_x)} gates, {basis}), and `units.gates_per_flop` is the "
+             f"step's gates over its FLOPs. `κ` is family {m.family}'s, and `u/w = 2G / (κ s_×)` is at the step's `G`."),
+            "", "| | FLOP model | measured | measured / model |", "|---|---|---|---|",
+            f"| gates a FLOP | {fmt(m.model_gates_per_flop)} | {fmt(m.gates_per_flop)} | {fmt(m.gates_ratio)} |",
+            (f"| ANDs a FLOP | {fmt(m.model_gates_per_flop)} (gates, `units.gates_per_flop`) | {fmt(m.ands_per_flop)} | "
+             f"{fmt(m.ands_ratio)} |"),
+            (f"| gates a product `κ` counts, `2G / κ` | {fmt(m.reference_s_times)} (`κ` = {fmt(m.kappa)}) | "
+             f"{fmt(m.step_s_times)} (the step's `κ` = {fmt(m.kappa_step)}) | {fmt(m.step_s_times / m.reference_s_times)} |"),
+            (f"| gates (ANDs) a counted product, every one the census counts | — | {fmt(m.gates_per_product)} "
+             f"({fmt(m.ands_per_product)}) | — |"),
+            (f"| `s_×` | {fmt(m.reference_s_times)} (`structure.reference`, `2G / κ`) | {fmt(m.s_x)} "
+             f"({fmt(m.s_x_unsplit)} outside the dot steps, which hold {m.steps_share:.1%} of the counted products) | "
+             f"{fmt(m.s_x / m.reference_s_times)} |"),
+            (f"| `u/w` | 1 | {fmt(m.u_over_w(m.s_x))} ({fmt(m.u_over_w(m.s_x_unsplit))} at `s_×` = "
+             f"{fmt(m.s_x_unsplit)}) | — |"), ""]
+
+
+def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None) -> str:
     fmt = run.fmt
     out = ["# The overhead per monitoring period", "",
            ("The overhead's lower bound at the measured H200 inputs, for each monitoring period, over "
@@ -146,6 +177,7 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS) -> str:
             "plausible range, the rest at reference; the corner is all of them at their worse ends at once. A lower "
             "bound below `μ / MFU`, the adversary no protocol encumbers, is vacuous. The time to the target is "
             "wall-clock, at least the overhead times `T_0 / Φ_total`."), "",
+           *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
            ("| scenario | over | period | overhead ≥ | range | corner | `μ / MFU` | status, premises | set by | "
            "what sets it | time to the target ≥ |"), "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -228,19 +260,26 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", action="append", help=f"scenario names (default: {', '.join(SCENARIOS)})")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
+    ap.add_argument("--measured", metavar="CIRCUIT",
+                    help="a circuit of data/circuits.toml whose design replaces the FLOP model (circuits.in_place)")
     ap.add_argument("--out", help="write periods.md and periods.json here (under `research run`, \"$OUT\")")
     args = ap.parse_args()
     reg = Registry.load()
     if args.set:
         reg = reg.override({k: json.loads(v) for k, v in (a.split("=", 1) for a in args.set)})
+    measured = circuits.compare(reg, args.measured) if args.measured else None
+    if args.measured:
+        reg = circuits.in_place(reg, args.measured)
     rows = evaluate(reg, tuple(args.scenario or SCENARIOS))
-    text = markdown(reg, rows)
+    text = markdown(reg, rows, measured=measured)
     print(text)
     if args.out:
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
+        doc = {"rows": rows} | ({"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}}
+                               if measured else {})
         (out / "periods.md").write_text(text + "\n")
-        (out / "periods.json").write_text(json.dumps({"rows": _finite(rows)}, indent=1, allow_nan=False))
+        (out / "periods.json").write_text(json.dumps(_finite(doc), indent=1, allow_nan=False))
 
 
 if __name__ == "__main__":

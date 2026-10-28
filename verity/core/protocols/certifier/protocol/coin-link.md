@@ -26,7 +26,8 @@ runs the server's network certifier (`trusted-host`). A window's session takes t
 
 A link that refuses to start ends the session at once, and the `end` entry says why. The link refuses when the record
 is missing or unreadable, when its parameters are invalid, or when the peer's line routes through another host. A link
-that ends while `serve.py` still serves, because its tunnel ended, ends the session too.
+that doesn't listen within the time `serve.py` has to start (`START_SECONDS`, 60 s) is killed and ends the session too,
+and so does a link that ends while `serve.py` still serves, because its tunnel ended.
 
 ### What it guarantees
 
@@ -63,8 +64,8 @@ that ends while `serve.py` still serves, because its tunnel ended, ends the sess
 - **One clock (RP8).** The ticks read the host's monotonic clock from one origin, and `serve.py`'s release log reads
   the same clock. A tick later than `slack` (25 ms) faults both grids for the rest of the link-window
   (`monitor-unavailable`). It never shifts the grid.
-- **Release order** (the soundness ruling of 27 Oct, 01:02Z: a challenger device releases its coin-commitment root only
-  after the prover's commitment is in). The open entry, which binds the prover's root, comes before `serve.py` starts.
+- **Release order.** A challenger device releases its coin-commitment root only
+  after the prover's commitment is in. The open entry, which binds the prover's root, comes before `serve.py` starts.
   The record comes before `serve.py` listens, and the link starts after it listens, so no challenger frame reaches the
   prover before the prover's root is in the ledger. The gate's `open` answer carries the commitment root too. It is
   given after the open entry, and on the gate's own ssh channel, which carries no coin.

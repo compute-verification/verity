@@ -188,7 +188,7 @@ def test_a_step_of_4096_slots_over_six_million_units_holds_its_frontier() -> Non
     """At 4,096 slots and 6,104,804 units (SMALL, then 52 layers of 117,000 one-row units and 400 two-row ones, test_scale's
     families-like layout), a step's committer holds 4,096 x 24 x 64 bytes of frontier (6.3 MB) and one pass over the first
     group; the leaf matrix was 4,096 x 6.1M x 64 bytes (1.6 TB). What it catches that test_a_step_holds_slots_times_log_units
-    can't: anything a unit at the full count. Builds a 6M-unit host Plan: 20 s and 2.3 GB on vy-nebius-cpu-4."""
+    can't: anything a unit at the full count. Builds a 6M-unit host Plan: 20 s and 2.3 GB on a CPU node."""
     units = [(S.Row((S.Part(0, 2 * i, 2),)),) for i in range(117_000)]
     units += [(S.Row((S.Part(1, 64 * i, 64),)), S.Row((S.Part(2, 0, 4),))) for i in range(400)]
     layer = S.Group((2 * 117_000, 64 * 400, 4), tuple(units))

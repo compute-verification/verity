@@ -36,7 +36,7 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   statement without a draw (`innerOk`), so at a statement the reader parses the inner statement holds one
   (`innerDrawn_checked`, in `DeployChecked`).
 * **Flock's statement check passes the inner statement only in the plain-leaves form** (`check_plain_of_decode`,
-  `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (§16.16), and since #2411
+  `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (§16.16), and
   `ProvedScope.check` passes them at hidden outputs without `--zk` (`InnerLeaf.check_of_innerOf`). The reader requires
   that check (`innerOk`), so what `Decomp` asks at the checked reader is `DeployChecked`'s.
 * **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
@@ -904,7 +904,7 @@ theorem setupLog_nil_layoutOf {Col T : Type} {H : Msg → Msg} {D : Claims.Recur
 
 /-! ## What the reader reads of the inner statement
 
-The inner statement as `readX` reads it, and Flock's statement check on it, which since #2411 passes plain leaves at
+The inner statement as `readX` reads it, and Flock's statement check on it, which passes plain leaves at
 hidden outputs without `--zk`, the one form the inner setup's circuit file can take (`InnerLeaf.check_of_innerOf`). -/
 
 /-- What `readX` read of the inner statement: its decoding, its circuit file set up at the inner tags

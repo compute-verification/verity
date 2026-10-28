@@ -1,0 +1,28 @@
+# Demo A, M3: one H200, one server-time block
+
+⟨LABEL⟩
+
+Each number below carries its run, its own verdict line quoted, its target and its ratio to the target. A number that
+missed its target is listed again under visible failures. Circuit size is counted in gates.
+
+⟨SECTIONS⟩
+
+## Production points (computed, not run)
+
+With 1% of compute spent on proving, at δ = 1%, by ⟨HORIZON_CITATION⟩: a one-week sampling block of one H200
+has at most H = ⟨H_POOLED⟩ faulty AND gates and B = ⟨B_POOLED⟩ leaked bits, both from one draw, the plan of record of
+proofs' planner (⟨PLANNER⟩): `for_budget` at 1% of the sampling block's GPU time, a unit's harm its own ANDs. A
+deployment of D H200s has D such sampling blocks a week, each with its own draw. The planner's shape and cost model are
+its own, not measured on M3's block; the sources say which.
+
+## Visible failures
+
+⟨MISSES⟩
+
+## What this report doesn't show
+
+⟨CAVEATS⟩
+
+## Sources
+
+⟨SOURCES⟩
