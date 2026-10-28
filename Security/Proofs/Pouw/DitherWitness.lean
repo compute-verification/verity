@@ -233,7 +233,7 @@ theorem moment_le_one (F : TDraw → Fin 2 → Word) (σ : Finset (Fin 2))
 
 end Sampling
 
-section Period
+section Jobs
 
 theorem twμ_nonneg (r : Fin 3) : 0 ≤ twμ r := by
   unfold twμ
@@ -267,7 +267,7 @@ theorem twCost :
   show ∑ _w : Fin 2, ((4 : ℝ) + 2 + 1) = ∑ r : Fin 3, twμ r * twHon r
   norm_num [Fin.sum_univ_three, twμ, twHon]
 
-end Period
+end Jobs
 
 section Premises
 
