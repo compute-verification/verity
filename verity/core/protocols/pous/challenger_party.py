@@ -7,8 +7,9 @@ time); `u64be 2^64 − 1` ends the session, after its last round or a late one. 
 `WARMUPS` frames on `WARMUP_INDEX`, which no coin chose, and discards their answers: nothing times, records or signs them,
 so the first timed round doesn't pay for waking both processes and the prover's memory path after the session's setup.
 The challenger draws its coins on its own host, designates the session id from them, the node and the setup's root
-(`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports `{"host",
-"public_key", "session", "session_id", "warmups"}`.
+(`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. Nothing but the indices, one
+a round, goes on the wire: the coin tree's root, the session id and the openings leave only in its report, `{"host",
+"public_key", "session", "session_id", "warmups"}`, after the session's last answer and its signature.
 
 The two sides are parties of the deployment layer (`verity.core.deploy`), the challenger (`Challenger`) and the prover
 (`Prover`), whose messages are those frames. The challenger takes its coin tree's hiding key and each round's salt from
