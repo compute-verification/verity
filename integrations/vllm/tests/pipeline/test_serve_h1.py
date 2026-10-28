@@ -125,7 +125,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
     window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
     session's, its record carries the session without its secret, and the verifier's check of the record against the
-    auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
+    auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file the windows wrote holds the weight trees' salt
+    key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
@@ -154,6 +155,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     assert len(set(sids)) == 2 and ports == [7811, 7811]
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
     assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)]] * 2
+    written = [f.read_bytes() for f in tmp_path.rglob("*") if f.is_file()]
+    assert written and not any(PH.WEIGHT_KEY in b or PH.WEIGHT_KEY.hex().encode() in b for b in written)
     srv.src.uninstall()
 
 
