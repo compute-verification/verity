@@ -816,51 +816,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "6c09a860e7f1ba7309537586ee8b3a8dad9ced9465684b5720f47edee27d57e4"
+   "digest": "487e224395c0ce552480a0d03f6ab598e7d5bbdcfdf0db5cd8ea80293d381559"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "4c40e9b6f9cccb6d63719a5689f818b0b251524629cc44420257333f53c08c01"
+   "digest": "c6f2d4d66557cd4d33f9b80756c722aada385b9f7b5c5afd3659ccd26677a342"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "a7e29062d11b44447508e6d06de8d7f5fa19fce6c3a7165eca06aedf92d32b28"
+   "digest": "761d66626f922569af0d6d0188f84e413d23c4266df5e017da3e1f0d3c2207fa"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "f994e55fe10761887e4ef37e966330a1ec640ddb34178b17a497ce7c79df462e"
+   "digest": "8cc55075e4910a0297243b1f891e638e17a044444085b91332031d36d30d5574"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "a2bffee2ba08154ce7ee310de717ed6cd2e4246b59bc71db332db7a8f75d4238"
+   "digest": "d820460d341c26c9511f845ddcc4c101bfcc6451575663fb9e20bbc3e502b1fc"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "de4bb5f96f96db33fe811de25f8bd66aaaaba669edbdbd44543a3ccef518ed44"
+   "digest": "5f1c41cc1cc96750e6ddb40822eed90f8b0f87500f1f13473ddefdaf3b655c45"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "d594cfa5db5e9db6a33842e1b98bcc8986c67ba2f8c479bf898fad095903a892"
+   "digest": "4568d08a3dec712925b68a947f711dcb56f3b4c7b77c784f781e671115ab9c5d"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "29c93d08e08c850f94ba2098232f1ed27285996174b391864d5f7abe0600e2f9"
+   "digest": "b726e81cdc0d3e89eb74bdf93f0d434ac4dbbf0fbfb2054d4123c74e6de36f6e"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "2ab7f77f48429e3e5fe9e65b0d1012ef5e14c6839ed5f0aea73701ade12fd05a"
+   "digest": "da62d8a05a3be058c4485b3fc72cd27b0efee269a289124dc33771fd2c219442"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "d31d897791556aa013b7932a558c72efc5c8c88b4621ef6e9a0ddcf65ac3f555"
+   "digest": "e470f7e4f984c52deab7050635d34610b3ffdc1c7cdc2ec8c4875add695e8eb1"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "d46f935a9a18ada777381418a5beb8cbf765db9281603334a0b0512e1b14d443"
+   "digest": "7b32093a502dc3fe0945d9bc4fe807dbbe11c8ca3240b651e3f1873904a50391"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "7a49ab790a5a9a3d0f042f46d6157b2a99b00e7562624c734c43d0151d8e2c3d"
+   "digest": "b5af1abb7ec36a21f750228e159d0394b2270e9d4b77809f32078d5982b0fb14"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -892,7 +892,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "84f8887bac4ddb07abddb950840df4ff9212af508f9c1eddf487efdcc01c3afe"
+   "digest": "a914b0602b5ddb90f3bd7bd21656e47865b3d25e6c7484f0d0f604c63b3ddf86"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -916,11 +916,11 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "f2b7bd1ddc0dfc7a533d211e6d1c1c8f576888151d1372a91e80fadeefc42c02"
+   "digest": "8d96bab0f6bcc15fca29eb01eb4bddd0b66ff5de6ac1f0ccc358ad14eaed86d1"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "a036f57be50444f8cda8dda2bfc297ce1cf062d8e81aa25204f52b85cc4907e4"
+   "digest": "ae5577b49f05316b499677cc243bc59bc8b9b18f2b73c22390d98e4585cd00b8"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
@@ -39259,9 +39259,8 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "c9177b20c1bce842221f75fb8d8dfbd981f893f204c42df404925ca5014698bb",
+   "digest": "e1a6c7bcdf87bf79de205757b6f97515b1bc1022f644a01fa1b2c57b7b2a38a3",
    "definitions": {
-    "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
     "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
