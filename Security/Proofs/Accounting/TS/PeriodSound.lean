@@ -13,9 +13,11 @@ statement fails at its opening, so the event lies in the union of the window's `
 window's sessions that are C-Flock sessions meeting that guarantee's named premises give `ServiceSound` at
 `n_π · (δ_s + δ)`.
 
-The witnesses are at H1's honest live-salt period (`Properties.Pouw.Period.SecurityProofs.HonestH1`), one window and
-one session: there the check accepts every window on every path and its layer is sound at `0`, and with relations
-that every opening fails `ServiceSound` fails at `0`, since the check accepts and draws a unit on every path.
+The witnesses state that some period of the deployed check meets the premise and that some period breaks the
+conclusion at `0`; their statements name no instance, so they read only the definitions and the check. Each proof
+takes H1's honest live-salt period (`Properties.Pouw.Period.SecurityProofs.HonestH1`), one window and one session:
+there the check accepts every window on every path and its layer is sound at `0`, and with relations that every
+opening fails `ServiceSound` fails at `0`, since the check accepts and draws a unit on every path.
 
 This module imports `Proofs.Accounting.TS.SessionSound`, whose imports make `X` a token, so `Proofs/Accounting.lean`
 imports it and no theorem here binds `X`.
@@ -90,21 +92,25 @@ namespace Accounting.SecurityProofs.TS
 open Pouw.RelativeSecurity Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs.HonestH1
 open Accounting.TS.WindowSessions
 
-/-- **The honest instance meets `CheckProofSystemSound`'s premise**: at H1's honest live-salt period of one window, one
-session a window, the deployed check accepts the window on every path, and its layer is sound at `0`. -/
+/-- **`CheckProofSystemSound`'s premise holds where the deployed check accepts**: there is a period of one window, at
+H1's population of 144 units and one session a window, on which PoUW's deployed check accepts the window on every path
+and its layer, under relations every opening meets, is sound at `0`. The instance is H1's honest live-salt period. -/
 theorem CheckProofSystemSound_honest :
-    (∀ x w, (checkLayer prm (windows 1) opened (stagedAt salt staged) (fun _ _ _ => (0 : Fin 1))).accepted x w 0) ∧
-      Accounting.Assumptions.TS.ProofSoundAt
-        (checkLayer prm (windows 1) opened (stagedAt salt staged) (fun _ _ _ => (0 : Fin 1))) 0 :=
-  ⟨fun x w => accepted_all 1 x w,
+    ∃ (m : ℕ) (p : PouwCheck.Params) (ws : Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
+      (∀ x w, Accepts p (ws.reg x w) (ws.ev x w)) ∧
+        Accounting.Assumptions.TS.ProofSoundAt
+          (checkLayer p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => True) (fun _ _ _ => (0 : Fin 1))) 0 :=
+  ⟨circuit.rounds, prm, windows 1, fun x w => accepted_all 1 x w,
     fun _ _ => le_of_eq
       (Accounting.SecurityProofs.ComposePeriod.Honest.prob_none fun _ h => h.2 fun _ _ _ => trivial)⟩
 
-/-- **`CheckProofSystemSound`'s conclusion fails at `0`** when every opening fails its relation: at H1's honest period
-of one window the deployed check accepts and publishes a drawn unit on every path. -/
+/-- **`CheckProofSystemSound`'s conclusion can fail at `0`**: there is a period of one window, at H1's population of
+144 units, on which PoUW's deployed check accepts and publishes a drawn unit on every path, so with relations every
+opening fails `ServiceSound` fails at `0`. The instance is H1's honest live-salt period. -/
 theorem CheckProofSystemSound_nontrivial :
-    ¬ ServiceSound prm (windows 1) opened (fun _ _ _ _ => False) 0 := by
-  intro h
+    ∃ (m : ℕ) (p : PouwCheck.Params) (ws : Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
+      ¬ ServiceSound p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => False) 0 := by
+  refine ⟨circuit.rounds, prm, windows 1, fun h => ?_⟩
   have : Nonempty (Paths Ω1 1) := ⟨((Paths.const true _, (Equiv.refl _, ())), ())⟩
   refine absurd (h 0) (not_le.2 (lt_of_lt_of_le one_pos
     ((Accounting.SecurityProofs.FillerLuck.Cell.prob_all (Ω := Paths Ω1 1)).symm.le.trans
