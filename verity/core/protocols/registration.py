@@ -24,8 +24,8 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 fails (`REFUSALS`): a site entry by the Site's (`verity.core.site.entry_refusal`), an information entry by `previous`
 and then `duplicate-information`. A component reads its view of an accepted log (`View`): the Site, θ's values
 (`View.value`) and the builder, at the head. Decoding takes exactly what the encoders write and raises `Malformed`
-otherwise; parameters holding a character outside ASCII without DEL are `Malformed` as `ascii`, as the Lean's canonical
-JSON refuses them.
+otherwise; a log or parameters holding a character outside ASCII without DEL are `Malformed` (`ascii`), in
+`Core.canonicalJson`'s words.
 """
 
 from __future__ import annotations
@@ -168,11 +168,11 @@ def item_of(j: Any) -> dict[str, Any]:
     raise Malformed(f"an item: kind {kind} is not one of [theta, builder]")
 
 
-def ascii(j: Any, what: str) -> None:
-    """ASCII without DEL, which the Lean's canonical JSON refuses anything outside of: `j`'s JSON, unescaped, holds no
-    character from 0x7f up."""
+def ascii(j: Any) -> None:
+    """ASCII without DEL, refused in `Core.canonicalJson`'s words: `j`'s JSON, unescaped, holds no character from 0x7f
+    up."""
     if any(ord(c) >= 0x7F for c in json.dumps(j, ensure_ascii=False)):
-        raise Malformed(f"ascii: {what} holds a character outside ASCII")
+        raise Malformed("not ASCII without DEL (a byte at or above 0x7f)")
 
 
 def entry_of(j: Any) -> Entry:
@@ -189,6 +189,7 @@ def entry_of(j: Any) -> Entry:
 
 def log_of(j: Any) -> tuple[str, list[Entry]]:
     """The committed log's composite and entries."""
+    ascii(j)
     _exactly(j, ["composite", "entries"], "the log")
     return _one_of(j["composite"], S.COMPOSITES, "the log's composite"), [entry_of(e) for e in _list(j["entries"], "entries")]
 
@@ -263,7 +264,7 @@ class View:
 def params_of(j: Any) -> tuple[str, Auditor]:
     """The auditor's parameters: `{"auditor": AUDITOR, "composite"}`, the auditor as `verity.core.site.Auditor.of_json`
     reads it."""
-    ascii(j, "the params")
+    ascii(j)
     _exactly(j, ["auditor", "composite"], "the params")
     return _one_of(j["composite"], S.COMPOSITES, "the params' composite"), Auditor.of_json(j["auditor"])
 

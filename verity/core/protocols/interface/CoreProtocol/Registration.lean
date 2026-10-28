@@ -19,8 +19,8 @@ names the whole log. An entry is one of two kinds, each under its own versioned 
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))` over the entry's canonical JSON, its format and `previous`
 among its keys, and the genesis of a composite's log is the Site's (`Core.Site.Registration.sha512`), so a log of site
-entries alone has the Site's head. Registration is ASCII-only without DEL: a log or parameters holding any other character
-is refused as `ascii` before any digest is taken.
+entries alone has the Site's head. Registration is ASCII-only without DEL: a log or parameters holding any other byte
+is refused (`ascii`, in `Core.canonicalJson`'s words) before anything is decoded.
 
 The check (`check`) holds each entry to the log before it, and refuses the first entry that fails by the first check it
 fails: a site entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), and an information
@@ -257,7 +257,12 @@ structure Params where
   composite : Composite
   auditor : Auditor
 
+/-- Registration is ASCII without DEL, refused in `Core.canonicalJson`'s words before anything is decoded. -/
+def ascii (b : ByteArray) : V Unit :=
+  if b.data.any (· ≥ 0x7f) then throw "not ASCII without DEL (a byte at or above 0x7f)" else pure ()
+
 def Params.ofJson (j : Json) : V Params := do
+  ascii j.compress.toUTF8
   exactly j ["auditor", "composite"] "the params"
   pure { composite := ← Site.Registration.Composite.ofJson (← Flock.J.get j "composite" "the params"),
          auditor := ← Site.Registration.Auditor.ofJson (← Flock.J.get j "auditor" "the params") }
@@ -268,6 +273,7 @@ structure Commitment where
   head : ByteArray
 
 def commitmentOf (b : ByteArray) : V Commitment := do
+  ascii b
   let committed ← Committed.ofJson (← canonicalJson b)
   pure { committed, head := ← Flock.unhex (head committed.composite committed.log) }
 
@@ -285,7 +291,7 @@ def checkLog (p : Params) (c : Commitment) (_ : Unit) : Outcome Json Json :=
 (`{"auditor": AUDITOR, "composite"}`, the auditor as `Core.Site.Registration.Auditor.ofJson` reads it), the commitment
 is the log (`{"composite", "entries": [ENTRY]}`) with its head as digest, the evidence is `{}`. It accepts a log the
 check passes, making public its view (`View.toJson`) and keeping its length, and rejects the first entry the check
-refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII as `ascii`. It is never undecided. -/
+refuses as `entry I: REFUSAL`, and a log or parameters outside ASCII without DEL as not ASCII. It is never undecided. -/
 def protocol : Protocol where
   id := protocolId
   Params := Params
@@ -431,7 +437,7 @@ private def answer (c : Composite) (log : Committed) : Answer :=
 #guard (answer .onsite { composite := .onsite, log := chain .onsite bare }).reason == some "entry 0: uncertified"
 private def accented : Committed :=
   { composite := .onsite, log := chain .onsite [information [.theta { weights with value := "poids\u00e9" }]] }
--- a log or parameters outside ASCII without DEL is refused before anything is decoded (`Core.canonicalJson`)
+-- a log or parameters outside ASCII without DEL is refused before anything is decoded (`ascii`)
 #guard (protocol.answer (bytes (params .onsite)) accented.toJson.compress.toUTF8 "{}".toUTF8).reason ==
   some "commitment: not ASCII without DEL (a byte at or above 0x7f)"
 private def deleted : Committed :=
