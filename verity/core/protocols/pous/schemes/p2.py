@@ -72,6 +72,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import cached_property
 
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import frame
 
 from ..codec import Codec
@@ -323,7 +324,7 @@ def stream(base: bytes, purpose: bytes, nbytes: int) -> bytes:
     """The first `nbytes` of `SHA512(base ‖ purpose ‖ u32be(0)) ‖ SHA512(base ‖ purpose ‖ u32be(1)) ‖ …`."""
     h = hashlib.sha512(base + purpose)
     out = bytearray()
-    for i in range(-(-nbytes // 64)):
+    for i in range(-(-nbytes // DIGEST_BYTES["sha512"])):
         c = h.copy()
         c.update(i.to_bytes(4, "big"))
         out += c.digest()

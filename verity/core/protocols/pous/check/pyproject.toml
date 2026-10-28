@@ -26,7 +26,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `PousCheck.Verdict` to `verdict_circuit.py`'s Definition, compiled and run by `verity.ml.circuits`' evaluator.
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
+# PoUW's and PoUS's Python verifiers answer through Core.Answer's Python (`answer.py`).
 inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/difftest", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",

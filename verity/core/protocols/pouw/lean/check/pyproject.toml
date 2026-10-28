@@ -24,8 +24,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
 # what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.ml.kernels` `tc.py` they reach).
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
-          # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+          # Core.Answer's Python, which PoUW's and PoUS's verifiers answer through
           "verity/core/protocols/answer.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",

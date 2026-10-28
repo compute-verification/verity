@@ -14,10 +14,11 @@ testpaths = ["tests"]
 # sampled_proofs and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
+# PoUW's and PoUS's Python verifiers answer through Core.Answer's Python (`answer.py`).
 inputs = ["verity/core/protocols/answer.py", "tools/config/verity_config",
           "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/profile.py",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",

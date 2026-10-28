@@ -11,8 +11,9 @@ testpaths = ["tests"]
 # and randomness are what those import, and kernels' tc what pouw's
 # circuit reaches. vclib reads its variables through settings.py, on verity_config.settings.
 inputs = [
+  "verity/core/protocols/record.py",
   "tools/config/verity_config",
-  # Core.Answer's Python, which PoUW's, PoUS's and the bandwidth audit's verifiers answer through
+  # Core.Answer's Python, which PoUW's and PoUS's verifiers answer through
   "verity/core/protocols/answer.py",
   "verity/__init__.py", "verity/settings.py",
   "verity/errors.py",
