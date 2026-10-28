@@ -14,7 +14,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: `lake` builds the onsite and remote packages beside this one (each product's executable, whose `serve` the
+# Test-only: `lake` builds the registration log's check (`core-registration`, the core interface's) and the onsite and
+# remote packages beside this one (each product's executable, whose `serve` the
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
 # Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the
@@ -27,10 +28,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # difftest (`nci_reference` and θ's provenance difftest's declarations), each from its own suite's tests; and space's
 # and bandwidth's period hooks (`pous.period`, `remote_bandwidth.period`), space's signed by
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
-# them what they import of `verity.ml` and `verity.errors`.
+# them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.core.deploy.config`)
+# and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
           "verity/core/protocols/record.py",
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
+          "verity/core/protocols/registration.py", "verity/core/wire",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/network", "verity/core/protocols/certifier",

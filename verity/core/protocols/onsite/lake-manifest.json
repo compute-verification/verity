@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "core_remote",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../remote",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "remote_audit",
    "manifestFile": "lake-manifest.json",
    "inherited": false,

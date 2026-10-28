@@ -93,7 +93,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   subprotocols), the memory wipe (onsite's) and the bandwidth audit over PoUS's store (neither composite's yet), exist
   here as a skeleton on fixture coins, not as runs, and nothing claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
-  `verity run` configuration (`config.toml`) of onsite's five components and the wipe on the served int8 window: its
+  `verity run` configuration (`config.toml`) of onsite's seven subprotocols on the served int8 window: its
   parties, channels and each component's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.

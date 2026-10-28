@@ -4,7 +4,9 @@ entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`
 `verity.core.protocols.sampled_proofs.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
-stand-in gives them, and the network certifier's entry and period check (`network_certifier`, `CHECKS`) likewise.
+stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
+(`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites, remote and onsite, run on
+it.
 ``component`` reads ``STATE/record/w<I>/<name>/``'s ``answer.json`` and ``case.json``, and ``product`` runs
 ``STATE/tools.json``'s ``product`` as ``product IDS check PARAMS COMMITMENT EVIDENCE``.
 """
@@ -104,10 +106,10 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
               default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
-    Component("wipe", "verity/wipe/v0", parties=_VERIFIER, product=False),
+    Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
-TOY = Workload("toy", frozenset({"windows", "ingress-relay"}), (Role("workers", "developer"),), _toy,
-               {"requests": [3, 7], "steps": 2, "cap": 8})
+TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),
+               _toy, {"requests": [3, 7], "steps": 2, "cap": 8})
 
 
 # --- the parties -------------------------------------------------------------------------------------------------------
@@ -127,12 +129,18 @@ def network_certifier(cfg: Mapping[str, Any], state: Path, local: bool) -> int:
     return 2
 
 
-def certifier_check(cfg: Mapping[str, Any], state: Path, i: int) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    raise SP.Unavailable(f"no network-period check serves period {i} at step 0 here")
+def unserved(what: str) -> Check:
+    """A period check that no machine here serves: `SP.Unavailable` for every period."""
+    def check(cfg: Mapping[str, Any], state: Path, i: int) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        raise SP.Unavailable(f"no {what} serves period {i} at step 0 here")
+    return check
 
 
-#: each listed component's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
-CHECKS: dict[str, Check] = {"certifier": certifier_check}
+#: each listed subprotocol's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
+CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
+                            "inference-only": unserved("inference-only policy check"),
+                            "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session"),
+                            "wipe": unserved("memory challenger's wipe check")}
 
 
 class Machine:
@@ -255,6 +263,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
 PARTIES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
     "certifier": {"network-certifier": network_certifier, "verifier": LIVE},
+    **{c: {"verifier": LIVE} for c in ("pouw", "inference-only", "pous", "bandwidth", "wipe")},
 }
 WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}
 #: the order a machine's entries run in, all before the live run: a party's sends come before the parties that read them

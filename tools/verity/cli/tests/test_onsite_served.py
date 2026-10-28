@@ -2,7 +2,8 @@
 the file is the table's configuration byte for byte and names no host; `verity run --dry-run` resolves every party,
 channel and piece with no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a
 binding the configuration has no place for; the served window runs once with every piece's hooks, and the onsite check
-reads the record's composed verdict. The runner and the record are stand-ins written by each test."""
+reads the record's composed verdict, undecided while the record has no row for a listed subprotocol. The runner and the
+record are stand-ins written by each test."""
 from __future__ import annotations
 
 import dataclasses
@@ -78,7 +79,9 @@ def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
     assert cfg["protocols"] == list(T.PROTOCOLS)
     assert {p["name"] for p in cfg["party"]} == {"workers", "firewall", "prover", "challenger", "network-certifier",
                                                  "memory-challenger", "bandwidth-verifier", "verifier"}
-    assert [c for c in T.PROTOCOLS if REG.components[c].product] == list(T.ONSITE_COMPONENTS)
+    assert all(REG.components[c].product for c in T.PROTOCOLS)
+    assert K.composite(cfg["protocols"], REG.components) == T.ONSITE
+    assert sorted(T.PROTOCOLS) == sorted(K.COMPOSITES[T.ONSITE])
 
 
 # --- the dry run -------------------------------------------------------------------------------------------------------
@@ -89,7 +92,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     cfg = R.load(CONFIG, REG)
     assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
     assert len(got["channel"]) == len(cfg["channel"]) == 13
-    assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 8, "channels": 13, "entries": 19, "unbound": []}]
+    assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 8, "channels": 13, "entries": 20, "unbound": []}]
     pieces = {(x["party"], e["component"]) for x in got["plan"] for e in x["entries"]}
     assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
@@ -227,8 +230,12 @@ print("RECORD " + json.dumps({"composed": composed, "missing": [] if "bandwidth"
 """
 
 
-@pytest.mark.parametrize("rows, verdict, rc", [({}, "undecided", 2), ({"bandwidth": "accept"}, "accept", 0)])
-def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, verdict, rc):
+@pytest.mark.parametrize("rows, verdict, rc, reason", [
+    ({}, "undecided", 2, "missing ['bandwidth']"),
+    ({"bandwidth": "accept"}, "undecided", 2, "no row for ['inference-only']"),
+    ({"bandwidth": "accept", "inference-only": "accept"}, "accept", 0, None),
+])
+def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monkeypatch, rows, verdict, rc, reason):
     monkeypatch.setattr(T, "RECORD", stand_in(tmp_path, "record.py", RECORD % json.dumps(rows)))
     state = tmp_path / "state"
     (state / "out").mkdir(parents=True)
@@ -239,5 +246,6 @@ def test_the_onsite_check_is_the_records_composed_verdict(tmp_path, capsys, monk
         "bandwidth-verifier": None, "memory-challenger": None, "verifier": None}
     (line,) = said(out, "VERDICT")
     assert line["verdict"] == verdict and line["block"] == 2 and line["product"] == T.ONSITE
-    assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS}, "bandwidth": rows.get("bandwidth", "absent")}
-    assert line["coins"] == "development" and line["reason"] == (None if rows else "missing ['bandwidth']")
+    assert line["components"] == {**{c: "accept" for c in T.PROTOCOLS},
+                                  **{c: rows.get(c, "absent") for c in ("bandwidth", "inference-only")}}
+    assert line["coins"] == "development" and line["reason"] == reason

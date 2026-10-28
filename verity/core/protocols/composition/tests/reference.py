@@ -9,8 +9,8 @@ inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the 
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs' one-stage audit on the
 proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's framing over v1's `one_stage` and decoders
 (`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, the wipe's
-(`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth
-(`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
+(`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
+`verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
 
 The trial's rule, onsite's and remote's over their components' statements:
@@ -233,7 +233,7 @@ POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(can
 SAMPLED_PROOFS = Ported(V2, one_stage_zk, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
+BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
 
@@ -391,8 +391,69 @@ class Same(Product):
         return [a["commitment"] for i, a in fitted_answers(answers) if i in self.same]
 
 
+@dataclass(frozen=True)
+class Tie:
+    """`Core.Composition.Tie`: the value ``what`` that each component of ``names`` reads off its commitment's bytes
+    with its function must be one value."""
+
+    what: str
+    names: tuple = ()
+
+    def strays(self, ev: list) -> str | None:
+        """`Core.Composition.Tie.strays`, on cases whose commitments all decode (`holdTies` reads it only when the
+        composition doesn't reject, so that every component's does)."""
+        cases = {k[0]: k[2] for k in ev}
+        if any(s not in cases for s, _ in self.names):
+            return None
+        (s, d), *rest = [(s, f(cases[s])) for s, f in self.names]
+        return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
+
+
+def _commitment_hex(key: str) -> Callable[[bytes], bytes]:
+    """A component's function reading the hex field ``key`` of its JSON commitment."""
+    return lambda b: bytes.fromhex(json.loads(b)[key])
+
+
+#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
+STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
+                      ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
+
+
+@dataclass(frozen=True)
+class TiedSame(Same):
+    """`Core.Composition.tiedSameB id ss ties components`: `same`, except that when it doesn't reject, the components
+    of a tie of ``ties`` that didn't all commit to one value reject (`holdTies`)."""
+
+    ties: tuple = ()
+
+    def check(self, ps, c: bytes, ev, blobs: list[bytes] = ()) -> tuple:
+        answers = self.run(ps, ev, blobs)
+        if isinstance(answers, str):
+            return REJECT, answers
+        if stray := self.strays(answers):
+            return REJECT, stray
+        out = self.judge(answers, c)
+        if out[0] != REJECT and (stray := next(filter(None, (t.strays(ev) for t in self.ties)), None)):
+            return REJECT, stray
+        return out
+
+    def tied(self, case: Any) -> list[tuple[str, bool]]:
+        """On a case whose components fit the composition and whose tied components' commitments all decode, each tie
+        by what it ties, and whether they committed to one value."""
+        ev: list = []
+
+        def answers():
+            c, blobs = self.split(case)
+            ev[:] = self.evidence(P.unhex(c["evidence"]))
+            return self.run(self.params(c["params"]), ev, blobs)
+        digests, cases = dict(fitted_answers(answers)), {k[0]: k[2] for k in ev}
+        return [(t.what, len({f(cases[s]) for s, f in t.names}) == 1) for t in self.ties
+                if all(digests.get(s, {}).get("commitment") is not None and s in cases for s, _ in t.names)]
+
+
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: remote's three
-#: committing to one window record, onsite's policy and integrity (v2) to one registration record.
+#: committing to one window record, onsite's policy and integrity (v2) to one registration record, and onsite's PoUS
+#: and PoUB-P2 on one store.
 REMOTE = Same("verity/remote/v0", (INFERENCE_ONLY, POUW, SAMPLED_PROOFS), (INFERENCE_ONLY.id, POUW.id, SAMPLED_PROOFS.id))
-ONSITE = Same("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
-              (INFERENCE_ONLY.id, SAMPLED_PROOFS.id))
+ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
+                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (STORE,))

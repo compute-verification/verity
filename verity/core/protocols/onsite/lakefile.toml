@@ -4,7 +4,7 @@
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
-defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
+defaultTargets = ["CoreOnsite", "onsite", "CoreComposites", "product"]
 
 [leanOptions]
 autoImplicit = false
@@ -22,7 +22,7 @@ path = "../interface"
 name = "core_composition"
 path = "../composition"
 
-# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
+# The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
 # `PouwCheck.Period`).
 [[require]]
 name = "core_sampled_proofs"
@@ -48,7 +48,7 @@ path = "../network/lean"
 name = "pous_check"
 path = "../pous/check"
 
-# Bandwidth: the remote bandwidth audit's session.
+# Bandwidth: the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol`).
 [[require]]
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
@@ -58,6 +58,11 @@ path = "../remote_bandwidth/lean"
 name = "core_memory_challenger"
 path = "../../devices/memory_challenger/lean"
 
+# Remote, the other composite `product` names.
+[[require]]
+name = "core_remote"
+path = "../remote"
+
 [[lean_lib]]
 name = "CoreOnsite"
 
@@ -65,10 +70,10 @@ name = "CoreOnsite"
 name = "onsite"
 root = "OnsiteMain"
 
-# A configuration's product: `Core.Composition.productB` over exactly the components its `protocols` lists (onsite for all
-# seven), `product IDS id | check | serve` (CoreProduct.lean).
+# The composite a configuration's subprotocols make, onsite or remote, and no other: `product IDS id | check | serve`
+# (CoreComposites.lean).
 [[lean_lib]]
-name = "CoreProduct"
+name = "CoreComposites"
 
 [[lean_exe]]
 name = "product"

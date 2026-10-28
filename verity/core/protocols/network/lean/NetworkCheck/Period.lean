@@ -6,9 +6,9 @@ import Flock.Public
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
 
-Onsite's communication component (`Core.Onsite.components`). A period is one node's link over `m` link-windows beside
-the period's compute audits (sampled proofs' one-stage, one answer per registered window of the workload). Its
-link-windows come in one of two forms, which the parameters name:
+The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
+link-windows beside the period's compute audits (sampled proofs' one-stage, one answer per registered window of the
+workload). Its link-windows come in one of two forms, which the parameters name:
 
 * **the clock form**: N2's link-windows (`service.LinkWindows`, Selection `All`), each proved, both its ends certified
   and its clock certified;
