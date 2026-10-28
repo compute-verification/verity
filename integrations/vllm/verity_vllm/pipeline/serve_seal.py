@@ -54,6 +54,7 @@ import functools
 import gc
 import json
 import shutil
+import sys
 import threading
 import time
 from collections import deque
@@ -778,7 +779,13 @@ class Sealer:
             self.errors.append(f"{type(e).__name__}: {e}"[:300])
             return None
 
+    def _yield(self, frame: Any, event: str, arg: Any) -> None:
+        if not self.gate._flag:
+            self.pace()
+
     def _run(self) -> None:
+        if self.gate_mode == "mid":
+            sys.setprofile(self._yield)
         while True:
             with self._cv:
                 while not self._jobs:
@@ -795,6 +802,8 @@ class Sealer:
                 return
 
     def _run_seals(self) -> None:
+        if self.gate_mode == "mid":
+            sys.setprofile(self._yield)
         while True:
             with self._cv:
                 while not self._seals:
@@ -828,7 +837,7 @@ class Sealer:
     def summary(self) -> dict[str, Any]:
         return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors),
                 "gate": {"mode": self.gate_mode, "pace_s": self.pace_s, "paced": self.paced[0], "paced_s": round(self.paced[1], 4),
-                         "ran_out": self.paced[2]}}
+                         "ran_out": self.paced[2], "mid_layer": getattr(self, "mid_layer", None)}}
 
 
 class DiskFloor:
