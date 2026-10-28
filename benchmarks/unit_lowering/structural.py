@@ -1,18 +1,24 @@
-"""The H1 tile unit's templated structural statement (``H1_TMPL=structural``: `h1unit.stager`'s
+"""The H1 leaf's statements in their templated structural form (``H1_TMPL=structural``: `h1unit.stager`'s
 `UnitStager(layout=h1unit.LAYOUT, structural=True)`, the unit as `struct_lower`'s template, the flat unit never built),
-measured beside the flat statement the period-open commits.
+measured beside the flat form, at any K and R × C tile. A leaf is proved as one of two units: ``tile``, the whole tile
+(`h1window.tile_unit`, the statement `pouw_h1_circuits` writes), or its ``lane`` (`h1zy.lane`, one circuit for every
+lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h1_lanes` stages, which
+`h1window.leaf_unit` derives at a K of whole lanes. Each must fit C-Flock's block (``k_log <= 27``).
 
-* ``lower K R C OUT [--form structural|flat] [--path FILE]``: `pouw_h1_circuits._lower` itself (the ``--lower`` command's
-  body, ``HZ_STAGE`` as it reads it), in this process, bound to `BIND`. OUT (JSON): the lowering (its class, the unrolled
-  ANDs, rows and references, the template's Definitions, rows and calls), its seconds and peak RSS before compose and at
-  the end, and the file's bytes, SHA-512 and META block fields; or compose's refusal (a block past ``K_MAX``) with the
-  lowering's counts. The file goes to FILE, else to a scratch directory removed at exit.
-* ``agree K R C OUT``: the flat and the structural stager at one shape, their units evaluated on the same rows (honest
-  leaves, a record off in one bit, random words): each output word of the template (`TmplLowering.evaluate`) against the
-  flat unit's (`ir_lower.Lowering.evaluate`) and both against `h1zy.reference`, the word reference; then
+* ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--path FILE]``: a tile through
+  `pouw_h1_circuits._lower` itself (the ``--lower`` command's body, ``HZ_STAGE`` as it reads it), a lane or combine
+  through `h1unit.stager` with `h1_lanes`' rows, in this process, bound to `BIND`. OUT (JSON): the lowering (its class,
+  the unrolled ANDs, rows and references, the template's Definitions, rows and calls), its seconds and peak RSS before
+  compose and at the end, and the file's bytes, SHA-512 and META block fields; or the refusal, before lowering (`refusal`)
+  or compose's (a block past ``K_MAX``, ``k_log`` the block it needs) with the lowering's counts. The file goes to FILE,
+  else to a scratch directory removed at exit.
+* ``agree K R C OUT``: the flat and the structural tile stager at one shape, their units evaluated on the same rows
+  (honest leaves, a record off in one bit, random words): each output word of the template (`TmplLowering.evaluate`)
+  against the flat unit's (`ir_lower.Lowering.evaluate`) and both against `h1zy.reference`, the word reference; then
   `circuit_check.structural.check_unit`'s verdict on the template against the flat unit.
-* ``sweep --shapes K:R:C,.. --out DIR [--form F] [--jobs J]``: ``lower`` of each shape in a process of its own, its peak
-  RSS from ``wait4`` (so also when it is killed): DIR/<form>-k<K>-<R>x<C>.json and DIR/sweep-<form>.json.
+* ``sweep --shapes K:R:C[:UNIT],.. --out DIR [--form F] [--jobs J]``: ``lower`` of each shape (UNIT ``tile`` unless
+  given) in a process of its own, its peak RSS from ``wait4`` (so also when it is killed):
+  DIR/<form>-<unit>-k<K>-<R>x<C>.json and DIR/sweep-<form>.json.
 """
 from __future__ import annotations
 
@@ -20,6 +26,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import resource
 import subprocess
 import sys
@@ -38,6 +45,8 @@ BIND = {"partition": "0" * 128, "program": "0" * 128}
 #: META's fields that say how the statement fills C-Flock's block
 BLOCK = ("format", "statement", "layout", "k_log", "unit_log", "vus_per_block", "per_vu")
 SEED = 20261028
+UNITS = ("tile", "lane", "combine")
+NAMES = {"tile": "unit/pouw-h1-tile", "lane": "unit/pouw-h1-lane", "combine": "unit/pouw-h1-combine"}
 
 
 def peak_gib() -> float:
@@ -51,6 +60,64 @@ def _h1unit(form: str):
             sys.path.insert(0, str(p))
     import h1unit
     return h1unit
+
+
+def refusal(unit: str, k: int, r: int, c: int) -> str | None:
+    """Why the R × C leaf at K has no ``unit`` statement, decided before anything is lowered; None when it has one."""
+    from verity.core.protocols.pouw import weights as W
+    from verity.core.protocols.pouw.circuit import h1zy as Z
+    if unit not in UNITS:
+        return f"a leaf's statement is one of {', '.join(UNITS)}, not {unit!r}"
+    if r <= 0 or c <= 0 or r % 4 or c % 8 or k < 64 or k % 32:
+        return (f"the H1 tile is whole lanes of 4 rows and 8 columns at 32 | K >= 64 (`h1tile._Unit`), not {r} × {c} at "
+                f"K = {k}")
+    if unit == "tile":
+        return None
+    if r % 16:
+        return (f"R = {r}: a lane reads the leaf's R admit bits as one row of whole 16-bit words (`h1zy._leaf`), so lanes "
+                f"need 16 | R; prove the {r} × {c} leaf in the whole-tile form (--unit tile)")
+    if W.chunks(k) > 1:
+        return (f"K = {k}: its rows are {W.chunks(k)} chunk leaves (`weights.chunks`), whose lanes are chunk lanes over "
+                f"J10-R's tile (`h1window.leaf_unit`), not `h1zy.lane`'s")
+    if unit == "combine" and k < Z.LEAST_K:
+        return f"K = {k}: a combine needs K >= {Z.LEAST_K} (`h1zy.combine`: a row that compresses before its last block)"
+    return None
+
+
+def leaf_statement(U, unit: str, k: int, r: int, c: int) -> tuple:
+    """``unit``'s Definition (`h1zy.lane` or `h1zy.combine` over the leaf's tile, as `h1window.leaf_unit` derives it at a
+    K of whole lanes) and its input rows, as `h1_lanes`' ``stager`` stages them."""
+    from verity.core.protocols.pouw import leaf_lanes as LL
+    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    t = HW.h1_tile(k, (r, c), H.PouwH1Tile3 if U.tile() == "v3" else None)
+    wp = 2 * LL.words(k)
+    if unit == "lane":
+        ab = 16 * (k // 2 + 2)
+        rows = ([(f"a{s}", V2, ab, [f"a[{s}]"]) for s in range(LL.LANE_ROWS)]
+                + [(f"b{s}", V2, ab, [f"b[{s}]"]) for s in range(LL.LANE_COLS)]
+                + [(LL.ADMIT, V2, r, [LL.ADMIT]), (LL.ZY, V2, 48 * r * c, [LL.ZY]), (LL.PARTIALS, V2, 16 * wp, [LL.PARTIALS]),
+                   ("pub", V2, U.PUB_BITS + 16, list(LL.PUBLIC))])
+        return Z.lane(t), rows
+    rows = ([(f"p{x}", V2, 16 * wp, [f"{LL.PARTIALS}[{x}]"]) for x in range(LL.lanes(r, c))]
+            + [(LL.RECEIPT, V2, 16 * wp, [LL.RECEIPT])])
+    return Z.combine(t), rows
+
+
+def stage(U, unit: str, k: int, r: int, c: int, path: Path) -> None:
+    """``unit``'s statement file at `path`, bound to `BIND`, staged as its benchmark stages it."""
+    if unit == "tile":
+        from tests.protocols import pouw_h1_circuits as PC
+        PC._lower(k, r, c, BIND, path)
+        return
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    if os.environ.get("HZ_STAGE", "fast") == "fast":
+        import fast_stage
+        fast_stage.install(path.parent / f".scratch-k{k}")
+    d, rows = leaf_statement(U, unit, k, r, c)
+    U.stager(d, NAMES[unit], rows, [(V2, (0,))], U.layout(), circuit=path, bind=BIND)
 
 
 def _counts(low) -> dict:
@@ -80,18 +147,30 @@ def _file(path: Path) -> dict:
     return {"head": head, "meta_bytes": newlines[1] - newlines[0] - 1, "sha512": h.hexdigest()}
 
 
+def _done(args, rec: dict) -> int:
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(rec, indent=1))
+    print("LOWER " + json.dumps({k: rec.get(k) for k in ("k", "r", "c", "unit", "form", "lowering", "ands", "k_log",
+                                                         "bytes", "seconds", "peak_gib", "refused")}), flush=True)
+    return 0
+
+
 def lower(args) -> int:
     U = _h1unit(args.form)
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
-    from tests.protocols import pouw_h1_circuits as PC
 
-    rec = {"k": args.k, "r": args.r, "c": args.c, "form": args.form, "staging": os.environ.get("HZ_STAGE", "fast"),
-           "layout": U.layout(), "bind": BIND}
+    rec = {"k": args.k, "r": args.r, "c": args.c, "tile": [args.r, args.c], "unit": args.unit, "form": args.form,
+           "staging": os.environ.get("HZ_STAGE", "fast"), "layout": U.layout(), "bind": BIND}
+    if why := refusal(args.unit, args.k, args.r, args.c):
+        return _done(args, rec | {"written": False, "refused": why, "seconds": 0.0, "peak_gib": peak_gib()})
     got: dict = {}
     library, meta_of = CS.unit_lowering, FC.meta_of
 
     def captured(*a, **k):
+        if args.form == "structural" and not (a[4] if len(a) > 4 else k.get("structural")):
+            raise SystemExit(f"{args.unit} at K = {args.k}, {args.r} × {args.c}: struct_lower refused it, and h1unit.stager "
+                             "fell back to the flat lowering, which is not the structural form")
         t = time.time()
         low, out_words = library(*a, **k)
         got.update(low=low, lower_s=round(time.time() - t, 2), lower_peak_gib=peak_gib())
@@ -108,10 +187,12 @@ def lower(args) -> int:
     path = Path(args.path) if args.path else Path(scratch.name) / f"k{args.k}.circuit.txt"
     t0 = time.time()
     try:
-        PC._lower(args.k, args.r, args.c, BIND, path)
+        stage(U, args.unit, args.k, args.r, args.c, path)
         rec["written"] = True
     except ValueError as e:
         rec |= {"written": False, "refused": str(e)}
+        if m := re.search(r"needs a block of 2\^(\d+) bits", str(e)):
+            rec["k_log"] = int(m.group(1))
     rec |= {"seconds": round(time.time() - t0, 2), "peak_gib": peak_gib()}
     if "low" in got:
         low = got.pop("low")
@@ -123,11 +204,7 @@ def lower(args) -> int:
         rec["templated"] = rec["head"].startswith("flock-circuit/tmpl ")
     if scratch is not None:
         scratch.cleanup()
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(rec, indent=1))
-    print("LOWER " + json.dumps({k: rec.get(k) for k in ("k", "r", "c", "form", "lowering", "ands", "k_log", "bytes",
-                                                         "seconds", "peak_gib", "refused")}), flush=True)
-    return 0
+    return _done(args, rec)
 
 
 def _leaf(U, k: int, r: int, c: int, rng) -> tuple:
@@ -185,8 +262,10 @@ def _reference(U, shape, rows: dict, i: int, pub: tuple) -> tuple[np.ndarray, in
 
 def agree(args) -> int:
     U = _h1unit("structural")
+    if why := refusal("tile", args.k, args.r, args.c):
+        raise SystemExit(why)
     shape = U.Shape(args.k, args.r, args.c)
-    name = "unit/pouw-h1-tile"
+    name = NAMES["tile"]
     rec = {"k": args.k, "r": args.r, "c": args.c, "layout": U.layout()}
     t = time.time()
     flat = shape.stager(name, flat=True)
@@ -243,9 +322,10 @@ def sweep(args) -> int:
     (out / "logs").mkdir(parents=True, exist_ok=True)
 
     def one(shape):
-        k, r, c = shape
-        tag = f"{args.form}-k{k}-{r}x{c}"
-        cmd = [sys.executable, __file__, "lower", str(k), str(r), str(c), str(out / f"{tag}.json"), "--form", args.form]
+        k, r, c, unit = shape
+        tag = f"{args.form}-{unit}-k{k}-{r}x{c}"
+        cmd = [sys.executable, __file__, "lower", str(k), str(r), str(c), str(out / f"{tag}.json"), "--form", args.form,
+               "--unit", unit]
         t0 = time.time()
         with open(out / "logs" / f"{tag}.log", "w") as log:
             p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
@@ -263,8 +343,15 @@ def sweep(args) -> int:
     return 0 if all(r["rc"] == 0 for r in recs) else 1
 
 
-def shapes(s: str) -> list[tuple[int, int, int]]:
-    return [tuple(int(v) for v in x.split(":")) for x in s.split(",") if x]
+def shapes(s: str) -> list[tuple[int, int, int, str]]:
+    out = []
+    for x in s.split(","):
+        if x:
+            k, r, c, *unit = x.split(":")
+            if unit and unit[0] not in UNITS:
+                raise argparse.ArgumentTypeError(f"{x}: the unit is one of {', '.join(UNITS)}")
+            out.append((int(k), int(r), int(c), unit[0] if unit else "tile"))
+    return out
 
 
 def main() -> None:
@@ -276,6 +363,7 @@ def main() -> None:
             p.add_argument(v, type=int)
         p.add_argument("out")
         if nm == "lower":
+            p.add_argument("--unit", choices=UNITS, default="tile")
             p.add_argument("--form", choices=("structural", "flat"), default="structural")
             p.add_argument("--path")
         else:
