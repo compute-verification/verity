@@ -76,7 +76,6 @@ import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.ExecDelta
 import Proofs.Flock.Soundness.ExecPlacement
 import Proofs.Flock.Soundness.ExecParse
-import Proofs.Flock.Soundness.ExecRowsAt
 import Proofs.Flock.Soundness.TmplFoldRef
 import Proofs.Flock.Soundness.TmplFoldPos
 import Proofs.Flock.Soundness.TmplFoldLayout
@@ -84,17 +83,12 @@ import Proofs.Flock.Soundness.TmplSplitEq
 import Proofs.Flock.Soundness.TmplUnit
 import Proofs.Flock.Soundness.TmplShare
 import Proofs.Flock.Soundness.TmplUnrollAt
-import Proofs.Flock.Soundness.TmplScope
-import Proofs.Flock.Soundness.TmplValue
-import Proofs.Flock.Soundness.TmplValueUnit
-import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplComputes
 import Proofs.Flock.Soundness.TmplReads
 import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecLookup
 import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.TmplNetOK
 import Proofs.Flock.Soundness.ExecTyped
 import Proofs.Flock.Soundness.ExecTemplate
 import Proofs.Flock.Soundness.ExecTemplatePlace
@@ -190,7 +184,6 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec
 import Proofs.Flock.Soundness.Discharge.HiddenDec
 import Proofs.Flock.Soundness.Discharge.HdecCor
 import Proofs.Flock.Soundness.Discharge.Hidden
-import Proofs.Flock.Soundness.Discharge.Pinned
 import Proofs.Flock.Soundness.Discharge.ZkCoins
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 import Proofs.Flock.Soundness.Discharge.ZkHidden

@@ -12,7 +12,9 @@ import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape

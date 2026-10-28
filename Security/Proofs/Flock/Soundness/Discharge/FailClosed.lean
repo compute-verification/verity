@@ -7,7 +7,6 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 import Proofs.Flock.Soundness.Discharge.FailClosed.General
 import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
 import Proofs.Flock.Soundness.Discharge.FailClosed.One
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegisteredTags
 import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
 import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
