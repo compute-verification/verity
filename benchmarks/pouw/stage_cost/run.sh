@@ -3,7 +3,7 @@
 # gate, then prefill at each PREFILL chunk, the deferred pass alone at each DEFERRED_T, and beside the decode step at each
 # BESIDE_T. Nothing is timed unless the gate passes. Clocks are read, never set. Results in $OUT/*.jsonl.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=STAGE-COST \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/stage_cost/run.sh
 # env: PREFILL (2048 8192), GATE_ROWS (50 100 300 512 1001 2500: row counts the gate checks besides PREFILL's, small and
 # ragged trees; never timed), DEFERRED_T, BESIDE_T (1024 4096 16384 32768), DEC_B, DEC_L (32 4096), FILL_SMS (92), DRAW_US

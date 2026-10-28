@@ -46,11 +46,11 @@ def _s8(shape, seed: int) -> torch.Tensor:
     return torch.randint(-128, 128, shape, generator=torch.Generator().manual_seed(seed), dtype=torch.int8)
 
 
-def _window(steps: dict[int, int]) -> "PT.Window":
+def _window(steps: dict[int, int]) -> "PT.Calls":
     """Two calls; steps {s: m}, each its own A and coin index s."""
     units = [(T // 32) * (n // 32) for n, _ in NK]
     offs = [sum(units[:w]) for w in range(len(NK))]
-    win = PT.Window([_s8((n, k), 10 + w) for w, (n, k) in enumerate(NK)], [bytes([w + 1]) * 64 for w in range(len(NK))],
+    win = PT.Calls([_s8((n, k), 10 + w) for w, (n, k) in enumerate(NK)], [bytes([w + 1]) * 64 for w in range(len(NK))],
                     offs, sum(units))
     for s, m in steps.items():
         a = [_s8((T, k), 100 * s + w) for w, (_, k) in enumerate(NK)]
@@ -202,7 +202,7 @@ def test_gpu_is_the_cpu_byte_for_byte():
     dev = torch.device("cuda")
     nk = [(96, 512), (64, 1024), (32, 4608)]  # m = 2, 2, 3: both of kh_lanes' instantiations
     units = [(T // 32) * (n // 32) for n, _ in nk]
-    win = PT.Window([_s8((n, k), 20 + w).to(dev) for w, (n, k) in enumerate(nk)],
+    win = PT.Calls([_s8((n, k), 20 + w).to(dev) for w, (n, k) in enumerate(nk)],
                     [bytes([w + 1]) * 64 for w in range(len(nk))], [sum(units[:w]) for w in range(len(nk))],
                     (1 << 40) + sum(units))
     for s, m in ((3, 40), (4, 20)):

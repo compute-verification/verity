@@ -1,10 +1,9 @@
-// Deep overlap of per-stage live coins in prefill on one RTX PRO 6000 (sm_120), Llama-3.1-8B, int8 (STAGE-OVL, cmp-13;
-// note:20261016T1037Z-draft-stage-ovl). k independent chunks (different sequences of M tokens) in flight, each through its
-// own chain over 32 layers x 6 stages: commit the stage's operands (stage.cu's fast path of the hm96-sha512 row-seg
-// frame-v3-sha512 tree, which stage.cu's gate holds byte-identical to verity.ml.commitments), wait DRAW_US for the draw,
-// then the stage's int8 GEMM. Draw t = (stage s, chunk c) is numbered s * k + c, so T_{t-k} is the same chunk's previous
-// stage and RS-D1E r2's release rule (iv_k) holds by each chunk's own order. stage.cu (with dcap.cu and hm96_rows.cu) is
-// included unchanged, in namespace sc.
+// Deep overlap of per-stage live coins in prefill on one RTX PRO 6000 (sm_120), Llama-3.1-8B, int8. k independent
+// chunks (different sequences of M tokens) in flight, each through its own chain over 32 layers x 6 stages: commit the
+// stage's operands (stage.cu's fast path of the hm96-sha512 row-seg frame-v3-sha512 tree, which stage.cu's gate holds
+// byte-identical to verity.ml.commitments), wait DRAW_US for the draw, then the stage's int8 GEMM. Draw t = (stage s,
+// chunk c) is numbered s * k + c, so T_{t-k} is the same chunk's previous stage and RS-D1E r2's release rule (iv_k)
+// holds by each chunk's own order. stage.cu (with dcap.cu and hm96_rows.cu) is included unchanged, in namespace sc.
 //
 // Modes (one JSON line each; clocks are read, never set):
 //   gate DIR M...           stage.cu's gate: every commitment file committed into 0xA5-poisoned buffers by both paths equals
@@ -38,7 +37,7 @@
 //   litec, litecprio, litecrrW, liteconly: the same, the stand-in chained as the tree is (a thread a segment, a thread a
 //             row, each CTA's 128-leaf levels, one CTA for the levels above: ~40 dependent compressions a stage at 2K)
 //   cg, cgeq, cgrrW, cgonly: hhi, eq, rrW and hashonly with each commitment commit_gpu's small path (benchmarks/pouw/commit_gpu: CTAs of 128
-//             threads, no shared memory) over the stage's operand as tile leaves of CG_R rows x 32 values (Decision 46),
+//             threads, no shared memory) over the stage's operand as tile leaves of CG_R rows x 32 values,
 //             sha512/row/v2 rows, hm96-sha512 leaves with derived salts in a frame-v3-sha512 tree of the stage's own domain
 //             (the CGP1 files DIR/cg-M-R-t.bin); layer 0's salts with the frame-leaf first blocks and pads at the chunk's
 //             start, layer l+1's salts for stage t on the chunk's salt stream after layer l's commitment of stage t.
