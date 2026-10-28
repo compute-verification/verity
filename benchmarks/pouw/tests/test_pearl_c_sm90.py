@@ -1,10 +1,10 @@
-"""Pearl-C's sm_90a tree off the card (benchmarks/pouw/pearl_c_sm90): the GEMMs within the H100's 227 KB with their tiles the
-runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check fixture against
-the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda (#449's, with
-pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID and shared-memory limit), every
-launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm90.cu states it, and each GEMM's operands
-against the tensor maps encoded for them at its tile's boxes.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real
-sm_90a build passes the gate."""
+"""Pearl-C's sm_90a tree off the card (benchmarks/pouw/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
+tiles the runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check
+fixture against the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda
+(pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
+and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm90.cu
+states it, and each GEMM's operands against the tensor maps encoded for them at its tile's boxes.  With VERITY_POUW_NVCC
+naming a CUDA >= 12.8 toolkit, the real sm_90a build passes the gate."""
 
 from __future__ import annotations
 

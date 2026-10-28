@@ -1,4 +1,4 @@
-"""pfill's PF_ROUNDS cost dial (note:20261017T0320Z-draft-eps1-fold): the NC 4 absorb folds each committed word
+"""pfill's PF_ROUNDS cost dial: the NC 4 absorb folds each committed word
 PF_ROUNDS times. The default (and -DPF_ROUNDS=1) take the single-absorb path, byte-identical to the fold of record;
 -DPF_ROUNDS=R>1 re-folds the same word R times (a serial u32 chain the GPU measures the cost of a round), which moves the
 receipt but leaves the GPU and the host dfill_ref bit-exact. Here, on pfill.cuh's host tile built with g++: the default
@@ -22,7 +22,7 @@ sys.modules[_spec.name] = R
 _spec.loader.exec_module(R)
 
 C0, C1 = 0x0123456789ABCDEF, 0xFEDCBA9876543210
-#: the NC 4 folds the dial wraps: ram (no flag), and P2-FF r9's LI and XIN13 (each its build flag)
+#: the NC 4 folds the dial wraps: ram (no flag), and the r9 LI and XIN13 (each its build flag)
 FOLD_FLAG = {"ram": [], "li": ["-DPFILL_LI"], "xin13": ["-DPFILL_XIN13"]}
 CASES = [(0, 4), (1000003, 13), ((1 << 62) | 99, 8)]  # (tile, steps)
 

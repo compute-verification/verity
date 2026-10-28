@@ -2,14 +2,14 @@
 
     python eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]
 
-eps_budget.py prices a peel design's skippable work with BC-KERNEL r2's and D2S-KERNEL r3's exact ncu counts on sm_120:
-APV_TAIL (apv_l7qs's tail stage, warp instructions a 128-cell tile by class: IMMA 4, IMAD 4.0, the rest 11.5, which ncu
-read as apv_l7qs − apv_cc), c_apv_serve (the served f over a plain epilogue, 4.4 a tile) and c_vfold (vfold − vfold_x,
-0.6884 / 0.7265 / 0.7221 warp instructions an entry at 2K / 8K / 32K). Off sm_120 it reads the same numbers. This counts
-the same differences from each architecture's SASS (eps_counts.sh's `nvdisasm -c -gi` dumps): every instruction a
-converged warp can reach (`reach`: `BRA.DIV`'s out-of-line paths never run) is placed by the source lines its inline
-chain passes through, and each region is weighted by how often a warp runs it at the shape ncu measured (Llama-3.1-8B,
-32 query and 8 KV heads):
+eps_budget.py prices a peel design's skippable work with the checked kernels' and the D2S kernels' exact ncu counts on
+sm_120: APV_TAIL (apv_l7qs's tail stage, warp instructions a 128-cell tile by class: IMMA 4, IMAD 4.0, the rest 11.5,
+which ncu read as apv_l7qs − apv_cc), c_apv_serve (the served f over a plain epilogue, 4.4 a tile) and c_vfold (vfold −
+vfold_x, 0.6884 / 0.7265 / 0.7221 warp instructions an entry at 2K / 8K / 32K). Off sm_120 it reads the same numbers.
+This counts the same differences from each architecture's SASS (eps_counts.sh's `nvdisasm -c -gi` dumps): every
+instruction a converged warp can reach (`reach`: `BRA.DIV`'s out-of-line paths never run) is placed by the source lines
+its inline chain passes through, and each region is weighted by how often a warp runs it at the shape ncu measured
+(Llama-3.1-8B, 32 query and 8 KV heads):
 
 - the tail: apv_l7qs's instructions inlined at apv_body's atail call, less apv_cc's at the `cabs_all` it runs instead
   (the fold both kernels do, which ncu's difference cancels), once a warp-tile (8 tiles of 128 cells), without atail's
@@ -33,7 +33,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-#: eps_budget.py's sm_120 values (BC-KERNEL r2 runs r20261017-090559-fd46 / -092503-35ff; D2S-KERNEL r3 -113844-b913)
+#: eps_budget.py's sm_120 values, from the checked kernels' and the D2S kernels' runs
 RECORDED = {"tail": {"IMMA": 4.0, "IMAD": 4.0, "ALU": 11.5}, "serve": 4.4,
             "vfold": {2048: 0.6884, 8192: 0.7265, 32768: 0.7221}}
 SHAPES = (2048, 8192, 32768)
@@ -145,9 +145,10 @@ def line(lines: list[str], pattern: str) -> tuple[int, int]:
 
 
 def regions(src: str) -> dict[str, tuple[int, int]]:
-    """apv.cu's line ranges the counts read; `y2s` and the vfold ones only where the tree has them (BC-KERNEL r3 and
-    D2S-KERNEL r3 added them). An empty range matches nothing. `tail_call` is apv_body's call of atail (OUT 0, 1) and
-    `cc_fold` the `cabs_all` apv_cc runs in its place (OUT 3): every instruction inlined there has the line in its chain."""
+    """apv.cu's line ranges the counts read; `y2s` and the vfold ones only where the tree has them (the checked kernels
+    and the D2S kernels added them). An empty range matches nothing. `tail_call` is apv_body's call of atail (OUT 0, 1)
+    and `cc_fold` the `cabs_all` apv_cc runs in its place (OUT 3): every instruction inlined there has the line in its
+    chain."""
     ln = src.splitlines()
     none = (0, -1)
     atail = block(ln, r"DEV void atail\(")

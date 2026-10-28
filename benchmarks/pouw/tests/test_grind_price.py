@@ -1,5 +1,5 @@
 """grind_price: the template's θ meets `TileLuck`'s condition and is tight, κ must exceed the live rate, the premium is
-ln(T/δ)/θ, H1's per-head floor is ATTN-NOISE's, and the shapes are eps_budget's."""
+ln(T/δ)/θ, H1's per-head floor is attn_noise's, and the shapes are eps_budget's."""
 
 from __future__ import annotations
 
