@@ -48,7 +48,7 @@ served values need no noise: its receipt is the constant 0 and its rows, which a
 give z = A Bᵀ = 0; its credit, the tally of its admit bits, is 0.
 
 **The J10-R units**, `PouwH1Tile_v5` (v1's z) and `PouwH1Tile_v6` (v3's one stream), are v1 and v3 under J10-R's noise
-(note:compute-accounting/20261019T0845Z-draft-rt-algo-r3, RT-ALGO-11 and -16; `seeds`' docstring), with two more public
+(`seeds`' docstring), with two more public
 inputs: ``call``, the position of its call's first unit, and ``blocks``, the first block of its call row R I and of its call
 column C J in the call-scale `Layout(M, N, K)` (`j10r_blocks`). Its noise is seed_c's (`seeds.call_seed` of the salt,
 ``call`` and the roots), row i from block ``blocks[0] + i RB`` and column j from ``blocks[1] + j CB``: the call-scale

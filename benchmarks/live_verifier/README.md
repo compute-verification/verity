@@ -1,6 +1,6 @@
 # The verifier's auditor host
 
-`host.py` is vy-auditor-1's verifier service (INF-179): the remote bandwidth audit's verifier
+`host.py` is vy-auditor-1's verifier service: the verifier of proof of useful bandwidth (PoUB)
 (`benchmarks/remote_session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
 gate `vy-verifier-gate` that every key of the host's `research` is forced to. Its docstring is the reference: who reaches
 the gate, what runs, a run, a bound run, a replay and the store. The host's deployed files are
@@ -12,7 +12,7 @@ the gate, what runs, a run, a bound run, a replay and the store. The host's depl
 ~~~text
 vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
                      | --sessions N [--windows W] [--window-ms MS] [--samples S])
-                     [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] [--verdict lean|both]
+                     [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L]
                      [--model ROLE [--engines E] --arena-blocks A]
 ~~~
 

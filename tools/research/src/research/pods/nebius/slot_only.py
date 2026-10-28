@@ -76,9 +76,13 @@ def through_slot(command: object) -> bool:
     return command.index("--", 2) < len(command) - 1
 
 
-def refusal(machine_marker: Path = MARKER) -> str:
-    return (f"this machine takes a `research run` only through its check slots ({machine_marker}): send it as "
-            f"`python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) -> str:
+    """Why the launcher refuses a run outside slot.py here, naming the `research run --pool` pools this machine has (27 Oct: lanes
+    sent `verity lean try --on vy-nebius-1` without `--pool`, and one wrapped slot.py by hand)."""
+    have = sorted(p for p, f in (POOLS if pools is None else pools).items() if Path(f).is_file())
+    send = (f"add `--pool {'|'.join(have)}` to `research run` or `verity lean try`, which sends CMD through that pool's slots"
+            if have else "send it as `python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+    return f"this machine takes a `research run` only through its check slots ({machine_marker}): {send}"
 
 
 def auditor_commands(marker: Path = AUDITOR) -> list[list[str]]:

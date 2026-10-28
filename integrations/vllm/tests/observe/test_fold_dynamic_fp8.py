@@ -1,5 +1,5 @@
 """`fp8.DynamicDeepGemmFp8Linear`: vLLM's default Hopper block-FP8 linear op, folded to the Definitions the Build's
-`DynamicDeepGemmFp8LinearRule` emits (VLLM-14).
+`DynamicDeepGemmFp8LinearRule` emits.
 
 * below 32 rows: `FlashInferFp8Linear_v1{K,N}`, its one output the op's;
 * from 32 rows: `DeepGemmFp8Linear_v1{K,N}`, (q, s, y) with only y in memory, so q and s are never written;
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Unsupported, spec_label

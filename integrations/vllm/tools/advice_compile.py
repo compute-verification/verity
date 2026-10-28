@@ -6,7 +6,8 @@ sampling parameters, which advice v0 doesn't carry: they come with the request's
 `main`), `requests.jsonl` (engine id to `user`) and `run.json` (the
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
 model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it), on
-that target at that execution, without workload.  Writes, under `--out`:
+that target at that execution, without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose
+server says it filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
 
     compiled.json     `Compiled.summary()`: the compiler digest, each request's Program digest and shape, each step's row refs
     traces/           one `verity-vllm build --wrapper request` per distinct request Program (`steps.trace_commands`)
@@ -22,7 +23,7 @@ execution and default seed from `serve.json`.  A window's advice is `window_advi
 one before it runs on at its carried state, and `carry_of` holds that state to the endpoint's records, the advice of the last
 window before K that ran steps (`windows.jsonl`), whose close K must open on (`window_advice.follows`); K is refused (exit 2) when
 it doesn't, or when it carries a request in and that advice isn't there.  The Build dirs go into `--out` itself (default the
-window's row dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
+window's workload dir, `windows/w<K>/`, beside its sealed `commit/`), as `build_request_*/`, with `manifest.json`: each request's
 Program digest and Build dir, the registration the advice is bound to, and the carry.
 
     cd integrations/vllm; PYTHONPATH=.:../.. /workspace/jobs/venv312/bin/python tools/advice_compile.py RUN --out DIR [--partial]
@@ -59,6 +60,18 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     meta = {"model": serve["model"], "revision": serve["revision"], "target": serve["target"], "execution": serve.get("execution"),
             "default_seed": serve.get("default_seed")}
     return adv / "private" / "advice.bin", meta, bodies, reg
+
+
+def registered_seed(meta: dict) -> int:
+    """The default seed the registration fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when the run's server says it
+    filled in another (or says none), since a request that sent no seed would be compiled under a seed its draw didn't use."""
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    seed = meta.get("default_seed")
+    if type(seed) is not int or seed != DEFAULT_SEED:
+        raise ValueError(f"the run's server filled in default seed {seed!r}, and the registered one is "
+                         f"engine.served_seed.DEFAULT_SEED ({DEFAULT_SEED}): serve it under that rule")
+    return DEFAULT_SEED
 
 
 def carry_of(run: Path, window: int, data: bytes) -> dict:
@@ -146,7 +159,13 @@ def main() -> int:
     phi = Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config}, target=dict(meta["target"]),
               execution=meta.get("execution") or "eager")
     cap = int(((reg_doc or {}).get("compiler") or {}).get("cap_bits") or CAP_BITS)
-    reg = Registered.of(phi, default_seed=int(meta.get("default_seed") or 0), cap_bits=cap)
+    try:
+        seed = registered_seed(meta)
+    except ValueError as e:
+        (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        print(f"[advice-compile] the run's default seed is refused: {e}", flush=True)
+        return 2
+    reg = Registered.of(phi, default_seed=seed, cap_bits=cap)
     try:
         compiled = compile_steps(reg, data, ingress, partial=a.partial)
     except Unexpressible as e:

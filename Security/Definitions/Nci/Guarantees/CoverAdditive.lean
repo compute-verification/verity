@@ -3,7 +3,7 @@ import Definitions.Nci.Assumptions.CoverAdditive
 /-!
 # The additive covering bound
 
-Daniel's covering bound at two costs (`Nci.Guarantees.CoveringBoundTwoCosts`) with the weights' bits paid outside the
+The covering bound at two costs (`Nci.Guarantees.CoveringBoundTwoCosts`) with the weights' bits paid outside the
 token computations (`Assumptions.ConditionalParameterHardAt`): a block's two charges, `c_w` per completed weight and
 `c_a` per token, then come from disjoint inputs and add up to at most `k`, so AM–GM bounds its completed multiplications
 by a quarter of `(k / c_w)(k / c_a)`. Activation-chaining at cost `c_a` charges a block `c_a` inputs per token: an

@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Types.Parts
 /-!
 # A typed template's unit, placed (1e for templates, T3)
 
-A template statement (#277) places its unit `u = done[unit]` by parts: the root net (`Typed.rootOf u`, the unit's own
+A template statement places its unit `u = done[unit]` by parts: the root net (`Typed.rootOf u`, the unit's own
 rows without their part columns) one slot per template instance, each placed layout's net one slot per part, and Δ
 (`delta_typed`): the flat entries, then per template instance each input's copy of its message bit, each part's bound
 inputs, and the root rows' entries at part columns (`crossOf`). Unit column `x` of template instance `g` is at
@@ -16,7 +16,7 @@ inputs, and the root rows' entries at part columns (`crossOf`). Unit column `x` 
   read's lookup from the table the verifier holds.
 - **`UnitShape done u`**: the facts about the unit's rows this reads: its constant row, its order within its own and its
   parts' columns, no Δ entry at an input, and a part's reads its callee's (`deriveChecked` gives each).
-- **`TemplateLayout.blockFacts`**: with those, and #394's part lemmas from `deriveChecked … = .ok done`, the block rows
+- **`TemplateLayout.blockFacts`**: with those, and the part lemmas from `deriveChecked … = .ok done`, the block rows
   at `col g c` are the unit's `blockRow` there, for every template instance `g`: `BlockFacts` at `Typed.col c tb g`,
   which is a table class's `placed g` (`BlockFacts.placement`).
 -/
@@ -561,7 +561,7 @@ structure TemplateLayout (st : Stmt) (tb : TypedBlock) (words : String → Optio
   kLog6 : 6 ≤ st.c.kLog
   m : st.m = st.c.kLog + st.nbl
 
-/-- **The unit's rows, as T3 reads them**, beyond #394's part lemmas: its constant is an own column whose row is
+/-- **The unit's rows, as T3 reads them**, beyond the part lemmas: its constant is an own column whose row is
 `[const]·[const]`; its order lists own and part columns only; no Δ entry sits at one of its inputs; a part's rows are
 covered by its callee's reads, shifted; and a covered callee row is `a · []`, its read's low minterms callee rows. -/
 structure UnitShape (done : Array D) (u : D) : Prop where
@@ -953,7 +953,7 @@ theorem blockRow_own (T : TemplateLayout st tb words done 𝒖) {c : ℕ} (hc : 
   rw [hf, hnc]
 
 /-- **A part's other row is its callee's row as the verifier folds it**, shifted to the part's base: the part's reads are
-its callee's (`UnitShape.part_reads`, and #394's `readSide_shift`). -/
+its callee's (`UnitShape.part_reads`, and `readSide_shift`). -/
 theorem blockRow_part (U : UnitShape done 𝒖) {p : ℕ × ℕ} (hp : p ∈ 𝒖.parts) {c : ℕ}
     (hc : c < (done.getD p.1 default).size) (hf : 𝒖.delta.find? (·.1 == p.2 + c) = none)
     (hrow : 𝒖.rows[p.2 + c]? = some (shiftRow p.2 ((done.getD p.1 default).rows.getD c ([], [])))) (one' : ℕ) :
@@ -1363,8 +1363,8 @@ theorem blockFacts (hd : deriveChecked types ls info words unit = .ok done) (hul
   · show rangesEntry st (slotEntryB st) st.pin j.val + deltaEntry st.db st.pin j.val = _
     rw [(T.placed_pin hd hul U j.val).2, if_congr (hpinv j) rfl rfl]
 
-/-- **A template statement's placement at template instance `g`**: the unit's composed rows, exactly as #256 and #287
-state them, placed at `Typed.col c tb g` in the model of the accepted statement. This is a table class's `placed g`. -/
+/-- **A template statement's placement at template instance `g`**: the unit's composed rows, placed
+at `Typed.col c tb g` in the model of the accepted statement. This is a table class's `placed g`. -/
 theorem placement (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     {g : ℕ} (hg : g < st.c.g) :

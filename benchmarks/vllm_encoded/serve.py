@@ -6,13 +6,13 @@ Arms:
   plain     every linear through `ve.cu`'s fused GEMM over plain FP8 fragments (k = 0): the native kernel of this harness
   enc       every linear through the fused GEMM over codec words only (k rounds of Sloth at p = 2^61 - 1); the plaintext
             weight is freed before vLLM profiles memory, so decode runs with no plaintext copy of any linear in HBM
-  wide      the same with ra-codec-wide's fused GEMM (`wide.cu`, ``--wide-lib``: Sloth over p = 2^127 - 1, 2^255 - 19,
+  wide      the same with the wide codec's fused GEMM (`wide.cu`, ``--wide-lib``: Sloth over p = 2^127 - 1, 2^255 - 19,
             2^521 - 1, 2^256 - 189 or 2^512 - 569, k rounds, k = 0 its plain payloads), with ``--tag`` also tagging every
             block of words it reads (ro-blake3/v1, the bandwidth audit's tag) as decode runs, or with ``--sketch 16``
             sketching the encoded words its CTAs hold and hashing the sketches (ro-sketch-blake3/v0, `wide_sketch`), and
             with ``--commit`` also committing each decode step as it goes: each linear's tags in one slot of a two-slot
             ring that L2 holds, their leaves hashed (and folded) beside the next linear's GEMM, the tree after the last
-  tensor    the same with ra-codec-tensor's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
+  tensor    the same with the tensor-core codec's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
             decoding in shared memory ahead of one MMA warp, k >= 1 rounds), with ``--tag`` its tag warps tagging the
             store's 4,088-byte blocks (ro-blake3/v1) as decode runs, or with ``--sketch K_S`` (k = 1) its decoder warps
             sketching the stored words they decode on the tensor cores and its MMA warp tagging the sketches
@@ -873,7 +873,7 @@ def main() -> None:
         ap.error("--no-autotune is a compiled mode")
 
     import vllm
-    from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
+    from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
@@ -925,7 +925,7 @@ def main() -> None:
     llm = LLM(**kw)
     startup_s = time.perf_counter() - t0
     log(f"engine up in {startup_s:.1f} s")
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     model = unwrap(runner.model)
     hf = llm.llm_engine.vllm_config.model_config.hf_config
     cache = llm.llm_engine.vllm_config.cache_config
@@ -934,7 +934,7 @@ def main() -> None:
                    if getattr(m, "attn_backend", None) is not None})
     rec: list = []
     window = Window(args.profile_steps)
-    recorder(hooks, get_scheduler(llm), rec, window)
+    recorder(hooks, handle.scheduler(llm), rec, window)
 
     props = torch.cuda.get_device_properties(0)
     result = {

@@ -25,9 +25,15 @@ from verity_vllm import llm as L
 LLAMA = ("unsloth/Llama-3.2-1B", "9535bd9b1d1dea6acafbdc4813b728796aeb28da")
 
 
-def test_the_package_exports_llm():
-    assert verity_vllm.LLM is L.LLM
-    assert "LLM" in verity_vllm.__all__
+def test_the_package_exports_llm_and_what_it_is_built_from():
+    from verity_vllm.engine import spec
+    from verity_vllm.program.frontend import target_profile
+
+    assert verity_vllm.__all__ == ["EnginePin", "EngineSpec", "LLM", "TargetProfile"]
+    assert verity_vllm.LLM is L.LLM and verity_vllm.EnginePin is EnginePin
+    assert verity_vllm.EngineSpec is spec.EngineSpec and verity_vllm.TargetProfile is target_profile.TargetProfile
+    with pytest.raises(AttributeError, match="no attribute 'Engine'"):
+        _ = verity_vllm.Engine
 
 
 @pytest.mark.parametrize("opt", ["tokenizer", "speculative_config"])
@@ -173,7 +179,7 @@ def test_without_protocols_nothing_is_installed(built):
 
 def test_a_refused_set_raises_before_the_engine_is_built(built):
     with pytest.raises(ValueError, match="sampled proofs runs in the Commit stage"):
-        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="sampled-proofs:vllm-v1")
+        L.LLM(LLAMA[0], revision=LLAMA[1], protocols="sampled-proofs:rows-sha512")
     with pytest.raises(ValueError, match="unknown protocol"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols={"zk": "v1"})
     assert built == {}
@@ -185,11 +191,11 @@ def test_a_refused_set_raises_before_the_engine_is_built(built):
     ("compilation_config", {"mode": 0}),
 ])
 def test_a_build_dependent_option_refuses_kernel_profile_overrides_before_build(built, option, value):
-    with pytest.raises(ValueError, match=rf"sampled-proofs:vllm-v1: engine overrides {option} .* no longer match its Build"):
+    with pytest.raises(ValueError, match=rf"sampled-proofs:rows-sha512: engine overrides {option} .* no longer match its Build"):
         L.LLM(
             LLAMA[0],
             revision=LLAMA[1],
-            protocols="sampled-proofs:vllm-v1",
+            protocols="sampled-proofs:rows-sha512",
             **{option: value},
         )
     assert built == {}

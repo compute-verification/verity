@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# Lane B200-FP8's job on the B200 (sm_100a): tcgen05.mma kind::f8f6f4 and kind::mxf8f6f4 captured and scored (f8_sm100.py).
+# The job on the B200 (sm_100a): tcgen05.mma kind::f8f6f4 and kind::mxf8f6f4 captured and scored (f8_sm100.py).
 #   f8_sm100.sh [GEN ARGS]   build tcgen05_f8.cu (SASS gate: exactly one UTC*MMA per kernel), gen into a kept scratch, under
 #                            one gpu-lease the capture (layout gate first), then eval on the CPU: $OUT/{capture,summary,
 #                            fixture}.json, the SASS opcodes and the device identity.
 #   f8_sm100.sh eval SCRATCH [EVAL ARGS]   re-score a kept scratch (no GPU).
 #
-#   research run --on vy-dc-b200 --project verity --campaign eps1 --source <tree> --cwd source --env GPU_LEASE_WHO=b200-fp8 \
-#     -- bash benchmarks/tc_probe_fp4/f8_sm100.sh [--tiles N] [--bulk-scale F] [--seed S]
+# From the source tree's root on a B200:
+#   OUT=DIR bash benchmarks/tc_probe_fp4/f8_sm100.sh [--tiles N] [--bulk-scale F] [--seed S]
 # Exit: 0 captured and scored, 3 a kind failed the layout gate (the others captured and scored), 1 build or SASS gate failed,
 # 2 no device or no nvcc.
 set -uo pipefail
-OUT=${OUT:?run under research run}
+OUT=${OUT:?OUT names the output directory}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 export PYTHONPATH="$(cd "$HERE/../.." && pwd)" PYTHONDONTWRITEBYTECODE=1
 PY=${PYTHON:-python3}
 keep() {
   command -v research >/dev/null && research keep "$1" --owner @compute-accounting --expires 2026-10-26 --priority normal \
     --regenerate "research run --on vy-dc-b200 -- bash benchmarks/tc_probe_fp4/f8_sm100.sh" \
-    --why "lane B200-FP8: operands and captured D words, re-scored by f8_sm100.sh eval" || echo "f8_sm100.sh: not kept: $1" >&2
+    --why "B200 FP8 capture: operands and captured D words, re-scored by f8_sm100.sh eval" || echo "f8_sm100.sh: not kept: $1" >&2
 }
 
 if [ "${1:-}" = eval ]; then

@@ -16,7 +16,8 @@ python tools/verity/lean/check.py --build Security    the Lean check of `securit
 The audit needs a machine of 160 GiB or more; `tools/verity/lean/README.md` and the lean-proofs skill
 (`.agents/skills/lean-proofs/SKILL.md`) say where it runs and give the fast path. The guarantees' records are in
 `Security/lean-audit.json`. Trusted without proof: the statements in `Security/Definitions/NetworkCertifier/`, Lean's
-kernel and the Mathlib pin.
+kernel and the Mathlib pin. The docstrings' `docs/network-transparency/timing-channel.md` is the covert-capacity note,
+which is kept outside this repository.
 
 ## Where each statement and proof lives
 

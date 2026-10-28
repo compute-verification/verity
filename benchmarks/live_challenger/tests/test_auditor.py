@@ -1,7 +1,7 @@
 """The auditor host's service (`auditor.py`) on a test key, with the gate's root steps (chown, systemctl) and the clock injected:
 a window is reserved, then opened at its root (one session a root), its entries signed before serve.py runs; the session's end entry seals its out/
 and counts the coins each family released; a session whose pin moved doesn't run; the gate refuses what it can't check; and the
-reference check refuses a ledger that was edited, cut, reordered or given a second session for a root. The red team's
+reference check refuses a ledger that was edited, cut, reordered or given a second session for a root. The
 witnesses against v1 are `test_auditor_rt4.py`'s."""
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ FAMILIES = [["positions", 2], ["replay", 1]]
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("# peers\nvy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("# peer, its certifier coin link's ports\nvy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -159,8 +160,6 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
     session = json.loads(open_window(host, signer)[1])["session"]
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
     argv = A.serve_argv(host, session, body)
-    i = argv.index("--peer")
-    del argv[i:i + 2]
     argv[argv.index("--port") + 1] = "0"
     argv = [sys.executable, str(HERE / "stub_serve.py"), *argv[2:], "--params", "4,4", "--keygen-workers", "1"]
     out = host.sessions / session / "out"
@@ -181,8 +180,6 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
     argv = A.serve_argv(host, session, body)
     assert argv[argv.index("--root") + 1] == "cd" * 64 and argv[argv.index("--secret-file") + 1].endswith(f"{session}/secret")
-    i = argv.index("--peer")
-    del argv[i:i + 2]
     argv[argv.index("--port") + 1] = "0"
     argv = [sys.executable, str(HERE / "stub_serve.py"), *argv[2:], "--params", "4,4", "--keygen-workers", "1"]
     out = host.sessions / session / "out"
@@ -303,6 +300,40 @@ def test_the_gate_refuses_a_reserve_it_cant_check(host, signer, bad, why):
                      reserve=lambda s: pytest.fail("reserved"))
     assert rc == 3 and why in json.loads(out)["refused"]
     assert A.read_ledger(host.ledger) == [] and list(host.sessions.iterdir()) == []
+
+
+@pytest.mark.parametrize("ports", [None, "", "vy-nebius-2 7811-7899\n", "vy-nebius-1\n", "vy-nebius-1 7811-7899 x\n",
+                                   "vy-nebius-1 7810-7820\n", "vy-nebius-1 7890-7900\n", "vy-nebius-1 7820-7811\n",
+                                   "vy-nebius-1 78a1\n"])
+def test_a_reserve_for_a_peer_without_a_certifier_coin_link_is_refused(host, signer, ports):
+    """A window's coins reach its peer only through the peer's certifier coin link (`CoinsConfidential`), so a peer
+    with no line of /etc/vy/coin-ports, or one whose ports aren't the gate's, gets no window."""
+    if ports is None:
+        host.coin_ports.unlink()
+    else:
+        host.coin_ports.write_text(ports)
+    rc, out = call(host, signer, RESERVE)
+    assert rc == 3 and "has no certifier coin link" in json.loads(out)["refused"] and A.read_ledger(host.ledger) == []
+
+
+def test_an_open_takes_a_port_of_its_peers_coin_link_and_its_serve_py_opens_no_tunnel(host, signer):
+    host.coin_ports.write_text("vy-nebius-1 7850-7851\n")
+    live: set[str] = set()
+    for token, commit, port in (("ab12", COMMIT, 7850), ("cd34", "cd" * 64, 7851)):
+        rc, out = open_window(host, signer, token=token, commit=commit, active=live.__contains__)
+        assert rc == 0 and json.loads(out)["port"] == port
+        live.add(json.loads(out)["session"])
+    session = min(live)
+    rc, out = open_window(host, signer, token="ef56", commit="ef" * 64, active=live.__contains__)
+    assert rc == 3 and "every port of 7850..7851 has a live session" in json.loads(out)["refused"]
+
+    argv = A.serve_argv(host, session, A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"])
+    assert argv[argv.index("--port") + 1] == "7850" and not {"--peer", "--peers"} & set(argv) and "--root" in argv
+
+    reserved = reserve(host, signer, token="0a0b")
+    host.coin_ports.write_text("")
+    rc, out = call(host, signer, ["open", "--session", reserved, "--root", "0a" * 64])
+    assert rc == 3 and "has no certifier coin link" in json.loads(out)["refused"]
 
 
 @pytest.mark.parametrize("bad, why", [

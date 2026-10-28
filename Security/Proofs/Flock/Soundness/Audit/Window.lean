@@ -25,15 +25,15 @@ Two weightings of the same draw: `w`, the work (each tile's W_ref on the tile st
 * `Covers σ k w K`: every stratum draws at least its share `K · w_s · n_s / W`, or all its units.
   `stratified_escape_le_of_covers`, **the work bound for any law whose sizes cover the weights**:
   `escape B ≤ ((W − W_B)/W)^K`. `covers_work`: the work law covers its own work.
-* `windowK`, **the per-call split** (X-SPC-106): call `c` draws by its own work law at its share
+* `windowK`, **the per-call split**: call `c` draws by its own work law at its share
   `K_c = min(N_c, max(1, ⌈K · W_c / W⌉))` of the window's `K`. `covers_window`: that covers the window's work when each
-  call's work is in one stratum (`hone`). `covers_of_floor`, **y's floors** (X-SPC-105, option B): sizes that draw at
+  call's work is in one stratum (`hone`). `covers_of_floor`, **y's floors**: sizes that draw at
   least `min(n_s, f_s)`, with `K_y · v_s · n_s ≤ f_s · N`, cover `v` at `K_y`.
 * `audit_window`, `extraction_audit_window`: the audit accepts while the unsound work is at least `T` or the unsound
   weight (`unsoundWork` under `v`) at least `T_y` with probability at most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks + δ_link`. The larger,
   not the sum: both bound the escape of the one wrong set the prover committed before the draw (`audit_profile`).
   `audit_window_of_record`: at `K = K_y = 27,713`, a 0.1% share of either with at most `2^-40 + ε_ks + δ_link`, and
-  `audit_window_split_of_record` for the per-call split with y's floors, the law #364 runs.
+  `audit_window_split_of_record` for the per-call split with y's floors, the law `PlanDraw` runs.
 
 **`hone` is needed, and not only by this route.** When a call's share `⌈K · W_c / W⌉` is capped at its units `N_c`, a
 second stratum doing work in the call can draw well below its share, and then the window bound itself fails. With call 0
@@ -187,7 +187,7 @@ theorem card_le_callUnits (σ : Fin n → Fin m) (call : Fin m → Fin C) (s : F
   Finset.single_le_sum (f := fun s => (stratum σ s).card) (fun _ _ => Nat.zero_le _)
     (mem_filter.2 ⟨mem_univ s, rfl⟩)
 
-/-- **X-SPC-106: the per-call split covers the window's work**, when each call's work is in one stratum. -/
+/-- **The per-call split covers the window's work**, when each call's work is in one stratum. -/
 theorem covers_window (σ : Fin n → Fin m) (call : Fin m → Fin C) (w f : Fin m → ℕ) (K : ℕ)
     (hW : 0 < totalWork σ w) (hone : ∀ s, 0 < w s → callWork σ call w (call s) = w s * (stratum σ s).card) :
     Covers σ (windowK σ call w f K) w K := by
@@ -228,7 +228,7 @@ theorem covers_window (σ : Fin n → Fin m) (call : Fin m → Fin C) (w f : Fin
     _ ≤ totalWork σ w * max (f s) Kc := Nat.mul_le_mul_left _ (le_max_right _ _)
     _ = max (f s) Kc * totalWork σ w := mul_comm _ _
 
-/-- **X-SPC-105, option B: floors cover the weights `v` at `K_y`**, for any sizes that draw at least `min(n_s, f_s)`. -/
+/-- **Floors cover the weights `v` at `K_y`**, for any sizes that draw at least `min(n_s, f_s)`. -/
 theorem covers_of_floor (σ : Fin n → Fin m) (k f v : Fin m → ℕ) (Ky : ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (hkf : ∀ s, min (stratum σ s).card (f s) ≤ k s)
     (hfy : ∀ s, Ky * v s * (stratum σ s).card ≤ f s * totalWork σ v) :
@@ -359,7 +359,7 @@ theorem audit_window_of_record (A : Analysis ((Law.stratified σ k hk).closure c
   · exact (Law.stratified_escape_le_of_covers σ k hk w 27713 hW hc _).trans (Law.pow_record_le hW hB)
   · exact (Law.stratified_escape_le_of_covers σ k hk v 27713 hN hcy _).trans (Law.pow_record_le hN hB)
 
-/-- **The per-call split with y's floors at the sizing of record** (#364; X-SPC-105 and X-SPC-106): every call drawn by
+/-- **The per-call split with y's floors at the sizing of record**: every call drawn by
 its own work law at its share of `K = 27,713`, each stratum's floor covering `v` at `K_y = 27,713`, with closures. -/
 theorem audit_window_split_of_record {C : ℕ} {call : Fin m → Fin C} {w v f : Fin m → ℕ}
     (A : Analysis ((Law.stratified σ (Law.windowK σ call w f 27713) (Law.windowK_le σ call w f 27713)).closure cl)

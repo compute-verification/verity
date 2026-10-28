@@ -1,5 +1,5 @@
 """Call boundaries (`call_boundaries`, Q_word: a Value two Calls of one module body exchange) as an acquisition source, evaluated on the
-host.  Per module body M and committed engine step, a forward pre-hook reads M's inputs and evaluates M's rows with the IR's evaluator
+host.  Per module body M and committed engine step, a forward pre-hook reads M's inputs and evaluates M's rows with the circuit's evaluator
 (`verity.ml.circuits.evaluation.evaluate_batch`: a registered row kernel of `verity.ml.definitions.numerics.rows` where one is, the reference for the rest
 and for what a kernel declines -- exact, NaN payloads included); at the step's end every required interior Value is committed as
 `<M>/<fx node>/<member>`, [rows, width] words over the identity's element range.  Attached whenever the required manifest names

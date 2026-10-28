@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Callable
 
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine import env as engine_env
 from verity_vllm.query.manifest.format import SERVED_IDS
 
@@ -42,7 +42,7 @@ from verity_vllm.query.manifest.format import SERVED_IDS
 @dataclass(frozen=True, kw_only=True)
 class Options:
     case: str = option("--case", help="the checkpoint role (verity_vllm.config.CHECKPOINTS)")
-    workload: str = option("--workload", help="sweep workload json: requests with prompt_token_ids, max_tokens, arrive_step")
+    workload: str = option("--workload", type=workload_arg, help="sweep workload json: requests with prompt_token_ids, max_tokens, arrive_step")
     out: str = option("--out", help="the output directory")
     build_of_record: str | None = option("--build-of-record", default=None, help="a served Build whose autotune winners seed this process "
                                          "and whose program digest and compile artifact this one must equal")
@@ -112,7 +112,7 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
     from vllm.model_executor.layers.fused_moe.experts.triton_moe import TritonExperts
     from vllm.model_executor.layers.fused_moe.router.fused_topk_router import FusedTopKRouter
 
-    from verity_vllm.engine.profiles.generic import router_vpt_bf16
+    from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 
     def flag(test: Callable[[], Any]) -> bool | None:
         try:
@@ -121,7 +121,7 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
             return None
 
     # each tensor under its first registration, the name the loader fills from the checkpoint: the runner re-registers the block's
-    # gate as its own `gate` ([R15 moe GATE-PATH])
+    # gate as its own `gate`
     named = {id(p): n for n, p in model.named_parameters()}
     out: dict[str, dict[str, Any]] = {}
     for m in runners:

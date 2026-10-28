@@ -1,10 +1,10 @@
 """load-relay: the network certifier's relay of the weights' load to the H200 and its commit of what crosses, in the exact
 form the units read it. The certifier reads the load from a source (a file, a pipe, another host's stream), writes every
-byte on to the sink (the H200's) as it reads it, and commits every tensor of CMP-95 interface 1's manifest as a
+byte on to the sink (the H200's) as it reads it, and commits every tensor of the seeded weights' manifest as a
 registered value, as the reading program's units read it (interface 1's registration for a program named by its
 digest): every tensor 16-bit leaves (a Boolean program's one-bit leaves rounded up, as the served step's Program reads
 them: an f32 scale two, its low half first), a linear's row ``row_codes`` codes (at H200 the 8,192 a FAMILIES ``wrow``
-part reads), ``tok`` (H, V) one coordinate over the tokens a row (proofs' pick, CMP-95 option (a)), in ``hm96-sha512/row/v2`` rows
+part reads), ``tok`` (H, V) one coordinate over the tokens a row, in ``hm96-sha512/row/v2`` rows
 (a value of ``hm96-sha512/row-seg/v1`` rows, as interface 1's ``tok_rows="token"`` registers ``tok``, commits too);
 each row under its own salt, in a frame-v3-sha512 tree under the value's domain, the root `Registered.commit`'s
 (`transfer_rows.Transfer`). It then signs
@@ -17,7 +17,7 @@ registrations the verifier pins each load value from (`blocks.pins`).
     python benchmarks/network_traces/load_relay.py write --store DIR [--shape h200|tiny] [--workers N] [--out FILE]
     python benchmarks/network_traces/load_relay.py sink --listen HOST:PORT --weights PATH --witness PATH [--streams 4]
 
-The demo's load (CMP-97 option (a)) is the gate's (``vy-challenger-gate weights-write`` and ``load-relay``,
+The demo's load is the gate's (``vy-challenger-gate weights-write`` and ``load-relay``,
 ``benchmarks/live_challenger/auditor.py``), in three parts:
 
 * **The store** (`write_store`, ``write``): interface 1's public weights stream under `DEMO_SEED`, generated once on
@@ -39,7 +39,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
 
 * **The format** (``--format``):
   - ``plain``: interface 1's weights stream, every tensor's bytes in manifest order (139,736,443,904 B at H200);
-  - ``p2``: CMP-95 interface 2's store, C* in block order (``p2-16448/v4``: 1,038 segments of 65,536 blocks of 2,056
+  - ``p2``: the P2 store (interface 2), C* in block order (``p2-16448/v4``: 1,038 segments of 65,536 blocks of 2,056
     bytes, 139,862,212,608 B; the segment files back to back), then every tensor the store doesn't hold (the scales,
     norms and embeddings, 36,760,576 B) back to back in manifest order. The store's tensors are interface 1's s8
     matrices: a layer's ``qkv_proj`` is ``wq ‖ wk ‖ wv`` and its ``o_proj``, ``up_proj`` and ``down_proj`` are ``wo``,
@@ -111,7 +111,7 @@ SALT_BYTES = _INST.salt_bytes
 #: a chunk's bytes are at most this many
 CHUNK_BYTES = 1 << 23
 READ_BYTES = 1 << 23
-#: CMP-95 interface 1's seeds (`verity_torch_loop.weights`): the demo's public one and its fixture's
+#: the seeded weights' seeds (`e2e_h200.served_weights`): the demo's public one and its fixture's
 DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/test-seed"
 
 
@@ -119,7 +119,7 @@ DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/
 
 @dataclass(frozen=True)
 class Shape:
-    """Interface 1's `Shape` (``verity_torch_loop.weights``)."""
+    """Interface 1's `Shape` (``e2e_h200.served_weights``)."""
 
     name: str
     width: int
@@ -133,7 +133,7 @@ class Shape:
     row_codes: int
 
 
-#: a linear's row the 8,192 codes a FAMILIES ``wrow`` part reads (interface 1's, #4681)
+#: a linear's row the 8,192 codes a FAMILIES ``wrow`` part reads (interface 1's)
 H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 8192)
 TINY = Shape("tiny-h32-l1", 32, 1, 2, 16, 1, 64, 256, 8, 16)
 SHAPES = {"h200": H200, "tiny": TINY}
@@ -257,7 +257,7 @@ def write_stream(seed: bytes, values: Sequence[Value], sink: BinaryIO, rows_at_o
 
 
 def read_manifest(doc: dict) -> tuple[Value, ...]:
-    """Interface 1's manifest JSON (``weights.py manifest``'s ``verity/seeded-weights/manifest/v1``) as values."""
+    """Interface 1's manifest JSON (``served_weights.py manifest``'s ``verity/seeded-weights/manifest/v1``) as values."""
     if doc.get("format") != "verity/seeded-weights/manifest/v1":
         raise ValueError(f"not interface 1's manifest: {doc.get('format')!r}")
     out = tuple(Value(t["name"], t["offset"], t["nbytes"], t["words"], t["kind"], t["shape"][0] if len(t["shape"]) == 2
@@ -706,12 +706,12 @@ def sign(issuer: Issuer, link: str, program: str, values: Sequence[Value], roots
 # --- the store: interface 1's weights on the auditor's disk -------------------------------------------------------------
 
 STORE_FORMAT = "verity-network-certifier/load-store/v1"
-#: interface 1's generator (`weights.FORMAT`), which its model id names
+#: interface 1's generator (`served_weights.FORMAT`), which its model id names
 GENERATOR = "verity/seeded-weights/v1"
 #: each shape's `digests_fold` of its tensors' SHA-256 under `DEMO_SEED`, the one store `write_store` keeps and the relay
-#: reads: H200's of interface 1's manifest, art:a6775aeef1f6d11badf5a7a38460cff7d4d59f27e70dbc3bf8dd995fbb4c82da
-#: (``weights.py manifest --digests``, vendored as ``tests/fixtures/weights-v1-h200-digests.json``), TINY's of this
-#: generator's, which is interface 1's (``test_load_relay``)
+#: reads: H200's of interface 1's manifest (``served_weights.py manifest --digests``, the fetched fixture
+#: ``tests/fixtures/weights-v1-h200-digests.json``), TINY's of this generator's, which is interface 1's
+#: (``test_load_relay``)
 STORE_DIGESTS = {
     H200.name: "247e946ed9e667a275ff816bcfcc1d4efba5382d938acdb1c6d3c290dc248454"
                "a939d6a81c899c161a9be14d6a108b03ffc917cf67364a519841d0ee2ebeb2e3",

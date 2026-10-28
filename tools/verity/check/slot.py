@@ -24,7 +24,9 @@ circuit-check's budget, so two checks' circuit-checks never each budget all the 
 20:06Z: two cold ones, each at its six 125-151 GiB targets, filled the 1600 GiB slice); while the check runs, the slot holds a
 research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what the check may still take.
 With every slot busy it retries every POLL_S, reading
-SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
+SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
+CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (a run sent to a pool the node lacks
+would run unpinned beside its GPU jobs). A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
@@ -33,10 +35,9 @@ lock is not in the line: it takes that slot whenever it frees.
 
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
-running check, and priority waiters keep their own arrival order. Merges unblock everyone (root, 2 Oct). With `--rank N`
+running check, and priority waiters keep their own arrival order. Merges unblock everyone. With `--rank N`
 (drive's train checks: the train's first-parent depth, so the lowest train's is the least), priority
-waiters go by rank, then arrival: the train that lands next takes the next slot, ahead of trains above it that came first (19 Oct
-19:12Z: a lowest train's resent check waited an hour behind them; CI-110). A priority waiter without a rank (drive's post-landing run) goes after the ranked.
+waiters go by rank, then arrival: the train that lands next takes the next slot, ahead of trains above it that came first. A priority waiter without a rank (drive's post-landing run) goes after the ranked.
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
@@ -78,7 +79,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
-#: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
+#: a lane's own test run, which no landing needs (a PR lands on an eyeball review)
 LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 LINE = "check-line"
@@ -131,7 +132,7 @@ def parse(text: str) -> list[dict]:
 
 def lane_pools(slots_file: Path) -> list[Path]:
     """The pools beside `slots_file` (`NAME/slots` in its directory, not a `*.bak-*` copy) with a slot a lane check may take: n2's
-    `gpu` and cpu-1's `research` beside their all-trains default pools (CI-164)."""
+    `gpu` and cpu-1's `research` beside their all-trains default pools."""
     out = []
     for p in sorted(slots_file.parent.glob("*/slots")):
         if ".bak-" in p.parent.name:
@@ -753,6 +754,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     priority, by, wait_max, run_max, pair, rank = options(opts)
     if not cmd:
         sys.exit(USAGE)
+    if not SLOTS.exists() and os.environ.get("CHECK_SLOTS"):
+        pools = ", ".join(p.parent.name for p in lane_pools(SLOTS.parent.parent / "slots")) or "none"
+        print(f"slot: not started: CHECK_SLOTS names {SLOTS}, which this machine doesn't have, and CMD would run on any core "
+              f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --pool "
+              f"NAME`): {pools}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
@@ -774,7 +781,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         pools = lane_pools(SLOTS)
         where = ("a lane check takes a lane pool here: " + ", or ".join(
             f"`CHECK_SLOTS={p} python3 tools/verity/check/slot.py --by LANE -- CMD...`" for p in pools)
-            + " (`research run --pool NAME` sends one by its directory's name, for the pools `research run --help` names)"
+            + " (`research run --pool NAME` sends one by its directory's name, and `check.py --record --on MACHINE --pool NAME` a "
+              "recorded check, for the pools `research run --help` names)"
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
                  f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")

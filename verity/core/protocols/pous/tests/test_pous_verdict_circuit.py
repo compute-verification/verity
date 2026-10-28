@@ -121,7 +121,7 @@ class _Clock:
 
 @pytest.mark.parametrize("wrong", [(), (2,), (0, 5)])
 def test_m0_is_the_memory_challengers_verdict(wrong):
-    """On a signed session, M = 0 accepts exactly when `memory_challenger.verdict` does: every answer its block, on time."""
+    """On a signed session, M = 0 accepts exactly when `memory_challenger.verdict` does: every answer its label, on time."""
     clock = _Clock()
     signer = ts.TestSigner(b"challenger key", height=2)
     session = hashlib.sha512(b"verdict session %r" % (wrong,)).digest()[:32]

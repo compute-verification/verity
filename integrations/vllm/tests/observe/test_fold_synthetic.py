@@ -2,8 +2,8 @@
 `b1` definitions, hand-written raw observation events (prefill step with 2 rows, decode step with a StepLink) and a
 toy pattern set, folded into `Captured_v1{PROFILE, WORKLOAD}` and compared with `Serve_v4` by `match_program`.
 
-While `memory.py` / `views.py` are skeletons (lane L2 in flight) the test installs a small in-file stub memory model
-through monkeypatching (`fold.MemoryModel`, `fold.row_view`); once the real modules import and work, it uses them."""
+When `memory.py` / `views.py` raise `NotImplementedError` the test installs a small in-file stub memory model
+through monkeypatching (`fold.MemoryModel`, `fold.row_view`); otherwise it uses them."""
 
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ def toy_log(ids_dtype: str = I32D, extra_unknown_op: bool = False, skip_norm0: b
 
 
 # ---------------------------------------------------------------------------------------------------------
-# toy patterns (the fold only sees resolutions; these are minimal stand-ins for L3's profile)
+# toy patterns (the fold only sees resolutions; these are minimal stand-ins for a real profile)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -336,7 +336,7 @@ def toy_profile(accepted=False, registered_values=False):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# stub memory model (only while L2's memory.py is a skeleton)
+# stub memory model (only when the real one raises NotImplementedError)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -430,7 +430,7 @@ def _real_memory_available() -> bool:
 
 
 def install_stub_memory() -> None:
-    """Point fold.py at the in-test memory model / view helpers (only while L2's memory.py is a skeleton)."""
+    """Point fold.py at the in-test memory model / view helpers (only when the real ones raise NotImplementedError)."""
     fold_mod.MemoryModel = StubMemory
     fold_mod.row_view = stub_row_view
     fold_mod.rows_view = stub_rows_view

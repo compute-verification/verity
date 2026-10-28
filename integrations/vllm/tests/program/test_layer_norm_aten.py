@@ -1,6 +1,6 @@
 """GPT-NeoX's `nn.LayerNorm` (weight + bias) exported under the pinned `b1-eager-v3` profile binds `aten.layer_norm` to
 `LayerNormAten_v1{N,EPS}` per row (`vllm_bindings.layer_norm`), the Definition the eager Match fold resolves the same op to
-(`engine/profiles/gen_ln_patterns.py`); the Program's rows evaluate to the Definition's own words; forms the vectorized kernel does
+(`observe/fold/profiles/gen_ln_patterns.py`); the Program's rows evaluate to the Definition's own words; forms the vectorized kernel does
 not run are refused by name.  The kernel equality is the difftest's (`registry/layer_norm_difftest.py`, on the GPU)."""
 from __future__ import annotations
 

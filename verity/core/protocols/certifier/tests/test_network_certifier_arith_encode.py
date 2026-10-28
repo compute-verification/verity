@@ -1,7 +1,7 @@
-"""arith_encode: advice v1's arithmetic encoder as Boolean Definitions, held to ENC-CODE's coders (`code.py`, `code_v1`)
+"""arith_encode: advice v1's arithmetic encoder as Boolean Definitions, held to the advice coders (`code.py`, `code_v1`)
 on what v1 actually codes (the fixture's streams, as `benchmarks/network_e2e/encodings/arith_vectors.py --steps` cut
 them: advice v1's windows, the replay's decisions, the arrival order's deviations and the hits sent past the pool
-bound, on ENC-REPLAY's step traces with v1's charges, and ENC-DERIVED's still-sent fields on the TRACE-CORPUS
+bound, on the replay's step traces with v1's charges, and the derived encoding's still-sent fields on the trace corpus
 fixture, each symbol tagged a bit or an integer's, with code.py's state after every symbol and its segment), to the
 references on random runs, and refusing every other segment and every symbol code.py refuses."""
 from __future__ import annotations
@@ -549,6 +549,19 @@ def test_size_counts_the_gates():
     for C in (1, 3):
         assert AE.size("book_kt", C=C)["ands"] == ands(AE.book_kt_unit(C))
     assert AE.size("charge", N=2)["ands"] == ands(AE.charge_unit(2))
+
+
+@pytest.mark.parametrize("part, key", [(AE.ArithEncodeFinish, ()), (AE.ArithEncodeStep, (3, 1))])
+def test_a_parts_build_is_called_as_the_lowering_calls_it(part, key):
+    """C-Flock's lowering (`ir_lower._boolean_activation`) passes the statics to ``build`` only when the part has some, so a
+    part without any, ArithEncodeFinish_v1, takes the elements alone."""
+    from verity.ml.circuits.boolean.trace import trace
+
+    S = SimpleNamespace(**dict(zip(part.statics, key)))
+    build = (lambda C, *e: part.build(C, S, *e)) if part.statics else part.build
+    params, ret = part.signature(S)
+    got, want = trace(build, [t for _, t in params], ret), part.traced(*key)
+    assert (got.gates, got.outputs) == (want.gates, want.outputs)
 
 
 @pytest.mark.parametrize("traced", [False, True])

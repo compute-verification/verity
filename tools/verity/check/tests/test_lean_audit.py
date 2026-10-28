@@ -155,7 +155,7 @@ sys.exit(1 if failed else 0)
 
 
 def test_a_trains_audit_passes_on_regenerated_records_names_them_and_keeps_no_such_pass(tmp_path, monkeypatch):
-    """`--regenerate` (a train's lean-audit step, CI-64) reaches check.py and not the cache key: a package that passes only on
+    """`--regenerate` (a train's lean-audit step) reaches check.py and not the cache key: a package that passes only on
     its regenerated record is named in audit.json's `regenerated` for the train to commit, and is never kept as a reusable pass,
     since its lock changes when the record lands; the other packages' passes are kept and reused as before."""
     root = _tree(tmp_path, monkeypatch)
@@ -1007,8 +1007,7 @@ def test_an_audit_sweeps_before_it_makes_its_scratch_tree_named_by_its_pid(tmp_p
 
 
 def test_kept_dependencies_and_replays_past_their_caps_go_oldest_first(tmp_path):
-    """LEAN-29: vy-nebius-2 held 24 kept dependency trees (806k inodes) and 180k replay entries, with nothing evicting
-    either. Kept dependencies keep the newest `kept` by use, a held one stays, and the replay cache its newest entries."""
+    """Kept dependency trees and replay entries are evicted, or a node fills up with them. Kept dependencies keep the newest `kept` by use, a held one stays, and the replay cache its newest entries."""
     deps = tmp_path / "lean-deps"
     for i, k in enumerate(("a", "b", "c")):
         (deps / k / "pkg").mkdir(parents=True)
@@ -1047,7 +1046,27 @@ def test_records_trees_beyond_the_cap_go_least_recently_used_first_unless_a_run_
     with open(store / "held" / ".lock", "w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
         os.utime(store / "held" / ".lock", (1001, 1001))
-        assert LA.prune_records(store, kept=1) == 2
+        assert LA.prune_records(store, kept=1, slots=0) == 2
     assert sorted(p.name for p in store.iterdir()) == ["held", "recent"] and not (away / "linked").exists()
-    assert LA.prune_records(store, kept=1) == 1 and [p.name for p in store.iterdir()] == ["recent"]
-    assert LA.prune_records(tmp_path / "absent") == 0
+    assert LA.prune_records(store, kept=1, slots=0) == 1 and [p.name for p in store.iterdir()] == ["recent"]
+    assert LA.prune_records(tmp_path / "absent", slots=0) == 0
+
+
+def test_a_node_with_more_build_slots_than_records_kept_keeps_a_tree_per_slot_and_its_passes(tmp_path):
+    """vy-nebius-cpu-1, 26 Oct: four trees seeded for `build 8` kept their source's old `.who`, and the hourly prune, which
+    kept 3, took two of them, so a waiting run built Mathlib from scratch on the root disk. The slots' own trees stay, the
+    ones a lowered cap left (`build-8`) go first whatever their use, and `passes/` is not a tree."""
+    store = tmp_path / "lean-records"
+    for i, name in enumerate(["build-8", *(f"build-{j}" for j in range(8)), "passes"]):
+        (store / name).mkdir(parents=True)
+        (store / name / ".who").write_text("r")
+        t = 2000 - 100 * (name != "build-8") - i
+        os.utime(store / name / ".who", (t, t))
+    slots = tmp_path / "lean-slots"
+    slots.write_text("check 4\nbuild 8   # one per tree\n")
+    assert LA.build_slots(slots) == 8 and LA.build_slots(tmp_path / "absent") == 0
+    assert LA.prune_records(store, slots=8) == 1
+    assert sorted(p.name for p in store.iterdir()) == sorted([*(f"build-{j}" for j in range(8)), "passes"])
+    slots.write_text("build 2\n")
+    assert LA.prune_records(store, slots=LA.build_slots(slots)) == 5
+    assert sorted(p.name for p in store.iterdir()) == ["build-0", "build-1", "build-2", "passes"]

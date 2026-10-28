@@ -13,17 +13,17 @@ certifies beside what it did.
   its gate with the known-bad variants rejected, then timed as the chain's L GEMMs on the chain's own operands. The FP8
   chain's weights have a per-tensor scale, which the registry's plain FP8 kernels don't read, so its pick is cuBLASLt's.
 - `certified.py`: the certified columns, pure: γ from the pinned price twins (`benchmarks/pouw/harness/price_twins.py`,
-  the larger of the two prices, at each Llama linear's (n, k) and the cube, #1809), W_cert = (1 − γ)(1 − εs)·ΣWref
+  the larger of the two prices, at each Llama linear's (n, k) and the cube), V = (1 − γ)(1 − εs)·ΣWref
   over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
   form (worst case over each audit's own coins; a per-run compute residual holds only conditional on `BudgetAbort` for
   the deployed cost model, so none is shown). S_cert is the PoUS arm's storage profile when it is certified (`storage`).
-  Q_cert is `bandwidth.audit.bound` at the red team's grant (#1805 at 5761861fd: T = 1.2 ms, s = 1,849, no RTT), per
+  Q_cert is `bandwidth.audit.bound` at the red team's grant (T = 1.2 ms, s = 1,849, no RTT), per
   window the verifier accepted within T, with S_chip as the bandwidth harness counts it (`summarize.s_chip_bytes`: the
   caches beside L2 and the SMs' registers and memory) and the side link at PCIe Gen5 x16; `window_params` also reports a
   window on time at T with the RTT at P2's cap inside it. First fetches are charged to the bandwidth account, not compute.
 - `joint.py`: the bandwidth audit's arms inside the PoUS harness's process, over its store set up under the bandwidth
-  audit's device-bound salt (`audit.draw_salt` over W's commitment and the GPU's id), each window through #1805's
-  `gpu.Prover` (the warm pass, the L2 scrub, then σ and the tag pass) and the granted `Verifier` in the same process, one
+  audit's device-bound salt (`audit.draw_salt` over W's commitment and the GPU's id), each window through the bandwidth
+  harness's `gpu.Prover` (the warm pass, the L2 scrub, then σ and the tag pass) and the granted `Verifier` in the same process, one
   `ChallengerState` per store: (d), the tag pass over the PoUS store as proof-only reads, every tag timed alone; (e),
   joint v0, `ro-blake3/v1`'s windows beside the chain and P2's audit; (f), joint v1, the honest prover pausing its chain
   at a call boundary for each window, at one window each 10, 100 or 1,000 ms of chain (or none): the bandwidth audit's
@@ -66,7 +66,7 @@ research run --on vy-nebius-2 --project verity --campaign resource-accounting --
   --env GPU_LEASE_WHO=<id> --env SHAPES=o --env BATCHES=1,128 --env ARMS=native-bf16,native-fp8 \
   --env JOINT=separate,inproc,joint -- bash benchmarks/resource_accounting/run.sh
 research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone --no-sampler \
-  --env GPU_LEASE_WHO=<id> --env LEGS=A,B,C,F --env AT=2026-10-12T15:00Z --env RELEASE='<the booking line>' \
+  --env GPU_LEASE_WHO=<id> --env LEGS=A,B,C,F --env AT=<the booking's start, UTC> --env RELEASE='<the booking line>' \
   -- bash benchmarks/resource_accounting/window.sh
 python benchmarks/resource_accounting/render.py art:<id>
 ~~~

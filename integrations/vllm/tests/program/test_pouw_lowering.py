@@ -38,7 +38,7 @@ from verity.ml.definitions.numerics.serve3_reference import materialize
 BF = torch.bfloat16
 M, K, NQ, V = 3, 64, 64, 16
 PROF = dict(mode="profile", profile="b1-eager-v3")
-POUW = DEFAULT_TARGET.with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:vllm-v1"))
+POUW = DEFAULT_TARGET.with_overrides(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
 
 
 def _gemm_meta(m: int, n: int, k: int) -> str:

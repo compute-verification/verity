@@ -13,7 +13,7 @@ A step's tree is three levels of trees, each a ``frame-v3-sha512`` tree padded t
 A row's leaf, row g of slot s (rows numbered in the layout's order within a slot) and rank r in its unit::
 
   x    = SHA-512(P(8 len(row)) || row)                       rowleaf.sha512_row_v2_digest
-  y    = ChaCha20 blocks 3g, 3g+1, 3g+2, key the step's salt key, nonce s      C-Flock's hm96_salt
+  y    = ChaCha20 chunks 3g, 3g+1, 3g+2, key the step's salt key, nonce s      C-Flock's hm96_salt
   b||c = hm96.SHA512.commit_string(KEY, x, y)                public, 128 bytes
   leaf = unit_domain(u).leaf(r, r, "hm96-sha512/row/v2", hm96.SHA512.tree_leaf(KEY, b||c))
 
@@ -22,6 +22,9 @@ each of rows, each row the concatenation of byte ranges (:class:`Part`) of the s
 has the same layout. A unit and a slot tree's domain don't name the slot or the step: the step tree's leaf index fixes the
 slot, and the step domain the step. :func:`commit` is the reference commitment; :func:`open_unit` opens one unit of one slot
 from that slot's rows alone (a replay of its request), and :func:`verify_unit` checks an opening against the step's root.
+
+Parts, rows and groups, with their checks, are ``verity.ml.commitments.layout``'s, which also reads a layout file
+(:func:`load`) in the form :func:`_layout_json` writes.
 """
 from __future__ import annotations
 
@@ -38,16 +41,19 @@ from typing import Any
 import numpy as np
 
 from verity.ml.commitments import hm96
+from verity.ml.commitments import layout as L
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512, tagged_sha512_prefix
 from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.layout import UNIT_MAX_BITS, Group, Part, Row
 from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, domain_message
 from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.ml.crypto.chacha20 import keystream
 
-__all__ = ["Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot", "edge_layout", "fixture",
-           "fresh_salt_key", "h200_layout", "layout_digest", "open_unit", "random_outputs", "row_salts", "slot_domain",
-           "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids", "verify_unit"]
+__all__ = ["UNIT_MAX_BITS", "Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
+           "edge_layout", "fixture", "fresh_salt_key", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",
+           "row_salts", "slot_domain", "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids",
+           "verify_unit"]
 
 LAYOUT_TAG = "verity/commit-slots/layout/v1"
 UNIT_TAG = "verity/commit-slots/unit/v1"
@@ -59,79 +65,18 @@ KEY = INST.default_key
 SALT_BYTES = INST.salt_bytes
 STRING_BYTES = INST.proven_bytes
 DIGEST_BYTES = INST.digest_bytes
-#: a unit's outputs fit its size class, at most 262,144 bits (AGENTS.md, "Everything zero-knowledge")
-UNIT_MAX_BITS = 262_144
 
 
 # --- the layout --------------------------------------------------------------------------------------------------------
 
-@dataclass(frozen=True, slots=True)
-class Part:
-    """``nbytes`` bytes at ``offset`` of a slot's row of the group's tensor ``source``."""
-
-    source: int
-    offset: int
-    nbytes: int
-
-
-@dataclass(frozen=True, slots=True)
-class Row:
-    """One committed row: its parts' bytes, concatenated."""
-
-    parts: tuple[Part, ...]
-
-    @property
-    def nbytes(self) -> int:
-        return sum(p.nbytes for p in self.parts)
-
-    @property
-    def bits(self) -> int:
-        return 8 * self.nbytes
-
-
-@dataclass(frozen=True, slots=True)
-class Group:
-    """What one ``add`` commits: ``sources[i]`` is the bytes a slot has in the group's tensor i (a tensor is (slots, ...),
-    each slot's bytes contiguous), and ``units`` the group's units, each its rows."""
-
-    sources: tuple[int, ...]
-    units: tuple[tuple[Row, ...], ...]
-
-    def __post_init__(self) -> None:
-        for unit in self.units:
-            if not unit:
-                raise ValueError("a unit has at least one row")
-            if sum(r.bits for r in unit) > UNIT_MAX_BITS:
-                raise ValueError(f"a unit's outputs are at most {UNIT_MAX_BITS} bits")
-            for row in unit:
-                if not row.parts or row.nbytes == 0:
-                    raise ValueError("a row has at least one byte")
-                for p in row.parts:
-                    if not 0 <= p.source < len(self.sources) or p.offset < 0 or p.nbytes < 1 \
-                            or p.offset + p.nbytes > self.sources[p.source]:
-                        raise ValueError(f"part {p} is outside the group's tensors {self.sources}")
-
-
-@dataclass(frozen=True)
-class Layout:
-    """A step's public structure: its groups in order, the same for every slot; ``name`` names it."""
-
-    name: str
-    groups: tuple[Group, ...]
+class Layout(L.Layout):
+    """A step's public structure, ``commitments.layout``'s (its groups in order, the same for every slot, a repeated group one
+    object; ``name`` names it), with the indices and the digest the slot's trees take."""
 
     @cached_property
     def units(self) -> tuple[tuple[Row, ...], ...]:
         """Every unit, in order: unit u's rows."""
         return tuple(u for g in self.groups for u in g.units)
-
-    @cached_property
-    def unit_base(self) -> tuple[int, ...]:
-        """Group i's first unit."""
-        out, n = [], 0
-        for g in self.groups:
-            out.append(n)
-            n += len(g.units)
-        return tuple(out)
 
     @cached_property
     def group_rows(self) -> tuple[int, ...]:
@@ -262,7 +207,7 @@ def fresh_salt_key() -> bytes:
 
 
 def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
-    """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 blocks 3g .. 3g + 2 under the step's
+    """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 chunks 3g .. 3g + 2 under the step's
     salt key with nonce ``slot`` (C-Flock's ``hm96_salt``, ``verity.core.protocols.pouw.audit.hm96_salt``)."""
     return keystream(salt_key, slot, 3 * first, 3 * n)
 
@@ -450,8 +395,8 @@ def _rows(source: int, *sizes: int) -> tuple[Row, ...]:
 
 
 def edge_layout() -> Layout:
-    """A small layout over SHA-512's block edges: rows of 1 to 240 bytes, a unit of 4 rows (no pad), one of 3 (a pad), one of 1,
-    a row of two parts (64 s8 codes, then their f32 scale) and one of 3 bytes; 5 units, so the slot tree pads 3."""
+    """A small layout over SHA-512's chunk edges: rows of 1 to 240 bytes, a proof block of 4 rows (no pad), one of 3 (a pad), one of 1,
+    a row of two parts (64 s8 codes, then their f32 scale) and one of 3 bytes; 5 proof blocks, so the slot tree pads 3."""
     g0 = Group((961,), (_rows(0, 1, 111, 112, 113), tuple(Row((Part(0, 337 + a, n),)) for a, n in ((0, 127), (127, 128), (255, 129))),
                         (Row((Part(0, 721, 240),)),)))
     g1 = Group((64, 4), ((Row((Part(0, 0, 64), Part(1, 0, 4))),), (Row((Part(1, 1, 3),)),)))
@@ -465,6 +410,13 @@ def _layout_json(layout: Layout) -> dict[str, Any]:
     return {"name": layout.name, "groups": [{"sources": list(g.sources), "units": [[[[p.source, p.offset, p.nbytes] for p in r.parts]
                                                                                    for r in u] for u in g.units]}
                                             for g in layout.groups]}
+
+
+def load(path: str | os.PathLike[str]) -> Layout:
+    """The layout in the file ``path`` (:func:`_layout_json`'s form), read and checked by ``commitments.layout.load``: equal
+    groups are one object, so a plan lays each out once."""
+    lay = L.load(path)
+    return Layout(lay.name, lay.groups)
 
 
 def fixture() -> dict[str, Any]:
@@ -496,7 +448,7 @@ def fixture() -> dict[str, Any]:
     h200 = h200_layout()
     return {
         "schema": "verity/commit-slots/fixture/v1",
-        "about": "CMP-95 item 3: a step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, "
+        "about": "A step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, "
                  "step tree over slot trees over unit trees over rows (benchmarks/torch_gpu/commit_slots/README.md). The context "
                  "and salt key are public test values.",
         "tags": {"layout": LAYOUT_TAG, "unit": UNIT_TAG, "slot": SLOT_TAG, "step": STEP_TAG, "row_schema": ROW_SCHEMA,

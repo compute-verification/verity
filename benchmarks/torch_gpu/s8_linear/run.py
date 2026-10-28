@@ -1,19 +1,21 @@
 """The exact W8A8 linear at the large model's linears, and its gate against `ScaledMmS8Coordinate_v1{K, DOT}` over W's rows.
 
-Two exact kernels (`--kernel`, default wgmma on sm_90, triton elsewhere), each with the Definition's epilogue in its order:
+Three exact backends (`--kernel`, default wgmma on sm_90, triton elsewhere), each with the Definition's epilogue in its order:
 cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_w, cvt.rn.bf16.f32, no FTZ, no FMA:
     wgmma   s8_wgmma.cu through wgmma.py on sm_90a (the H100 and H200): warpgroup MMAs (wgmma m64nNk32 .s32.s8.s8) into one
             s32 accumulator; its SASS gate is build.sh's, held to the cubin by the MANIFEST.sha256 beside it
     triton  `verity_vllm.engine.int8_fused.scaled_mm`, as vLLM's int8 profile serves it (mma.sync m16n8k32 on sm_120), its PTX
             (`int8_fused.ptx_check`) and SASS (the s8 MMA present; no FFMA; no .FTZ) checked per compiled kernel
+    int_mm  int_mm.py's `linear`: torch._int_mm (cuBLASLt's s32 GEMM) and a separate epilogue, its config: "fused" (one Triton
+            kernel of inline PTX, held to `int_mm.ptx_audit` per compiled variant) or "eager" (four torch kernels)
 Their configs are `configs.CONFIGS` (tune.py's gated winners, or --configs a tune.py best.json), else the kernel's default.
 
-    python run.py --out OUT [--kernel wgmma|triton] [--models mqa16k52] [--ms 1,7,16,...] [--extra-cfgs CFG,...]
+    python run.py --out OUT [--kernel wgmma|triton|int_mm] [--models mqa16k52] [--ms 1,7,16,...] [--extra-cfgs CFG,...]
                   [--configs BEST_JSON] [--no-edge] [--no-swap] [--no-head]
 
 Per linear (N, K) of `fixture.shapes(models)` and M, on `fixture`'s inputs (all of s8, structured rows and columns, special
 scales):
-    sums       z = X W^T by torch._int_mm (cuBLASLt, s32), held to `fixture.sums` (float64, exact) on the structured and
+    sums       z = X W^T by `int_mm.int_mm` (torch._int_mm, cuBLASLt, s32), held to `fixture.sums` (float64, exact) on the structured and
                special rows and columns and sampled others
     twin       `fixture.epilogue(z, s_a, s_w)` on every cell: the Definition's words (tests/test_twin.py holds it to the
                Definition's evaluator)
@@ -45,9 +47,9 @@ import torch
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import fixture as FX  # noqa: E402
+import int_mm as IM  # noqa: E402
 import wgmma as W  # noqa: E402
 from configs import CONFIGS  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 POISON = 0xA5
@@ -134,7 +136,48 @@ class Triton:
         return {"kernel": self.name, "triton": __import__("triton").__version__}
 
 
-KERNELS = {"wgmma": Wgmma, "triton": Triton}
+class Epilogue(str):
+    """IntMm's config: one of `int_mm.EPILOGUES`."""
+
+    @classmethod
+    def parse(cls, text: str) -> Epilogue:
+        if text not in IM.EPILOGUES:
+            raise ValueError(f"int_mm's config {text!r}: one of {IM.EPILOGUES}")
+        return cls(text)
+
+
+class IntMm:
+    """int_mm.py's `linear`: torch._int_mm and the fused epilogue, the eager one beside it."""
+    name, Cfg, extra = "int_mm", Epilogue, ("eager",)
+
+    def pick(self, m: int, n: int, k: int) -> Epilogue:
+        return table_cfg(self, m, n, k) or Epilogue("fused")
+
+    def baseline(self, m: int, n: int, k: int) -> Epilogue:
+        return Epilogue("fused")
+
+    def skip(self, cfg, m: int, n: int) -> str | None:
+        return None
+
+    def call(self, x, sa, w, sw, y, cfg):
+        IM.linear(x, sa, w, sw, epilogue=cfg, out=y)
+        return cfg, x, sa, w, sw
+
+    def checks(self, handle) -> dict:
+        cfg, x, sa, w, sw = handle
+        if cfg != "fused":
+            return {"epilogue": cfg, "ok": True}
+        audit = IM.ptx_audit(IM.fused_ptx(IM.int_mm(x, w), sa, sw))
+        return {"epilogue": cfg, "ptx": audit, "ok": audit["ok"]}
+
+    def residue(self) -> int:
+        return 0
+
+    def meta(self) -> dict:
+        return {"kernel": self.name, "triton": IM.triton.__version__ if IM.triton else None}
+
+
+KERNELS = {"wgmma": Wgmma, "triton": Triton, "int_mm": IntMm}
 
 
 def kernel(name: str | None = None):
@@ -223,7 +266,7 @@ class Case:
         self.x = codes(m, k, seed, FX.STRUCT_ROWS)
         self.sa_np = FX.act_scales(m, seed, special)
         self.sa = torch.from_numpy(self.sa_np).cuda()
-        self.z = E.int_mm(self.x, wt.w)
+        self.z = IM.int_mm(self.x, wt.w)
         self.ref16 = reference(self.z, self.sa, wt.sw)
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
         self.twin16 = self._twin() if twin else None
@@ -357,7 +400,7 @@ def main() -> int:
     ap.add_argument("--kernel", choices=sorted(KERNELS), default=None)
     ap.add_argument("--models", default=",".join(FX.DEFAULT_MODELS))
     ap.add_argument("--ms", default=None, help="default: fixture.GATE_MS and every configs.CONFIGS m_max")
-    ap.add_argument("--extra-cfgs", default=None, help="default: the kernel's (wgmma.EXTRA_CFGS, TRITON_EXTRA)")
+    ap.add_argument("--extra-cfgs", default=None, help="default: the kernel's (wgmma.EXTRA_CFGS, TRITON_EXTRA, int_mm's eager)")
     ap.add_argument("--configs", default=None, help="a tune.py best.json for this kernel")
     ap.add_argument("--no-edge", action="store_true")
     ap.add_argument("--no-swap", action="store_true")

@@ -1,4 +1,4 @@
-"""VLLM-75 on one GPU: a MoE (OLMoE by default) pinned int8 (`int8-checkpoint`, recipe v1) served under `TargetProfile.int8_exact`
+"""On one GPU: a MoE (OLMoE by default) pinned int8 (`int8-checkpoint`, recipe v1) served under `TargetProfile.int8_exact`
 "linears", its routed experts on `Int8ExpertsMethod`, checked bit for bit on the CPU.
 
 One process writes `<out>/int8_experts_gpu.json` and `<out>/pin_entry.json` (the int8 pin's entry):
@@ -23,7 +23,7 @@ One process writes `<out>/int8_experts_gpu.json` and `<out>/pin_entry.json` (the
             and the served weight against the oracle's `quant_rows(w.float(), 127)` of the base weight.
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY tests/engine/int8_experts_gpu.py --out DIR --at 2026-10-23T00:00:00Z --by LANE
+    $PY tests/engine/int8_experts_gpu.py --out DIR --at ISO_TIME --by LANE
 """
 from __future__ import annotations
 

@@ -91,8 +91,8 @@ def test_sampling_params_prefers_the_request_params(monkeypatch):
     fake.SamplingParams = SP
     monkeypatch.setitem(sys.modules, "vllm", fake)
     samp = {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "seed": 0, "n": 1}
-    fn({"max_tokens": 16, "seed": None, "n": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}, samp)   # the pinned greedy row
-    fn({"max_tokens": 16, "seed": 0, "n": 1}, samp)                                                     # the sampled row
+    fn({"max_tokens": 16, "seed": None, "n": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}, samp)   # the pinned greedy workload
+    fn({"max_tokens": 16, "seed": 0, "n": 1}, samp)                                                     # the sampled workload
     fn({"max_tokens": 16, "seed": 7, "n": 1, "temperature": 0.7, "top_p": 0.9, "top_k": 50}, samp)
     assert (calls[0]["temperature"], calls[0]["seed"]) == (0.0, 0)          # no request seed -> the workload's seed
     assert (calls[1]["temperature"], calls[1]["seed"], calls[1]["top_k"]) == (1.0, 0, 0)
@@ -182,7 +182,7 @@ def _lane_ctx(events, start, sampling, seed=None, sample=None):
     import dataclasses
     from verity_vllm.observe.fold.resolver import StepContext
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.engine.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
+    from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
     hdr = S.header(sampling)
     if seed is not None:
         hdr.workload["requests"][0]["seed"] = seed

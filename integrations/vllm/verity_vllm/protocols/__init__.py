@@ -49,7 +49,7 @@ import dataclasses
 import hashlib
 import importlib
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -254,16 +254,24 @@ class Composition:
             raise ValueError(f"no bindable option {name!r} in {list(self.entries)}")
         opt.commits.update(commitment)
 
+    def unhook(self) -> None:
+        """Every option's hooks off the model, newest first, each release left to `close` (which may run on another thread,
+        the model touched no more).  The first error is raised once every option's hooks were tried."""
+        self._each(lambda opt: opt.hooks.uninstall())
+
     def close(self) -> None:
         """Close every option, newest first.  Idempotent; an option whose close raises does not keep the older ones
         installed (the first error is raised once all are closed)."""
         if self.closed:
             return
         self.closed = True
+        self._each(lambda opt: opt.close())
+
+    def _each(self, act: Callable[[Any], Any]) -> None:
         err: BaseException | None = None
         for opt in reversed(self.installed):
             try:
-                opt.close()
+                act(opt)
             except BaseException as e:  # noqa: BLE001
                 err = err or e
         if err is not None:
@@ -418,14 +426,20 @@ def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> 
     return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
 
 
-def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None) -> Any:
+def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None,
+                 commit_scheme: str | None = None) -> Any:
     """The Commit's check before its engine is built: ``profile`` back unchanged when the Commit can run its set, else
     exit 3 (fail-closed) with every reason printed.  ``hot`` is a hot Commit worker and ``installs`` False a Commit that
-    installs no options (the TP Commit): both refuse any declared set."""
+    installs no options (the TP Commit): both refuse any declared set.  ``commit_scheme``, the committer's
+    (``--commit-scheme``), must be the one sampled proofs is declared with."""
     try:
         ctx = commit_context(profile, world=world, settings=settings)
         if ctx is not None and (hot or not installs):
             raise Refused([f"this Commit ({'the hot worker' if hot else 'TP'}) installs no protocol options yet"])
+        declared = ctx.scheme("sampled-proofs") if ctx is not None else None
+        if commit_scheme is not None and declared is not None and declared != commit_scheme:
+            raise Refused([f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
+                           f"commits under {commit_scheme}: run it with --commit-scheme {declared}"])
     except Refused as e:
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None

@@ -54,7 +54,7 @@ def test_a_step_gets_the_stage_rpc_bound_unless_the_operator_set_one(monkeypatch
 @pytest.mark.parametrize("module, fn", [("verity_vllm.pipeline.tp.capture", "main"), ("verity_vllm.pipeline.tp.commit", "main"),
                                         ("verity_vllm.pipeline.tp.match", "_engine_main")])
 def test_every_tp_engine_bounds_a_step_by_its_rpc_timeout_before_it_is_built(module, fn) -> None:
-    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy row's first one
+    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy workload's first one
     took 147 s on an idle host."""
     import importlib
     import inspect
@@ -151,5 +151,5 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
 
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
-    is not the execution order, and wiring (operand_provenance) fails."""
+    is not the execution order the fold takes it to be."""
     assert env.ENGINE["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == env.EXPORT["VLLM_DISABLE_SHARED_EXPERTS_STREAM"] == "1"

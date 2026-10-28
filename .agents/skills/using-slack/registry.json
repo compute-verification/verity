@@ -104,7 +104,7 @@
       "lineage": [
         "bc-8f4b652b"
       ],
-      "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
+      "remit": "Proofs: Lean, red team, C-Flock, proof-system sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0CAGBJTJF4",
       "retired_usergroups": [
@@ -119,13 +119,10 @@
         "Security/Definitions/Core/",
         "verity/",
         "verity/core/protocols/sampled_proofs/",
-        "archive/",
         "benchmarks/one_stage/",
         "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "archive/sp1/benchmarks/dot_product/",
-        "archive/sp1/benchmarks/ir_call/",
         "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
@@ -225,15 +222,12 @@
         "Security/Definitions/Nci.lean",
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
-        "benchmarks/all_protocols/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
-        "benchmarks/e2e_h200/",
-        "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -249,11 +243,7 @@
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-        "integrations/torch_loop/",
         "fixtures/bench-instances/",
-        "fixtures/redteam/",
-        "fixtures/redteam-3/",
-        "fixtures/redteam-zk/",
         "benchmarks/census/",
         "Security/Definitions/Accounting/CoinFlow.lean",
         "Security/Definitions/Accounting/Filler.lean",
@@ -281,7 +271,9 @@
         "Security/Proofs/Accounting/HMu/",
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
-        "Security/Proofs/Accounting/TS/"
+        "Security/Proofs/Accounting/TS/",
+        "examples/h200/",
+        "examples/dither_full_util/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -320,11 +312,9 @@
         "benchmarks/bandwidth/",
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
-        "benchmarks/kv_lifetime/",
         "benchmarks/live_verifier/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
-        "benchmarks/rate_redteam/",
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
@@ -473,7 +463,6 @@
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py",
         "tools/research/src/research/drive.py",
-        "tools/research/src/research/mergequeue.py",
         "tools/research/tests/test_queue_drive.py"
       ],
       "branch_suffixes": [
@@ -559,11 +548,12 @@
         "AGENTS.md",
         "README.md",
         "ARCHITECTURE.md",
-        "glossary/",
+        "GLOSSARY.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
         "examples/README.md",
+        "examples/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -578,7 +568,8 @@
       "usergroup": "S0C954BELSW",
       "owns": [
         "integrations/vllm/",
-        "examples/vllm/"
+        "examples/vllm/",
+        "ruff.toml"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
@@ -598,7 +589,7 @@
     {
       "handle": "benchmarks",
       "holder": "the benchmarks coordinator (bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9)",
-      "remit": "Benchmarks: the overhead and throughput measurements across backends, and the tables rendered from them.",
+      "remit": "Benchmarks: the overhead and throughput measurements across proof systems, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C9ZLL7T88",
       "linear": "BENCH",
@@ -607,7 +598,8 @@
         "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py"
+        "benchmarks/judge.py",
+        "benchmarks/README.md"
       ],
       "branch_suffixes": [
         "47e4",
@@ -627,6 +619,7 @@
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
+      "linear": "HASH",
       "owns": [
         "benchmarks/hash/",
         "benchmarks/torch_gpu/"
@@ -648,6 +641,7 @@
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
+      "linear": "TRN",
       "owns": [
         "benchmarks/rho/",
         "benchmarks/circuit_properties/"

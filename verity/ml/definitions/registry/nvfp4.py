@@ -1,7 +1,7 @@
 """NVFP4 (W4A4) linear of the pinned vLLM (d9105ea80) where it runs `CutlassNvFp4LinearKernel`: cc 12.0, both checkpoint formats
 (`modelopt_fp4` and compressed-tensors `W4A4Fp4`), under `VLLM_BATCH_INVARIANT=1`.
 
-Each linear launches two kernels (the attention lane's capture, art:3bc1b2c4):
+Each linear launches two kernels (as captured on the device):
 
 1. `vllm::cvt_fp16_to_fp4<bf16>` (`scaled_fp4_quant`, csrc/libtorch_stable/quantization/fp4/nvfp4_quant_kernels.cu and
    nvfp4_utils.cuh `cvt_warp_fp16_to_fp4`, UE4M3 path), per 16-element block of the bf16 row, with `g` the fp32 global scale
