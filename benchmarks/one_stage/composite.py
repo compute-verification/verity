@@ -15,12 +15,14 @@ A case's evidence is witness, and so are its params' bodies, so the output is sp
 its files 0600) gets the product's params (``params.json``), commitment (``commitment.bin``: `bind` of the digests in
 the order of the ids, then the registration's digest) and evidence (``evidence.json``), all canonical, as
 `Core.Composition.registeredB` and `productB` read them (the composition README's formats), the blobs' paths
-(``blobs.txt``), each piece's answer (``pieces/N.answer.json``) and the product's (``answer.json``). ``--public-out``
-gets only ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its
-canonical params) and commitment, what is missing, each piece's answer and Lean's; and ``verdicts.txt``, its
-``PIECE``, ``NOT_ESTABLISHED`` and ``VERDICT`` lines, which it also prints. Before writing them it refuses (exit 65)
-public bytes that share 64 bytes or more with any case's evidence, raw or hex, the cases' commitments and digests aside.
-The public directory may not be or contain the private one.
+(``blobs.txt``), each piece's answer (``pieces/N.answer.json``) and the product's (``answer.json``). An answer's
+query, digests, profile and reason are private too (a partition's digest is the query), so ``--public-out`` gets only
+``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
+params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
+refusal's name); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED`` and ``VERDICT ID VERDICT
+[NAME]`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
+with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
+contain the private one.
 
 With ``--exe``, it runs ``EXE check params.json commitment.bin evidence.json BLOB...`` and exits with its code: 0
 accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
@@ -33,6 +35,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Iterable, Sequence
@@ -53,6 +56,11 @@ LEAK = 65
 #: Public bytes sharing a run of twice this with a case's evidence are refused: the evidence's windows at this stride,
 #: looked up among every window of the public bytes, find any such run.
 WINDOW = 32
+VERDICTS = ("accept", "reject", "undecided")
+#: A refusal's name is its reason up to the first colon (``params``, ``proofs``), public only when it is a short name and
+#: carries no value.
+NAME = re.compile(r"[A-Za-z][A-Za-z0-9_./ -]{0,63}")
+VALUE = re.compile(r"[0-9A-Fa-f]{16}")
 
 
 class Parser(argparse.ArgumentParser):
@@ -128,12 +136,32 @@ def missing(product: str, pieces: Sequence[dict[str, Any]], registration: dict[s
     return out + ([REGISTRATION] if product == "onsite" and registration is None else [])
 
 
+def outcome(id: str, answer: str | None) -> dict[str, str]:
+    """What of a Lean answer line is public: ``{"id", "verdict"}`` (``none`` when there is no answer), and ``refusal``,
+    the name of the reason a verdict other than accept gives (``refused`` when that is not a short name)."""
+    try:
+        a = json.loads(answer) if answer else {}
+    except ValueError:
+        a = {}
+    a = a if isinstance(a, dict) else {}
+    out = {"id": id, "verdict": a["verdict"] if a.get("verdict") in VERDICTS else "none"}
+    reason = a.get("reason")
+    if out["verdict"] != "accept" and isinstance(reason, str) and reason:
+        name = reason.split(":", 1)[0].strip()
+        out["refusal"] = name if NAME.fullmatch(name) and not VALUE.search(name) else "refused"
+    return out
+
+
+def line(kind: str, o: dict[str, str]) -> str:
+    return " ".join([kind, o["id"], o["verdict"], *([o["refusal"]] if "refusal" in o else [])])
+
+
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
-                  verdict: str | None) -> dict[str, Any]:
-    """What ``--public-out`` may hold: no evidence and no params bodies."""
+                  verdict: dict[str, str] | None) -> dict[str, Any]:
+    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
-            "cases": [{"id": p["id"], "params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
-                       "commitment": p["commitment"].hex(), "answer": p["answer"]} for p in cases]}
+            "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
+                       "commitment": p["commitment"].hex()} | outcome(p["id"], p["answer"]) for p in cases]}
 
 
 def check_public(public: bytes, cases: Sequence[dict[str, Any]]) -> None:
@@ -179,15 +207,17 @@ def run(a: argparse.Namespace) -> int:
     write_private(priv, files)
     cases = sorted(pieces, key=lambda p: p["id"]) + ([reg] if reg is not None else [])
     gone = missing(a.product, pieces, reg)
-    lines = [f"PIECE {p['answer']}" for p in cases] + ([f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else [])
+    lines = [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
+    lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
            *blobs]
     rc, verdict = 0, None
     if a.exe:
         p = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        verdict = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
-        write_private(priv, {"answer.json": f"{verdict or ''}\n".encode(), "check.err": p.stderr.encode()})
-        lines.append(f"VERDICT {verdict or f'no answer (exit {p.returncode}; its stderr is in --private-out)'}")
+        answer = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
+        write_private(priv, {"answer.json": f"{answer or ''}\n".encode(), "check.err": p.stderr.encode()})
+        verdict = outcome(PRODUCTS[a.product], answer)
+        lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
     record = canonical(public_record(a.product, commitment, cases, gone, verdict))
     text = "".join(f"{ln}\n" for ln in lines).encode()
