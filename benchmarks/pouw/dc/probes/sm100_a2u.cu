@@ -1,9 +1,9 @@
-// RT-B200-EMP (MM red, 24h push 19 Oct): A2u, the issue ceiling with the uniform datapath included, tested where it
+// A2u, the issue ceiling with the uniform datapath included, tested where it
 // could fail on sm_100a (B200): every SMSP's issue saturated by lane instructions while warp 0 keeps the tensor pipe
 // saturated with tcgen05.mma and issues K warp-uniform chain instructions an iteration.
 //
 // A2/A2u (data-sheet axioms, retired from Lean with the TS facet model) say an SMSP issues at most one warp instruction a cycle,
-// uniform ones included. RT-ISA r2's utc_ (sm100_async.cu) found the chain flat in K beside the async op, but its one
+// uniform ones included. sm100_async.cu's utc_ probes found the chain flat in K beside the async op, but its one
 // warp leaves the SMSP's issue ~3/4 idle (4 UTCIMMA hold it ~512 cycles), so the chain only filled idle slots: that
 // can't tell a free uniform slot from an idle one. Here nothing is idle. If the uniform instructions cost no slot, the
 // block issues more than 4 warp instructions an SM clock: (fixed loop's instructions x iters + the OP_UNTIL loop's

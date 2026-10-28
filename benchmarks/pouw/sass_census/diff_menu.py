@@ -1,5 +1,5 @@
 """Diff a device's SASS opcode census against A7's menu: every opcode the model doesn't price, and whether it can head a
-committed word (RT-ISA, the compute-accounting red team).
+committed word.
 
 A7 (the data-sheet axiom `SheetSemantics`, retired from Lean with the TS facet model) says no unit outside the menu heads
 a fresh committed word (NoSum) and a side unit costs at least its per-word vector (SideUnits). The menu is five routes

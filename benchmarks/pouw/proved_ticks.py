@@ -24,7 +24,7 @@ reads W off a block where the datacenter places a Program `SCHEME` or its one st
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
   is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, the figure the TS model's sm_120 data-sheet headline
   proved before its retirement (A5b, receipt luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π*
-  puts 197/3761 on DS_smem so that a fold on the bulk engine (RT4-SHEET-1) costs at least φ*, which lowers
+  puts 197/3761 on DS_smem so that a fold on the bulk engine costs at least φ*, which lowers
   N_w(w* + φ*) to 16.1095 against B_♭.
   main's machine model reads 0.585% at p = ¾ (`machine-model headline`), with no bulk route; the measured reading,
   0.591% on VF3s-16, is at measured rates, not the sheet's.
@@ -45,11 +45,11 @@ What it rests on:
 - A5b: a bulk or TMA instruction holds the shared-memory bytes it moves in the banks at A5's rate, a reading no vendor
   document states;
 - ε's source above, on the full-checking layer: ε_sample and the Fiat–Shamir premium are separate lines;
-- the node's work, in its G GPUs' ticks: the headline is per node (ASK-65 = A), the work of its GPUs, host CPU and
+- the node's work, in its G GPUs' ticks: the headline is per node (= A), the work of its GPUs, host CPU and
   peer GPUs together, priced on the GPUs' sheet (A1–A7 price none of its other devices: its CPUs, its DPU). Read as
-  the G GPUs' own time, it needs LOC's host deduction (decision 37) and every billable GPU on the node credited each
-  window (the machine model's README, "The headline is per node"; RT-SCOPE, #2681);
-- per block only under attribution's grade: PoUW credits the prover system (decision 111), so the ledger puts this on
+  the G GPUs' own time, it needs LOC's host deduction and every billable GPU on the node credited each
+  window (the machine model's README, "The headline is per node");
+- per block only under attribution's grade: PoUW credits the prover system, so the ledger puts this on
   the block only as far as `BlockAccount.local_at_least` places it there, graded by its anchor (`Credit.grade`), and
   the rest on the datacenter.
 """

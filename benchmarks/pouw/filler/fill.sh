@@ -3,7 +3,7 @@
 # green-context split, over decode (batch, context) x filler SMs x chain shape (big: m = k = 8192, l2: m = k = 4096). The
 # gate runs first, under the same lease, and nothing is timed unless it passes. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=CAP \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/filler/fill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/fill.sh"'
 set -uo pipefail
 export O=${OUT:?}
