@@ -20,9 +20,10 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "hold", "node", "blocks", "payload_root", "key", "layout"}`: a hello's store held to that binding
   (`Store.Binding.hold`, its payload root's subtrees on `workers` threads), `{"regions", "expected_root"}` or
   `{"refused": why, "expected_root"}` (`Difftest.heldJ`), the decision of record on the hello's `bound`;
-* `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
-  `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
-  whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
+* `{"op": "register", "site", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout",
+  "nonce"}`: `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node the
+  Site of `site`, `{"log", "auditor"}` as `Difftest.siteOf` reads it, registers as no host, and for a node with none
+  live whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
   node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
   flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
@@ -214,7 +215,8 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
   | "register" =>
     let some kind := Kind.ofName? (← ofV (J.str req "receipt" "request"))
       | throwThe String "a receipt kind is sketch-sha512 or block-sha512"
-    let (reg?, r) ← ofV (srv.registry.register srv.source (← ofV (bytesOf req "node")) (← ofV (nat req "blocks"))
+    let S ← ofV (Difftest.siteOf (← ofV (J.get req "site" "request")))
+    let (reg?, r) ← ofV (srv.registry.register S srv.source (← ofV (bytesOf req "node")) (← ofV (nat req "blocks"))
       (← ofV (bytesOf req "payload_root")) (← ofV (Difftest.codecOf (← ofV (J.get req "codec" "request")))) kind
       (← ofV (J.bool req "bind" "request")) (← ofV (J.str req "layout" "request")) (← ofV (nat req "rows"))
       (← ofV (bytesOf req "nonce")))

@@ -285,13 +285,14 @@ def read_back(registry: dict | None, s: D.Server) -> bool | None:
     """Whether both verifiers read a record's registry/v0 back and write it out as recorded; None if it keeps none."""
     if registry is None:
         return None
-    agree, out = registries({"source": "00", "registry": registry, "ops": []}, s)
+    agree, out = registries({"source": "00", "site": M.SITE, "registry": registry, "ops": []}, s)
     return agree and out is not None and out["registry"] == registry
 
 
 def refusal(v: dict, s: D.Server) -> dict:
     """A refused registration's record replayed: its node registered again on the registry as it stood before (the
-    recorded one, the node's refusals one fewer), which both verifiers must refuse, leaving the recorded registry."""
+    recorded one, the node's refusals one fewer), in a Site registering the node as a host (a node refused by its live
+    registration is one, `audit.host_of`), which both verifiers must refuse, leaving the recorded registry."""
     m, after = REFUSED.match(v["refused"]), v.get("registry")
     if m is None or after is None or m[1] not in after.get("refused", {}):
         return {"agree": None, "held": None, "why": "the record keeps no registry to replay its refusal in"}
@@ -303,7 +304,8 @@ def refusal(v: dict, s: D.Server) -> dict:
     op = {"op": "register", "node": node, "blocks": 1, "payload_root": "00" * 64, "codec": M.codec_json(M.P512),
           "receipt": receipts.DEFAULT, "bind": False, "layout": receipts.LAYOUT,
           "rows": receipts.sketch_rows(receipts.DEFAULT), "nonce": "00" * audit.NONCE_BYTES}
-    agree, out = registries({"source": "00", "registry": before, "ops": [op]}, s)
+    agree, out = registries({"source": "00", "site": M.site_json(bytes.fromhex(node)), "registry": before, "ops": [op]},
+                            s)
     if not agree:
         return {"agree": False, "held": False, "why": "the verifiers differ"}
     live = after["live"].get(node, {}).get("registration", "")

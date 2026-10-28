@@ -13,16 +13,17 @@ The functions `tests/` holds `audit.py`, `receipts.py` and `codec.py` to through
 strings lowercase hex, indices integers): a whole session's events (`session`: every event's result, the outcome and
 the record), and the pieces a mismatch there would point to (the codec's decode, a plan, a receipt, a frame-v3-sha512
 opening, a leaf's receipt, a window's draws and a registration's digest), the registration `audit.register` makes
-with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
-closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
+with its codec seed, the verifier's registry (`registry`: registrations of the hosts a Site registers, sessions over
+them and their events, closes, and `registry/v0` both ways), and `store.py`'s binding (`RemoteAudit.Store`: a pin from its file's bytes,
 canonical JSON, `checkpoint_sha512`, a payload salt, the expected root, `Binding.hold`, and `binding`, the binding as
 the verifier's process starts it and holds each hello to it, its `bind` and `hold` requests), `line.py`'s memory
 line (`line` of groups and windows given, `line_record` read off an accepted session's record, `RemoteAudit.Line`:
 rationals as strings `n` or `n/d`) and `pooled.py`'s pooled bound, which the line
 reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
 so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
-`p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
-and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`).
+`p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), its registration of a host
+the Site registers (`p2_register`), a unit's partials, sketch and receipt (`p2_sketch`) and an opening's check on
+PoUS's vk (`p2_opening`).
 `remote-audit-difftest` serves them.
 -/
 
@@ -257,11 +258,22 @@ def opOf (j : Json) : V Op := do
 
 private def refusedJ : Json := Json.mkObj [("refused", .bool true)]
 
-/-- `audit.Registry` under a given source: `{"source", "registry", "ops"}`, from the registry `registry/v0` reads back
-(`null` for an empty one), to each call's result (`refused` where `Registry` raises `RegistryError`) and the registry
-after them. A session's events go to it by its node and its place among its registration's sessions. -/
+/-- The Site of `{"log", "auditor"}`: the log checked against the auditor
+(`Core.Site.Registration.check`) at the deployed digests, refused at the first entry it refuses. -/
+def siteOf (j : Json) : V Core.Site := do
+  let (c, log) ← Core.Site.Registration.ofJson (← J.get j "log" "site")
+  let A ← Core.Site.Registration.Auditor.ofJson (← J.get j "auditor" "site")
+  match Core.Site.Registration.check Core.Site.Registration.sha512 A c log with
+  | .error (i, r) => throw s!"the Site's log is refused at entry {i}: {r.name}"
+  | .ok S => pure S
+
+/-- `audit.Registry` under a given source and Site: `{"source", "site", "registry", "ops"}`, from the registry
+`registry/v0` reads back (`null` for an empty one), to each call's result (`refused` where `Registry` raises
+`RegistryError`) and the registry after them, each registration's node held to the Site (`siteOf`). A session's
+events go to it by its node and its place among its registration's sessions. -/
 def registryFn (j : Json) : V Json := do
   let source ← hex j "source"
+  let S ← siteOf (← J.get j "site" "input")
   let mut r ← match ← J.get j "registry" "input" with
     | .null => pure ({} : Registry)
     | v => Registry.ofJson v
@@ -271,7 +283,7 @@ def registryFn (j : Json) : V Json := do
   for op in ops do
     match op with
     | .register node blocks root codec kind bind layout rows nonce =>
-      let (reg?, r') ← r.register source node blocks root codec kind bind layout rows nonce
+      let (reg?, r') ← r.register S source node blocks root codec kind bind layout rows nonce
       r := r'
       match reg? with
       | some reg =>
@@ -739,6 +751,16 @@ def p2RegistrationOf (j : Json) : V P2.Registration := do
 /-- `p2.Registration.digest`. -/
 def p2RegistrationDigestFn (j : Json) : V Json := do pure (hexJ (← p2RegistrationOf j).digest)
 
+/-- `p2.register`'s check of its node: the digest of the registration `p2RegistrationOf` reads, made only for a node
+the Site of `site` registers as a host (`P2.Registration.register`). -/
+def p2RegisterFn (j : Json) : V Json := do
+  let S ← siteOf (← J.get j "site" "input")
+  let c ← J.get j "codec" "registration"
+  let r ← P2.Registration.register S (← hex j "node") (← J.nat c "w" "codec") (← J.nat c "c0" "codec")
+    (← J.str c "expander" "codec") (← J.nat c "blocks_per_segment" "codec") (← J.nat c "segments" "codec")
+    (← hex j "commitment") (← hex j "salt") (← hex j "root") (← nat j "rows")
+  pure (hexJ r.digest)
+
 private def p2Seed (j : Json) : V ByteArray := do
   let s ← hex j "seed"
   if s.size ≠ DIGEST_BYTES then throw "a pass seed is 64 bytes"
@@ -797,6 +819,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("pin", pinFn), ("canonical_json", canonicalJsonFn), ("checkpoint_sha512", checkpointFn),
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("node", nodeFn), ("pooled", pooledFn),
-  ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn)]
+  ("p2_registration_digest", p2RegistrationDigestFn), ("p2_register", p2RegisterFn), ("p2_sketch", p2SketchFn),
+  ("p2_opening", p2OpeningFn)]
 
 end RemoteAudit.Difftest

@@ -100,6 +100,7 @@ from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
+from verity.core.site import Site
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
 from verity.ml.randomness import derive, frame
@@ -281,6 +282,19 @@ def _node(node: bytes) -> bytes:
     if type(node) is not bytes or not 1 <= len(node) <= NODE_BYTES:
         raise ValueError(f"a node's id is 1 to {NODE_BYTES} bytes")
     return node
+
+
+def host_of(site: Site, node: bytes) -> str:
+    """The host a node's id names: its bytes read as UTF-8 the id of a location `site` registers as a host
+    (`Site.kind`); ValueError for any other id.  The verifier registers a store only for such a node
+    (`Registry.register`, `p2.register`), as `RemoteAudit.hostOf` does."""
+    try:
+        h = _node(node).decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("a node's id is a host's id in UTF-8") from None
+    if site.kind(h) != "host":
+        raise ValueError(f"{h} is no host the Site registers")
+    return h
 
 
 def _bind(bind: object) -> bool:
@@ -1376,9 +1390,9 @@ def _outcomes(value: object) -> list[str]:
 
 
 class Registry:
-    """The verifier's registrations, at most one live a node (the red team's KB-4).  `register` draws a codec seed
-    (`register`) only for a node with none live: a second while one is live is refused (`RegistryError`) and counted
-    (`refused`), and draws nothing, so a retry never redraws.  A registration ends only when the verifier closes it
+    """The verifier's registrations, at most one live a node (the red team's KB-4), each of a host the Site registers
+    (`host_of`).  `register` draws a codec seed (`register`) only for a node with none live: a second while one is
+    live is refused (`RegistryError`) and counted (`refused`), and draws nothing, so a retry never redraws.  A registration ends only when the verifier closes it
     (`close`), which counts each of its sessions as it stands: accepted, the failure that rejected it, or `UNENDED`,
     counted as failed.  So a failed session stays on its registration's record, and every codec seed a node has been
     given is in `closed` or live: `drawn(node)` is R, what an advice form charges as log₂ R.  `to_json` and `from_json`
@@ -1401,11 +1415,13 @@ class Registry:
         return sum(c.node == node for c in self.closed) + (node in self._live)
 
     def register(self, source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
-                 receipt: str = receipts.DEFAULT, **kw) -> Registration:
-        """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
-        with.  One that would bind PoUW's tile outputs (`bind`) draws nothing either (ValueError): the verifier's
-        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
+                 receipt: str = receipts.DEFAULT, *, site: Site, **kw) -> Registration:
+        """`register`'s draw for a node `site` registers as a host (`host_of`, ValueError for any other) with no live
+        registration, which it makes live; refused, and counted, for one with.  One that would bind PoUW's tile
+        outputs (`bind`) draws nothing either (ValueError): the verifier's definition, `RemoteAudit.Registry.register`,
+        covers receipts of a block alone and refuses it."""
         node = _node(node)
+        host_of(site, node)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
             raise RegistryError(f"node {node.hex()} has a live registration, {self._live[node].digest.hex()[:16]}…: a "

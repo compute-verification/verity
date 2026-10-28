@@ -39,8 +39,11 @@ then leaves right behind the close, so its coin, after the same root, is asked f
 boundary is due at its k-th root, so its coin is asked for first, after that root, and the close second, and the
 prover waits a round trip on each coin.
 
-A node has one live registration (`audit.Registry`), this process's own or kept across processes in `--registry`: a
-hello for a node with a live registration is answered `bye` with the reason and draws nothing. The process closes its
+A node is a host the Site of `--site` registers, its id that host's id in UTF-8 (`audit.host_of`, the Lean's
+`RemoteAudit.hostOf`, each verifier checking the log itself): a hello naming any other is answered `bye` with the
+reason and draws nothing. A node has one live registration (`audit.Registry`), this process's own or kept across
+processes in `--registry`: a hello for a node with a live registration is answered `bye` with the reason and draws
+nothing. The process closes its
 registration after its last session, counting each session (a failed one by its failure); one left live by a
 process that ended early stays live, refusing the node, until `--close NODE` closes it with its sessions as they stood,
 the one in flight unended.
@@ -99,7 +102,8 @@ the Lean's session, which holds only the append coins released, otherwise.
 
 Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
 
-    python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
+    python verifier.py --port 7781 --out OUT --site LOG HOST [--site-keys KEYS]
+                       [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
                        [--registry REGISTRY.json] [--lean-exe PATH]
                        [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
                        [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
@@ -159,15 +163,45 @@ def device_memory(node: hardware.NodeFigures) -> int:
 HBM_BYTES = device_memory(NODE)
 
 
+def site_of(log: Path, keys: Path | None = None) -> dict:
+    """The Site a registration log registers as both verifiers take it, `{"log", "auditor"}`
+    (`RemoteAudit.Difftest.siteOf`): the log (`verity.core.site.Registration`'s JSON) and the auditor's data sheets,
+    every GPU card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
+    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], json.loads(keys.read_text()) if keys else None)
+    return {"log": json.loads(log.read_text()), "auditor": auditor.to_json()}
+
+
+def one_host(h: str) -> dict:
+    """`site_of`'s JSON for a remote log of one site holding one host, `h`, and nothing else: the Site a verifier in
+    the prover's own process holds its node to (`serve.py --local`)."""
+    log = site.Registration("remote")
+    log = log.append(log.entry(locs=(site.Loc("site", "site"), site.Loc(h, "host", "site"))))
+    return {"log": log.to_json(), "auditor": site.Auditor().to_json()}
+
+
+def vy_nebius_log(host: str) -> site.Registration:
+    """A remote log of one site, `site0`, holding one host, `host`, of eight RTX PRO 6000s (their card's sheet, an HBM
+    leaf each) and a TiB of DRAM: a vy-nebius node, for a verifier whose prover runs beside it (`ahead_bench.py`)."""
+    sheet = site.Sheet.of_file(load("rtx-pro-6000-server"))
+    gpus = [x for i in range(8) for x in (site.Loc(f"gpu{i}", "device", host, sheet=sheet.digest()),
+                                           site.Loc(f"hbm{i}", "memory", f"gpu{i}", tier="hbm", bytes=sheet.mem))]
+    log = site.Registration("remote")
+    return log.append(log.entry((sheet,), (site.Loc("site0", "site"), site.Loc(host, "host", "site0"), *gpus,
+                                           site.Loc("dram0", "memory", host, tier="dram", bytes=1 << 40))))
+
+
+def checked(j: dict) -> site.Site:
+    """The Site of `site_of`'s JSON: its log checked entry by entry against its auditor (`site.check`), `site.Refused`
+    at the first entry that fails."""
+    return site.check(site.Registration.of_json(j["log"]), site.Auditor.of_json(j["auditor"]))
+
+
 def site_node(log: Path, host: str, keys: Path | None = None, host_card: str = hardware.VY_NEBIUS[1],
               placeholders: Sequence[str] = hardware.VY_NEBIUS[2]) -> hardware.NodeFigures:
     """The figures of host `host`'s node in the Site a registration log registers (`ledger.figures`), on host card
     `host_card` with the placeholders `placeholders` names read as open (by default a vy-nebius node's): the log
-    (`verity.core.site.Registration`'s JSON) checked entry by entry (`site.check`) against the auditor's data sheets,
-    every GPU card file's, and its own devices' keys, `keys` (a JSON object of id to key)."""
-    auditor = site.Auditor.of_files([load(sku) for sku in skus("gpu")], json.loads(keys.read_text()) if keys else None)
-    return ledger.figures(site.check(site.Registration.of_json(json.loads(log.read_text())), auditor), host,
-                          host_card, placeholders)
+    checked against the auditor's data sheets and its own devices' keys, `keys` (`site_of`, `checked`)."""
+    return ledger.figures(checked(site_of(log, keys)), host, host_card, placeholders)
 
 
 DISK_BYTES_PER_S = 4.4e9
@@ -961,8 +995,8 @@ class Pair:
 
 
 class Verifier:
-    def __init__(self, conn: wire.Conn, *, source: bytes, windows: int, window_ns: int, samples: int, delta: float,
-                 jitter_ns: int, clock=None, log=print, checks=None, lifetime: int | None = None,
+    def __init__(self, conn: wire.Conn, *, source: bytes, site: dict, windows: int, window_ns: int, samples: int,
+                 delta: float, jitter_ns: int, clock=None, log=print, checks=None, lifetime: int | None = None,
                  registry: audit.Registry | None = None, hbm_bytes: int = HBM_BYTES, host_bytes: int = 0,
                  ingress_bytes_per_s: float = 0.0, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
@@ -972,6 +1006,7 @@ class Verifier:
                  binding: rstore.Binding | None = None, groups_per_coin: int = 1) -> None:
         coins.openings_coins(1, groups_per_coin)
         self.groups_per_coin = groups_per_coin
+        self.site, self.hosts = site, checked(site)
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.payload_key = secrets.token_bytes(rstore.KEY_BYTES) if payload_key is None else payload_key
         self.binding = binding
@@ -1049,7 +1084,7 @@ class Verifier:
     def register(self) -> tuple[audit.Registration, dict]:
         """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, drawn through
         the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
-        raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
+        raised), a node the Site registers as no host (`audit.host_of`'s ValueError), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
         covers none of: ValueError), or, with a `binding`, a store that isn't the pinned model's under that key
         (`hold_store`'s Refused), all before the registry draws anything. Both registries draw it
@@ -1075,13 +1110,13 @@ class Verifier:
         bind = hello.get("bind", False)
         nonce = secrets.token_bytes(audit.NONCE_BYTES)
         try:
-            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, bind=bind,
-                                                       rows=rows, nonce=nonce)
+            self.registration = self.registry.register(self.source, node, blocks, root, c, receipt, site=self.hosts,
+                                                       bind=bind, rows=rows, nonce=nonce)
             mine, why = {"codec_seed": self.registration.codec_seed.hex(), "digest": self.registration.digest.hex()}, None
         except (audit.RegistryError, ValueError) as e:
             mine, why = (lv.REFUSED if isinstance(e, audit.RegistryError) else {"error": True}), e
         try:
-            got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce, bind))
+            got = self.lean.call(lv.register_request(node, blocks, root, c, receipt, rows, nonce, bind, self.site))
         except (lv.LeanError, ValueError):
             got = {"error": True}
         if got != mine:
@@ -1572,7 +1607,9 @@ def main() -> int:
                          "live registration there is refused (default: this process's own)")
     ap.add_argument("--site", nargs=2, metavar=("LOG", "HOST"),
                     help="the audited node: host HOST of the Site the registration log LOG registers (`site_node`), "
-                         "its figures read off its devices' cards (default: a vy-nebius node, `hardware.VY_NEBIUS`)")
+                         "its figures read off its devices' cards; a session's hello names a host it registers "
+                         "(`audit.host_of`); without --site only --close and --memory-of run, the latter on a "
+                         "vy-nebius node (`hardware.VY_NEBIUS`)")
     ap.add_argument("--site-keys", type=Path, metavar="KEYS",
                     help="--site: the auditor's devices' keys, a JSON object of id to key")
     ap.add_argument("--host-card", default=hardware.VY_NEBIUS[1], metavar="SKU",
@@ -1667,9 +1704,11 @@ def main() -> int:
                     help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
                          "verifier's threads recomputing it at the same time")
     a = ap.parse_args()
+    hosts = None
     if a.site:
-        NODE = site_node(Path(a.site[0]), a.site[1], a.site_keys, a.host_card,
-                         hardware.VY_NEBIUS[2] if a.placeholder is None else a.placeholder)
+        hosts = site_of(Path(a.site[0]), a.site_keys)
+        NODE = ledger.figures(checked(hosts), a.site[1], a.host_card,
+                              hardware.VY_NEBIUS[2] if a.placeholder is None else a.placeholder)
     a.hbm_bytes = device_memory(NODE) if a.hbm_bytes is None else a.hbm_bytes
     a.engines = len(NODE.devices) if a.engines is None else a.engines
     if a.memory_of is not None:
@@ -1703,6 +1742,8 @@ def main() -> int:
     if a.groups_per_coin > 1 and any(pace_of(x, 1.0).get("in_flight") == 1 for x in a.paced or ()):
         ap.error("--groups-per-coin above 1 takes no --paced session at one window in flight (F = 1): the Lean "
                  "verifier refuses one, as no property covers it; drop :1 or --groups-per-coin")
+    if hosts is None:
+        ap.error("a session needs --site LOG HOST: the verifier registers a store only for a host the Site registers")
     a.out.mkdir(parents=True, exist_ok=True)
     if a.challenger == "gate" and a.port in challengers.GATE_PORTS:
         ap.error(f"--port {a.port} is one of the gate's session ports ({challengers.GATE_PORTS.start}.."
@@ -1740,7 +1781,8 @@ def main() -> int:
     # saves this process's registry over the file.
     registry = load_registry(a.registry)
     conn = wire.Conn(sock)
-    v = Verifier(conn, source=os.urandom(32), windows=a.windows, window_ns=round(a.window_ms * 1e6), samples=a.samples,
+    v = Verifier(conn, source=os.urandom(32), site=hosts, windows=a.windows, window_ns=round(a.window_ms * 1e6),
+                 samples=a.samples,
                  delta=2.0 ** a.delta_log2, jitter_ns=round(a.jitter_ms * 1e6),
                  log=lambda m: print(m, flush=True), checks=checks, lifetime=a.lifetime, registry=registry,
                  hbm_bytes=a.hbm_bytes, host_bytes=a.host_bytes, ingress_bytes_per_s=a.ingress_bytes_per_s,

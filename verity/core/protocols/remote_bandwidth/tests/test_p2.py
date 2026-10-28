@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from test_registrations import hosts
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as pous_p2
 from verity.core.protocols.pous.schemes.p2 import P2Params
@@ -21,6 +22,7 @@ from verity.ml.randomness import frame
 FIXTURES = Path(__file__).parent / "fixtures"
 SOURCE = b"the verifier's secret"
 NODE = b"p2-node-under-test"
+SITE = hosts(NODE.decode())
 SCHEDULE = timing.honest(1000, 2, 300, gap_ns=10, down_ns=20, up_ns=30)
 A = 20 + 30 + 300 + 10
 
@@ -67,7 +69,7 @@ def vk(fixture):
 
 @pytest.fixture(scope="module")
 def store(fixture, vk) -> p2.Store:
-    reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk)
+    reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk, site=SITE)
     return p2.Store(reg, fixture["blocks"])
 
 
@@ -135,7 +137,9 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
     assert len({reg.digest, dataclasses.replace(reg, rows=64).digest, dataclasses.replace(reg, node=b"x").digest}) == 3
     other = setup.draw_salt(b"another secret", reg.commitment)
     with pytest.raises(ValueError, match="under the salt"):
-        p2.register(b"another secret", NODE, reg.commitment, vk)
+        p2.register(b"another secret", NODE, reg.commitment, vk, site=SITE)
+    with pytest.raises(ValueError, match="another node is no host the Site registers"):
+        p2.register(SOURCE, b"another node", reg.commitment, vk, site=SITE)
     assert other != reg.salt
     with pytest.raises(ValueError, match="not the registered C"):
         p2.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])

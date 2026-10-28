@@ -41,6 +41,7 @@ if __package__ in (None, ""):
 else:
     from . import store as S
 
+from verity.core import site
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import expand_prefix
 from verity.core.protocols.remote_bandwidth import audit, coins, p2, receipts
@@ -92,15 +93,23 @@ def blocks_of(store: S.Store, c_star: bytes) -> list[bytes]:
     return [c_star[nb * j:nb * (j + 1)] for j in range(store.params.blocks)]
 
 
+def toy_site(node: bytes = NODE) -> site.Site:
+    """The toy's Site: one site holding one host, the toy's node, its id in UTF-8 (`audit.host_of`)."""
+    log = site.Registration("remote")
+    log = log.append(log.entry(locs=(site.Loc("site0", "site"), site.Loc(node.decode(), "host", "site0"))))
+    return site.check(log, site.Auditor())
+
+
 def registration(store: S.Store, doc: dict, c_star: bytes, node: bytes = NODE) -> p2.Registration:
     """The verifier's registration of the toy's store: PoUS's setup decoding `C*` to the committed `W` under the salt
-    it drew from its source after the commitment, then `p2.register`."""
+    it drew from its source after the commitment, then `p2.register` of the node as a host of the toy's Site
+    (`toy_site`)."""
     params, n = store.params, store.params.blocks_per_segment
     commitment, salt, source = (bytes.fromhex(doc[k]) for k in ("commitment", "salt", "source"))
     blocks = blocks_of(store, c_star)
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.register(source, node, commitment, vk)
+    return p2.register(source, node, commitment, vk, site=toy_site(node))
 
 
 def _requant(v: np.ndarray, k: int) -> np.ndarray:

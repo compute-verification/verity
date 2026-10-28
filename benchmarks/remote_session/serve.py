@@ -164,7 +164,8 @@ def verify_locally(lsock, clock: PassClock, a: argparse.Namespace, out: dict) ->
     lsock.close()
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), windows=a.windows,
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32),
+                              site=verifier.one_host(a.node), windows=a.windows,
                               window_ns=a.window_ns, samples=a.samples, delta=2.0 ** -40, jitter_ns=10 ** 9,
                               clock=clock, log=lambda m: None, lifetime=a.lifetime)
         v.register()

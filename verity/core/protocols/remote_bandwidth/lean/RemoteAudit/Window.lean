@@ -1,4 +1,5 @@
 import Std.Data.HashMap
+import CoreProtocol.Site
 import RemoteAudit.Receipts
 
 /-!
@@ -68,6 +69,14 @@ def Registration.make? (node : ByteArray) (blocks : Nat) (payloadRoot codecSeed 
   if layout ≠ LAYOUT then throw "the block layout is store-order/v0"
   if !receipt.rowsOk rows then throw "the sketch rows are not the receipt kind's"
   pure { node, blocks, payloadRoot, codecSeed, codec, receipt, rows, key := Codec.key codecSeed codec }
+
+/-- `audit.host_of`: the host a node's id names, its bytes read as UTF-8 the id of a location the Site `S` registers
+as a host (`Core.Site.kind?`); refused for any other id. The verifier registers a store only for such a node
+(`Registry.register`, `P2.Registration.register`). -/
+def hostOf (S : Core.Site) (node : ByteArray) : Except String String :=
+  match String.fromUTF8? node with
+  | none => throw "a node's id is a host's id in UTF-8"
+  | some h => if S.kind? h = some .host then pure h else throw s!"{h} is no host the Site registers"
 
 def CODEC_DOMAIN : String := "verity/remote-bandwidth/codec/v0"
 def NONCE_BYTES : Nat := 32

@@ -80,15 +80,15 @@ class PassClock:
 
 
 @contextlib.contextmanager
-def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.Verifier]:
-    """`verifier.Verifier` over the accepted ``sock`` on ``clock``, torn down however the body ends: the socket shut,
-    so a prover waiting on it sees the audit run end (the verifier's reader thread would hold it open), and the Lean
-    verifier's process (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
-    on its stdin."""
+def verifying(sock: socket.socket, clock: PassClock, node: str = "test-node", **kw) -> Iterator[verifier.Verifier]:
+    """`verifier.Verifier` over the accepted ``sock`` on ``clock``, under a Site whose one host is the prover's
+    ``node`` (`verifier.one_host`), torn down however the body ends: the socket shut, so a prover waiting on it sees
+    the audit run end (the verifier's reader thread would hold it open), and the Lean verifier's process
+    (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting on its stdin."""
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), delta=2.0 ** -40,
-                              jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), site=verifier.one_host(node),
+                              delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
         yield v
     finally:
         with contextlib.suppress(OSError):
@@ -608,7 +608,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     is answered `bye`, and `prove` raises `remote.Refused` with the verifier's reason."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
-    registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512)
+    registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512,
+                      site=verifier.checked(verifier.one_host("test-node")))
     lsock = wire.listen("127.0.0.1", 0)
     address = f"127.0.0.1:{lsock.getsockname()[1]}"
     raised = []

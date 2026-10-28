@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from test_registrations import hosts
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
@@ -59,7 +60,7 @@ def store() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, NODE, commitment, vk), blocks)
+    return p2.Store(p2.register(SOURCE, NODE, commitment, vk, site=hosts(NODE.decode())), blocks)
 
 
 class Prover:

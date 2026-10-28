@@ -26,6 +26,7 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.core import site
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
@@ -44,6 +45,17 @@ P512 = codec.Codec(codec.P512, 2, False)
 P512_K3 = codec.Codec(codec.P512, 3, True)
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
+
+
+def site_json(*hosts: bytes) -> dict:
+    """`siteOf`'s input: a remote log of one site, `site0`, holding the hosts `hosts` (each its id in UTF-8), under an
+    auditor with no sheets."""
+    log = site.Registration("remote")
+    log = log.append(log.entry(locs=(site.Loc("site0", "site"), *(site.Loc(h.decode(), "host", "site0") for h in hosts))))
+    return {"log": log.to_json(), "auditor": site.Auditor().to_json()}
+
+
+SITE = site_json(NODE)
 
 
 # --- decoding, as `RemoteAudit.Difftest` decodes ----------------------------------------------------------------------
@@ -400,10 +412,21 @@ def registry_op(v: Any) -> tuple:
     raise D.Reject(f"no registry op {op}")
 
 
-def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
+def site_of(v: Any) -> site.Site:
+    """`siteOf`: the Site of `{"log", "auditor"}`, its log checked against the auditor (`site.check`), refused at the
+    first entry it refuses."""
+    try:
+        return site.check(site.Registration.of_json(_get(v, "log")), site.Auditor.of_json(_get(v, "auditor")))
+    except site.Refused as e:
+        raise ValueError(f"the Site's log is refused at entry {e.entry}: {e.name}") from None
+
+
+def _registry_call(r: audit.Registry, source: bytes, S: site.Site, drawn: list[audit.Registration], op: str,
+                   a: tuple) -> Any:
     if op == "register":
         node, blocks, root, c, kind, bind, layout, rows, nonce = a
-        reg = r.register(source, node, blocks, root, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
+        reg = r.register(source, node, blocks, root, c, kind, site=S, bind=bind, layout=layout, rows=rows,
+                         nonce=nonce)
         drawn.append(reg)
         return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
     if op == "session":
@@ -426,18 +449,19 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
 
 
 def registry(v: Any) -> dict:
-    """`registryFn`: a case's calls on `audit.Registry` under its source, from the registry read back (`registry_of`),
-    each call's result (`refused` where it raises `RegistryError`) and the registry after them. A session's events
-    go through the `Session` the registry holds, on the clock it was started with."""
+    """`registryFn`: a case's calls on `audit.Registry` under its source and Site (`site_of`), from the registry read
+    back (`registry_of`), each call's result (`refused` where it raises `RegistryError`) and the registry after them.
+    A session's events go through the `Session` the registry holds, on the clock it was started with."""
     with decoding():
         source = hex_(v, "source")
+        S = site_of(_get(v, "site"))
         r = registry_of(_get(v, "registry"))
         ops = [registry_op(o) for o in _list(v, "ops")]
     drawn: list[audit.Registration] = []
     results = []
     for op, *a in ops:
         try:
-            results.append(_registry_call(r, source, drawn, op, tuple(a)))
+            results.append(_registry_call(r, source, S, drawn, op, tuple(a)))
         except audit.RegistryError:
             results.append({"refused": True})
     return {"registry": r.to_json(), "results": results}

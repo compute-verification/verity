@@ -118,7 +118,7 @@ def run(plan: str, *, windows: int = 3, copies: bool = True, **kw):
     th.start()
     sock, _ = lsock.accept()
     lsock.close()
-    with verifying(sock, clock, windows=windows, window_ns=5, samples=512, lifetime=60) as v:
+    with verifying(sock, clock, "gpu-node", windows=windows, window_ns=5, samples=512, lifetime=60) as v:
         v.register()
         try:
             r = v.session(0, v.allowance(v.ping(4)), None)

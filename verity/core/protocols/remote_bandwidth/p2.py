@@ -54,6 +54,7 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.params import SALT_BITS
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
+from verity.core.site import Site
 from verity.ml.randomness import frame
 
 from . import audit, coins, receipts
@@ -139,11 +140,13 @@ class Registration:
             + self.rows.to_bytes(4, "big")).digest()
 
 
-def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
+def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *, site: Site,
              rows: int | None = None) -> Registration:
-    """The verifier's registration of a node's P2 store from its PoUS setup: the salt it draws from its own secret
-    `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
-    (`setup.verifier_key_from_encoding`), must be under."""
+    """The verifier's registration of a node's P2 store from its PoUS setup, for a node `site` registers as a host
+    (`audit.host_of`, ValueError for any other; `RemoteAudit.P2.Registration.register`): the salt it draws from its
+    own secret `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded
+    at setup (`setup.verifier_key_from_encoding`), must be under."""
+    audit.host_of(site, node)
     salt = setup.draw_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))
     if type(vk) is not VerifierKey or type(vk.params) is not P2Params or vk.salt != salt:
         raise ValueError("vk is the verifier's own, built at PoUS's setup under the salt it drew after the commitment")

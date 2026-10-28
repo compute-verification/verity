@@ -32,7 +32,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   there, root's and 0644, whenever it pins either host, and no run starts without it), writes every session's transcript
   (`--transcript`) and keeps the registry. The audited node's capacities, which its memory line is measured against
   (`--host-bytes`, `--ingress-bytes-per-s`, `--hbm-bytes`), are the host's for `--peer` (`/etc/vy/verifier.json`),
-  never the request's. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
+  never the request's, and so is the Site its hello is held to (`--site LOG HOST`, the peer's `site`: `log`, the
+  registration log of the peer's node infra keeps on this host, and `host`, the node's id in it, which the prover's
+  hello names as its node); a peer with no `site` runs nothing. The prover reaches the port only through its tunnel account's `ssh -L` (`vy-verifier-tunnel`),
   which may open nothing else; `status RUN` says when the verifier listens, and the prover connects after that. The
   unit, `vy-verifier@<run>.service`, leaves `runs/<run>/out/` as `benchmarks/remote_session/run.sh`'s ROLE=verifier
   does (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`), which `auditor_line.py` reads, and the
@@ -349,18 +351,25 @@ def bound_paths(host: Host, settings: dict, role: str, tree: Path = TREE) -> tup
 def verifier_argv(host: Host, run: str, req: dict, settings: dict, *, python: str = "/usr/bin/python3",
                   tree: Path = TREE) -> list[str]:
     """verifier.py's command line for the run: the request's whitelisted values, and the host's paths, challenger,
-    first-parent list of main (`Host.main`, refused when infra hasn't written it) and the peer's capacities; a bound
-    run's (`--model`) its role's checkpoint and core's pin (`bound_paths`), refused when either is missing."""
+    first-parent list of main (`Host.main`, refused when infra hasn't written it), the peer's capacities and its Site
+    (refused when the peer names none); a bound run's (`--model`) its role's checkpoint and core's pin
+    (`bound_paths`), refused when either is missing."""
     ch, node = settings["challenger"], settings["peers"][req["peer"]]
     if not host.main.is_file():
         raise Refused(f"this host has no {host.main}, main's first-parent history (infra writes `git rev-list "
                       "--first-parent origin/main` there, root's, 0644): the verifier refuses every gate session whose "
                       "challenger pin it can't find on it, so no run starts without it")
+    site = node.get("site")
+    if not (isinstance(site, dict) and isinstance(site.get("log"), str) and isinstance(site.get("host"), str)):
+        raise Refused(f"peer {req['peer']} names no Site in {host.config} (its `site`: `log`, the registration log of "
+                      "its node infra keeps on this host, and `host`, the node's id in it): the verifier registers a "
+                      "store only for a host the Site registers, so no run starts without it")
     argv = [python, "-I", str(tree / "benchmarks" / "remote_session" / "verifier.py"),
             "--host", "127.0.0.1", "--port", str(req["port"]), "--out", str(host.runs / run / "out"),
             "--registry", str(host.registry), "--transcript", str(host.scratch / run / "transcripts"),
             "--challenger", "gate", "--challenger-ssh", ch["ssh"], "--challenger-peer", ch["peer"],
-            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main)]
+            "--challenger-pin", req["pin"], "--challenger-period", req["period"], "--challenger-main", str(host.main),
+            "--site", site["log"], site["host"]]
     for key in (*INTS, *DECIMALS, "--quantile"):
         name = key.lstrip("-")
         if name in req:

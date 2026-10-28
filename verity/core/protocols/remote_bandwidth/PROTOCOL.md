@@ -328,8 +328,10 @@ Three properties of registration matter:
 **One live registration per node.** Each registration draws a fresh codec seed, so a prover that registered \(R\)
 times and kept the registration whose key suits it would choose \(\log_2 R\) bits of the seed: a retry that redraws,
 which live coins rule out (a red-team finding). The verifier draws
-through its `Registry`, which holds at most one live registration per node:
+through its `Registry`, which holds at most one live registration per node, each node a host the Site registers:
 
+- a node whose id isn't, in UTF-8, the id of a host the Site registers (`audit.host_of`, `RemoteAudit.hostOf`) is
+  refused (ValueError) and draws nothing, as P2's `p2.register` refuses it (`P2.Registration.register`);
 - a second `register` for a node while it has a live registration is refused (`RegistryError`), counted (`refused`),
   and draws nothing;
 - each session over the registration is the registry's (`Registry.session`, its coins' session number its count so

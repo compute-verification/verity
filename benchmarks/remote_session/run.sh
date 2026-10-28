@@ -53,7 +53,10 @@
 # from the auditor host's challenger through its gate, its fetched sessions, ledger and pins log there
 # (PORT then outside the gate's 7811-7899). A registration left live by a run that ended early refuses the node until
 # CLOSE=NODE_HEX closes it (the same ROLE=verifier run, which closes it in REGISTRY and exits). The verifier builds
-# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`).
+# the Lean verifier with elan's `lake` ($HOME/.elan/bin, `tools/verity/lean/setup.sh`). It registers a store only for
+# a host its Site registers, so VERIFIER_ARGS name the Site under ROLE=verifier and both (`--site LOG HOST`, LOG the
+# registration log of the prover's node and HOST its id there), and the prover's hello names HOST as its node
+# (`--node HOST`, in PROVER_ARGS, or NODE_ARGS under SERVE=node).
 #
 # CPU=BLOCKS makes the prover the driver's reference over a store of BLOCKS blocks under CODEC (default p512/k2): no
 # GPU, no lease, no build, and kv:P and kvdrop:P sessions (KV pages appended and released mid-session, `prover.py`)
@@ -83,11 +86,12 @@
 #
 #   research run --queue --on vy-nebius-1 --phase cpu --cpus 16 ... --env ROLE=verifier --env PEER=vy-nebius-2 \
 #     --env PORT=7799 --env SESSIONS=2 --env WINDOWS=7 --env WINDOW_MS=60000 --env SAMPLES=33273 --env QUANTILE=max \
-#     --env JITTER_MS=50 --env VERIFIER_ARGS='--host-bytes 1843153879040' -- bash benchmarks/remote_session/run.sh
+#     --env JITTER_MS=50 --env VERIFIER_ARGS='--host-bytes 1843153879040 --site SITE.json vy-nebius-2' \
+#     -- bash benchmarks/remote_session/run.sh
 #   research run --queue --on vy-nebius-2 --gpus 8 --preemptible --mem-gb 200 --max-min 60 --timeout 5h ... \
 #     --env ROLE=prover --env PORT=7799 --env SERVE=node --env PLAN=honest,skip:0.0625 --env ENGINE_CPUS=0-23 \
 #     --env PROVER_CPUS=24-47 --env ENGINE_ARGS='--step-hz 2 --align-steps' \
-#     --env NODE_ARGS='--decode-s 60 --warm-openings 33273' -- bash benchmarks/remote_session/run.sh
+#     --env NODE_ARGS='--decode-s 60 --warm-openings 33273 --node vy-nebius-2' -- bash benchmarks/remote_session/run.sh
 #
 # Queue the prover first: its lease waits for all 8 GPUs (--timeout covers that wait, --max-min the lease), and once it
 # holds them it waits for the verifier's tunnel; start the verifier then.

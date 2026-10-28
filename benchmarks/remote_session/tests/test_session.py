@@ -26,7 +26,6 @@ sys.path.insert(0, str(HERE.parents[2]))
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 from verity.core import site  # noqa: E402
-from verity.hardware import load  # noqa: E402
 
 import prover  # noqa: E402
 import verifier  # noqa: E402
@@ -34,6 +33,8 @@ import wire  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 NODE = verifier.NODE
+SITE = verifier.one_host("test-node")
+"""The Site the prover's node, `test-node`, is a host of."""
 
 
 VERIFIER, PROVER = 0, 1
@@ -187,7 +188,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
-    v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
+    v = verifier.Verifier(vconn, source=os.urandom(32), site=SITE, windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
                           challenger=challenger, appends=appends, binding=binding, groups_per_coin=groups_per_coin)
@@ -267,12 +268,7 @@ def test_the_audited_node_is_the_registered_hosts_read_off_its_cards(tmp_path):
     the card files' sheets (`verifier.site_node`), so eight RTX PRO 6000s registered under a host are a vy-nebius
     node, and their memory the memory line's capacity; an id the Site registers as no host is refused, and so is a
     log the check refuses."""
-    sheet = site.Sheet.of_file(load("rtx-pro-6000-server"))
-    gpus = [x for i in range(8) for x in (site.Loc(f"gpu{i}", "device", "node0", sheet=sheet.digest()),
-                                           site.Loc(f"hbm{i}", "memory", f"gpu{i}", tier="hbm", bytes=sheet.mem))]
-    log = site.Registration("remote").append(site.Registration("remote").entry((sheet,), (
-        site.Loc("site0", "site"), site.Loc("node0", "host", "site0"), *gpus,
-        site.Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 40))))
+    log = verifier.vy_nebius_log("node0")
     path = tmp_path / "log.json"
     path.write_text(json.dumps(log.to_json()))
     node = verifier.site_node(path, "node0")
@@ -1169,14 +1165,15 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
 
 
 def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
-            plan: str = "honest") -> tuple[verifier.Verifier, ValueError | None, list[str]]:
-    """A prover of `plan` whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with
-    `hello`'s fields too and without `drop`'s: the verifier, its refusal if it refused, and the reason the prover read
-    in its `bye`."""
+            plan: str = "honest", node: bytes = b"test-node",
+            hosts: dict = SITE) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+    """A prover of `plan` on `node` whose backend says `deferred` greeting a verifier of lifetime cap `lifetime` under
+    the Site `hosts`, its hello with `hello`'s fields too and without `drop`'s: the verifier, its refusal if it
+    refused, and the reason the prover read in its `bye`."""
     a, b = socket.socketpair()
     backend = prover.CpuBackend(16, random.Random(7))
     backend.deferred = deferred
-    p = prover.ProverSide(wire.Conn(b), backend, b"test-node", prover.parse_plan(plan), seed=11, log=lambda m: None)
+    p = prover.ProverSide(wire.Conn(b), backend, node, prover.parse_plan(plan), seed=11, log=lambda m: None)
     send = p.conn.send
 
     def greet(head: dict) -> dict:
@@ -1193,8 +1190,8 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
-    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
+    v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), site=hosts, windows=3, window_ns=20, samples=6,
+                          delta=2.0 ** -40, jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
     refused = None
     try:
         v.register()
@@ -1241,6 +1238,29 @@ def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused():
     v, refused, heard = greeted(None, False, hello={"bind": True})
     assert refused is not None and "tile outputs" in str(refused)
     assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
+
+
+def test_a_hello_naming_no_host_the_site_registers_is_refused_before_either_registry_draws():
+    """The hello's node is a host of the verifier's Site, its id in UTF-8 (`audit.host_of`, the Lean's `hostOf`):
+    another id, the site's own and bytes that aren't UTF-8 are each refused by both registries with `bye`, drawing
+    nothing, and the same node registers under a Site that registers it."""
+    for node, why in ((b"other-node", "other-node is no host"), (b"site", "site is no host"),
+                      (b"\xfftest-node", "a host's id in UTF-8")):
+        v, refused, heard = greeted(None, False, node=node)
+        assert refused is not None and why in str(refused) and heard == [f"refused: {refused}"], node
+        assert "disagreement" not in str(refused) and v.registry.drawn(node) == 0
+    v, refused, heard = greeted(None, False, node=b"other-node", hosts=verifier.one_host("other-node"))
+    assert refused is None and heard == [] and v.registry.drawn(b"other-node") == 1
+
+
+def test_a_session_needs_the_site_its_hello_is_held_to(tmp_path, monkeypatch, capsys):
+    """`--site LOG HOST` names the hosts a hello may name: without it the verifier refuses to start a session before it
+    listens, while `--close` and `--memory-of` still run."""
+    monkeypatch.setattr(sys, "argv", ["verifier.py", "--out", str(tmp_path / "out")])
+    with pytest.raises(SystemExit) as e:
+        verifier.main()
+    assert e.value.code == 2 and "--site LOG HOST" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
 
 
 def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp_path, monkeypatch, capsys):

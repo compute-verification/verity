@@ -19,7 +19,7 @@ from hypothesis import strategies as st
 import ra_cases as M
 import verity_difftest as D
 from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
-from verity.core.protocols.remote_bandwidth import p2, receipts
+from verity.core.protocols.remote_bandwidth import audit, p2, receipts
 from verity.core.protocols.remote_bandwidth.codec import P2_EXPANDER, P2_POINT, P2Codec
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
@@ -137,6 +137,37 @@ def test_p2_registration_digest(server) -> None:
     stats = D.run(port("p2_registration_digest", registration_digest, registration_inputs()), examples=200,
                   server=server)
     assert stats.outputs > 80, stats
+
+
+# --- a registration's node ----------------------------------------------------------------------------------------------
+
+HOSTS = (b"p2-node", b"node-b", b"\x07", "é".encode())
+
+
+def register(v) -> str:
+    """`p2.register`'s check of its node (`P2.Registration.register`): the digest of the registration
+    `registration_of` reads, for a node the Site of `site` registers as a host (`audit.host_of`)."""
+    with M.decoding():
+        hosts = M.site_of(M._get(v, "site"))
+        r = registration_of(v)
+    audit.host_of(hosts, r.node)
+    return r.digest.hex()
+
+
+@st.composite
+def register_inputs(draw) -> dict:
+    """`registration_inputs` under a Site of `HOSTS`, its node most often one of them, else drawn bytes, the site's id
+    or bytes that aren't UTF-8; now and then the Site leaves hosts out."""
+    v = draw(registration_inputs())
+    if v.get("node") not in ("", "00" * 65) and draw(st.integers(0, 7)):
+        v["node"] = draw(st.sampled_from(HOSTS * 4 + (b"site0", b"\xff", b"\xc0\xae"))).hex()
+    v["site"] = M.site_json(*(HOSTS[:draw(st.integers(0, len(HOSTS)))] if draw(st.integers(0, 5)) == 0 else HOSTS))
+    return v
+
+
+def test_p2_register(server) -> None:
+    stats = D.run(port("p2_register", register, register_inputs()), examples=200, server=server)
+    assert stats.outputs > 40 and stats.rejects > 40, stats
 
 
 # --- a unit's sketch ---------------------------------------------------------------------------------------------------
@@ -329,6 +360,16 @@ def test_the_committed_store_s_registration_digest_is_the_leans(server, committe
     reg = committed.registration
     assert D.replay(port("p2_registration_digest", registration_digest, st.nothing()), registration_json(reg),
                     server) == ("output", f'"{reg.digest.hex()}"')
+
+
+def test_the_committed_store_registers_only_for_a_host_the_site_registers(server, committed) -> None:
+    """Its node a host of the Site: registered, with its digest; under a Site that doesn't register it, or naming the
+    site, refused by both."""
+    reg = committed.registration
+    v = registration_json(reg) | {"site": M.site_json(reg.node)}
+    assert D.replay(port("p2_register", register, st.nothing()), v, server) == ("output", f'"{reg.digest.hex()}"')
+    for bad in ({"site": M.site_json()}, {"site": M.site_json(b"node-b")}, {"node": b"site0".hex()}):
+        assert D.replay(port("p2_register", register, st.nothing()), v | bad, server)[0] == "reject"
 
 
 def test_an_honest_opening_of_each_committed_unit_checks_in_lean(server, committed) -> None:
