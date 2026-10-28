@@ -114,7 +114,7 @@ streamed-label wipe") has the messages, the bound, the measured fill and round t
 from verity.core.protocols.pous import streamed_wipe as sw
 
 p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
-c = sw.Challenger(secret, server_id, session_id, p, signer, log=log)          # the id claimed; the commitment published
+c = sw.WipeMemoryChallenger(secret, server_id, session_id, p, signer, log=log)  # the id claimed; the commitment published
 for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry

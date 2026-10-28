@@ -1,25 +1,25 @@
-"""The streamed wipe as two parties of the deployment layer (`verity.core.deploy`): the memory challenger (`Challenger`)
-and the prover (`Prover`), the protocol `wipe_party` speaks as a byte stream, in messages.
+"""The streamed wipe as two parties of the deployment layer (`verity.core.deploy`): the memory challenger
+(`Challenger`) and the prover (`Prover`), the protocol `wipe_party` speaks as a byte stream, in messages.
 
 ~~~text
 memory-challenger -> prover   Fill {first, count} + labels (private) ... FillDone; then per batch Read {indices} (coins); End
 prover -> memory-challenger   FillAck once it holds the fill; per batch Answer, 64 bytes an index (private)
 ~~~
 
-The challenger drives the same `streamed_wipe.Challenger` as `wipe_party.serve`, in the same order: the labels' secret
-and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's send and receipt
-on its clock, the coin secret drawn when the first batch is revealed, the session signed once it ends with the egress
-its machine was given. On the same coins, clock readings and key it signs the same bytes as `serve`. Its machine gives
-it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its session log),
-its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none) and the reads it times
+The challenger drives the same `streamed_wipe.WipeMemoryChallenger` as `wipe_party.serve`, in the same order: the
+labels' secret and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's
+send and receipt on its clock, the coin secret drawn when the first batch is revealed, the session signed once it ends
+with the egress its machine was given. On the same coins, clock readings and key it signs the same bytes as `serve`. Its
+machine gives it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its
+session log), its egress count (`capabilities["egress_bits"]`, `wipe_party.UNCOUNTED` when none) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`); the prover's gives it `store`
 (`capabilities["store"]`, the prover a `WipeParams` makes: `streamed_wipe.Prover` unless given, `wipe_store.StoreProver`
 on a node). The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses
-them, never the prover. The challenger finishes with `wipe_party.report`
-(private: what it signs is witness), refused by name, and unsigned, when the prover leaves (`closed`), sends a frame the
-wire refuses, or answers a batch with another count of labels (`schema`); parameters that name the reads are refused
-`schema` before any fill. It streams the fill `WINDOW` frames at a time,
-letting the prover take each window before the next, so neither side holds more of it than that.
+them, never the prover. The challenger finishes with `wipe_party.report` (private: what it signs is witness), refused by
+name, and unsigned, when the prover leaves (`closed`), sends a frame the wire refuses, or answers a batch with another
+count of labels (`schema`); parameters that name the reads are refused `schema` before any fill. It streams the fill
+`WINDOW` frames at a time, letting the prover take each window before the next, so neither side holds more of it than
+that.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ class Challenger:
 
     def __init__(self, chunk: int = WP.CHUNK) -> None:
         self.chunk = chunk
-        self.c: sw.Challenger | None = None
+        self.c: sw.WipeMemoryChallenger | None = None
         self._reading: int | None = None
         self._then: Callable[[], list[Any]] | None = None
 
@@ -80,7 +80,8 @@ class Challenger:
         return [Send("coins", Message("CoinsDraw", {"n": 64}))]
 
     def _clock(self) -> int:
-        """The reading the challenger asked its clock for, used once: `streamed_wipe.Challenger` reads it here."""
+        """The reading the challenger asked its clock for, used once: `streamed_wipe.WipeMemoryChallenger` reads it
+        here."""
         if self._reading is None:
             raise RuntimeError("the wipe read its clock without a fresh reading")
         out, self._reading = self._reading, None
@@ -105,8 +106,8 @@ class Challenger:
             return self._finish(e.name)
         if m.type == "Coins" and self.c is None:
             secret, session = m.body[:32], m.body[32:]
-            self.c = sw.Challenger(secret, self.request["node"].encode(), session, self.wp, self.signer, log=self.log,
-                                   clock=self._clock)
+            self.c = sw.WipeMemoryChallenger(secret, self.request["node"].encode(), session, self.wp, self.signer,
+                                             log=self.log, clock=self._clock)
             self.phase.expect()
             return [Record({"commitment": self.c.commitment.to_json()}, "structure"),
                     *self._after_reading(self._fill_start)]

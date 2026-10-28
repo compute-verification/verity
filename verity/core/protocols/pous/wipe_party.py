@@ -74,13 +74,13 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, egress_bits: int,
           reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
-          fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
+          fill: Callable[[bytes, int], Any] | None = None) -> sw.WipeMemoryChallenger:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id drawn here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
     `wipe_stream`), `reads` batches revealed and their answers read on `clock`, the session signed by `signer` with
     `egress_bits` once it ends. A prover that closes first leaves it unsigned."""
-    c = sw.Challenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
-                      params_of(request, reads), signer, log=log, clock=clock)
+    c = sw.WipeMemoryChallenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
+                                params_of(request, reads), signer, log=log, clock=clock)
     try:
         if fill is not None:
             f.flush()
@@ -142,7 +142,7 @@ def utc(unix_ns: int) -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(s)) + f".{ns // 1000:06d}Z"
 
 
-def report(c: sw.Challenger, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
+def report(c: sw.WipeMemoryChallenger, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
     """The side's report; `window`, the session's `(t0, t1)` in Unix nanoseconds on this host's real-time clock."""
     out = {"commitment": c.commitment.to_json(), "ended": c.ended, "host": socket.gethostname(),
            "public_key": public_key.hex(), "reads": len(c.batches),

@@ -35,12 +35,14 @@ def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
     return sw.WipeParams(N, K, batch, limit, (("gpu", 128 * sw.LABEL_BYTES), ("host-dram", 128 * sw.LABEL_BYTES)))
 
 
-def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None) -> sw.Challenger:
-    return sw.Challenger(SECRET, SERVER, SESSION, p or params(), signer or ts.TestSigner(b"wipe challenger", height=2),
-                         log=log or ts.session_log(), clock=clock or Clock(), coin_secret=b"coins")
+def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None) -> sw.WipeMemoryChallenger:
+    return sw.WipeMemoryChallenger(SECRET, SERVER, SESSION, p or params(),
+                                   signer or ts.TestSigner(b"wipe challenger", height=2), log=log or ts.session_log(),
+                                   clock=clock or Clock(), coin_secret=b"coins")
 
 
-def run(c: sw.Challenger, respond=None, *, clock: Clock | None = None, spend=lambda b: 20_000) -> sw.SignedWipe:
+def run(c: sw.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
+        spend=lambda b: 20_000) -> sw.SignedWipe:
     prover = sw.Prover(c.params)
     for start, data in c.fill(100):
         prover.receive(start, data)

@@ -260,9 +260,9 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
     server = node.encode()
     if party is None:
         assert signer is not None and log is not None, "an in-process wipe needs the challenger's signer and log"
-        c = sw.Challenger(secrets.token_bytes(32) if secret is None else secret, server,
-                          secrets.token_bytes(32) if session_id is None else session_id, params, signer, log=log,
-                          clock=clock, coin_secret=coin_secret)
+        c = sw.WipeMemoryChallenger(secrets.token_bytes(32) if secret is None else secret, server,
+                                    secrets.token_bytes(32) if session_id is None else session_id, params, signer,
+                                    log=log, clock=clock, coin_secret=coin_secret)
         p = prover(params)
         for first, data in c.fill(chunk):
             p.receive(first, data)

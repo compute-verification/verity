@@ -53,7 +53,7 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
-def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.WipeMemoryChallenger:
     """`wipe_party.serve` over a socket pair, its OS draws taken in order from `SEED`'s seeded coins."""
     coins = S.SeededCoins(SEED)
     monkeypatch.setattr(WP, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
