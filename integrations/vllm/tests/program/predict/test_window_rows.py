@@ -142,8 +142,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     and combine give the node's token, every position's but the last's a row of its collector; each feed (every position
     but the first below the prompt cap) holds its token and carried slot; each slot's scan read every lane's first token and
     carried slot, occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector
-    (the next-to-last position's) the outputs so far from its prompt's last position on and its entry the 2 outputs' count
-    and ids; each head's first
+    (the next-to-last position's) the outputs so far from its prompt's last position on and its entry the read bit (its
+    occupancy word's bit 0), the 2 outputs' count and ids; each head's first
     key block (`Attention_v20`'s cut) is evaluated, and its end's Definition on that block's state is the node's value, the
     row kernel's. With no served values every unit is computed or evaluated."""
     low, fields, tables, _w, slots = window
@@ -194,7 +194,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
         n = min(CLASS.outputs, CLASS.positions - lp)
         assert _i32(rows.outs[ct][0][cu]) == [picks[-2]]
         assert _i32(rows.outs[ct][1][cu]) == [(lp - CLASS.positions) & 0xFFFFFFFF, 2, *[0] * (CLASS.outputs - n), *outs[:n]]
-        assert sum(int(w) << 16 * k for k, w in enumerate(rows.outs[et][0][eu])) == 2 | outs[0] << 32 | outs[1] << 49
+        assert sum(int(w) << 16 * k for k, w in enumerate(rows.outs[et][0][eu])) == 1 | 2 << 1 | outs[0] << 33 | outs[1] << 50
         assert len(P.heads) == 2 * (CLASS.prompt + CLASS.outputs - 1)
         for j, (plan, calls) in P.heads.items():
             (first, _), (end, _) = plan
