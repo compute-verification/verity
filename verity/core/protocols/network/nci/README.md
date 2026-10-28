@@ -10,8 +10,9 @@ and the registered information alone. In Lean it is `Nci.Complies`, in an older 
 The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/core/protocols/composition`):
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the declared circuit, the budgets and the registration log before the run; its commitment is
-the run's own registration record, which must name the declared circuit; its evidence is the declared division with θ
-and θ's provenance. That evidence reaches the verifier in the clear: the check doesn't run inside a zero-knowledge
+the run's own registration record, which must name the declared circuit and which each composite requires to be the
+record sampled proofs commits to (`Core.Composition.same`); its evidence is the declared division with θ and θ's
+provenance. That evidence reaches the verifier in the clear: the check doesn't run inside a zero-knowledge
 proof yet.
 
 ## Why it separates inference from training
