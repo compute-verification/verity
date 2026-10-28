@@ -101,6 +101,7 @@ import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
 import Definitions.Pouw.Window
+import Definitions.Pouw.Witness
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 
