@@ -22,7 +22,7 @@ and the weights `2^(−charge)` of a run's windows to at most 1.
 
 **Scope.** Every advice v1 window, from any carry chained from the book's first (`Book.first`): its decisions, hits
 and order entries, with n_resumes and n_lag sent as 0 (advice v1 never sends resumes or lag bits). Which slots ask is
-not charged, as for `EncardChargedLe`. A `Window` holds each field's values at its enabled slots, in order, so these
+not charged, as for `EncardChargedLe`. An `Advice` holds each field's values at its enabled slots, in order, so these
 statements count advice values, not slot arrangements. The slice that wires `ChargeLink_v2` takes `hen` and `oen` from
 the replay, as `en` is (enabled slots first, never the prover's), and reads no disabled slot's value (`charge-chain.md`,
 "The slice").
@@ -47,7 +47,7 @@ order entries) are charged `c` bits or fewer in all, with no window refused. The
 Python reference defines it: that the circuit computes it is the one hypothesis left (module doc). -/
 def EncardChargedLeWhole : Prop :=
   ∀ (bk : Book) (N H O W c : ℕ),
-    {a : Fin W → Window | ∃ ls, charges bk N H O a = some ls ∧ ls.sum ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞)
+    {a : Fin W → Advice | ∃ ls, charges bk N H O a = some ls ∧ ls.sum ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞)
 
 /-- **The leak bound with advice v1's whole-window charge.** `EncardAccSeqsWithinLeConstantRate` with the advice
 string each window's decisions, hits and order entries (`WindowCharge.Streams`) and its charge `WindowCharge.bits`,

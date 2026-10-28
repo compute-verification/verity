@@ -311,7 +311,7 @@ theorem entrySyms_split (bk : Book) : ∀ (pos rank : ℕ) (es es' : List (ℕ �
         exact (binned_split bk.index (zigzag_le h1.2.2.2 hr) (zigzag_le h2.2.2.2 hr) (zigzag_ne hk)).append _ _
     · exact (binned_split bk.gap h1.2.2.1 h2.2.2.1 (by omega)).append _ _
 
-theorem window_eq {x y : Window} (h1 : x.ds = y.ds) (h2 : x.hits = y.hits) (h3 : x.order = y.order) : x = y := by
+theorem window_eq {x y : Advice} (h1 : x.ds = y.ds) (h2 : x.hits = y.hits) (h3 : x.order = y.order) : x = y := by
   cases x
   cases y
   simp only at h1 h2 h3
@@ -319,7 +319,7 @@ theorem window_eq {x y : Window} (h1 : x.ds = y.ds) (h2 : x.hits = y.hits) (h3 :
   rfl
 
 /-- **Two windows split**: from one carry, two different windows' symbol sequences split. -/
-theorem syms_split (bk : Book) (N H O : ℕ) (cy : Carry) {x y : Window} {p q : List Sym × Carry}
+theorem syms_split (bk : Book) (N H O : ℕ) (cy : Carry) {x y : Advice} {p q : List Sym × Carry}
     (hx : x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O)
     (hy : y.ds.length ≤ N ∧ y.hits.length ≤ H ∧ y.order.length ≤ O) (hr : cy.rank ≤ INDEX_CAP + 1) (hne : x ≠ y)
     (h : syms bk N H O cy x = some p) (h' : syms bk N H O cy y = some q) : Split p.1 q.1 := by
@@ -359,7 +359,7 @@ theorem syms_split (bk : Book) (N H O : ℕ) (cy : Carry) {x y : Window} {p q : 
 
 /-! ### One window, and the run -/
 
-theorem window_isSome {bk : Book} {N H O : ℕ} {cy : Carry} {x : Window} (h : (window bk N H O cy x).isSome) :
+theorem window_isSome {bk : Book} {N H O : ℕ} {cy : Carry} {x : Advice} (h : (window bk N H O cy x).isSome) :
     (x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧ cy.rank ≤ INDEX_CAP + 1) ∧
       ∃ q, syms bk N H O cy x = some q := by
   unfold window at h
@@ -373,7 +373,7 @@ theorem window_isSome {bk : Book} {N H O : ℕ} {cy : Carry} {x : Window} (h : (
   · simp at h
 
 /-- A window weighs, times `2^32`, at most the state its symbols lead to. -/
-theorem stepWt_window_le (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) :
+theorem stepWt_window_le (bk : Book) (N H O : ℕ) (cy : Carry) (x : Advice) :
     stepWt (window bk N H O) cy x * 2 ^ 32 ≤ owt (codeAll Tally.fresh (((syms bk N H O cy x).map Prod.fst).getD [])) := by
   unfold stepWt
   cases hw : window bk N H O cy x with
@@ -388,10 +388,10 @@ theorem stepWt_window_le (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) :
 
 /-- **One window (Kraft)**: over any finite set of windows, the weights `2^(−charge)` of those the window charge
 doesn't refuse sum to at most 1, from any carry. -/
-theorem sum_window_le (bk : Book) (N H O : ℕ) (cy : Carry) (A : Finset Window) :
+theorem sum_window_le (bk : Book) (N H O : ℕ) (cy : Carry) (A : Finset Advice) :
     ∑ x ∈ A, stepWt (window bk N H O) cy x ≤ 1 := by
   classical
-  let s : Window → List Sym := fun x => ((syms bk N H O cy x).map Prod.fst).getD []
+  let s : Advice → List Sym := fun x => ((syms bk N H O cy x).map Prod.fst).getD []
   let B := A.filter fun x => (window bk N H O cy x).isSome
   have h1 : ∑ x ∈ A, stepWt (window bk N H O) cy x = ∑ x ∈ B, stepWt (window bk N H O) cy x := by
     refine (sum_filter_of_ne fun x _ h => ?_).symm
@@ -414,7 +414,7 @@ theorem sum_window_le (bk : Book) (N H O : ℕ) (cy : Carry) (A : Finset Window)
   rw [h1]
   exact le_of_mul_le_mul_right h3 (by positivity)
 
-theorem session_eq (bk : Book) (N H O : ℕ) (cy : Carry) (ws : List Window) :
+theorem session_eq (bk : Book) (N H O : ℕ) (cy : Carry) (ws : List Advice) :
     session bk N H O cy ws = runOf (window bk N H O) cy ws := by
   induction ws generalizing cy with
   | nil => rfl
@@ -422,7 +422,7 @@ theorem session_eq (bk : Book) (N H O : ℕ) (cy : Carry) (ws : List Window) :
 
 /-- **Advice v1's whole-window charge counts (Kraft).** -/
 theorem encard_charged_le (bk : Book) (N H O W c : ℕ) :
-    {a : Fin W → Window | ∃ ls, charges bk N H O a = some ls ∧ ls.sum ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞) := by
+    {a : Fin W → Advice | ∃ ls, charges bk N H O a = some ls ∧ ls.sum ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞) := by
   simpa only [charges, session_eq] using
     encard_runOf_le (window bk N H O) (sum_window_le bk N H O) bk.first W c
 
@@ -441,7 +441,7 @@ theorem bitsCount (bk : Book) (N H O W : ℕ) : BitsCount (bits bk N H O (W := W
   calc {a : Streams bk N H O W | ∑ w, bits bk N H O a w ≤ c}.encard
       = (Subtype.val '' {a : Streams bk N H O W | ∑ w, bits bk N H O a w ≤ c}).encard :=
         (Subtype.val_injective.encard_image _).symm
-    _ ≤ {a : Fin W → Window | ∃ ls, charges bk N H O a = some ls ∧ ls.sum ≤ c}.encard := by
+    _ ≤ {a : Fin W → Advice | ∃ ls, charges bk N H O a = some ls ∧ ls.sum ≤ c}.encard := by
         apply Set.encard_le_encard
         rintro _ ⟨a, ha, rfl⟩
         obtain ⟨ls, hls⟩ := Option.isSome_iff_exists.1 a.2
