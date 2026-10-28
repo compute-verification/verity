@@ -1,7 +1,7 @@
-// Verity R8 lane B-kernel / R13 lane fa2 (v8): link stubs so that the pinned flash_api.cpp (which dispatches over
+// Verity (v8): link stubs so that the pinned flash_api.cpp (which dispatches over
 // fp16/bf16 x hdim{32..256} x causal) links against a build that only contains the bf16 split-KV kernels of the head
 // dimensions selected at build time (build_ext.py --hdims -> -DVERITY_HAVE_SPLIT_HDIM<N>_BF16).  Any call into a stub
-// is a hard error; it never silently substitutes a different kernel (C-FA2-HDIM fails closed at the dispatch).
+// is a hard error; it never silently substitutes a different kernel (the head-dim check fails closed at the dispatch).
 #include <stdexcept>
 #include <cuda_runtime.h>
 #include <cutlass/numeric_types.h>

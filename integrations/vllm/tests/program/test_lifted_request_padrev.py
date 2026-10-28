@@ -1,10 +1,10 @@
-"""padrev — adversarial tests for the F-pad-14 path (`lift_request_component`, lane/r16-pad d40b22bb5): the lifted Program OF RECORD
-built by node replay over GP-01's request component.  Attack list items: A3 (post-hoc deletion disguised as "not required"),
+"""Adversarial tests for the lifted Program OF RECORD (`lift_request_component`), built by node replay over GP-01's request
+component.  Attack list items: A3 (post-hoc deletion disguised as "not required"),
 A4 (`1‖nonzero` laundered into ⊥ = a corrupt committed word that makes a request look legitimately stopped), the redirect
 completeness (an un-redirected reader of event `s−1`'s raw token lets an Active value flow into a ⊥ step), and "nothing about a
 served length enters" (guard placement is a function of the body's dataflow and the declared cap only).
 
-Uses pad's fixture shape (GP-01 `request_component` of the frozen `Serve_v2{TINY}` descriptor; boundary `Final_v2`); nothing here is
+Uses `test_lifted_request.py`'s fixture shape (GP-01 `request_component` of the frozen `Serve_v2{TINY}` descriptor; boundary `Final_v2`); nothing here is
 implementation."""
 from __future__ import annotations
 
@@ -59,8 +59,8 @@ def test_guard_placement_is_the_same_for_every_declared_eos_set(component):
     lnv = L.lift_request_component(component.fn, (NEVER,), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)
     l2 = L.lift_request_component(component.fn, (17, NEVER), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)
     assert l17.node_map == lnv.node_map and l17.boundaries == lnv.boundaries == l2.boundaries
-    # guard_nodes = the R17-1 guard (eos[i], bot32, enable/one, s=<s>/live, s=<s>/tok_in) + the Continuation_v1 controller (R17-32: is_eos/out
-    # per slot, emit per slot); v0.6 B7 adds the root enable constant `enable/one`
+    # guard_nodes = the activity guard (eos[i], bot32, the root enable constant enable/one, s=<s>/live, s=<s>/tok_in) + the
+    # Continuation_v1 controller (is_eos/out per slot, emit per slot)
     assert len(l17.guard_nodes) == len(lnv.guard_nodes) == L.continuation_gate_count(CAP, 1, 0) == 2 * (CAP - 1) + 1 + 2 + 3 * CAP
     assert len(l2.guard_nodes) == L.continuation_gate_count(CAP, 2, 0) == 2 * (CAP - 1) + 2 + 2 + 3 * CAP  # one more EOS constant, nothing else moves
     # the guard nodes are exactly the named ones — never an unnamed extra node
@@ -74,14 +74,14 @@ def test_guard_placement_is_the_same_for_every_declared_eos_set(component):
 def test_every_reader_of_a_raw_event_token_is_a_guard_or_the_return(component):
     """Redirect completeness: in the lifted body the raw token gate of event s−1 (the mapped boundary node) is read ONLY by its own
     guard `s=<s>/live` and `s=<s>/tok_in`; every other reader was redirected to `tok_in`.  A missed reader would carry an Active
-    token into a ⊥ step — an Active value inside a ⊥ step, which SPEC §4 forbids."""
+    token into a ⊥ step — an Active value inside a ⊥ step, which the spec's §4 forbids."""
     lifted = L.lift_request_component(component.fn, (17,), max_tokens=CAP, lag=0, boundary_prefix=BOUNDARY)
     body = lifted.body
     by_name = {n.name: k for k, n in enumerate(body.nodes) if n.name}
     for s in range(1, CAP):
         raw = lifted.node_map[lifted.boundaries[s - 1]]
         readers = {k for k in range(len(body.nodes)) if raw in _reads_of(body, k)}
-        # its guard and its own slot's controller (R17-32: `slot=<s>/is_eos`, `slot=<s>/out` read the raw token y_s) — nothing else
+        # its guard and its own slot's controller (`slot=<s>/is_eos`, `slot=<s>/out` read the raw token y_s) — nothing else
         assert readers == {by_name[f"s={s}/live"], by_name[f"s={s}/tok_in"], by_name[f"slot={s}/is_eos"], by_name[f"slot={s}/out"]}, (s, readers)
         # and tok_in_s is read by at least one original (non-guard) node — the step consumes the guarded token
         tok_in = by_name[f"s={s}/tok_in"]
@@ -90,7 +90,7 @@ def test_every_reader_of_a_raw_event_token_is_a_guard_or_the_return(component):
     # the last event's raw token is read by nobody (no step beyond the cap)
     last = lifted.node_map[lifted.boundaries[-1]]
     assert {k for k in range(len(body.nodes)) if last in _reads_of(body, k)} == {by_name[f"slot={CAP}/is_eos"], by_name[f"slot={CAP}/out"]}
-    # the return reads the designated outputs `slot=<t>/out` (R17-32 spec s5 C), never tok_in and never a raw token directly
+    # the return reads the designated outputs `slot=<t>/out`, never tok_in and never a raw token directly
     ret_reads = L._reads(body.ret)
     assert ret_reads == {by_name[f"slot={t}/out"] for t in range(1, CAP + 1)}
     assert not any(by_name[f"s={s}/tok_in"] in ret_reads for s in range(1, CAP))
@@ -178,8 +178,8 @@ def test_values_of_the_active_prefix_do_not_depend_on_the_declared_set(component
 
 
 def test_a3_a_served_shape_component_is_refused_against_the_declared_cap():
-    """F-pad-15 (CLOSED lane/r16-pad 859dc5d22): at d40b22bb5 the population was read from the body's boundary count alone and a
-    component derived at the SERVED shape (row_pod's eos-truncated build_request_LP32_T11, exec M-0140) lifted with cap = served length."""
+    """A component derived at the SERVED shape (row_pod's eos-truncated build_request_LP32_T11) is refused against the declared cap: the
+    population is never read from the body's boundary count alone, which would lift it with cap = served length."""
     served_steps = D_MAX - 3  # a request Program derived at T = the served length − 1, not at cap − 1
     comp = tiny_component(served_steps)
     with pytest.raises(ValueError):
@@ -187,7 +187,7 @@ def test_a3_a_served_shape_component_is_refused_against_the_declared_cap():
 
 
 def test_the_served_shape_component_lifts_only_under_its_own_cap_and_is_a_different_program(component):
-    """Companion for F-pad-15: the served-shape component lifts only when the caller declares ITS cap (max_tokens = served length) — a
+    """Companion of the test above: the served-shape component lifts only when the caller declares ITS cap (max_tokens = served length) — a
     different Program (id) from the declared population's; the record tool must never be handed that component."""
     served_steps = D_MAX - 3
     comp = tiny_component(served_steps)

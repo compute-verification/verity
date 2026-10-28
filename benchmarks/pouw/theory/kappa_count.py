@@ -6,8 +6,7 @@ The cap per word is Lean's: `Pouw.SecurityProofs.Eps1.ClassPSlots` (Security/Pro
 `created_le_65`): a class-P tuple word creates only incidences of its fields' own entries, a field's range has at least
 128|E| + 1 values, and `Π_k (128 e_k + 1) ≤ 2^32` with `e_k ≤ 32` caps `Σ_k e_k` at 65 (two 32-entry fields and a
 one-entry field). The guarantee charges a slot of d words `65·d`, so a word costs at least `1 + (32 − w)/κ` slots when a
-writer creates at most w (QSTAR's paper says 4; a writer that takes two segments' fields from one tuple creates 8,
-note:20261018T0230Z-draft-floors).
+writer creates at most w (the q* analysis takes 4; a writer that takes two segments' fields from one tuple creates 8).
 
 Each census kind the current epoch holds is classified: a CUDA lane kind (registers from registers, the vector route),
 a register load (the table route: its address may be data), a tensor kind (MMA forms and tensor-memory loads, the
