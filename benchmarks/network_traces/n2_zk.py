@@ -45,9 +45,11 @@ decides nothing.
 * **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
   (the salted root, nothing of the certificates) and the draw; the two certificates' public fields, from the certifier,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
-  hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
-  outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
-  descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
+  hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; the
+  outcome record, and one-stage v2's evidence (`one_stage_evidence`). Its own: the circuit file (its lowering, which
+  prover and verifier share here) and one-stage v2's parameters for the link (`one_stage_params`, ``one-stage.json``,
+  with the Program's descriptor and the partition object), which certifier/v0's period check runs v2 under on each
+  link-window (the all-protocols certifier leg's case). Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
   certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
   (`public_pieces`), which the verifier has whatever the witness, and a member fails on a ``leaked`` piece under the
@@ -98,7 +100,8 @@ ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'L
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
-            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
+            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record",
+            "one-stage.json": "one-stage v2's evidence (the audit record's inputs, the proof's files by SHA-512)"}
 
 
 def log(msg: str) -> None:
@@ -434,6 +437,29 @@ def firewall(M, sg: SimpleNamespace) -> dict:
                                                      "program_file": sg.program_file})}
 
 
+def one_stage_params(lw: LinkWindows, circuit_sha512: str, delta: float) -> dict:
+    """The auditor's one-stage v2 parameters for the link's link-windows (`OneStageZk.paramsOfJson`'s) as its stream
+    registers and decides them, without ``ports``, which are each link-window's (`LinkWindows.ports`), and with ``log``
+    empty, the stream's before its first: the registered Program's descriptor and partition object, the check's query,
+    Selection All's law over a link-window's one unit, the stream's δ, and the proofs' circuit file by its SHA-512."""
+    return {"anchors": [], "delta": str(Fraction(delta)), "law": SVC.S.selection_law(lw.spec.selection, 1),
+            "leaf_layer": None, "log": [], "partition": lw.partition, "program": json.loads(lw.program),
+            "proofs": {"circuit": circuit_sha512, "registered": None}, "query": lw.query, "registered": None,
+            "scheme": SVC.S.SCHEME, "work_table": None}
+
+
+def one_stage_evidence(PF, body: dict, proof, root: str) -> dict:
+    """One-stage v2's evidence for a link-window (`OneStageZk.evidenceOf`) from its outcome record ``body``: what its
+    audit record was handed (the receipt, the draw, the proved units, their count and the statement), the delivered
+    sessions, the session's root of the link-window's port (`LinkWindows.outcome`'s ``session_roots``), and in place of
+    the verdicts the proof's files by their SHA-512 (`proofs.evidence_v2`)."""
+    audit = body["audit"]
+    proofs, _ = PF.evidence_v2(proof, body["sessions"])
+    return {"draw": audit["draw"], "instances": len(audit["proved_units"]), "proofs": proofs,
+            "proved_units": audit["proved_units"], "receipt": audit["receipt"], "served": None,
+            "session_roots": {SVC.VALUE: root}, "sessions": list(body["sessions"]), "statement": audit["statement"]}
+
+
 def one_session(jobs: int) -> None:
     """A driver's ``--jobs``: 1, its members proved one after another, each session behind the firewall alone
     (`ONE_SESSION`); any other count is refused before anything runs."""
@@ -487,6 +513,10 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
+    (vdir / "one-stage.json").write_text(json.dumps(one_stage_params(lw, sg.circuit_sha512, stream.delta), indent=1,
+                                                    sort_keys=True))
+    if not (vdir / "circuit.txt").exists():
+        os.link(sg.circuit, vdir / "circuit.txt")
     drawn, windows, segment = None, rd.windows, None
     if k is not None:
         try:
@@ -538,6 +568,9 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                  "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
                  "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
                                     "output": x.statement.output}}
+        if body.get("audit") is not None:
+            files["one-stage.json"] = one_stage_evidence(M.PF, body, delivered.proof,
+                                                         reg.record["roots"][0]["root"])
         for f, v in files.items():
             (vdir / f"{pre}{f}").write_text(json.dumps(v, indent=1, sort_keys=True, default=str))
         os.link(x.statement.dir / "pub-1.bin", vdir / f"{pre}pub-1.bin")

@@ -11,9 +11,9 @@ that acceptance and whose other two, each release at its round of the log and th
 (`networkWindowLe_verdict`); remote has no network component. So the network certifier at the code
 (`Verity.Subprotocol.network_atCode`, at the coupling's run, `Vocab.Coupling.atCode`) rests on the bridge's assumptions
 (`KS`, `Commitment.Binds`, `Flock.ListWithin`, and `trusted-host` in the realization) and the named steps
-(`network_atCode_of_steps`): S2–S6, the ρ gap and S8's two premises (`Proofs.Properties.Verity.Network.Window`). At a
-coupling, that is the per-period guarantee `Vocab.networkSound_of_coupling` reads at onsite
-(`coupling_atCode_of_steps`).
+(`network_atCode_of_steps`): S2 and S4–S6, the ρ gap and S8's two premises
+(`Proofs.Properties.Verity.Network.Window`), S5 and S8's registration premise under the guard. At a coupling, that is
+the per-period guarantee `Vocab.networkSound_of_coupling` reads at onsite (`coupling_atCode_of_steps`).
 -/
 
 namespace Verity.Network
@@ -31,25 +31,30 @@ theorem networkWindowLe {r : PeriodRun d α C Ω} {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n}
     {A : Audit → ((i : I) → Ω i) → Prop} {s : ((i : I) → Ω i) → Sent} {G : ((i : I) → Ω i) → Prop}
     (hA : ∀ ξ, A .network ξ → ComponentAccepts .onsite .network (s ξ) ∧ G ξ) (W : WindowRuns R)
-    (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W G)
-    (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
+    (h2 : PeriodRunsV2 W s) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W G) (h6 : NetworkCouples R s W)
+    (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s G)
     (hcov : RecordCovers W s) :
     NetworkWindowLe R A := fun ξ i =>
-  le_trans (Pouw.pr_mono fun _ hx => ⟨(hA _ hx.1).1, (hA _ hx.1).2, hx.2⟩) (windowLe W h2 h3 h4 h5 h6 hρ hreg hcov ξ i)
+  le_trans (Pouw.pr_mono fun _ hx => ⟨(hA _ hx.1).1, (hA _ hx.1).2, hx.2⟩) (windowLe W h2 h4 h5 h6 hρ hreg hcov ξ i)
+
+/-- **S5's guard at onsite's network coupling**: the coupling's verdict at the code past its component's acceptance,
+each release its check read at its round of the device's log and the coupling's break absent. -/
+abbrev couplingGuard {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    (q : V.Coupling .onsite .network θ F c σ) (ξ : (i : q.I) → q.Ω i) : Prop :=
+  V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧ ¬ q.brk ξ
 
 /-- **The refinement in the game**: the network certifier's refinement at a coupling's verdict at the code, with the steps at what the prover
 sent at the outcome the coins lead to, S5 guarded by the verdict's releases at their rounds and break absent. -/
 theorem networkWindowLe_verdict {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted q.run K H D L Kₒ S lay k δ decode reg Dj n} (W : WindowRuns R)
-    (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h3 : V2AcceptMeans W)
-    (h4 : WindowCoinsLive W)
-    (h5 : SessionIsSampledRun W fun ξ => V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧ ¬ q.brk ξ)
+    (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h4 : WindowCoinsLive W)
+    (h5 : SessionIsSampledRun W (couplingGuard q))
     (h6 : NetworkCouples R (fun ξ => (V.outcome θ F c σ q.coins ξ).sent) W)
     (hρ : WindowValuesRegistered R fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
-    (hreg : WindowRegistersAs W fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
+    (hreg : WindowRegistersAs W (fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (couplingGuard q))
     (hcov : RecordCovers W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) : NetworkWindowLe R q.verdict :=
-  networkWindowLe (fun _ h => h) W h2 h3 h4 h5 h6 hρ hreg hcov
+  networkWindowLe (fun _ h => h) W h2 h4 h5 h6 hρ hreg hcov
 
 /-- **The network certifier at the code from the named steps**: `Verity.Subprotocol.network_atCode` with
 `NetworkWindowLe` from `networkWindowLe`. -/
@@ -64,12 +69,12 @@ theorem network_atCode_of_steps {r : PeriodRun d α C Ω} (c : Certificates) (p 
       εtap)
     {A : Audit → ((i : I) → Ω i) → Prop} {s : ((i : I) → Ω i) → Sent} {G : ((i : I) → Ω i) → Prop}
     (hA : ∀ ξ, A .network ξ → ComponentAccepts .onsite .network (s ξ) ∧ G ξ) (W : WindowRuns R)
-    (h2 : PeriodRunsV2 W s) (h3 : V2AcceptMeans W) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W G)
-    (h6 : NetworkCouples R s W) (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s)
+    (h2 : PeriodRunsV2 W s) (h4 : WindowCoinsLive W) (h5 : SessionIsSampledRun W G) (h6 : NetworkCouples R s W)
+    (hρ : WindowValuesRegistered R s) (hreg : WindowRegistersAs W s G)
     (hcov : RecordCovers W s) :
     (atCode r A).Sound c p .network (n * (δ + εks + εbind + εtap)) :=
   network_atCode c p R hks hb hδ hdec εks εbind εtap herr hbind htap
-    (networkWindowLe hA W h2 h3 h4 h5 h6 hρ hreg hcov)
+    (networkWindowLe hA W h2 h4 h5 h6 hρ hreg hcov)
 
 /-- **A network coupling's guarantee at the code from the named steps**: the coupled run at the verdict at the code
 (`Vocab.Coupling.atCode`) meets `CommOfPeriodLeakAccepted`'s bound at the published certificates and the coupling's
@@ -85,15 +90,14 @@ theorem coupling_atCode_of_steps {V : Vocab d α} {θ F c : ByteArray} {σ : Gam
     (hbind : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ εbind)
     (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
       εtap)
-    (W : WindowRuns R) (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h3 : V2AcceptMeans W)
-    (h4 : WindowCoinsLive W)
-    (h5 : SessionIsSampledRun W fun ξ => V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧ ¬ q.brk ξ)
+    (W : WindowRuns R) (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h4 : WindowCoinsLive W)
+    (h5 : SessionIsSampledRun W (couplingGuard q))
     (h6 : NetworkCouples R (fun ξ => (V.outcome θ F c σ q.coins ξ).sent) W)
     (hρ : WindowValuesRegistered R fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
-    (hreg : WindowRegistersAs W fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
+    (hreg : WindowRegistersAs W (fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (couplingGuard q))
     (hcov : RecordCovers W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) :
     q.atCode.Sound (V.certOf θ) q.price .network (n * (δ + εks + εbind + εtap)) :=
   network_atCode_of_steps (V.certOf θ) q.price R hks hb hδ hdec εks εbind εtap herr hbind htap (fun _ h => h) W h2
-    h3 h4 h5 h6 hρ hreg hcov
+    h4 h5 h6 hρ hreg hcov
 
 end Verity.Network

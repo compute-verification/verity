@@ -11,10 +11,11 @@ own declared circuit, `policy_on`), hands every subprotocol the same blobs (`BLO
 often breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other
 params, a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself
 (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. v2
-accepts only on a session's proof, which no case carries, so integrity is undecided at best and no product accepts
-here. `product IDS serve` over each composite's subprotocols, the composite `verity run`'s verifier runs, is held to the
-same reference, and `product IDS id` names remote and onsite for their subprotocols and refuses every other set: the same
-two composites a configuration may list (`verity.core.deploy.config.COMPOSITES`)."""
+accepts only on a session's proof, which no case carries, so integrity and communication (whose period check runs v2 on
+each sampling block) are undecided at best and no product accepts here. `product IDS serve` over each composite's
+subprotocols, the composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names
+remote and onsite for their subprotocols and refuses every other set: the same two composites a configuration may list
+(`verity.core.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
@@ -64,8 +65,9 @@ def pouw_periods() -> dict[str, list[dict]]:
             R.REJECT: [PPC.instance(random.Random(f"{n}/0"), n) for n in PPC.NAMES]}
 
 OS = R.ONE_STAGE
-#: The files every product case hands its components as blobs: v2's cases name them as their circuit and public file.
-CIRCUIT, PUBLIC = b"not a circuit file", b"not a public file"
+#: The files every product case hands its components as blobs: v2's cases, and the period check's sampling blocks, name
+#: them as their circuit and public file.
+CIRCUIT, PUBLIC = R.ZK.CIRCUIT, R.ZK.PUBLIC
 BLOBS = [CIRCUIT, PUBLIC]
 
 
@@ -121,9 +123,9 @@ V2_CASES = {R.UNDECIDED: empty_draws().map(v2_case),
                                 st.builds(v2_case, empty_draws(), st.sampled_from(V2_BREAKS)))}
 
 NP = R.PERIOD
-#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
-PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case")
-                for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
+#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`):
+#: none accepts, since v2 is undecided at best on each sampling block.
+PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case") for v in (R.REJECT, R.UNDECIDED)}
 
 #: The inference-only policy's changes by the verdict they aim at: none, or one that rejects. It is never undecided.
 INFERENCE_CASES = {v: tuple(m for m, (x, _) in R.INFERENCE.EXPECT.items() if x == v) for v in (R.ACCEPT, R.REJECT)}
@@ -140,6 +142,8 @@ def kinds(C) -> list[str]:
         return list(INFERENCE_CASES)
     if C is R.SAMPLED_PROOFS:
         return list(V2_CASES)
+    if C is R.CERTIFIER:
+        return list(PERIOD_CASES)
     if C is R.WIPE:
         return list(R.WIPE_CASES.KINDS)
     if C is R.POUW_PERIOD:
@@ -163,7 +167,8 @@ def component_case(draw, C, kind: str | None) -> dict:
     elif C is R.POUW_PERIOD:
         case = draw(st.sampled_from(pouw_periods()[kind]))
     elif C is R.CERTIFIER:
-        case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
+        ms = PERIOD_CASES[R.UNDECIDED if kind == R.ACCEPT else kind]
+        case = NP.build(draw(st.sampled_from(ms)), draw(st.integers(0, 1 << 16)), small=True)
     elif C is R.INFERENCE_ONLY:
         case = draw(R.INFERENCE.drawn(draw(st.sampled_from(INFERENCE_CASES[kind]))))
     elif C is R.WIPE:

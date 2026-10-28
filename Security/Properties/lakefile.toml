@@ -90,11 +90,12 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",
   "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords", "Properties.NetworkPeriod",
-  "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
+  "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
+  "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Core.Site", "Properties.Flock.Circuit",
-  "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Subprotocols",
-  "Properties.NetworkCertifier.Period", "Properties.Verity.Network"]
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Challenger", "Properties.Core.Site",
+  "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
+  "Properties.Verity.Subprotocols", "Properties.NetworkCertifier.Period", "Properties.Verity.Network"]

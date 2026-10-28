@@ -1,4 +1,4 @@
-"""The seed and the noise a PoUW unit derives inside its own proof (`PROTOCOL.md` §`compile`).
+"""The seed and the noise a PoUW unit derives inside its own proof (`compile`).
 
 A drawn unit's noise is neither a public nor a coin input: the unit computes its seed from the window's salt
 (`pouw.salt`, the one coin), its position and its operands' roots, all inputs of the unit bound before the draw, and its

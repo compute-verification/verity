@@ -3,12 +3,13 @@ of onsite and remote, over the harness's framing of the core interface (`verity_
 `Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`, remote's work) and `period_check.case` (`verity/pouw/period/v1`, onsite's work), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
-certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
+certificates and one-stage v2 on each sampling block,
+`verity/core/protocols/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs' one-stage audit on the
-proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's framing over v1's `one_stage` and decoders
-(`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, the wipe's
+proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk_case.answer`: v2's framing over v1's `one_stage`
+and decoders (`verity/core/service/sampled_proofs/tests/`), on the cases v2 decides without a proof, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
@@ -38,7 +39,6 @@ import functools
 import hashlib
 import importlib.util
 import json
-import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -68,9 +68,10 @@ def module(name: str, path: Path) -> ModuleType:
     return m
 
 
-#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, and its strategies
-#: draw audits.
-ONE_STAGE = module("one_stage_difftest", CORE / "service/sampled_proofs/tests/test_difftest.py")
+#: One-stage v2 in Python on the cases it decides without a proof (`answer`), over sampled proofs' one-stage difftest
+#: (`ONE_STAGE`: `one_stage` behind the decoders `OneStage` reads, whose strategies draw audits).
+ZK = module("one_stage_zk_case", CORE / "service/sampled_proofs/tests/one_stage_zk_case.py")
+ONE_STAGE = ZK.ONE_STAGE
 #: PoUW's check difftest's cases: honest windows and one mutation each.
 POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/pouw_check_cases.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
@@ -144,79 +145,8 @@ class Recorded:
         raise KeyError(f"{self.id}: no answer recorded for this case")
 
 
-V2 = "verity/sampled-proofs/one-stage/v2"
-DIGEST = re.compile(r"[0-9a-f]{128}")
-REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
-
-
-def _v2_params(j: Any) -> dict:
-    """`OneStageZk.paramsOfJson`: v1's parameters with ``proofs``, exactly the auditor's circuit digest and the verifier's
-    registered file, and the verifier's own partition object."""
-    pr = j.get("proofs") if isinstance(j, dict) else None
-    if not isinstance(pr, dict) or sorted(pr) != ["circuit", "registered"]:
-        raise Reject("the parameters name no proofs, or other keys under them")
-    if not isinstance(pr["circuit"], str) or not DIGEST.fullmatch(pr["circuit"]):
-        raise Reject("proofs: circuit is not a SHA-512 digest")
-    if pr["registered"] is not None and not isinstance(pr["registered"], dict):
-        raise Reject("proofs: registered is not an object or null")
-    base = ONE_STAGE.decode_params({k: v for k, v in j.items() if k != "proofs"})
-    if base["partition"] is None:
-        raise Reject("partition is null")
-    return {"base": base, "program": j.get("program"), **pr}
-
-
-def _v2_evidence(b: bytes) -> dict:
-    """`OneStageZk.evidenceOf`: v1's evidence with no verdicts and with ``proofs``, the public file's digest and the
-    sessions' files, named as the evidence's sessions."""
-    j = P.canonical_json(b)
-    if not isinstance(j, dict) or "verdicts" in j or "proofs" not in j:
-        raise Reject("the evidence is not an object naming proofs and no verdicts")
-    base = ONE_STAGE.decode_evidence(canonical({**{k: v for k, v in j.items() if k != "proofs"}, "verdicts": {}}).encode())
-    pr = j["proofs"]
-    if not isinstance(pr, dict) or sorted(pr) != ["public", "sessions"] or not isinstance(pr["public"], str) \
-            or not isinstance(pr["sessions"], list):
-        raise Reject("the evidence's proofs")
-    for s in pr["sessions"]:
-        if not isinstance(s, dict) or sorted(s) != ["name", "record", "reps"] or not isinstance(s["name"], str) \
-                or not isinstance(s["record"], str) or not isinstance(s["reps"], dict) \
-                or not all(isinstance(d, str) for d in s["reps"].values()):
-            raise Reject("a session of the proofs")
-    if [s["name"] for s in pr["sessions"]] != base["sessions"]:
-        raise Reject("proofs: the sessions are not the evidence's sessions")
-    return {"base": base, "public": pr["public"], "sessions": pr["sessions"]}
-
-
-def _v2_check(blobs: list[bytes]):
-    """`OneStageZk.checkBlobs` on `blobs`, for evidence whose sessions' records are in no blob, where it needs no proof:
-    the circuit and the public file are blobs, a session whose record is in none is refused, and with no session the
-    evidence proves no unit and v1 decides on no verdict (undecided at best: v2 accepts only on a session's proof)."""
-    held = {hashlib.sha512(b).hexdigest() for b in blobs}
-
-    def check(p: dict, c: tuple, e: dict) -> tuple:
-        if p["registered"] is not None:
-            raise ValueError("outside the mirror: the verifier's registered file (`OneStageZk.readsOf`)")
-        definitions = p["program"].get("definitions") if isinstance(p["program"], dict) else None
-        if not isinstance(definitions, dict) or any(REGISTERED_INPUT.fullmatch(k) for k in definitions):
-            return REJECT, "registered: the program reads registered values"
-        if p["circuit"] not in held or not DIGEST.fullmatch(e["public"]) or e["public"] not in held:
-            return REJECT, "proofs: the circuit or the public file is in no blob"
-        if e["sessions"]:
-            if e["sessions"][0]["record"] in held:
-                raise ValueError("outside the mirror: a session's record is a blob")
-            return REJECT, "proofs: a session's record is in no blob"
-        if e["base"]["proved_units"]:
-            return REJECT, "proofs: the units the sessions proved are not the evidence's proved_units"
-        return ONE_STAGE.check(p["base"], c, e["base"])
-    return check
-
-
-def one_stage_zk(case: Any) -> dict:
-    """`SampledProofs.OneStageZk.protocol` on a case and its ``blobs`` (`_v2_check`'s cases)."""
-    return P.answer(V2, case, params=_v2_params, commitment=ONE_STAGE.decode_commitment, evidence=_v2_evidence,
-                    digest=lambda c: c[1], check=_v2_check(case.get("blobs", []) if isinstance(case, dict) else []))
-
-
-CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+#: Communication: the period check, which runs one-stage v2 on each sampling block's proof on the product's blobs.
+CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference, blobs=True)
 INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 
@@ -230,7 +160,7 @@ def _period_answer(case: str) -> str:
 #: component's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 #: Integrity: one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`).
-SAMPLED_PROOFS = Ported(V2, one_stage_zk, blobs=True)
+SAMPLED_PROOFS = Ported(ZK.ID, ZK.answer, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")

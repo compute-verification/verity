@@ -11,7 +11,7 @@ per-run command's exit code is recorded, and a nonzero one fails this step witho
 line accepted. Every command's output is kept under ``verify/`` in the run's directory.
 
 Every reference verifier an arm names today is a replay that opens the run's rows and words and recomputes the scheme in
-the clear, so an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md).
+the clear, so an accepted row is replay-verified (development shortcut; the protocol's check is a ZK proof).
 The records and `panel.py append`'s arguments keep the name ``verifier``.
 
   python verify.py RESULT_JSON [--run-id ID] [--commit SHA] [--out FILE]

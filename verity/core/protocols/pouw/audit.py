@@ -1,4 +1,4 @@
-"""The protocol's commitments and epoch, the same for every `PoUWScheme` (``PROTOCOL.md``, "Lifecycle"): what the served
+"""The protocol's commitments and epoch, the same for every `PoUWScheme` (the lifecycle ``README.md`` outlines): what the served
 path's prover commits and its verifier reads.
 
 0. **Coins.**  Before the epoch the challenger publishes its coin commitment over the epoch's coins (`coins`).

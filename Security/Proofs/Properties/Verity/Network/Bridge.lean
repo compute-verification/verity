@@ -83,7 +83,7 @@ theorem windowCoinsLive_of_equiv (W : WindowRuns R)
 
 /-- **S4 at an own coin of `n` blocks of `m` challenger's coins**: where the own coin is such a coin (`eo`), no
 statement's sampled verifier spends more than `m` coins (`hk`), and window `i`'s prover's tape is the rest of the own
-coin (`et`) and its coins the first of its block, the sessions' coins are the challenger's live coins. -/
+coin (`et`) and its coins the first of its block, every window's tape and coins are the challenger's live coins. -/
 theorem windowCoinsLive_split (W : WindowRuns R) {m : ℕ} (eo : Ω (r.own .network) ≃ OwnCoins Coin n m)
     (hk : ∀ x, D.V.k x ≤ m) (et : ∀ ξ i, R.Tape ξ i ≃ OwnTape Coin n m i (D.V.k (R.stmt ξ i)))
     (h : ∀ ξ i x, W.coins ξ i x = ((et ξ i).symm.prodCongr (Equiv.refl _)) (splitOwn i (hk (R.stmt ξ i)) (eo x))) :
@@ -330,12 +330,12 @@ theorem onsite_network_first :
       NetworkCheck.Period.protocol.id ∉ Core.Onsite.components.tail.map (·.id) :=
   ⟨rfl, by decide +kernel⟩
 
-/-- **Onsite's network triple is its first**: a triple of onsite's components, on any blobs, whose protocol is the
-period check names the first of the composition's parameters. -/
+/-- **Onsite's network triple is its first**: a triple of onsite's components, on any blobs, whose protocol has the
+period check's id names the first of the composition's parameters. -/
 theorem network_triple_first {bs : Core.Blobs} {ps : List Core.Composition.Named} {ev : List Core.Composition.Case}
     {x : Core.Protocol × Core.Composition.Named × Core.Composition.Case}
     (hx : x ∈ Properties.Composition.triples (Core.Onsite.components.map (·.onBlobs bs)) ps ev)
-    (h1 : x.1 = NetworkCheck.Period.protocol) : ∃ ps', ps = x.2.1 :: ps' := by
+    (h1 : x.1.id = NetworkCheck.Period.protocol.id) : ∃ ps', ps = x.2.1 :: ps' := by
   unfold Properties.Composition.triples at hx
   rw [onsite_network_first.1, List.map_cons] at hx
   cases ps with
@@ -362,7 +362,7 @@ def periodParamsOf (θ : ByteArray) : Option NetworkCheck.Period.Params :=
 theorem networkPeriod_params {s : Sent} {p : NetworkCheck.Period.Params} {c : NetworkCheck.Period.Commitment}
     {e : NetworkCheck.Period.Evidence} (h : NetworkPeriod .onsite s p c e) : periodParamsOf s.params = some p := by
   obtain ⟨ps, b, ev, ⟨hps, -, -⟩, x, hx, hx1, hp, -, -⟩ := h
-  obtain ⟨ps', rfl⟩ := network_triple_first (bs := Core.Blobs.ofArray s.blobs) hx hx1
+  obtain ⟨ps', rfl⟩ := network_triple_first (bs := Core.Blobs.ofArray s.blobs) hx (congrArg Core.Protocol.id hx1)
   unfold periodParamsOf
   rw [hps]
   exact congrArg Except.toOption hp
