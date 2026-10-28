@@ -291,6 +291,8 @@ def link_tree(v) -> dict:
     if not isinstance(o["pos"], list) or len(o["pos"]) != 2:
         raise D.Reject("pos: [unit, row]")
     t = LK.Tree(leaves, LK.depth(UB, PB))
+    if t.root == bytes(64):
+        raise D.Reject("a root of 64 zero bytes")
     return {"root": t.root.hex(), "path": [s.hex() for s in t.path(at(o["pos"]))]}
 
 

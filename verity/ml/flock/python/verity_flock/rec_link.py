@@ -22,7 +22,8 @@ with ``D = UB + PB``. Every port is u16 words in byte-string order (bit ``t`` of
 **The trees.** The inner statement publishes each unit's rows' commit strings ``b ‖ c`` (hm96-sha512, fresh salts). The
 verifier builds two trees of depth D from them itself: input row ``p`` of unit ``u`` is leaf ``u · 2^PB + p`` of the input rows'
 tree, output row ``o`` of unit ``u`` leaf ``u · 2^PB + o`` of the output rows' tree; a leaf is the row's hm96 tree leaf
-``SHA-512(leaf_prefix(key) ‖ b ‖ c)``, a leaf with no row 64 zero bytes (whose preimage nobody holds), and a node
+``SHA-512(leaf_prefix(key) ‖ b ‖ c)``, a leaf with no row `EMPTY` = ``SHA-512()`` (of the empty string, which is no row
+leaf's input, so opening it is a SHA-512 collision), and a node
 ``SHA-512(left ‖ right)``. It registers both roots, and the statement reads every instance's ``rin`` and ``rout`` against
 them. A position comes from the table row, so which leaves an instance opens is private, and only the table's padded
 count is public.
@@ -78,7 +79,7 @@ OUT_WORDS = 64
 ROW_BLOCK = 64
 FIELD_BITS = 32
 UB_MAX, PB_MAX, D_MAX = 30, 16, 32
-EMPTY = bytes(64)
+EMPTY = hashlib.sha512(b"").digest()
 PORTS = ("trow", "xr", "yr", "raux", "xw", "yw", "waux")
 
 

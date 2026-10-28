@@ -8,7 +8,7 @@ A recursive session's link table (`Flock.RecLinks`) is checked one row an instan
 climbs the reader's and the writer's rows to two roots the verifier builds itself, from the commit strings `b ‖ c` the
 inner statement publishes for each unit's rows: input row `p` of unit `u` is leaf `u · 2^PB + p` of the input rows' tree,
 output row `o` of unit `u` leaf `u · 2^PB + o` of the output rows' tree. A leaf is the row's hm96 tree leaf
-(`Hm96.Default512.treeLeaf`), a leaf with no row 64 zero bytes (`EMPTY`), and a node `SHA-512(left ‖ right)`.
+(`Hm96.Default512.treeLeaf`), a leaf with no row `EMPTY`, and a node `SHA-512(left ‖ right)`.
 
 `rowsRoot` is one tree's root, `rowsPath` an opening of it. Each is linear in the rows it is given (one hash a row a level,
 at most `D ≤ 32` levels): the public commitments the verifier already reads, not the circuit they commit.
@@ -23,8 +23,9 @@ def UB_MAX : Nat := 30
 def PB_MAX : Nat := 16
 def D_MAX : Nat := 32
 
-/-- A leaf no row fills: 64 zero bytes (`rec_link.EMPTY`), whose SHA-512 preimage nobody holds. -/
-def EMPTY : ByteArray := ByteArray.mk (Array.replicate 64 0)
+/-- A leaf no row fills (`rec_link.EMPTY`): the SHA-512 of the empty string, which is no row leaf's input
+(`leaf_prefix ‖ b ‖ c`), so a row leaf that opens it is a SHA-512 collision. -/
+def EMPTY : ByteArray := Sha512.hash ByteArray.empty
 
 def node (l r : ByteArray) : ByteArray := Sha512.hash (l ++ r)
 
@@ -91,9 +92,12 @@ def rowLeaves (UB PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) : Except S
     pure (index u r PB, leaf bc)
 
 /-- **A rows tree's root**: the input rows' tree, or the output rows', of depth `UB + PB` over the inner statement's rows
-`((unit, row), b ‖ c)` in increasing order. -/
+`((unit, row), b ‖ c)` in increasing order. A root of 64 zero bytes is refused: it is the output of an instance whose row
+fails, which the statement must never read as a root. -/
 def rowsRoot (UB PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) : Except String ByteArray := do
-  root (UB + PB) (← rowLeaves UB PB rows)
+  let r ← root (UB + PB) (← rowLeaves UB PB rows)
+  if r.data.all (· == 0) then throw "a rows tree's root is 64 zero bytes, a failed row's output"
+  pure r
 
 /-- An opening of a rows tree: row `r` of unit `u`'s siblings, bottom up. -/
 def rowsPath (UB PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) (u r : Nat) : Except String (List ByteArray) := do
