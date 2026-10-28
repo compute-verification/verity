@@ -48,7 +48,7 @@ theorem FixedClock_honest :
 and `fxRate1` accepts four steps under `fxAdv1`. -/
 theorem ConstantRateFixedClock_honest :
     syncOne.size = 1 ∧ (honestI (K := 1) fxRate1 fxAdv1).obsRun () 4 ∈ AccSeqs fxRate1 (unitOp (K := 1)) 4 1 :=
-  ⟨by simp [SyncSet.size, syncOne], honestI_mem fxRate1 fxAdv1 4⟩
+  ⟨by first | simp [SyncSet.size, syncOne] | rfl | decide, honestI_mem fxRate1 fxAdv1 4⟩
 
 /-- **`EncardAccSeqsLeSync`'s bound fails at the verifier that accepts everything**, at `fxRate`'s parameters. -/
 theorem EncardAccSeqsLeSync_nontrivial :

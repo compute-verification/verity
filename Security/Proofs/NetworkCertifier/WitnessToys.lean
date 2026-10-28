@@ -157,8 +157,9 @@ theorem accSeqsAt_acceptAll_infinite {S : ℕ} (hS : 0 < S) (k : ℕ) :
     (f := fun m : ℕ => List.replicate (k + 1)
       (⟨fun _ _ => some (List.replicate m true), 0, fun _ => .complete⟩ : Obs 1 1 S)) ?_ ?_
   · intro a b hab
-    have := congrArg (fun o : List (Obs 1 1 S) => o.head?.map fun x => (x.rows 0 ⟨0, hS⟩).map List.length) hab
-    simpa using this
+    have h := congrArg (fun o : List (Obs 1 1 S) => o.head?.map fun x => (x.rows 0 ⟨0, hS⟩).map List.length) hab
+    have h' : some (some (List.replicate a true).length) = some (some (List.replicate b true).length) := h
+    simpa using h'
   · intro m
     simp [AccSeqsAt, acceptAll]
 
@@ -220,8 +221,8 @@ theorem fxLeakObs_not_le {n : ℕ} (hn : 0 < n) (N : ℕ∞) (hN : N ≠ ⊤) :
   rw [fxLeak_obs_univ hn, Set.encard_univ, ENat.card_eq_top_of_infinite, top_le_iff]
   exact hN
 
-theorem two_mul_ne_top (X : ℕ) : (2 : ℕ∞) * (X : ℕ∞) ≠ ⊤ := by
-  have h : (2 : ℕ∞) * (X : ℕ∞) = ((2 * X : ℕ) : ℕ∞) := by first | norm_cast | simp
+theorem two_mul_ne_top (m : ℕ) : (2 : ℕ∞) * (m : ℕ∞) ≠ ⊤ := by
+  have h : (2 : ℕ∞) * (m : ℕ∞) = ((2 * m : ℕ) : ℕ∞) := by first | norm_cast | simp | (push_cast; rfl)
   rw [h]
   exact ENat.coe_ne_top _
 
