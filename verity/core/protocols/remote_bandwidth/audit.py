@@ -15,9 +15,11 @@ many reads of a node's registered blocks the node made in each window, from rece
    counting its sessions, an unended one as failed.
 2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
    its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
-   on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
-   once, after the root the verifier recorded for it, which the challenger's signed log keeps
-   (`Session.released_reason`).
+   on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it, which the
+   challenger's signed log keeps (`Session.released_reason`), and the prover is sent its value and that root
+   (`coins.Released`).  The commitment, a function of every coin, reaches the prover only once the session has its
+   outcome, with every released coin's opening (`Session.disclose`), and the prover checks each coin it was sent
+   against them then (`Prover.end`).
 3. A session of `windows` windows.  The verifier releases `σ_0` (`Session.start`), and at each window's end the next
    window's challenge, or the close after the last (`Session.boundary`), one-way.  A window lasts at least the stated
    `T` (`Params.window_ns`, 60 s by default).
@@ -593,24 +595,37 @@ class Opening:
 class Prover:
     """The honest prover: each pass reads its plan's blocks (every block by default), computes their receipts and
     commits them, each leaf under a fresh salt from `entropy`.  `tiles` is PoUW's if the registration binds z, and
-    None if it does not."""
+    None if it does not.  It keeps every challenge it is sent (`received`) and checks them at the session's end
+    against the commitment it gets only then (`end`)."""
 
-    def __init__(self, store: Store, tiles: Tiles | None, commitment: coins.LiveCommitment, *,
-                 entropy: Callable[[int], bytes] = os.urandom) -> None:
-        self.store, self.commitment, self.entropy = store, commitment, entropy
+    def __init__(self, store: Store, tiles: Tiles | None, *, entropy: Callable[[int], bytes] = os.urandom) -> None:
+        self.store, self.entropy = store, entropy
         self.tiles = _tiles(tiles, store.registration.bind)
+        self.received: dict[int, coins.Released] = {}
 
-    def run(self, challenge: coins.LiveOpening, i: int, previous: bytes, plan: Plan | None = None, *,
-            head: bytes | None = None) -> Pass:
-        """Pass i of the window whose challenge is `challenge`, after the root `previous`, its seed binding `head`, the
-        chain over every append the verifier will have received before this pass's root (`chained`; None without
-        one, the honest prover's `Store.head`): refused unless the coin is a window's challenge and opens against the
-        session's commitment."""
-        t = getattr(challenge, "index", None)
-        reason = coins.coin_reason(self.commitment, challenge, coins.CHALLENGE, t)
+    def run(self, challenge: coins.Released | coins.LiveOpening, i: int, previous: bytes, plan: Plan | None = None,
+            *, head: bytes | None = None) -> Pass:
+        """Pass i of the window whose challenge is `challenge` (`coins.released`), after the root `previous`, its seed
+        binding `head`, the chain over every append the verifier will have received before this pass's root
+        (`chained`; None without one, the honest prover's `Store.head`): refused unless the coin is a window's challenge,
+        the one it was sent for that window before if any."""
+        try:
+            got = coins.released(challenge)
+        except coins.CoinError as e:
+            raise ValueError(str(e)) from None
+        if got.label != coins.CHALLENGE or got.index < 0:
+            raise ValueError(f"not a window's challenge: {got.label} coin {got.index}")
+        if self.received.setdefault(got.index, got) != got:
+            raise ValueError(f"window {got.index}'s challenge was sent again, another coin")
+        return self.pass_under(got.index, i, receipts.seed(coins.coin(got), i, chained(previous, head)), plan)
+
+    def end(self, commitment: coins.LiveCommitment, openings: Sequence[coins.LiveOpening]) -> None:
+        """The session's end: `commitment` and every released coin's opening, as the verifier sends them
+        (`Session.disclose`), refused (ValueError) unless every challenge this prover was sent opens against it with
+        the value and the root it was sent with (`coins.received_reason`)."""
+        reason = coins.received_reason(commitment, tuple(self.received[t] for t in sorted(self.received)), openings)
         if reason is not None:
             raise ValueError(reason)
-        return self.pass_under(t, i, receipts.seed(coins.coin(challenge), i, chained(previous, head)), plan)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> Pass:
         """Pass i of `window`'s receipts and tree under `seed`, however it was derived."""
@@ -926,8 +941,18 @@ class Session:
 
     @property
     def commitment(self) -> coins.LiveCommitment:
-        """The session's coin commitment, sent to the prover before the first coin."""
+        """The session's coin commitment, the verifier's: the prover is sent it only at the end (`disclose`)."""
         return self.coins.commitment
+
+    def disclose(self) -> tuple[coins.LiveCommitment, tuple[coins.LiveOpening, ...]]:
+        """The coin commitment and every coin released so far, opened, family by family: what the verifier sends the
+        prover at the session's end, for it to check every coin it was sent (`Prover.end`).  Refused while the
+        session has no outcome: once it is accepted or rejected no root joins its record, so the commitment, a
+        function of every coin, reaches the prover only after its last root."""
+        if self.outcome is None:
+            raise SessionError("the session's coins are disclosed at its end, once it is accepted or rejected")
+        c = self.coins
+        return c.commitment, tuple(o for label, _ in c.commitment.families for o in c.opened(label))
 
     def _release(self, t: int, now: int) -> coins.LiveOpening:
         """σ_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
@@ -1702,8 +1727,7 @@ def pooled(record: Record) -> tuple[float, float]:
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
     draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
-    + the coin commitment's hiding terms + the receipts' binding term (`Accounting.Guarantees.Remote.PooledDraw`,
-    `ledger.draw`).
+    + the receipts' binding term (`Accounting.Guarantees.Remote.PooledDraw`, `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
     `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least

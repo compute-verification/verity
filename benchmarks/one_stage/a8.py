@@ -105,7 +105,7 @@ def window(store: C3.Store, L: int, samples: int, delta: float, secret: bytes, s
     clock = a7.Clock()
     s = C3.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed)),
                    not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, s.commitment, entropy=a7.Entropy(secret + b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
     challenge, previous, passes, msgs = s.start(), reg.digest, {}, []
     for i in range(N // L):
         runs = ((L * i, L),)

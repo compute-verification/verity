@@ -118,7 +118,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     clock = Clock()
     s = Session(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
                 clock=clock)
-    prover = audit.Prover(store, tiles, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -255,8 +255,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     """The plan's order is only the tree's: the same blocks listed in another order give each block the same receipt
     (z, when the receipts bind it, is the tile before the block's read), and a different root."""
     store = stores[receipts.DEFAULT, bind]
-    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, challenger(store, params()).commitment,
-                          entropy=Entropy(b"s"))
+    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, entropy=Entropy(b"s"))
     seed = receipts.seed(bytes(range(32)), 0, store.registration.digest)
     a = prover.pass_under(0, 0, seed, receipts.Plan(((0, 10),), N))
     b = prover.pass_under(0, 0, seed, receipts.Plan.of(list(reversed(range(10))), N))
@@ -554,7 +553,7 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
             Session(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
-            audit.Prover(st, tiles, challenger(st, params()).commitment)
+            audit.Prover(st, tiles)
 
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
@@ -726,8 +725,14 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
     forged = dataclasses.replace(first, coin=bytes([first.coin[0] ^ 1]) + first.coin[1:])
     assert (coins.coin_reason(c.commitment, forged, coins.CHALLENGE, 0)
             == "coin does not open against the epoch's coin commitment")
-    with pytest.raises(ValueError, match="does not open"):
+    with pytest.raises(ValueError, match="sent again, another coin"):
         prover.run(forged, 0, store.registration.digest)
+    fresh = audit.Prover(store, None, entropy=Entropy(b"fresh"))
+    fresh.run(forged, 0, store.registration.digest)
+    with pytest.raises(ValueError, match="does not open"):
+        fresh.end(c.commitment, (forged,))
+    with pytest.raises(ValueError, match="is not the one opened"):
+        fresh.end(c.commitment, (first,))
     with pytest.raises(ValueError, match="openings coin"):
         prover.run(c.openings(0, first.after), 0, store.registration.digest)
     with pytest.raises(ValueError, match="already open"):
