@@ -40,14 +40,12 @@ theorem instance_program (p : NciCheck.Protocol.Params) (e : NciCheck.Protocol.E
 /-- An expansion of the policy's instance, and what it parses to, carry the declared circuit's text. -/
 theorem expands_program {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {j' : Json}
     {i : NciCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : i.program = p.program := by
-  obtain ⟨i0, -, h0, -, -, -, h0', -, -⟩ := hx
+  obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
   have a : (instanceOf p e).getObjVal? "program" = .ok (.str i0.program) := h0.1
   rw [instance_program] at a
   have b : j'.getObjVal? "program" = .ok (.str i0.program) := h0'.1
   rw [hi.1] at b
-  cases a
-  cases b
-  rfl
+  exact (Json.str.inj (Except.ok.inj b)).trans (Json.str.inj (Except.ok.inj a)).symm
 
 theorem bytes_eq_of_beq {a b : ByteArray} (h : (a == b) = true) : a = b :=
   ByteArray.ext (eq_of_beq (show ByteArray.beq a b = true from h))
@@ -148,8 +146,7 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
   have hprog : i0.program = p.program := by
     have a : (instanceOf p e).getObjVal? "program" = .ok (.str i0.program) := h0.1
     rw [instance_program] at a
-    cases a
-    rfl
+    exact (Json.str.inj (Except.ok.inj a)).symm
   have hP : Flock.Program.decode p.program.toUTF8 = .ok P := hprog ▸ hP0
   exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
     (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).1, policy_met hd hc hP⟩
@@ -160,9 +157,9 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
     (h : (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof) :
     ∃ (kI kW kS : Case) (pI : NciCheck.Protocol.Params) (cI : NciCheck.Protocol.Commitment)
       (eI : NciCheck.Protocol.Evidence), ev = [kI, kW, kS] ∧
-      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some cI.digest ∧
-      Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some cI.digest ∧
-      Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some cI.digest ∧
+      Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf PouwCheck.protocol kW.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
+      Properties.Composition.digestOf SampledProofs.OneStageZk.protocol.toProtocol kS.commitment = some (NciCheck.Protocol.protocol.digest cI) ∧
       (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI ∧
       NciCheck.Protocol.commitmentOf kI.commitment = .ok cI ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok eI ∧
       ∃ pub' prof', NciCheck.Protocol.check pI cI eI = .accept pub' prof' := by
@@ -181,26 +178,36 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
   obtain ⟨pI, cI, eI, hpI', hcI, heI, pubI, profI, hchkI⟩ := hI
   obtain ⟨pW, cW, eW, -, hcW, -, -⟩ := hW
   obtain ⟨pS, cS, eS, -, hcS, -, -⟩ := hS
+  have hcI' : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hcI
+  have hcW' : PouwCheck.protocol.commitment kW.commitment = .ok cW := hcW
+  have hcS' : (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)).commitment kS.commitment = .ok cS := hcS
+  have hpI'' : (canonicalJson nI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI := hpI'
+  have heI' : NciCheck.Protocol.evidenceOf kI.evidence = .ok eI := heI
+  have hchkI' : NciCheck.Protocol.check pI cI eI = .accept pubI profI := hchkI
   have hm : ["verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"].mapM
       (fun s => (committedBy s [NciCheck.Protocol.protocol, PouwCheck.protocol,
         SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)] [kI, kW, kS]).map (s, ·)) =
       some [("verity/inference-only/v0", NciCheck.Protocol.protocol.digest cI),
         ("verity/pouw/v1", PouwCheck.protocol.digest cW),
-        ("verity/sampled-proofs/one-stage/v2", SampledProofs.OneStageZk.protocol.digest cS)] := by
-    simp [committedBy, id_policy, id_pouw, id_oneStage, hcI, hcW, hcS, Except.toOption] <;> rfl
+        ("verity/sampled-proofs/one-stage/v2",
+          (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)).digest cS)] := by
+    simp [committedBy, id_policy, id_pouw, id_oneStage, hcI', hcW', hcS', Except.toOption]
   have htie := strays_none hm hstrays
   have hdW : PouwCheck.protocol.digest cW = NciCheck.Protocol.protocol.digest cI := htie _ (by simp)
-  have hdS : SampledProofs.OneStageZk.protocol.digest cS = NciCheck.Protocol.protocol.digest cI := htie _ (by simp)
-  refine ⟨kI, kW, kS, pI, cI, eI, rfl, ?_, ?_, ?_, hpI ▸ hpI', hcI, heI, pubI, profI, hchkI⟩
-  · simp [Properties.Composition.digestOf, hcI, Except.toOption] <;> rfl
-  · simp [Properties.Composition.digestOf, hcW, Except.toOption, hdW] <;> rfl
-  · have hcS' : SampledProofs.OneStageZk.protocol.commitment kS.commitment = .ok cS := hcS
-    simp [Properties.Composition.digestOf, hcS', Except.toOption, hdS] <;> rfl
+  have hdS : (SampledProofs.OneStageZk.protocol.onBlobs (Blobs.ofArray blobs)).digest cS =
+      NciCheck.Protocol.protocol.digest cI := htie _ (by simp)
+  have hcS'' : SampledProofs.OneStageZk.protocol.toProtocol.commitment kS.commitment = .ok cS := hcS
+  have hdS' : SampledProofs.OneStageZk.protocol.toProtocol.digest cS = NciCheck.Protocol.protocol.digest cI := hdS
+  have hp : (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok pI := by rw [hpI]; exact hpI''
+  refine ⟨kI, kW, kS, pI, cI, eI, rfl, ?_, ?_, ?_, hp, hcI', heI', pubI, profI, hchkI'⟩
+  · simp [Properties.Composition.digestOf, hcI', Except.toOption]
+  · simp [Properties.Composition.digestOf, hcW', Except.toOption, hdW]
+  · simp [Properties.Composition.digestOf, hcS'', Except.toOption, hdS']
 
 theorem acceptInferenceOnly : AcceptInferenceOnly := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, hdI, hdW, hdS, hp, hc, he, pub', prof', hchk⟩ := remote_accept h
-  exact ⟨kI, kW, kS, cI.digest, hev, hdI, hdW, hdS, pI, cI, eI, hp, hc, he, policyHeld hchk⟩
+  exact ⟨kI, kW, kS, NciCheck.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, pI, cI, eI, hp, hc, he, policyHeld hchk⟩
 
 theorem acceptComplies : AcceptComplies := by
   intro blobs ps c ev pub prof h
