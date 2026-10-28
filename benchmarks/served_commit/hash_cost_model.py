@@ -3,7 +3,8 @@
     python3 benchmarks/served_commit/hash_cost_model.py OUT_JSON RUN_OUT...    (an ARMS run: each arm's directory)
 
 h is in MAC-times a committed byte (hash_cost_h.py). For each T and row size rb:
-  h_x(rb)      exclusive: the cheapest leaves alone at any phases, plus the cheapest tree form at that row size
+  h_x(rb)      exclusive: the served kernel configuration's leaves alone (median over runs; the others are listed), plus the
+               cheapest tree form at that row size
   h_b(rb, b)   beside the GEMM, b bytes a forward: the least h_beside of a measured point that fits b bytes beside one forward,
                floored at 0 (a point inside the noise) and capped at h_x (past that the bytes go exclusive); h_b_hi adds twice the
                A/A noise floor where an A-B-A run measured it
@@ -13,6 +14,7 @@ A point's phases and cap are its kernel configuration: VERITY_ROWS_PHASES (data 
 from __future__ import annotations
 
 import json
+import statistics
 import sys
 from pathlib import Path
 
@@ -20,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hash_cost_h import analyze
 
 GRID_MB = (10, 25, 50, 100, 200, 400, 800, 1600)
+SERVED = ("t256", "4", "split")                                # native_rows.cu as served: 256 threads, 4 data phases, split leaves
 
 
 def collect(runs: list[Path]) -> dict:
@@ -47,9 +50,24 @@ def model(by: dict) -> dict:
     out: dict = {}
     trees = {rb: min(t["h_tree"] for e in by.values() for t in e.get(rb, {}).get("tree", [])) for rb in
              {rb for e in by.values() for rb in e if any(e[rb]["tree"] for e in by.values() if rb in e)}}
+    # alone, the hash doesn't see T: each kernel configuration's median over every run, then the cheapest configuration
+    alone: dict = {}
+    for rows in by.values():
+        for rb, e in rows.items():
+            for a in e["alone"]:
+                alone.setdefault(rb, {}).setdefault((a["form"], a["phases"], a["kind"]), []).append(a)
+    def summary(cfg: tuple, xs: list) -> dict:
+        return {"form": cfg[0], "phases": cfg[1], "kind": cfg[2], "n": len(xs), "h_leaf": round(statistics.median(x["h_leaf"] for x in xs), 1),
+                "h_leaf_range": [min(x["h_leaf"] for x in xs), max(x["h_leaf"] for x in xs)],
+                "gbps": statistics.median(x["gbps"] for x in xs), "runs": sorted({x["run"] for x in xs})}
+
+    best_alone = {}
+    for rb, groups in alone.items():
+        cfg = SERVED if SERVED in groups else min(groups, key=lambda c: statistics.median(x["h_leaf"] for x in groups[c]))
+        best_alone[rb] = {**summary(cfg, groups[cfg]), "others": [summary(c, xs) for c, xs in groups.items() if c != cfg]}
     for T, rows in by.items():
         for rb, e in rows.items():
-            best = min(e["alone"], key=lambda x: x["h_leaf"])
+            best = best_alone[rb]
             h_x = best["h_leaf"] + trees.get(rb, 0.0)
             pts = sorted(e["points"], key=lambda p: p["bytes_per_fwd"])
             # a single-baseline point's noise is unmeasured: where A-B-A points exist they set the curve, up to their largest share
@@ -74,7 +92,7 @@ def model(by: dict) -> dict:
                 env.append({"mb_per_fwd": mb, "h_b": round(h, 1), "h_b_hi": round(h_hi, 1),
                             "at": p and {k: p[k] for k in ("run", "arm", "phases", "cap", "beside_gbps", "kappa")}})
             out.setdefault(T, {})[rb] = {"h_x": round(h_x, 1), "h_leaf": best["h_leaf"], "h_tree": trees.get(rb),
-                                         "alone_at": {k: best[k] for k in ("run", "arm", "phases", "gbps")},
+                                         "alone_at": best,
                                          "h_b_by_mb_per_fwd": env, "points": pts}
     return out
 
