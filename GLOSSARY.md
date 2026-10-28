@@ -158,7 +158,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
-| "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth"; until MEM-152's code move renames them, the package `verity/core/protocols/remote_bandwidth/`, the Lean `RemoteAudit` and `Accounting.Remote*`, `benchmarks/remote_session/`, `--remote-verifier`, the id `verity/remote-bandwidth/v0` and its domain tags `verity/remote-bandwidth/…` | PoUB (not the bandwidth audit, which is over PoUS's store) |
+| "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the firewall |
 | "verifier gateway" | the challenger |
