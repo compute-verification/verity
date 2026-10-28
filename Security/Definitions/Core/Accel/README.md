@@ -35,10 +35,10 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | QMMA.16832 (sm_120: e4m3, e5m2, e2m1) | `mma.sync` `kind::f8f6f4` | covered | `mma`. The E4M3 and E5M2 same-format K32 dots are pinned at every accumulator (`Sm120.f8Pipeline`); E2M1 and the mixed pairings are `Open.dot`. FP6 (e3m2, e2m3) is missing |
 | OMMA.SF.16864 (sm_120: nvf4, mxf4) | `mma.sync` `kind::mxf4nvf4` `.block_scale` | covered | `mma` nvf4/mxf4. The dot is `Open.dot` (pinned in Python only) |
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
-| HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
+| HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Opcode.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
 | OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
-| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 units of `tensor` and `tensorLong` a MAC, as ALGO-COST A18 measured it beside `wgmma`, so it shares the low-precision formats' budget) |
-| DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at 32 MACs an SM clock; rate undocumented, measured at 1.75 |
+| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Opcode.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 units of `tensor` and `tensorLong` a MAC, as ALGO-COST A18 measured it beside `wgmma`, so it shares the low-precision formats' budget) |
+| DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Opcode.dmma` at 32 MACs an SM clock; rate undocumented, measured at 1.75 |
 
 ## Integer and floating-point lanes
 
@@ -79,11 +79,11 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | MOVM (`movmatrix`) | missing | |
 | LDGSTS (`cp.async`) | coarse | a copy from device memory or L2 to shared memory, with no latency |
 | UTMALDG, UTMASTG, UBLKCP (TMA, `cp.async.bulk`) | coarse | a bulk copy of any length with shared memory at one end |
-| UTMAREDG (TMA reduce, `cp.reduce.async.bulk`), integer add, min, max and bitwise | covered | `Op.red` from shared memory into L2 or device memory, priced as the bulk copy |
+| UTMAREDG (TMA reduce, `cp.reduce.async.bulk`), integer add, min, max and bitwise | covered | `Opcode.red` from shared memory into L2 or device memory, priced as the bulk copy |
 | UTMAREDG 64-bit, float, `inc`, `dec`; TMA multicast | missing | |
 | ATOMS, ATOMG, ATOM, RED (add, exch) | covered | `atom` add and exch on shared memory, L2 and device memory. RED is an `atom` whose old value is discarded |
-| RED vector forms (`red.v2`, `.v4`), integer | coarse | `Op.red` from up to 8 registers, any `Lane.reduces` function (integer forms are scalar on the card) |
-| RED float forms (`.f32`, `.f16x2`, `.bf16x2`, `.v8`) | over-approximated | `Op.red` by `iadd3` and `add2`: exact integer adds, from up to 8 registers |
+| RED vector forms (`red.v2`, `.v4`), integer | coarse | `Opcode.red` from up to 8 registers, any `Lane.reduces` function (integer forms are scalar on the card) |
+| RED float forms (`.f32`, `.f16x2`, `.bf16x2`, `.v8`) | over-approximated | `Opcode.red` by `iadd3` and `add2`: exact integer adds, from up to 8 registers |
 | ATOMS, ATOMG (min, max, and, or, xor, inc, dec, cas), float atomics | missing | |
 | LDC (constant bank operands) | missing | constant-bank operands |
 | TEX, TLD, TLD4, TXD, TMML, SULD, SUST, SURED, SUATOM | **missing, important** | the texture path has its own bandwidth and filtering arithmetic (weighted sums of texels) outside every resource here |
@@ -117,24 +117,24 @@ uncovered variants (`.64`, other atomic operations, `f16` accumulators).
 | IDP4A | covered | `Lane.dp4a` |
 | FADD, FADD32I, FFMA32I, FFMA, FMUL, FMUL32I | covered | `Lane.fadd`/`ffma`/`fmul` (an immediate is an operand) |
 | FSEL, BREV, FLO, IADD, IADD3, IADD32I, IMAD, IMNMX, IMUL, IMUL32I, ISCADD, ISCADD32I, ISETP, LEA, LOP, LOP3, LOP32I, POPC, SHF, SHL, SHR, PRMT, SEL | covered | `Lane` integer functions (an immediate is an operand; `IMUL` is `mad` at `c = 0`, `SHL`/`SHR` are `shf`, `ISCADD` is `lea`) |
-| ATOM, ATOMS, ATOMG, REDAS, REDG | covered | `Op.atom` (the modelled operations; others missing) |
-| MOV, MOV32I, LD, LDG, LDL, LDS, LDSM, STSM, ST, STG, STL, STS, R2UR | covered | `Op.copy` (a lane load or store, at most 4 words), `Op.bcast` (a broadcast load) |
-| LDGSTS, STAS, UBLKCP, UTMALDG, UTMASTG | covered | `Op.copy` (bulk, shared memory at one end) |
-| BMMA, BGMMA | covered | `Op.mma` (`b1`, `Open.b1`) |
-| QGMMA | covered | `Op.mma` (`e4m3`/`e5m2`) |
-| HMMA, HGMMA | covered | `Op.mma` (`f16`/`bf16`/`tf32` with `f32` accumulators; `f16` accumulators missing) |
-| IMMA, IGMMA | covered | `Op.mma` (`s8`/`u8`, the integer path) |
-| UBREV, UFLO, UIADD3, UIMAD, UISETP, ULEA, ULOP, ULOP3, ULOP32I, UMOV, UPOPC, UPRMT, USEL, USHF, USHL, USHR | covered | `Op.uni` (integer, a whole issue slot) |
+| ATOM, ATOMS, ATOMG, REDAS, REDG | covered | `Opcode.atom` (the modelled operations; others missing) |
+| MOV, MOV32I, LD, LDG, LDL, LDS, LDSM, STSM, ST, STG, STL, STS, R2UR | covered | `Opcode.copy` (a lane load or store, at most 4 words), `Opcode.bcast` (a broadcast load) |
+| LDGSTS, STAS, UBLKCP, UTMALDG, UTMASTG | covered | `Opcode.copy` (bulk, shared memory at one end) |
+| BMMA, BGMMA | covered | `Opcode.mma` (`b1`, `Open.b1`) |
+| QGMMA | covered | `Opcode.mma` (`e4m3`/`e5m2`) |
+| HMMA, HGMMA | covered | `Opcode.mma` (`f16`/`bf16`/`tf32` with `f32` accumulators; `f16` accumulators missing) |
+| IMMA, IGMMA | covered | `Opcode.mma` (`s8`/`u8`, the integer path) |
+| UBREV, UFLO, UIADD3, UIMAD, UISETP, ULEA, ULOP, ULOP3, ULOP32I, UMOV, UPOPC, UPRMT, USEL, USHF, USHL, USHR | covered | `Opcode.uni` (integer, a whole issue slot) |
 | PLOP3, PSETP, P2R, R2P, UP2UR, UPLOP3, UPSETP, UR2UP | covered | predicates are registers: `Lane.lop3`, `setp`, register copies |
 | LDC, ULDC | coarse | a copy from device memory (constant banks) |
 | SHFL | covered | `Lane.shfl` on the shuffle pipe (`Res.shfl`) |
 | FENCE, LDGDEPBAR, SYNCS, CCTL, CCTLL, ERRBAR, MEMBAR, CCTLT, UCGABAR_ARV, UCGABAR_WAIT, USETMAXREG, WARPGROUP, WARPGROUPSET, UBLKPF, UTMACCTL, UTMACMDFLUSH, UTMAPF, ACQBULK, BMOV, BPT, BREAK, BSSY, BSYNC, CGAERRBAR, ENDCOLLECTIVE, EXIT, KILL, NANOSLEEP, PREEXIT, WARPSYNC, YIELD, BAR, DEPBAR, NOP, PMTRIG | coarse | no data effect: the schedule is free, so a program may omit it |
 | UCLEA, UIADD3.64, ULEPC | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
 | FCHK, FMNMX, FSET, FSETP, FSWZADD | missing | FP32 compare, min/max, check, swizzle |
-| DADD, DFMA, DMMA, DMUL | over-approximated | `Lane.dfma`, `Op.dmma` |
+| DADD, DFMA, DMMA, DMUL | over-approximated | `Lane.dfma`, `Opcode.dmma` |
 | DSETP | missing | FP64 compares |
 | MUFU | missing | MUFU (transcendentals) |
-| UBLKRED, UTMAREDG (integer add, min, max, and, or, xor) | covered | `Op.red` from shared memory into L2 or device memory, priced as the bulk copy |
+| UBLKRED, UTMAREDG (integer add, min, max, and, or, xor) | covered | `Opcode.red` from shared memory into L2 or device memory, priced as the bulk copy |
 | UBLKRED, UTMAREDG (64-bit, float, `inc`, `dec`; into another CTA's shared memory) | missing | other functions |
 | LDGMC | missing | multimem loads |
 | F2F, F2I, I2F, I2I, I2IP, I2FP, F2IP, FRND | missing | conversions |
@@ -157,14 +157,14 @@ uncovered variants (`.64`, other atomic operations, `f16` accumulators).
 
 | Opcodes | Mark | Model |
 |---|---|---|
-| OMMA | covered | `Op.mma` (`e2m1`, block-scaled dots `Open.dot`) |
-| QMMA | covered | `Op.mma` (`e4m3`/`e5m2`) |
-| UIMNMX | covered | `Op.uni` (integer, a whole issue slot) |
+| OMMA | covered | `Opcode.mma` (`e2m1`, block-scaled dots `Open.dot`) |
+| QMMA | covered | `Opcode.mma` (`e4m3`/`e5m2`) |
+| UIMNMX | covered | `Opcode.uni` (integer, a whole issue slot) |
 | LDCU | coarse | a copy from device memory (constant banks) |
 | SYNCSU, USYNCS, UBLKL2CCTL, UTMAL2CCTL, ACQSHMINIT | coarse | no data effect: the schedule is free, so a program may omit it |
 | MOV64IUR, UMOV.64 | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
 | FMNMX3 | missing | FP32 compare, min/max, check, swizzle |
-| REDS, UREDGR | missing | shared and uniform-register reductions (`Op.red`'s forms cover the integer bulk ones on sm_90) |
+| REDS, UREDGR | missing | shared and uniform-register reductions (`Opcode.red`'s forms cover the integer bulk ones on sm_90) |
 | UGETNEXTWORKID, UMEMSETS, UVIRTCOUNT | missing | elect, address-space query, local-memory base, block id, work id, virtual count |
 | FHADD, FHADD2, FHFMA, FHFMA2, FHMUL2 | missing | half2 and mixed half arithmetic |
 | UIABS | missing | integer abs, sign extend, bit mask, `IDP.2A` |
