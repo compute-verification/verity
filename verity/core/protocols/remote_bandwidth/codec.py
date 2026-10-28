@@ -1,8 +1,7 @@
 """The store's codec: Sloth over one wide word, byte-exact with `verity/word-codec/kv/v0` (ra-codec-mix's
 `benchmarks/word_codec/kv.py`, its kernel `kv.cu`), a 4 KiB chunk as W words.  A codec is its field, its k ≥ 2 rounds
-and whether σ_K masks between them, and a registration names it (`Codec.name`).  The default is Daniel's ruling (#1884,
-12 Oct): p = 2^1024 − 105, masked, k = 3, with k = 2 at the same width the fallback.  p = 2^512 − 569, unmasked, is kept
-as the upgrade path.
+and whether σ_K masks between them, and a registration names it (`Codec.name`).  The default is p = 2^1024 − 105,
+masked, k = 3, with k = 2 at the same width the fallback.  p = 2^512 − 569, unmasked, is kept as the upgrade path.
 
 ~~~text
 field      p = 2^n − c, p ≡ 3 (mod 4): p1024 = 2^1024 − 105, p512 = 2^512 − 569

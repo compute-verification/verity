@@ -406,7 +406,7 @@ def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Recor
 
 
 def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None:
-    """Daniel's hybrid claim at 2^-40 (#1884), as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
+    """The hybrid claim at 2^-40, as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
     openings each (d·n ≥ 18,470) are short by under 0.15% over the horizon, and by under 1% in every window, together.
     Read per window, each window's own bound at δ is about 1% of its receipts, with 7·δ in all."""
     n, d, u, delta = 7, 2773, 100_000, 2.0 ** -40

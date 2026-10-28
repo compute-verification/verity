@@ -80,13 +80,15 @@ The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate dir
 
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
-    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 180m \\
-      --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 bash -c \\
+    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
+      --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
+      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --eos-ids 128001 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
-(``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
+(``--store-read`` gives the job the read-only store key its fetch of the records art needs; ``--run-max`` leaves room
+over a dry chain of 16 requests on the gate's coins, which held its slot about 9,500 s, an hour of it the challenger's
+session; ``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
 
 and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
 
@@ -215,10 +217,12 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                 "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
                 "chain": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
-                         "--cwd clone --timeout 180m -- env CHECK_SLOTS=/workspace/research/locks/network/slots "
-                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 "
-                         "-- nice -n 19 python3 benchmarks/network_traces/served_session.py chain --run RUN "
-                         "--endpoint ART --eos-ids 128001"}}
+                         "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
+                         "env CHECK_SLOTS=/workspace/research/locks/network/slots "
+                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
+                         "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
+                         "--endpoint ART --eos-ids 128001 --draw 8 --coins gate "
+                         "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
 
 
 def keep_dir(keep: Path, out: Path) -> Path:
@@ -441,7 +445,8 @@ def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
     if src.startswith("art:"):
         got = subprocess.run(["research", "data", "fetch", src, "--to", str(dest)], capture_output=True, text=True)
         if got.returncode:
-            raise Refused(f"research data fetch {src} (exit {got.returncode}): {got.stderr.strip()[-300:]}")
+            raise Refused(f"research data fetch {src} (exit {got.returncode}): {got.stderr.strip()[-300:]} (a `research "
+                          "run` job reads the store's remote only when launched with --store-read)")
     elif path.is_dir():
         if path.resolve() != dest.resolve():
             shutil.copytree(path, dest, dirs_exist_ok=True)

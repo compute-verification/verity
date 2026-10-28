@@ -1,5 +1,5 @@
-"""R9 lane cmt-hidden: one-stage commitment of the FA2 *hidden* value stream (scores, P, running max, rescale, lane
-sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 taps of `out/gen/r9/cmt-hidden/src/`:
+"""One-stage commitment of the FA2 *hidden* value stream (scores, P, running max, rescale, lane
+sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 taps:
 
 * **M1 stream** (`VERITY_TAP=3`): the kernel materialises the selected classes into one flat u32 buffer whose layout is
   arithmetic in (HB = b*h slabs, M = seqlen_q rows, NB = key-block cap) -- `StreamLayout` below mirrors
@@ -12,7 +12,7 @@ sums, PV accumulators, epilogue) as acquired from the pinned kernel by the v7 ta
   validity); only the 32-byte digests leave the SM.  `ThreadLeafCommitment` builds the tree over those digests; an
   opening reveals the thread leaf's message (regenerated on replay from the M1 stream / the Definition) plus a path.
 
-Validity conditions (BRIEF §3): (1) binding under SHA-256 (leaf) + the production Merkle rule (nodes); (2) the leaf
+Validity conditions: (1) binding under SHA-256 (leaf) + the production Merkle rule (nodes); (2) the leaf
 preimage contains the position header the verifier derives itself from the claimed identity, and a word's offset inside
 the leaf is fixed by the layout -- identity/position, not a multiset; (3) openings fold to the *prechallenge* root;
 (4) `test_hidden_stream.py` rejects altered / reordered / substituted words, substituted leaves, wrong launch tag.

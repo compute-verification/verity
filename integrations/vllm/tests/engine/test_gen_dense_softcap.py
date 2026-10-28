@@ -1,4 +1,4 @@
-"""[r8 lane E-cleanup 2026-09-18] `AttentionScopeSoftcap` (verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py): the FA2 scope of a
+"""`AttentionScopeSoftcap` (verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py): the FA2 scope of a
 softcapped launch resolves to `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` with the base pattern's operands; softcap 0 / None is untouched;
 a windowed + softcapped launch (Gemma-2 even layers) goes through the inert-window rule; bad softcaps are Unsupported with a reason."""
 from __future__ import annotations
