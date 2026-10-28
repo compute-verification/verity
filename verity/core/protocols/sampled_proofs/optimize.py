@@ -23,6 +23,14 @@ witness is built by re-executing its replay block from the last committed state 
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
 
+**Modes.**  `CostModel.commit_weight` is the weight w on serving's commitments in a plan's total: at 1 they count as spent,
+and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest law costs
+`c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it: `n · b(s) · h`
+for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is drawn or not.
+`grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s law, `GranularityOptimum`'s
+cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
+form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
+
 **Sweep.**  The note's Lagrangian: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
 weight of the subcircuit's weight class, 1 unless the plan weighs classes), some subcircuits at their floor only, some proved
 whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a proof block
@@ -34,7 +42,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
-from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, nextafter
+from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, nextafter, sqrt
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
@@ -152,7 +160,8 @@ class CostModel:
     hidden window: one session, its k drawn proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay domains that build
-    witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id."""
+    witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id.  A plan's total weighs
+    serving's commitments, the proof blocks' and `serve`, by `commit_weight` (`PROVING_ONLY`, 0, leaves them out)."""
 
     templates: Mapping[str, TemplateCost] = field(default_factory=dict)
     per_and: float = 0.0
@@ -167,6 +176,11 @@ class CostModel:
     sigma: float = 0.0
     source: str = ""
     shared: bool = False
+    commit_weight: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not self.commit_weight >= 0:
+            raise ValueError("the commitments' weight is at least 0 (0 prices proving alone)")
 
     def of(self, c: Candidate) -> TemplateCost:
         if c.template in self.templates:
@@ -244,7 +258,8 @@ class Certificate:
 class Plan:
     """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per subcircuit, the subcircuits
     held at their floor and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
-    `total` everything), each weight class's weight on the density (1 when absent), and the certificate once certified."""
+    `total` everything, `commit` and `serve` at the model's `commit_weight`), each weight class's weight on the density (1
+    when absent), and the certificate once certified."""
 
     lam: float
     choice: Mapping[str, str]
@@ -579,7 +594,8 @@ def _plan(chosen: Sequence[Candidate], costs: CostModel, objective: Objective, l
         parts["commit"] += costs.commit(c)
     parts["replay"] = replay_cost(sizes, chosen, costs)
     parts["serve"] = costs.serve_cost()
-    parts["total"] = parts["statements"] + parts["units"] + parts["commit"] + parts["replay"] + parts["serve"]
+    parts["total"] = parts["statements"] + parts["units"] + parts["replay"] \
+        + costs.commit_weight * (parts["commit"] + parts["serve"])
     choice = {c.op: c.alternative for c in chosen}
     return Plan(lam, choice, statement, sizes, floor_only, full, parts, weights)
 
@@ -602,7 +618,7 @@ def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel
         return _k(c, objective, lam, weights.get(c.block, 1.0))
 
     def at(c: Candidate) -> float:
-        return costs.commit(c) + template_cost(c, costs, k(c))[0]
+        return costs.commit_weight * costs.commit(c) + template_cost(c, costs, k(c))[0]
 
     chosen = [c for alts in ops.values()
               for c in min(alts.items(), key=lambda kv: (sum(at(c) for c in kv[1]), kv[0]))[1]]
@@ -620,7 +636,7 @@ def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel
         plans.append(base)
         whole = frozenset(c.template for c in chosen if c.template not in skip and base.sizes[c.template] < c.units
                           and template_cost(c, costs, c.units)[0] - template_cost(c, costs, base.sizes[c.template])[0]
-                          <= promote * (base.cost["total"] - base.cost["serve"]))
+                          <= promote * (base.cost["total"] - costs.commit_weight * base.cost["serve"]))
         if whole:
             plans.append(_plan(chosen, costs, objective, lam, skip, whole, weights))
     return plans
@@ -676,7 +692,7 @@ def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Can
     """The frontier's least-harm plan within `budget`: its costliest affordable plan.  Given the candidates, costs and
     objective, the plans either side of the budget are moved to it by bisection on the density, each holding its cuts,
     floor-only and full subcircuits and weights, and the one certifying less is taken, so the answer doesn't hang on the
-    sweep's grid.  The budget is the total, the serve-time commitments included."""
+    sweep's grid.  The budget is the total, the serve-time commitments included at the model's `commit_weight`."""
     affordable = [p for p in plans if p.cost["total"] <= budget]
     if not affordable:
         return None
@@ -885,8 +901,107 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     return {"law": "work:1", "table": {c.template: {"work": c.work, "floor": plan.sizes[c.template]} for c in chosen}}
 
 
-__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
-           "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
-           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
-           "template_cost", "touched", "weigh", "work_law"]
+#: `CostModel.commit_weight`'s proving-only mode, the model of Lean's `GranularityOptimum`
+PROVING_ONLY = 0.0
+
+
+@dataclass(frozen=True)
+class Grain:
+    """One uniform partition of a window, as `Partitioning.Model` states one: `units` proof blocks (n) of `work` each (s),
+    each `out_bits` wide (b, what a wrong one exports), committing `commit_bytes` at serve time whether drawn or not (b(s),
+    its share of every byte the window commits under this partition), and costing `prove` when drawn (c(s), its
+    statement's share included)."""
+
+    name: str
+    units: int
+    work: float
+    out_bits: float
+    commit_bytes: float
+    prove: float
+
+    def __post_init__(self) -> None:
+        if self.units < 1 or not self.work > 0 or not min(self.out_bits, self.commit_bytes, self.prove) >= 0:
+            raise ValueError(f"grain {self.name!r}: needs units >= 1, work > 0, and non-negative widths and costs")
+
+
+def loc_bits(n: int, k: int) -> float:
+    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j): 0 at K = 0, n H2(K/n) up to K = n/2 and n past it
+    (`consumers.location_bits`' bound)."""
+    if k <= 0:
+        return 0.0
+    if 2 * k >= n:
+        return float(n)
+    x = k / n
+    return n * (-x * log2(x) - (1 - x) * log2(1 - x))
+
+
+def leak_count(g: Grain, ell: float) -> int:
+    """`ExfiltrationOptimum`'s K: the most wrong proof blocks a leak target of `ell` bits allows, the largest K <= n with
+    b K + locBits(n, K) <= ell, by `loc_bits`, so the K it returns is certified."""
+    if not ell >= 0:
+        raise ValueError("a leak target is at least 0 bits")
+
+    def ok(k: int) -> bool:
+        return g.out_bits * k + loc_bits(g.units, k) <= ell
+
+    lo, hi = 0, g.units
+    if ok(hi):
+        return hi
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (mid, hi) if ok(mid) else (lo, mid)
+    return lo
+
+
+def work_draws(g: Grain, target: float, delta: float) -> float:
+    """`Achievability`'s law on equal proof blocks for the free-compute target C: each drawn with probability
+    min(1, Λ s / C), so (ns/C) Λ draws, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
+    return g.units * min(1.0, log(1 / delta) * g.work / target)
+
+
+def leak_draws(g: Grain, ell: float, delta: float) -> float:
+    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) draws, at most n, and none once
+    every proof block may be wrong."""
+    k = leak_count(g, ell)
+    return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
+
+
+def grain_costs(grains: Iterable[Grain], delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
+                leak: float | None = None) -> list[dict]:
+    """Each partition's expected cost at one target, the free-compute target `work` (C) or the exfiltration target `leak`
+    (bits), at `delta`, in the grains' order: `prove`, c(s) times the target's draws; `commit`, n b(s) h, paid on every
+    proof block; and `total`, proving plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's
+    model)."""
+    if (work is None) == (leak is None):
+        raise ValueError("one target: work (C) or leak (bits)")
+    if not 0 < delta < 1 or not weight >= 0 or not h >= 0 or (work is not None and not work > 0):
+        raise ValueError("needs 0 < delta < 1, weight >= 0, h >= 0 and a positive work target")
+    rows = []
+    for g in grains:
+        draws = work_draws(g, work, delta) if work is not None else leak_draws(g, leak, delta)
+        prove, commit = draws * g.prove, g.units * g.commit_bytes * h
+        rows.append({"grain": g.name, "work": g.work, "units": g.units, "draws": draws, "prove": prove,
+                     "commit": commit, "total": prove + weight * commit})
+    return rows
+
+
+def grain_optimum(grains: Iterable[Grain], delta: float, **kw) -> dict:
+    """`grain_costs`' cheapest partition, the first of the grains' order on a tie."""
+    rows = grain_costs(grains, delta, **kw)
+    if not rows:
+        raise ValueError("no partition to choose from")
+    return min(rows, key=lambda r: r["total"])
+
+
+def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, weight: float = 1.0) -> float:
+    """The free-compute target's optimal proof-block work when c(s) = f + o s and every proof block commits `beta` bytes:
+    the s minimizing (f + o s)(F/C) Λ + w (F/s) β h, which is s* = √(w β h C / (o Λ)), whatever F and f, while s* Λ <= C."""
+    return sqrt(weight * beta * h * target / (o * log(1 / delta)))
+
+
+__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "PROVING_ONLY", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts",
+           "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target", "frontier", "grain_costs",
+           "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
+           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity",
+           "sqrt_grain", "structure", "template_cost", "touched", "weigh", "work_draws", "work_law"]

@@ -9,19 +9,20 @@ import random
 from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
-from math import ceil, exp, fsum, log, log1p, ulp
+from math import ceil, comb, exp, fsum, log, log1p, log2, ulp
 
 import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
-                                                           TemplateCost, _hit, _miss, certify, density_bound, density_exact,
-                                                           for_budget, for_target, frontier, ln_bound, ln_upper, max_harm,
-                                                           max_harm_check, needs_benchmark,
+from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, Commitment, CostModel, Grain,
+                                                           Objective, ReplayDomain, TemplateCost, _hit, _miss, certify,
+                                                           density_bound, density_exact, for_budget, for_target, frontier,
+                                                           grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
+                                                           ln_upper, loc_bits, max_harm, max_harm_check, needs_benchmark,
                                                            overlaps, perturb, replay_cost, row_ands, sensitivity,
-                                                           template_cost, touched, weigh, work_law)
+                                                           sqrt_grain, template_cost, touched, weigh, work_law)
 
 SLACK = 1 + 2.0 ** -18
 
@@ -334,6 +335,22 @@ def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
     assert {p.cost["commit"] for p in plans} == {0.0, 4.0 * R}
 
 
+@pytest.mark.parametrize("weight", [PROVING_ONLY, 0.5, 2.0])
+def test_the_commitments_weight_moves_the_switch_and_proving_only_leaves_them_out(weight):
+    """At weight w the partition costs 4R + w 4R + k and the covering 2k, so the switch is at k = 4R (1 + w); proving
+    only (w = 0) is where it was with no commitment.  The commitment is still reported, unweighted."""
+    costs = replace(_noised_costs(commit_per_bit=0.01), commit_weight=weight)
+    plans = frontier(_noised(commit_bits=400), costs, Objective(2.0 ** -20), grid=61)
+    rec, form = _crossing(plans)
+    assert rec <= 4 * R * (1 + weight) <= form
+    assert {p.cost["commit"] for p in plans} == {0.0, 4.0 * R}
+    for p in plans:
+        assert p.cost["total"] == pytest.approx(p.cost["statements"] + p.cost["units"] + p.cost["replay"]
+                                                + weight * (p.cost["commit"] + p.cost["serve"]))
+    with pytest.raises(ValueError, match="at least 0"):
+        CostModel(commit_weight=-1.0)
+
+
 SERVE = (Commitment("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
          Commitment("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
          Commitment("commit", "y", 500.0),
@@ -362,6 +379,105 @@ def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(ba
     assert perturb(served, "commit", 2.0).serve_cost() == pytest.approx(2 * fixed)
     with pytest.raises(ValueError, match="non-negative"):
         Commitment("commit", "x", -1.0)
+    unweighed = frontier(cands, replace(served, commit_weight=PROVING_ONLY), objective, grid=41)
+    assert [dict(p.sizes) for p in unweighed] == [dict(p.sizes) for p in plans]
+    for p, q in zip(unweighed, plans):
+        assert p.cost["serve"] == pytest.approx(fixed) and p.cost["total"] == pytest.approx(q.cost["total"])
+
+
+LAMBDA = log(2.0 ** 40)
+
+
+def _ladder(total: float, f: float, o: float, beta: float, ratio: float = 2 ** 0.125, lo: float = 1.0,
+            hi: float = 2.0 ** 30) -> list[Grain]:
+    """Partitions of the same work `total` into n = total/s proof blocks of c(s) = f + o s, each committing beta bytes."""
+    out, s = [], lo
+    while s <= hi:
+        out.append(Grain(f"s={s:.4g}", max(1, round(total / s)), s, 16, beta, f + o * s))
+        s *= ratio
+    return out
+
+
+def test_proving_only_puts_the_optimum_at_the_finest_partition():
+    """`GranularityOptimum`: while s Λ <= C a law draws (ns/C) Λ proof blocks, whatever s, so proving only costs
+    c(s) (F/C) Λ and the finest partition is cheapest (`GranularityChoice`); past C/Λ every proof block is drawn."""
+    total, target, delta = 2.0 ** 40, 2.0 ** 34, 2.0 ** -40
+    ladder = _ladder(total, 100.0, 0.01, 4.0)
+    rows = grain_costs(ladder, delta, h=1e-3, weight=PROVING_ONLY, work=target)
+    for g, r in zip(ladder, rows):
+        if g.work * LAMBDA <= target:
+            assert r["draws"] == pytest.approx(g.units * g.work / target * LAMBDA)
+            assert r["total"] == r["prove"] == pytest.approx(g.prove * g.units * g.work / target * LAMBDA)
+        else:
+            assert r["draws"] == g.units
+        assert r["commit"] == pytest.approx(g.units * 4.0 * 1e-3)
+    assert grain_optimum(ladder, delta, h=1e-3, weight=PROVING_ONLY, work=target)["grain"] == ladder[0].name
+
+
+@pytest.mark.parametrize("weight", [1.0, 0.25])
+def test_with_the_commitment_the_work_optimum_grows_like_the_root_of_the_target(weight):
+    """With n b(s) h = (F/s) β h beside proving, the cheapest partition is `sqrt_grain`'s √(w β h C / (o Λ)) to the
+    ladder's step, and quadrupling C doubles it."""
+    total, delta, f, o, beta, h = 2.0 ** 44, 2.0 ** -40, 50.0, 0.02, 4.0, 1e-4
+    ladder = _ladder(total, f, o, beta)
+    got = []
+    for target in (2.0 ** 34, 2.0 ** 36, 2.0 ** 38):
+        best = grain_optimum(ladder, delta, h=h, weight=weight, work=target)
+        star = sqrt_grain(beta, h, target, o, delta, weight)
+        assert star * 2 ** -0.25 <= best["work"] <= star * 2 ** 0.25 and star * LAMBDA <= target
+        got.append(best["work"])
+    assert got[1] / got[0] == pytest.approx(2, rel=0.2) and got[2] / got[1] == pytest.approx(2, rel=0.2)
+
+
+def _loc_exact(n: int, k: int) -> float:
+    return log2(sum(comb(n, j) for j in range(k + 1)))
+
+
+def test_leak_count_is_certified_and_the_leak_law_draws_n_lambda_over_k_plus_one():
+    """K is the most wrong proof blocks the target allows under `loc_bits` (at least Lean's `locBits`, so b K + locBits
+    n K <= ℓ holds for it), and the law draws n Λ / (K + 1), at most n, none once every proof block may be wrong."""
+    delta = 2.0 ** -20
+    for n, b, ell in ((50, 3, 40.0), (200, 16, 1000.0), (1000, 1, 300.0), (40, 8, 0.0), (64, 16, 5000.0)):
+        g = Grain("g", n, 1.0, b, 0.0, 1.0)
+        k = leak_count(g, ell)
+        assert b * k + loc_bits(n, k) <= ell and b * k + _loc_exact(n, k) <= ell
+        assert k == n or b * (k + 1) + loc_bits(n, k + 1) > ell
+        assert loc_bits(n, k) >= _loc_exact(n, k) - 1e-9
+        draws = leak_draws(g, ell, delta)
+        assert draws == (0.0 if k >= n else min(n, n * log(1 / delta) / (k + 1)))
+    with pytest.raises(ValueError, match="one target"):
+        grain_costs([Grain("g", 4, 1.0, 1, 0.0, 1.0)], 0.5, h=0.0)
+
+
+def test_leak_costs_keep_the_refinement_rule():
+    """`RefinementRule`: splitting each proof block into r of width b' with b + log2(K+2)/(K+1) <= b' + log2 r costs at least
+    (1 - K/n)(1 - Λ/(2(K+1))) of the unsplit partition's c(s) n Λ/(K+1); a split that cuts the width by much more than
+    log2 r bits is cheaper."""
+    rng = random.Random(3)
+    delta = 2.0 ** -40
+    lam = log(1 / delta)
+    checked = 0
+    for _ in range(400):
+        n, r, b = rng.randint(10 ** 3, 10 ** 6), rng.choice([2, 4, 16, 256]), rng.randint(16, 4096)
+        f, o, s = rng.uniform(0, 10), rng.uniform(0, 1), rng.uniform(1, 1000)
+        ell = rng.uniform(1, 400) * b
+        whole = Grain("whole", n, s, b, 0.0, f + o * s)
+        k = leak_count(whole, ell)
+        if not 2 * (k + 1) <= n or lam / (k + 1) >= 1:
+            continue
+        floor_ = (1 - k / n) * (1 - lam / (2 * (k + 1))) * (f + o * s) * n * lam / (k + 1)
+        whole_cost = grain_costs([whole], delta, h=0.0, leak=ell)[0]["total"]
+        assert whole_cost == pytest.approx((f + o * s) * n * lam / (k + 1))
+        narrow = max(0, ceil(b + log2(k + 2) / (k + 1) - log2(r)))
+        for width in (narrow, b):
+            split = Grain("split", r * n, s / r, width, 0.0, f + o * s / r)
+            assert grain_costs([split], delta, h=0.0, leak=ell)[0]["total"] >= floor_ * (1 - 1e-12)
+        checked += 1
+    assert checked > 100
+    whole = Grain("whole", 10 ** 6, 64.0, 1024, 0.0, 64.0)
+    split = Grain("split", 4 * 10 ** 6, 16.0, 16, 0.0, 16.0)
+    ell = 2.0 ** 20
+    assert grain_costs([split], delta, h=0.0, leak=ell)[0]["total"] < grain_costs([whole], delta, h=0.0, leak=ell)[0]["total"]
 
 
 def test_overlaps_count_each_scale_and_price_committing_once():
