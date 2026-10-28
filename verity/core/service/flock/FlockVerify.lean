@@ -742,7 +742,12 @@ cannot know what it verifies), then a record not in its canonical text (`RecordT
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, or two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
 different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
-is accepted under `--zk` and changes nothing), all after every
+is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
+tags, files and a draw outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
+without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
+reading several input groups or a tail stage returning the outputs is; a shared-row public file, with or without
+`--registered F`; at more than one table a draw that does not parse or a subset draw whose `k` the tables don't divide;
+`Flock.Guarantees.SampledKSLiveV4` is over that acceptance), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -885,9 +890,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
-  let ksFiles := if zk then
-      PortRoots.checkOf (if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables) tags pubB
-    else .ok ()
+  let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
+  let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
   let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
@@ -931,7 +935,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
-      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
+      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a circuit, a
+      -- public file or a draw outside its form (`KsScope.checkOf`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -940,6 +945,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       ProvedScope.programHeld program
       RecordText.check record
       ksFiles
+      if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
@@ -959,6 +965,28 @@ def verifyCmd (args : List String) : IO UInt32 := do
     IO.println s!"VERDICT {line.compress}"
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
+
+/-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
+(`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a draw, as one
+line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). It accepts no session: it is the check the Python mirror
+(`one_stage.proofs.ks_form_why`) is held to. -/
+def ksFormCmd (args : List String) : IO UInt32 := do
+  let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
+  let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
+  let stmtName := (argOf args "--statement").getD Tags.circuit.name
+  let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
+    | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
+  let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
+  let tags := tags.withCoins (Coins.tree (Zk.coinSpec (tags.tableNames count)))
+  let (circuitB, pubB, _, tables) ← match ← statementInputs args with
+    | .ok x => pure x
+    | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
+  let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
+  let ksParsed := if tags.hiddenOutputs then ProvedScope.circuitOf tags circuitB tables
+    else HmOut.parse tags circuitB tables
+  match KsScope.checkOf ksParsed tags pubB count none with
+  | .ok () => IO.println "KS-FORM ok"; return 0
+  | .error why => IO.println s!"KS-FORM {why}"; return 1
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. With
 `--rec-inner F`, the statement must be one of V*'s at that inner shape, statement `--rec-part J` of them under the
@@ -1599,6 +1627,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
+  | "ks-form" :: rest => ksFormCmd rest
   | "rec-inner" :: rest => recInnerCmd rest
   | "rec-statements" :: rest => recStatementsCmd rest
   | "rec-transcript" :: rest => recTranscriptCmd rest

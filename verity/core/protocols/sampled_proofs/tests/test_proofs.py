@@ -5,8 +5,10 @@ verifier's own program, partition and `--registered` file are the fixture's `sta
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
-verdict comes from core's own verifier run: the honest session is accepted with its program, registered finding and proof blocks
-read off that run, a circuit file other than the committed one is refused before the verifier runs, tampered proof bytes
+verdict comes from core's own verifier run: the honest session passes every check with its program and registered
+finding read off that run, and is refused for its shared-row public file alone, which `verify --zk` refuses until a proof
+covers it (`Flock.KsScope`, `SampledKSLiveV4`), so it proves no proof block; a circuit file other than the committed one
+is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
 names them or not.
@@ -39,6 +41,9 @@ CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
            "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
 DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
+#: `verify --zk`'s last refusal, of a shared-row public file (`KsScope.TABLES_WHY`)
+TABLES = ("refused: a shared-row public file (header shared_rows) under --zk: a statement form the soundness proof does "
+          "not cover")
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -72,6 +77,42 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_files(t
     assert got is None and why[0] == "proof", why
 
 
+def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | None = None) -> tuple[Path, Path]:
+    """A circuit file's head (its META and a ``unit`` circuit of `groups` input groups) and a public file's header."""
+    unit = f"flock-ir-unit/v2 u 1 2 {groups}" + " 0 1 1 16" * groups + " 1 1 1 1 16\n0 0\n"
+    circuit, public = d / "circuit.txt", d / "pub.bin"
+    circuit.write_text(f"flock-circuit/v1 u\nMETA {json.dumps(meta or {})}\nCIRCUIT unit 2\n{unit}")
+    public.write_bytes(json.dumps(header or {}).encode() + b"\n")
+    return circuit, public
+
+
+SCOPE = f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover"
+FORMS = {"unit form, own rows": ({}, None), "two input groups": ({"groups": 2}, SCOPE),
+         "a tail stage returns the outputs": ({"meta": {"out_net": "stage0"}}, SCOPE),
+         "shared rows": ({"header": {"shared_rows": {"x": 2}}}, TABLES),
+         "the scope before the rows": ({"groups": 2, "header": {"shared_rows": {"x": 2}}}, SCOPE)}
+
+
+@pytest.mark.parametrize("form, want", FORMS.values(), ids=FORMS.keys())
+def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, want):
+    """`ks_form_why` on files' heads: `KsScope.filesWhy`'s refusals with its reasons, the scope's first
+    (`verity/ml/flock/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's files)."""
+    assert PF.ks_form_why(*_files(tmp_path, **form)) == want
+
+
+def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path, monkeypatch):
+    circuit, public = _files(tmp_path, groups=2)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
+                         program=RUN_ONLY, partition={"program": "p"}, registered=None)
+    assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
+
+
 @pytest.fixture(scope="module")
 def fx(tmp_path_factory) -> Path:
     sys.path.insert(0, str(VERIFIER))
@@ -95,15 +136,20 @@ def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-
 
 @lean
 @pytest.mark.slow
-def test_the_honest_session_is_accepted_by_cores_own_verifier_run(fx):
+def test_the_honest_session_passes_every_check_of_cores_own_verifier_run_but_its_shared_rows(fx):
+    """The honest session's draw is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
+    the registered root; the verifier refuses it for its shared-row public file alone, so it proves no proof block."""
     got, why = _verify(fx, fx / "session")
     assert why is None, why
     (f,) = got
     partition = json.loads((fx / "stage" / "partition.json").read_text())
-    assert f.accepted is True and f.why == "", f
+    assert (f.accepted, f.why) == (False, TABLES), f
+    assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") == TABLES
     assert f.program == partition["program"]
     assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT}}
-    assert f.units == DRAWN
+    assert f.units == ()
+    draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
+    assert tuple(draw["units"]) == DRAWN, draw
 
 
 def _unnamed(fx: Path) -> str:
@@ -201,9 +247,9 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted, proving the drawn proof blocks), a session whose proof bytes were
-    tampered with (record kept or rehashed), and the honest session without the verifier's registered file, its finding
-    is `verify`'s, reason and proof blocks included."""
+    the files as blobs: on the honest session (refused for its shared rows alone, proving no proof block), a session
+    whose proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's
+    registered file, its finding is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
                          (_tampered(fx, tmp_path / "rehashed", True), True), (fx / "session", False)):
         got, why = _verify(fx, session, own=own)
@@ -213,7 +259,7 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
         _same(got, mine)
         if own and session == fx / "session":
             (f,) = mine
-            assert f.accepted is True and f.units == DRAWN, f
+            assert (f.accepted, f.why, f.units) == (False, TABLES, ()), f
 
 
 @lean
