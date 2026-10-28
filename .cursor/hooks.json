@@ -2,11 +2,11 @@
   "version": 1,
   "hooks": {
     "beforeShellExecution": [
-      {"command": "python3 tools/agent-guard/shell_hook.py", "timeout": 10, "failClosed": true}
+      {"command": "sh tools/agent-guard/hook.sh shell_hook.py", "timeout": 10, "failClosed": true}
     ],
     "preToolUse": [
-      {"command": "python3 tools/agent-guard/task_hook.py", "matcher": "Task", "timeout": 10},
-      {"command": "python3 tools/agent-guard/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10}
+      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "Task", "timeout": 10},
+      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "CallDynamicTool", "timeout": 10}
     ]
   }
 }
