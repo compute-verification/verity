@@ -24,13 +24,17 @@ k and v, which later tokens read). β counts each committed value once, at its w
   17.4 M ANDs, past the cap.
 * ``e2``: ``e1`` with max-first recompute (cut.py's ``Q_word`` v2 recompute): a gate_up tile commits its partial max only,
   and a code block recomputes the tile and writes its int8 codes, so s is never committed; attention likewise writes oq.
+* ``e3``: ``e1`` at the finest GEMM units: a unit a coordinate, or a rotary or (g, u) pair where its epilogue pairs columns,
+  each reading its own weight column and its slice's shared rows, and o quantized in a block of its own (a coordinate
+  can't afford the prologue). A unit is drawn by its work and costs its block, so smaller units prove less a window.
 
 Every number is the IR's: widths from the Calls' signatures, MACs from their tensor-core steps, ANDs and two-input gates from
 each primitive's Boolean version (census ``boolean=boolean_version``), summed over a unit's gates (`Q_word` units, tile
 slices) or the whole Call's (a block holding whole ops). A block's opening ANDs are `optimize.row_ands` of each row it reads or
-writes (a value slice a row, a tile's weights one row), an estimate of the in-circuit hashing. ``over_cap`` marks a block whose
-ANDs pass ``CAP_ANDS``, the ANDs of ``Gemm_v2{2048,16}`` at C-Flock's 2^27-bit block (class_size.MEASURED), itself an
-estimate of where a block stops fitting.
+writes (a value slice a row, a weight column a row, a key's k and v a row), an estimate of the in-circuit hashing. Its
+``k_log_est`` is `class_size.block_k_log` of its ANDs and those rows, and ``over_cap`` marks one past C-Flock's 2^27-bit
+block. Attention's key blocks, where the window's FA3 BN doesn't set them, are as few as keep a block's ANDs under
+``CAP_ANDS``.
 
     python partition_beta.py [--keys 18,35,144,288] [--out FILE.json]
 """
@@ -218,28 +222,36 @@ def measure(keys: list[int]) -> dict:
 @dataclass
 class Block:
     """A proof block kind: ``n`` a token (``per`` "layer": a token-layer, ×16), its MACs, two-input gates and ANDs (compute),
-    the rows it reads (bytes each; ``weights`` the registered weight bytes it reads) and the bytes it commits."""
+    the rows it reads (bytes each, or ``(count, bytes)`` for ``count`` rows; ``weights`` the registered weight bytes it reads,
+    in ``weight_rows`` rows) and the bytes it commits (one row)."""
     name: str
     n: float
     macs: int
     gates2: int
     ands: int
     commits: int
-    reads: list[int] = field(default_factory=list)
+    reads: list[int | tuple[int, int]] = field(default_factory=list)
     weights: int = 0
     per: str = "layer"
     note: str = ""
+    weight_rows: int = 1
+
+    def rows(self) -> list[int]:
+        out = [b for r in self.reads for b in ([r[1]] * r[0] if isinstance(r, tuple) else [r])]
+        return (out + ([self.weights // self.weight_rows] * self.weight_rows if self.weights else [])
+                + ([self.commits] if self.commits else []))
 
     def opening_ands(self) -> int:
-        rows = self.reads + ([self.weights] if self.weights else []) + ([self.commits] if self.commits else [])
-        return sum(row_ands(b) for b in rows)
+        return sum(row_ands(b) for b in self.rows())
 
     def row(self) -> dict:
         boundary = self.commits * 8
+        k_log = CS.block_k_log(self.ands, self.rows())
         return {"block": self.name, "per": self.per, "n_per_token": self.n * (LAYERS if self.per == "layer" else 1),
                 "macs": self.macs, "gates2": self.gates2, "ands": self.ands, "opening_ands_est": self.opening_ands(),
                 "boundary_bits": boundary, "size_class": unit_class(boundary) if boundary else None,
-                "reads_bytes": sum(self.reads), "weight_bytes": self.weights, "over_cap": self.ands > CAP_ANDS, "note": self.note}
+                "reads_bytes": sum(r[0] * r[1] if isinstance(r, tuple) else r for r in self.reads), "weight_bytes": self.weights,
+                "k_log_est": k_log, "over_cap": k_log > CS.K_MAX, "note": self.note}
 
 
 class Facts:
@@ -304,7 +316,7 @@ class Facts:
 def gemm_blocks(F: Facts, name: str, K: int, N: int, n: int, reads: list[int], out_bytes: int, prologue=(0, 0),
                 epilogue=(0, 0), note: str = "") -> Block:
     macs, g2, a = F.tile(K, n, prologue, epilogue)
-    return Block(name, N / n, macs, g2, a, out_bytes, reads, n * (K + 4), note=note)
+    return Block(name, N / n, macs, g2, a, out_bytes, reads, n * (K + 4), note=note, weight_rows=n)
 
 
 def partitions(F: Facts) -> dict[str, list[Block]]:
@@ -315,7 +327,7 @@ def partitions(F: Facts) -> dict[str, list[Block]]:
     hm, hg, ha = F.attn_head()
     norm, quant2, quant8, silu = F.call(F.norm), F.call(F.quant[2048]), F.call(F.quant[8192]), F.call(F.silu)
     rope_head = (HEAD_DIM * F.rope_word["gates2"], HEAD_DIM * F.rope_word["ands"])
-    keys = T * 2 * KV  # a q head reads its KV head's T keys and values
+    keys = (T, 2 * KV)  # a q head reads its KV head's T keys and values, a row a key
     plus = lambda *ws: (sum(w[0] for w in ws), sum(w[1] for w in ws))  # noqa: E731
     out: dict[str, list[Block]] = {}
 
@@ -328,11 +340,12 @@ def partitions(F: Facts) -> dict[str, list[Block]]:
         reads = [KV, keys] if reads is None else reads
         if kb == 1:
             return [Block(f"{name} T={T}", HEADS, hm + extra[0], hg + extra[1], ha + extra[2], commits, reads)]
+        per_block = (math.ceil(T / kb), 2 * KV)
         last = Block(f"{name} T={T}, last key block of {kb}", HEADS, hm // kb + extra[0], hg // kb + extra[1],
-                     ha // kb + extra[2], commits, [STATE, keys // kb] + reads[2:])
+                     ha // kb + extra[2], commits, [STATE, per_block] + reads[2:])
         return [last] if last_only else [
             Block(f"{name} T={T}, key block 1..{kb - 1} of {kb}", HEADS * (kb - 1), hm // kb, hg // kb, ha // kb, STATE,
-                  [KV, keys // kb], note="commits the running state (m, l, O): an estimate of its bytes"), last]
+                  [KV, per_block], note="commits the running state (m, l, O): an estimate of its bytes"), last]
 
     # today's: each Call a block, every Call output committed
     out["a0"] = [
@@ -440,6 +453,20 @@ def partitions(F: Facts) -> dict[str, list[Block]]:
                     epilogue=plus(silu_ep, code8)),
         out["e1"][-1],
     ]
+
+    # (e3) e1 at the finest GEMM units, each reading its weight column and sharing its slice's rows
+    out["e3"] = [
+        e_common[0],
+        gemm_blocks(F, "q/k rotary pair + RoPE", 2048, 2560, 2, [XQ], 4, epilogue=(2 * F.rope_word["gates2"], 2 * F.rope_word["ands"])),
+        gemm_blocks(F, "v coordinate", 2048, 512, 1, [XQ], 2),
+        *heads("attention head", False),
+        Block("Int8RowQuant{2048} (oq)", 1, 0, *quant2, XQ, [X]),
+        gemm_blocks(F, "o coordinate", 2048, 2048, 1, [XQ], 2),
+        out["e1"][-4],
+        gemm_blocks(F, "gate_up (g, u) pair + SiluMul", 2048, 16384, 2, [XQ], 2, epilogue=(F.silu_word["gates2"], F.silu_word["ands"])),
+        out["e1"][-2],
+        gemm_blocks(F, "down coordinate", 8192, 2048, 1, [SQ], 2),
+    ]
     return out
 
 
@@ -470,7 +497,7 @@ def head_blocks(F: Facts, name: str) -> list[Block]:
     groups_ands, _k, gsrc = CS.MEASURED["TokenSelectGroups_v1{C=2672,G=16}"]
     comb_ands, _k, csrc = CS.MEASURED["TokenSelectCombine_v2{V=128256,C=16}"]
     per_group = groups_ands // 167
-    if name in ("e1", "e2"):
+    if name in ("e1", "e2", "e3"):
         return [Block("LM head slice {2048,16} + best of 16", slices, n * co["macs"], n * co["gates2"],
                       n * co["ands"] + per_group, 2 + 4, [F.bf16_row], n * 2 * 2048, per="sampled",
                       note="epilogue ANDs: TokenSelectGroups' a group of 16 (measured / 167); the index's 4 bytes an estimate"),
@@ -494,11 +521,16 @@ def summarize(F: Facts, name: str, blocks: list[Block]) -> dict:
     w = sum(r["n_per_token"] * r["ands"] ** 2 for r in rows)
     wo = sum(r["n_per_token"] * (r["ands"] + r["opening_ands_est"]) ** 2 for r in rows)
     ao = sum(r["n_per_token"] * (r["ands"] + r["opening_ands_est"]) for r in rows)
+    # a unit is drawn by its work (its ANDs) and costs its block, openings and padding included
+    cost_ands = sum(r["n_per_token"] * r["ands"] * (r["ands"] + r["opening_ands_est"]) for r in rows) / ands
+    cost_bits = sum(r["n_per_token"] * r["ands"] * 2 ** r["k_log_est"] for r in rows) / ands
     return {"partition": name, "keys": F.T, "beta_bytes_per_token": beta, "beta_bytes_per_kmac": 1000 * beta / F.served_macs,
             "served_macs_per_token": F.served_macs, "proved_macs_per_token": macs, "blocks_per_token": n,
             "ands_per_token": ands, "blocks_over_cap_per_token": sum(r["n_per_token"] for r in rows if r["over_cap"]),
             "and_weighted_mean_block_ands": w / ands, "with_openings_and_weighted_mean": wo / ao,
-            "expected_proved_ands_per_window_est": DRAWS * w / ands, "head_beta_bytes_per_sampled_token": head_beta,
+            "expected_proved_ands_per_window_est": DRAWS * w / ands,
+            "expected_proved_ands_with_openings_per_window_est": DRAWS * cost_ands,
+            "expected_proved_bits_per_window_est": DRAWS * cost_bits, "head_beta_bytes_per_sampled_token": head_beta,
             "head_ands_per_sampled_token": sum(r["n_per_token"] * r["ands"] for r in head),
             "beta_with_head_bytes_per_token": beta + head_beta, "blocks": rows, "head_blocks": head}
 
@@ -566,7 +598,7 @@ def main(argv=None) -> int:
                   f"{p['and_weighted_mean_block_ands']:,.0f}")
             for r in p["blocks"][:14]:
                 print("   ", {k: r.get(k) for k in ("block", "op", "kind", "n_per_token", "macs", "gates2", "ands",
-                                                    "opening_ands_est", "boundary_bits", "size_class", "over_cap")
+                                                    "opening_ands_est", "boundary_bits", "size_class", "k_log_est", "over_cap")
                               if k in r})
     if a.out:
         Path(a.out).write_text(json.dumps(res, indent=1, default=str))

@@ -191,6 +191,26 @@ def rows_k(rows: int) -> int:
     return max(22, 19 + (rows - 1).bit_length())
 
 
+#: C-Flock's ranges (`verity_flock.circuit`): an hm96 slot a port and a SHA-512 slot a 3 compressions, 2^18 bits each
+SLOT_LOG, PER_SLOT = 18, 3
+#: template bits a unit spends an AND: the K = 14,336 H1 lane's 197.9 M columns (r20261023-045657-f038,
+#: note:proofs/20261023T0048Z-report-structw) over its ≈ 149.8 M ANDs (`h1_tile_optimum`'s fits), an estimate. The staged
+#: lanes bound it to (1.03, 1.53]: K = 4,096's fits 2^27 and K = 6,144's is refused at 2^28 (r20261024-013223-eef3)
+UNIT_BITS_PER_AND = 1.32
+
+
+def block_k_log(ands: int, row_bytes: list[int]) -> int:
+    """An estimate of the least k_log of one unit of ``ands`` ANDs whose rows in and out are ``row_bytes`` bytes each: C-Flock's
+    ranges summed (`circuit.fits` at one VU), the unit's template (`UNIT_BITS_PER_AND` a bit an AND) rounded up to a power of
+    two, an hm96 slot a port (their count rounded up to a power of two) and the rows' compressions past each first block
+    (`circuit.Port.comps`) in SHA-512 slots. It gives `rows_k` on copy units, the staged H1 lanes' 27, 28 and 29 at K =
+    4,096, 6,144 and 14,336, and RMSNormFusedCuda_v2's 27 at 128 rows."""
+    unit = 1 << max(7, math.ceil(math.log2(max(2, UNIT_BITS_PER_AND * ands))))
+    comps = sum(-(-(b + 17) // 128) - 1 for b in row_bytes)
+    ports = 1 << (len(row_bytes) - 1).bit_length()
+    return max(22, math.ceil(math.log2(unit + (ports << SLOT_LOG) + (-(-comps // PER_SLOT) << SLOT_LOG))))
+
+
 def measured(lab: str) -> tuple[int, int, str]:
     """(ANDs, k_log, source) of a unit ``lab`` at Llama-3.2-1B, refused where nothing measured it or a binding it scales from."""
     if lab in MEASURED:
