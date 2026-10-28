@@ -10,8 +10,10 @@ those of the generator reading of the scan's statement:
 
 * log2 #Ss = 0;
 * the fail cell's position, log2(egress_cells + 1) a request;
-* the scan's ``prog`` rows, its free inputs (`READINGS`): T·NP a sampling block as registered, or 32 + KO·IDB a
-  request if ``prog`` is an input only at its anchored entries;
+* the sampling block's free inputs, which the scan's ``prog`` rows carry (`READINGS`): T·NP a sampling block as
+  registered, or an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`) if ``prog`` is an input only at
+  its anchored entries. Tied, the rows are a compute audit's outputs, so the T·NP bits are the tied audit's free
+  inputs, which the rows form's K charges to the sampling block (`NetworkCheck.Period.tiedAudits`);
 * no faulty proof block, every one being drawn;
 * Dj = 1, so the jitter term is 0 (assumed, `NetTiming.JitterBounded`).
 
@@ -44,7 +46,8 @@ DELTAS: tuple[Fraction, ...] = WM.DELTAS
 TAU = Fraction(W.WardenParams().bucket_ms, 1000)
 #: Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the final norm), BF16
 WEIGHTS_BITS = 1_235_814_400 * 16
-#: each reading of the scan's free inputs, as a report labels it
+#: each reading of the sampling block's free inputs (the scan's `prog`, the tied audit's free inputs), as a report
+#: labels it
 READINGS = {"registered": "`prog` as registered today (the record's K)",
             "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering)"}
 STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
@@ -97,7 +100,7 @@ class Link:
             raise ValueError(f"a reading is one of {', '.join(READINGS)}, not {reading!r}")
         if reading == "registered":
             return {"block": self.T * IS.prog_bits(self.scan), "request": 0}
-        return {"block": 0, "request": 32 + self.scan.KO * self.scan.IDB}
+        return {"block": 0, "request": sum(w for _, w in IS.entry_layout(self.scan))}
 
     def bits(self, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None) -> float:
         """K over ``period`` (a `PERIODS` name, or its seconds) in ``reading``: the per-period form, or with ``delta``
