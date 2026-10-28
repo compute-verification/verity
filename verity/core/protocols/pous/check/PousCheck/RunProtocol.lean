@@ -33,7 +33,8 @@ blocks; `k` at least its own and `Δ + RTT` within its rounds), `s_bits` is `⌊
 the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous statement, and the profile names each gap.
 At Demo B's store, 1038 segments of `2^16` blocks, that is `Pous.Period.PeriodHeldDemo`'s 1,060,008,348,186 bits at
 `1% + 2^-128`. At `k` of at least 320 and `2^19` to `2^27` blocks the certificate is `wide320Certificate`'s,
-`Pous.SecurityProofs.ObligationWide320`, and `eps` is `2^-20`.
+`Pous.SecurityProofs.ObligationWide320`, and `eps` is `2^-20 + 2^-127`: the window's `2^-20` at uniform indices, and
+`ε_prf` at the memory challenger's SHA-512 indices (`Hash.Assumptions.Sha512Prf`, `prf/sha-512`).
 
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
@@ -135,15 +136,20 @@ def wideCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
 /-- `p2.CERT_K_WIDE320`: the reads of `Pous.SecurityProofs.ObligationWide320`'s window. -/
 def CERT_K_WIDE320 : Nat := 320
 
+/-- `p2.WIDE320_CLAIMS`: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`) for the memory challenger's
+indices, which `ObligationWide320` reads as uniform. -/
+def WIDE320_CLAIMS : List String := WIDE_CLAIMS ++ ["prf/sha-512"]
+
 /-- `p2.wide320_certificate`: `Pous.SecurityProofs.ObligationWide320` for a store at the registered width and prime of
 any block count from `2^19` to `2^27`, in any number of segments: a window of 320 reads at the store's snapshot, the
-state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, `δ = 2^-20 − 2^-128`
-beside `2^eps_log2 = 2^-128`. -/
+state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20 + ε_prf`: `δ = 2^-20` at
+uniform indices, beside `2^eps_log2 = ε_prf = 2^-127`, `Hash.Assumptions.Sha512Prf` at the memory challenger's two
+tests (its coin key and its streams), at most `2^-128` each. -/
 def wide320Certificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
     some { k := CERT_K_WIDE320, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
-           theoremName := "Pous.SecurityProofs.ObligationWide320", delta := (2 ^ 108 - 1, 2 ^ 128), segments := none,
-           claims := WIDE_CLAIMS }
+           theoremName := "Pous.SecurityProofs.ObligationWide320", delta := (1, 2 ^ 20), epsLog2 := -127,
+           segments := none, claims := WIDE320_CLAIMS }
   else none
 
 /-- `period.certificate`: at `k` of at least `CERT_K_WIDE320` challenges, the 320-read window's (`wide320Certificate`)
@@ -342,11 +348,13 @@ private def TIE_PUB : SetupProtocol.Public :=
 #guard !(certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16 - 1, 2 ^ 11 + 1⟩ }).certified
 #guard (gaps { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 2 ^ 11 + 1⟩ }).2 ==
   [s!"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {2 ^ 27 + 2 ^ 16})"]
-#guard (certify { Run.DEPLOYED with k := 320 }).eps.toString == s!"1/{2 ^ 20}"
+#guard (certify { Run.DEPLOYED with k := 320 }).eps.toString == s!"{2 ^ 107 + 1}/{2 ^ 127}"
 #guard (certify { Run.DEPLOYED with k := 320 }).sBits == 2 ^ 19 * 16448 * 18 / 19
 #guard ((certificate { Run.DEPLOYED with k := 320 }).map (·.theoremName)) == some "Pous.SecurityProofs.ObligationWide320"
 #guard ((certificate { Run.DEPLOYED with k := 319 }).map (·.theoremName)) == some "Pous.SecurityProofs.P2SlackFamilyUncond"
-#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 1038⟩, k := 320 }).eps.toString == s!"1/{2 ^ 20}"
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 1038⟩, k := 320 }).eps.toString ==
+  s!"{2 ^ 107 + 1}/{2 ^ 127}"
+#guard ((certificate { Run.DEPLOYED with k := 320 }).map (·.claims.getLast?)) == some (some "prf/sha-512")
 #guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 256, 1⟩, k := 320 }).eps.toString ==
   s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true

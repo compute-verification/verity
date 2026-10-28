@@ -76,21 +76,22 @@ def test_demo_bs_store_is_certified_by_period_held_at():
     assert period.gaps(past)[1] == [f"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {(1 << 27) + (1 << 16)})"]
 
 
-def test_320_reads_certify_at_two_to_the_minus_20():
+def test_320_reads_certify_at_two_to_the_minus_20_plus_eps_prf():
     """At `k ≥ 320` challenges the run takes `ObligationWide320` (`p2.wide320_certificate`) for `2^19` to `2^27`
-    blocks: the registered point and Demo B's store certify their `⌊ρ·blocks·w⌋` at exactly `2^-20` under
-    `WIDE_CLAIMS`; below `2^19` blocks, or at 319 challenges, the 105-read certificates stand at `1% + 2^-128`."""
+    blocks: the registered point and Demo B's store certify their `⌊ρ·blocks·w⌋` at `2^-20 + 2^-127` (the window's
+    `2^-20` and `Sha512Prf`'s `ε_prf` at the memory challenger's indices) under `WIDE320_CLAIMS`; below `2^19` blocks,
+    or at 319 challenges, the 105-read certificates stand at `1% + 2^-128`."""
     def at(bps: int, segments: int, k: int) -> R.Point:
         return R.Point(P2Params(16448, 21065, bps, segments), k, R.DEPLOYED.limit_ns)
 
-    two20 = str(Fraction(1, 1 << 20))
+    eps320 = str(Fraction(1, 1 << 20) + Fraction(1, 1 << 127))
     for bps, segments in ((1 << 16, 8), (1 << 16, 1038), (1 << 16, 1 << 11)):
         for k in (320, 321):
             pt = at(bps, segments, k)
-            assert period.certify(pt) == {"certified": True, "eps": two20, "s_bits": bps * segments * 16448 * 18 // 19}
+            assert period.certify(pt) == {"certified": True, "eps": eps320, "s_bits": bps * segments * 16448 * 18 // 19}
             prof = period.profile(pt)
             assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.ObligationWide320"
-            assert prof["certificate"]["k"] == 320 and prof["certificate"]["claims"] == list(P2.WIDE_CLAIMS)
+            assert prof["certificate"]["k"] == 320 and prof["certificate"]["claims"] == list(P2.WIDE320_CLAIMS)
     assert period.certify(at(1 << 16, 8, 320))["s_bits"] == 8_169_621_180
     assert period.certificate(R.DEPLOYED.params, 319) == P2.P2(R.DEPLOYED.params).certificate
     assert period.certify(at(1 << 16, 8, 319))["eps"] == str(EPS)

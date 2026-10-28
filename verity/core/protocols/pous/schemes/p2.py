@@ -59,8 +59,11 @@ leaves and challenge derivation), not with the expander.
   spec caps the RTT allowance at `RTT_ALLOWANCE_CAP_NS`.
 - At `k ≥ 320` challenges the run protocol takes `wide320_certificate` for `2^19` to `2^27` blocks:
   `Pous.SecurityProofs.ObligationWide320`, P2's ring-model audit window of 320 reads, the state at most `⌊ρ·|C|⌋` at
-  each, passed with probability at most `2^-20` (`(1 − 0.043)^320 + 320·2^-137`), from `P2RingRoundSecureWide`. It
-  bounds the window at the store's snapshot, not the composed check, for which `periodHeldAt` holds at 105 reads only.
+  each, passed with probability at most `2^-20` (`(1 − 0.043)^320 + 320·2^-137`) at uniform indices, from
+  `P2RingRoundSecureWide`. The memory challenger derives its indices from SHA-512 (`prf/sha-512`, the premise
+  `Hash.Assumptions.Sha512Prf`), which adds `ε_prf` at its two tests, so the certificate is `2^-20 + 2^-127`
+  (`WIDE320_CLAIMS`). It bounds the window at the store's snapshot, not the composed check, for which `periodHeldAt`
+  holds at 105 reads only.
 - A shared mask with linear tweaks is model M2, which is not covered; the keys here are per block.
 - Neither codec is ever the default.  Its profile says so plainly (`EXPERIMENTAL`).
 """
@@ -112,6 +115,11 @@ WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
 conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
 commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
+
+WIDE320_CLAIMS = (*WIDE_CLAIMS, "prf/sha-512")
+"""What `wide320_certificate` rests on: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`, ASK-184) for the
+memory challenger's indices, which `ObligationWide320` reads as uniform: they are derived by SHA-512 from its 64-byte
+secret source."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
@@ -510,18 +518,21 @@ def wide_certificate(params: P2Params) -> Certificate | None:
 def wide320_certificate(params: P2Params) -> Certificate | None:
     """`Pous.SecurityProofs.ObligationWide320` for a v4 store at the registered width and prime of any block count in
     `CERT_WIDE_BLOCKS`, in any number of segments: a window of `CERT_K_WIDE320` reads at the store's snapshot, the state
-    at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, read at `N` = the store's
-    blocks, under `WIDE_CLAIMS`. `delta` is `2^-20 − 2^-128`, so that `delta + 2^eps_log2` is the statement's `2^-20`.
-    The run protocol takes it at `k ≥ CERT_K_WIDE320` (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20 + ε_prf`, read at `N` = the
+    store's blocks, under `WIDE320_CLAIMS`. `delta` is the statement's `2^-20`, at uniform indices. `2^eps_log2` is
+    `ε_prf = 2^-127`, what `Hash.Assumptions.Sha512Prf` adds at the memory challenger's indices: its two tests, the coin
+    key (one input after the 64-byte source) and the streams (`CERT_K_WIDE320 · 64` blocks after that key), at most
+    `2^-128` each (A4's figure, `prf/sha-512`). The run protocol takes it at `k ≥ CERT_K_WIDE320` (`period.certificate`,
+    `PousCheck.RunProtocol.certificate`)."""
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return Certificate(k=CERT_K_WIDE320, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.SecurityProofs.ObligationWide320",
-                       delta=Fraction(1, 1 << 20) - Fraction(1, 1 << 128), segments=None, claims=WIDE_CLAIMS)
+                       theorem="Pous.SecurityProofs.ObligationWide320", delta=Fraction(1, 1 << 20), eps_log2=-127,
+                       segments=None, claims=WIDE320_CLAIMS)
 
 
 __all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
-           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
+           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "WIDE320_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
            "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]
