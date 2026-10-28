@@ -144,7 +144,7 @@ guarantee above.
 **The named assumptions.**
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRStrict` and `SHA512CRExpected`
   (`Security/Proofs/Flock/Soundness/Assumptions.lean`), and `Claims.StrictBirthday` and `Claims.ExpectedCR`
-  (`Security/Definitions/Claims.lean`).
+  (`Security/Definitions/Core/Interaction.lean`).
 - A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file).
 - Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`
   (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`) and `Zk.RecordCustodyZKLaw` and its forms

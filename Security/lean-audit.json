@@ -2149,7 +2149,7 @@
   "SampledProofs"
  ],
  "claims": {
-  "modules": ["Definitions.Claims", "Definitions.Pous.Claims"],
+  "modules": ["Definitions.Claims", "Definitions.Core.Interaction", "Definitions.Pous.Claims"],
   "witnesses": {
    "Claims.Bits": {
     "fails": "Claims.Bits_fails",
@@ -2692,14 +2692,14 @@
    "sealed": true
   },
   "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Hash.Basic", "Definitions.Claims"],
+   "imports": ["Mathlib", "Definitions.Core.Interaction", "Definitions.Claims"],
    "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic)"
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; the interaction model they are stated in, with its messages and collisions, is core's (Definitions.Core.Interaction)"
   },
   "Definitions.Hash": {
-   "imports": ["Mathlib", "Definitions.Core.Digest", "Definitions.Hash"],
+   "imports": ["Mathlib", "Definitions.Core.Digest", "Definitions.Core.Hash", "Definitions.Hash"],
    "except": [],
-   "why": "the hash area's definitions are trusted text: messages, collisions and the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and core's digests (Definitions.Core.Digest); they import no assumption, guarantee or proof"
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib, core's digests (Definitions.Core.Digest) and core's messages, collisions and byte encodings (Definitions.Core.Hash); they import no assumption, guarantee or proof"
   },
   "Definitions.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Hash", "Definitions.Hash.Guarantees"],
