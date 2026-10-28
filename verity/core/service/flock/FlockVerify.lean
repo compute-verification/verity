@@ -1002,7 +1002,7 @@ def ksFormCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
-  let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
+  let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let tags := tags.withCoins (Coins.tree (Zk.coinSpec (tags.tableNames count)))
