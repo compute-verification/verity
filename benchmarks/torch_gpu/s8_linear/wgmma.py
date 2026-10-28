@@ -72,6 +72,14 @@ assert Params.clk.offset == 320
 RS = (8, 16, 32, 64, 128)
 FUSED_TILES = ((128, 256), (128, 128))
 FLUSHES = {"red": "s8mr", "bulk": "s8mrb"}
+#: (tile rows, tile columns, r, flush) with no kernel: ptxas would serialize their wgmma pipeline (s8_wgmma.cu's S8MR)
+UNBUILT = frozenset({(128, 256, 8, "red"), (128, 256, 16, "red")})
+
+
+def has_reduction(cfg: "Cfg", r: int, flush: str) -> bool:
+    """Whether a reduction kernel runs cfg's tile at width r with this flush."""
+    return ((cfg[0], cfg[1]) in FUSED_TILES and cfg[4] == 1 and r in RS and flush in FLUSHES
+            and (cfg[0], cfg[1], r, flush) not in UNBUILT)
 #: within each 32 bytes of R's depth, the kernel's byte kk is R's byte KERNEL_ORDER[kk]: the accumulator words of columns
 #: 2 t and 2 t + 1 of an 8-column group are the A fragment's bytes 4 t .. 4 t + 3 and 16 + 4 t .. 16 + 4 t + 3
 KERNEL_ORDER = tuple(4 * (2 * ((kk % 16) // 4) + kk // 16) + kk % 4 for kk in range(32))
@@ -189,6 +197,8 @@ class Lib:
         for tm, bn in FUSED_TILES:
             for r in RS:
                 for flush, prefix in FLUSHES.items():
+                    if (tm, bn, r, flush) in UNBUILT:
+                        continue
                     f = self.fn(f"{prefix}_{tm}x{bn}_r{r}")
                     self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(tm, bn))
                     self.rfns[(tm, bn, r, flush)] = f
@@ -304,8 +314,9 @@ class Lib:
     def reduce_mm(self, xq, s_a, w, s_w, y, rk, z, cfg: Cfg, flush: str, clk=None) -> dict:
         tm, bn, _, _, cl, _ = cfg
         r = rk.shape[0]
-        if (tm, bn) not in FUSED_TILES or cl != 1 or r not in RS or flush not in FLUSHES:
-            raise ValueError(f"no reduction kernel for {cfg} at r {r}, flush {flush}: tiles {FUSED_TILES}, one CTA, r in {RS}")
+        if not has_reduction(cfg, r, flush):
+            raise ValueError(f"no reduction kernel for {cfg} at r {r}, flush {flush}: tiles {FUSED_TILES}, one CTA, r in {RS}, "
+                             f"none of {sorted(UNBUILT)}")
         q = RParams()
         q.p, units, grid = self._params(xq, s_a, w, s_w, y, cfg, clk)
         if q.p.splits != 1:

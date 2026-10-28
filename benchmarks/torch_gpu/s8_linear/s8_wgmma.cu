@@ -547,8 +547,10 @@ S8MM(64, 64)
     body<128, BN, 1, RR, FL>(q.p, &q.r, q.z);                                                                            \
   }
 #define S8MR(BN, RR) S8MR1(BN, RR, 0, s8mr) S8MR1(BN, RR, 1, s8mrb)
-S8MR(256, 8)
-S8MR(256, 16)
+// no s8mr_128x256_r8 or _r16: ptxas puts their groups' exchanges between the fence and the atoms, wherever the source puts
+// them, and serializes every wgmma of the kernel (wgmma.py's UNBUILT)
+S8MR1(256, 8, 1, s8mrb)
+S8MR1(256, 16, 1, s8mrb)
 S8MR(256, 32)
 S8MR(256, 64)
 S8MR(256, 128)

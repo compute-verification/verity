@@ -220,6 +220,11 @@ class Reduction:
         return lin.loop(lambda i: mm(lin.os[i % len(lin.os)].view(torch.int8), self.mat, self.zsep))
 
 
+def flushes(cfg: W.Cfg, r: int) -> list[str]:
+    """The flushes with a reduction kernel at cfg's tile and width r."""
+    return [f for f in W.FLUSHES if W.has_reduction(cfg, r, f)]
+
+
 def gate(lin: Linear, cfgs: list[W.Cfg], fused_cfgs: list[W.Cfg], reds: dict[int, Reduction]) -> dict:
     """Mismatched cells or words of every alone config and every fused (config, r, flush) on weight copy 0."""
     w0, o0 = lin.ws[0], lin.os[0]
@@ -234,7 +239,7 @@ def gate(lin: Linear, cfgs: list[W.Cfg], fused_cfgs: list[W.Cfg], reds: dict[int
         zref = red.reference(o0)
         for cfg in fused_cfgs:
             W.scaled_mm(lin.x, lin.sa, w0.w, w0.sw, lin.y, cfg)
-            for flush in W.FLUSHES:
+            for flush in flushes(cfg, r):
                 arm = f"fused:{cfg}:{r}:{flush}"
                 z = red.z(arm)
                 R.poison(lin.yf, z)
@@ -288,7 +293,7 @@ def measure(model: str, name: str, n: int, k: int, m: int, rs: tuple[int, ...], 
     fns = {f"alone:{c}": lin.alone(c) for c in fused_cfgs}
     for r, red in reds.items():
         for cfg in fused_cfgs:
-            for flush in W.FLUSHES:
+            for flush in flushes(cfg, r):
                 arm = f"fused:{cfg}:{r}:{flush}"
                 fns[arm] = red.fused(cfg, flush, arm)
         fns[f"sep:{r}"] = red.sep()
@@ -336,6 +341,8 @@ def summarize(rows: list[dict], rs: tuple[int, ...]) -> dict:
                 by_row = sum(blocks(row["m"], r)[1] for row in mine)
                 sep = sum(row["us"][f"sep:{r}"] for row in mine)
                 for flush in W.FLUSHES:
+                    if any(f"fused:{row[which]}:{r}:{flush}" not in row["us"] for row in mine):
+                        continue
                     fused = sum(row["us"][f"fused:{row[which]}:{r}:{flush}"] for row in mine)
                     v = {"alone_us": alone, "fused_us": fused, "added_us": fused - alone, "added_over_alone": (fused - alone) / alone,
                          "share": (fused - alone) / fused, "sep_us": sep, "sep_share": sep / (alone + sep),
@@ -407,6 +414,8 @@ def table(rows: list[dict], summary: dict, rs: tuple[int, ...], meta: dict) -> s
                     continue
                 for flush in W.FLUSHES:
                     arms = (f"alone:{cfg}", f"fused:{cfg}:{r}:{flush}")
+                    if arms[1] not in row["us"]:
+                        continue
                     al, fu = (row["us"][arm] for arm in arms)
                     c64 = "; ".join(num(row["clock"][arm]["clock64_mhz"]) for arm in arms)
                     nv = "; ".join(num(row["clock"][arm]["nvml_mhz"]) for arm in arms)

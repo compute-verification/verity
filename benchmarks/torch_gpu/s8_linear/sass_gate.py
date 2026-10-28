@@ -18,6 +18,8 @@ import sys
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 KERNEL = re.compile(r"s8mm2?_(64|128)x(64|128|256)$")
 REDUCE = re.compile(r"s8mrb?_(128)x(128|256)_r(8|16|32|64|128)$")
+#: the reduction kernels s8_wgmma.cu doesn't build (wgmma.py's UNBUILT)
+UNBUILT = {"s8mr_128x256_r8", "s8mr_128x256_r16"}
 REG = re.compile(r"\bR(\d+)\b")
 #: the compiler's unsigned integer division (the raster's, by a runtime group and tile count) truncates a reciprocal it
 #: computed from the divisor with this F2I; it never sees a value, so it is counted apart from every other .FTZ
@@ -64,7 +66,7 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
             else:
                 funcs[cur]["other_mma"].append(form)
     want = {f"s8mm{c}_{tm}x{bn}" for c in ("", "2") for tm in (64, 128) for bn in (64, 128, 256)}
-    reduce = {f"{f}_128x{bn}_r{r}" for f in ("s8mr", "s8mrb") for bn in (128, 256) for r in (8, 16, 32, 64, 128)}
+    reduce = {f"{f}_128x{bn}_r{r}" for f in ("s8mr", "s8mrb") for bn in (128, 256) for r in (8, 16, 32, 64, 128)} - UNBUILT
     for name, r in funcs.items():
         if max(r.get("stack", 0), r.get("spill_stores", 0), r.get("spill_loads", 0)) or r.get("LDL") or r.get("STL"):
             problems.append(f"{name}: local memory {r}")

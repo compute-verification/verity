@@ -164,7 +164,12 @@ def test_rparams_and_the_reduction_kernels_are_the_kernels():
     r, z, size = map(int, re.search(r"offsetof\(RParams, r\) == (\d+) && offsetof\(RParams, z\) == (\d+) && "
                                     r"sizeof\(RParams\) == (\d+)", src).groups())
     assert (W.RParams.r.offset, W.RParams.z.offset, W.C.sizeof(W.RParams)) == (r, z, size)
-    assert re.findall(r"^S8MR\((\d+), (\d+)\)", src, re.M) == [(str(bn), str(rr)) for _, bn in W.FUSED_TILES for rr in W.RS]
+    built = {f"{prefix}_128x{bn}_r{rr}" for bn, rr in re.findall(r"^S8MR\((\d+), (\d+)\)", src, re.M) for prefix in W.FLUSHES.values()}
+    built |= {f"{name}_128x{bn}_r{rr}" for bn, rr, name in re.findall(r"^S8MR1\((\d+), (\d+), \d, (\w+)\)", src, re.M)}
+    cfg = {bn: W.Cfg.parse(f"128x{bn}") for _, bn in W.FUSED_TILES}
+    assert built == {f"{prefix}_128x{bn}_r{rr}" for _, bn in W.FUSED_TILES for rr in W.RS for flush, prefix in W.FLUSHES.items()
+                     if W.has_reduction(cfg[bn], rr, flush)}
+    assert SG.UNBUILT == {f"{W.FLUSHES[flush]}_{tm}x{bn}_r{rr}" for tm, bn, rr, flush in W.UNBUILT}
     assert all(tm == 128 for tm, _ in W.FUSED_TILES)
 
 
