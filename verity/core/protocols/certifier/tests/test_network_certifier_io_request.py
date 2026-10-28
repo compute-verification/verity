@@ -458,8 +458,7 @@ def test_the_unit_is_its_reference(link):
     args = [Q.arguments(SHAPE, i) for i in insts]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(2)])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want
-    memo = {}
-    a = lambda fn: HC.ands(fn, memo)  # noqa: E731
+    a = HC.ands
     parts = SHAPE.N * (a(bind(Q.IoTieRequestFrame, B=B)) + a(bind(Q.IoTieRequestStep))) + \
         SHAPE.L * a(bind(Q.IoTieRequestEnd)) + a(BL.and_gate(SHAPE.L))
     assert a(fn) == parts == 84_175
