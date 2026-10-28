@@ -33,7 +33,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/engine/hooks.py",
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
           # that module imports) and the block record's leg
-          "benchmarks/one_stage/served_verdicts.py", "demos/h200/interfaces/verity_e2e_demo/block_record.py",
+          "benchmarks/one_stage/served_verdicts.py", "examples/h200/interfaces/verity_e2e_demo/block_record.py",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py",
           "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
           "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/salt.py",

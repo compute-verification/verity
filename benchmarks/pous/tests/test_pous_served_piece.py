@@ -67,7 +67,7 @@ SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py"
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
 fakes = _load("pous_fakes", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_fakes.py")
 ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
-BR = _load("pous_served_block_record", ROOT / "demos" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
+BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
 
 

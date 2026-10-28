@@ -1516,13 +1516,6 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
-    },
-    {
-      "paths": {
-        "examples/": "demos/",
-        "tests/test_examples.py": "tests/test_demos.py",
-        "tools/verity/cli/verity_cli/examples.py": "tools/verity/cli/verity_cli/demos.py"
-      }
     }
   ]
 }

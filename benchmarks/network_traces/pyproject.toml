@@ -45,8 +45,8 @@ inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "benchmarks/network_e2e/encodings/tests/fixtures",
           "verity/ml/flock/verifier/redigest.py", "verity/ml/flock/verifier/transcript_check.py",
-          "demos/h200/interfaces/verity_e2e_demo/schemas/block-record.v1.schema.json",
-          "demos/h200/interfaces/verity_e2e_demo/block_record.py",
-          "demos/h200/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
-          "demos/h200/interfaces/tests/fixtures/block-record-r2-period0.json",
+          "examples/h200/interfaces/verity_e2e_demo/schemas/block-record.v1.schema.json",
+          "examples/h200/interfaces/verity_e2e_demo/block_record.py",
+          "examples/h200/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
+          "examples/h200/interfaces/tests/fixtures/block-record-r2-period0.json",
           "verity/core/protocols/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]

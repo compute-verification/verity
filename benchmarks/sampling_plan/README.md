@@ -56,7 +56,7 @@ zero-work subcircuits at their floor.
   sampling block length in blocks that proves within its own GPU time, and the faulty ANDs (`Stratified.harm_bound`, not a Lean
   guarantee).
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
-  6.35 s step, 32 steps a request, on the Definition map (`demos/h200/e2e_h200/plan.py`: every subcircuit a
+  6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
   Definition C-Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
   per sampling block. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half

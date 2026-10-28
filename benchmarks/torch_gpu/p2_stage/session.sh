@@ -7,7 +7,7 @@
 #   tar -C benchmarks/pous/p2_v1/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 240m \
 #     --env GPU_LEASE_WHO=LANE [--env ENCODED=1] [--env STEPS=toy,stage,gemm,check] \
-#     --send /tmp/p2lib.tar --send demos/h200/e2e_h200/served_weights.py --send h200-manifest.json \
+#     --send /tmp/p2lib.tar --send examples/h200/e2e_h200/served_weights.py --send h200-manifest.json \
 #     --send store-layout.json \
 #     --send /tmp/store-toy.tar [--send SLICE/setup.json --send SLICE/00000.c --send SLICE/00000.json ...] \
 #     -- bash benchmarks/torch_gpu/p2_stage/session.sh
