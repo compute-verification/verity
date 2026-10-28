@@ -65,7 +65,7 @@ end Fork
 variable {D : Type} {H : List UInt8 → D}
 
 /-- **A collision output says its event held.** -/
-theorem of_isColl_collOf {p : Prop} {h : p → Merkle.Collision H} (hc : IsColl H (collOf H p h)) : p := by
+theorem of_isColl_collOf {p : Prop} {h : p → Hash.HasCollision H} (hc : IsColl H (collOf H p h)) : p := by
   by_contra hp
   obtain ⟨_, _, e, -⟩ := hc
   unfold collOf at e
@@ -138,7 +138,7 @@ def PadsClashAnyZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :
 
 omit [Field F] [Fintype F] [DecidableEq F] in
 theorem PadsClashAnyZ.collision {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} (h : PadsClashAnyZ Hs N q out) :
-    Merkle.Collision Hs.H := by
+    Hash.HasCollision Hs.H := by
   obtain ⟨_, _, root, jj, _, jj', _, p, h1, h2, hne⟩ := h
   exact Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => root) (Nat.log 2 N) p.val _ _ _ _ _ _ hne h1 h2
 
@@ -178,7 +178,7 @@ omit [Field F] [Fintype F] [DecidableEq F] in
 /-- Two runs opening a pads position two ways at any position give a collision. -/
 theorem opPadsAnyZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D}
     {x : OutZC F D Sl × OutZC F D Sl} {p : Fin N} (h : Rewinding.ConflictAt (opPadsAnyZ Hs N q r c) x p) :
-    Merkle.Collision Hs.H := by
+    Hash.HasCollision Hs.H := by
   obtain ⟨jj, -, h1, e1⟩ := opPadsAnyZ_some h.1
   obtain ⟨jj', -, h2, e2⟩ := opPadsAnyZ_some h.2.1
   refine Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val _ _ _ _ _ _
@@ -215,7 +215,7 @@ def SelfClashAnyZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (out : OutZC F D Sl) :
     PadsClashAnyZ Hs T.N T.q out
 
 theorem SelfClashAnyZ.collision {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D Sl}
-    (h : SelfClashAnyZ Hs T out) : Merkle.Collision Hs.H := by
+    (h : SelfClashAnyZ Hs T out) : Hash.HasCollision Hs.H := by
   rcases h with h | ⟨_, _, _, _, _, _, h⟩ | h
   · exact h.collision
   · exact h.collision

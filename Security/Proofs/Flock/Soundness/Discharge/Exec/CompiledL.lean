@@ -370,7 +370,7 @@ omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **A clash is a collision**, under any salts (`Merkle.opening_bindingL`). -/
 theorem ClashL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashL H E Lf cap lanes depth xs) :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨x, -, y, -, hxy, hx, hy, hne⟩ := h
   exact Merkle.opening_bindingL H E Lf cap depth x.1 x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2 hne hx.2
     (hxy ▸ hy.2)
@@ -378,7 +378,7 @@ theorem ClashL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf 
 omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **A self-clash is a collision.** -/
 theorem SelfClashL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {sch : Schedule} {out : OutCL F D Sl} (h : SelfClashL H E Lf sch out) : Merkle.Collision H := by
+    {sch : Schedule} {out : OutCL F D Sl} (h : SelfClashL H E Lf sch out) : Hash.HasCollision H := by
   rcases h with h | ⟨_, _, _, _, _, _, h⟩
   · exact h.collision
   · exact h.collision
@@ -390,7 +390,7 @@ theorem opOfL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F)
     {p : Fin (2 ^ d)} (h1 : (opOfL H E Lf lanes depth d xs cap p).isSome)
     (h2 : (opOfL H E Lf lanes depth d xs' cap p).isSome)
     (hne : opOfL H E Lf lanes depth d xs cap p ≠ opOfL H E Lf lanes depth d xs' cap p) :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨x, -, hxp, hx, hox⟩ := opOfL_some h1
   obtain ⟨y, -, hyp, hy, hoy⟩ := opOfL_some h2
   refine Merkle.opening_bindingL H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
@@ -402,7 +402,7 @@ omit [Fintype F] [DecidableEq F] in
 theorem op₀L_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
     {p : Fin (2 ^ (lvOf sch 0).logLen)} (h : Rewinding.ConflictAt (op₀L H E Lf sch cap) x p) :
-    Merkle.Collision H :=
+    Hash.HasCollision H :=
   opOfL_conflict_collision h.1 h.2.1 h.2.2
 
 omit [Fintype F] [DecidableEq F] in
@@ -410,7 +410,7 @@ omit [Fintype F] [DecidableEq F] in
 theorem opRL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {r ℓ : ℕ} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : Rewinding.ConflictAt (opRL H E Lf sch r ℓ cap) x p) :
-    Merkle.Collision H :=
+    Hash.HasCollision H :=
   opOfL_conflict_collision h.1 h.2.1 h.2.2
 
 /-! ## The plurality prover and the collision finders -/

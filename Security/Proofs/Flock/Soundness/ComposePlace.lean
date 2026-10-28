@@ -4,11 +4,11 @@ import Proofs.Flock.Soundness.ExecSetup
 /-!
 # Composed rows, placed: what 1d and 1e hand to a table's class (`dp`)
 
-`placement_of_realizes` (`Compose.lean`) proves `Placement` for `Rows.compose` from facts about the block matrices. Here
+`placement_of_realizes` (`Compose.lean`) proves `BlockRows` for `Rows.compose` from facts about the block matrices. Here
 those facts are one proposition, and they are discharged for a flat statement `Stmt.setupH` accepted:
 - **`Compose.Realizes S L pos`**: each logical column's position is in the block; at each computed row's position the
   matrices read exactly the positions of its columns, or the pin for a row that copies `one`; and the pin's row reads
-  the pin. `Realizes.placement` is the `Placement` it gives, at `composePlace`.
+  the pin. `Realizes.placement` is the `BlockRows` it gives, at `composePlace`.
 - **`Compose.BlockFacts`**: 1e's form of the same facts, over the unit's block rows (`blockRow`, Δ applied), for the
   verifier's own `deriveChecked` run. `BlockFacts.realizes` turns them into `Realizes` for the unit's composed rows
   (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness lane's `TableClass`).
@@ -47,7 +47,7 @@ structure Realizes (S : Model.Statement) (L : Logical) (pos : ℕ → ℕ) : Pro
   pinB : ∀ j, S.B₀ S.pin j = if j = S.pin then 1 else 0
 
 theorem Realizes.placement {S : Model.Statement} {L : Logical} {pos : ℕ → ℕ} (hr : Realizes S L pos) (h : Ordered L) :
-    Placement S (Rows.compose L h) (composePlace S L h pos hr.lt) :=
+    BlockRows S (Rows.compose L h) (composePlace S L h pos hr.lt) :=
   placement_of_realizes hr.rowA hr.rowB hr.oneA hr.oneB hr.pinA hr.pinB
 
 /-- **The composed rows are the net's**: every column of the order is at most the net's constant; each computed
@@ -169,7 +169,7 @@ theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
     (hone : (done.getD unit default).rows.size ≤ one) (hf : BlockFacts S words done (done.getD unit default) one pos) :
-    Placement S (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd))
+    BlockRows S (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd))
       (composePlace S _ (ofBlock_ordered hd) pos (hf.realizes hd hone).lt) :=
   (hf.realizes hd hone).placement (ofBlock_ordered hd)
 

@@ -47,7 +47,7 @@ def ClashCL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf
 omit [Fintype F] [DecidableEq F] in
 /-- **A clash is a collision.** -/
 theorem ClashCL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {sch : Schedule} {o o' : OutCL F D Sl} (h : ClashCL H E Lf sch o o') : Merkle.Collision H := by
+    {sch : Schedule} {o o' : OutCL F D Sl} (h : ClashCL H E Lf sch o o') : Hash.HasCollision H := by
   rcases h with h | h | ⟨_, h⟩ | ⟨_, _, _, _, _, _, _, h⟩
   · exact h.collision
   · exact h.collision

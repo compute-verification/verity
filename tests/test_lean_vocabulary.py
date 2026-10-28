@@ -371,7 +371,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 387
+KNOWN_MAX = 385
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -489,12 +489,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.Boolean.Op`: becomes it (a copy of Core/Boolean's) (lean)",
     "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
         "duplicate of `Verity.Partition`: becomes it (a copy of Core's) (lean)",
-    "Security/Definitions/Flock/Lowering.lean::FlockSoundness.Placement":
-        "homonym, a unit's rows in a statement: rename (lean)",
     "Security/Definitions/Flock/Lowering.lean::FlockSoundness.Prog":
         "duplicate of `Flock.Program.Prog`: becomes its spec, unit by unit (lean)",
-    "Security/Definitions/Flock/Merkle.lean::FlockSoundness.Merkle.Collision":
-        "duplicate of `Hash.Collision`: becomes it (`Hash.HasCollision`) (lean)",
     "Security/Definitions/Flock/Statement.lean::FlockSoundness.Model.Statement":
         "duplicate of `Flock.Stmt`: becomes its spec (one block R1CS statement) (lean)",
     "Security/Definitions/Flock/Statement.lean::FlockSoundness.Model.Witness":

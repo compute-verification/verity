@@ -45,19 +45,19 @@ def IsColl (o : Pair) : Prop := ∃ x y, o = some (x, y) ∧ x ≠ y ∧ H x = H
 
 open Classical in
 /-- A collision of `H` when `p` holds (`h` gives one), nothing otherwise. -/
-noncomputable def collOf (p : Prop) (h : p → Merkle.Collision H) : Pair :=
+noncomputable def collOf (p : Prop) (h : p → Hash.HasCollision H) : Pair :=
   if hp : p then some ((h hp).choose, (h hp).choose_spec.choose) else none
 
-theorem collOf_isColl {p : Prop} (h : p → Merkle.Collision H) (hp : p) : IsColl H (collOf H p h) := by
+theorem collOf_isColl {p : Prop} (h : p → Hash.HasCollision H) (hp : p) : IsColl H (collOf H p h) := by
   unfold collOf
   rw [dite_eq_left hp]
   exact ⟨_, _, rfl, (h hp).choose_spec.choose_spec⟩
 
 /-- An event of a run, as a finder's output: a collision whenever the event holds. -/
-noncomputable def onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Merkle.Collision H) (a : α) : Pair :=
+noncomputable def onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Hash.HasCollision H) (a : α) : Pair :=
   collOf H (q a) (hq a)
 
-theorem ind_le_onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Merkle.Collision H) (a : α) :
+theorem ind_le_onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Hash.HasCollision H) (a : α) :
     ind q a ≤ ind (IsColl H) (onePick H q hq a) := by
   unfold ind
   by_cases h : q a
@@ -68,7 +68,7 @@ theorem ind_le_onePick {α : Type} (q : α → Prop) (hq : ∀ a, q a → Merkle
 
 /-- Two runs' conflict at some position, as a finder's output. -/
 noncomputable def conflictPick {α P V : Type} (op : α → P → Option V)
-    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H) (b b' : α) : Pair :=
+    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Hash.HasCollision H) (b b' : α) : Pair :=
   onePick H (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (fun x h => h.elim (hcol x)) (b, b')
 
 /-- **A collision finder**: a game played by a fixed strategy, with what it found as its output. -/
@@ -117,13 +117,13 @@ theorem twoRuns_ev {β γ : Type} (f : γ → ℝ) (g : Game β) (s : Strategy g
   exact congrArg (fun F => expect F g s) (funext fun b => expect_map f (pick b) g s)
 
 theorem expect_one_le {α : Type} (g : Game α) (s : Strategy g) (q : α → Prop)
-    (hq : ∀ a, q a → Merkle.Collision H) :
+    (hq : ∀ a, q a → Hash.HasCollision H) :
     expect (ind q) g s ≤ (oneRun g s (onePick H q hq)).ev (ind (IsColl H)) := by
   rw [oneRun_ev]
   exact expect_mono (ind_le_onePick H q hq) g s
 
 theorem expect₂_conflict_le {α P V : Type} (g : Game α) (s : Strategy g) (op : α → P → Option V)
-    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H) :
+    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Hash.HasCollision H) :
     expect₂ (fun b b' => ind (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (b, b')) g s ≤
       (twoRuns g s (conflictPick H op hcol)).ev (ind (IsColl H)) := by
   rw [twoRuns_ev]
@@ -168,7 +168,7 @@ theorem forkE_le_ev (plur : Lock.Chooser T Dc β) (slot : ℕ) {Φ : Dc → β �
       · exact forkE_le_ev plur slot hΦ hdflt _ σ'.2
 
 theorem forkE_conflict_le {P V : Type} (plur : Lock.Chooser T Dc β) (slot : ℕ) (op : Dc → β → P → Option V)
-    (hcol : ∀ d x p, Rewinding.ConflictAt (op d) x p → Merkle.Collision H) {i : I} {g : Game α} {g' : Game β}
+    (hcol : ∀ d x p, Rewinding.ConflictAt (op d) x p → Hash.HasCollision H) {i : I} {g : Game α} {g' : Game β}
     (L : Lock T Dc get R i g g') (σ' : Strategy g') :
     Lock.forkE plur slot (fun d b b' => ind (fun x : β × β => ∃ p, Rewinding.ConflictAt (op d) x p) (b, b')) L σ' ≤
       (forkFinder plur slot (fun d => conflictPick H (op d) (hcol d)) none L σ').ev (ind (IsColl H)) :=
@@ -186,7 +186,7 @@ budget of the finder that runs the prover twice after the registration (`DESIGN.
 theorem tree_le_strict {α P V : Type} [Fintype P] [Fintype V] [DecidableEq V] (op : α → P → Option V)
     (g : Game α) (s : Strategy g) (vstar : P → V) (hv : Rewinding.IsPluralityE op g s vstar) (Q : ℕ)
     (hQ : ∀ a, (Finset.univ.filter fun p => (op a p).isSome).card ≤ Q)
-    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H) {q : ℝ}
+    (hcol : ∀ x p, Rewinding.ConflictAt op x p → Hash.HasCollision H) {q : ℝ}
     (hCR : (twoRuns g s (conflictPick H op hcol)).CR H q) :
     expect (ind fun a => ∃ p, Rewinding.Off op vstar a p) g s ≤
       Real.sqrt (Fintype.card P * Q * (q ^ 2 / 2 ^ (513 : ℝ))) :=
@@ -212,7 +212,7 @@ structure TreeRewind {β : Type} (G : Game β) (S : Strategy G) (bad : β → Pr
   plur : Rewinding.IsPluralityE op g s vstar
   Q : ℕ
   opens : ∀ a, (Finset.univ.filter fun p => (op a p).isSome).card ≤ Q
-  binds : ∀ x p, Rewinding.ConflictAt op x p → Merkle.Collision H
+  binds : ∀ x p, Rewinding.ConflictAt op x p → Hash.HasCollision H
   covers : prob bad G S ≤ ENNReal.ofReal (expect (ind fun a => ∃ p, Rewinding.Off op vstar a p) g s)
 
 namespace TreeRewind

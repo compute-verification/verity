@@ -216,7 +216,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - **An instance's rows** (`Rows.stack`): a template instance is its VU's `upv` unit slots, so its `Rows` are `upv`
     copies of the net's, stacked in `Rows`' order. Each copy's constant is a computed row reading the shared constant,
     and precedes the copy's rows, which read it as their net rows read their slot's constant.
-  - **Placing an instance** (`placement_stack`): `Placement` for the stacked rows at `stackPlace` (copy `u` at slot
+  - **Placing an instance** (`placement_stack`): `BlockRows` for the stacked rows at `stackPlace` (copy `u` at slot
     base `base u`, the shared constant at the pin) follows from three facts about the level-0 matrices: at each copy's
     computed rows they are the net's rows shifted to the slot, and each copy's constant row and the pin's own row read
     the pin. Those facts are what the verifier's matrices (L3-A's `placedA`/`placedB`) and Δ give, next.
@@ -225,7 +225,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     destination). That none is a unit's computed row follows from the layout checks (`delta_split`, `deltaIn_inBit`).
 - **The theorem** (`lowering_sound`, for every template). Suppose a witness satisfies a statement in which a unit's rows
   are placed in a block. Then the trace decoded from that block makes the unit correct.
-  - Placed (`Placement`) means two things:
+  - Placed (`BlockRows`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
     - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
 
@@ -241,7 +241,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   `unitPlace_of_setupH` is the `UnitPlace` that `loweringSoundB_of_place` takes, given the unit's instance in the audit
   circuit (`IsRowsUnit`, the circuit side) and `Layout.Aliased`: its inputs on one gate carry one value, from the flat
   statement's copies (open).
-  - `Layout.placement` (`ExecPlacement.lean`) proves `Placement` from the layout facts `Layout` names. At a unit copy's
+  - `Layout.placement` (`ExecPlacement.lean`) proves `BlockRows` from the layout facts `Layout` names. At a unit copy's
     computed rows only its slot has entries (pairwise-apart spans, `rangesEntry_of_covers`) and Δ has none. At its
     constant Δ's `(k, k)` cancels the row's own entry and `(k, pin)` reads the pin. The pin's row reads itself.
   - `setupH_layout` derives `Layout`:
@@ -262,7 +262,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   - `Rows.compose` reads a unit's rows in logical order from a `Compose.Logical`: the columns in order, the input bits
     first, and each column's row as the block holds it, or a copy of `one` (the unit's constant, which Δ binds to the
     pin).
-  - `placement_of_realizes` gives `Placement` when the block matrices, at each row's position, read its columns'
+  - `placement_of_realizes` gives `BlockRows` when the block matrices, at each row's position, read its columns'
     positions, and the rows that copy `one` and the pin's row read the pin.
   - For a flat type, `derive`'s rows (`Compose.ofDerived`) are in that order (`compose_ordered`), and satisfied composed
     rows carry the type's outputs (`Rows.compose_eval`, from `Types.compose_sound`).
@@ -270,7 +270,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     order, Δ's constant copies copying `one`) are in that order (`ofBlock_ordered`, from `Types.Dag.order_sound`), and
     satisfied composed rows carry the unit type's outputs (`Rows.compose_eval_unit`, from `Types.Dag.unit_sound`).
   - **Placed** (`ComposePlace.lean`). `Compose.Realizes` is `placement_of_realizes`'s block facts as one proposition,
-    and `Realizes.placement` the `Placement` it gives. `Compose.BlockFacts` is 1e's form of the same facts, over the
+    and `Realizes.placement` the `BlockRows` it gives. `Compose.BlockFacts` is 1e's form of the same facts, over the
     unit's block rows (`blockRow`), and `BlockFacts.placement` gives a table class's placement at a slot for the unit's
     composed rows (`ofBlock`) from them. `Layout.realizes` proves `Realizes` at any unit slot of a flat statement
     `Stmt.setupH` accepted, for composed rows that are the unit net's (`Compose.NetRows`).

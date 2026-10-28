@@ -122,7 +122,7 @@ omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **A clash is a collision**, under any salts (`Merkle.opening_bindingL`). -/
 theorem ClashW.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {w depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashW H E Lf cap w depth xs) :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨x, -, y, -, hxy, hx, hy, hne⟩ := h
   exact Merkle.opening_bindingL H E Lf cap depth x.1 x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2 hne hx.2
     (hxy ▸ hy.2)
@@ -134,7 +134,7 @@ theorem opOfW_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F)
     {p : Fin (2 ^ d)} (h1 : (opOfW H E Lf w depth d xs cap p).isSome)
     (h2 : (opOfW H E Lf w depth d xs' cap p).isSome)
     (hne : opOfW H E Lf w depth d xs cap p ≠ opOfW H E Lf w depth d xs' cap p) :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨x, -, hxp, hx, hox⟩ := opOfW_some h1
   obtain ⟨y, -, hyp, hy, hoy⟩ := opOfW_some h2
   refine Merkle.opening_bindingL H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
@@ -145,7 +145,7 @@ theorem opOfW_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F)
 theorem op₀Z_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {T : TabZK F mPts} {cap : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
     {p : Fin (2 ^ (lvOf T.sch 0).logLen)} (h : Rewinding.ConflictAt (op₀Z H E Lf T cap) x p) :
-    Merkle.Collision H :=
+    Hash.HasCollision H :=
   opOfW_conflict_collision h.1 h.2.1 h.2.2
 
 /-! ## The levels' caps -/
@@ -186,7 +186,7 @@ omit [Fintype F] [DecidableEq F] in
 theorem opRZ_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {r ℓ : ℕ} {cap : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : Rewinding.ConflictAt (opRZ H E Lf sch r ℓ cap) x p) :
-    Merkle.Collision H :=
+    Hash.HasCollision H :=
   Exec.opOfL_conflict_collision h.1 h.2.1 h.2.2
 
 /-! ## The pads roots -/
@@ -227,7 +227,7 @@ def PadsClashAtZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :=
 
 omit [Field F] [Fintype F] [DecidableEq F] in
 theorem PadsClashAtZ.collision {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} (h : PadsClashAtZ Hs N q out) :
-    Merkle.Collision Hs.H := by
+    Hash.HasCollision Hs.H := by
   obtain ⟨_, _, root, jj, _, jj', _, p, -, -, h1, h2, hne⟩ := h
   exact Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => root) (Nat.log 2 N) p.val _ _ _ _ _ _ hne h1 h2
 
@@ -261,7 +261,7 @@ omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **Every pair a pads root's collision finder counts is a collision.** -/
 theorem opPadsAtZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap D}
     {x : OutZC F D Sl × OutZC F D Sl} {p : Fin N} (h : Rewinding.ConflictAt (opPadsAtZ Hs N q r c) x p) :
-    Merkle.Collision Hs.H := by
+    Hash.HasCollision Hs.H := by
   obtain ⟨jj, -, -, h1, e1⟩ := opPadsAtZ_some h.1
   obtain ⟨jj', -, -, h2, e2⟩ := opPadsAtZ_some h.2.1
   refine Merkle.opening_bindingL Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val _ _ _ _ _ _
@@ -308,7 +308,7 @@ theorem rowTau_tauTab (v : Unit → F) : rowTau (tauTab v) = v := funext fun _ =
 omit [Field F] [Fintype F] [DecidableEq F] in
 /-- **Every pair a `τ` commitment's collision finder counts is a collision** (`Leaf.bind`). -/
 theorem opTauZ_conflict_collision {Hs : Hashes F D Sl} {r : ℕ} {c : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
-    {p : Unit} (h : Rewinding.ConflictAt (opTauZ Hs r c) x p) : Merkle.Collision Hs.H := by
+    {p : Unit} (h : Rewinding.ConflictAt (opTauZ Hs r c) x p) : Hash.HasCollision Hs.H := by
   classical
   obtain ⟨h1, h2, hne⟩ := h
   by_cases ha : x.1.accepted = true ∧ Hs.Lτ.leaf (x.1.opens.inner r).tau.1 (x.1.opens.inner r).tau.2 = c 0
@@ -348,7 +348,7 @@ def SelfClashZ (Hs : Hashes F D Sl) (T : TabZK F mPts) (out : OutZC F D Sl) : Pr
 
 /-- **A self-clash is a collision.** -/
 theorem SelfClashZ.collision {Hs : Hashes F D Sl} {T : TabZK F mPts} {out : OutZC F D Sl}
-    (h : SelfClashZ Hs T out) : Merkle.Collision Hs.H := by
+    (h : SelfClashZ Hs T out) : Hash.HasCollision Hs.H := by
   rcases h with h | ⟨_, _, _, _, _, _, h⟩ | h
   · exact h.collision
   · exact h.collision

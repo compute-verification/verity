@@ -206,7 +206,7 @@ theorem setupH_flatPlacement (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net))
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count) :
-    Placement ((setupH_flatLayout ht h hr).2.2.model regs)
+    BlockRows ((setupH_flatLayout ht h hr).2.2.model regs)
       (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default)) (ofBlock_ordered k.hd))
       (composePlace _ _ (ofBlock_ordered k.hd) (fun c => st.c.unitRange.slot s₀ + c)
         (setupH_flatRealizes ht h hr regs hs).lt) :=

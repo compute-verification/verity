@@ -29,7 +29,7 @@ open Audit Types.Dag Compose Model
 structure RowsAt (St : Statement) (R : Rows) where
   o : Fin (2 ^ St.nbl)
   col : Fin R.w → Fin (2 ^ St.kLog)
-  placed : Placement St R col
+  placed : BlockRows St R col
 
 /-- The same place, for equal rows. -/
 def RowsAt.cast {St : Statement} {R R' : Rows} (e : R = R') (a : RowsAt St R) : RowsAt St R' := e ▸ a
@@ -62,7 +62,7 @@ structure TableClass (St : Statement) where
   slots : ℕ
   col : Fin slots → Fin (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd)).w →
     Fin (2 ^ St.kLog)
-  placed : ∀ g, Placement St (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd)) (col g)
+  placed : ∀ g, BlockRows St (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd)) (col g)
   copyPos : Fin slots → ℕ → Fin (2 ^ St.kLog)
   copy : ∀ g (c : Fin (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd)).w),
     c.val < (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd)).nIn →

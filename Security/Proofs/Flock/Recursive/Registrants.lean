@@ -51,7 +51,7 @@ def ReadsX.Clash (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') : Prop :=
       Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')))
 
 theorem ReadsX.Clash.collision {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} (h : rd.Clash rd') :
-    Merkle.Collision H512 := by
+    Hash.HasCollision H512 := by
   obtain ⟨_, _, _, _, ⟨h1, h2⟩ | ⟨h1, h2⟩⟩ := h
   · exact ⟨_, _, h1, h2⟩
   · exact ⟨_, _, h1, h2⟩
@@ -76,7 +76,7 @@ def RegColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S
   ∃ j j', (zs R ω t R₂ j).rd.Clash (zs R ω t R₂ j').rd
 
 theorem RegColl.collision {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg}
-    {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : RegColl zs R ω t R₂) : Merkle.Collision H512 := by
+    {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : RegColl zs R ω t R₂) : Hash.HasCollision H512 := by
   obtain ⟨_, _, h⟩ := h
   exact h.collision
 

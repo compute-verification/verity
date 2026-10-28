@@ -1368,7 +1368,7 @@ at `Typed.col c tb g` in the model of the accepted statement. This is a table cl
 theorem placement (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     {g : ℕ} (hg : g < st.c.g) :
-    Placement (T.model regs) (Rows.compose (ofBlock words done 𝒖) (ofBlock_ordered hd))
+    BlockRows (T.model regs) (Rows.compose (ofBlock words done 𝒖) (ofBlock_ordered hd))
       (composePlace (T.model regs) _ (ofBlock_ordered hd) (Typed.col st.c tb g)
         ((T.blockFacts hd hul U regs hg le_rfl).realizes hd le_rfl).lt) :=
   (T.blockFacts hd hul U regs hg le_rfl).placement hd le_rfl

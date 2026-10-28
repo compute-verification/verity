@@ -295,7 +295,7 @@ def RegClash (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Lea
 omit [Field F] [Fintype F] [DecidableEq F] in
 theorem RegClash.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {lv : Level} {x : HoloReg F D} {o : OutHL F D Sl} (hx : x.Opens H E Lf lv) (h : RegClash H E Lf lv x o) :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨y, -, hlt, hv, hne⟩ := h
   obtain ⟨s, sibs, hs⟩ := hx y.1 hlt
   exact Merkle.opening_bindingL H E Lf x.cap (pathLen lv) y.1 _ _ _ _ _ _ hne hv.2 hs
@@ -311,7 +311,7 @@ omit [Fintype F] [DecidableEq F] in
 /-- **A clash is a collision**, given the registrant's openings. -/
 theorem ClashHL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {sch rsch : Schedule} {x : HoloReg F D} {o o' : OutHL F D Sl} (hx : x.Opens H E Lf rsch.level₀)
-    (h : ClashHL H E Lf sch rsch x o o') : Merkle.Collision H := by
+    (h : ClashHL H E Lf sch rsch x o o') : Hash.HasCollision H := by
   rcases h with h | h | h | h
   · exact h.collision
   · exact h.collision
@@ -330,7 +330,7 @@ omit [Fintype F] [DecidableEq F] in
 /-- **A clash of two runs is a collision.** -/
 theorem ClashRunHL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {sch rsch : Schedule} {cap : Cap D} {o o' : OutHL F D Sl} (h : ClashRunHL H E Lf sch rsch cap o o') :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   rcases h with h | h
   · exact h.collision
   · exact h.collision

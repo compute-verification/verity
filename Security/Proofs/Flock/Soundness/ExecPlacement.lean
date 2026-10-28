@@ -6,7 +6,7 @@ import Proofs.Flock.Level3.Placed
 
 The verifier's level-0 matrices are `placedA st` and `placedB st` (flock-verifier's `FlockLevel3.Placed`): column
 `j`'s entries come from the last range covering `j`, rows in the same slot only, plus Δ's pairs. This file proves
-`Placement` for an instance's stacked rows (`Rows.stack`, `placement_stack`) from the layout facts `Layout` names:
+`BlockRows` for an instance's stacked rows (`Rows.stack`, `placement_stack`) from the layout facts `Layout` names:
 - **the ranges:** their spans are pairwise disjoint (`HmRow.check`'s pairwise test), a net range's slots are its net's
   `2^unitLog` rows, and every net's constant and input rows fit its slot;
 - **the unit range:** `vus_per_block × units_per_vu` slots of the unit net, a net `Net.ofRows` built (a text net, or a
@@ -606,7 +606,7 @@ include L
 `ur.slot (g·upv + u)` for copy `u`, with the shared constant at the pin (`stackPlace`), and the verifier's level-0
 matrices place them there. -/
 theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
-    Placement (L.model regs) ((unitRows st L.unit_built).stack st.c.upv)
+    BlockRows (L.model regs) ((unitRows st L.unit_built).stack st.c.upv)
       (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg)) := by
   have hW : 0 < 2 ^ st.c.unit.unitLog := Nat.two_pow_pos _

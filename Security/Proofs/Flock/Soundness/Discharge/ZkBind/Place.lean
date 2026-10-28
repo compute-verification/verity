@@ -83,7 +83,7 @@ noncomputable def SitesZ.colKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : 
 
 /-- **The `--zk` table's statement places the program's unit at its template instance** (`Accepted.placement`). -/
 theorem SitesZ.placed_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    Placement (tabOfZ planZ tab S R u).S ((keyProg c hU n).rows u) (si.colKey hU hparse S R u h) := by
+    BlockRows (tabOfZ planZ tab S R u).S ((keyProg c hU n).rows u) (si.colKey hU hparse S R u h) := by
   exact placement_rows (si.rowsOf_keyProg hU hparse S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
 /-- **The program's own instance is aliased as Δ copies** at each drawn unit's site in its `--zk` table

@@ -11,8 +11,8 @@ audit's `Rows` from a `Logical`: the columns in logical order (`order`), and eac
 - logical column `ℓ < |order|` is physical column `order[ℓ]`, and the last logical column is the block's `one`;
 - computed row `k` is the row at `order[nIn + k]`, each column it reads mapped to its place in `order`.
 
-Placement (for every `Logical` whose rows are `Ordered`):
-- `placement_of_realizes`: `Placement` for `Rows.compose` at `composePlace` (each logical column at its physical
+BlockRows (for every `Logical` whose rows are `Ordered`):
+- `placement_of_realizes`: `BlockRows` for `Rows.compose` at `composePlace` (each logical column at its physical
   column's block position, `one` at the pin), when the block's matrices at those positions read the rows' columns'
   positions, a row that copies `one` and the pin's row read the pin.
 
@@ -198,7 +198,7 @@ theorem placement_of_realizes
       ∀ r j : Fin (2 ^ S.kLog), r.val = pos (L.order.getD (L.nIn + k) 0) → S.B₀ r j = if j = S.pin then 1 else 0)
     (hpinA : ∀ j, S.A₀ S.pin j = if j = S.pin then 1 else 0)
     (hpinB : ∀ j, S.B₀ S.pin j = if j = S.pin then 1 else 0) :
-    Placement S (Rows.compose L h) (composePlace S L h pos hb) := by
+    BlockRows S (Rows.compose L h) (composePlace S L h pos hb) := by
   have hle := h.le
   have hone : composePlace S L h pos hb (Rows.compose L h).one = S.pin := by
     unfold composePlace; rw [dite_eq_right (by rw [Rows.compose_one]; omega)]

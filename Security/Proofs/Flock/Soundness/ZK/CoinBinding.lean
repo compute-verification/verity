@@ -12,7 +12,7 @@ of `x` under a salt, `H(lp ‖ b ‖ c)` with `b = mix(x, y)` and `c = H(sp ‖ 
 opening of `n` coins is the coins, `T_n`, the salt and the path.
 
 `coin_opening_binding`: if two openings of one (stream, round) position with the same number of coins both reach the root
-and disagree on a coin, then `H` has a collision. The conclusion is the proposition `Collision H`, that a collision exists.
+and disagree on a coin, then `H` has a collision. The conclusion is the proposition `Hash.HasCollision H`, that a collision exists.
 The proof's simulator also needs the collision computed from the two openings, in time linear in their size, to turn
 `⊥_bind` into A2's bound. That extraction is this proof's case split run as an algorithm, and it stays on paper.
 
@@ -56,7 +56,7 @@ theorem append3_inj {p : List UInt8} {a a' : List UInt8} {b b' : List UInt8} (hl
 /-- Two chains of equally many coins that disagree on a coin but reach one `T_0` give a collision. -/
 theorem chain_binding (tag : List UInt8) :
     ∀ (cs cs' : List Coin) (Tn Tn' : D), cs.length = cs'.length → cs ≠ cs' →
-      chainTop H E tag Tn cs = chainTop H E tag Tn' cs' → Collision H
+      chainTop H E tag Tn cs = chainTop H E tag Tn' cs' → Hash.HasCollision H
   | [], [], _, _, _, hne, _ => absurd rfl hne
   | [], _ :: _, _, _, hlen, _, _ => by simp at hlen
   | _ :: _, [], _, _, hlen, _, _ => by simp at hlen
@@ -79,7 +79,7 @@ theorem coin_opening_binding (mix : D → Salt → D) (hmix : ∀ y, Function.In
     (MerkleE : Enc Unit D)
     (h : walk H MerkleE idx (coinLeaf H E mix chainTag roundTag pos lp sp Tn cs y) sibs = root)
     (h' : walk H MerkleE idx (coinLeaf H E mix chainTag roundTag pos lp sp Tn' cs' y') sibs' = root) :
-    Collision H := by
+    Hash.HasCollision H := by
   by_cases hleaf : coinLeaf H E mix chainTag roundTag pos lp sp Tn cs y
       = coinLeaf H E mix chainTag roundTag pos lp sp Tn' cs' y'
   · -- the leaves agree: split the hm96 leaf, then the round digest, then the chain

@@ -128,7 +128,7 @@ theorem compile_step_prefix {Ω₁ : Type} [Fintype Ω₁] [Nonempty Ω₁] [Non
 theorem conflict_collision {Col D : Type} (H : List UInt8 → D) (E : Merkle.Enc Col D)
     (cap : ℕ → D) (depth pos : ℕ) (c c' : Col) (sibs sibs' : List D) (hc : c ≠ c')
     (h : Merkle.Verifies H E cap depth pos c sibs) (h' : Merkle.Verifies H E cap depth pos c' sibs') :
-    Merkle.Collision H :=
+    Hash.HasCollision H :=
   Merkle.opening_binding H E cap depth pos c c' sibs sibs' hc h h'
 
 end FlockSoundness.Compiled

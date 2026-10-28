@@ -139,7 +139,7 @@ structure ProgPlaces where
   inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u)
   o : ∀ S R u, u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl)
   col : ∀ S R u, u ∈ S → Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)
-  placed : ∀ S R u (h : u ∈ S), Placement (Partition.tabOf plan tab S R u).S (p.rows u) (col S R u h)
+  placed : ∀ S R u (h : u ∈ S), BlockRows (Partition.tabOf plan tab S R u).S (p.rows u) (col S R u h)
   aliased : ∀ S R u (h : u ∈ S), ∀ c c', (inst u).wire c = (inst u).wire c' → c.val < (p.rows u).nIn →
     c'.val < (p.rows u).nIn → ∀ z : Witness (Partition.tabOf plan tab S R u).S.m,
       (Partition.tabOf plan tab S R u).S.Satisfies z →

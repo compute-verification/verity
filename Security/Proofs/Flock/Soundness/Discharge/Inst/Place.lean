@@ -666,7 +666,7 @@ bits a wire fills (`WiredDelta`): template instance `g`'s columns at their posit
 (`composePlace`). -/
 theorem placement_instOf (P : ParseFacts tags st.c) (C : CheckFacts st.c) (hD : WiredDelta st) {g : ℕ}
     (hg : g < st.c.g) :
-    Placement (L.model regs) (instRows st.c)
+    BlockRows (L.model regs) (instRows st.c)
       (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hbOf L regs P C hg)) := by
   refine placement_of_realizes ?_ ?_ ?_ ?_ ?_ ?_
   · intro k _ p hp r j hr
@@ -694,7 +694,7 @@ include F in
 /-- **A template instance's rows, placed by the accepted statement**: template instance `g`'s columns at their
 positions (`pos`), `one` at the pin (`composePlace`). -/
 theorem placement_inst {g : ℕ} (hg : g < st.c.g) :
-    Placement (L.model regs) (instRows st.c)
+    BlockRows (L.model regs) (instRows st.c)
       (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hb L F regs hg)) :=
   placement_instOf L regs F.parse F.check (wiredDelta L F) hg
 

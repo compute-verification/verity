@@ -310,13 +310,13 @@ theorem opOf_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {lanes dept
 /-- **A clash is a collision.** -/
 theorem Clash.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {cap : Cap D}
     {lanes depth : ℕ} {xs : List (ℕ × List F × List D)} (h : Clash H E cap lanes depth xs) :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨x, -, y, -, hxy, hx, hy, hne⟩ := h
   exact Merkle.opening_binding H E cap depth x.1 x.2.1 y.2.1 x.2.2 y.2.2 hne hx.2 (hxy ▸ hy.2)
 
 /-- **A self-clash is a collision.** -/
 theorem SelfClash.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch : Schedule}
-    {out : OutC F D} (h : SelfClash H E sch out) : Merkle.Collision H := by
+    {out : OutC F D} (h : SelfClash H E sch out) : Hash.HasCollision H := by
   rcases h with h | ⟨_, _, _, _, _, _, h⟩
   · exact h.collision
   · exact h.collision
@@ -326,7 +326,7 @@ theorem opOf_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
     {lanes depth d : ℕ} {cap : Cap D} {xs xs' : List (ℕ × List F × List D)} {p : Fin (2 ^ d)}
     (h1 : (opOf H E lanes depth d xs cap p).isSome) (h2 : (opOf H E lanes depth d xs' cap p).isSome)
     (hne : opOf H E lanes depth d xs cap p ≠ opOf H E lanes depth d xs' cap p) :
-    Merkle.Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨x, -, hxp, hx, hox⟩ := opOf_some h1
   obtain ⟨y, -, hyp, hy, hoy⟩ := opOf_some h2
   refine Merkle.opening_binding H E cap depth p.val x.2.1 y.2.1 x.2.2 y.2.2 (fun hxy => hne ?_)
@@ -336,13 +336,13 @@ theorem opOf_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
 /-- **Every pair the level-0 collision finder counts is a collision.** -/
 theorem op₀_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch : Schedule}
     {cap : Cap D} {x : OutC F D × OutC F D} {p : Fin (2 ^ (lvOf sch 0).logLen)}
-    (h : Rewinding.ConflictAt (op₀ H E sch cap) x p) : Merkle.Collision H :=
+    (h : Rewinding.ConflictAt (op₀ H E sch cap) x p) : Hash.HasCollision H :=
   opOf_conflict_collision h.1 h.2.1 h.2.2
 
 /-- **Every pair a rep's collision finder counts is a collision.** -/
 theorem opR_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch : Schedule}
     {r ℓ : ℕ} {cap : Cap D} {x : OutC F D × OutC F D} {p : Fin (2 ^ (lvOf sch ℓ).logLen)}
-    (h : Rewinding.ConflictAt (opR H E sch r ℓ cap) x p) : Merkle.Collision H :=
+    (h : Rewinding.ConflictAt (opR H E sch r ℓ cap) x p) : Hash.HasCollision H :=
   opOf_conflict_collision h.1 h.2.1 h.2.2
 
 /-! ## The plurality prover and the collision finders -/

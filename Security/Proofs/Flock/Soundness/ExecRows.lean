@@ -483,7 +483,7 @@ theorem placement_stack
       S.B₀ (posIn S R k base hb hu R.one) j = if j = S.pin then 1 else 0)
     (hpinA : ∀ j, S.A₀ S.pin j = if j = S.pin then 1 else 0)
     (hpinB : ∀ j, S.B₀ S.pin j = if j = S.pin then 1 else 0) :
-    Placement S (R.stack k) (stackPlace S R k base hb) := by
+    BlockRows S (R.stack k) (stackPlace S R k base hb) := by
   have key : ∀ (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)) (f : Fin R.nComp → List (Fin R.w))
       (hrow : ∀ u (hu : u < k) (i : Fin R.nComp) (j : Fin (2 ^ S.kLog)),
         M (posIn S R k base hb hu (R.comp i)) j = (((f i).map (posIn S R k base hb hu)).count j : ZMod 2))

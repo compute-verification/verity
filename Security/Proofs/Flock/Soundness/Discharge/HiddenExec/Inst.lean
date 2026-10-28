@@ -145,7 +145,7 @@ theorem instCol_val {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) 
 /-- **The accepted statement places the template instance's rows at every template instance**, at output rows that
 fit (`placement_instOf`, `wiredDeltaH`). -/
 theorem placement_inst (hrows : Hidden.Any.OutRowsS a.st.c) {g : ℕ} (hg : g < a.st.c.g) :
-    Placement T (instRows a.st.c) (a.instCol hg) :=
+    BlockRows T (instRows a.st.c) (a.instCol hg) :=
   Placed.Accepted.placement_cast a.hT
     (placement_instOf a.L a.regs a.unitFacts.parse a.unitFacts.check (wiredDeltaH a.ht a.h hrows) hg)
 

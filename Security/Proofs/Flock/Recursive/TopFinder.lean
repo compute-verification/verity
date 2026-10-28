@@ -187,7 +187,7 @@ def TopColl (wr : List (Cm × I.Coin) → Lean.Json × String) (st : Flock.Stmt)
 theorem TopColl.collision {wr : List (Cm × I.Coin) → Lean.Json × String} {st : Flock.Stmt} {reg : Lean.Json}
     {bcs' : Array ByteArray} {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
     (hstk : StackedTopAt lv st reg cap salt bcs') {t : List (Cm × I.Coin)}
-    (h : TopColl wr st reg bcs' t) : Merkle.Collision Refine.H512 := by
+    (h : TopColl wr st reg bcs' t) : Hash.HasCollision Refine.H512 := by
   obtain ⟨cs, s, bcs, hi, hs, ht, hne⟩ := h
   obtain ⟨program, e, hreg', hfields', -⟩ := hstk
   unfold innerCommitsAt at hi

@@ -304,8 +304,8 @@ section Picks
 open Model Accounting Exec
 
 /-- **`collOf` reads its condition only up to `↔`.** -/
-theorem collOf_congr {D : Type} {H : List UInt8 → D} {p q : Prop} {h : p → Merkle.Collision H}
-    {h' : q → Merkle.Collision H} (e : p ↔ q) : collOf H p h = collOf H q h' := by
+theorem collOf_congr {D : Type} {H : List UInt8 → D} {p q : Prop} {h : p → Hash.HasCollision H}
+    {h' : q → Hash.HasCollision H} (e : p ↔ q) : collOf H p h = collOf H q h' := by
   cases propext e
   rfl
 

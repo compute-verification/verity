@@ -35,7 +35,7 @@ def LeafColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin 
   ∃ j, ∃ R' : Reg', ∃ path p, (zs R ω t R₂ j).rd.isRead p ∧ ((zs R ω t R₂ j).rd.openings R' path p).Conflict
 
 theorem LeafColl.collision {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg}
-    {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : LeafColl zs R ω t R₂) : Merkle.Collision H512 := by
+    {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : LeafColl zs R ω t R₂) : Hash.HasCollision H512 := by
   obtain ⟨_, _, _, _, -, hc⟩ := h
   obtain ⟨h1, h2⟩ := FlockSoundness.Registered.TwoOpenings.collides _ hc
   exact ⟨_, _, h1, h2⟩

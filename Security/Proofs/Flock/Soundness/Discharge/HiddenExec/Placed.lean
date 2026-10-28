@@ -75,7 +75,7 @@ noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 
 
 /-- **The accepted statement places its template instance rows at every template instance** (`Layout.placement`), in
 every block. -/
-theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) :=
+theorem placement {g : ℕ} (hg : g < a.st.c.g) : BlockRows T a.rows (a.col hg) :=
   Placed.Accepted.placement_cast a.hT (a.L.placement a.regs hg)
 
 /-- An accepted statement's circuit is the one its circuit file parses to (`parse_untyped`). -/
@@ -160,7 +160,7 @@ noncomputable def SitesH.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
 /-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its template
 instance. -/
 theorem SitesH.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
+    BlockRows (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
   Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
 /-- **`ProgPlaces` from setupHidden's accept**, its aliasing from `Layout.Aliased` at each drawn unit's template

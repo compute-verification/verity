@@ -60,7 +60,7 @@ def ReadsX.SaltClash (rd : ReadsX lay rs) (rows : Array (Array ℕ)) (salt : ℕ
     (FlockC3.RegLevels.rowInV rows[rd.readAt p]!) (salt (rd.readAt p)).data.toList)
 
 theorem ReadsX.SaltClash.collision {rd : ReadsX lay rs} {rows : Array (Array ℕ)} {salt : ℕ → ByteArray}
-    (h : rd.SaltClash rows salt) : Merkle.Collision H512 := by
+    (h : rd.SaltClash rows salt) : Hash.HasCollision H512 := by
   obtain ⟨_, -, h1, h2⟩ := h
   exact ⟨_, _, h1, h2⟩
 
@@ -83,7 +83,7 @@ def SaltColl (lv : FlockSoundness.Accounting.Level) (cap : Cap Refine.Dig) (salt
 
 theorem SaltColl.collision {lv : FlockSoundness.Accounting.Level} {cap : Cap Refine.Dig} {salt : ℕ → ByteArray}
     {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg} {ω : L.Ω}
-    {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : SaltColl lv cap salt zs R ω t R₂) : Merkle.Collision H512 := by
+    {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : SaltColl lv cap salt zs R ω t R₂) : Hash.HasCollision H512 := by
   obtain ⟨_, h⟩ := h
   exact h.collision
 

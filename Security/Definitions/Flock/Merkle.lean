@@ -21,9 +21,6 @@ namespace FlockSoundness.Merkle
 
 variable {Col D : Type}
 
-/-- A collision of a hash on byte strings: `Hash.HasCollision`. -/
-abbrev Collision (H : List UInt8 → D) : Prop := Hash.HasCollision H
-
 /-- The byte encodings a tree uses: a column (its elements, 16 bytes each) and a digest. Both are
 injective, and all digests have one length, so a node's input determines its two children. -/
 structure Enc (Col D : Type) where
@@ -57,7 +54,7 @@ def Verifies (cap : ℕ → D) (depth : ℕ) (pos : ℕ) (column : Col) (sibs : 
 give a collision of `H`. The unsalted leaf `H(encode column)` is `Leaf.plain`, with `S = Unit`. -/
 structure Leaf (Col S D : Type) (H : List UInt8 → D) where
   leaf : Col → S → D
-  bind : ∀ c c' s s', c ≠ c' → leaf c s = leaf c' s' → Collision H
+  bind : ∀ c c' s s', c ≠ c' → leaf c s = leaf c' s' → Hash.HasCollision H
 
 /-- The unsalted leaf, `H(encode column)`. -/
 def Leaf.plain : Leaf Col Unit D H where
@@ -95,7 +92,7 @@ def hm96Leaf (K : Hm96Key) (c : Col) (y : List UInt8) : D :=
 when `b ‖ c` differ, in the salt hash when the salts differ, and in the inner hash when the salts agree (then the masks
 agree, so the `x`s do). It uses only the fixed lengths, and that `x ↦ x ⊕ M·y` is injective for a fixed `y`. -/
 theorem hm96Leaf_bind (K : Hm96Key) (hL : ∀ d, (E.dig d).length = K.L) (c c' : Col) (y y' : List UInt8)
-    (hc : c ≠ c') (h : hm96Leaf (H := H) (E := E) K c y = hm96Leaf (H := H) (E := E) K c' y') : Collision H := by
+    (hc : c ≠ c') (h : hm96Leaf (H := H) (E := E) K c y = hm96Leaf (H := H) (E := E) K c' y') : Hash.HasCollision H := by
   by_cases ho : K.leafPrefix ++ (xorBytes (E.dig (H (E.col c))) (K.mask y) ++ E.dig (H (K.saltPrefix ++ y))) =
       K.leafPrefix ++ (xorBytes (E.dig (H (E.col c'))) (K.mask y') ++ E.dig (H (K.saltPrefix ++ y')))
   · have hbl : (xorBytes (E.dig (H (E.col c))) (K.mask y)).length =

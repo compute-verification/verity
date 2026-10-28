@@ -493,7 +493,7 @@ template instance `g` has its `units_per_vu` unit slots' rows (the unit net's ro
 (`placedA`, `placedB`). -/
 theorem placement_of_setupH (ht : tags.typed = false) (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g : ℕ} (hg : g < st.c.g) :
-    Placement ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv)
+    BlockRows ((setupH_layout ht h).model regs) ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv)
       (stackPlace ((setupH_layout ht h).model regs) (unitRows st (setupH_layout ht h).unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) ((setupH_layout ht h).hb hg)) :=
   (setupH_layout ht h).placement regs hg

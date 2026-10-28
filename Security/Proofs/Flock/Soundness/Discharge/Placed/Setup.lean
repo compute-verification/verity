@@ -83,13 +83,13 @@ noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 
 
 /-- A placement moves along an equal statement. -/
 theorem placement_cast {S S' : Model.Statement} (hS : S = S') {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (h : Placement S R col) :
-    Placement S' R (fun c => Fin.cast (congrArg (fun S : Model.Statement => 2 ^ S.kLog) hS) (col c)) := by
+    (h : BlockRows S R col) :
+    BlockRows S' R (fun c => Fin.cast (congrArg (fun S : Model.Statement => 2 ^ S.kLog) hS) (col c)) := by
   subst hS; exact h
 
 /-- **The accepted statement places its template instance rows at every template instance** (`placement_of_setupH`), in
 every block. -/
-theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) :=
+theorem placement {g : ℕ} (hg : g < a.st.c.g) : BlockRows T a.rows (a.col hg) :=
   placement_cast a.hT (placement_of_setupH a.ht a.h a.regs hg)
 
 /-- **The template instance rows are the parsed circuit's** (W6 on the untyped path, by definition): they depend on the
@@ -122,7 +122,7 @@ end Accepted
 
 /-- A placement moves along equal rows. -/
 theorem placement_rows {S : Model.Statement} {R R' : Rows} (hR : R = R') {col : Fin R'.w → Fin (2 ^ S.kLog)}
-    (h : Placement S R' col) : Placement S R (fun c => col (Fin.cast (congrArg Rows.w hR) c)) := by
+    (h : BlockRows S R' col) : BlockRows S R (fun c => col (Fin.cast (congrArg Rows.w hR) c)) := by
   subst hR; exact h
 
 section Sites
@@ -155,7 +155,7 @@ noncomputable def Sites.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
 /-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its template
 instance. -/
 theorem Sites.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
+    BlockRows (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
   placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
 /-- **`ProgPlaces` from setupH's accept.** Each drawn unit's place is its template instance in its table's accepted

@@ -292,7 +292,7 @@ theorem topRoot_collision {dom : ByteArray} {bcs bcs' : Array ByteArray}
     (hsz : bcs.size = bcs'.size) (hne : bcs ≠ bcs')
     (hroot : Flock.FV3.root dom (topLeaves dom bcs) Flock.Sha512.hash =
       Flock.FV3.root dom (topLeaves dom bcs') Flock.Sha512.hash) :
-    Merkle.Collision Refine.H512 := by
+    Hash.HasCollision Refine.H512 := by
   classical
   let S := topStrings dom bcs ++ topStrings dom bcs'
   by_contra noCollision

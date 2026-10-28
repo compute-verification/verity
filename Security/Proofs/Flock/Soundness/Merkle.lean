@@ -28,7 +28,7 @@ theorem append_inj {a b a' b' : D} (h : E.dig a ++ E.dig b = E.dig a' ++ E.dig b
 /-- Two walks from different nodes that meet give a collision. -/
 theorem walk_binding : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
     sibs.length = sibs'.length → a ≠ a' → walk H E idx a sibs = walk H E idx a' sibs' →
-      Collision H
+      Hash.HasCollision H
   | [], [], _, a, a', _, hne, heq => absurd heq hne
   | [], _ :: _, _, _, _, hlen, _, _ => by simp at hlen
   | _ :: _, [], _, _, _, hlen, _, _ => by simp at hlen
@@ -46,7 +46,7 @@ theorem walk_binding : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
 columns yield a collision of `H`. -/
 theorem opening_binding (cap : ℕ → D) (depth pos : ℕ) (c c' : Col) (sibs sibs' : List D)
     (hc : c ≠ c') (h : Verifies H E cap depth pos c sibs) (h' : Verifies H E cap depth pos c' sibs') :
-    Collision H := by
+    Hash.HasCollision H := by
   obtain ⟨hl, hr⟩ := h
   obtain ⟨hl', hr'⟩ := h'
   have heq : reach H E pos c sibs = reach H E pos c' sibs' := hr.trans hr'.symm
@@ -64,7 +64,7 @@ theorem verifiesL_plain (cap : ℕ → D) (depth pos : ℕ) (column : Col) (sibs
 columns, under any salts, yield a collision of `H`. -/
 theorem opening_bindingL (Lf : Leaf Col S D H) (cap : ℕ → D) (depth pos : ℕ) (c c' : Col) (s s' : S)
     (sibs sibs' : List D) (hc : c ≠ c') (h : VerifiesL H E Lf cap depth pos c s sibs)
-    (h' : VerifiesL H E Lf cap depth pos c' s' sibs') : Collision H := by
+    (h' : VerifiesL H E Lf cap depth pos c' s' sibs') : Hash.HasCollision H := by
   obtain ⟨hl, hr⟩ := h
   obtain ⟨hl', hr'⟩ := h'
   have heq : reachL H E Lf pos c s sibs = reachL H E Lf pos c' s' sibs' := hr.trans hr'.symm

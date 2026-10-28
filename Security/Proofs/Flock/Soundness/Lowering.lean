@@ -16,7 +16,7 @@ of the unit's columns to the circuit's gates (`Partition.IsRowsUnit`). Only inpu
 a gate: a unit may read one source on several inputs.
 
 **The theorem, for every template** (`lowering_sound`). Suppose a witness satisfies a statement in
-which unit `u`'s rows are placed in block `o` (`Placement`: the block matrices' rows at the unit's
+which unit `u`'s rows are placed in block `o` (`BlockRows`: the block matrices' rows at the unit's
 computed columns read exactly its rows' columns, and its constant's rows read the pin), and the
 unit's input columns on one gate carry one value there. Then the transcript decoded from that
 block makes `u` correct, and carries `true` on the constant (`UnitPlace.decode_one`). What each
@@ -160,7 +160,7 @@ theorem mulVec_placed {S : Statement} (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S
 
 /-- **A satisfied statement satisfies the placed rows**, in every block. -/
 theorem rowsSat_of_satisfies {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (hpl : Placement S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+    (hpl : BlockRows S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
     R.Sat fun c => bit (S.block z o (col c)) := by
   intro i
   have h := hz.1 o (col (R.comp i))
@@ -170,8 +170,8 @@ theorem rowsSat_of_satisfies {S : Statement} {R : Rows} {col : Fin R.w → Fin (
   exact hb.symm
 
 /-- **A placed unit's constant is 1** in every block of a satisfying witness. -/
-theorem Placement.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (hpl : Placement S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+theorem BlockRows.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
+    (hpl : BlockRows S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
     S.block z o (col R.one) = 1 := by
   have h := hz.1 o (col R.one)
   simp only [Matrix.mulVec, dotProduct, hpl.hA₁, hpl.hB₁, ite_mul, one_mul, zero_mul,
@@ -183,7 +183,7 @@ theorem Placement.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ 
 value there, the transcript decoded from that block makes `u` correct. -/
 theorem lowering_sound {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) {S : Statement} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (hpl : Placement S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z)
+    (hpl : BlockRows S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z)
     (ha : I.Agree fun c => bit (S.block z o (col c))) :
     P.Correct (I.decode fun c => bit (S.block z o (col c))) u :=
   I.correct_decode (rowsSat_of_satisfies hpl hz o) ha
