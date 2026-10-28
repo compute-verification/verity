@@ -32,7 +32,7 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 device premises (G1, G2, P1, P2), for every round protocol `P` over a period of `k` sampling blocks, every work check
 `vw` on the transcript (the proof service's, which reads no device), every network certifier's check `vn` on the
 transcript and the devices' readings `dev`, every period `Pd` of the registered devices and every price `μ` that is
-the period's dual price at one credit (`Period.DualOpt μ 1`), with `C = μ · hon > 0` the credited work's honest cost
+the period's dual price at one credit (`Jobs.DualOpt μ 1`), with `C = μ · hon > 0` the credited work's honest cost
 there and `β ≥ 0`: if
 
 * a prover that exchanges nothing, whose period the work check accepts, spent at least `F` of priced timed work, but
@@ -60,7 +60,7 @@ Open (stated so the red team can aim at them):
   for the MVP that is placement (`WitnessPathPrivate`), whose discharge is the secure-transport workstream's. -/
 def OnsiteFreed : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Obs : Type) (vw : Verdict P k Unit) (vn : Verdict P k Obs)
-    (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ) (F β K κ δ : ℝ),
+    (dev : Readings G P k Obs) (Pd : Jobs G) (μ : G.Res → ℝ) (F β K κ δ : ℝ),
     Pd.DualOpt μ 1 → 0 < ∑ r, μ r * (1 * Pd.hon r) → 0 ≤ β →
     G.G1 → G.G2 → G.P1 → G.P2 →
     RemoteWorkFloor G P k vw μ F κ → OutsourceWithinEgressPeriod G P k μ β → CertifiedImport G P k vn dev K δ →
