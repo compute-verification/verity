@@ -1,4 +1,4 @@
-"""``attention.bf16.v1`` -- the *independent* relation for vLLM's FlashAttention-2 node (W11).
+"""``attention.bf16.v1`` -- the *independent* relation for vLLM's FlashAttention-2 node.
 
 ``independent_attention(node, opened_inputs) -> bytes`` predicts the committed BF16 bytes of one
 attention output row (all ``num_heads`` heads x ``head_size``) at position ``t`` from the opened
@@ -32,7 +32,7 @@ from verity.ml.circuits.ops import mufu
 from verity.ml.definitions.numerics import fa2_model as FA
 <<<<<<< HEAD
 
-try:  # share W4b's node adaptation + error base when its module imports (it needs veritor.core.silicon, Python >= 3.12)
+try:  # share gemm_relation's node adaptation + error base when its module imports (it needs veritor.core.silicon, Python >= 3.12)
     from verity.ml.definitions.numerics import gemm_relation as _R4
 
     GemmRelationError = _R4.GemmRelationError
@@ -50,7 +50,7 @@ except Exception:  # noqa: BLE001  -- e.g. the pod's Python 3.11: the same helpe
             if value.dtype == np.int16:
                 return value.view(np.uint16).reshape(-1)
             raise GemmRelationError(f"numpy opening must be uint16 words, got {value.dtype}")
-        if hasattr(value, "data") and hasattr(value, "dtype") and hasattr(value, "shape"):  # W2 Value
+        if hasattr(value, "data") and hasattr(value, "dtype") and hasattr(value, "shape"):  # a runner Value
             if str(value.dtype) not in ("bfloat16", "torch.bfloat16"):
                 raise GemmRelationError(f"{getattr(value, 'canonical_id', '?')}: expected bfloat16, got {value.dtype}")
             return np.frombuffer(value.data, dtype="<u2")
