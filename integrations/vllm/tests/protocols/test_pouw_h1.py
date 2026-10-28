@@ -174,7 +174,7 @@ def test_a_call_past_the_window_or_its_rows_is_refused_and_the_window_is_not_sta
 def test_a_forward_out_of_module_order_sits_each_call_at_its_step_and_linear():
     """GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before its indexer's wq_b, which module order puts
     first; counting steps at linear 0 put each forward's first two calls in the step before (step -1, refused, for the
-    first) and past their round's root (r20261023-224227-ea5a). A step starts at the window's first call and at a linear
+    first) and past their round's root. A step starts at the window's first call and at a linear
     the step already holds: each call sits at (s, w)'s index and position, and round s closes once all of step s's calls
     are in. A step whose order departs from the first step's isn't static."""
     rng = np.random.default_rng(5)
@@ -219,8 +219,8 @@ def test_credit_is_the_served_rows_and_the_padding_is_shown_beside_it():
 def test_fill_declares_every_served_step_full_and_serve_h1_is_119_of_1152():
     """`FILL`: 64 one-token prompts at cap 16 in T = 64, S = 18 prefill at step 0 and decode together, so each of
     the 16 served steps carries 64 rows and u = 16/18; the engine runs all 64 in flight with no prefix
-    cache. SERVE-H1's 5 prompts (`tests/engine/int8_exact_gpu.PROMPTS`, 44 tokens with BOS under the int8 Llama-3.1-8B's
-    tokenizer, r20261020-011113-6876) at the same cap are 44 + 15 x 5 rows: 119/1152."""
+    cache. The 5 batched prompts (`tests/engine/int8_exact_gpu.PROMPTS`, 44 tokens with BOS under the int8 Llama-3.1-8B's
+    tokenizer) at the same cap are 44 + 15 x 5 rows: 119/1152."""
     assert PH.FILL.schedule() == [64] * 16 + [0, 0] and PH.FILL.u == Fraction(16, 18)
     assert PH.FILL.engine_args() == {"max_num_seqs": 64, "max_num_batched_tokens": 64, "enable_chunked_prefill": True,
                                      "enable_prefix_caching": False}
@@ -950,7 +950,7 @@ def _serve_window(settings):
     return comp.installed[0].commitment(), run
 
 
-#: the challenger gate's open answer for the window (RT4-INT-17): its Commit root and coin commitment (the host's, `_host`)
+#: the challenger gate's open answer for the window: its Commit root and coin commitment (the host's, `_host`)
 SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "root": "ca" * 64, "commitment": "c0" * 64}
 #: the gate's reserve answer for an H1 window (its challenge phase `_host`'s), which the window opens itself (`_gate`)
 RESERVED = {"session": CH.session_id(1), "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
