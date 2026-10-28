@@ -151,7 +151,7 @@ def toyStmt : Flock.Stmt where
   inp _ _ := .pub 0
   out _ _ := .pub 0
   pub := []
-  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩
+  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩
 
 theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := fun _ _ o => o.elim0
 

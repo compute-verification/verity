@@ -1,5 +1,5 @@
 """The salted H1 tile unit's pin (`core_check.TILES`, `PouwCheck/Tile.lean`): `h1unit.Shape(64)`'s staged flat circuit (the
-statement the Lean verifier accepts; the templated one it refuses until its proof lands) is the one the verifier pins for
+statement the Lean verifier accepts; the templated one it refuses with ``--registered``) is the one the verifier pins for
 its template, with the salted layout the opening reads: R A rows, C B rows, then the public row of
 salt, position and roots, each `hm96-sha512/row/v2`. The opening refuses a proof over any other circuit, so a change to
 `PouwH1Tile`'s Definition or to C-Flock's lowering lands its new digest in both tables. `test_pouw_core_check` ties the

@@ -130,7 +130,8 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
 /-- **Each drawn unit's place in its table, for the program's circuit** (named). Unit `u` is an instance of its rows
 `p.rows u` (`inst`; `Prog.isRowsUnit` gives one), and the statement of the table it is drawn into holds those rows in
 block `o` at the columns `col`:
-* `placed`: the statement's level-0 matrices hold `p.rows u` there. From the executable's accept step,
+* `placed`: the statement's level-0 matrices hold `p.rows u` there, up to other matrices every satisfying witness
+  satisfies (`PlacedSat`, as at a pinned output's row). From the executable's accept step,
   `placement_of_setupH` gives it for the rows `Rows.ofNet` reads off setupH's net; that those rows are the program's
   unit's (W6) is open;
 * `aliased`: the unit's input columns on one gate carry one value in every satisfying witness (`Layout.Aliased`, which
@@ -139,7 +140,7 @@ structure ProgPlaces where
   inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u)
   o : ∀ S R u, u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl)
   col : ∀ S R u, u ∈ S → Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)
-  placed : ∀ S R u (h : u ∈ S), Placement (Partition.tabOf plan tab S R u).S (p.rows u) (col S R u h)
+  placed : ∀ S R u (h : u ∈ S), PlacedSat (Partition.tabOf plan tab S R u).S (p.rows u) (col S R u h)
   aliased : ∀ S R u (h : u ∈ S), ∀ c c', (inst u).wire c = (inst u).wire c' → c.val < (p.rows u).nIn →
     c'.val < (p.rows u).nIn → ∀ z : Witness (Partition.tabOf plan tab S R u).S.m,
       (Partition.tabOf plan tab S R u).S.Satisfies z →
