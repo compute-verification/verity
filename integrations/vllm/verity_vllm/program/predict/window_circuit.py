@@ -124,7 +124,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Refs, runs
 from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.registry import b1_norm_split as NS
+from verity.ml.definitions.registry import rmsnorm_fused_split as NS
 from verity.ml.definitions.registry import int8_exact as IX
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
