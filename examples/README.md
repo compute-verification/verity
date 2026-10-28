@@ -12,14 +12,14 @@ Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remot
 establishes with no hardware of its own at the prover's site. It composes two protocols (`Core.Remote.components`):
 
 - integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`): the prover commits every value of
-  a served window under hiding leaves, a live coin from the challenger draws proof blocks, the prover proves each drawn
-  block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
+  a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
+  proof block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by PoUW's window check (`verity/pouw/v1`): the GPU's time is credited to useful matmuls through receipts the live
   coins open.
 
 Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
-other answers. It rests on live coins (drawn after the commitment, never redrawn) and on what each component's own
-guarantee assumes; each component states its guarantee in `Security/`, and the composite states none of its own in Lean
+other answers. It rests on live coins (sampled after the commitment, never resampled) and on what each subprotocol's own
+guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
 yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
 Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a
 stand-in prover; `vllm/` and `h200/` each run remote's sampled-proofs half for real; PoUW's half has no runner in an
@@ -71,16 +71,16 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half on a real model. Llama-3.2-1B in bf16 served by
   vLLM on one RTX PRO 6000 through `verity_vllm`'s committing endpoint; `verity example vllm` serves a window, commits its
-  values, and audits it: live coins draw proof blocks, C-Flock `--zk` proves them and the Lean verifier checks them, with a
-  verdict per sampling period. Its workload is in its own `workloads/`, its placement is `placement.toml`, which `run.sh`
+  values, and audits it: live coins select proof blocks, C-Flock `--zk` proves them and the Lean verifier checks them, with a
+  verdict per verification phase. Its workload is in its own `workloads/`, its placement is `placement.toml`, which `run.sh`
   reads, and its scripts reach the integration by `PYTHONPATH`; it is not a package. It is not `placed`: its runs of record
   ran the Lean verifier on the GPU node with the endpoint and the prover. The int8 served run on an H200 is tonight's,
   Tue 27 Oct, 6 PM PDT.
 - `h200/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half at a frozen shape on one H200. The
   frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity example h200
   --out OUT` runs its step driver, `run.py` (on the CPU at small shapes, or an H200 at the frozen shape), and writes a
-  replay bundle and a block record; `phases.sh` runs the drawn-block proving, one phase a run, from the step's commit on
-  the H200 to its drawn blocks proved. In its run of record, 8 proof blocks drawn by one live coin are each proved by
+  replay bundle and a block record; `phases.sh` runs the sampled-proof-block proving, one phase a run, from the step's commit on
+  the H200 to its sampled proof blocks proved. In its run of record, 8 proof blocks sampled by one live coin are each proved by
   C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
   on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
   subprotocols), and the bandwidth audit over PoUS's store and the memory wipe (neither composite's yet), exist here as

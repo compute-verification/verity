@@ -51,7 +51,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
-| network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
+| network certification (over the period: its verification phases of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
@@ -84,10 +84,10 @@ Lean to:
   unverified), whose Lean their packages' difftests hold to those verifiers (`../pous/check/tests/test_run_protocol.py`,
   `../remote_bandwidth/lean/tests/test_protocol.py`).
 
-Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
+Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
+(one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
 composition's inputs or the case itself are often broken. `test_a_reference_without_reject_dominance_is_caught` shows the
-difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a case where
+difftest tells the rule above from one in which a rejection need not reject the whole: such a reference disagrees with the Lean on a case where
 one subprotocol rejects and another is undecided.
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite

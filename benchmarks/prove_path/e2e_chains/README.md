@@ -42,11 +42,11 @@ certifier's, NCI's or accounting's, so this is a C-Flock question, plus one PoUW
     - recursion's `RecDeploy.PlainLeavesAdmitted`.
   - The conclusions are acceptance events and the verifier's checks, events a bound measures, antecedents inside a
     conclusion, and fields of setups built from the verifier's own. PoUW's `CanonRead` is one of them, a selector.
-  - It also found premises the scan doesn't print: recursion's draw custody (`ZkOuterD.hDraw`, `ZkOuterR.hDraw`), and
+  - It also found premises the scan doesn't print: recursion's sample custody (`ZkOuterD.hDraw`, `ZkOuterR.hDraw`), and
     `--zk`'s `TableCRZ` and `LinkCRZC`.
 - **Form conditions**, a third class: `StmtWF` and `RegionsWF` (26 guarantees each), `PadOK` (29), and perhaps
   `isRow` and `isRead`. The first sort counts them as conclusions: the first three are fields of setups that
-  `drawSetup*_of` builds from flock-verify's setup, and the last two are selectors. A four-class sort (conclusion,
+  `drawSetup*_of` builds from the Lean verifier's setup, and the last two are selectors. A four-class sort (conclusion,
   premise, form condition, well-formedness) says whether the compiled verifier checks each form condition. A form
   condition the verifier doesn't check comes to this page as a gap.
 - **Moved and listed:** on main, these premises are named assumptions listed in the lock: the plain custody

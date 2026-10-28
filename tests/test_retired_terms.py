@@ -39,10 +39,29 @@ DOC_TERMS = {
     "thread block": "CTA",
     "KV block": "KV page",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
+    "components, the composite's product": "subprotocols, composition",
+    "firewall": "ZK server",
+    "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
+                                                      "stays in backticks)",
+    "builder, advice compiler, circuit builder": "registered compiler",
+    "declared advice": "advice",
+    "declared circuit": "registered circuit",
+    "declaration block, declaration period": "execution block, execution phase",
+    "sampling period, sampling block, PoUW's commit period": "verification phase",
+    "hm96 rows, outside the commitments' docs": "hiding commitments",
+    "that period's coins": "before any coins are flipped",
+    "rejection dominates, reject dominance": "any rejection rejects the whole",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
-                       rf"|legs?)\b)|\bIUs?\b")
+                       rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
+                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?)"
+                       rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
+                       rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*)\b)|\bIUs?\b"
+                       rf"|\bcommit{_SPACE}periods?\b")
+#: The commitments' own docs, where hm96 rows keep their name.
+HM96_HOME = "verity/ml/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -133,21 +152,27 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
     return out, used
 
 
-def doc_offenders(files: list[str], read=_read) -> list[tuple[str, int, str]]:
-    """(file, line, the term as written) for each of DOC_TERMS in a maintained doc's prose."""
-    out = []
+def doc_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]], set[str]]:
+    """(file, line, the term as written) for each of DOC_TERMS in a maintained doc's prose, and the ALLOWED spellings used."""
+    out, used = [], set()
     for f in scanned(files):
         if not f.endswith(".md") or f.rsplit("/", 1)[-1] == "CHANGELOG.md" or (text := read(f)) is None:
             continue
         prose = _CODE.sub(lambda m: re.sub(r"[^\n]", " ", m[0]), text)
+        allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
         for m in _DOC_TERM.finditer(prose):
             n = text.count("\n", 0, m.start()) + 1
             quoted = text[m.start() - 1:m.start()] in ('"', "“") and text[m.end():m.end() + 1] in ('"', "”")
             if quoted or (f == GLOSSARY and lines[n - 1].startswith("|")):
                 continue
+            if f.startswith(HM96_HOME) and m[0].lower().startswith("hm96"):
+                continue
+            if spelling := next((s for a, b, s in allowed if a <= m.start() and m.end() <= b), None):
+                used.add(spelling)
+                continue
             out.append((f, n, " ".join(m[0].split())))
-    return out
+    return out, used
 
 
 def test_no_retired_term_in_prose():
@@ -156,15 +181,16 @@ def test_no_retired_term_in_prose():
         "a retired term: say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
         + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY}); a spelling baked into a record or a digest goes in ALLOWED'
         + " with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
-    assert not set(ALLOWED) - used, f"ALLOWED entries that match nothing any more: {sorted(set(ALLOWED) - used)}"
+    unused = set(ALLOWED) - used - doc_offenders(_tracked())[1]
+    assert not unused, f"ALLOWED entries that match nothing any more: {sorted(unused)}"
 
 
 def test_no_retired_term_in_the_maintained_docs():
-    bad = doc_offenders(_tracked())
+    bad, _ = doc_offenders(_tracked())
     assert not bad, (
         "a retired term in a maintained doc: say " + "; ".join(f'{new} for "{old}"' for old, new in DOC_TERMS.items())
-        + f" (ARCHITECTURE.md's Glossary, {GLOSSARY}). A path or a record key that keeps it goes in backticks:\n"
-        + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+        + f" (ARCHITECTURE.md's Glossary, {GLOSSARY}). A path or a record key that keeps it goes in backticks, and a word"
+        + " in another sense goes in ALLOWED with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
 
 
 def test_the_glossary_records_the_retired_terms():
@@ -202,7 +228,22 @@ def test_the_doc_scan_reads_each_form():
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
-    assert doc_offenders(list(docs), read=docs.__getitem__) == [(GLOSSARY, 2, "leg"),
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
         ("b.md", 8, "thread block")]
+
+
+def test_the_doc_scan_reads_the_protocol_terms():
+    """The protocol's vocabulary (TOP-137), on toy files: hm96 rows keep their name in the commitments' own docs."""
+    docs = {
+        "a.md": "The draw, a drawn unit, nothing redraws; the firewall and a sampling\nblock; the declared circuit.\n"
+                "Committed as hm96 rows before that period's coins; rejection dominates. A Commit period stays.\n"
+                "The commit period, `flock-verify verify`, then flock-verify.\n",
+        "verity/ml/commitments/x/PROTOCOL.md": "hm96 rows in frame-v3-sha512 trees, before the draw.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "draw"), ("a.md", 1, "drawn"), ("a.md", 1, "redraws"), ("a.md", 1, "firewall"),
+        ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
+        ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),
+        ("a.md", 4, "flock-verify"), ("verity/ml/commitments/x/PROTOCOL.md", 1, "draw")]

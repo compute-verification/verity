@@ -5,7 +5,7 @@ A spec-level reference for network accounting's timing channel:
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest hidden under a
-  64-byte salt the certifier draws fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
+  64-byte salt the certifier samples fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
   the ingress links' status check;
 - one link-window's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
@@ -105,11 +105,11 @@ A spec-level reference for network accounting's timing channel:
   ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
   (`free_width`), and the charge is ℓ_w;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
-  draw under the run root as an hm96 row registration, a row each block of G steps (G = P unless given: a window's row,
+  sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
   holds a unit's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
   and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
-  hm96 rows from `verity`;
+  hiding commitments from `verity`;
 - the served rows' tie (`served_tie`): `ServedRowsTie_v2`, a Boolean Definition with `check` its reference, holds a
   window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
   then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
@@ -140,7 +140,7 @@ A spec-level reference for network accounting's timing channel:
   `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
   v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
   in no proof-system Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
-- the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hm96 rows,
+- the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hiding commitments,
   window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
   and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
   takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
@@ -175,7 +175,7 @@ A spec-level reference for network accounting's timing channel:
   committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
   ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
   0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.Layout`); its
-  format is `verity/boundary/v3`. `refusal`, the verifier's check before it draws, checks that the layout fits the
+  format is `verity/boundary/v3`. `refusal`, the verifier's check before it samples, checks that the layout fits the
   circuit (`NetTiming.Layout.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
   grain, which contains the gate grain's, held to `prog_fits`, `Layout.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
@@ -233,11 +233,11 @@ A spec-level reference for network accounting's timing channel:
   certifier's sealed record cell `_salts[p]` until `Proxy.reveal(p, registration)` opens it on the PoUW window's
   registration after its last ingress record is published, once and only within `reveal_deadline` of the window's
   end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
-  reads is recorded before the salt's draw, signed by the registered prover (`Proxy.commit_weights(p, root,
+  reads is recorded before the salt's sample, signed by the registered prover (`Proxy.commit_weights(p, root,
   signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
   (`Proxy.committed(p, registration)`). With `Proxy(challenger_key=…, signer=…)`, both or neither, the challenger's key
   from the auditor's deployment record, the two calls take only a request the auditor's challenger signed under LMS
-  for the certifier's key id and run (`Proxy.run_id`, 32 bytes drawn at construction) and answer an `active.Revealed`
+  for the certifier's key id and run (`Proxy.run_id`, 32 bytes sampled at construction) and answer an `active.Revealed`
   the certifier signed, which names both; `active.serve_reveals` serves them over the network, one JSON line each way,
   to the challenger's `active.RemoteCertifier`, given the run id by the deployment record, which returns the value
   once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
@@ -346,11 +346,11 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
 to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
-  the registered Program and the drawn units with every gate pinned, the public row the verifier derives (root, served
+  the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
   openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
   take as inputs what the proof system and the lowering give: the findings of the verifier's own C-Flock Lean run, the
-  sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. On an
+  sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. On an
   advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the Lean,
   which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.
 - on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
@@ -360,7 +360,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included: 193 link-windows of seven runs, plain and served, 180 accepted and 13 refused, each with nine
   injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
-  warden runs give 30 link-windows from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a draw of 8 on the
+  warden runs give 30 link-windows from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a sample of 8 on the
   H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
   r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and
   `unread`, a sync off Σ_sync that changes neither verdict.
@@ -379,7 +379,7 @@ spec and each registration bind, binds both circuits, and `LinkWindows.verify` r
 Program, or a unit of a size class no sidecar pins (`LinkWindows.proved`).
 
 The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
-salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier draws fresh for each record
+salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record
 (`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
 a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
 Each end's head check holds R to the head it opens and D to R under `salt_c`, so the certificates' check reads nothing

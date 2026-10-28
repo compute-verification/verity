@@ -53,22 +53,22 @@ uv run tools/verity/check/suites.py verity-core-evaluate           # the difftes
 ~~~
 
 `tests/test_difftest.py` holds it to the Python reference through `verity_difftest`, output for output and refusal for
-refusal: seeded random Boolean composites over every node form, drawn by a Hypothesis strategy with their inputs and with
-mutations both sides refuse; each scalar primitive on the whole grid of its operands' edge words, on drawn words, and on
+refusal: seeded random Boolean composites over every node form, sampled by a Hypothesis strategy with their inputs and with
+mutations both sides refuse; each scalar primitive on the whole grid of its operands' edge words, on sampled words, and on
 words out of range; each FP32 and BF16 primitive the same way, its grid of FP edge words (signed zeros, subnormals, the
 extreme normals, ties and overflows on rounding, the infinities and every NaN class) batched in one Program per row,
 `Bf16ToF32` and `E4m3ToF32` on every word, and the GPU captures in `verity/ml/circuits/ops/tests/fixtures` (the FP32
 probe of `gpu-nan-2026-09-28`, and the fetched `cvt.rn.bf16.f32` campaign of `tc-total-2026-09-07`); each tensor-core dot
 step batched on every pair of its format's edge codes under every FP32 edge accumulator, on pairs of specials across its
-groups, on every pair of edge scale bytes, on 3118 accumulators over structured operands, on drawn words and on words out of
+groups, on every pair of edge scale bytes, on 3118 accumulators over structured operands, on sampled words and on words out of
 range, its traced Boolean Definition evaluated gate by gate against it, and the captures: the RTX 4090 golden records, the
 A100 and RTX 4090 special-value campaign, the H100 HGMMA and wgmma records, the RTX PRO 6000's E5M2 and MXFP4 tiles, and
 autoproof's RTX 5090 NVFP4 vectors (the large ones fetched, `research data fetch-fixtures`); every constant of the
 registry and the constant ids the Python reads; E4's primitives each on the grid of their operands' edge words (every word
-for a one-operand bf16 primitive, and a sweep of every binade's edges for an FP32 one), on drawn words and on words out of
+for a one-operand bf16 primitive, and a sweep of every binade's edges for an FP32 one), on sampled words and on words out of
 range, and on their captures (the L40S SiLU and RoPE slices, the H100 and L40S log probe, test_mufu's fingerprints and the
 RTX 4090 tanh sample); the MUFU tables against the library's SHA-512 and the registered tables against C-Flock's SHA-256;
 `TanhF32Rn_v2` and `GeluTanhMulBf16_v3` reading a table named in the request; the lazy families on their index edges;
 a registered input bound like a run input; and explicit examples: the pinned
-2-bit adder of `boolean_vectors.json`, Boolean Definitions traced from the builders (up to the Ampere BF16 tensor-core
+2-bit adder of `boolean_vectors.json`, Boolean Definitions traced from their Python definitions (up to the Ampere BF16 tensor-core
 step), and malformed programs and inputs.

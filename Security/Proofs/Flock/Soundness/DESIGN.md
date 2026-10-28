@@ -60,10 +60,10 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
 - **Tight against a registrant's opening.** Where someone other than the prover holds an opening, as the registrant
   holds `(W, R)` for the weights root, binding is a straight-line reduction: `t²/2^513` once (`registered_weights`, §3).
   At `t ≥ 2^65` such roots need a hash of at least 288 bits.
-- **Not tight for serving roots in a sampled audit.** Serving registers its roots before the draw and nobody else holds
+- **Not tight for serving roots in a sampled audit.** Serving registers its roots before the sample and nobody else holds
   an opening, so against arbitrary provers they need the rewinding argument too. `Rewinding.bad_sq_le` applies unchanged
-  with the unit draw in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
-  the leaves under every serving root registered before the draw, and `Q_s` the leaves the sampled units open.
+  with the unit sample in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
+  the leaves under every serving root registered before the sample, and `Q_s` the leaves the sampled units open.
   - `log2 √(2·N_s·Q_s)` is 17.4 to 34.0 over the study's audits, so this term exceeds the Flock proof term by up to
     2^17.
   - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for the study's
@@ -172,7 +172,7 @@ adopted form is "fill and decode"; it is proved (`Knowledge.lean`).
 
 **The link term: expected-time collision resistance, of record.** The audit's value layer rests on
 `ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record, under strict-time collision resistance alone
-(proved), and, for comparison, under a random oracle. $Q_s$ is the expected number of commit strings the drawn units
+(proved), and, for comparison, under a random oracle. $Q_s$ is the expected number of commit strings the sampled proof blocks
 read, at most the $N_s$ leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$
 the prover's SHA-512 evaluations. The audits are the lifetime doc's A–D.
 
@@ -221,24 +221,24 @@ strict time.
   - **The value layer** is the plurality of what extractions recover behind each commit string (lifetime doc §2), a
     function of the state at registration. Behind one string, disagreeing with the plurality is at most as likely as
     two independent recoveries disagreeing: $r-p_{\max}\le r-\sum_v p_v^2/r$.
-  - **The link finder** for one commit string draws a unit set that reads it and runs an extraction. Two drawn units
+  - **The link finder** for one commit string samples a unit set that reads it and runs an extraction. Two sampled proof blocks
     that open the string differently are already a collision. If one value was read, it runs extractions on such
-    draws until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
-    $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a draw reads it gives
+    samples until one reads the string, $1/r$ of them in expectation, and collides if the value differs. That is
+    $2(1+k)\,t$ evaluations in expectation (Wald). Weighting each string by the probability that a sample reads it gives
     $\delta_{\rm link}\le2Q_s(1+k)\,t/2^{256}$, with $Q_s\le N_s$ (below).
   - **The bound is relative.** $u^*$ is faulty, so acceptance itself is the bad event:
     $\Pr[\text{accept}\wedge\text{hit}]\,(1-1/c)\le\delta_{\rm tree}+\varepsilon_c^-+\sqrt{k\,\mathrm{Adv}_0}+\delta_{\rm link}$.
     The square root goes.
   - **The constant.** $c=2$ minimizes $c^2/(c-1)$, giving the record's $t\cdot Q_s(8N_0/e)/2^{256}$ up to lower-order
     terms. It doubles the other terms, to $2\delta_{\rm tree}+2\varepsilon_c^-$, one bit on terms 19 bits below.
-  - **A one-bit refinement, for later:** $4N_0/e$, from a value layer drawn from a sequence of auxiliary extractions
+  - **A one-bit refinement, for later:** $4N_0/e$, from a value layer sampled from a sequence of auxiliary extractions
     (the first recovery behind each string), with the committed trace then chosen by averaging over that
     sequence. The record keeps $8N_0/e$, the form the Lean proof takes.
   - **Proved** (`flock_batched_linkSoundE`), under A2 for each commit string's explicit finder and a named binding of
     wires to commit strings (`ValueBinding`, from the `hm96` layout):
     $\delta_{\rm link}\le Q_s\big(2(1+k)t'/2^{256}+1/(eM)+k/(eR_w)\big)/(1-\rho)$. Waits give up after $R_w$ runs
     and the finder after $M$ further trials; $\rho$ bounds each table's $N_0/(ek)$.
-  - **$Q_s\le N_s$** is the expected number of commit strings the drawn units read, since the finder draws only unit
+  - **$Q_s\le N_s$** is the expected number of commit strings the sampled proof blocks read, since the finder samples only unit
     sets that read its target. The record counts $Q_s$; with $N_s$ it would be $t\cdot2^{-205.1}$ for
     audit B.
 - **Strict time, proved** (`CROnly/`). The link finders stopped at a budget $q$ fixed in advance meet
@@ -259,7 +259,7 @@ strict time.
 
 | Id | Change | How the model and bound cover it |
 |---|---|---|
-| A1 | 6 zerocheck coins squeezed, never read | Drawn and ignored in the model; no term |
+| A1 | 6 zerocheck coins squeezed, never read | Sampled and ignored in the model; no term |
 | A2 | Last Ligerito batching coin | Charged like every batching coin |
 | A3 | Vanishing on S imposed by interpolation; degree 127 | Skip term `127/|F|` (the paper has 126) |
 | A4 | `final_c_eval` sent, must equal `Pc(z)` | Forced, so it is not a prover message in the model |
@@ -272,7 +272,7 @@ strict time.
 | A11 | GF(2^256) folds; stratified queries; out-of-domain sample at level 0; clear residual | Fold terms use `2^256`. Stratified sampling misses a far word with probability at most `(1−γ)^Q`, exactly as uniform sampling does (AM–GM per stratum). The level-0 sample is one more batched claim (`L₀/|F|`). |
 | A12 | Proof of work: every nonce must be `0`, and the verifier refuses any other (R4, D21) | No grinding credit anywhere |
 | A13 | Label, statement digest and cap absorbed before the first coin | The statement is fixed before any coin |
-| A14 | Region claims at the link points, opened with `ab`, `c` | The link points are drawn once for both reps. Their term, `L₀·regions·(m_pts/2^128)^2`, is added once and not squared. |
+| A14 | Region claims at the link points, opened with `ab`, `c` | The link points are sampled once for both reps. Their term, `L₀·regions·(m_pts/2^128)^2`, is added once and not squared. |
 | A15 | `root_F = Σ` | Session check; no soundness term |
 | A16 | `m > 35` rejected | The schedule is data for `22 ≤ m ≤ 35` only |
 
@@ -333,7 +333,7 @@ We follow the staging and vocabulary, and differ where the setting does.
 | **1b** commitment binding, under a cryptographic assumption or an idealized model | Binding of the polynomial commitment | The Merkle layer: plain SHA-512 collision resistance, for every prover, by rewinding to the plurality table (§2). Ligerito's commitment binds to a list of at most L₀ codewords, not to one polynomial (README.md §2). The random-oracle version is only a cross-check. | Follows. The model is named per result, as a16z asks. |
 | **1c** the compiled argument | With Fiat–Shamir, security in the random-oracle model | **Deliberately different: no Fiat–Shamir.** The oracle protocol plus Merkle commitments (1b) plus session binding, which needs no assumption since the challenger keeps each round's bytes. | Differs. No random oracle for coins, avoiding the article's main caveat; Fiat–Shamir is out (§8). |
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (spec §16) is satisfied exactly by correct evaluations of the named circuit. | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
-| **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every component inside it verified. |
+| **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every part inside it verified. |
 | **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
 | **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§6). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
 
@@ -436,9 +436,9 @@ later proof opens that root.
   - Age doesn't weaken SHA-512. Rotate on a cryptanalytic advance, a salt or key exposure, or a hash upgrade, with a
     fresh key and salts and a one-time proof that both roots open to the same weights.
 - **Hiding doesn't accumulate.** Every proof republishes the same commit strings, so the leaf count sets the bound:
-  `N_leaves·2^-256` with a key drawn at commitment, or `N_leaves·2^-192` with the pinned key, except for a one-time
+  `N_leaves·2^-256` with a key sampled at commitment, or `N_leaves·2^-192` with the pinned key, except for a one-time
   `2^-64` fraction of keys.
-  - **Design change:** draw the root's key at commitment, never reuse salts, and keep the salts as secret as the
+  - **Design change:** sample the root's key at commitment, never reuse salts, and keep the salts as secret as the
     weights.
 - **Zero knowledge** must hold against a malicious verifier. §11 states the decided model: batched, serialized
   sessions.
@@ -530,28 +530,28 @@ If real concurrency is ever needed:
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
 - **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is faulty
-  relative to a committed trace defined by extraction. A drawn faulty proof block is charged to one of two named events:
+  relative to a committed trace defined by extraction. A sampled faulty proof block is charged to one of two named events:
   extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
   case where the registration is the trace (`Partition.oracle`).
 - **Traces are total** (`Fin C.N → Bool`), and the committed set is derived. `Circuit.run` is the one evaluator,
   and every composition lemma is a strong induction over gate indices.
-- **Two-stage.** Second-stage coins are drawn for every coarse unit, and only the drawn units' coordinates are used.
+- **Two-stage.** Second-stage coins are flipped for every coarse unit, and only the sampled proof blocks' coordinates are used.
   Tightness and the dilution counterexample hold for any first-stage sampling design. Minimax uses the supporting line
   of `s ↦ C(n − s, K)` in `ℕ`, where real convexity fails.
 - **The Flock instantiation, oracle layer** (`Audit/Flock.lean`). `table_sound` splits into its `value` form
   (`table_value_sound`), which projects a batched session onto one table through `value_interleave_le`. The lowering
   is a named hypothesis.
 - **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`). The
-  table's extractor is randomized and its bound depends on the prover, so the audit carries, per drawn unit, the joint
+  table's extractor is randomized and its bound depends on the prover, so the audit carries, per sampled proof block, the joint
   probabilities `ks = Pr[accept ∧ extraction fails]` and `link = Pr[accept ∧ extraction disagrees]` over the fresh run
-  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a faulty drawn unit, and bounds that are functions of the
+  and the reruns, with `cover: Pr[accept] ≤ ks + link` at a faulty sampled proof block, and bounds that are functions of the
   prover's state (the form agreed with flock-soundness). A deterministic extractor is the special case
   (`Analysis.toExtraction`), so `extraction_audit_le` subsumes `audit_le`.
-  - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each drawn unit is read from
+  - Several tables (`FlockBatched.lean`): the protocol's batched session (`sessionB`); each sampled proof block is read from
     one table of the plan, `ks` is `Pr[accept]` times that table's extraction failure (the product is the joint
-    probability, by independence), and ε_ks is the largest table's `joint_le_B'` bound averaged over the draw.
+    probability, by independence), and ε_ks is the largest table's `joint_le_B'` bound averaged over the sample.
   - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
-  - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
+  - The decoder is per sampled proof block, since two sampled proof blocks that share a wire hold it in their own columns. The circuit
     `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
     `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`. `unitPlace_of_setupH` gives
     the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.

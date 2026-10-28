@@ -21,12 +21,12 @@ The grids (`GRIDS`, which `fp_exact.cu`'s `grids()` mirrors):
 - E4M3 has the integers in [−16, 16] and their halves and quarters (`e4m3_int16`, `e4m3_half8`, `e4m3_quarter4`).
 - E2M1 has the grid ×2 = {0, ±1, ±2, ±3, ±4, ±6, ±8, ±12} halves (`e2m1_x2`) and its integer subset (`e2m1_int`).
 
-The per-block scales (`SCALES`, which `fp_exact.cu`'s `make_scale()` mirrors; both operands draw from the one set, a
+The per-block scales (`SCALES`, which `fp_exact.cu`'s `make_scale()` mirrors; both operands sample from the one set, a
 scale a 16-element block for NVFP4 / a 32-element block for MXFP4):
 
 - `unit`: 1.0 on every block (E4M3 and the 2:4-sparse route, whose MMA takes unit scales, use only this).
 - `lo`, `hi`: one fixed scale a block — NVFP4's UE4M3 3 / 15, MXFP4's UE8M0 2^−3 / 2^3.
-- `mix`: a scale drawn per block and per operand — NVFP4 the odd integers 1..15 (Theorem K's 2-adic form keeps c = 1
+- `mix`: a scale sampled per block and per operand — NVFP4 the odd integers 1..15 (Theorem K's 2-adic form keeps c = 1
   under odd-integer scales), MXFP4 the powers 2^k, k in [−3, 3] (a cheater's range stretch).
 - `bind`, `bind26`: MXFP4 blocks alternate 2^7 and 2^−7 (scale-exponent spread 28, one past the 27-bit frac anchor) /
   2^7 and 2^−6 (spread 26). They probe whether a wide intra-firing spread makes the align-add's 27-bit anchor truncate
@@ -34,7 +34,7 @@ scale a 16-element block for NVFP4 / a 32-element block for MXFP4):
 
 The reference keeps the integer dot in units of 2^−(2s + sh), where `sh` carries the blocks' most negative scale
 exponent so every shift is non-negative; the binade C0 is matched to that scaled resolution. The K-limit table
-(`limits`) reports, per format, grid and scale, the largest K exact for every draw and the first K that rounds, with
+(`limits`) reports, per format, grid and scale, the largest K exact for every sample and the first K that rounds, with
 the max scale product.
 
 The distributions (`DISTS`) are:
@@ -45,7 +45,7 @@ The distributions (`DISTS`) are:
 - a ramp: maximal products first, then ±minimal ones, which sum to an even number in every firing;
 - pairwise cancellation;
 - an edge: maximal products first, then 0 or the minimal product, so a firing's sum is odd about half the time. This
-  is the draw that lands a partial on an odd value just past 2^24, or past C0's binade.
+  is the sample that lands a partial on an odd value just past 2^24, or past C0's binade.
 
 K runs over every power of two from one firing to 262144.
 
@@ -55,7 +55,7 @@ Each value of C0 (`c0_words`) has a role:
 - `binade`: NOBITS' 0x4B400000 generalized, so its ulp is one product unit (`note:20261016T0703Z-draft-fp4-nobits-probe`).
 - `nobits`: NOBITS' own word, whose ulp of 1 is coarser than a dyadic grid's units.
 - `over`: one binade higher, so FP32 must round.
-- `negzero`, on the cancelling draws.
+- `negzero`, on the cancelling samples.
 
 | File | What |
 |---|---|

@@ -48,8 +48,8 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the draw, C-Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
-| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a draw on live coins, C-Flock `--zk` behind the Lean firewall, and the Lean verifier | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, C-Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
+| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, C-Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `multi_unit/` | an FP8 GEMM's proof blocks staged as C-Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
 | `proof_throughput/` | the proof blocks a second C-Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |

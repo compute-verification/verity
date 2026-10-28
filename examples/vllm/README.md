@@ -5,8 +5,8 @@ what a verifier with no hardware at the site establishes about a datacenter serv
 two subprotocols and accepts only when both accept:
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
-  computes is committed under hiding commitments, the verifier's own random coins draw proof blocks of a served sampling
-  period, the prover proves the drawn blocks with C-Flock in zero knowledge behind the Lean firewall, and the Lean verifier
+  computes is committed under hiding commitments, the verifier's own random coins select proof blocks of a served verification
+  phase, the prover proves the sampled proof blocks with C-Flock in zero knowledge behind the Lean ZK server, and the Lean verifier
   gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`).
 
@@ -29,8 +29,8 @@ takes `Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the
 Llama-3.2-1B (`unsloth/Llama-3.2-1B` at `9535bd9b1d1dea6acafbdc4813b728796aeb28da`), bf16, batch-invariant eager, served
 by vLLM on one RTX PRO 6000 through `verity_vllm`'s committing OpenAI endpoint: this is today's run of record, and
 `run.sh` passes the workload's own model and precision (`--precision pin`). `served_verdicts.sh`'s own default, int8 on an
-H200, is tonight's served run, Tue 27 Oct, 6 PM PDT. Each closed sampling period is sealed, its
-values committed as the serving runs, and one sampling period is audited by sampled proofs. What attaches Verity to vLLM is
+H200, is tonight's served run, Tue 27 Oct, 6 PM PDT. Each closed verification phase is sealed, its
+values committed as the serving runs, and one verification phase is audited by sampled proofs. What attaches Verity to vLLM is
 `integrations/vllm/`, and the chain an audit runs is `benchmarks/one_stage/served_verdicts.sh`'s. This directory holds
 what is the example's own: its workload, its placement and its commands.
 
@@ -41,7 +41,7 @@ what is the example's own: its workload, its placement and its commands.
   that digest by `run.sh` and by the integration (`verity_vllm.config.workload_file`). The integration finds it only
   through `VERITY_WORKLOADS`, which `commit.sh` sets (`verity_vllm.config.row_file`); its Build's manifest is what the
   endpoint commits under.
-- The load, `serve_load.py`: `served_verdicts.sh`'s one sampling period of varied requests (`--varied`), or `serve.sh`'s
+- The load, `serve_load.py`: `served_verdicts.sh`'s one verification phase of varied requests (`--varied`), or `serve.sh`'s
   `BURSTS` bursts of `PER_BURST` requests, each burst sealed on its own (8 and 4 by default), or with `VARIED=N` and
   `ADMIT=release-order` the network certifier's varied traffic.
 
@@ -63,13 +63,13 @@ recorder; `--dry-run` prints the command.
    seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names the
    Commit the endpoint commits under.
 2. `verity example vllm`: `served_verdicts.sh`, the endpoint committing under that Commit, its requests, every closed
-   sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean verifier's
+   verification phase sealed, then the sampled proofs (C-Flock `--zk` behind the Lean ZK server, and the Lean verifier's
    verdict), with one record of every verdict in `$OUT/verdicts.txt`. The other subprotocols (PoUW, PoUB, PoUS, memory
    wipes and network certification) run only when their commands are set (`POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD`,
    `CERTIFIER_CMD`, `WIPE_CMD`); each one unset prints a `MISSING` line, and the record stays `pending`. The example's
    runs of record (`example.toml`'s `runs`) ran sampled proofs alone.
-3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
-   period in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
+3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed verification
+   phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `integrations/vllm`, and run

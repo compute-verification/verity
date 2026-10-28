@@ -116,7 +116,7 @@ nothing, so list what they read, and list a path a test only checks the existenc
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
   code rejects by name, not merely that it raises.
-- **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random draws) comes
+- **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random samples) comes
   from a sweep over many seeds, with margin past the worst seed's value; its docstring names the sweep (seeds and worst
   value).
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in

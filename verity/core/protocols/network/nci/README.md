@@ -1,9 +1,9 @@
 # The inference-only policy
 
-The inference-only policy asks that the declared circuit D have an inference-block partition 𝓘: blocks with gate
+The inference-only policy asks that the registered circuit D have an inference-block partition 𝓘: blocks with gate
 budget c (exactly c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
 every value outside the registered information θ, the models, code and data fixed before the monitoring period. It is
-a protocol with no rounds: the developer registers R = (θ, D, 𝓘), and the verifier checks 𝓘 from the declared circuit
+a protocol with no rounds: the developer registers R = (θ, D, 𝓘), and the verifier checks 𝓘 from the registered circuit
 and the registered information alone. In Lean it is `Nci.Complies`, in an older form (below), and its check is
 `NciCheck`.
 
