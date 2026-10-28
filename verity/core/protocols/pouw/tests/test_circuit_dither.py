@@ -375,13 +375,19 @@ def _receipt(*roots: bytes) -> bytes:
 def _producer():
     A, B = _operands(PSH, 13)
     T, O = D.values(PSH, SEEDS, A, B)
-    sc = D.act_scales(PSH, O, *_scales(PSH))
-    Ap = D.acts(PSH, O, sc)
-    return A, B, T, O, sc, Ap, D.commit(PSH, D.values_buffer(PSH, T, O, Ap), D.salts(KS, OFF))
+    sc = D.act_scales(PSH, *_scales(PSH))
+    Ap, recs = D.acts(PSH, O, sc)
+    return A, B, T, O, sc, Ap, recs, D.commit(PSH, D.values_buffer(PSH, T, O, Ap, recs), D.salts(KS, OFF))
 
 
-def _block(sh: D.Shape, seeds, A, B, cm: D.Tree, sc, i: int, j: int, s: int, o=None, ap=None) -> list[list[int]]:
-    """Block (i, j, s)'s inputs from its rows opened against `cm`'s root, with `o` or `ap` in place of the opened O or A′."""
+def _amax(rec: bytes) -> int:
+    return int.from_bytes(rec[:2], "little")
+
+
+def _block(sh: D.Shape, seeds, A, B, cm: D.Tree, sc, i: int, j: int, s: int, o=None, amax=None,
+           ap=None) -> list[list[int]]:
+    """Block (i, j, s)'s inputs from its rows opened against `cm`'s root, with `o`, `amax` or `ap` in place of the opened
+    O, record's amax or A′."""
     rows = _opened_rows(sh, cm, i, j, s)
     t0 = D.word_at(sh, rows, i, j, s - 1)
     if s < sh.S:
@@ -389,40 +395,56 @@ def _block(sh: D.Shape, seeds, A, B, cm: D.Tree, sc, i: int, j: int, s: int, o=N
     o = D.out_at(sh, rows, i, j) if o is None else o
     if not sh.gate(j):
         return D.block_inputs(sh, seeds, A[i], B[j], i, j, s, t0, o=o)
+    amax = _amax(D.rec_at(sh, rows, i)) if amax is None else amax
     ap = D.act_at(sh, rows, i, j) if ap is None else ap
-    return D.block_inputs(sh, seeds, A[i], B[j], i, j, s, t0, o=o, up=B[j + sh.I], sc=sc, ap=ap)
+    return D.block_inputs(sh, seeds, A[i], B[j], i, j, s, t0, o=o, up=B[j + sh.I], sc=sc, amax=amax, ap=ap)
 
 
 def _check(sh: D.Shape, seeds, i: int, j: int, s: int, ins) -> int:
     return D.check_last(sh, seeds, i, j, ins) if s == sh.S else D.check_block(ins)
 
 
+def _codes(hs, amax: int) -> list[int]:
+    return [D.wrap8(D.requant(h, amax)) for h in hs]
+
+
 def test_o16_and_act_layout():
-    """O at 16 bits takes a tile-segment's rows, and A′'s rows follow each tile-row's tiles, a row's I bytes in rows of
-    `row` bytes with the last short: every value's leaf and offset is the one `leaf_of` lists it at, and the leaves' rows
-    tile the values end to end. At 8B's gate-up (one segment, 16 KiB rows) a tile is O's two leaves and an A′ row one of
-    14,336 bytes. A gate cell's last block opens its A′ too; no Definition checks that block yet; today's shapes keep
-    their layout and domain."""
+    """O at 16 bits takes a tile-segment's rows, and A′'s rows follow each tile-row's tiles, a row's I codes and its
+    record in rows of `row` bytes with the last short: every value's leaf and offset is the one `leaf_of` lists it at, and
+    the leaves' rows tile the values end to end. At 8B's gate-up (one segment, 16 KiB rows) a tile is O's two leaves and an
+    A′ row one of 14,352 bytes. A row whose codes fill its leaves puts its record in a leaf of its own. A gate cell's last
+    block opens its A′ and its row's record too; no Definition checks that block yet; today's shapes keep their layout
+    and domain."""
     big = D.Shape(16384, 28672, 4096, lp=512, L=4096, row=16384, ow=16, act=True)
-    assert (big.S, big.W, big.row_o, big.lpt, big.I, big.apr, big.stride, big.leaves) == (1, 0, 2, 2, 14336, 1, 576, 73728)
-    assert big.leaf_of(448)[0] == D.ACT and big.leaf_span(448) == (448 * 16384, 14336)
-    assert big.leaf_span(576) == (448 * 16384 + 128 * 14336, 16384) and big.leaf_of(576)[0] is None
+    assert (big.S, big.W, big.row_o, big.lpt, big.I, big.arow, big.apr, big.stride, big.leaves) == \
+        (1, 0, 2, 2, 14336, 14352, 1, 576, 73728)
+    assert big.leaf_of(448)[0] == D.ACT and big.leaf_span(448) == (448 * 16384, 14352)
+    assert big.rec_leaf(0) == (448, 14336) and big.leaf_of(448)[1][-1] == (0, 14336)
+    assert big.leaf_span(576) == (448 * 16384 + 128 * 14352, 16384) and big.leaf_of(576)[0] is None
+    assert D.Shape(16384, 65536, 16384, lp=512, L=4096, row=16384, ow=16, act=True).apr == 3
     assert D.Shape(256, 128, 4096).label() == {"m": 256, "n": 128, "k": 4096, "lp": 128, "t": 8, "row": 16384, "leaves": 20}
     assert D.Shape(256, 128, 4096, ow=16).domain() != D.Shape(256, 128, 4096).domain()
+    for sh in (D.Shape(256, 384, 256, lp=32, L=128, row=128, ow=16, act=True),
+               D.Shape(128, 256, 64, lp=32, L=64, row=128, ow=16, act=True)):
+        end = 0
+        for pos in range(sh.leaves):
+            kind, cells = sh.leaf_of(pos)
+            off, n = sh.leaf_span(pos)
+            width, rec = {D.ACT: 1, None: 2}.get(kind, 2), kind == D.ACT and cells[-1][1] == sh.I
+            assert off == end and n == (len(cells) - rec) * width + rec * D.REC
+            end += n
+            for x, (i, j) in enumerate(cells[:len(cells) - rec:7]):
+                got = sh.act_leaf(i, j) if kind == D.ACT else sh.o_leaf(i, j) if kind is None else sh.word_leaf(i, j, kind)
+                assert got == (pos, width * 7 * x)
+            if rec:
+                assert sh.rec_leaf(cells[-1][0]) == (pos, n - D.REC)
+        assert end == sh.nbytes == sh.tiles * sh.lpt * 128 + sh.m * (sh.I + D.REC)
+    small = D.Shape(128, 256, 64, lp=32, L=64, row=128, ow=16, act=True)
+    assert small.apr == 2 and small.leaf_of(small.act_leaves(3)[1]) == (D.ACT, [(3, 128)])
     sh = D.Shape(256, 384, 256, lp=32, L=128, row=128, ow=16, act=True)
     assert (sh.S, sh.W, sh.row_w, sh.row_o, sh.lpt, sh.I, sh.apr, sh.stride) == (2, 1, 256, 256, 512, 192, 2, 1792)
-    end = 0
-    for pos in range(sh.leaves):
-        kind, cells = sh.leaf_of(pos)
-        off, n = sh.leaf_span(pos)
-        assert off == end and n == len(cells) * {D.ACT: 1, None: 2}.get(kind, 2)
-        end += n
-        for x, (i, j) in enumerate(cells[::7]):
-            got = sh.act_leaf(i, j) if kind == D.ACT else sh.o_leaf(i, j) if kind is None else sh.word_leaf(i, j, kind)
-            assert got == (pos, {D.ACT: 1}.get(kind, 2) * 7 * x)
-    assert end == sh.nbytes == sh.tiles * sh.lpt * 128 + 256 * 192
-    assert [sh.leaf_span(p)[1] for p in sh.act_leaves(200)] == [128, 64]
-    assert sh.opened(5, 9, 2) == [sh.word_leaf(5, 9, 1)[0], sh.o_leaf(5, 9)[0], sh.act_leaf(5, 9)[0]]
+    assert [sh.leaf_span(p)[1] for p in sh.act_leaves(200)] == [128, 64 + D.REC]
+    assert sh.opened(5, 9, 2) == [sh.word_leaf(5, 9, 1)[0], sh.o_leaf(5, 9)[0], sh.act_leaf(5, 9)[0], sh.rec_leaf(5)[0]]
     assert sh.opened(5, 200, 2) == [sh.word_leaf(5, 200, 1)[0], sh.o_leaf(5, 200)[0]]
     assert D.block_definition(sh, 1).name.startswith("PouwDitherBlock")
     for bad in (sh, D.Shape(256, 384, 256, lp=32, L=128, row=128, ow=16)):
@@ -432,16 +454,19 @@ def test_o16_and_act_layout():
         D.Shape(128, 128, 256, ow=8)
     with pytest.raises(ValueError, match="commits O"):
         D.Shape(128, 128, 256, o=False, act=True)
+    with pytest.raises(ValueError, match="u16 below"):
+        D.Shape(128, 131072, 256, act=True)
 
 
 def test_act_map_is_the_served_definitions():
     """A′'s map is the served words: `dequant` is `PouwZyDequant_v1`'s (h1zy's), `silu_mul` is `SiluMulBf16_v2` on random
-    and edge words (NaN, ±inf, ±0, subnormals, gates past expf's overflow), and `requant` and `abs_max` are
-    `QuantChunkS8_v1`'s codes and `RowAbsMax_v1`'s amax on rows, amax's edges included."""
+    and edge words (NaN, ±inf, ±0, subnormals, gates past expf's overflow), and `abs_max`, `act_scale` and `requant` are
+    the served quantizer's, `Int8RowQuant_v1`'s scale and codes, on rows with NaN, ±inf, zeros, rows under the scale's
+    floor and rows whose maximum sits at a binade's edge."""
     from verity.core.protocols.pouw.circuit import h1zy
     from verity.ml.circuits import evaluation as E
-    from verity.ml.circuits.ops import quant as Q
     from verity.ml.definitions.registry import act
+    from verity.ml.definitions.registry import int8_exact as IE
 
     rng = np.random.default_rng(25)
     z = rng.integers(-(1 << 31), 1 << 31, 64).tolist() + [0, -1, (1 << 31) - 1, -(1 << 31)]
@@ -455,24 +480,31 @@ def test_act_map_is_the_served_definitions():
     assert act.SiluMulBf16.id == "SiluMulBf16_v2"
     assert [D.silu_mul(g, u) for g, u in pairs] == [act.SiluMulBf16.evaluate(g, u) for g, u in pairs]
     n = 16
-    xb = rng.integers(0, 1 << 16, (12, n)).astype(np.uint16)
+    xb = rng.integers(0, 1 << 16, (14, n)).astype(np.uint16)
     xb[0, :] = 0
     xb[1, 3] = 0x7FC0
-    amax = np.array([0x0000, 0x7F80, 0xBF80, 0x7FC0, 0x0001, 0x3F80, 0x4000, 0x3C00, 0x4300, 0x7F7F, 0x3E00, 0x4120],
-                    dtype=np.uint16)
-    want = E.evaluate_batch(bind(Q.QuantChunkS8, N=n, RELU=False), xb, amax)[:, :n].astype(np.uint8)
-    assert [[D.requant(int(h), int(a)) for h in r] for r, a in zip(xb, amax)] == want.tolist()
-    got = E.evaluate_batch(bind(Q.RowAbsMax, N=n, RELU=False), xb)
-    assert [D.abs_max(r.tolist()) for r in xb] == np.asarray(got).reshape(-1).astype(int).tolist()
+    xb[2, 5] = 0xFF80
+    xb[3, :] = rng.integers(0, 0x0D00, n)
+    xb[4, :2] = [0x4000, 0xBFFF]
+    xb[5, :2] = [0x3FFF, 0x3FFE]
+    xb[6:, :] = (rng.standard_normal((8, n)).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    got = np.asarray(E.evaluate_batch(bind(IE.Int8RowQuant, K=n), xb)).astype(int)
+    for r, g in zip(xb.tolist(), got):
+        amax = D.abs_max(r)
+        assert D.act_scale(amax) == g[n] and [D.requant(h, amax) for h in r] == (g[:n] & 0xFF).tolist(), r
+    assert D.abs_max([0x7FC0, 0x3F80, 0xC000]) == 0x4000 and D.requant(0x7FC0, 0x3F80) == 0x81
 
 
 def test_o16_act_honest_producer_and_consumer():
     """An honest gate-up call at O 16 bits with A′, and its consumer reading A′: every segment's block of the producer
-    passes, its gate cells' last blocks with A′; its O and A′ rows are the reference's from only the cells they hold; and
-    the consumer, its seeds after a receipt of the producer's root, opens A′'s rows from that root as its A and passes."""
-    A, B, T, O, sc, Ap, cm = _producer()
+    passes, its gate cells' last blocks with A′; its O and A′ rows are the reference's from only the cells they hold and
+    the row's record; and the consumer, its seeds after a receipt of the producer's root, opens A′'s rows and records
+    from that root as its A, passes, and its amax check passes on every row."""
+    A, B, T, O, sc, Ap, recs, cm = _producer()
     assert len(cm.rows) == PSH.leaves == 320 and len({x for r in Ap for x in r}) > 64
-    assert all(-128 <= x < 128 for r in Ap for x in r) and {abs(max(r, key=abs)) for r in Ap} <= {127, 128}
+    assert all(-127 <= x <= 127 for r in Ap for x in r) and {abs(max(r, key=abs)) for r in Ap} == {127}
+    H = D.act_hs(PSH, O, sc)
+    assert all(rec.amax == D.abs_max(h) and 1 <= len(rec.named) <= D.NAMED for rec, h in zip(recs, H))
     rng = random.Random(21)
     cells = [(0, 0), (127, 127), (5, 200), (64, 255), *((rng.randrange(PSH.m), rng.randrange(PSH.n)) for _ in range(6))]
     for i, j in cells:
@@ -481,8 +513,9 @@ def test_o16_act_honest_producer_and_consumer():
             assert _check(PSH, SEEDS, i, j, s, ins) == 1, (i, j, s)
             if s == PSH.S:
                 assert ins[7] == [O[i][j] & D.M16] and (len(ins) == 12) == (j < PSH.I)
-    for pos in (PSH.o_leaf(3, 4)[0], PSH.act_leaf(77, 5)[0], PSH.word_leaf(9, 130, 2)[0]):
-        assert D.leaf_row(PSH, SEEDS, A, B, pos, sc) == cm.rows[pos]
+    for pos in (PSH.o_leaf(3, 4)[0], PSH.word_leaf(9, 130, 2)[0]):
+        assert D.leaf_row(PSH, SEEDS, A, B, pos) == cm.rows[pos]
+    assert D.leaf_row(PSH, SEEDS, A, B, PSH.act_leaf(77, 5)[0], sc, recs[77]) == cm.rows[PSH.act_leaf(77, 5)[0]]
     cs = D.seeds(CCOIN, _receipt(cm.root), 0)
     Bc = _operands(CSH, 14)[1]
     Tc, Oc = D.values(CSH, cs, Ap, Bc)
@@ -490,16 +523,17 @@ def test_o16_act_honest_producer_and_consumer():
     for i, j in ((0, 0), (127, 5), (40, 99)):
         rows = {p: cm.open(p) for p in PSH.act_leaves(i)}
         assert all(D.opens(cm.dom, cm.root, PSH.leaves, p, *r) for p, r in rows.items())
-        a_i = D.act_row(PSH, {p: r[0] for p, r in rows.items()}, i)
-        assert a_i == Ap[i]
+        a_i, rec = D.act_row(PSH, {p: r[0] for p, r in rows.items()}, i), D.rec_at(PSH, {p: r[0] for p, r in rows.items()}, i)
+        assert a_i == Ap[i] and rec == recs[i].pack()
         for s in range(1, CSH.S + 1):
             assert _check(CSH, cs, i, j, s, _block(CSH, cs, {i: a_i}, Bc, cc, None, i, j, s)) == 1
+    assert all(D.check_named(PSH, SEEDS, A[i], B, i, Ap[i], recs[i].pack(), sc) == 1 for i in range(PSH.m))
 
 
 def test_o16_a_forged_o_is_refused():
     """O at 16 bits forged in any one bit fails the last block of a gate cell and of an up cell, and a forged O row
     fails its opening against the honest root."""
-    A, B, T, O, sc, Ap, cm = _producer()
+    A, B, T, O, sc, Ap, recs, cm = _producer()
     rng = random.Random(22)
     for i, j in [(3, 4), (3, 132), *((rng.randrange(PSH.m), rng.randrange(PSH.n)) for _ in range(8))]:
         o = O[i][j] & D.M16 ^ 1 << rng.randrange(16)
@@ -512,71 +546,100 @@ def test_o16_a_forged_o_is_refused():
 def test_o16_a_forged_act_is_refused():
     """A′ forged at a gate cell fails that cell's last block: any other byte, and A′ mapped from an O whose committed 16
     bits are right and whose high bits aren't (O + 2^16, which the block's 32-bit dot refuses wherever the map moves).
-    A forged A′ byte in a row the consumer opens fails its opening against the producer's root."""
-    A, B, T, O, sc, Ap, cm = _producer()
+    A forged A′ byte or record byte in a row the consumer opens fails its opening against the producer's root."""
+    A, B, T, O, sc, Ap, recs, cm = _producer()
     rng = random.Random(23)
     cells = [(0, 0), (127, 127), *((rng.randrange(PSH.m), rng.randrange(PSH.I)) for _ in range(10))]
     moved = 0
     for i, j in cells:
         bad = (Ap[i][j] + rng.randrange(1, 256)) & 0xFF
         assert D.check_last(PSH, SEEDS, i, j, _block(PSH, SEEDS, A, B, cm, sc, i, j, PSH.S, ap=bad)) == 0
-        hi = D.act_word(O[i][j] + (1 << 16), O[i][j + PSH.I], sc.sa[i], sc.sw[j], sc.sw[j + PSH.I], sc.amax[i])
+        hi = D.act_word(O[i][j] + (1 << 16), O[i][j + PSH.I], sc.sa[i], sc.sw[j], sc.sw[j + PSH.I], recs[i].amax)
         ins = _block(PSH, SEEDS, A, B, cm, sc, i, j, PSH.S, ap=hi)
         assert D.check_last(PSH, SEEDS, i, j, ins) == int(hi == Ap[i][j] & 0xFF) and ins[7] == [O[i][j] & D.M16]
         moved += hi != Ap[i][j] & 0xFF
     assert moved >= len(cells) - 2
-    p, off = PSH.act_leaf(77, 5)
-    row, salt, path = cm.open(p)
-    assert not D.opens(cm.dom, cm.root, PSH.leaves, p, row[:off] + bytes([row[off] ^ 1]) + row[off + 1:], salt, path)
+    for p, off in (PSH.act_leaf(77, 5), PSH.rec_leaf(77)):
+        row, salt, path = cm.open(p)
+        assert not D.opens(cm.dom, cm.root, PSH.leaves, p, row[:off] + bytes([row[off] ^ 1]) + row[off + 1:], salt, path)
 
 
-def test_o16_the_minus_v_minus_da_attack_is_refused():
-    """A = −V − d_A makes X = 0, so on T = 0 and O = Σ (A + d_A)(B + d_B) every block of the consumer passes when A is
-    bound after its seeds. A′ is bound in the producer's value root, which the consumer's receipt reads: committing that
-    A′ moves the root and with it the consumer's seeds, under which T = 0 fails, and the producer's gate blocks refuse
-    the A′ besides."""
-    A, B, T, O, sc, Ap, cm = _producer()
-    Bc = _operands(CSH, 14)[1]
-    cs = D.seeds(CCOIN, _receipt(cm.root), 0)
-    Ax = [[-x for x in r] for r in D.noise_a(CSH, cs, range(CSH.m))]
-    Tx, Ox = D.values(CSH, cs, Ax, Bc)
-    assert not any(v for Ts in Tx for r in Ts for v in r)
-    rng = random.Random(26)
-    cells = [(rng.randrange(CSH.m), rng.randrange(CSH.n)) for _ in range(6)]
+def test_o16_a_forged_amax_is_refused():
+    """A prover that sets row i's amax to the row's second-largest |h| clips the true maximum to ±127. With A′ and S_i
+    formed under that amax every gate cell's last block passes, the maximum's included; the consumer's amax check
+    refuses the row, the maximum being in S_i with |h| > amax. It refuses an amax one step above the maximum (attained by
+    no cell), a record whose S_i drops or adds a column, and an empty S_i under an amax whose own code is 127."""
+    A, B, T, O, sc, Ap, recs, cm = _producer()
+    H = D.act_hs(PSH, O, sc)
+    rng = random.Random(27)
+    for i in [0, 127, *rng.sample(range(1, 127), 6)]:
+        top, second = sorted({h & 0x7FFF for h in H[i]}, reverse=True)[:2]
+        codes = _codes(H[i], second)
+        forged = D.ActRecord(second, D.named_of(codes))
+        kmax = [j for j, h in enumerate(H[i]) if h & 0x7FFF == top]
+        assert set(kmax) <= set(forged.named) and len(forged.named) <= D.NAMED and codes != Ap[i]
+        for j in kmax[:1] + rng.sample(range(PSH.I), 3):
+            ins = _block(PSH, SEEDS, A, B, cm, sc, i, j, PSH.S, amax=second, ap=codes[j])
+            assert D.check_last(PSH, SEEDS, i, j, ins) == 1, (i, j)
+        assert D.check_named(PSH, SEEDS, A[i], B, i, codes, forged.pack(), sc) == 0
+        above = _codes(H[i], top + 1)
+        assert D.check_named(PSH, SEEDS, A[i], B, i, above, D.ActRecord(top + 1, D.named_of(above)).pack(), sc) == 0
+        rec = recs[i]
+        extra = next(j for j in range(PSH.I) if j not in rec.named)
+        for named in (rec.named[1:], tuple(sorted(rec.named + (extra,)))):
+            assert D.check_named(PSH, SEEDS, A[i], B, i, Ap[i], D.ActRecord(rec.amax, named).pack(), sc) == 0
+        assert D.check_named(PSH, SEEDS, A[i], B, i, Ap[i], rec.pack(), sc) == 1
+    assert D.named_ok([0] * 16, D.ActRecord(0x3F80, ()).pack(), {}) == 0
 
-    def ins(seeds, i, j, s):
-        t1 = None if s == CSH.S else 0
-        return D.block_inputs(CSH, seeds, Ax[i], Bc[j], i, j, s, 0, t1, Ox[i][j] if s == CSH.S else None)
 
-    assert all(_check(CSH, cs, i, j, s, ins(cs, i, j, s)) for i, j in cells for s in range(1, CSH.S + 1))
-    cmx = D.commit(PSH, D.values_buffer(PSH, T, O, Ax), D.salts(KS, OFF))
-    cx = D.seeds(CCOIN, _receipt(cmx.root), 0)
-    assert cmx.root != cm.root and all(cx[x] != cs[x] for x in D.STREAMS)
-    assert not any(_check(CSH, cx, i, j, 1, ins(cx, i, j, 1)) for i, j in cells)
-    assert not any(_check(CSH, cx, i, j, CSH.S, ins(cx, i, j, CSH.S)) for i, j in cells)
-    for i, j in [(i, j % PSH.I) for i, j in cells]:
-        assert Ax[i][j] != Ap[i][j]
-        assert D.check_last(PSH, SEEDS, i, j, _block(PSH, SEEDS, A, B, cmx, sc, i, j, PSH.S)) == 0
+def test_amax_check_bounds_the_maximum_by_magnitude():
+    """At the top of a binade an amax one bf16 step below the row's maximum still rounds the maximum to 127 (2 / RN(1.9921875
+    / 127) ≈ 127.498), so a rounding check alone passes it: `named_ok` refuses it on |h| > amax. A row under the scale's
+    floor has an empty S_i under any amax that shares its scale. A row with more columns at ±127 than a record's slots
+    isn't served under this layout."""
+    from verity.ml.circuits.ops import fp32 as F
+
+    top, below = 0x4000, 0x3FFF
+    row = [top, below] + [0x3F00] * 30
+    q = float(F.f32_of(F.f32_div_bits(F.bf16_to_f32_bits(top), D.act_scale(below))))
+    assert 127.49 < q < 127.5 and D.requant(top, below) == 127
+    codes = _codes(row, below)
+    named = D.named_of(codes)
+    assert named == (0, 1)
+    assert D.named_ok(codes, D.ActRecord(below, named).pack(), {j: row[j] for j in named}) == 0
+    honest, rec = D.act_codes(row)
+    assert D.named_ok(honest, rec.pack(), {j: row[j] for j in rec.named}) == 1 and rec == D.ActRecord(top, (0, 1))
+    tiny = [0x0001, 0x0080, 0x8100] * 4
+    codes, rec = D.act_codes(tiny)
+    assert rec.named == () and set(codes) == {0}
+    assert all(D.named_ok(codes, D.ActRecord(a, ()).pack(), {}) == 1 for a in (rec.amax, 0, 0x0200))
+    assert D.named_ok(codes, D.ActRecord(0x3F80, ()).pack(), {}) == 0
+    _, wide = D.act_codes([0x3F80] * (D.NAMED + 1))
+    with pytest.raises(ValueError, match="slots"):
+        wide.pack()
 
 
 @pytest.mark.parametrize("k", [64, 128])
 def test_o16_a_guessed_act_passes_only_with_the_o16_it_guesses(k):
     """Requant is many-to-one, so A′ alone is guessed: at A = B = 0 a prover that skips the work commits A′ = 0 under an
-    amax past every |h|, which every gate cell's A′ check alone (`act_ok`) passes. The last block also checks O mod 2^16,
-    which it has to guess: with T_{S−1} honest (S = 1 at K 64, 2 at K 128), exactly the cells whose O mod 2^16 is the
-    guess pass (O = Σ d_A d_B ~ Bin(K, 1/4), the guess its mode ⌊(K + 1)/4⌋), about a tenth of them."""
+    amax past every |h|, which every gate cell's A′ check alone (`act_ok`) passes and the consumer's amax check refuses
+    (S_i empty, the amax's own code 127). The last block also checks O mod 2^16, which it has to guess: with T_{S−1}
+    honest (S = 1 at K 64, 2 at K 128), exactly the cells whose O mod 2^16 is the guess pass (O = Σ d_A d_B ~ Bin(K, 1/4),
+    the guess its mode ⌊(K + 1)/4⌋), about a tenth of them."""
     sh = D.Shape(128, 256, k, lp=32, L=64, row=1024, ow=16, act=True)
     A, B = [[0] * k] * sh.m, [[0] * k] * sh.n
-    sc = D.ActScales(*_scales(sh), [0x7F7F] * sh.m)
+    sc = D.ActScales(*_scales(sh))
     g = (k + 1) // 4
     rng = random.Random(24)
     cells = sorted({(rng.randrange(sh.m), rng.randrange(sh.I)) for _ in range(200)})
     a_only = passed = 0
     for i, j in cells:
         Tc, o = D.cell_values(sh, SEEDS, A[i], B[j], i, j)
-        ins = D.block_inputs(sh, SEEDS, A[i], B[j], i, j, sh.S, Tc[-2] if sh.S > 1 else 0, o=g, up=B[j + sh.I], sc=sc, ap=0)
+        ins = D.block_inputs(sh, SEEDS, A[i], B[j], i, j, sh.S, Tc[-2] if sh.S > 1 else 0, o=g, up=B[j + sh.I], sc=sc,
+                             amax=0x7F7F, ap=0)
         a_only += D.act_ok(sh, ins)
         got = D.check_last(sh, SEEDS, i, j, ins)
         assert got == int(o & D.M16 == g), (i, j, o)
         passed += got
     assert a_only == len(cells) and 0 < passed < len(cells) / 5
+    assert D.check_named(sh, SEEDS, A[0], B, 0, [0] * sh.I, D.ActRecord(0x7F7F, ()).pack(), sc) == 0

@@ -56,17 +56,33 @@ offset); no coin feeds a salt. A block (i, j, s) opens T_s's row (s < S), T_{s�
 
 **O at 16 bits, and A′** (`Shape.ow`, `Shape.act`). A call may commit O mod 2^16 (u16, 32 KiB a tile): the binding
 identity is used mod 2^16, so O mod 2^16 carries T_S in full, and the s = S block checks o ≡ Σ (a + da)(b + db) mod 2^16.
-A gate-up call ([gate ‖ up], n = 2I) may also commit its consumer's int8 operand A′, I cells a row:
+A gate-up call ([gate ‖ up], n = 2I) may also commit its consumer's int8 operand A′, I cells a row, and a record a row:
 
-    A′_ij = requant(SiLU·mul(dequant(O_ij, s_a_i, s_w_j), dequant(O_i,j+I, s_a_i, s_w_j+I)), amax_i)   (j < I, `act_word`)
+    h_ij = SiLU·mul(dequant(O_ij, s_a_i, s_w_j), dequant(O_i,j+I, s_a_i, s_w_j+I))    (j < I, `act_h`)
+    A′_ij = requant(h_ij, amax_i),   amax_i = max_j |h_ij|                              (`requant`, `abs_max`)
 
-(`PouwZyDequant_v1`'s word, then `SiluMulBf16_v2`'s, then `QuantChunkS8_v1`'s code under the row's amax), with the map's
-scalars as its consumer reads them (`ActScales`: s_a per row and s_w per column, f32, and amax per row, bf16). A′ has
-leaves of its own: after tile-row tm's tiles come its 128 rows' A′, each row's I bytes cut into rows of `row` bytes, the
-last short (`Shape.act_leaf`). The s = S block of a gate cell (i, j) opens A′_ij too, and checks it against the map of
-its own in-circuit 32-bit dot and the up column's, which it recomputes from B's row j + I (`check_last`, `act_ok`); a
-consumer opens A′'s row from this call's value root (`act_row`) as its A. No Definition here evaluates the 16-bit or the
-A′ block yet: `block_definition` refuses them.
+(`PouwZyDequant_v1`'s word, `SiluMulBf16_v2`'s, then the served quantizer's code, `Int8RowQuant_v1`'s: the scale
+RN32(max(amax, RN32(1e-30)) / 127) and the code clamp(rint(RN32(h / scale)), -127, 127), ties to even), with s_a per row and
+s_w per column (f32, `ActScales`). Row i's record (`ActRecord`, `REC` bytes) follows its I codes: amax_i (bf16) and S_i, the
+columns where |A′_ij| = 127, ascending in `NAMED` u16 slots (`NO_INDEX` past the last). The rows have leaves of their own:
+after tile-row tm's tiles come its 128 rows, each row's I codes and its record cut into rows of `row` bytes, the last short
+(`Shape.act_leaf`, `Shape.rec_leaf`).
+
+The s = S block of a gate cell (i, j) opens A′_ij and amax_i, and checks A′_ij = requant(h_ij, amax_i) on its own in-circuit
+32-bit dot and the up column's, which it recomputes from B's row j + I (`check_last`, `act_ok`). That binds each code to the
+committed amax_i, and the consumer's s = S block binds amax_i to the row: it opens A′'s whole row i as its A (`act_row`)
+with its record (`rec_at`), and checks (`check_named`, `named_ok`)
+
+* that S_i is exactly {j : |A′_ij| = 127} over the row;
+* for each j in S_i, h_ij recomputed from the producer's A row i and B's rows j and j + I (two K-long dots), that
+  |h_ij| ≤ amax_i and A′_ij = requant(h_ij, amax_i);
+* that some j in S_i has |h_ij| = amax_i, or, S_i empty, that amax_i's own code is below 127 (a row under the scale's
+  floor, whose scale every such amax shares).
+
+An amax_i above the row's maximum is attained by no cell. One below it clips the maximum to ±127, which puts its cell in
+S_i, where |h| ≤ amax_i fails. That bound is on the magnitudes because rounding alone admits a maximum one bf16 step above
+an amax at the top of a binade (127 · 256 / 255 rounds to 127). No Definition here evaluates the 16-bit or the A′ blocks
+yet: `block_definition` refuses them.
 
 The reference: `values` gives a call's T (S × m × n) and O; `cell_values` one cell's from its two rows alone;
 `values_buffer`, `row_bytes` and `leaf_row` the leaf rows, the last from only the cells it holds; `tree` and `opens` the
@@ -90,7 +106,7 @@ from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, bind, primitive
 from verity.ml.circuits.ops import fp32 as F
 from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.ops.scalar import F32ToS8RniSat
+from verity.ml.circuits.ops.scalar import F32Fmaxf, F32Fminf, F32ToS8RniSat
 from verity.ml.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP,
     HOPPER_SM90_S8_K32,
@@ -127,7 +143,13 @@ TILE_WORD_BYTES, TILE_O_BYTES = 2 * CELLS, 4 * CELLS
 M16, M32 = (1 << 16) - 1, (1 << 32) - 1
 #: `Shape.leaf_of`'s kind of an A′ row
 ACT = "act"
-F32_ONE, F32_127, F32_INF = 0x3F800000, 0x42FE0000, 0x7F800000
+#: an A′ row's record: amax (bf16), then S_i's columns in NAMED u16 slots, NO_INDEX past the last
+NAMED = 7
+REC = 2 + 2 * NAMED
+NO_INDEX = M16
+F32_127, F32_NEG127, F32_INF = 0x42FE0000, 0xC2FE0000, 0x7F800000
+#: the served quantizer's scale floor, RN32(1e-30)
+F32_FLOOR = 0x0DA24260
 #: SiLU's gate past which expf(-g) overflows and SiluMulBf16_v2 gives -0
 LN_F32_OVERFLOW = math.log((2.0 - 2.0 ** -24) * 2.0 ** 127)
 #: the least contraction at which an s8 × s8 sum can leave s32: below it the wrapping and clamping steps agree
@@ -144,7 +166,7 @@ KEY = INST.default_key
 class Shape:
     """A call: m rows of A against n rows of B at contraction k, HYB noise of period lp (L′), words every L inner indices,
     leaf rows of `row` bytes, O committed (`o`; a filler's calls commit none) at `ow` bits (32 or 16), and with `act` a
-    gate-up call's A′ (n / 2 int8 cells a row) after each tile-row's tiles."""
+    gate-up call's A′ (n / 2 int8 cells a row, then the row's record) after each tile-row's tiles."""
 
     m: int
     n: int
@@ -161,6 +183,8 @@ class Shape:
             raise ValueError(f"O is committed at 32 or 16 bits, not {self.ow!r}")
         if self.act and not self.o:
             raise ValueError("A′ is checked against O's block: a call that commits A′ commits O")
+        if self.act and self.n // 2 >= NO_INDEX:
+            raise ValueError(f"S_i's columns are u16 below {NO_INDEX}: I = n / 2 is {self.n // 2}")
         if self.m <= 0 or self.n <= 0 or self.m % TILE or self.n % TILE:
             raise ValueError(f"m and n are whole tiles of {TILE}, not {self.m} × {self.n}")
         if self.lp <= 0 or self.lp % 32 or self.k % self.lp:
@@ -208,13 +232,19 @@ class Shape:
         return self.n // 2
 
     @property
+    def arow(self) -> int:
+        """Bytes an A′ row takes: its I codes, then its record (`REC`; none without A′)."""
+        return self.I + REC if self.act else 0
+
+    @property
     def apr(self) -> int:
-        """Leaves an A′ row takes: its I bytes in rows of `row` bytes, the last short (none without A′)."""
-        return -(-self.I // self.row) if self.act else 0
+        """Leaves an A′ row takes: its `arow` bytes in rows of `row` bytes, the last short (none without A′). The record
+        never straddles two, since I and `row` are multiples of 16."""
+        return -(-self.arow // self.row)
 
     @property
     def stride(self) -> int:
-        """Leaves a tile-row takes: its n / 128 tiles, then its 128 rows' A′."""
+        """Leaves a tile-row takes: its n / 128 tiles, then its 128 A′ rows."""
         return self.n // TILE * self.lpt + TILE * self.apr
 
     @property
@@ -234,7 +264,7 @@ class Shape:
     @property
     def nbytes(self) -> int:
         """The call's committed values, every leaf's row end to end (`values_buffer`)."""
-        return self.tiles * self.lpt * self.row + (self.m * self.I if self.act else 0)
+        return self.tiles * self.lpt * self.row + self.m * self.arow
 
     def seg(self, s: int) -> tuple[int, int]:
         """Segment s's inner range [a, b) (s = 1 .. S)."""
@@ -282,22 +312,34 @@ class Shape:
             raise ValueError("this call commits no A′")
         if not (0 <= i < self.m and 0 <= j < self.I):
             raise ValueError(f"A′ is {self.m} × {self.I} cells, not ({i}, {j})")
+        return self._arow_at(i, j)
+
+    def rec_leaf(self, i: int) -> tuple[int, int]:
+        """(leaf position, byte offset in its row) of A′ row i's record, `REC` bytes after its I codes."""
+        if not self.act:
+            raise ValueError("this call commits no A′")
+        if not 0 <= i < self.m:
+            raise ValueError(f"A′ has {self.m} rows, not row {i}")
+        return self._arow_at(i, self.I)
+
+    def _arow_at(self, i: int, b: int) -> tuple[int, int]:
         tm, r = divmod(i, TILE)
-        return tm * self.stride + self.n // TILE * self.lpt + r * self.apr + j // self.row, j % self.row
+        return tm * self.stride + self.n // TILE * self.lpt + r * self.apr + b // self.row, b % self.row
 
     def act_leaves(self, i: int) -> list[int]:
-        """The leaves of A′'s row i, which its consumer opens as its A's row i."""
-        return [self.act_leaf(i, c * self.row)[0] for c in range(self.apr)]
+        """The leaves of A′'s row i, its record's last, which its consumer opens as its A's row i."""
+        return [self._arow_at(i, c * self.row)[0] for c in range(self.apr)]
 
     def leaf_of(self, pos: int) -> tuple[int | str | None, list[tuple[int, int]]]:
-        """(s, None for an O row or `ACT` for an A′ row; the cells (i, j) in value order) of leaf `pos`."""
+        """(s, None for an O row or `ACT` for an A′ row; the cells (i, j) in value order, (i, I) standing for an A′ row's
+        record) of leaf `pos`."""
         if not 0 <= pos < self.leaves:
             raise ValueError(f"leaf {pos} is not one of the call's {self.leaves}")
         tm, q = divmod(pos, self.stride)
         if q >= self.n // TILE * self.lpt:
             r, c = divmod(q - self.n // TILE * self.lpt, self.apr)
             i, lo = tm * TILE + r, c * self.row
-            return ACT, [(i, j) for j in range(lo, min(lo + self.row, self.I))]
+            return ACT, [(i, j) for j in range(lo, min(lo + self.row, self.I))] + ([(i, self.I)] if c == self.apr - 1 else [])
         tn, r = divmod(q, self.lpt)
         if r < self.W * self.row_w:
             s, h = divmod(r, self.row_w)
@@ -312,21 +354,21 @@ class Shape:
             raise ValueError(f"leaf {pos} is not one of the call's {self.leaves}")
         tm, q = divmod(pos, self.stride)
         tiles = self.n // TILE * self.lpt
-        start = tm * (tiles * self.row + (TILE * self.I if self.act else 0))
+        start = tm * (tiles * self.row + TILE * self.arow)
         if q < tiles:
             return start + q * self.row, self.row
         r, c = divmod(q - tiles, self.apr)
-        return start + tiles * self.row + r * self.I + c * self.row, min(self.row, self.I - c * self.row)
+        return start + tiles * self.row + r * self.arow + c * self.row, min(self.row, self.arow - c * self.row)
 
     def opened(self, i: int, j: int, s: int) -> list[int]:
         """The leaves proof block (i, j, s) opens: T_s's (s ≤ `W`), T_{s−1}'s (s > 1), and at s = S O's, and a gate
-        cell's A′ (j < I, with `act`)."""
+        cell's A′ and its row's record (j < I, with `act`)."""
         self.seg(s)
         pos = [self.word_leaf(i, j, s)[0]] if s <= self.W else []
         pos += [self.word_leaf(i, j, s - 1)[0]] if s > 1 else []
         last = s == self.S and self.o
         pos += [self.o_leaf(i, j)[0]] if last else []
-        pos += [self.act_leaf(i, j)[0]] if last and self.gate(j) else []
+        pos += [self.act_leaf(i, j)[0], self.rec_leaf(i)[0]] if last and self.gate(j) else []
         return list(dict.fromkeys(pos))
 
     def gate(self, j: int) -> bool:
@@ -505,14 +547,15 @@ def cell_values(sh: Shape, seeds: Mapping[str, bytes], a_i: Sequence[int], b_j: 
 
 
 def values_buffer(sh: Shape, T: Sequence[Sequence[Sequence[int]]], O: Sequence[Sequence[int]] | None = None,
-                  Ap: Sequence[Sequence[int]] | None = None) -> bytes:
+                  Ap: Sequence[Sequence[int]] | None = None, recs: Sequence[ActRecord] | None = None) -> bytes:
     """The call's leaf rows end to end: per tile-row, each tile's tile-segments' committed T_s (u16, s ≤ `Shape.W`) and
     then its O (u32, or u16 at `Shape.ow` 16), cells row-major, little-endian; then, with `Shape.act`, the tile-row's 128
-    rows of A′ (`acts`, I int8 bytes a row)."""
+    A′ rows (`acts`), each its I int8 codes and its record (`ActRecord.pack`)."""
     if sh.o and O is None:
         raise ValueError("this call commits O: pass it")
-    if sh.act and (Ap is None or len(Ap) != sh.m or any(len(r) != sh.I for r in Ap)):
-        raise ValueError(f"this call commits A′, m × I = {sh.m} × {sh.I} int8 cells: pass it")
+    if sh.act and (Ap is None or len(Ap) != sh.m or any(len(r) != sh.I for r in Ap) or recs is None
+                   or len(recs) != sh.m):
+        raise ValueError(f"this call commits A′, m × I = {sh.m} × {sh.I} int8 cells, and a record a row: pass them")
     w16 = struct.Struct(f"<{TILE}H").pack
     wo = w16 if sh.ow == 16 else struct.Struct(f"<{TILE}I").pack
     out = bytearray()
@@ -527,7 +570,7 @@ def values_buffer(sh: Shape, T: Sequence[Sequence[Sequence[int]]], O: Sequence[S
                     out += wo(*(int(v) & sh.omask for v in O[r][cols]))
         if sh.act:
             for r in range(tm * TILE, (tm + 1) * TILE):
-                out += bytes(int(v) & 0xFF for v in Ap[r])
+                out += bytes(int(v) & 0xFF for v in Ap[r]) + recs[r].pack()
     return bytes(out)
 
 
@@ -538,19 +581,20 @@ def row_bytes(sh: Shape, buf: bytes, pos: int) -> bytes:
 
 
 def leaf_row(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], B: Sequence[Sequence[int]],
-             pos: int, sc: ActScales | None = None) -> bytes:
+             pos: int, sc: ActScales | None = None, rec: ActRecord | None = None) -> bytes:
     """Leaf `pos`'s row from only the cells it holds: their rows of A and of B and the coins (an A′ row's, B's gate and
-    up rows and the map's scalars `sc`)."""
+    up rows, the map's scalars `sc` and the row's record `rec`, whose amax every code reads)."""
     s, cells = sh.leaf_of(pos)
     if s == ACT:
-        if sc is None:
-            raise ValueError("an A′ row reads the map's scalars: pass them")
-        i, jj = cells[0][0], [j for _, j in cells]
+        if sc is None or rec is None:
+            raise ValueError("an A′ row reads the map's scalars and its row's record: pass them")
+        i, jj = cells[0][0], [j for _, j in cells if j < sh.I]
         cols = jj + [j + sh.I for j in jj]
         c = _cells(sh, seeds, {i: A[i]}, {j: B[j] for j in cols}, [i], cols)
         z = [_out(c.Ad[0], bd) for bd in c.Bd]
-        return bytes(act_word(z[x], z[len(jj) + x], sc.sa[i], sc.sw[j], sc.sw[j + sh.I], sc.amax[i])
-                     for x, j in enumerate(jj))
+        codes = bytes(act_word(z[x], z[len(jj) + x], sc.sa[i], sc.sw[j], sc.sw[j + sh.I], rec.amax)
+                      for x, j in enumerate(jj))
+        return codes + (rec.pack() if cells[-1][1] == sh.I else b"")
     ii, jj = sorted({i for i, _ in cells}), sorted({j for _, j in cells})
     c = _cells(sh, seeds, {i: A[i] for i in ii}, {j: B[j] for j in jj}, ii, jj)
     ri, rj = {i: x for x, i in enumerate(ii)}, {j: x for x, j in enumerate(jj)}
@@ -565,12 +609,25 @@ def leaf_row(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], 
 
 @dataclass(frozen=True)
 class ActScales:
-    """A′'s map's scalars, encodings as its consumer reads them: s_a (f32) per row of the gate-up call, s_w (f32) per
-    column of it (gate and up), and the consumer's amax (bf16) per row."""
+    """A′'s map's scalars, f32 encodings as the served epilogue reads them: s_a per row of the gate-up call and s_w per
+    column of it (gate and up)."""
 
     sa: Sequence[int]
     sw: Sequence[int]
-    amax: Sequence[int]
+
+
+@dataclass(frozen=True)
+class ActRecord:
+    """A′ row i's record: amax, the bf16 word of the row's max |h| (`abs_max`), and named, S_i, the columns j where
+    |A′_ij| = 127, ascending."""
+
+    amax: int
+    named: tuple[int, ...]
+
+    def pack(self) -> bytes:
+        """The record's `REC` bytes: amax, then the columns in `NAMED` u16 slots, `NO_INDEX` past the last
+        (little-endian)."""
+        return struct.pack(f"<{1 + NAMED}H", self.amax & M16, *slots(self.named))
 
 
 def dequant(z: int, sa: int, sw: int) -> int:
@@ -601,41 +658,76 @@ def silu_mul(g: int, u: int) -> int:
     return F.f32_to_bf16_rn_bits(F.f32_mul_bits(F.bf16_to_f32_bits(s), uf), F.BF16_NAN_F2FP)
 
 
+def act_scale(amax: int) -> int:
+    """The served quantizer's scale of a row whose max |h| is the bf16 word amax (`Int8RowScale_v1`):
+    RN32(fmaxf(f32(amax), RN32(1e-30)) / 127)."""
+    return F.f32_div_bits(F32Fmaxf.evaluate(F.bf16_to_f32_bits(amax), F32_FLOOR), F32_127)
+
+
 def requant(h: int, amax: int) -> int:
-    """`QuantChunkS8_v1{1, false}`'s code of the bf16 word h under its row's bf16 amax, as a byte: the scale RN(amax / 127)
-    when 0 < amax ≤ +inf (else 1.0), and `F32ToS8RniSat_v1` of RN(h / scale), NaN 0."""
-    a = F.bf16_to_f32_bits(amax)
-    scale = F.f32_div_bits(a, F32_127) if 0 < a <= F32_INF else F32_ONE
-    return F32ToS8RniSat.evaluate(F.f32_div_bits(F.bf16_to_f32_bits(h), scale))
+    """The served quantizer's code of the bf16 word h in a row whose amax is the bf16 word amax (`Int8QuantElement_v1` at
+    `act_scale`), as a byte: s8(clamp(rint(RN32(f32(h) / scale)), -127, 127)), ties to even, the clamp fmaxf's and fminf's
+    (a NaN quotient takes -127)."""
+    q = F.f32_div_bits(F.bf16_to_f32_bits(h), act_scale(amax))
+    return F32ToS8RniSat.evaluate(F32Fminf.evaluate(F32Fmaxf.evaluate(q, F32_NEG127), F32_127))
+
+
+def act_h(zg: int, zu: int, sa: int, swg: int, swu: int) -> int:
+    """h of a gate cell, a bf16 word, from its 32-bit dot zg and its up cell's zu: silu_mul(dequant(zg, sa, swg),
+    dequant(zu, sa, swu))."""
+    return silu_mul(dequant(zg, sa, swg), dequant(zu, sa, swu))
 
 
 def act_word(zg: int, zu: int, sa: int, swg: int, swu: int, amax: int) -> int:
-    """A′'s byte of a gate cell from its 32-bit dot zg and its up cell's zu: requant(silu_mul(dequant(zg, sa, swg),
-    dequant(zu, sa, swu)), amax)."""
-    return requant(silu_mul(dequant(zg, sa, swg), dequant(zu, sa, swu)), amax)
+    """A′'s byte of a gate cell from its 32-bit dot zg and its up cell's zu under its row's amax: requant(act_h(...), amax)."""
+    return requant(act_h(zg, zu, sa, swg, swu), amax)
 
 
 def abs_max(hs: Iterable[int]) -> int:
-    """`RowAbsMax_v1{N, false}` on bf16 words: the bf16 word of max |h|, the greatest magnitude encoding (a NaN above
-    +inf)."""
-    return max((h & 0x7FFF for h in hs), default=0)
+    """The served quantizer's amax on bf16 words (`Int8RowScale_v1`'s fmaxf fold from +0): the bf16 word of max |h|, a NaN
+    skipped."""
+    return max((x for x in (h & 0x7FFF for h in hs) if x <= 0x7F80), default=0)
 
 
-def act_scales(sh: Shape, O: Sequence[Sequence[int]], sa: Sequence[int], sw: Sequence[int]) -> ActScales:
-    """The honest scalars: s_a and s_w as given, and each row's amax over its SiLU·mul (`abs_max`)."""
+def named_of(codes: Iterable[int]) -> tuple[int, ...]:
+    """S_i of an A′ row (int8 values or bytes): its columns where |A′| = 127, ascending."""
+    return tuple(j for j, c in enumerate(codes) if abs(_sx8(c)) == 127)
+
+
+def slots(named: Sequence[int]) -> tuple[int, ...]:
+    """S_i in a record's `NAMED` slots, `NO_INDEX` past the last. Refused past `NAMED` columns: the record holds no more,
+    so such a row isn't served under this layout."""
+    if len(named) > NAMED:
+        raise ValueError(f"S_i has {len(named)} columns, more than a record's {NAMED} slots")
+    return (*named, *[NO_INDEX] * (NAMED - len(named)))
+
+
+def act_codes(hs: Sequence[int]) -> tuple[list[int], ActRecord]:
+    """A row's A′ (int8 values) and record from its h words, as the served quantizer forms them."""
+    amax = abs_max(hs)
+    codes = [_sx8(requant(h, amax)) for h in hs]
+    return codes, ActRecord(amax, named_of(codes))
+
+
+def act_scales(sh: Shape, sa: Sequence[int], sw: Sequence[int]) -> ActScales:
+    """The map's scalars: s_a one f32 a row and s_w one a column."""
     if len(sa) != sh.m or len(sw) != sh.n:
         raise ValueError(f"s_a is one f32 a row ({sh.m}) and s_w one a column ({sh.n}), not {len(sa)} and {len(sw)}")
-    amax = [abs_max(silu_mul(dequant(O[i][j], sa[i], sw[j]), dequant(O[i][j + sh.I], sa[i], sw[j + sh.I]))
-                    for j in range(sh.I)) for i in range(sh.m)]
-    return ActScales(list(sa), list(sw), amax)
+    return ActScales(list(sa), list(sw))
 
 
-def acts(sh: Shape, O: Sequence[Sequence[int]], sc: ActScales) -> Rows:
-    """A′ (m × I int8) from the call's 32-bit O and the map's scalars."""
+def act_hs(sh: Shape, O: Sequence[Sequence[int]], sc: ActScales) -> Rows:
+    """h (m × I bf16 words) from the call's 32-bit O and the map's scalars."""
     if not sh.act:
         raise ValueError("this call commits no A′")
-    return [[_sx8(act_word(O[i][j], O[i][j + sh.I], sc.sa[i], sc.sw[j], sc.sw[j + sh.I], sc.amax[i]))
-             for j in range(sh.I)] for i in range(sh.m)]
+    return [[act_h(O[i][j], O[i][j + sh.I], sc.sa[i], sc.sw[j], sc.sw[j + sh.I]) for j in range(sh.I)]
+            for i in range(sh.m)]
+
+
+def acts(sh: Shape, O: Sequence[Sequence[int]], sc: ActScales) -> tuple[Rows, list[ActRecord]]:
+    """A′ (m × I int8) and its rows' records from the call's 32-bit O and the map's scalars (`act_codes`)."""
+    rows = [act_codes(hs) for hs in act_hs(sh, O, sc)]
+    return [c for c, _ in rows], [r for _, r in rows]
 
 
 # -- the leaves and the trees ----------------------------------------------------------------------------------------------------
@@ -751,10 +843,16 @@ def act_at(sh: Shape, rows: Mapping[int, bytes], i: int, j: int) -> int:
 
 def act_row(sh: Shape, rows: Mapping[int, bytes], i: int) -> list[int]:
     """A′'s row i (I int8 values) from its opened leaves (`Shape.act_leaves`): its consumer's A row i."""
-    out = [x for p in sh.act_leaves(i) for x in array("b", rows[p])]
-    if len(out) != sh.I:
-        raise ValueError(f"A′'s row {i} is {sh.I} bytes, not {len(out)}")
-    return out
+    b = b"".join(rows[p] for p in sh.act_leaves(i))
+    if len(b) != sh.arow:
+        raise ValueError(f"A′'s row {i} is {sh.arow} bytes with its record, not {len(b)}")
+    return array("b", b[:sh.I]).tolist()
+
+
+def rec_at(sh: Shape, rows: Mapping[int, bytes], i: int) -> bytes:
+    """A′ row i's record (`REC` bytes, `ActRecord.pack`) from its opened leaf (`Shape.rec_leaf`)."""
+    p, o = sh.rec_leaf(i)
+    return bytes(rows[p][o:o + REC])
 
 
 # -- the devices -----------------------------------------------------------------------------------------------------------------
@@ -1000,12 +1098,12 @@ def _int8s(v: Sequence[int]) -> list[int]:
 
 def block_inputs(sh: Shape, seeds: Mapping[str, bytes], a_i: Sequence[int], b_j: Sequence[int], i: int, j: int, s: int,
                  t0: int = 0, t1: int | None = None, o: int | None = None, up: Sequence[int] | None = None,
-                 sc: ActScales | None = None, ap: int | None = None) -> list[list[int]]:
+                 sc: ActScales | None = None, amax: int | None = None, ap: int | None = None) -> list[list[int]]:
     """Proof block (i, j, s)'s inputs to `block_definition`, as word lists. For s < S (and a call without O): a and b (A's
     row i and B's row j over the segment), na, nb, then t0 (but at s = 1) and t1. For s = S: a, da over the whole row,
     na over k < (S − 1)L, then b, db, nb likewise, t0, and o (at `Shape.ow` bits); when S = 1 only a, da, b, db and o.
-    A gate cell's (`Shape.gate`) last block reads four more: B's row j + I (`up`) and its dither, the map's scalars
-    [s_a_i, s_w_j, s_w_j+I, amax_i] (`sc`) and A′_ij (`ap`, a byte)."""
+    A gate cell's (`Shape.gate`) last block reads four more: B's row j + I (`up`) and its dither, the map's scalars and the
+    row's amax [s_a_i, s_w_j, s_w_j+I, amax_i] (`sc`, and `amax` from the row's opened record) and A′_ij (`ap`, a byte)."""
     a, b = _row(f"A's row {i}", a_i, sh.k), _row(f"B's row {j}", b_j, sh.k)
     na, nb = noise_a(sh, seeds, [i])[0], noise_b(sh, seeds, [j])[0]
     if s == sh.S and sh.o:
@@ -1019,11 +1117,11 @@ def block_inputs(sh: Shape, seeds: Mapping[str, bytes], a_i: Sequence[int], b_j:
             ins = [_int8s(a), da, _int8s(na[:lo]), _int8s(b), db, _int8s(nb[:lo]), [t0 & M16], [o & sh.omask]]
         if not sh.gate(j):
             return ins
-        if up is None or sc is None or ap is None:
-            raise ValueError("a gate cell's last block reads B's row j + I, the map's scalars and A′: pass them")
+        if up is None or sc is None or amax is None or ap is None:
+            raise ValueError("a gate cell's last block reads B's row j + I, the map's scalars, amax and A′: pass them")
         u, ju = _row(f"B's row {j + sh.I}", up, sh.k), j + sh.I
         return ins + [_int8s(u), dithers(sh, seeds, "B", [ju])[0], [sc.sa[i] & M32, sc.sw[j] & M32, sc.sw[ju] & M32,
-                                                                    sc.amax[i] & M16], [ap & 0xFF]]
+                                                                    amax & M16], [ap & 0xFF]]
     if t1 is None:
         raise ValueError(f"segment {s}'s block reads T_{s}: pass it")
     lo, hi = sh.seg(s)
@@ -1094,11 +1192,49 @@ def act_ok(sh: Shape, ins: Sequence[Sequence[int]]) -> int:
     return int(act_word(zg, zu, sa, swg, swu, amax) == ap & 0xFF)
 
 
-__all__ = ["ACT", "ActScales", "DEVICES", "K_LIMIT", "NOISE", "PAD", "STREAMS", "Shape", "TAG", "TILE", "Tree",
-           "PouwDitherBlock", "PouwDitherFirst", "PouwDitherLast", "PouwDitherLastOk", "PouwDitherOnlyOk",
-           "PouwDitherOutDot", "PouwDitherOutDot0", "PouwDitherStep", "abs_max", "act_at", "act_ok", "act_row",
-           "act_scales", "act_word", "acts", "block_bits", "block_definition", "block_inputs", "block_widths",
-           "cell_values", "check_block", "check_last", "checkpoint_digest", "commit", "dequant", "dithers", "dot_steps",
-           "fill_seeds", "leaf_h", "leaf_row", "noise_a", "noise_b", "operand_domain", "operand_row", "operand_tree",
-           "opens", "out_at", "out_dot", "pad_rows", "perms", "prf_salt", "prg", "requant", "row_bytes", "salts", "seeds",
-           "silu_f32", "silu_mul", "step_ok", "tree", "values", "values_buffer", "word_at", "wrap8"]
+def named_ok(codes: Sequence[int], rec: bytes, hs: Mapping[int, int]) -> int:
+    """The consumer's amax check of one A′ row, in the clear, on its I opened codes (`codes`), its opened record (`rec`,
+    `REC` bytes) and h at the columns the codes name (`hs`, column to bf16 word, as `check_named` recomputes them): the
+    record's slots are exactly S_i = `named_of(codes)`'s; amax is no NaN; each j in S_i has |h_j| ≤ amax and
+    A′_j = requant(h_j, amax); and some j in S_i has |h_j| = amax, or, S_i empty, |requant(amax, amax)| < 127."""
+    if len(rec) != REC:
+        raise ValueError(f"a record is {REC} bytes, not {len(rec)}")
+    amax, *got = struct.unpack(f"<{1 + NAMED}H", rec)
+    named = named_of(codes)
+    if len(named) > NAMED or tuple(got) != slots(named) or amax > F32_INF >> 16:
+        return 0
+    if not named:
+        return int(abs(_sx8(requant(amax, amax))) < 127)
+    mags = [hs[j] & 0x7FFF for j in named]
+    if any(m > amax or requant(hs[j], amax) != codes[j] & 0xFF for j, m in zip(named, mags)):
+        return 0
+    return int(amax in mags)
+
+
+def check_named(sh: Shape, seeds: Mapping[str, bytes], a_i: Sequence[int], B: Mapping[int, Sequence[int]], i: int,
+                codes: Sequence[int], rec: bytes, sc: ActScales) -> int:
+    """`named_ok` on A′ row i of the gate-up call `sh` as its consumer's s = S block opens it (`codes`, `rec`), with h at
+    each column j it names recomputed as a gate cell's block computes it: two K-long dots from the producer's A row i
+    (`a_i`), B's rows j and j + I (`B`, by row) and the producer's coins `seeds`, then `act_h`."""
+    named = named_of(codes)
+    hs = {}
+    if len(named) <= NAMED:
+        a8, da = _int8s(_row(f"A's row {i}", a_i, sh.k)), dithers(sh, seeds, "A", [i])[0]
+        for j in named:
+            ju = j + sh.I
+            zg, zu = (out_dot(0, a8, da, _int8s(_row(f"B's row {c}", B[c], sh.k)), dithers(sh, seeds, "B", [c])[0])
+                      for c in (j, ju))
+            hs[j] = act_h(zg, zu, sc.sa[i], sc.sw[j], sc.sw[ju])
+    return named_ok(codes, rec, hs)
+
+
+__all__ = ["ACT", "ActRecord", "ActScales", "DEVICES", "K_LIMIT", "NAMED", "NOISE", "NO_INDEX", "PAD", "REC", "STREAMS",
+           "Shape", "TAG", "TILE", "Tree", "PouwDitherBlock", "PouwDitherFirst", "PouwDitherLast", "PouwDitherLastOk",
+           "PouwDitherOnlyOk", "PouwDitherOutDot", "PouwDitherOutDot0", "PouwDitherStep", "abs_max", "act_at",
+           "act_codes", "act_h", "act_hs", "act_ok", "act_row", "act_scale", "act_scales", "act_word", "acts",
+           "block_bits", "block_definition", "block_inputs", "block_widths", "cell_values", "check_block", "check_last",
+           "check_named", "checkpoint_digest", "commit", "dequant", "dithers", "dot_steps", "fill_seeds", "leaf_h",
+           "leaf_row", "named_of", "named_ok", "noise_a", "noise_b", "operand_domain", "operand_row", "operand_tree",
+           "opens", "out_at", "out_dot", "pad_rows", "perms", "prf_salt", "prg", "rec_at", "requant", "row_bytes",
+           "salts", "seeds", "silu_f32", "silu_mul", "slots", "step_ok", "tree", "values", "values_buffer", "word_at",
+           "wrap8"]
