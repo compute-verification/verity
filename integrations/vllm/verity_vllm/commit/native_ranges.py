@@ -17,6 +17,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+from verity.ml.commitments import Commitment, Opening as FrameOpening, VerificationLimits, verify_opening
 from verity_vllm.commit import scheme, step_rows
 from verity_vllm.commit.merkle import fold_range, range_path_shape
 
@@ -256,8 +257,8 @@ class NativeRangeOpenings:
         return True
 
     def _verify_rows(self, run: Any, opening: Any) -> bool:
-        """rows-sha512's `verify`: the row and its salt give the hiding leaf, the frame path folds it to the tree root, which binds into
-        the step root, which is in the run root."""
+        """rows-sha512's `verify`: the row and its salt give the hiding leaf, which the frame path opens under the step's tree root (core's
+        `verify_opening`), which binds into the step root, which is in the run root."""
         try:
             sc = run.steps[opening.step]
             ident = self.identity_of(opening.step, opening.index)
@@ -268,11 +269,14 @@ class NativeRangeOpenings:
         if len(opening.salt) != step_rows.SALT_BYTES or any(not isinstance(p, bytes) for p in opening.path):
             return False
         h = step_rows.hiding_leaf(opening.value, opening.salt, 8 * step_rows.ROW_BYTES)[1]
-        merkle = step_rows.fold_path(self._row_domain(opening.step, sc.n_leaves), opening.index, h, opening.path)
-        if merkle is None:
+        try:
+            if not verify_opening(self._row_domain(opening.step, sc.n_leaves), Commitment(sc.merkle_root, sc.n_leaves),
+                                  FrameOpening(opening.index, h, tuple(opening.path)), step_rows.SCHEMA, VerificationLimits()):
+                return False
+        except ValueError:
             return False
         root = step_rows.step_root(self.program_digest, self._ctx_digest(opening.step), self._geo_digest,
-                                   self.layout_digest(self._layouts[opening.step]), sc.n_leaves, merkle)
+                                   self.layout_digest(self._layouts[opening.step]), sc.n_leaves, sc.merkle_root)
         return root == sc.root and len(run.run_root) == step_rows.ROOT_BYTES and self._run_root(run) == run.run_root
 
     def _verify_rows_range(self, run: Any, ro: RangeOpening, roots: dict[int, bytes] | None) -> bool:
