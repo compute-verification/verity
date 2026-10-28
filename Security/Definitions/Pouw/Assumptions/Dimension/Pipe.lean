@@ -3,8 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
 /-!
 # `A1_cost` in the closed scalar pipe (trusted statements)
 
-The coordinator's model decision of 06:01Z (`barrier.md`, "`A1_cost`"; the red team's P8-1 and P8-2 in
-`red-team.md`, Phase 8). AlgM_4090 with a **closed scalar pipe**:
+The model of `A1_cost`: AlgM_4090 with a **closed scalar pipe**:
 
 * **No free instructions.** W1 prices every addition, so a program has no free linear combinations.
 * **Priced instructions** cost at least 16 and may output any function of the noise (tensor-core words, INT32
@@ -13,13 +12,13 @@ The coordinator's model decision of 06:01Z (`barrier.md`, "`A1_cost`"; the red t
   the noise and every function of `F₁`) or a scalar multiple of an earlier FP32 output (`PipeStep`). It never reads the
   output of an instruction priced at 16 or more: such a product is priced at 16, as before. FMUL is `c = 0`; FADD
   `α·x + β·y` is `a = α` constant, `b = x`, `c = β·y`.
-* **Quadratic** (`QuadStep`, `a1-cost.md` §3.1 with P8-2): each product multiplies two free values, or one factor is
+* **Quadratic** (`QuadStep`): each product multiplies two free values, or one factor is
   a constant. Every known algorithm for the checked words is quadratic.
 
 `A1_cost(c, γ)` (additive form, `c` a parameter, under checkpoint independence and MinRank ≥ 5): a closed FP32
 pipe whose outputs include `|S|` non-final checked words has at least `c·|S| − c·γ·D` steps, with
 `D = |U|·m·n·(3k/16 − 1)`. At `c = 2` and `c_s = 8` that is `8·#steps ≥ 16·|S| − 16·γ·D`. `a1-cost`'s Theorem 1
-(proved on paper, granted by the red team with P8-1 and P8-2) is `A1_cost_quad 2 0`; the open part is
+(proved on paper, with priced additions and free products of free values) is `A1_cost_quad 2 0`; the open part is
 `A1_nonquad`, the pipes that are not quadratic.
 
 The model's definitions are in `Pouw.Dimension.PipeModel`; `A1_cost`, `A1_cost_quad`, `A1_nonquad` and the lifting's
@@ -32,7 +31,7 @@ open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension.Assumptions
 
 variable {N m n k : ℕ}
 
-/-- The cyclic shift by 24 (`minrank.md`): column `j < k` has its `1` in row `j + 24 mod k`. -/
+/-- The cyclic shift by 24: column `j < k` has its `1` in row `j + 24 mod k`. -/
 def shift24 (k : ℕ) : Mat := fun i j => if j < k ∧ i = (if j + 24 < k then j + 24 else j + 24 - k) then 1 else 0
 
 /-- The closed-pipe AlgM_4090 as a machine: its programs are the `ClosedPipe cs` programs on the noise coordinates, at
@@ -109,7 +108,7 @@ def PipeWitness : Prop :=
       MinRankGe k R 16 ∧ QuadPipe 8 P ∧ Outputs k m n N R A B U P (coords N m n k) ∧ (prodOuts P).length = 1 ∧
       cost P = 16 * (U.card * (m * n) * (3 * k / 16 - 1)) + 8
 
-/-- **The closed pipe's witness, with a checked word in the pipe** (red team P9B-3): as `PipeWitness`, for `m, n ≥ 1`
+/-- **The closed pipe's witness, with a checked word in the pipe**: as `PipeWitness`, for `m, n ≥ 1`
 and a unit `u₀ ∈ U`, the program's FP32 pipe is the 16-FFMA chain from `c₀ = 0`, `c_{l+1} = X[0, l]·Y[l, 0] + c_l`
 with `X`, `Y` unit `u₀`'s stacked operands. It has 16 quadratic steps, it outputs `u₀`'s non-final checked word at
 position 0 (depth 16), which is not a free value, and the program costs `16·|U|·m·n·(3k/16 − 1) + 16·8`. -/
@@ -151,13 +150,13 @@ def PipeChainConsistent : Prop :=
         ∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ (quadMachine N m n k 8).outputs q) ∧
       1 - (3 / 4 : ℝ) ≤ (1 - 0) * (1 - 1 / 2) * (1 - 16 / (3 * k : ℝ))
 
-/-- **MinRank ≥ 16 for the shift by 24** (`minrank.md` §3), at every `k ≥ 1024` with `16 ∣ k`: every nonzero
+/-- **MinRank ≥ 16 for the shift by 24**, at every `k ≥ 1024` with `16 ∣ k`: every nonzero
 combination has a diagonal 16 × 16 minor, on the step block of a nonzero `α`, on the block moved by 24 of a nonzero
 `β`, or on 8 columns at each of two change points of `γ` around the cycle of steps. 16 is the maximum (one step
 increment has rank 16). -/
 def MinRankGeShift16 : Prop := ∀ k, 1024 ≤ k → 16 ∣ k → MinRankGe k (shift24 k) 16
 
-/-- **MinRank is monotone in `ρ`**, and **MinRank ≥ 2 in the minor form gives `MinRank2`** (P8-6). -/
+/-- **MinRank is monotone in `ρ`**, and **MinRank ≥ 2 in the minor form gives `MinRank2`**. -/
 def MinRankGeFacts : Prop :=
   (∀ (k : ℕ) (R : Mat) (ρ ρ' : ℕ), ρ' ≤ ρ → MinRankGe k R ρ → MinRankGe k R ρ') ∧
   (∀ (k : ℕ) (R : Mat), MinRankGe k R 2 → MinRank2 k R)
