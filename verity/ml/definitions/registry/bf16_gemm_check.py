@@ -316,7 +316,7 @@ def cublas_serial_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int) -> np.
 
 
 def cublas_aligned_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int, ALIGN: int, TILE_K: int) -> np.ndarray:
-    """`CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, HopperBF16WgmmaDot16_v2}` of every row of x (M, K)
+    """`CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, HopperBF16WgmmaDot16_v3}` of every row of x (M, K)
     against w (N, K): `cublas_bf16.aligned_bounds`' chunks, each chunk's k16 chain over its k-tiles residue first
     (`cublas_bf16.residue_first`), partials rounded to bf16 and widened, a serial increasing-order f32 reduction and one bf16
     rounding: bf16 words (M, N)."""
