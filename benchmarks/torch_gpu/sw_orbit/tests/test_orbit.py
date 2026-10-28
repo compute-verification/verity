@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import orbit  # noqa: E402
+import orbit
 
 
 def _ops(seed: int, m: int, n: int, k: int, lo: int = -128, hi: int = 127) -> tuple[np.ndarray, np.ndarray]:

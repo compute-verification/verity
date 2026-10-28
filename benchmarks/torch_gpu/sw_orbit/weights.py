@@ -23,10 +23,10 @@ LINEARS = {"qkv": ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"), 
 
 
 def _get(name: str, lo: int | None = None, hi: int | None = None) -> bytes:
-    req = urllib.request.Request(URL + name)
+    req = urllib.request.Request(URL + name)  # noqa: S310 - URL is the pinned https base
     if lo is not None:
         req.add_header("Range", f"bytes={lo}-{hi - 1}")
-    with urllib.request.urlopen(req, timeout=600) as r:
+    with urllib.request.urlopen(req, timeout=600) as r:  # noqa: S310
         data = r.read()
     if lo is not None and len(data) != hi - lo:
         raise RuntimeError(f"{name}: asked bytes {lo}..{hi}, got {len(data)}")

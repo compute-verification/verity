@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import orbit  # noqa: E402
-import weights  # noqa: E402
+import orbit
+import weights
 
 TILE = 128
 

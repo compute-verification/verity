@@ -26,9 +26,8 @@
 #include "cutlass/gemm/kernel/gemm_universal.hpp"
 #include "cutlass/pipeline/pipeline.hpp"
 
+namespace orbit_impl {
 using namespace cute;
-
-namespace {
 
 constexpr int kSlots = 7;
 
@@ -418,7 +417,9 @@ Plain256& batched256() {
   return g;
 }
 
-}  // namespace
+}  // namespace orbit_impl
+
+using namespace orbit_impl;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The library's C surface (bench.py's, by ctypes). Every call is issued on `st` and returns 0, or nonzero on refusal.
