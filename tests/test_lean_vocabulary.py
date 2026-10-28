@@ -9,7 +9,8 @@ Each hit is one of:
 
 - **canonical**: ``CANONICAL`` names, per concept, at most three declarations: one under `Security/Definitions/Core/` or
   `Security/Definitions/Hash/`, one in the code-Lean package that owns it, and one Python class. A concept with no
-  canonical yet says so, with an empty entry.
+  canonical yet says so, with an empty entry. A canonical may be declared under another name (a session's is
+  `Verity.Play`, a play over sampling blocks): the scan reads that name at its ``CANONICAL`` key alone.
 - **a mirror**: a Python class that ``MIRRORS`` holds to a Lean declaration through the `verity_difftest` port (a
   `[[lean_exe]]` of a tracked lakefile) that tests them against each other. The pair counts once, as its Lean.
 - **reading the canonical**: an `abbrev` whose body is a canonical declaration, or a list, array or option of it, or a
@@ -113,7 +114,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Record": (),
     "Registration": (),
     "Registry": (),
-    "Session": (),
+    "Session": (f"{CORE}Period.lean::Verity.Play",),
     "Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "verity/ml/crypto/lms.py::Signature"),
     "Site": (),
     "Statement": (),
@@ -167,7 +168,10 @@ class Hit:
     opens: tuple = ()
 
 
-_ALT = "|".join(sorted(CONCEPTS, key=len, reverse=True))
+#: Each canonical's concept, by key; and the names canonicals are declared under that are no concept's, read only there.
+CONCEPT_OF = {k: c for c, keys in CANONICAL.items() for k in keys}
+OTHER_NAMES = tuple(sorted({k.partition("::")[2].rpartition(".")[2] for k in CONCEPT_OF} - set(CONCEPTS)))
+_ALT = "|".join(sorted(CONCEPTS + OTHER_NAMES, key=len, reverse=True))
 _NAME = rf"((?:[^\s(\[{{:]*\.)?(?:{_ALT}))(?![\w'.!?])"
 _KEYWORD = r"(structure|class\s+inductive|class|inductive|abbrev|opaque|def)"
 _MODS = r"(?:(?:private|protected|public|noncomputable|partial|unsafe|nonrec|meta)\s+)*"
@@ -283,7 +287,7 @@ def python_definitions(text: str) -> list[tuple[str, Hit]]:
         indent, keyword, name = len(m.group(1).expandtabs()), m.group(2), m.group(3)
         while stack and stack[-1][0] >= indent:
             stack.pop()
-        if keyword == "class" and name in CONCEPTS and all(k == "class" for _, k, _ in stack):
+        if keyword == "class" and name in CONCEPTS + OTHER_NAMES and all(k == "class" for _, k, _ in stack):
             out.append((name, Hit(".".join([n for _, _, n in stack] + [name]), text.count("\n", 0, m.start()) + 1, "class")))
         stack.append((indent, keyword, name))
     return out
@@ -316,7 +320,8 @@ class Scan:
 
 
 def scan(texts: dict[str, str] | None = None) -> Scan:
-    """The hits and protocol fields of `texts` (path: source), or of every file the guard reads."""
+    """The hits and protocol fields of `texts` (path: source), or of every file the guard reads. A declaration under one of
+    ``OTHER_NAMES`` is a hit only at its ``CANONICAL`` key, of that canonical's concept."""
     hits, fields = defaultdict(list), []
     if texts is None:
         texts = {path: (ROOT / path).read_text(encoding="utf-8") for path in tracked()}
@@ -327,7 +332,9 @@ def scan(texts: dict[str, str] | None = None) -> Scan:
             defs, found = lean_definitions(text)
             fields += [(path, *f) for f in found]
         for concept, h in defs:
-            hits[concept].append(Hit(f"{path}::{h.key}", h.line, h.keyword, h.body, h.scopes, h.opens))
+            key = f"{path}::{h.key}"
+            if concept in CONCEPTS or (concept := CONCEPT_OF.get(key)):
+                hits[concept].append(Hit(key, h.line, h.keyword, h.body, h.scopes, h.opens))
     return Scan(dict(hits), fields)
 
 
@@ -1269,6 +1276,19 @@ def test_readings_and_slots_are_exempt():
     assert reads == {f"{pouw}::Pouw.Coins"}
     assert not reads_canonical(s.hits["Draw"][0], {f"{core}::Verity.Coins"}, s)
     assert slots(s) == {f"{pouw}::Pouw.Registration"}
+
+
+def test_a_canonical_under_another_name():
+    """`Verity.Play` is a hit, the session's canonical, at its key alone, and an abbrev of it reads it."""
+    core, rate, other = f"{CORE}Period.lean", f"{D}Accounting/Rate.lean", f"{D}Accounting/Other.lean"
+    s = scan({core: "namespace Verity\nabbrev Play (n : Nat) (Ω : Type) (X : Fin n → Type) : Type :=\n"
+                    "  (t : Fin n) → ({s : Fin n // s < t} → Ω) → X t\nend Verity\n",
+              rate: "namespace Accounting.Rate\nabbrev Session (n : Nat) : Type :=\n"
+                    "  Verity.Play n Nat (fun _ => Nat)\nend Accounting.Rate\n",
+              other: "namespace Accounting\nstructure Play where\n  x : Nat\nend Accounting\n"})
+    assert [h.key for h in s.hits["Session"]] == [f"{core}::Verity.Play", f"{rate}::Accounting.Rate.Session"]
+    assert "Play" not in s.hits
+    assert reads_canonical(s.hits["Session"][1], set(CANONICAL["Session"]), s)
 
 
 def test_prune_deletes_stale_lines():
