@@ -258,6 +258,7 @@ def main() -> None:
           "cuda": torch.version.cuda, "arms": names, "sos": sos, **nv.sample()})
     for pi, prompt in enumerate(args.prompt or PROMPTS):
         lens = ar.parse_prompt(prompt)
+        arms.sched_cache.clear()
         s = Step(m, lens, args.seed + pi)
         bat = batched(m, s, args.seed + 100 + pi)
         ref = snap(arms.call("served", s, poisoned(s))())
