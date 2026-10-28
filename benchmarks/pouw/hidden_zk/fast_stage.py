@@ -18,7 +18,8 @@ the circuit back.
     - a flat unit of inputs and ANDs (`unit_lowering`'s inline, non-structural one) is built as a `StreamCircuit`, which
       keeps no AND in memory: each goes to a spool under ``scratch`` as it is made, with its value bit on the all-zero
       instance (all `compose`'s dummy reads), and `StreamLayout` lays the unit out from the spool (`ands_layout`'s rows: a
-      backward pass for liveness, then the netlist written block by block). It holds two bytes a bit while it lays out,
+      backward pass for liveness, then the netlist written `ROWS` ANDs a piece, each in one of `WORKERS` processes forked
+      for it, in order). It holds two bytes a bit while it lays out,
       none after; a unit that reads a table, makes a hint or takes an input after an AND is built again the library's way.
       A Boolean activation's CSE memo (`ir_lower._lower_activation`'s) holds each AND's key's hash and bit, and a hit
       reads its sides back from the spool: the library's memo holds both sides' forms of every AND the activation made
@@ -32,6 +33,7 @@ import hashlib
 import inspect
 import io
 import json
+import multiprocessing
 import os
 import shutil
 import sys
@@ -53,7 +55,11 @@ CHUNK = 1 << 26
 ROWS = 1 << 16
 #: the ANDs a spool block holds: its operand bits are about 140 MB as int64
 BLOCK = 1 << 19
+TEXT_ROWS = 1 << 12
+#: processes that write the netlist's AND rows, `ROWS` a piece (`StreamLayout.pieces`): each holds about 0.2 GB
+WORKERS = min(4, len(os.sched_getaffinity(0)))
 _key_hash = hash
+_forked: list = []
 _scratch: list[Path] = []
 _spools: list[Path] = []
 _memo: dict[int, tuple[str, dict]] = {}
@@ -539,47 +545,57 @@ class StreamLayout(IL.Layout):
         yield " ".join(map(str, head)) + "\n"
         for k in range(0, len(self.in_rows), ROWS):
             yield "".join(f"1 {i} 1 {i}\n" if self.in_rows[i] else "0 0\n" for i in range(k, min(k + ROWS, len(self.in_rows))))
-        for i in range(len(self.spool.blocks)):
-            yield from self._and_rows(i)
+        cuts = [(i, j0, min(j0 + ROWS, n)) for i, (_a0, n, _b0, _m) in enumerate(self.spool.blocks) for j0 in range(0, n, ROWS)]
+        if WORKERS > 1 and len(cuts) > 1:
+            _forked[:] = [self]
+            try:
+                with multiprocessing.get_context("fork").Pool(min(WORKERS, len(cuts))) as pool:
+                    yield from pool.imap(_and_rows_of, cuts)
+            finally:
+                _forked.clear()
+        else:
+            for cut in cuts:
+                yield self._and_rows(*cut)
         C = self.const
         for k in range(0, len(self.tail), ROWS):
             yield "".join("0 0\n" if a is None else " ".join(map(str, [len(a), *a, 1, C])) + "\n" for a in self.tail[k:k + ROWS])
         yield f"1 {C} 1 {C}\n"
 
-    def _and_rows(self, i: int):
-        """Spool block i's live ANDs' rows, `ROWS` at a time: each side ``|cols| cols..`` with its columns ascending and the
+    def _and_rows(self, i: int, j0: int, j1: int) -> str:
+        """Spool block i's ANDs j0..j1's rows, the live ones: each side ``|cols| cols..`` with its columns ascending and the
         constant column last when its form's constant is 1."""
-        a0, heads, ids = self.spool.block(i)
-        v0, n = self.n_in + a0, len(heads)
-        keep = np.ones(n, bool)
-        lo, hi = np.searchsorted(self.dead, [v0, v0 + n])
-        keep[self.dead[lo:hi] - v0] = False
-        lens = heads >> 1
-        ends = np.concatenate([[0], np.cumsum(lens.sum(axis=1))])
-        for j0 in range(0, n, ROWS):
-            j1 = min(j0 + ROWS, n)
-            k, h, x = keep[j0:j1], lens[j0:j1], ids[ends[j0]:ends[j1]]
-            c = heads[j0:j1] & 1
-            if not k.all():
-                x, h, c = x[np.repeat(k, h.sum(axis=1))], h[k], c[k]
-            if not len(h):
-                continue
-            seglen, segc = h.reshape(-1).astype(np.int64), c.reshape(-1).astype(np.int64)
-            seg = np.repeat(np.arange(len(seglen), dtype=np.int64), seglen)
-            key = seg * (self.const + 1) + self._col(x)
-            key.sort()
-            cols = key - seg * (self.const + 1)
-            segtok = 1 + seglen + segc
-            rowtok = segtok[0::2] + segtok[1::2] + 1
-            rstart = np.cumsum(rowtok) - rowtok
-            sstart = np.empty(len(seglen), np.int64)
-            sstart[0::2], sstart[1::2] = rstart, rstart + segtok[0::2]
-            out = np.empty(int(rowtok.sum()), np.int64)
-            out[sstart] = seglen + segc
-            out[np.repeat(sstart + 1 - (np.cumsum(seglen) - seglen), seglen) + np.arange(len(cols))] = cols
-            out[(sstart + 1 + seglen)[segc == 1]] = self.const
-            out[rstart + rowtok - 1] = -1
-            yield (" ".join(map(str, out.tolist())) + " ").replace(" -1 ", "\n")
+        a0, _n, b0, _m = self.spool.blocks[i]
+        heads = np.fromfile(self.spool.dir / "heads", np.int32, 2 * j1, offset=8 * a0).reshape(j1, 2)
+        sides = (heads >> 1).sum(axis=1)
+        e0 = int(sides[:j0].sum())
+        x = np.fromfile(self.spool.dir / "ids", np.int32, int(sides[j0:].sum()), offset=4 * (b0 + e0))
+        h, c = heads[j0:j1] >> 1, heads[j0:j1] & 1
+        v0 = self.n_in + a0 + j0
+        k = np.ones(j1 - j0, bool)
+        lo, hi = np.searchsorted(self.dead, [v0, v0 + j1 - j0])
+        k[self.dead[lo:hi] - v0] = False
+        if not k.all():
+            x, h, c = x[np.repeat(k, h.sum(axis=1))], h[k], c[k]
+        if not len(h):
+            return ""
+        seglen, segc = h.reshape(-1).astype(np.int64), c.reshape(-1).astype(np.int64)
+        seg = np.repeat(np.arange(len(seglen), dtype=np.int64), seglen)
+        key = seg * (self.const + 1) + self._col(x)
+        key.sort()
+        cols = key - seg * (self.const + 1)
+        segtok = 1 + seglen + segc
+        rowtok = segtok[0::2] + segtok[1::2] + 1
+        rstart = np.cumsum(rowtok) - rowtok
+        sstart = np.empty(len(seglen), np.int64)
+        sstart[0::2], sstart[1::2] = rstart, rstart + segtok[0::2]
+        out = np.empty(int(rowtok.sum()), np.int64)
+        out[sstart] = seglen + segc
+        out[np.repeat(sstart + 1 - (np.cumsum(seglen) - seglen), seglen) + np.arange(len(cols))] = cols
+        out[(sstart + 1 + seglen)[segc == 1]] = self.const
+        out[rstart + rowtok - 1] = -1
+        # a row ends at its -1: rows of a few thousand at a time keep `tolist`'s ints (36 bytes a token) small
+        at = [*rstart[::TEXT_ROWS].tolist(), len(out)]
+        return "".join((" ".join(map(str, out[s:e].tolist())) + " ").replace(" -1 ", "\n") for s, e in zip(at, at[1:]))
 
     def zero(self, ports, T: int, flip=None):
         """`ir_lower.evaluate_layout` on ports all zero and no flip, from the all-zero instance's outputs and assertions;
@@ -588,6 +604,11 @@ class StreamLayout(IL.Layout):
             return None
         mask = (1 << T) - 1
         return [IL.unslice_words([mask if b else 0 for b in bits], T) for bits in self.zero_outs], mask if self.zero_ok else 0
+
+
+def _and_rows_of(cut: tuple[int, int, int]) -> str:
+    """`StreamLayout._and_rows` in a worker forked from `StreamLayout.pieces`."""
+    return _forked[0]._and_rows(*cut)
 
 
 def evaluate_layout(lay, ports, T, flip=None):

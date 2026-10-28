@@ -146,8 +146,9 @@ def test_the_stream_circuits_memo_is_the_librarys(tmp_path, monkeypatch):
 
 
 def test_the_stream_layout_is_the_library_layout(tmp_path, monkeypatch):
-    """About 3 s: `fast_stage.StreamLayout` of 150 random units, its spool cut into blocks of 37 ANDs and its netlist into
-    pieces of 11 rows, against `ir_lower.layout`'s: the netlist, counts, port groups, rows and evaluations (all-zero, which
+    """About 5 s: `fast_stage.StreamLayout` of 150 random units, its spool cut into blocks of 37 ANDs and its netlist into
+    pieces of 11 rows (written in this process, or in 2 or 3 forked ones), against `ir_lower.layout`'s: the netlist,
+    counts, port groups, rows and evaluations (all-zero, which
     `StreamLayout.zero` answers, and random). The H1 units stream too, but have no dead AND, assertion, constant output or
     split port group, and fill few spool blocks."""
     monkeypatch.syspath_prepend(str(STAGE.parent))
@@ -157,8 +158,10 @@ def test_the_stream_layout_is_the_library_layout(tmp_path, monkeypatch):
 
     monkeypatch.setattr(FS, "BLOCK", 37)
     monkeypatch.setattr(FS, "ROWS", 11)
+    monkeypatch.setattr(FS, "TEXT_ROWS", 3)
     monkeypatch.setattr(FS, "_scratch", [tmp_path])
     for seed in range(150):
+        monkeypatch.setattr(FS, "WORKERS", 1 + seed % 3)
         C = forms.Circuit()
         args = _random_unit(C, seed)
         want = IL.layout(C, *args)
