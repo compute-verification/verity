@@ -76,8 +76,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
-   block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `Ledger.linked`), less
-   the share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`Ledger.error`);
+   block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `Ledger.linked`), less the
+   share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`Ledger.error`);
    without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
@@ -230,8 +230,8 @@ class Params:
     schedule_cap: int | None = None
     """a, the most bits of the schedule the prover will publish (`schedule.check`), which it commits with the session's
     parameters, so before the session's first coin: the schedule check refuses a schedule over it, and the ledger
-    credits it as the layout's steering (`Ledger.steering`, the `a` of `SteeredLayout`) at every coin alike.  None
-    (the default) commits none, and the session credits no appended block (`Session.scheduled` refuses)."""
+    credits it as the layout's steering (`Ledger.steering`, the `a` of `SteeredLayout`) at every coin alike.  None (the
+    default) commits none, and the session credits no appended block (`Session.scheduled` refuses)."""
 
     def __post_init__(self) -> None:
         if type(self.deferred) is not bool:
@@ -1483,8 +1483,7 @@ LEDGER_SOURCES = {
               "at its step, less a block for each planned block it credits no receipt of (`linked_bits`, "
               "RequirementMoved), less the link's ε of the session's (the whole of it from any one window)",
     "sample": "the record: its openings' bound on wrong receipts, each window's own at delta (`Ledger.sample`, the "
-              "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, "
-              "`pooled`)",
+              "per-window reading), or the session's pooled over its windows at one delta (`Ledger.horizon`, `pooled`)",
     "chip": "S_chip, measured: one pass's worth a block held on chip need not be read again",
     "counting": "AuditRO's slack, a pass's `named_bits` of its receipts (log2 of q^k/k!, which bounds C(q, k); every "
                 "certified receipt, whichever reading) and slack_log2",
@@ -1804,8 +1803,8 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     On `requirement`, the served circuit's requirement linked to the passes (`RequirementLink`, which must hold, its
     memory-map unit making the record's appends at the passes' heads, `mapped`), a pass's credit is the bits the
     circuit reads from complete blocks at its step, less a block for each planned block it credits no receipt of
-    (`linked_bits`, by `RequirementMoved`), so the credit is the circuit's reads (`Ledger.linked`), and a plan
-    topped up with filler earns nothing for it; `sample` still charges a whole block for a wrong receipt, as
+    (`linked_bits`, by `RequirementMoved`), so the credit is the circuit's reads (`Ledger.linked`), and a plan topped
+    up with filler earns nothing for it; `sample` still charges a whole block for a wrong receipt, as
     `RequirementMoved` charges a planned block the pass didn't move.
     The link's units are sampled: the session's credit is 1 − ε of that sum, and a window's is its own less ε of the
     session's, since the unproved share may sit in any one window; the link's δ is added to `error` and

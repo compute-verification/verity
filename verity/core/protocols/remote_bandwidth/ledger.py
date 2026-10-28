@@ -300,8 +300,7 @@ class Gamma:
                              "window": w.window} for w in self.windows]}
 
 
-def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int,
-           capacity: float) -> tuple[audit.WindowLedger, ...]:
+def _fixed(record: audit.Record, lg: audit.Ledger, chip_bytes: int, capacity: float) -> tuple[audit.WindowLedger, ...]:
     """The ledger's window terms over a paced record's fixed windows (`windows`).  A pass is in the fixed window that
     holds it whole, from its challenge's release to its root's arrival, and in none if it straddles a boundary; each
     term is its passes': their credited receipts, chip and counting, and of each window they are from, its wrong

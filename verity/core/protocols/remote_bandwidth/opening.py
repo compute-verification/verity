@@ -109,8 +109,8 @@ class Session(audit.Session):
                 domain, commitment, coin = self._payload_domain, Commitment(self.registration.payload_root, N), None
             else:
                 _f, domain, commitment, coin = self._appends[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
-            out.append(Draw(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
-                                    w.roots[i], domain, commitment, coin))
+            out.append(Draw(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan, w.roots[i],
+                            domain, commitment, coin))
         return tuple(out)
 
     def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
