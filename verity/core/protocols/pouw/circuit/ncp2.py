@@ -32,7 +32,7 @@ same reason: every column's first lane is the call's own, so no two calls' key u
 `schemes.ncp.assemble`'s, route U's checked values `schemes.ncp.checked_route_u`'s: c₀ = −β·Σ_l Y[l][j] and one
 16-deep step per checkpoint; the tile returns checkpoints 1 … 3k/16 − 1 (the credited words) and Z, the last.
 
-**Index binding** (X-SPC-30, X-SPC-40): the forward index, the position, the weight id and the global row and column
+**Index binding**: the forward index, the position, the weight id and the global row and column
 indices are Program inputs, anchored like the salt: `Q_template_instances` admits no constant node at the root, so they
 cannot be structure there.
 
@@ -102,7 +102,7 @@ def _digest_body(B, S, rows):
 
 NcpDigestDef = CompositeDefinition(
     "NcpDigest", 1, ("K",), lambda S: ((("rows", Array(D, Array(S.K, I7))),), DIGEST), _digest_body,
-    doc="A strip's digest D_s: SHA-512 over its 16 row digests (the per-row form, decision 9).", conformance="protocol-defined")
+    doc="A strip's digest D_s: SHA-512 over its 16 row digests (the per-row form).", conformance="protocol-defined")
 
 
 def _node_body(B, S, left, right):
