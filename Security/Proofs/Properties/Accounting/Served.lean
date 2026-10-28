@@ -312,9 +312,9 @@ def witLayout : Layout where
   tileCols := 8
   linears := [(32, 8)]
 
-/-- A gate of `op` on `args`, committed or not, at no site. -/
+/-- A gate of `op` on `args`, committed or not, at no place. -/
 def witGate (op : Accounting.Gates.Op Unit) (args : List ℕ) (commit : Bool) : Accounting.Gates.Gate Unit :=
-  { op := op, args := args, lo := 0, hi := 0, step := 0, prim := "", site := .other, commit := commit }
+  { op := op, args := args, lo := 0, hi := 0, step := 0, prim := "", place := .other, commit := commit }
 
 /-- `witLayout`'s one call in one live round: its coin, an A row (a run input), and a committed receipt word reading
 both, committed before the draw, the round after its own. -/
@@ -591,9 +591,9 @@ theorem affine_two (c₁ c₂ a b : ℤ) : (0 : ℤ) + (List.zipWith (· * ·) [
 
 /-! ## Honest windows meet `CreditTie`: `zTree` with `z` beside the noised product, `perCall` with `z` peeled from it -/
 
-/-- A gate of `op` on `args` declared `[lo, hi]`, committed or not, at no site. -/
+/-- A gate of `op` on `args` declared `[lo, hi]`, committed or not, at no place. -/
 def witGateR (op : Accounting.Gates.Op ℕ) (args : List ℕ) (lo hi : ℤ) (commit : Bool) : Accounting.Gates.Gate ℕ :=
-  { op := op, args := args, lo := lo, hi := hi, step := 0, prim := "", site := .other, commit := commit }
+  { op := op, args := args, lo := lo, hi := hi, step := 0, prim := "", place := .other, commit := commit }
 
 /-- The witnesses' dequant: `z·s_a·s_w`. -/
 def witDq (v : List ℤ) : ℤ := v.headD 0 * v.getD 1 0 * v.getD 2 0
