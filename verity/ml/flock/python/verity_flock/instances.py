@@ -339,8 +339,8 @@ def write_set(path: str | Path, relation: str, set_dir: str | Path, lo: int = 0,
     ``x.u16`` / ``w.u16`` with ``y.u16`` for BF16, ``x.u8`` / ``w.u8`` with ``y.u32``, the FP32 accumulator word, for E4M3)
     as a ``flock-pure-instances/v1`` file for ``relation`` (a :data:`lowering.PIPES` entry: its unit model chains each row, and
     the set's recorded y must equal the epilogue of the last accumulator, or the last accumulator itself; the committed y
-    word is the relation's ``y_public`` of it). Rows are written per VU (the unshared statement,
-    root's ruling 2026-09-26 02:30Z); the instance reference names the set and its ``content_digest``. ``y_model``: the set
+    word is the relation's ``y_public`` of it). Rows are written per VU (the unshared
+    statement); the instance reference names the set and its ``content_digest``. ``y_model``: the set
     was captured on other silicon, so y is the relation's own chain output (a distinct tier; the reference counts the words
     that differ from the set's recorded y)."""
     from concurrent.futures import ProcessPoolExecutor

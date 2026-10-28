@@ -47,9 +47,9 @@ inputs = [
     "verity/core/service/flock/Flock/Test/RecCap.lean", "verity/core/service/flock/Flock/Test/RecCapSmall.lean",
 ]
 parallel = true
-# an xdist worker peaked at 15.6 GB (16 Oct, vy-nebius-cpu-1: 38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
+# an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
 worker_gb = 16
-# 9,765 s on one worker beside a loaded check (r20261025-023312-fa65), past suites.py's SUITE_TIMEOUT_S
+# 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
