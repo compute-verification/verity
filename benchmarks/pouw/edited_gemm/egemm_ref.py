@@ -9,8 +9,8 @@ layout), and U (tag 6, lpgemm.cu's LP_UW 64, derive.py's u_noise64 on the weight
     Y  = X W^T (the served product), and C - S U^T == Y for C = X W'^T
     receipts over C's running sums T_s (s = 1 .. k / 32), each dumped kernel's by its kind (meta.json's kinds):
       duo32  derive.py's tile_receipts over every T_s;  duo64  the same over T_2, T_4, ... (the odd steps, 0-based)
-      xin    P2-FF's XOR-in fold (egemm.cu's XIN), tile t's words into chain t % 4;  xin64  the same over T_2, T_4, ...
-      xin13  P2-FF r9's twin itself (receipt_folds_r9.py, art:91c156a1…, pinned by its sha256 below): its xorin_step on
+      xin    the XOR-in fold (egemm.cu's XIN), tile t's words into chain t % 4;  xin64  the same over T_2, T_4, ...
+      xin13  the r9 twin itself (receipt_folds_r9.py, pinned by its sha256 below): its xorin_step on
              the same words and chains, each chain from pfill's y = pos = (tile NCT + ctid) 4 + c, keys the first two
              words that pass its key_ok_r9
       tb4, tb2w, tb1w, tb4c  floored_gemm/ref.py's tb_receipts and tbc_receipts on the tile
@@ -38,7 +38,7 @@ _spec = importlib.util.spec_from_file_location("fgemm_ref", HERE.parent / "floor
 fref = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fref)
 
-RF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"   # art:91c156a1…'s MANIFEST.sha256
+RF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"   # the r9 reference's sha256
 _rf_path = HERE / "receipt_folds_r9.py"
 if hashlib.sha256(_rf_path.read_bytes()).hexdigest() != RF_SHA256:
     sys.exit(f"{_rf_path} is not P2-FF r9's reference (sha256 {RF_SHA256}): restore it from art:91c156a1…, don't edit it")

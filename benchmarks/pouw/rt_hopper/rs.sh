@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# RT-HOPPER-1's and RT-HOPPER-8's H200 job, in two runs so no CPU phase runs on the shared H200 node. From a pushed commit:
+# The H200 job for the form escape and honest's folding loops, in two runs so no CPU phase runs on the shared H200 node.
+# From a pushed commit:
 #
 #   research run --on auto --project verity --campaign eps1 --source <tree> --cwd source -- bash benchmarks/pouw/rt_hopper/rs.sh build
 #       builds sm90_rs.cu (or --env RS_SRC=sm90_forms.cu, the s8-exact siblings) for sm_90a and gates every probe's
 #       SASS (probe.py gate), and runs uni64.sh into $OUT/uni64/.
 #       Outputs: nvcc.txt, build.log, sass/, gate-build.{txt,json}, uni64/ (uni64.sass, uniform.txt), bins.tgz.
 #   research run --on vy-dc-h200 --project verity --campaign eps1 --source <tree> --cwd source --send bins.tgz \
-#     --custody-ttl 12h --timeout 30m --env GPU_LEASE_WHO=rt-hopper -- bash benchmarks/pouw/rt_hopper/rs.sh time [REPS]
+#     --custody-ttl 12h --timeout 30m --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/rt_hopper/rs.sh time [REPS]
 #       unpacks the build's bins.tgz (from $RESEARCH_RUN_DIR/inputs/), times every probe under one gpu-lease (clocks
 #       sampled every 200 ms) into probes/ (rows.jsonl, gate.json, times.jsonl), then rs.py into rs.json.
 #       Outputs: env/ (device.csv, clocks-{before,after}.txt, smi.csv), probes/, rs.json.

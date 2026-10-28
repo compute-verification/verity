@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# EPS1 AMPERE on one A100 (sm_80): every native mma.sync form alone and beside a scalar lane, the scalar pipes, duo
+# On one A100 (sm_80): every native mma.sync form alone and beside a scalar lane, the scalar pipes, duo
 # beside IMMA and the integer forms' exactness, then the gate verdicts and the fit.
 #
 #   research run --on vy-dc-a100 --project verity --campaign cmp-13 --source /workspace --cwd source \
