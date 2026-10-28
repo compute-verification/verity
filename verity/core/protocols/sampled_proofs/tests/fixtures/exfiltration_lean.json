@@ -7,7 +7,7 @@
   "Security/Proofs/Flock/Soundness/Audit/Law.lean": "0d563492751f0915ae1ddc6ea4d577d78bcc8c21c2b237409a2119fabf92c558",
   "Security/Proofs/Flock/Soundness/Audit/Stratified.lean": "4181e6a2442ecd82eeb985d0508711f490590168d5c1b0860ebb285ff538a8cc",
   "Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean": "8ca04b7e4c055f5d66108bb0faea515554dd865d5ef5308a604c2821532cd240",
-  "Security/Proofs/lake-manifest.json": "106679e91dc2e8eebe768458b4e50ffdbffe12b1f87fe9d3147fe8a7b7d505ed",
+  "Security/Proofs/lake-manifest.json": "4cc519754e1baa2eaaf8e58866cee7719cfa7fe3f5fa4de51ca49f66733b0dfb",
   "Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632"
  },
  "vectors": [
