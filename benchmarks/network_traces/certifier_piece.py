@@ -130,7 +130,7 @@ HEIGHT = 10
 WARMUP_REQUEST_S, WARMUP_CLOSE_S = 600, 600
 #: the served node, where the front's peer and the piece and its chain run, as the gate's peers file names it
 SERVED = SS.SITE["front_peer"]
-#: each drawing round's challenger evidence in the chain's out/ (`round_coins.Session`)
+#: each drawing round's challenger evidence in the chain's out/ (`round_coins.RoundSession`)
 CHALLENGER = ("scan/*/challenger", "n2/*/challenger", "n2/*/verifier/period-certificates.json")
 #: how long a step's process group has after SIGTERM before SIGKILL: inside `timeout -k`'s minute and the research
 #: runner's grace, so the piece has ended its steps before anything ends the piece; and how often it looks

@@ -540,8 +540,8 @@ def coins_step(scan: dict | None, n2: dict | None, tie: dict | None, job: dict) 
     """Each round's coin source, from the drivers' summaries' ``coins``: a scan round's and a sampled N2 member's
     session of the auditor's challenger (`round_coins`), or none (Selection All: N2 at every window, the tie).
     Accepted when every scan round the summary ran, and a sampled N2 period (the job's ``n2_sampled``), has a session,
-    no two rounds share a session's root, and every session held (`round_coins.Session.held`'s ``ok``); ``open`` names
-    the coins that aren't the challenger's, every Flock session's (`round_coins.FLOCK`)."""
+    no two rounds share a session's root, and every session held (`round_coins.RoundSession.held`'s ``ok``); ``open``
+    names the coins that aren't the challenger's, every Flock session's (`round_coins.FLOCK`)."""
     rounds: dict[str, dict] = {}
     for step, doc in (("scan", scan), ("n2", n2)):
         for name, r in (((doc or {}).get("coins") or {}).get("rounds") or {}).items():

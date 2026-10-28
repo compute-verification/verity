@@ -479,7 +479,7 @@ def period_certificates(rd: SimpleNamespace) -> list[list[dict]]:
     return [[_certificate(c) for c in x.certificates] for x in rd.windows]
 
 
-def period_session(a, name: str, rd: SimpleNamespace, out: Path) -> RC.Session | None:
+def period_session(a, name: str, rd: SimpleNamespace, out: Path) -> RC.RoundSession | None:
     """Member `name`'s period draw's session of the auditor's challenger (``--challenger``, `round_coins`) on its root
     (`round_coins.root` of its period's certificates, `period_certificates`, step ``n2`` and the member), its need
     planned (`round_coins.subset_need`), so it opens or is refused before anything of the member is proved; its
@@ -487,7 +487,7 @@ def period_session(a, name: str, rd: SimpleNamespace, out: Path) -> RC.Session |
     coin). A session that doesn't open stops the driver: nothing draws on other coins."""
     if not a.draw:
         return None
-    s = RC.Session(a, RC.root(RC.digest(period_certificates(rd)), "n2", name), out / "challenger")
+    s = RC.RoundSession(a, RC.root(RC.digest(period_certificates(rd)), "n2", name), out / "challenger")
     try:
         s.rank.plan(RC.subset_need(a.draw, len(rd.windows)))
     except Exception as e:
@@ -496,11 +496,12 @@ def period_session(a, name: str, rd: SimpleNamespace, out: Path) -> RC.Session |
     return s
 
 
-def period_held(s: RC.Session | None, name: str, rd: SimpleNamespace, res: dict, vdir: Path) -> dict | None:
-    """Member `name`'s period draw (`res`'s ``period``) held to its session's evidence (`round_coins.Session.held`): the
-    coins it read, which the network verdict's Lean drew on, released after its period's commitment, on the root the
-    verifier recomputes from the period's certificates it received. Writes those and the evidence beside what the
-    verifier received (``period-certificates.json``, ``coins.json``). None when the period isn't sampled."""
+def period_held(s: RC.RoundSession | None, name: str, rd: SimpleNamespace, res: dict, vdir: Path) -> dict | None:
+    """Member `name`'s period draw (`res`'s ``period``) held to its session's evidence
+    (`round_coins.RoundSession.held`): the coins it read, which the network verdict's Lean drew on, released after its
+    period's commitment, on the root the verifier recomputes from the period's certificates it received. Writes those
+    and the evidence beside what the verifier received (``period-certificates.json``, ``coins.json``). None when the
+    period isn't sampled."""
     if s is None:
         return None
     p = res["period"]

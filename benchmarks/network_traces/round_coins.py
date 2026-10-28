@@ -1,21 +1,21 @@
 """Each drawing round's coins from the auditor's challenger: a round of the network chain that draws (a scan round's
-`service.Stream`, a sampled N2 period's draw) reads its coins from a challenger session of its own and from nothing else,
-never the verifier's own randomness.
+`service.Stream`, a sampled N2 period's draw) reads its coins from a challenger session of its own and from nothing
+else, never the verifier's own randomness.
 
 * **The challenger** (``--challenger``): ``local``, a development session on this machine (`a5_coins.Local`: the auditor
   host's own service on a scratch root, under an LMS key of its own, so it shows the path, not an auditor's coins: the
   dry runs'); ``loopback:HOST:PORT``, the same on the challenger party's host; ``gate:USER@HOST``, the auditor's
-  challenger through infra's gate, on the network certifier's machine, with ``--peer`` (this node as the gate's /etc/vy/peers names
-  it, whose 127.0.0.1 the gate's coin link serves), ``--challenger-key`` (the deployment's challenger-key/v1 record) and
-  ``--gate-key`` (the lane's gate key). ``--main`` is the verifier's own copy of main's first-parent history, on which
+  challenger through infra's gate, on the network certifier's machine, with ``--peer`` (this node as the gate's
+  /etc/vy/peers names it, whose 127.0.0.1 the gate's coin link serves), ``--challenger-key`` (the deployment's
+  challenger-key/v1 record) and ``--gate-key`` (the lane's gate key). ``--main`` is the verifier's own copy of main's first-parent history, on which
   the session's pin must be. Tests run ``local`` on live_challenger's stub of the Lean's coins
   (``benchmarks/live_challenger/tests/stub_serve.py``): the fake challenger.
 * **The root** (`root`): the SHA-512 of the run's base (what the auditor's devices signed, which the prover can't
   vary: the scan's the warden's session and signed registrations, a sampled N2 period's its certificates), the step
   and the round. The gate opens a root once, ever, so each round of a run draws once, and a rerun of the run can't
   draw it again.
-* **A round's session** (`Session`: `a5_coins.start` for one rank). The round plans its need (`RankCoins.plan`, which
-  opens the session), commits to its registration (`RankCoins.commit`), reads its coins and ends its turn
+* **A round's session** (`RoundSession`: `a5_coins.start` for one rank). The round plans its need (`RankCoins.plan`,
+  which opens the session), commits to its registration (`RankCoins.commit`), reads its coins and ends its turn
   (`RankCoins.drawn`: the segment the session released). `close` publishes the session's evidence, kept under its
   directory, and `held` holds what the round read to it: `coins.coins_reason` on the root and the round's commitment,
   each of `a5_coins.negatives` refused, and the bytes read the ones released. A session that can't open, or whose
@@ -100,7 +100,7 @@ def subset_need(k: int, n: int) -> int:
     return -(-(sum(reads) + max(reads, default=0)) // a5_coins().Ch.COIN_BYTES)
 
 
-class Session:
+class RoundSession:
     """Round `name`'s challenger session on `root`, its evidence kept under `dest` (module docstring). `rank` is the
     round's coins (`a5_coins.RankCoins`), which its draw plans, commits and reads."""
 

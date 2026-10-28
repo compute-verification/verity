@@ -1,7 +1,7 @@
 """round_coins: each drawing round's coins from a session of its own of the auditor's challenger, on a root that binds
 the run's base, the step and the round. The fake challenger is ``local`` on live_challenger's stub of the Lean
 verifier's coins (`fake_challenger`, as `test_a5_reserve` runs it), so nothing builds `sampled-proofs-verifier`. A
-round's draw holds against its session's evidence (`Session.held`: `coins.coins_reason` on the round's root and its
+round's draw holds against its session's evidence (`RoundSession.held`: `coins.coins_reason` on the round's root and its
 commitment, each `a5_coins.negatives` refused, the bytes read the ones released); a draw held to other bytes, another
 commitment or another root is refused; a round that never planned its draw opens nothing, and a session the challenger
 refuses fails the round, with nothing drawn on other coins. Flags that can't name a challenger are refused by name."""
@@ -42,7 +42,7 @@ def fake_challenger(tmp_path: Path, monkeypatch, **flags) -> SimpleNamespace:
                               "challenger_key": None, **flags})
 
 
-def draw(s: RC.Session, commitment: bytes) -> tuple[bytes, dict | None]:
+def draw(s: RC.RoundSession, commitment: bytes) -> tuple[bytes, dict | None]:
     """The round's `subset:K` of N on its session's coins once committed to `commitment`: (the bytes read, the
     segment its turn released)."""
     s.rank.plan(RC.subset_need(K, N))
@@ -76,7 +76,7 @@ def test_flags_that_cant_name_a_challenger_are_refused_by_name(flags, why):
 def test_a_rounds_draw_holds_on_its_own_session_and_other_bytes_a_commitment_or_a_root_do_not(tmp_path, monkeypatch):
     a = fake_challenger(tmp_path, monkeypatch)
     root, after = RC.root("ab" * 64, "scan", "honest"), hashlib.sha512(b"registration").digest()
-    s = RC.Session(a, root, tmp_path / "honest" / "challenger")
+    s = RC.RoundSession(a, root, tmp_path / "honest" / "challenger")
     try:
         read, segment = draw(s, after)
     finally:
@@ -98,7 +98,7 @@ def test_a_rounds_draw_holds_on_its_own_session_and_other_bytes_a_commitment_or_
 
 def test_a_round_that_never_planned_opens_nothing_and_a_refused_session_fails_closed(tmp_path, monkeypatch):
     a = fake_challenger(tmp_path, monkeypatch)
-    s = RC.Session(a, RC.root("ab" * 64, "scan", "chain"), tmp_path / "chain" / "challenger")
+    s = RC.RoundSession(a, RC.root("ab" * 64, "scan", "chain"), tmp_path / "chain" / "challenger")
     published = s.close()
     assert "was not opened" in published["error"] and published["plan"].get("session") is None
     held = s.held(b"", b"", None)
@@ -107,7 +107,7 @@ def test_a_round_that_never_planned_opens_nothing_and_a_refused_session_fails_cl
 
     AC = RC.a5_coins()
     monkeypatch.setattr(AC, "reserve_reason", lambda layout, needs: "the challenger refuses the reserve")
-    s = RC.Session(a, RC.root("ab" * 64, "scan", "tampered"), tmp_path / "tampered" / "challenger")
+    s = RC.RoundSession(a, RC.root("ab" * 64, "scan", "tampered"), tmp_path / "tampered" / "challenger")
     try:
         with pytest.raises(AC.Ch.CoinError, match="the challenger refuses the reserve"):
             s.rank.plan(RC.subset_need(K, N))

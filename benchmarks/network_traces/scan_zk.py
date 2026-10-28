@@ -108,19 +108,19 @@ session of the auditor's challenger of its own (``--challenger``, `round_coins`)
   instances' rows. A member none of whose units is drawn (G > 1) runs no session.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, `round_coins`): every round, the
   block round and the negatives too, draws as prove_path's records audit draws (`a5_coins`), on a session of the
-  auditor's challenger of its own, on the round's root (`round_coins.root` of the group's `window_root`, the warden's session and the group's
-  signed registrations, and the round's name). The round's `service.Stream` (`spec_of`) on its coins
-  (`a5_coins.RankCoins`) registers the round, the coins commit to the registration's digest, and its select draws once
-  (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of record is the stream's with
-  the coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to the Python's
-  (`coins_outcome`), and the session's evidence held by `round_coins.Session.held`; for the honest round each altered
-  evidence (`a5_coins.negatives`, the evidence for another window) is also refused by the Lean's run. ``local`` is a
-  development session on this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is
-  the auditor's challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
-  ``--challenger-key``. The gate opens a root once, ever: a run's round is drawn once (the synthetic run's
-  registrations carry fresh salts, so each synthetic run has roots of its own). A round whose session doesn't open, or
-  whose evidence doesn't hold, fails; the summary's ``coins`` names each round's session, and each Flock session's
-  coins, which are not the challenger's (`round_coins.FLOCK`).
+  auditor's challenger of its own, on the round's root (`round_coins.root` of the group's `window_root`, the warden's
+  session and the group's signed registrations, and the round's name). The round's `service.Stream` (`spec_of`) on its
+  coins (`a5_coins.RankCoins`) registers the round, the coins commit to the registration's digest, and its select
+  draws once (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of record is the
+  stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to the Python's
+  (`coins_outcome`), and the session's evidence held by `round_coins.RoundSession.held`; for the honest round each
+  altered evidence (`a5_coins.negatives`, the evidence for another window) is also refused by the Lean's run.
+  ``local`` is a development session on this machine (its own key; it shows the path, not an auditor's coins);
+  ``gate:USER@HOST`` is the auditor's challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under
+  the deployment's key record ``--challenger-key``. The gate opens a root once, ever: a run's round is drawn once (the
+  synthetic run's registrations carry fresh salts, so each synthetic run has roots of its own). A round whose session
+  doesn't open, or whose evidence doesn't hold, fails; the summary's ``coins`` names each round's session, and each
+  Flock session's coins, which are not the challenger's (`round_coins.FLOCK`).
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but a public ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`; the slot
   entries' o0 is a committed row, `ROWS_O0`, whose salts it never sends), less the pieces public
@@ -1012,10 +1012,10 @@ def window_root(at: SimpleNamespace) -> str:
 
 @contextmanager
 def challenger(a, at: SimpleNamespace, name: str, out: Path):
-    """Round `name`'s session of the auditor's challenger (``--challenger``, `round_coins.Session`) on its root
+    """Round `name`'s session of the auditor's challenger (``--challenger``, `round_coins.RoundSession`) on its root
     (`round_coins.root` of `window_root`), its evidence under ``out / "challenger"``; on the way out the round's turn
     ends whether or not it drew and the session's evidence is published."""
-    coins = RC.Session(a, RC.root(window_root(at), "scan", name), out / "challenger")
+    coins = RC.RoundSession(a, RC.root(window_root(at), "scan", name), out / "challenger")
     try:
         yield coins
     finally:
@@ -1048,7 +1048,7 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     return spec, units, counts
 
 
-def coins_outcome(a, coins: RC.Session, spec: S.Spec, units: list, counts: dict, stream: S.Stream, draw: S.Draw,
+def coins_outcome(a, coins: RC.RoundSession, spec: S.Spec, units: list, counts: dict, stream: S.Stream, draw: S.Draw,
                   rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None, sessions: list[str],
                   verdicts: dict, statement: dict, given: dict,
                   negatives: bool = True) -> tuple[dict | None, dict, dict]:
@@ -1132,7 +1132,7 @@ def _free_port() -> int:
 
 
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
-          port: int, k: int | None, coins: RC.Session) -> dict:
+          port: int, k: int | None, coins: RC.RoundSession) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
     warden ports read, `warden_roots`, before any coin), its units drawn ``stratified:k`` (every unit when `k` is None)
@@ -1141,8 +1141,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     held unit's public ``o0`` (none of the slot entries', `ROWS_O0`) opened under the salt the prover sends. A member
     with no unit drawn runs no session. Member j's session listens on ``port + j``, or with ``port`` 0 on a port the OS
     picks free. Writes what the verifier received under ``out / "verifier"``. The outcome of record is the stream's
-    (`coins_outcome`), and ``session`` the round's session held (`round_coins.Session.held`). An accepted audit carries
-    its charge terms (`charge_terms`) and each member's cost per drawn unit."""
+    (`coins_outcome`), and ``session`` the round's session held (`round_coins.RoundSession.held`). An accepted audit
+    carries its charge terms (`charge_terms`) and each member's cost per drawn unit."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V

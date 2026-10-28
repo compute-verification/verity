@@ -53,7 +53,7 @@ def _period(name: str, cert: str = "cert") -> SimpleNamespace:
         for w in range(N)])
 
 
-def _draw(s: RC.Session, name: str, rd: SimpleNamespace) -> dict:
+def _draw(s: RC.RoundSession, name: str, rd: SimpleNamespace) -> dict:
     commitment = hashlib.sha512(("period/" + name).encode()).hexdigest()
     read = bytearray()
     s.rank.commit(bytes.fromhex(commitment))
@@ -64,7 +64,7 @@ def _draw(s: RC.Session, name: str, rd: SimpleNamespace) -> dict:
             "segment": s.rank.drawn()}
 
 
-def _member(a, name: str, rd: SimpleNamespace, out: Path) -> tuple[RC.Session, dict]:
+def _member(a, name: str, rd: SimpleNamespace, out: Path) -> tuple[RC.RoundSession, dict]:
     s = n2.period_session(a, name, rd, out / name)
     try:
         res = _draw(s, name, rd)

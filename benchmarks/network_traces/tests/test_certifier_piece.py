@@ -4,8 +4,8 @@ and its outcome. The piece, on a serve dir whose window was the warden's synthet
 `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
 link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
-the kept gate's host, each draw's coins the challenger's host's, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
-report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
+the kept gate's host, each draw's coins the challenger's host's, the checks on the prover's node), then goes through
+`served_verdicts.py record` into the window report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
 is the three files `network-period` read, as `composite.py` reads a piece's case; the chain's endpoint report, with
 each Commit window's counts, stays in the kept run. A window request the warden didn't certify is
 rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
@@ -114,7 +114,8 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
     return d
 
 
-#: a drawing round's challenger evidence as the chain leaves it in out/ (`round_coins.Session`), which DIR publishes
+#: a drawing round's challenger evidence as the chain leaves it in out/ (`round_coins.RoundSession`), which DIR
+#: publishes
 EVIDENCE = ("scan/honest/challenger/session.json", "scan/honest/challenger/pins.jsonl", "scan/honest/challenger/coins.json",
             "n2/honest/challenger/coins.json", "n2/honest/verifier/period-certificates.json")
 
