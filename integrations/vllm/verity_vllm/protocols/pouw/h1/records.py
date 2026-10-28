@@ -2,7 +2,8 @@
 ``verity_int8::scaled_mm_zy`` writes beside the served y over a call's T slots, one `ZY_BYTES` record a 32 × 32 unit in the
 compiled Program's unit order, the unit's exact s32 z over the whole K then its y = dq(z, s_a, s_w) in bf16, little-endian
 and row-major, an empty slot's bytes zero (`engine.int8_exact.zy_records`). Unit u's record is the z table's leaf u. The
-credit's value check (`reason`) holds the records to the call's committed scales and its served y."""
+credit's value check (`reason`) holds the records to the call's committed scales and its served y. The records are
+read where the arm wrote them (`of`); `host` copies them only for what reads them on the host."""
 from __future__ import annotations
 
 from typing import Any
@@ -15,17 +16,19 @@ UNIT = (32, 32)
 ZY_BYTES = 6 * UNIT[0] * UNIT[1]
 
 
-def of(z: Any, units: int) -> np.ndarray | None:
-    """A call of `units` units' records on the host, [units, `ZY_BYTES`] uint8, when `z` is them (``scaled_mm_zy``'s zy),
-    else None. A CUDA tensor is copied into pinned host memory, which the array holds."""
+def of(z: Any, units: int) -> Any:
+    """A call of `units` units' records, [units, `ZY_BYTES`] uint8, as its arm handed them over (``scaled_mm_zy``'s zy: a
+    tensor on its device, or an array), when `z` is them, else None."""
     if z is None or str(getattr(z, "dtype", "")).removeprefix("torch.") != "uint8" or tuple(z.shape) != (units, ZY_BYTES):
         return None
-    if getattr(z, "is_cuda", False):
-        import torch
-        host = torch.empty(tuple(z.shape), dtype=torch.uint8, pin_memory=True)
-        host.copy_(z.detach())
-        return host.numpy()
-    return np.ascontiguousarray(z.detach().cpu().numpy() if hasattr(z, "detach") else np.asarray(z))
+    return z.detach() if hasattr(z, "detach") else np.ascontiguousarray(z)
+
+
+def host(records: Any) -> np.ndarray | None:
+    """`records` (`of`'s) on the host, [units, `ZY_BYTES`] uint8."""
+    if records is None:
+        return None
+    return np.ascontiguousarray(records.detach().cpu().numpy() if hasattr(records, "detach") else np.asarray(records))
 
 
 def split(records: np.ndarray, rows: int, n: int) -> tuple[np.ndarray, np.ndarray]:
@@ -76,11 +79,13 @@ def _holds(records: np.ndarray, rows: int, n: int, y: Any, s_a: Any, s_w: Any) -
     return not tail[:, :half].any() and bool((tail[:, half:].view("<i2").reshape(-1, cols, ur, uc) == y0).all())
 
 
-def reason(records: np.ndarray, rows: int, n: int, y: np.ndarray, s_a: np.ndarray, s_w: np.ndarray) -> str | None:
+def reason(records: Any, rows: int, n: int, y: np.ndarray, s_a: np.ndarray, s_w: np.ndarray) -> str | None:
     """Why a call's records over `rows` slots are not its served product's (None if they are): every unit's y is dq of its
     z at the call's committed scales, s_a [m] on the m served slots, 0 on the empty ones, and s_w [n] (`DequantOf`,
     `engine.int8_exact.dequantize`); the served y [m, n] bf16 bits are the records' on the served rows; an empty slot's z
-    is 0. Records that hold are accepted by `_holds`; the rest are read whole, here, for the first unit that doesn't."""
+    is 0. Records that hold are accepted by `_holds`; the rest are read whole, here, for the first unit that doesn't.
+    Records on a device are read on the host's copy (`host`)."""
+    records = host(records)
     if _holds(records, rows, n, y, s_a, s_w):
         return None
     return _reason(records, rows, n, y, s_a, s_w)
