@@ -1,4 +1,5 @@
 import Properties.Verity.Soundness
+import Properties.Verity.Idle
 import Proofs.Properties.Composition
 import Proofs.Core.Game.Prob
 
@@ -12,12 +13,18 @@ subprotocols' events, each at most its target's error at the strategy: the union
 subprotocols in one game (`soundness_at_of_targets`). `soundness_of_legs` is it at onsite's seven, and
 `remote_soundness_of_legs` at remote's three, which are a subset of onsite's.
 
-Beside it, the two checks every guarantee carries: `soundness_of_legs_honest`, at the honest deployment (the
-deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
-event and the theorem's own have probability `0`; and `soundness_of_legs_nontrivial`, its conclusion fails for a verifier
+Beside it, the two checks every guarantee carries, for any names `V`: `soundness_honest_of`, at the honest deployment
+(the deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
+event and the theorem's own have probability `0`; and `soundness_nontrivial_of`, its conclusion fails for a verifier
 that accepts everything, wherever a claim fails on every play of a strategy whose files pass the commit phase's check and
 the errors sum below one. `Vocab.holds_sampled_of_opens` is the honest commitment's case of sampled proofs' claim: a
 correct transcript that the commitment opens everywhere, the constants by their constants, has no unbound unit.
+
+The witnesses of each of the three theorems are at the idle deployment (`Properties.Verity.Idle`), at the compiled
+composites: its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundness_of_legs_honest`,
+`remote_soundness_of_legs_honest`), and its conclusion fails at `Idle.exact` for a verifier that accepts everything
+(`soundness_at_of_targets_nontrivial`, `soundness_of_legs_nontrivial`, `remote_soundness_of_legs_nontrivial`): there
+every error is `0` and PoUW's claim fails on every play of the files that pass the commit phase's check.
 -/
 
 namespace Verity
@@ -123,7 +130,7 @@ theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Exchange → 
 /-- **Its hypotheses hold at the honest deployment**: at registered files, where each of composite `k`'s subprotocols'
 honest lemma holds (`Vocab.HonestHolds`), the deployment's honest prover meets every target with probability `0` on its
 event, and the event the theorem bounds has probability `0`. -/
-theorem soundness_of_legs_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
+theorem soundness_honest_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (k : Verity.Registration.Composite) (h : ∀ a ∈ subprotocols k, V.HonestHolds k a) (θ F c : ByteArray)
     (hreg : V.Registered θ F) :
     (∀ a ∈ subprotocols k, Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c (V.honest θ F c) a o)
@@ -151,7 +158,7 @@ theorem soundness_of_legs_honest {ι α : Type} [Fintype α] {d : Device ι} (V 
 
 /-- **Its conclusion fails for a verifier that accepts everything**: at files that pass the commit phase's check, a
 strategy on whose every play the claim of one of composite `k`'s subprotocols fails, and errors summing below one. -/
-theorem soundness_of_legs_nontrivial {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
+theorem soundness_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (hreg : V.Registered θ F) (a : Subprotocol) (ha : a ∈ subprotocols k) (hfail : ∀ o, ¬ V.Holds k θ F c σ a o)
     (hlt : ∑ a ∈ subprotocols k, V.error a θ F c σ < 1) :
@@ -173,7 +180,7 @@ theorem prob_play_eq_zero (ns : List ℕ) (θ F c : ByteArray) (p : Exchange →
 which the claim of one of composite `k`'s subprotocols fails with probability above the errors summed makes the
 conclusion fail for a verifier that accepts everything. So the one model-level failing instance (through that
 subprotocol's `_nontrivial`) gives the theorem's, with no instance of its own. -/
-theorem soundness_of_legs_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
+theorem soundness_nontrivial_of_lt {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
     (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
     (hreg : V.Registered θ F) (a : Subprotocol) (ha : a ∈ subprotocols k)
     (hlt : ∑ b ∈ subprotocols k, V.error b θ F c σ < Game.prob (fun o => ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ) :
@@ -250,5 +257,97 @@ theorem fileFinder_calls (θ F : ByteArray) (x : (V.fileFinder θ F).S) (n : ℕ
   simp [fileFinder]
 
 end Vocab
+
+namespace Idle
+
+/-- At `unbounded`, every subprotocol's error is `⊤`. -/
+theorem error_unbounded (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (unbounded.game θ F c)) :
+    unbounded.error a θ F c σ = ⊤ := by
+  unfold Vocab.error Accounting.condError
+  split_ifs <;> simp [unbounded, vocab]
+
+/-- At `unbounded`, every subprotocol meets its target at every composite. -/
+theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) : unbounded.Target k a := by
+  intro θ F c σ
+  rw [error_unbounded]
+  exact le_top
+
+/-- The idle finder outputs no collision. -/
+theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
+  unfold Claims.Finder.Pr Claims.Pr
+  simp [finder]
+
+/-- The idle forger forges nothing. -/
+theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forger.Pr verify = 0 := by
+  unfold Hash.Assumptions.LmsForger.Pr Hash.Assumptions.LmsForger.Forges
+  simp [forger]
+
+/-- At `exact`, every subprotocol's error is `0`: its finder and forger meet their premises, and every term is `0`. -/
+theorem error_exact (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
+    exact.error a θ F c σ = 0 := by
+  unfold Vocab.error Accounting.condError
+  rw [if_pos ⟨le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
+  simp [exact, vocab]
+
+/-- At `exact`, PoUW's claim fails on every play: it certifies one gate computed, and no play computes one. -/
+theorem pouw_fails (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (exact.game θ F c))
+    (o : Exchange) : ¬ exact.Holds k θ F c σ .pouw o := by
+  intro h
+  change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf F).N)) : ℕ) : ℝ) at h
+  simp at h
+
+/-- At `exact`, the conclusion at composite `k` fails for a verifier that accepts everything, at the files that are the
+parameters (`ByteArray.empty`), for the honest prover. -/
+theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw ∈ subprotocols k) :
+    ¬ exact.SoundnessFor k fun _ => True := by
+  refine soundness_nontrivial_of exact k .empty .empty .empty (exact.honest .empty .empty .empty) rfl .pouw hk
+    (pouw_fails k _ _ _ _) ?_
+  simp only [error_exact, Finset.sum_const_zero]
+  exact zero_lt_one
+
+end Idle
+
+/-- **`SoundnessOf`'s honest lemma**: its hypotheses hold at the idle deployment's compiled composites, every
+subprotocol meeting its target at onsite and at remote. -/
+theorem soundness_at_of_targets_honest :
+    Idle.unbounded.Target .onsite .sampled ∧ Idle.unbounded.Target .onsite .pouw ∧
+      Idle.unbounded.Target .onsite .inferenceOnly ∧ Idle.unbounded.Target .onsite .pous ∧
+      Idle.unbounded.Target .onsite .poub ∧ Idle.unbounded.Target .onsite .network ∧
+      Idle.unbounded.Target .onsite .wipe ∧ Idle.unbounded.Target .remote .sampled ∧
+      Idle.unbounded.Target .remote .pouw ∧ Idle.unbounded.Target .remote .inferenceOnly :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
+    Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
+    Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+
+/-- **`SoundnessOf`'s nontrivial lemma**: its conclusion fails at onsite for a verifier that accepts everything, at the
+idle deployment whose errors are all `0`. -/
+theorem soundness_at_of_targets_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
+  Idle.nontrivial_at .onsite (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+
+/-- **`Soundness`'s honest lemma**: its seven hypotheses hold at the idle deployment's compiled onsite composite. -/
+theorem soundness_of_legs_honest :
+    Idle.unbounded.SampledProofsSound .onsite ∧ Idle.unbounded.PouwSound .onsite ∧
+      Idle.unbounded.InferenceOnlySound .onsite ∧ Idle.unbounded.PousSound .onsite ∧
+      Idle.unbounded.BandwidthAuditSound .onsite ∧ Idle.unbounded.NetworkCertifierSound .onsite ∧
+      Idle.unbounded.WipeSound .onsite :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
+    Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+
+/-- **`Soundness`'s nontrivial lemma**: its conclusion fails at onsite for a verifier that accepts everything, at the
+idle deployment whose errors are all `0`. -/
+theorem soundness_of_legs_nontrivial : ¬ Idle.exact.SoundnessFor .onsite fun _ => True :=
+  Idle.nontrivial_at .onsite (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+
+/-- **`RemoteSoundness`'s honest lemma**: its three hypotheses hold at the idle deployment's compiled remote
+composite. -/
+theorem remote_soundness_of_legs_honest :
+    Idle.unbounded.SampledProofsSound .remote ∧ Idle.unbounded.PouwSound .remote ∧
+      Idle.unbounded.InferenceOnlySound .remote :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+
+/-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
+the idle deployment whose errors are all `0`. -/
+theorem remote_soundness_of_legs_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
+  Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
 
 end Verity

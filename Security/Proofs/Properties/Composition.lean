@@ -11,6 +11,10 @@ then `check`, and `Core.Composition.holdTies` into its ties' `strays`; a `strays
 (`oneRecord_of_strays`, `tied_of_strays`). `bindCollision`, because `bindMessage` is injective in the digests: past the id
 and the zero byte, its JSON reads back entry by entry, each escaped string ending at its first unescaped quote
 (`canonStr_split`) and lowercase hex decoding to its bytes (`unhex_hexOf`).
+
+`acceptSame_honest` and `acceptTied_honest` are their honest lemmas, an input the compiled function accepts, and
+`acceptSame_nontrivial` and `acceptTied_nontrivial` their nontrivial ones, an input whose conclusion fails, which a
+verifier that accepts everything accepts.
 -/
 
 namespace Properties.Composition
@@ -282,6 +286,29 @@ theorem acceptTied : AcceptTied := by
 /-- Ties over no components hold every outcome as it is. -/
 theorem holdTies_nil (ev : List Case) (o : Outcome Keyed Keyed) : holdTies [] ev o = o := by
   cases o <;> rfl
+
+/-- **`AcceptSame`'s honest lemma**: remote's `checkSame` accepts a composition that fits, with no components and no
+record subprotocols, under the binding of no digests. -/
+theorem acceptSame_honest :
+    checkSame "verity/remote/v0" [] [] [] (bind "verity/remote/v0" []) [] = .accept [] [] := by
+  simp [checkSame, run, strays, judge, binding, answersOf]
+
+/-- **`AcceptSame`'s nontrivial lemma**: `SameAccepted` fails at parameters that name a component the composition
+doesn't have, which a verifier that accepts everything accepts. -/
+theorem acceptSame_nontrivial :
+    ¬ SameAccepted "verity/remote/v0" [] [] [⟨"x", ""⟩] ByteArray.empty [] [] [] := by
+  rintro ⟨⟨⟨h, -⟩, -⟩, -⟩
+  simp at h
+
+/-- **`AcceptTied`'s honest lemma**: `holdTies` accepts an accepted outcome whose ties hold. -/
+theorem acceptTied_honest : holdTies [] [] (.accept [] []) = .accept [] [] :=
+  holdTies_nil _ _
+
+/-- **`AcceptTied`'s nontrivial lemma**: `TiedAccepted` fails at an outcome that rejected, which a verifier that accepts
+everything accepts. -/
+theorem acceptTied_nontrivial : ¬ TiedAccepted [] [] (.reject "") [] [] := by
+  rintro ⟨h, -⟩
+  cases h
 
 /-! ## `bind`'s messages, read back
 
