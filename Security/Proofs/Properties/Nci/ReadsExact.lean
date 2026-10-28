@@ -1752,7 +1752,7 @@ theorem parsePartsIn_nonneg (leaves : Bool → Nat → Option Nat) (args : Nat �
 speaks of `Desc.nodeReads`' segments as the positions they name (`segPos`): their gates are `Width.segGates`'
 (`segGates_pos`), and the root node of a segment's first piece is `Desc.nodeOf`'s (`nodeOf_root`). -/
 
-open Flock.Program (Prog)
+open Flock.Program (Prog GateTable)
 open DescAgree (nodeCount rootOffs)
 
 /-- `Desc.analyze`'s summaries of the reached Definitions, callees first. -/
@@ -1903,7 +1903,7 @@ pieces naming gates only, every segment of positive count has pieces of positive
 `c.w[a]` of one root node; and the gates the segments of positive count name are exactly the gates outside node `k`
 that its gates read. `readsExact_of_rootReads` gives `Novel.ReadsExact` from it. -/
 def RootReads : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
     ∀ k < nodeCount P, ∀ rs, Desc.nodeReads (rootCtx P memo) k = .ok rs →
@@ -2377,7 +2377,7 @@ gates outside the node that its gates read. A composite's read `keep` keeps is t
 
 /-- A segment as `RootReads` speaks of it: of no count, it names no positions; else its pieces have positive count and
 it names gates `a` of one root node, each of width `c.w[a]`. -/
-def SegGood (P : Prog) (c : Circuit) (s : Seg) : Prop :=
+def SegGood (P : Prog) (c : GateTable) (s : Seg) : Prop :=
   (s.count = 0 → segPos s = []) ∧
     (s.count ≠ 0 → (∀ q ∈ s.ps.toList, 0 < q.count) ∧
       ∃ k' < nodeCount P, ∀ x ∈ segPos s, ∃ a : Nat, x = (.gate c.w[a]!, (a : Int)) ∧ a ∈ nodeGates P k')
@@ -2397,7 +2397,7 @@ every read `Seg.split` makes of a segment `down` gives a piece of one of its arg
 or `Desc.carriesRead` gives of its scan's carries, is `SegGood`. Open past `rootSegs_of` and `rootGates_of`:
 `RootNodes`. -/
 def RootSegs : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
     ∀ k < nodeCount P, ∀ node rs, (rootCtx P memo).node k = .ok node → Desc.nodeReads (rootCtx P memo) k = .ok rs →
@@ -2409,7 +2409,7 @@ def RootSegs : Prop :=
 name (`rootRead`), outside the node where its callee is a composite, are exactly the gates outside the node that its
 gates read. -/
 def RootSet : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
     ∀ k < nodeCount P, ∀ node rs, (rootCtx P memo).node k = .ok node → Desc.nodeReads (rootCtx P memo) k = .ok rs →
@@ -2447,7 +2447,7 @@ theorem keep_gate (P : Prog) (memo : Array Desc.Summary) (k : Nat) (s : Seg) (q 
 
 /-- **A `SegGood` segment of positive count is kept exactly when a gate it names is outside the node**: its gates are
 one root node's, its first piece's among them. -/
-theorem keep_iff (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hl : Desc.rootLaidOut P = true) {k : Nat}
+theorem keep_iff (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hl : Desc.rootLaidOut P = true) {k : Nat}
     (hk : k < nodeCount P) {s : Seg} (hg : SegGood P c s) (hc0 : s.count ≠ 0) {w a : Nat}
     (hw : (Tgt.gate w, (a : Int)) ∈ segPos s) : keep (rootCtx P memo) k s = true ↔ a ∉ nodeGates P k := by
   obtain ⟨-, -, -, hmono⟩ := DescAgree.rootLaidOut_spec P hl
@@ -2681,7 +2681,7 @@ theorem find_root (P : Prog) (hl : Desc.rootLaidOut P = true) {k g : Nat} (hk : 
 
 /-- **A gate of a primitive root node reads its member's operands in the root activation**: member `0` of a primitive
 or Call node, else the one `(g - offset) / gates` holds. -/
-theorem reads_rootPrim (P : Prog) (c : Circuit) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true)
+theorem reads_rootPrim (P : Prog) (c : GateTable) (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true)
     {k : Nat} (hk : k < nodeCount P) (hp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = true) {g : Nat}
     (hg : g ∈ nodeGates P k) :
     Flock.Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!)
@@ -10825,7 +10825,7 @@ theorem rootShape (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok me
 
 /-- A read `Seg.split` makes of a `ShapeOk` segment of the root's body, the root without parameters, is `SegGood`
 wherever, of positive count, it names gates of one root node with their widths. -/
-theorem segGood_of {P : Prog} {c : Circuit} {s g : Seg} (hp0 : (P.defs[P.root]!).body.params.size = 0)
+theorem segGood_of {P : Prog} {c : GateTable} {s g : Seg} (hp0 : (P.defs[P.root]!).body.params.size = 0)
     (hs : ShapeOk P P.root s) (hg : g ∈ (Seg.split s).toList)
     (hG : g.count ≠ 0 → ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g →
       w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k') :
@@ -10855,7 +10855,7 @@ reads, with its summaries `memo` and `circuitOf`'s circuit `c`: every read `Seg.
 a piece of one of root node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's
 carries, of positive count, names gates `p` of width `c.w[p]` of one root node. -/
 def RootGates : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
     ∀ k < nodeCount P, ∀ node, (rootCtx P memo).node k = .ok node →
@@ -10865,7 +10865,7 @@ def RootGates : Prop :=
 
 /-- A segment of the root's body whose gates have their widths in `c` and lie in root nodes as `Seg.split` reads them:
 each piece's in one root node, and, when its copies shift (`reps > 1`, `shift ≠ 0`), all its copies' in one. -/
-def SegNodes (P : Prog) (c : Circuit) (s : Seg) : Prop :=
+def SegNodes (P : Prog) (c : GateTable) (s : Seg) : Prop :=
   (∀ w p, (Tgt.gate w, p) ∈ segPos s → w = c.w[p.toNat]!) ∧
   (∀ q ∈ s.ps.toList, q.count ≠ 0 →
     ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ pos q → p.toNat ∈ nodeGates P k') ∧
@@ -10876,7 +10876,7 @@ def SegNodes (P : Prog) (c : Circuit) (s : Seg) : Prop :=
 node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries, is
 `SegNodes` (`rootNodes_of`, from `RootOneNode`). -/
 def RootNodes : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
     ∀ k < nodeCount P, ∀ node, (rootCtx P memo).node k = .ok node →
@@ -10885,7 +10885,7 @@ def RootNodes : Prop :=
 
 /-- A read `Seg.split` makes of a `SegNodes` segment, of positive count, names gates of one root node with their
 widths. -/
-theorem split_nodes {P : Prog} {c : Circuit} {s g : Seg} (hs : SegNodes P c s) (hg : g ∈ (Seg.split s).toList)
+theorem split_nodes {P : Prog} {c : GateTable} {s g : Seg} (hs : SegNodes P c s) (hg : g ∈ (Seg.split s).toList)
     (h0 : g.count ≠ 0) :
     ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos g → w = c.w[p.toNat]! ∧ p.toNat ∈ nodeGates P k' := by
   have hx : ∀ x, x ∈ segPos g → x ∈ segPos s := fun x hx => (mem_segPos_split s x).1 ⟨g, hg, hx⟩
@@ -10970,7 +10970,7 @@ theorem gate_root_prim (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : Nat} {
     cases hprim'
 
 /-- **A gate of a root node calling a primitive has that primitive's width** in `circuitOf`'s circuit. -/
-theorem w_root_prim (P : Prog) {c : Circuit} (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k g : Nat}
+theorem w_root_prim (P : Prog) {c : GateTable} (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k g : Nat}
     (hk : k < nodeCount P) (hg : g ∈ nodeGates P k)
     (hprim : (P.defs[((DescAgree.rootBody P).nodes[k]!).fn]!).prim = true) :
     (P.defs[((DescAgree.rootBody P).nodes[k]!).fn]!).ret = .value c.w[g]! := by
@@ -11084,7 +11084,7 @@ theorem run_locW (P : Prog) (g : Nat) : ∀ (n : Nat) (sc : Flock.Program.Scope)
       exact ih
 
 /-- **A root gate's width in `circuitOf`'s circuit is the one `LocW` gives it.** -/
-theorem locW_root {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
+theorem locW_root {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g : Nat} (hg : g < gates P) :
     LocW P P.root g c.w[g]! := by
   obtain ⟨p, sc, hp, hw, -⟩ := circuitOf_gate hc hg
   unfold Flock.Program.Prog.gate at hp
@@ -13024,7 +13024,7 @@ theorem memoOf_retW (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok m
         (fun k n hn => (hRR hp k n hn).2) Flock.Steps.FUEL).1) hv (r.push v) hlast
 
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
-theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
+theorem w_of_locW {P : Prog} {c : GateTable} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
   locW_unique h (locW_root hc hg)
 
@@ -13130,7 +13130,7 @@ theorem rootW (P : Prog) (memo : Array Desc.Summary) (hm : memoOf P = .ok memo) 
 
 /-- **The gates a root node's reads name have their widths in `circuitOf`'s circuit** (`SegNodes`' first part):
 `rootW`, each gate in the root's range (`locW_lt`), and `w_of_locW`. -/
-theorem rootW_circuit (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hm : memoOf P = .ok memo)
+theorem rootW_circuit (P : Prog) (memo : Array Desc.Summary) (c : GateTable) (hm : memoOf P = .ok memo)
     (hc : circuitOf P = .ok c) (hF : RootFacts P) (hWF : WidthFacts P) {k : Nat} {node : Flock.Program.Node}
     (hn : (rootCtx P memo).node k = .ok node) {s : Seg}
     (hs : (∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
@@ -13145,7 +13145,7 @@ node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` giv
 of positive count names gates of one root node, and, when its copies shift, all its copies' gates are one root
 node's. Proved in `ReadsOneNode` (`rootOneNode_of`). -/
 def RootOneNode : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : GateTable),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
     ∀ k < nodeCount P, ∀ node, (rootCtx P memo).node k = .ok node →
