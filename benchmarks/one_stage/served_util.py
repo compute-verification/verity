@@ -321,7 +321,7 @@ def windows(serve_dir: Path) -> dict[str, Any]:
     s = serve_dir / "summary.json"
     if s.exists():
         doc = json.loads(s.read_text())
-        got["summary"] = {k: doc.get(k) for k in ("served", "engine_steps", "engine_error", "stopped_by", "pauses", "sealer")}
+        got["summary"] = {k: doc.get(k) for k in ("served", "engine_steps", "engine_error", "stopped_by", "pauses", "sealer", "release")}
         if isinstance(doc.get("commit"), dict):
             got["summary"]["commit"] = {k: v for k, v in doc["commit"].items() if not isinstance(v, (list, dict)) or k in ("seals", "pouw_h1")}
     return got
