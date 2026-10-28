@@ -30,6 +30,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; the configurations of pous_check's other requires, which
           # `lake` reads to resolve them; and the committed C*, whose registration and openings test_p2.py replays
           "verity/core/protocols/remote_bandwidth/p2.py", "verity/core/protocols/pous",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/core/primitives/identity/lakefile.toml",
           "verity/core/primitives/identity/lake-manifest.json", "verity/core/primitives/identity/lean-toolchain",
           "verity/core/devices/memory_challenger/lean/lakefile.toml",

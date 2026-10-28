@@ -16,6 +16,7 @@ inputs = ["verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kern
           "integrations/vllm/verity_vllm",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
           "verity/core/claims/__init__.py", "verity/core/protocols/pouw", "verity/core/protocols/remote_bandwidth",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness",
