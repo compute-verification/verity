@@ -21,6 +21,7 @@ from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import GRAIN, KEY, _checkpoint
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
+from verity_vllm.program import model as M
 from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.protocols.pouw.h1 import registered as H1R
@@ -61,10 +62,10 @@ def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -
     mine, doc = IF.of_records(d, LAW, IF.resolve)
     files = IF.registered_reads(doc, mine, pins, registered=G)
     assert set(files) == {m.key for m in mine.members}
-    written, bad = json.loads((d / "window.json").read_text())["members"], set()
+    written, bad = json.loads((d / "window.json").read_text()), set()
     for k, m in enumerate(mine.members):
         for p, port in files[m.key]["ports"].items():
-            dom, entry, bc = win.registered[port["value"]].domain, written[k]["registered"][p], c.bc[m.port(p)]
+            dom, entry, bc = win.registered[port["value"]].domain, CS.registered_header(written, k)[p], c.bc[m.port(p)]
             assert dom.domain_id.hex() == port["domain"]
             if not all(G.verify_read(dom, bytes.fromhex(port["root"]), pos, bc[r * CS.BC_BYTES:(r + 1) * CS.BC_BYTES],
                                      bytes.fromhex(path), port["row_schema"])
@@ -88,13 +89,14 @@ def x(tmp_path):
 def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkeypatch):
     """One chain for the shard, from the verifier's own state after its header (its pending bytes the header's length mod
     128) through every tensor's rows in file order to its SHA-512, one for the embedding's other width (TINY's tied LM
-    head reads it @512 and ``x0`` @64: @512 is the shard's, sorted first), from the IV over the tensor's bytes to their
+    head reads it @1024 and ``x0`` @64: @1024 is the shard's, sorted first), from the IV over the tensor's bytes to their
     SHA-512, and one for its table @64, from the IV over the tag and the tensor's bytes; each rooted parameter's every row
-    read once, the rotary table (no root) none. Its templates: the shard's rows at its one phase (each row whole blocks)
-    and its last row, the field's rows and last row, and the table's rows (one byte pending) and last row, whose ``data``
-    alone are row-seg ports. The verifier makes the tie, its circuit's digest and its audit inputs without committing a
-    weight (`weight_value` and the H1 committer refuse here), and its shape entries are the weights record's, which names
-    no root."""
+    read once, the rotary table none: the record gives it a shape, but it is an analytic table, no checkpoint bytes, so the
+    tie names it unrooted, as the registration does. Its templates: the shard's rows of each width (1024, 64 and 512 words,
+    in first use) at its one phase (each row whole blocks) and its last row, the field's rows and last row, and the table's
+    rows (one byte pending) and last row, whose ``data`` alone are row-seg ports. The verifier makes the tie, its circuit's
+    digest and its audit inputs without committing a weight (`weight_value` and the H1 committer refuse here), and its shape
+    entries are the weights record's but the rotary table's, which names no root."""
     reg, (d, man) = S._registered(), x
     registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     record = WW.weights_record(reg, d, man, grain=GRAIN)
@@ -114,20 +116,22 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
         ("tie/model.safetensors", tuple(cv), pend, len(shard), hashlib.sha512(shard).digest()),
         (f"tie/weights/{EMBED}@64", tuple(IV), b"", len(embed), hashlib.sha512(embed).digest()),
         (f"tie/weights/{EMBED}@64/table", tuple(IV), WT.TABLE_TAG, len(tagged), hashlib.sha512(tagged).digest())]
-    assert t.entries == record["registered_entries"] and not [e for e in t.entries.values() if "root" in e]
+    analytic = {p for p in record["registered_entries"] if "rotary_emb.cos_sin_cache" in p}
+    assert analytic and t.entries == {p: e for p, e in record["registered_entries"].items() if p not in analytic}
+    assert analytic <= set(t.unrooted) and not [e for e in t.entries.values() if "root" in e]
     read = Counter(r for c in t.chains for r in c.rows)
     assert read == Counter((p, j) for p, e in t.entries.items() for j in range(e["leaves"]))
     assert list(t.unrooted) == list(registration["unrooted"]) and not set(t.unrooted) & set(t.entries)
     h = base % 128
     tag = len(WT.TABLE_TAG)
     assert [(descriptor_id(fn), n) for fn, n in t.circuit().templates] == [
-        (descriptor_id(fn), n) for fn, n in ((SS.row(h, 512), 176), (SS.row(h, 64), 4), (SS.last(h, 64, len(shard)), 1),
-                                             (SS.row(0, 64), 255), (SS.last(0, 64, len(embed)), 1),
+        (descriptor_id(fn), n) for fn, n in ((SS.row(h, 1024), 80), (SS.row(h, 64), 4), (SS.row(h, 512), 16),
+                                             (SS.last(h, 64, len(shard)), 1), (SS.row(0, 64), 255), (SS.last(0, 64, len(embed)), 1),
                                              (SS.row(tag, 64), 255), (SS.last(tag, 64, len(tagged)), 1))]
     assert IF.seg_ports(t.circuit().registered) == {
         descriptor_id(fn): {"data"} for fn in (SS.row(tag, 64), SS.last(tag, 64, len(tagged)))}
     got = WT.audit_inputs(registration, record, t, LAW, CAP)
-    assert got["outputs"] == [[0, 693]] and got["units"] == 693 and got["run"] == t.run
+    assert got["outputs"] == [[0, 613]] and got["units"] == 613 and got["run"] == t.run
     assert got["registered"][0] == {"program": registration["program"], "values": registration["values"]}
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(LAW, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(LAW, CAP)
@@ -198,6 +202,24 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     with pytest.raises(ValueError, match="roots for .* aren't the registration's"):
         WT.checked_pins(registration, record, t, _summary(t, registration, record, other), LAW, CAP)
     assert WT.checked_pins(registration, record, t, _summary(t, registration, record, roots), LAW, CAP) == roots
+
+
+def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tmp_path):
+    """A registration that roots the rotary table at the engine's served words (`weights_registration`'s ``tables``) roots
+    every other weight as the tie's committer does, but the tie reads no row of the table, so its window holds no root of
+    it and the verifier pins nothing on an accepting audit of that window."""
+    reg, (d, man) = S._registered(), x
+    record = WW.weights_record(reg, d, man, grain=GRAIN)
+    field = next(f for f in record["fields"] if f.get("pinned") == "analytic")
+    rooted = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN,
+                                     tables={"cos_sin": M.cos_sin_table(field["analytic"]["C"])})
+    registration, t, win = WT.commit(reg, KEY, d, man, law=LAW, cap=CAP, grain=GRAIN)
+    rope = sorted(set(rooted["values"]) - set(registration["values"]))
+    assert rope == sorted(t.unrooted) and {p: rooted["values"][p] for p in registration["values"]} == registration["values"]
+    win.write(win.close(), tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
+    roots = json.loads((tmp_path / "w" / "registration.json").read_text())["window"]["registered_roots"]
+    with pytest.raises(ValueError, match=re.escape(f"the records audit's roots for {rope} aren't the registration's roots")):
+        WT.checked_pins(rooted, record, t, _summary(t, rooted, record, roots), LAW, CAP)
 
 
 def test_the_command_pins_only_on_an_accepting_audit(x, tmp_path, capsys):
