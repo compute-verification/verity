@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import shutil
+import types
 from collections import Counter
 from fractions import Fraction
 from pathlib import Path
@@ -179,12 +180,13 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
 
 
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
-    """The scan reads its Programs' row (`prog`) from a compute audit's output, so the rows form refuses, in Lean and in
-    the mirror and by name, each way a link-window's tie can fail (`PC.UNTIES`): its `scan/prog` entry at another root
-    or domain than the audit's output port's, the audit's entry at a port that is no unit's output (`o0`, an input,
-    `o01`, a non-ASCII digit, no unit), no `scan/prog` entry or one under another name, the output's entry in the scan's
-    own registration and in no audit's, and neither root a string; and a mirror that skips the tie refuses only at the
-    wiring (`PC.UNWIRED`) what Lean refuses at the tie."""
+    """The scan reads each lane's Programs' rows (`scan/prog<j>`) from a compute audit's output, so the rows form
+    refuses, in Lean and in the mirror and by name, each way a link-window's tie can fail at every lane
+    (`PC.UNTIES`): its `scan/prog<j>` entries at another root or domain than the audit's ports', the audit's entries at
+    ports that are no unit's output nor a chunk's entries port (`o0`, an input, `o01`, a non-ASCII digit, no unit, a
+    chunk index with a leading zero or none), no `scan/prog<j>` entry or each under another name (`scan/prog`
+    among them), the chunks' entries in the scan's own registration and in no audit's, and no root a string; and a
+    mirror that skips the tie refuses only at the wiring (`PC.UNWIRED`) what Lean refuses at the tie."""
     untie = PC.UNTIES
     for u in untie:
         monkeypatch.setattr(PC, "UNTIES", (u,))
@@ -203,12 +205,14 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
 
 
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
-    """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, so the
-    rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's wiring can fail
-    (`PC.UNWIRES`): the audit's entry at an output port (another unit's `o<j>`, or the slot entries' chunk's `o1`), at
-    the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, that template one member off a
-    slot each, or that template under the slot entry's name and descriptor id with another body; and a mirror that
-    skips the wiring, which the state tie reads too, accepts what Lean refuses at the wiring."""
+    """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, lane
+    j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's
+    wiring can fail at one lane (`PC.UNWIRES`): the audit's chunk entry at an output port (another unit's `o<j>`, or
+    the chunk's own `o1`), at the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, at
+    another chunk's entries port, of other than T / every leaves, the scan's lane entry named another lane's, that
+    template one member off a slot each, or that template under the slot entry's name and descriptor id with another
+    body; and a mirror that skips the wiring, which the state tie reads too, accepts what Lean refuses at the
+    wiring."""
     unwire = PC.UNWIRES
     for u in unwire:
         monkeypatch.setattr(PC, "UNWIRES", (u,))
@@ -270,10 +274,10 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
         verdict, got = D.replay(PORT, case, server)
         assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
         for reg, t in zip(c["windows"], out["public"]["scans"]):
-            (root,) = {e["root"] for e in reg.get("roots", []) + reg.get("registered", [])
-                       if PC.PROG in (e.get("port"), e.get("value"))}
+            roots = {e["root"] for e in reg.get("roots", []) + reg.get("registered", [])
+                     if PC.prog_port(e.get("port")) or PC.prog_port(e.get("value"))}
             want = sum(a["free"] for a, r in zip(case["params"]["audits"], c["audits"])
-                       if any(o.get("root") == root for o in r["roots"]))
+                       if any(o.get("root") in roots for o in r["roots"]))
             assert t["free"] == want, (n, t, want)
         charged += any(t["free"] for t in out["public"]["scans"])
     assert charged
@@ -352,28 +356,66 @@ def test_an_output_port_is_a_units_past_o0():
                                         "u/prog", "", 1, None]))
 
 
-def test_an_entries_port_is_a_slot_entry_templates_first_chunks_o0():
+def test_an_entries_port_is_a_slot_entry_templates_chunks_o0():
     """`entries_port_name` is Lean's `entriesPortName` on its `#guard`s: a `SlotEntry_v1` or `SelectEntry_v1`
-    template's `<id>/c0/o0`."""
+    template's `<id>/c<j>/o0`, the chunk's index in ASCII digits without a leading zero."""
     assert PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") == "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}/c0/o0"
+    assert PC.entries_port("SelectEntry_v1{}", 3) == "SelectEntry_v1{}/c3/o0"
     assert all(map(PC.entries_port_name, [PC.entries_port("SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}"),
-                                          "SlotEntry_v1{}/c0/o0", PC.entries_port(PC.SELECT_KEY),
-                                          "SelectEntry_v1{}/c0/o0"]))
-    assert not any(map(PC.entries_port_name, ["SlotEntry_v2{KO=2}/c0/o0", "SlotEntry_v1{KO=2}/c1/o0",
+                                          "SlotEntry_v1{}/c0/o0", "SlotEntry_v1{KO=2}/c1/o0",
+                                          PC.entries_port(PC.SELECT_KEY, 3), "SelectEntry_v1{}/c0/o0",
+                                          "SelectEntry_v1{KO=2}/c10/o0"]))
+    assert not any(map(PC.entries_port_name, ["SlotEntry_v2{KO=2}/c0/o0", "SlotEntry_v1{KO=2}/c01/o0",
                                               "SlotEntry_v1{KO=2}/c0/o1", "SlotEntry_v1/c0/o0", "", 1, None,
-                                              "SelectEntry_v2{KO=2}/c0/o0", "SelectEntry_v1{KO=2}/c1/o0",
+                                              "SlotEntry_v1{KO=2}/c/o0", "SlotEntry_v1{KO=2}c0/o0",
+                                              "SlotEntry_v1{KO=2}/cx/o0", "SlotEntry_v1{KO=2}/c\u0663/o0",
+                                              "SelectEntry_v2{KO=2}/c0/o0", "SelectEntry_v1{KO=2}/c1/o1",
                                               "SelectEntry_v1/c0/o0", "ScanSlots_v2{KO=2}/c0/o0"]))
+
+
+def test_a_prog_port_is_a_lanes_programs_rows():
+    """`prog_port` is Lean's `progPort` on its `#guard`s: `scan/prog<j>`, the lane's index in ASCII digits without a
+    leading zero."""
+    assert PC.prog_name(3) == "scan/prog3"
+    assert all(map(PC.prog_port, [PC.prog_name(0), "scan/prog3", "scan/prog12"]))
+    assert not any(map(PC.prog_port, ["scan/prog", "scan/prog01", "scan/prog/", "Scan/prog0", "scan/prog0x", "prog0",
+                                      "scan/state", "", "scan/prog\u0663", 1, None]))
+
+
+def test_each_lanes_prog_is_its_own_chunk():
+    """`_wired` is Lean's `wired` on its two-lane `#guard` (T = 4, `every` 2): lane j's `scan/prog<j>` is chunk j's
+    entries port, of 2 leaves, of one pinned template of 4 members; not with the lanes swapped, a chunk of other
+    leaves, lane 1's tree missing, or another template's chunk 1; and the scan's lane-1 tree alone ties the audit."""
+    s = types.SimpleNamespace(schedule=types.SimpleNamespace(window=4, every=2, lanes=2),
+                              audits=[PC.Audit(0, 0, "", 4, 0, (("SlotEntry_v1{KO=1}", 4, PC.SLOT_ENTRY_PINS[0]),))])
+
+    def reg(*ports) -> PC.Registration:
+        return PC.Registration({"roots": [{"port": q, "leaves": n, "root": root, "domain": "d"}
+                                          for q, root, n in ports]}, b"")
+
+    def chunks(l0: int, l1: int, k1: str) -> PC.Registration:
+        return reg(("SlotEntry_v1{KO=1}/c0/o0", "r0", l0), (k1 + "/c1/o0", "r1", l1))
+
+    def scan(r0: str, r1: str) -> PC.Registration:
+        return reg(("scan/prog0", r0, 2), ("scan/prog1", r1, 2))
+
+    assert PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], scan("r0", "r1"))
+    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], scan("r1", "r0"))
+    assert not PC._wired(s, [chunks(3, 1, "SlotEntry_v1{KO=1}")], scan("r0", "r1"))
+    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=1}")], reg(("scan/prog0", "r0", 2)))
+    assert not PC._wired(s, [chunks(2, 2, "SlotEntry_v1{KO=2}")], scan("r0", "r1"))
+    assert PC._tied_audits([chunks(2, 2, "SlotEntry_v1{KO=1}")], reg(("scan/prog1", "r1", 2))) == [0]
 
 
 def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
     compute audit's output), an ingress and an egress instance's committed bits (their returns: a u16 with the state
     and view, or with the row), and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
-    Lean and the mirror refuse, as parameters, a scan that isn't a descriptor,
-    another Program's, one
-    in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
-    and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
-    check of what `NetTiming.Layout.Fits` asks."""
+    Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
+    form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
+    or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
+    lane's input, one with an input gate no template's, and each negative of a check of what `NetTiming.Layout.Fits`
+    asks."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]

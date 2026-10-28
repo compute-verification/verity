@@ -21,10 +21,11 @@ the salt in no case), and answered by one-stage with its one unit proved. In the
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
 none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
-that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, or
-`select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots' `ScanSlots_v2`, each a pinned
-Definition with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
+registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
+of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
+smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'
+`ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
+(`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset draw at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
@@ -411,12 +412,12 @@ def _member_ref(x: dict, o: int, m: int, k: int, j: dict) -> tuple[str, int, int
     return refs[i] if i < len(refs) else None
 
 
-def _reads_entries(x: dict, o: int, t0: int, lanes: int, nb: int, every: int, E: int, k: int, j: dict) -> bool:
+def _reads_entries(x: dict, o: int, t0: int, every: int, E: int, ks: list[int], j: dict) -> bool:
     """`readsEntries`: for each lane `i` and member `m` (bucket `t0 + m`), argument `o + i` is row
-    `i · nb + ⌊(t0 + m) / every⌋` of input node `k`, `E` leaves a row, leaf by leaf."""
+    `⌊(t0 + m) / every⌋` of input node `ks[i]`, lane `i`'s slot entries, `E` leaves a row, leaf by leaf."""
     return all(o + i < len(x["args"]) and all(
-        _member_ref(x, o + i, m, ell, j) == ("n", k, (i * nb + (t0 + m) // every) * E + ell)
-        for m in range(x["n"]) for ell in range(E)) for i in range(lanes))
+        _member_ref(x, o + i, m, ell, j) == ("n", k, (t0 + m) // every * E + ell)
+        for m in range(x["n"]) for ell in range(E)) for i, k in enumerate(ks))
 
 
 #: `Flock.Steps.FUEL`: the most steps `Prog.gate`'s walk to an operand takes
@@ -507,8 +508,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
+    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
+    own input node of its slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
     the descriptor's nodes, signatures and returns; C-Flock's decoder, which Lean runs on it, refuses no descriptor
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
@@ -572,14 +573,17 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
         raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
                        "depend on the ingress (NetTiming.Layout.Fits)")
-    r0 = _member_ref(xf, 1, 0, 0, j)
-    if r0 is None or r0[0] == "p" or r0[1] in rows or not (r0[1] < len(nodes) and _is_input(nodes[r0[1]], j)):
-        raise D.Reject("scan: bucket 0's prog0 reads no input node of its own, the slot entries'")
+    r0 = [_member_ref(xf, 1 + i, 0, 0, j) for i in range(L)]
+    pks = [r[1] for r in r0 if r is not None]
+    if (len(pks) != L or any(r[0] == "p" for r in r0) or len(set(pks)) != L
+            or any(k in rows or not (k < len(nodes) and _is_input(nodes[k], j)) for k in pks)):
+        raise D.Reject("scan: bucket 0's prog<j> reads no input node of lane j's own, its slot entries', distinct from "
+                       "every other lane's")
     E = leaves_of(ety)
-    if not (_reads_entries(xf, 1, 0, L, nb, s.every, E, r0[1], j)
-            and all(_reads_entries(x, 2, 1, L, nb, s.every, E, r0[1], j) for x, _ in later)):
-        raise D.Reject(f"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input "
-                       "node, lane j's slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
+    if not (_reads_entries(xf, 1, 0, s.every, E, pks, j)
+            and all(_reads_entries(x, 2, 1, s.every, E, pks, j) for x, _ in later)):
+        raise D.Reject(f"scan: bucket t's prog<j> is not row ⌊t / {s.every}⌋ of lane j's slot entries' input node, "
+                       "its slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
@@ -784,7 +788,8 @@ def _holds(reg: Registration, doc: dict) -> bool:
                for e in entries)
 
 
-#: the scan's Programs' row in its registration: its `roots` entry's port, or its `registered` entry's value
+#: the scan's Programs' rows in its registration, one tree a lane, `PROG<j>` lane j's (`progName`): its `roots` entry's
+#: port, or its `registered` entry's value
 PROG = "scan/prog"
 #: the scan's state in a registration: its `roots` entry's port (`stateName`), or its `registered` entry's value, the
 #: value a window circuit registers the scan's state rows as (`stateValue`, `ingress_scan`'s `SCAN_STATE`)
@@ -800,16 +805,35 @@ def output_port(port) -> bool:
     return parts[-1][:1] == "o" and j != "" and all("0" <= c <= "9" for c in j) and j[0] != "0"
 
 
-def entries_port(key: str) -> str:
-    """`entriesPort`: a `SlotEntry_v1` or `SelectEntry_v1` template's entry rows, its first chunk's public word,
-    ``<descriptor id>/c0/o0``."""
-    return f"{key}/c0/o0"
+def prog_name(j: int) -> str:
+    """`progName`: lane `j`'s Programs' rows, ``scan/prog<j>``."""
+    return f"{PROG}{j}"
+
+
+def _index(s: str) -> bool:
+    """`indexChars`: a lane's or a chunk's index, ASCII digits with no leading zero."""
+    return s != "" and all("0" <= c <= "9" for c in s) and (s[0] != "0" or len(s) == 1)
+
+
+def prog_port(name) -> bool:
+    """`progPort`: some lane's Programs' rows (`prog_name`)."""
+    return isinstance(name, str) and name.startswith(PROG) and _index(name[len(PROG):])
+
+
+def entries_port(key: str, j: int = 0) -> str:
+    """`entriesPort`: a `SlotEntry_v1` or `SelectEntry_v1` template's entry rows of chunk `j`, its `j`-th member's
+    public word, ``<descriptor id>/c<j>/o0``."""
+    return f"{key}/c{j}/o0"
 
 
 def entries_port_name(port) -> bool:
-    """`entriesPortName`: some `SlotEntry_v1` or `SelectEntry_v1` template's entries port (`entries_port`)."""
-    return (isinstance(port, str) and any(port.startswith(i + "{") for i in ENTRY_IDS)
-            and port.endswith("}/c0/o0"))
+    """`entriesPortName`: some `SlotEntry_v1` or `SelectEntry_v1` template's entries port of some chunk
+    (`entries_port`)."""
+    if not (isinstance(port, str) and any(port.startswith(i + "{") for i in ENTRY_IDS) and port.endswith("/o0")):
+        return False
+    head = port[:-3]
+    stem = head.rstrip("0123456789")
+    return stem.endswith("}/c") and _index(head[len(stem):])
 
 
 def _entries(j: dict, k: str) -> list[dict]:
@@ -817,33 +841,44 @@ def _entries(j: dict, k: str) -> list[dict]:
     return [e for e in v if isinstance(e, dict)] if isinstance(v, list) else []
 
 
-def _prog(reg: Registration) -> list[dict]:
-    """The scan's registration's `scan/prog` entries (`PROG`) whose root and domain are strings."""
-    return [e for e in [*(e for e in _entries(reg.record, "roots") if e.get("port") == PROG),
-                        *(e for e in _entries(reg.record, "registered") if e.get("value") == PROG)]
+def _prog(reg: Registration, j: int | None = None) -> list[dict]:
+    """The scan's registration's Programs' rows entries of lane `j` (`prog_name`), or of any lane (`prog_port`), by
+    port or value, their root and domain strings."""
+    lane = prog_port if j is None else lambda q: q == prog_name(j)
+    return [e for e in [*(e for e in _entries(reg.record, "roots") if lane(e.get("port"))),
+                        *(e for e in _entries(reg.record, "registered") if lane(e.get("value")))]
             if isinstance(e.get("root"), str) and isinstance(e.get("domain"), str)]
 
 
 def _tied_audits(audits: list[Registration], reg: Registration) -> list[int]:
     """`tiedAudits`: the audits, by index, whose registration's `roots` has an output port's or an entries port's entry
-    (`output_port`, `entries_port_name`) at the root and domain of the scan's registration's `scan/prog` entry
-    (`PROG`)."""
+    (`output_port`, `entries_port_name`) at the root and domain of a lane's `scan/prog<j>` entry of the scan's
+    registration (`prog_port`)."""
     return [i for i, a in enumerate(audits)
             if any(any((output_port(q := o.get("port")) or entries_port_name(q)) and o.get("root") == e["root"]
                        and o.get("domain") == e["domain"] for o in _entries(a.record, "roots"))
                    for e in _prog(reg))]
 
 
+def _leaves(o: dict):
+    """A roots entry's leaf count, `getNat?`'s: an int, not a bool, at least 0; else None."""
+    n = o.get("leaves")
+    return n if isinstance(n, int) and not isinstance(n, bool) and n >= 0 else None
+
+
 def _wired(p: Params, audits: list[Registration], reg: Registration) -> bool:
-    """`wired`: the scan's `scan/prog` entry is at the root and domain of an audit's entries port (`entries_port`) of
-    a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program (`Audit.entries`), a pinned Definition
-    (its closure digest one of `SLOT_ENTRY_PINS` and `SELECT_ENTRY_PINS`, `entryPins`), with one member a slot of the
-    window."""
+    """`wired`: for each lane j, the scan's `scan/prog<j>` entry is at the root and domain of chunk j's entries port
+    (`entries_port`), of T / every leaves, of a `SlotEntry_v1` or `SelectEntry_v1` template of one audit's own Program
+    (`Audit.entries`), a pinned Definition (its closure digest one of `SLOT_ENTRY_PINS` and `SELECT_ENTRY_PINS`,
+    `entryPins`), with one member a slot of the window."""
     s = p.schedule
-    return any(n == s.window // s.every * s.lanes and d in SLOT_ENTRY_PINS + SELECT_ENTRY_PINS
-               and any(o.get("port") == entries_port(k) and o.get("root") == e["root"]
-                       and o.get("domain") == e["domain"] for e in _prog(reg) for o in _entries(r.record, "roots"))
-               for a, r in zip(p.audits, audits) for k, n, d in a.entries)
+    nb = s.window // s.every
+    return any(n == nb * s.lanes and d in SLOT_ENTRY_PINS + SELECT_ENTRY_PINS and all(
+        any(o.get("port") == entries_port(k, j) and _leaves(o) == nb and o.get("root") == e["root"]
+            and o.get("domain") == e["domain"] for e in _prog(reg, j)
+            for o in _entries(r.record, "roots"))
+        for j in range(s.lanes))
+        for a, r in zip(p.audits, audits) for k, n, d in a.entries)
 
 
 def _states(reg: Registration) -> list[dict]:
@@ -1260,44 +1295,45 @@ CHECKER_EGRESS = CompositeDefinition(
     lambda B, S, state, row: B.call(bind(SPREAD, N=OUT_BITS), state[0][0], row[0][0]), register=False)
 
 
-def _scan_root(members: list[tuple], rows: int, nb: int, every: int, prog: int, skew: int = 0) -> Program:
+def _scan_root(members: list[tuple], lanes: int, nb: int, every: int, prog: int, skew: int = 0,
+               shared: bool = False) -> Program:
     """The scan's root in the generator form: each `(template, n, fixed)` of `members` one batch over its buckets, in
     order, its first `fixed` parameters inputs of its own and each later one, lane j's `prog<j>`, at bucket t row
-    `j · nb + ⌊t / every⌋` (the last row past the rows), or `skew` rows on, cyclically, of one input of the slot
-    entries, `rows` rows of `prog` bits."""
+    `⌊t / every⌋` (the last row past the rows), or `skew` rows on, cyclically, of lane j's input `prog<j>` of the
+    slot entries, `nb` rows of `prog` bits (lane 0's for every lane, `shared`)."""
     sigs = [t.signature() for t, _, _ in members]
 
     def signature(S):
         params = tuple((f"{i}.{name}", Array(n, ty)) for i, ((ps, _), (_, n, fixed)) in enumerate(zip(sigs, members))
                        for name, ty in ps[:fixed])
-        return (*params, ("prog", Array(rows, Array(prog, BIT)))), \
+        return (*params, *((f"prog{j}", Array(nb, Array(prog, BIT))) for j in range(lanes))), \
             Tuple(*(Array(n, ret) for (_, ret), (_, n, _) in zip(sigs, members)))
 
     def body(B, S, *args):
-        entries, outs, at, start = args[-1], [], 0, 0
+        entries, outs, at, start = args[len(args) - lanes:], [], 0, 0
         for (t, n, fixed), (ps, _) in zip(members, sigs):
-            lanes = [array_of([entries[(min(j * nb + (start + m) // every, rows - 1) + skew) % rows] for m in range(n)])
-                     for j in range(len(ps) - fixed)]
-            outs.append(B.batch(t, *args[at:at + fixed], *lanes, axes=(0,) * len(ps)))
+            reads = [array_of([entries[0 if shared else j][(min((start + m) // every, nb - 1) + skew) % nb]
+                               for m in range(n)]) for j in range(len(ps) - fixed)]
+            outs.append(B.batch(t, *args[at:at + fixed], *reads, axes=(0,) * len(ps)))
             at, start = at + fixed, start + n
         return coll_concat(signature(S)[1], outs)
 
-    defn = CompositeDefinition("NetworkPeriodScan", 0, ("templates", "counts", "rows", "nb", "every", "skew"),
+    defn = CompositeDefinition("NetworkPeriodScan", 0, ("templates", "counts", "lanes", "nb", "every", "skew", "shared"),
                                signature, body, register=False)
     return Program(bind(defn, templates=tuple(t.id for t, _, _ in members), counts=tuple(n for _, n, _ in members),
-                        rows=rows, nb=nb, every=every, skew=skew))
+                        lanes=lanes, nb=nb, every=every, skew=skew, shared=shared))
 
 
 @lru_cache(maxsize=None)
 def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts: tuple[int, ...] | None = None,
                     names: tuple[tuple[str, ...], ...] | None = None, checker: bool = False, lanes: int = 1,
-                    every: int = 1, skew: int = 0) -> str:
+                    every: int = 1, skew: int = 0, shared: bool = False) -> str:
     """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
     ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
     row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths`, and
-    `lanes` entry ports a bucket, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋` of one input of the slot
-    entries (`_scan_root`), or `skew` rows on, cyclically; `checker`: in the checker form instead, `T` ingress and `T`
-    egress instances (or `counts`) that take their rows."""
+    `lanes` entry ports a bucket, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's input `prog<j>` of the slot
+    entries (`_scan_root`), or `skew` rows on, cyclically, or lane 0's input (`shared`); `checker`: in the checker form
+    instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
     state, prog, view, words = widths
     ingress = {"ROW": row, "STATE": state, "PROG": prog, "VIEW": view}
     names = names or (first_params(lanes), ingress_params(lanes), EGRESS_PARAMS)
@@ -1309,8 +1345,7 @@ def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts:
     templates = (bind(FIRST_BUCKET, NAMES=names[0], **ingress), bind(INGRESS_BUCKET, NAMES=names[1], **ingress),
                  bind(EGRESS_BUCKET, NAMES=names[2], WORDS=words, ROW=row))
     kept = [(t, n, f) for t, n, f in zip(templates, counts or (1, T - 1, T), (1, 2, len(names[2]))) if n]
-    nb = T // every
-    return D.canonical(codec.encode_program(_scan_root(kept, lanes * nb, nb, every, prog, skew)))
+    return D.canonical(codec.encode_program(_scan_root(kept, lanes, T // every, every, prog, skew, shared)))
 
 
 def _unit_sig(S):
@@ -1395,15 +1430,18 @@ def templates_of(desc: dict) -> list[tuple[str, str, int]]:
             if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
 
 
-#: How `rows-prog-untied` breaks its link-window's tie of the scan's `prog` to an audit's output: the scan's entry at
-#: another root or domain, the audit's entry at a port that is no unit's output, no `scan/prog` entry or one under
-#: another name, the output's entry in the scan's own registration and in no audit's, or neither entry's root a string
+#: How `rows-prog-untied` breaks its link-window's tie of the scan's `prog` to an audit's output, at every lane: the
+#: scan's `scan/prog<j>` entries at another root or domain, the audit's chunks' entries at ports that are no unit's
+#: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them),
+#: the chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
 UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
-#: How `rows-prog-unwired` breaks its link-window's wiring while its tie holds: the audit's entry at an output port
-#: (another unit's `o1`, or the slot entries' chunk's), at another `SlotEntry_v1` or `SelectEntry_v1` template's
-#: entries port than any of its Program's, its Program's slot entries' template one member off a slot each, or that
-#: template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`, `RENAMED_SELECT_ENTRY`)
-UNWIRES = ("output", "key", "members", "body")
+#: How `rows-prog-unwired` breaks its link-window's wiring at one lane j while its tie holds: the audit's chunk j
+#: entry at an output port (another unit's `o1`, or the chunk's own), at another `SlotEntry_v1` or `SelectEntry_v1`
+#: template's entries port than any of its Program's, at another chunk's (`chunk`), of other than T / every leaves
+#: (`leaves`), the scan's lane j entry named another lane's (`lane`), its Program's slot entries' template one member
+#: off a slot each, or that template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`,
+#: `RENAMED_SELECT_ENTRY`)
+UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
 #: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
@@ -1415,21 +1453,30 @@ def _present(e: dict) -> dict:
     return {k: v for k, v in e.items() if v is not None}
 
 
-def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None) -> list[dict]:
-    """The scan's registration's entries for its `prog` (`PROG`, named by port in `roots` and by value in
-    `registered`) at its tie's root and domain, broken as `untie` says."""
+def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None, unwire: bool = False,
+                  hit: int = 0) -> list[dict]:
+    """The scan's registration's entries for its `prog`, lane j's `scan/prog<j>` (`prog_name`, named by port in
+    `roots` and by value in `registered`) at its tie's chunk j's root and domain, each broken as `untie` says, or
+    lane `hit`'s named another lane's (`unwire`)."""
     key = "port" if where == "roots" else "value"
-    e = {"domain": tie["domain"], key: PROG, "root": tie["root"]}
     if untie == "missing":
         return []
-    if untie in ("root", "domain"):
-        e[untie] = rp.randbytes(64).hex()
-    elif untie == "renamed":
-        other = "value" if key == "port" else "port"
-        e = rp.choice([{other if k == key else k: v for k, v in e.items()},
-                       e | {key: rp.choice(["scan/prog2", "scan/state", "Scan/prog", "prog", "scan/prog/"])}])
-    scan = [{"domain": tie["domain"], key: tie["port"], "root": tie["root"]}] if untie == "scan" else []
-    return [_present(x) for x in [e, *scan]]
+    out = []
+    for j, c in enumerate(tie["chunks"]):
+        e = {"domain": c["domain"], key: prog_name(j), "root": c["root"]}
+        if untie in ("root", "domain"):
+            e[untie] = rp.randbytes(64).hex()
+        elif untie == "renamed":
+            other = "value" if key == "port" else "port"
+            e = rp.choice([{other if k == key else k: v for k, v in e.items()},
+                           e | {key: rp.choice([PROG, f"{PROG}0{j}", f"{PROG}-{j}", f"{PROG}\u0663", f"Scan/prog{j}",
+                                                f"prog{j}", f"{PROG}{j}/", STATE])}])
+        elif unwire and j == hit:
+            e[key] = prog_name(rp.choice([x for x in range(len(tie["chunks"]) + 1) if x != j]))
+        out.append(e)
+        if untie == "scan":
+            out.append({"domain": c["domain"], key: c["port"], "root": c["root"]})
+    return [_present(x) for x in out]
 
 
 def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate: str | None) -> list[dict]:
@@ -1454,26 +1501,32 @@ def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate:
     return [_present(x) for x in [e, *extra]]
 
 
-def _output_entries(rp: random.Random, i: int, ties: dict, T: int, aimed: int, untie: str | None,
-                    unwire: str | None = None) -> list[dict]:
-    """Audit `i`'s registration's `roots`: for each link-window's `prog` tied to it, the entries port its tie names at
-    the tie's root and domain (`T` leaves, a bucket's row each), and an input port's entry at another root; at
-    link-window `aimed`, broken as `untie` or `unwire` says."""
+def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, untie: str | None,
+                    unwire: str | None = None, hit: int = 0) -> list[dict]:
+    """Audit `i`'s registration's `roots`: for each link-window's `prog` tied to it, each lane's chunk's entries port
+    its tie names at the chunk's root and domain (`nb` leaves, a timestep's row each), and an input port's entry at
+    another root; at link-window `aimed`, every chunk's broken as `untie` says, or lane `hit`'s as `unwire` says."""
     out = []
     for w, x in ties.items():
         if x["audit"] != i or (w == aimed and untie == "scan"):
             continue
-        port = x["port"]
-        if w == aimed and untie == "port":
-            port = rp.choice([f"block-{w}/o0", f"block-{w}/prog", f"block-{w}/o01", "o1", f"block-{w}/O1",
-                              f"block-{w}/o", f"block-{w}/o1x", f"block-{w}/o\u0663", f"block-{w}/o\u00b9", 1,
-                              port.replace("/c0/", "/c1/"), port[port.index("{"):]])
-        elif w == aimed and unwire == "output":
-            port = rp.choice([f"block-{w}/o{rp.choice([1, 2, 10])}", port.removesuffix("o0") + "o1"])
-        elif w == aimed and unwire == "key":
-            port = port.replace("NP=4", f"NP={rp.choice([5, 1024])}")
-        out.append(_present({"domain": x["domain"], "leaves": T, "port": port, "root": x["root"]}))
-    out.append({"domain": rp.randbytes(64).hex(), "leaves": T, "port": f"block-{rp.randrange(4)}/prog",
+        for j, c in enumerate(x["chunks"]):
+            port, leaves, broken = c["port"], nb, w == aimed and j == hit
+            if w == aimed and untie == "port":
+                port = rp.choice([f"block-{w}/o0", f"block-{w}/prog", f"block-{w}/o01", "o1", f"block-{w}/O1",
+                                  f"block-{w}/o", f"block-{w}/o1x", f"block-{w}/o\u0663", f"block-{w}/o\u00b9", 1,
+                                  port.replace(f"/c{j}/", f"/c0{j}/"), port.replace(f"/c{j}/", "/c/"),
+                                  port.replace(f"/c{j}/", "/"), port[port.index("{"):]])
+            elif broken and unwire == "output":
+                port = rp.choice([f"block-{w}/o{rp.choice([1, 2, 10])}", port.removesuffix("o0") + "o1"])
+            elif broken and unwire == "key":
+                port = port.replace("NP=4", f"NP={rp.choice([5, 1024])}")
+            elif broken and unwire == "chunk":
+                port = entries_port(x["key"], rp.choice([y for y in range(len(x["chunks"]) + 1) if y != j]))
+            elif broken and unwire == "leaves":
+                leaves = rp.choice([nb - 1, nb + 1, 2 * nb, -1, None, "1", True])
+            out.append(_present({"domain": c["domain"], "leaves": leaves, "port": port, "root": c["root"]}))
+    out.append({"domain": rp.randbytes(64).hex(), "leaves": nb, "port": f"block-{rp.randrange(4)}/prog",
                 "root": rp.randbytes(64).hex()})
     rp.shuffle(out)
     return out
@@ -1534,8 +1587,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # selects has select entries and scan slots, as a window circuit's last position reads its slots' occupancy
     owners = rp.sample(range(n_audits), n_windows) if rows else []
     selects = {i for i in owners if rp.random() < 0.5} | ({owners[t]} if m == "tied-slots-undrawn" else set())
-    ties = {w: {"audit": i, "port": entries_port(SELECT_KEY if i in selects else SLOT_KEY),
-                "root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()}
+    lanes = sched.lanes if rows else 0
+    ties = {w: {"audit": i, "key": (k := SELECT_KEY if i in selects else SLOT_KEY), "chunks": [
+                {"port": entries_port(k, j), "root": rp.randbytes(64).hex(), "domain": rp.randbytes(64).hex()}
+                for j in range(lanes)]}
             for w, i in zip(range(first, first + n_windows), owners)}
     untie = rp.choice(UNTIES) if m == "prog-untied" else None
     unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
@@ -1543,7 +1598,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         if rows else {}
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     if untie == "untyped":
-        ties[first + t]["root"] = rp.choice([None, 7, False])
+        for c in ties[first + t]["chunks"]:
+            c["root"] = rp.choice([None, 7, False])
+    # the lane whose wiring the aimed link-window's `unwire` breaks
+    hit = rp.randrange(lanes) if lanes else 0
     # the changes that draw the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
     # whole (`tied-partial`) or one of them in part
     by_template = m in ("tied-partial", "tied-entries-undrawn", "tied-slots-undrawn")
@@ -1654,7 +1712,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
             {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
-        entries += _prog_entries(rp, ties[w], where, untie if aimed else None)
+        entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
         rp.shuffle(entries)
         rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
@@ -1785,7 +1843,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
         if rows:
-            rec["roots"] = _output_entries(rp, i, ties, sched.window, first + t, untie, unwire)
+            rec["roots"] = _output_entries(rp, i, ties, sched.window // sched.every, first + t, untie, unwire, hit)
             stated = i == ties[first + t]["audit"]
             if not (stated and unstate == "audit"):
                 st = states[i] | ({"root": rp.randbytes(64).hex()} if stated and unstate == "audit-root" else {})
@@ -1909,8 +1967,9 @@ def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
 def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
-    with other parameters, another number of instances, rows not the schedule's, an input gate no template's, and each
-    negative of a check of what `NetTiming.Layout.Fits` asks (`scan_negatives`)."""
+    with other parameters, another number of instances, rows not the schedule's, a lane's `prog<j>` another row of its
+    input than its bucket's or another lane's input, an input gate no template's, and each negative of a check of what
+    `NetTiming.Layout.Fits` asks (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
     L, every = s["lanes"], s["every"]
@@ -1939,7 +1998,8 @@ def bad_scans(p: dict) -> list[dict]:
             own(scan(T, row, widths, counts=(2, T - 1, T))),
             own(scan(T, row, widths, counts=(1, T, T))),
             own(scan(T, row + 1, widths)),
-            *([own(scan(T, row, widths, skew=1))] if L * (T // every) > 1 else []),
+            *([own(scan(T, row, widths, skew=1))] if T // every > 1 else []),
+            *([own(scan(T, row, widths, shared=True))] if L > 1 else []),
             p | {"scan": extra, "program": program_sha512(extra)},
             *(q for q, _ in scan_negatives(p).values())]
 

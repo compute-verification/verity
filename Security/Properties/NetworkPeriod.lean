@@ -29,8 +29,8 @@ supplies each of the statement's quantities as at most the check's number:
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its wrong units
 only as the slot entries they can set; `RowsTiedDrawn` says the check accepts a tied audit only drawn whole or with its
 slot entries' and scan slots' templates each a stratum drawn whole (`StrataDrawnWhole`), so a wrong unit is in neither.
-`RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries, the entries
-port of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
+`RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree
+the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. Beside them, their nontrivial lemmas' objects:
 `RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
@@ -99,11 +99,12 @@ def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome P
           StrataDrawnWhole i a reg x
 
 /-- **The rows form accepts no link-window whose scan's `prog` is not a compute audit's slot entries.** If the check
-accepts a period in the rows form, each link-window's scan's registration has its `scan/prog` entry at the root and
-domain of an audit's entries port, `<descriptor id>/c0/o0` of a template node of that audit's own Program calling
-`SlotEntry_v1` or `SelectEntry_v1` (whose select and collector end in `SlotEntry_v1`), a Definition the check pins by
-its closure digest (`entryPins`, so a template under either name with another body is refused), with one member a slot
-of the window (`wired`), so each slot's entry, read bit included, is one its Program computed. -/
+accepts a period in the rows form, each link-window's scan's registration has, for each lane `j`, its `scan/prog<j>`
+entry at the root and domain of one audit's entries port of chunk `j`, `<descriptor id>/c<j>/o0` of `T / every` leaves,
+of a template node of that audit's own Program calling `SlotEntry_v1` or `SelectEntry_v1` (whose select and collector
+end in `SlotEntry_v1`), a Definition the check pins by its closure digest (`entryPins`, so a template under either name
+with another body is refused), with one member a slot of the window (`wired`), so chunk `j` is lane `j`'s slots and each
+slot's entry, read bit included, is one its Program computed. -/
 def RowsProgWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →

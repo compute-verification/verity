@@ -191,7 +191,7 @@ def tiedAudit : Registration :=
 /-- A link-window's registration whose `prog` is at that root and domain. -/
 def tiedWindow : Registration :=
   { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "scan/prog"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+      [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
 
 theorem tiedWindow_ties : tiedIn #[tiedAudit] #[tiedWindow] 0 = true := by
   decide +kernel
@@ -256,7 +256,8 @@ def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
 def slotReg : Registration :=
   { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])],
+    digest := .empty }
 
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the slot audit
 is tied to it, so its free inputs are in the link-window's term. -/
@@ -271,7 +272,8 @@ def selectAudit : Audit := ⟨0, 0, "", 1, 0, #[("SelectEntry_v1{KO=1}", 1, sele
 
 def selectReg : Registration :=
   { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
-      [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+      [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])],
+    digest := .empty }
 
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the audit is
 tied to it. -/
@@ -351,13 +353,14 @@ def stateReg (root : String) : Registration :=
       ("registered", Lean.Json.arr #[Lean.Json.mkObj
         [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
       ("roots", Lean.Json.arr #[Lean.Json.mkObj
-        [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+        [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])],
+    digest := .empty }
 
 /-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, and whose state, the tree
 its units read and register their states in, is at the root `s` and the domain `e`. -/
 def stateWindow : Registration :=
   { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[
-      Lean.Json.mkObj [("port", "scan/prog"), ("root", "r"), ("domain", "d")],
+      Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
       Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]])], digest := .empty }
 
 /-- Its honest side: a slot audit whose `SCAN_STATE` is the scan's state, at its root and domain, ties it. -/
