@@ -13,7 +13,7 @@ proves its segment holds its output, and a reader takes its input from a segment
 (U16 is ``Array<16, Value<1>>``.) The statics are the writers table's (FAMILIES' `circuits/shared-row-bindings/v2`) in words:
 ROW the row's words (its bytes / 2), OFF the word its first segment starts at (``row_offset`` / 2), G the segments of W words
 that one family's proof blocks write (its G), W the words a proof block writes (``window_bytes`` / 2). Segment j is words
-[OFF + W·j, OFF + W·j + W), so a row may hold several families' segments, each at its own OFF. A row that is one proof
+[OFF + W*j, OFF + W*j + W), so a row may hold several families' segments, each at its own OFF. A row that is one proof
 block's whole output (a quant chunk's codes and scale) is that block's own output row, and needs no writer.
 
 A segment's words are its value's bits, 16 a word, least significant first: an f32 is two words, its low half first, as the
@@ -21,7 +21,7 @@ tensor's bytes are in memory. FN's return, or PORT's type, is any type of bits w
 
 **The writer.** `SharedRowCheck_v1` is the difference d, bit for bit,
 
-    d[w] = (row[OFF + W·j + w] XOR y[w]) OR (j >= G)   for w < W (j unsigned),
+    d[w] = (row[OFF + W*j + w] XOR y[w]) OR (j >= G)   for w < W (j unsigned),
 
 so d is segment j XOR y when j < G and every bit set when j >= G: d is 0 exactly when j < G and segment j is y.
 `SharedRowWindow_v1`'s proof block has no output row: d is its pinned output (C-Flock's META ``pinned_outputs``, each bit a
@@ -93,7 +93,7 @@ def _segment(C, row, j, G: int, OFF: int, W: int):
 
 
 def window_check(C, y, row, j, G: int, OFF: int):
-    """``d``: W words, ``row[OFF + W·j + w] ^ y[w]``, every bit set when ``j >= G`` (``y`` W words, ``row`` the row's words,
+    """``d``: W words, ``row[OFF + W*j + w] ^ y[w]``, every bit set when ``j >= G`` (``y`` W words, ``row`` the row's words,
     ``j`` 16 bits, each a list of forms LSB first)."""
     W = len(y)
     got, past = _segment(C, row, j, G, OFF, W)
@@ -102,7 +102,7 @@ def window_check(C, y, row, j, G: int, OFF: int):
 
 
 def window_select(C, row, j, G: int, OFF: int, W: int):
-    """Segment j's W words, ``row[OFF + W·j:OFF + W·j + W]``, every bit 0 when ``j >= G``."""
+    """Segment j's W words, ``row[OFF + W*j:OFF + W*j + W]``, every bit 0 when ``j >= G``."""
     got, past = _segment(C, row, j, G, OFF, W)
     keep = NOT(past)
     return [[C.AND(x, keep) for x in got[16 * w:16 * (w + 1)]] for w in range(W)]
@@ -134,7 +134,7 @@ def _check_signature(S: Any):
 SharedRowCheck = specialized(
     "SharedRowCheck", 1, ("W", "ROW", "OFF", "G"),
     lambda S: lambda C, *e: window_check(C, e[:S.W], e[S.W:-1], e[-1], S.G, S.OFF), _check_signature,
-    doc="a shared row's segment check on bits: d[w] = row[OFF + W·j + w] XOR y[w] for w < W, every bit set when j >= G "
+    doc="a shared row's segment check on bits: d[w] = row[OFF + W*j + w] XOR y[w] for w < W, every bit set when j >= G "
         "(j unsigned), so d = 0 exactly when j < G and segment j is y; a row of ROW words, G segments of W words from word OFF")
 
 
@@ -146,7 +146,7 @@ def _select_signature(S: Any):
 SharedRowSelect = specialized(
     "SharedRowSelect", 1, ("W", "ROW", "OFF", "G"),
     lambda S: lambda C, *e: window_select(C, e[:-1], e[-1], S.G, S.OFF, S.W), _select_signature,
-    doc="a shared row's segment read on bits: words [OFF + W·j, OFF + W·j + W) of a row of ROW words when j < G (j unsigned), "
+    doc="a shared row's segment read on bits: words [OFF + W*j, OFF + W*j + W) of a row of ROW words when j < G (j unsigned), "
         "every bit 0 when j >= G; G segments of W words from word OFF")
 
 

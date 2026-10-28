@@ -53,7 +53,7 @@ def _dequant_body(B, S, z, s, t, bias):
 
 NcpDequantDef = CompositeDefinition(
     "NcpDequant", 1, (), lambda S: ((("z", U32), ("s", F32), ("t", F32), ("bias", BF16)), BF16), _dequant_body,
-    doc="y = bf16(fp32(s_i)·fp32(t_j)·Z) + bias_j: a width-rule unit after the Z separator.", conformance="protocol-defined")
+    doc="y = bf16(fp32(s_i)*fp32(t_j)*Z) + bias_j: a width-rule unit after the Z separator.", conformance="protocol-defined")
 
 NcpDequant = bind(NcpDequantDef)
 
