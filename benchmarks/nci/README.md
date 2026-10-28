@@ -353,7 +353,7 @@ in a checkpoint's slack bits, about 2×10¹¹ tokens for a 1T-parameter model re
 training on smuggled data stays bounded, not closed.
 
 **The proof gap.** The thread guarantees say nothing about a developer whose data is in θ, since their premise
-`BaselineRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
+`ThetaRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
 at most the bits of data the budgets allow.
 
 ## Not yet here
