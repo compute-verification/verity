@@ -90,9 +90,10 @@ ALLOWED = {
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
-    # verifier recomputes): the one edge into the catalog.
+    # verifier recomputes): the one edge into the catalog. H1's device records take SMs, f_max and the s8 rate from the
+    # card files (`circuit.h1device`).
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                            "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
+                            "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs", "hardware"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
