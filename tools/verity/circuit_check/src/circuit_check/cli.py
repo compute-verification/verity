@@ -520,8 +520,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 
     The task list (each target and its key) is a cache entry too, under the catalog's own key, which holds the pinned ids
     (`targets.pinned`: a pin keeps its target): while everything its build could depend on is unchanged
-    (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no Definition. Any other run builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`),
-    building only the bindings whose record misses, and a full build stores them."""
+    (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no Definition. Any other run
+    builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`), building only the bindings
+    whose record misses, and a full build stores them."""
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
     listed = None

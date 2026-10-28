@@ -346,9 +346,10 @@ KBIG_BINDING = """def kbig():
 
 def test_a_pin_added_after_the_records_keeps_its_target_from_them(tmp_path):
     """SynK is reached at K = 2 (a root, and in SynKBig's body) and at K = 5 (in SynKBig's body), with `targets.MAX_GATES` at 2
-    gates: the full build checks K = 2 alone, and its records describe no K = 5.  A pin of K = 5 then keeps it (`targets.pinned`): the run from the
-    records reuses every one, makes K = 5 from SynKBig's binding and describes it (no `units.Stale`, which would build the whole
-    catalog), checks it with its pin, reuses every other target, and gives the verdicts a full build gives."""
+    gates: the full build checks K = 2 alone, and its records describe no K = 5.  A pin of K = 5 then keeps it
+    (`targets.pinned`): the run from the records reuses every one, makes K = 5 from SynKBig's binding and describes it (no
+    `units.Stale`, which would build the whole catalog), checks it with its pin, reuses every other target, and gives the
+    verdicts a full build gives."""
     from test_cache import _set_pin
 
     root = _tree(tmp_path / "t")
