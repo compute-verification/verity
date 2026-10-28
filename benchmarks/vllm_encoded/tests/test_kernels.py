@@ -46,7 +46,7 @@ def test_tag_vectors_bound_every_launch(n, kd, t):
 def test_tensor_configs_fit_the_fused_kernel(tw, s, warps, t, sketch):
     """Every config the tensor arm launches passes `wt_fused_sketch`'s bounds and its shared memory at M = 32
     (`fused_smem_bytes<4, k_s>` with the signs in global memory), for p768, p1536 (8 warps at T = 8, and 12 at T = 32)
-    and p512; the sketched ones include ra-codec-tensor's p1536 picks, 8 x 8 and 10 x 9."""
+    and p512; the sketched ones include the tensor-core codec's p1536 picks, 8 x 8 and 10 x 9."""
     tlib = object.__new__(K.TensorLib)
     tlib.sb, tlib.task_words, tlib.fused_warps, tlib.fused_span = tw * s, tw, warps, (tw + 30) // 32 + 1
     tlib.sketch = {"k": sketch, "t": t} if sketch else None
