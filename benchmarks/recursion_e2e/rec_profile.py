@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Iterable
 
 SCHEMA = "recursion-e2e/v1"
-GPU_STEPS = ("inner", "oprove")
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
 #: run, ``icheck`` and ``oreplay`` time more of it)
 E2E_STEPS = ("build", "inner", "vstage", "vcap", "oprove", "lean")
