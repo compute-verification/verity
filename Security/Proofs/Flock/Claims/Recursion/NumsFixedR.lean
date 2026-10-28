@@ -29,7 +29,7 @@ namespace RecDeploy.NumsFix
 open Flock
 open Claims (Msg Out)
 open FlockSoundness.Refine
-open FlockSoundness.Discharge.Exec (range_mapM_ok mPts_of_any)
+open FlockSoundness.Discharge.Exec (range_mapM_ok mPts_of_any ok_of_refuse)
 open Lean (Json)
 
 /-! ## Flock's parsers with the public file swapped -/
@@ -86,7 +86,7 @@ theorem setupTables_okH' {tags : Tags} {cf pf : ByteArray} {coins : Coins} {coun
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact Or.inl ⟨by assumption, _, by assumption, rfl, rfl⟩
+  · exact Or.inl ⟨by assumption, _, ok_of_refuse (by assumption), rfl, rfl⟩
   all_goals
     obtain ⟨hsz, -⟩ := range_mapM_ok (by assumption)
     exact Or.inr ⟨by omega, hsz⟩
