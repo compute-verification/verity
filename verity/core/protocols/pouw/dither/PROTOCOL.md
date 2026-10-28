@@ -521,8 +521,9 @@ ruled on, and nothing of it is in a Lean lock. `circuit/dither_c2o.py` holds its
   With weights the prover chooses, d_A's count times B's mean passes 80% of cells.
 - **Its proof block** is 8 adjacent cells of one row, `PouwDitherServedC2O_v1`, over A's whole row, B's 8 rows and their
   dithers. Its only output is the pass bit.
-- **Credit.** An accepted call is credited at pub_O, not at the int8 GEMM: about 0.886 of it on the H200 with B pinned,
-  the price of Strassen–Winograd at A = 0 with its sparse corrections.
+- **Credit.** An accepted call is credited at pub_O, not at the int8 GEMM: about 0.90 of it on the H200 with B pinned
+  (0.903 on the served Llama 3.1 8B int8 weights, against BYTE-CELL's 0.886 on random B), the price of Strassen at depth 1
+  with its sparse corrections. It rises with a correction's cost, which the fused kernel measures.
 - **Each form's dispatch refuses the others' shapes.** `dither_c2o.block_definition` takes only a `C2OShape`.
 - **Open:** compute-research's C2-O spec, the check of down's A′ beside the block (up's cells through SiLU·mul and the
   requant), and SAKHigh-O's statement.

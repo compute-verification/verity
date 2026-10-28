@@ -20,8 +20,9 @@ R .. R + W − 1 of O's two's complement.
 * B is pinned (`pinned`). With weights the prover chooses, at A = B = 0, O = d_A d_Bᵀ is one b1 product, and d_A's count
   times B's mean passes 80% of cells (BYTE-CELL, C2-O (b)). So a call on unpinned weights is refused.
 
-**Credit.** The exact route, Strassen–Winograd at A = 0 with its sparse corrections, computes O at pub_O ≈ 0.886 of the int8
-GEMM on the H200 with B pinned. So an accepted C2-O call is credited at pub_O, not at the GEMM.
+**Credit.** The exact route, Strassen at depth 1 with its sparse corrections, computes O at pub_O ≈ 0.90 of the int8 GEMM
+on the H200 with B pinned (0.903 on the served Llama 3.1 8B int8 weights; 0.886 was BYTE-CELL's estimate on random B). So an
+accepted C2-O call is credited at pub_O, not at the GEMM. pub_O is a public figure of the protocol, not of this Definition.
 
 **A proof block** is `CELLS` = 8 adjacent cells (i, j0 .. j0 + 7) of one row, j0 a multiple of 8, `PouwDitherServedC2O_v1{K,
 CELLS, R, W}`:
