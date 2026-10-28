@@ -1,4 +1,4 @@
-"""PoUW's audit window as the proof service sees it: what the window makes public, the grid its tile count is padded to,
+"""PoUW's audit window as the proof system sees it: what the window makes public, the grid its tile count is padded to,
 the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile).
 
 **Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
@@ -52,7 +52,7 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 
 **Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
-derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
+derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
 `live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
 from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
@@ -709,8 +709,7 @@ def session_cap(k_log: int, per_block: int = 1) -> int:
 
 
 def sessions(k: int, cap: int) -> int:
-    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles.  Served windows draw
-    K′ <= 31,178 (ε = 0.1%, δ = 2^-40 over levels 87 to 143) and K′ <= 9,937 (ε = 1%, δ = 2^-128)."""
+    """S, the fixed-shape sessions of `cap` instances that hold a window's K′ = `k` drawn tiles (`k_prime`)."""
     if not (_positive(k) and _positive(cap)):
         raise ValueError(f"K′ and the cap are positive, not {k!r} and {cap!r}")
     return -(-k // cap)

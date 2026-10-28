@@ -442,7 +442,7 @@ def main() -> None:
     p32 = pts["32B x8"]
     r32 = next((x for x in recorded if x["t_ms"] == T * 1e3), recorded[0])["passes_per_s"]
     rows = []
-    for s_T in (206, 759, 2773, 6072, 11091, 33273):
+    for s_T in (206, 759, 2773, 6072, 11091, audit.SAMPLES):
         k = max(1, math.ceil(r32 * T / s_T))
         d = s_T * k / (r32 * T)
         o = s_T / T
