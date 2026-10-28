@@ -2,13 +2,16 @@
 
 This example runs one half of the **remote protocol** (`verity/remote/v0`, in `verity/core/protocols/remote/`):
 what a verifier with no hardware at the site establishes about a datacenter serving a model. The remote protocol composes
-two subprotocols and accepts only when both accept:
+three subprotocols and accepts only when all three accept:
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
   computes is committed under hiding commitments, the verifier's own random coins draw proof blocks of a served sampling
   period, the prover proves the drawn blocks with C-Flock in zero knowledge behind the Lean firewall, and the Lean verifier
   gives the verdict;
-- **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`).
+- **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`);
+- **the inference-only policy** (`verity/core/protocols/network/nci/`): the declared circuit divides into inference
+  blocks within their gate and fresh-input budgets. This example doesn't run it: the served run doesn't produce the
+  declared division yet.
 
 This example runs the integrity half end to end. Its work half doesn't run here: PoUW's served form needs an int8 model
 and the challenger's gate, and on such a workload `benchmarks/one_stage/served_verdicts.sh` runs it today only as a

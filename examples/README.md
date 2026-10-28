@@ -9,21 +9,23 @@ or `run.sh`.
 ## The remote protocol
 
 Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
-establishes with no hardware of its own at the prover's site. It composes two protocols (`Core.Remote.components`):
+establishes with no hardware of its own at the prover's site. It composes three protocols (`Core.Remote.components`):
 
 - integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger draws proof blocks, the prover proves each drawn
   block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by PoUW's window check (`verity/pouw/v1`): the GPU's time is credited to useful matmuls through receipts the live
-  coins open.
+  coins open;
+- the inference-only policy (`verity/inference-only/v0`): the declared circuit divides into inference blocks within
+  their gate and fresh-input budgets, checked from the declared circuit and the registered information alone.
 
-Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
-other answers. It rests on live coins (drawn after the commitment, never redrawn) and on what each component's own
+Remote accepts only when all three accept over one commitment that binds them; any one's rejection rejects it, whatever
+the others answer. It rests on live coins (drawn after the commitment, never redrawn) and on what each component's own
 guarantee assumes; each component states its guarantee in `Security/`, and the composite states none of its own in Lean
 yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
 Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a
-stand-in prover; `vllm/` and `h200/` each run remote's sampled-proofs half for real; PoUW's half has no runner in an
-example yet. Five other things are called "remote" (PoUB among them); `verity/core/protocols/remote/README.md`, "Which
+stand-in prover; `vllm/` and `h200/` each run remote's sampled-proofs half for real; PoUW's half and the inference-only
+policy have no runner in an example yet. Five other things are called "remote" (PoUB among them); `verity/core/protocols/remote/README.md`, "Which
 remote", lists them.
 
 ## How far an example runs, and how far it's proved
