@@ -190,12 +190,14 @@ def link_ref(UB: int, PB: int, trow: Sequence[int], xr: Sequence[int], yr: Seque
     row = bytes_of(trow)
     pr = _field(row, 2) | _field(row, 1) << PB
     pw = _field(row, 4) | _field(row, 3) << PB
-    sib = lambda a: [bytes_of(a[NODE_WORDS * h:NODE_WORDS * (h + 1)]) for h in range(D)]
+    def sib(a):
+        return [bytes_of(a[NODE_WORDS * h:NODE_WORDS * (h + 1)]) for h in range(D)]
     key = INSTANCE.default_key
     lr = leaf(INSTANCE.commit_string(key, bytes_of(xr), bytes_of(yr)))
     lw = leaf(INSTANCE.commit_string(key, bytes_of(xw), bytes_of(yw)))
     ok = ok_ref(UB, PB, row, bytes_of(xr), bytes_of(xw))
-    mask = lambda r: expected(r) if ok else [0] * OUT_WORDS
+    def mask(r):
+        return expected(r) if ok else [0] * OUT_WORDS
     return mask(_climb_ref(lr, sib(raux), pr & ((1 << D) - 1))), mask(_climb_ref(lw, sib(waux), pw & ((1 << D) - 1)))
 
 
@@ -230,7 +232,8 @@ def _none(ops, bits: list):
 
 def _ok(ops, UB: int, PB: int, row: list, xr: list, xw: list):
     one = ops.const(1)
-    field = lambda f: row[FIELD_BITS * f:FIELD_BITS * (f + 1)]
+    def field(f):
+        return row[FIELD_BITS * f:FIELD_BITS * (f + 1)]
     kind = field(0)
     rest_zero = _none(ops, kind[1:])
     is_fill = ops.and_([rest_zero], ops.xor([kind[0]], [one]))[0]
@@ -239,8 +242,10 @@ def _ok(ops, UB: int, PB: int, row: list, xr: list, xw: list):
     fits = _none(ops, field(1)[UB:] + field(3)[UB:] + field(2)[PB:] + field(4)[PB:])
     fz = _none(ops, field(1)[:UB] + field(3)[:UB] + field(2)[:PB] + field(4)[:PB])
     eq = _none(ops, ops.xor(xr, xw))
-    not_ = lambda a: ops.xor([a], [one])[0]
-    or_ = lambda a, b: not_(ops.and_([not_(a)], [not_(b)])[0])
+    def not_(a):
+        return ops.xor([a], [one])[0]
+    def or_(a, b):
+        return not_(ops.and_([not_(a)], [not_(b)])[0])
     kinds = or_(is_fill, is_link)
     return _all(ops, [kinds, tail, fits, or_(not_(is_fill), fz), or_(not_(is_link), eq)])
 
@@ -261,7 +266,8 @@ def _leaf(ops, x: list, y: list) -> list:
 
 def _steps(ops, UB: int, PB: int, trow: list, xr: list, yr: list, raux: list, xw: list, yw: list, waux: list) -> tuple[list, list]:
     """``rin``'s and ``rout``'s bits (byte-string order) from the ports' (`RecLink`'s, flattened)."""
-    field = lambda f: trow[FIELD_BITS * f:FIELD_BITS * (f + 1)]
+    def field(f):
+        return trow[FIELD_BITS * f:FIELD_BITS * (f + 1)]
     dr = field(2)[:PB] + field(1)[:UB]
     dw = field(4)[:PB] + field(3)[:UB]
     ok = _ok(ops, UB, PB, trow, xr, xw)

@@ -22,14 +22,16 @@ def _population(seed: int = 1):
     """Each unit's output rows (digest, salt) and input rows, unit u + 1's input row 0 reading unit u's output row 1, and the
     verifier's two trees over the rows' commit strings."""
     g = random.Random(seed)
-    rnd = lambda n: bytes(g.getrandbits(8) for _ in range(n))
+    def rnd(n):
+        return bytes(g.getrandbits(8) for _ in range(n))
     outs = {(u, o): (rnd(64), rnd(192)) for u in range(UNITS) for o in range(OUTS)}
     ins = {(u, p): (rnd(64), rnd(192)) for u in range(UNITS) for p in range(INS)}
     links = [RL.Link(u + 1, 0, u, 1) for u in range(UNITS - 1)]
     for l in links:
         ins[l.reader, l.port] = (outs[l.writer, l.out][0], rnd(192))
-    tree = lambda rows: R.Tree({R.index(u, p, PB): R.leaf(hm96.SHA512.commit_string(KEY, x, y)) for (u, p), (x, y) in rows.items()},
-                               R.depth(UB, PB))
+    def tree(rows):
+        return R.Tree({R.index(u, p, PB): R.leaf(hm96.SHA512.commit_string(KEY, x, y)) for (u, p), (x, y) in rows.items()},
+                      R.depth(UB, PB))
     return ins, outs, links, tree(ins), tree(outs)
 
 
@@ -106,7 +108,8 @@ def test_the_tree_is_the_verifiers_over_padded_leaves():
     t = R.Tree({1: b"\1" * 64}, 2)
     import hashlib
 
-    h = lambda a, b: hashlib.sha512(a + b).digest()
+    def h(a, b):
+        return hashlib.sha512(a + b).digest()
     assert t.root == h(h(R.EMPTY, b"\1" * 64), h(R.EMPTY, R.EMPTY))
     assert t.path(1) == [R.EMPTY, h(R.EMPTY, R.EMPTY)]
 
@@ -141,10 +144,12 @@ def test_the_definition_computes_the_reference():
     cases, _, _ = _cases()
     d = R.definition(UB, PB)
     assert d.id == f"RecLink_v1{{UB={UB},PB={PB}}}"
-    port = lambda i: np.array([np.array(_bits(c[0][i]), dtype=np.uint8).reshape(-1, 16) for c in cases])
+    def port(i):
+        return np.array([np.array(_bits(c[0][i]), dtype=np.uint8).reshape(-1, 16) for c in cases])
     res = np.asarray(evaluate_batch(d, *(port(i) for i in range(len(R.PORTS)))))
     res = res.reshape(len(cases), 2 * R.OUT_WORDS, 16)
-    word = lambda w: int(sum(int(b) << j for j, b in enumerate(w)))
+    def word(w):
+        return int(sum(int(b) << j for j, b in enumerate(w)))
     for t, (ports, _) in enumerate(cases):
         rin, rout = R.link_ref(UB, PB, *ports)
         assert [word(w) for w in res[t]] == rin + rout
