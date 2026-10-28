@@ -153,7 +153,6 @@ def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, sui
     `call_families` does, and it decides most."""
     calls = TG.call_families()
     words = TG.word_call_families()
-    assert calls - words <= TG.boolean_call_candidates(words)
     assert TG.certified_boolean_calls(words) <= calls
     _without_the_catalog(monkeypatch)
     fams = set(TG.REGISTERED) | {TG.family(fn) for fn in suite.values()} | calls
@@ -166,6 +165,20 @@ def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, sui
     assert {f for f, call in decided.items() if call} == set(decided) & calls
     undecided = sorted(fams - set(decided))
     assert len(undecided) < len(fams) // 10, f"most families need no catalog: {undecided[:20]}"
+
+
+@pytest.mark.slow
+def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(suite):
+    """`boolean_call_candidates`, narrowed to the statics a binding of the word Call family could give, drops only Boolean
+    families `boolean_version` refuses: on the real catalog, the Boolean version `boolean_version` accepts for each suite
+    Definition of a word Call family (`boolean_call_families`) is a candidate, unless its family is a word Call family itself,
+    which is decided as one first.  `units.call_families` looks for ``--all``'s Boolean Calls only among the candidates, and
+    `is_call` says a family outside them is no Call, so a family dropped here would leave both short of `call_families`."""
+    words = TG.word_call_families()
+    accepted = TG.boolean_call_families(words, suite) - words
+    assert accepted, "the served word Calls have Boolean versions"
+    missing = sorted(accepted - TG.boolean_call_candidates(words))
+    assert not missing, f"Boolean versions boolean_version accepts that the candidates drop: {missing}"
 
 
 def test_a_boolean_version_whose_statics_no_word_call_binds_is_not_a_candidate(monkeypatch):
