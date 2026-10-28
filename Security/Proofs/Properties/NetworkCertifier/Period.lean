@@ -177,10 +177,11 @@ theorem honest_make : Lms.Params.make 64 1 20 false = .ok Lms.deployed := by
 theorem honestKey_I : honestKey.I = honestI :=
   (Properties.CertifierDevice.Proofs.Lms.key_spec honestKey_ok).2.1
 
-theorem honestParams_key (l : ClockLink) : (honestParams l).key = honestKey.I ++ honestKey.tree[1]! := rfl
+theorem honestParams_key (l : ClockLink) (prog : String) : (honestParams l prog).key = honestKey.I ++ honestKey.tree[1]! :=
+  rfl
 
-theorem honest_keyId (l : ClockLink) : (honestParams l).key.extract 0 16 = honestI := by
-  rw [honestParams_key l, honestKey_I]
+theorem honest_keyId (l : ClockLink) (prog : String) : (honestParams l prog).key.extract 0 16 = honestI := by
+  rw [honestParams_key l prog, honestKey_I]
   exact ByteArray.extract_append_eq_left (by decide)
 
 theorem honest_message (d : NetworkCheck.Direction) (x : ByteArray) (hx : x.size = 64) :
@@ -193,8 +194,8 @@ theorem honest_message (d : NetworkCheck.Direction) (x : ByteArray) (hx : x.size
     Functor.map, Except.map]
   exact ⟨_, rfl⟩
 
-theorem certifies_honest (l : ClockLink) (d : NetworkCheck.Direction) (q : Nat) (x : ByteArray) (hq : q < 2 ^ 20)
-    (hx : x.size = 64) : certifies (honestParams l) d 0 (honestCert d 0 q x) = true := by
+theorem certifies_honest (l : ClockLink) (prog : String) (d : NetworkCheck.Direction) (q : Nat) (x : ByteArray)
+    (hq : q < 2 ^ 20) (hx : x.size = 64) : certifies (honestParams l prog) d 0 (honestCert d 0 q x) = true := by
   obtain ⟨m, hm⟩ := honest_message d x hx
   obtain ⟨sig, hs, hv, hsq, hy, hpath, hC, hys, hps⟩ :=
     Properties.CertifierDevice.Proofs.Lms.verify_signAt (q := q) m honest_make honestKey_ok hq
@@ -205,7 +206,7 @@ theorem certifies_honest (l : ClockLink) (d : NetworkCheck.Direction) (q : Nat) 
       (Lms.signAt honestKey q)).toOption.map Lms.Signature.encode).getD .empty = sig.encode
     rw [hm, except_bind_ok, hs]
     try rfl
-  refine certifies_of (m := m) (sig := sig) rfl rfl rfl (honest_keyId l).symm hm ?_ hv
+  refine certifies_of (m := m) (sig := sig) rfl rfl rfl (honest_keyId l prog).symm hm ?_ hv
   rw [hsig]
   exact hdec
 
@@ -215,8 +216,9 @@ end Period
 accepts one clock-form link-window, registered as the link's Program at window 0 and proved by one unit that one-stage
 v2 accepts and that opens, both ends and the clock certified with the certifier's key at the deployed LMS parameters. -/
 theorem periodAcceptMeans_honest (hv : HonestWindowProved) :
-    ∃ (l : ClockLink) (reg : Json) (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs),
-      check (honestParams l) (honestCommitment reg) (honestEvidence s ev) bs =
+    ∃ (l : ClockLink) (prog : String) (reg : Json) (de di : ByteArray) (s : Salts)
+      (ev : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs),
+      check (honestParams l prog) (honestCommitment reg) (honestEvidence de di s ev) bs =
         .accept (terms #[] #[] #[] 0 1 1) { link := "link", windows := 1 } := by
   sorry
 
@@ -224,7 +226,7 @@ theorem periodAcceptMeans_honest (hv : HonestWindowProved) :
 accepts the honest parameters' period with a commitment that registers no link-window, and none of it was accepted. -/
 theorem periodAcceptMeans_nontrivial : ¬ PeriodAcceptMeansOf acceptAllPeriod := by
   intro h
-  exact absurd (h (honestParams ⟨honestSyncs, "", ⟨⟨0, 0, 0, 0, 0⟩, none⟩, ⟨⟨0, 0, 0, 0, 0⟩, none⟩, .null, ""⟩)
+  exact absurd (h (honestParams ⟨honestSyncs, "", ⟨⟨0, 0, 0, 0, 0⟩, none⟩, ⟨⟨0, 0, 0, 0, 0⟩, none⟩, .null, ""⟩ "")
     ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ .empty _ _ rfl).1 (by decide)
 
 end Properties.NetworkCertifier

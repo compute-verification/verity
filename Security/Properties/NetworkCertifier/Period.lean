@@ -46,9 +46,10 @@ levels) are stated as the code's `==` returning `true`.
 
 Beside the property, its two lemmas' objects: `PeriodAcceptMeansOf`, the property of any period check, and
 `acceptAllPeriod`, a check that accepts every period; and an honest period of one clock-form link-window on a clock link
-`l` (`honestParams`, `honestCommitment`, `honestEvidence`), its certificates signed with the certifier's key at the
-deployed LMS parameters, with the named assumption its acceptance takes: that some clock link, registration and proof
-of that link-window pass v2 and open (`HonestWindowProved`), which no kernel evaluation makes.
+`l` under N2's Program `prog` (`honestParams`, `honestCommitment`, `honestEvidence`), its certificates signed with the
+certifier's key at the deployed LMS parameters, with the named assumption its acceptance takes: that some clock link,
+Program, registration, certified digests and proof of that link-window pass v2 and open (`HonestWindowProved`), which
+no kernel evaluation makes.
 -/
 
 open NetworkCheck.Period
@@ -228,9 +229,9 @@ def honestCert (d : NetworkCheck.Direction) (w q : Nat) (x : ByteArray) : Certif
     signature := (((NetworkCheck.certificateMessage honestI honestSession "link" d w x).bind
       (Lms.signAt honestKey q)).toOption.map Lms.Signature.encode).getD .empty }
 
-/-- The period's parameters on the clock link `l`: the link `link` under N2's Program `program`, one clock-form
+/-- The period's parameters on the clock link `l` under N2's registered Program `prog`: the link `link`, one clock-form
 link-window from window 0, no audit, and the certifier's key at the deployed LMS parameters in its session. -/
-def honestParams (l : ClockLink) : Params where
+def honestParams (l : ClockLink) (prog : String) : Params where
   audits := #[]
   cells := #[]
   first := 0
@@ -239,30 +240,32 @@ def honestParams (l : ClockLink) : Params where
   lms := Lms.deployed
   key := honestKey.publicKey
   session := honestSession
-  program := "program"
+  program := prog
   form := .clock l
   windows := 1
 
-/-- Link-window 0 as the evidence shows it: the certificates of both ends of the link at window 0 (egress then
-ingress) and the clock's, each on its own one-time key, with the delivered salts `s` and the v2 evidence `ev` of its
-proof. -/
-def honestWindow (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) : Window :=
-  { certificates := #[honestCert .egress 0 0 ⟨Array.replicate 64 5⟩, honestCert .ingress 0 1 ⟨Array.replicate 64 6⟩],
+/-- Link-window 0 as the evidence shows it: the certificates of both ends of the link at window 0 on the digests `de`
+(egress) and `di` (ingress) and the clock's, each on its own one-time key, with the delivered salts `s` and the v2
+evidence `ev` of its proof. -/
+def honestWindow (de di : ByteArray) (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) : Window :=
+  { certificates := #[honestCert .egress 0 0 de, honestCert .ingress 0 1 di],
     shown := .clock (honestCert .egress 0 2 ⟨Array.replicate 64 7⟩) s ev }
 
 def honestCommitment (reg : Json) : Commitment := ⟨#[], #[reg], .empty⟩
 
-def honestEvidence (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) : Evidence := ⟨#[], #[honestWindow s ev]⟩
+def honestEvidence (de di : ByteArray) (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) : Evidence :=
+  ⟨#[], #[honestWindow de di s ev]⟩
 
-/-- **Named assumption: an honest link-window is proved.** Some clock link under Σ_sync `honestSyncs` (N2's declared
-ends and the auditor's one-stage v2 parameters for it), some registration of the link's Program at window 0, and some
-salts, v2 evidence and blobs of a proof of link-window 0 under the honest certificates pass one-stage v2 and open to
-the verifier's own public row: N2's completeness on that link-window, which needs a proof v2 accepts, and the kernel
-runs no prover. -/
+/-- **Named assumption: an honest link-window is proved.** For some clock link under Σ_sync `honestSyncs` (N2's
+declared ends and the auditor's one-stage v2 parameters for it) and N2's registered Program `prog` for it, some
+registration of `prog` at window 0, the 64-byte digests both ends' certificates sign, and the salts, v2 evidence and
+blobs of a proof of link-window 0 under those certificates pass one-stage v2 and open to the verifier's own public row:
+N2's completeness on that link-window, which needs a proof v2 accepts, and the kernel runs no prover. -/
 def HonestWindowProved : Prop :=
-  ∃ (l : ClockLink) (reg : Json) (s : Salts) (ev : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs),
-    l.syncSet = honestSyncs ∧ PeriodWindowRegistered (honestParams l) 0 reg ∧
-      PeriodWindowV2 (honestParams l) l #[] 0 reg (honestWindow s ev) bs ∧
-      PeriodWindowOpened (honestParams l) l 0 reg (honestWindow s ev) bs
+  ∃ (l : ClockLink) (prog : String) (reg : Json) (de di : ByteArray) (s : Salts)
+    (ev : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs),
+    l.syncSet = honestSyncs ∧ de.size = 64 ∧ di.size = 64 ∧ PeriodWindowRegistered (honestParams l prog) 0 reg ∧
+      PeriodWindowV2 (honestParams l prog) l #[] 0 reg (honestWindow de di s ev) bs ∧
+      PeriodWindowOpened (honestParams l prog) l 0 reg (honestWindow de di s ev) bs
 
 end Properties.NetworkCertifier
