@@ -74,7 +74,8 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     """Two Commit windows, each one H1 window over the committer's steps 0 and 1: each window's A tables and input ids are
     the rows the server's Commit acquired (ROOTS1 tied, none of the Commit's own trees), under the period's one Program and
     weights' root, on the epoch's in-process coins (a fresh epoch a window), so no row is gate-passed; at each close H1's
-    hooks and its tap come off, leaving the committer as it was. A window that served no step is neither tied nor not."""
+    hooks and its tap come off, leaving the committer as it was. A window that served no step is neither tied nor not, and
+    on in-process coins is released without padding its steps (`serve_h1.UNSERVED`): no transcript, nothing gated."""
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
     described = arm.describe()
@@ -97,9 +98,59 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
         assert arm.close(w) is None
     assert salts[0] != salts[1]
     arm.open(2)
+    run = pouw.h1_run(SH.ENTRY)
     idle = arm.close(2)
-    assert (idle["tied"], idle["steps_served"], idle["gate"]["gate_passed"]["rows"]) == (None, 0, 0), "it served no step"
+    assert (idle["tied"], idle["steps_served"], idle["release"]) == (None, 0, SH.UNSERVED), "it served no step"
+    assert idle["gate"]["gate_passed"] is None and not run.closed and run.calls == []
+    assert not (tmp_path / "h1" / "w2").exists()
+    assert "_acquire" not in vars(srv.com) and "execute_model" not in vars(srv.runner)
     assert arm.summary() == {"windows": 3, "tied": 2, "untied": [], "gate_passed_rows": 0, "releasing": 0, "unused": []}
+    srv.src.uninstall()
+
+
+def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no_draw(tmp_path, monkeypatch):
+    """Async scheduling's last call before the stop only returns the last outputs, so the Commit window it opens holds no
+    step. On in-process coins that window's release pads none of its S steps and draws nothing (`serve_h1.UNSERVED`); it
+    still goes through ``closer`` behind the windows before it, so the outcomes, and the window lines that wait for
+    them, stay in window order, and the draw-gated release neither waits on it nor counts it refused."""
+    from verity_vllm.pipeline import serve_release as RL
+
+    srv, closer = _Server(monkeypatch), Later()
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), closer=closer)
+    draws = RL.Draws((SH.DRAWER, "other"))
+    arm.drawing(draws)
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    pending = [arm.close(0)]
+    arm.open(1)
+    pending.append(arm.close(1))
+    assert not any(f.done() for f in pending) and arm.summary()["releasing"] == 2 and arm.outcomes == []
+    closer.run()
+    served, unserved = (f.result() for f in pending)
+    assert [o["window"] for o in arm.outcomes] == [0, 1] and arm.summary()["releasing"] == 0
+    assert served["tied"] and served["steps_served"] == STEPS and "release" not in served
+    assert (unserved["steps_served"], unserved["release"], unserved["tied"]) == (0, SH.UNSERVED, None)
+    assert "draw" not in unserved and "error" not in unserved
+    assert set(unserved["seconds"]) == {"reserve", "install", "close_on_loop", "queued", "release", "ended"}
+    assert (tmp_path / "h1" / "w0" / PH.CALLS_FILE).is_file() and not (tmp_path / "h1" / "w1").exists()
+    summary = draws.summary()
+    assert 1 not in summary["drawn_not_released"] and 1 not in summary["refused"], summary
+    srv.src.uninstall()
+
+
+def test_a_window_on_a_gate_session_that_served_no_step_still_opens_and_closes_its_session(tmp_path, monkeypatch):
+    """A window whose coins are a gate session is released in full though it served no step: its S steps padded, its
+    session opened on an empty round 0 and closed, and its end entry waited for, so the session it took doesn't leave its
+    period incomplete."""
+    srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
+    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
+    arm.open(0)
+    run = pouw.h1_run(SH.ENTRY)
+    out = arm.close(0)
+    assert "release" not in out and out["steps_served"] == 0 and out["tied"] is None and run.closed, out
+    assert out["session"]["end"] == {"opened": True, "rc": 0, "closed": True, "complete": True}, out["session"]
+    assert (tmp_path / "h1" / "w0" / PH.CALLS_FILE).is_file()
     srv.src.uninstall()
 
 
