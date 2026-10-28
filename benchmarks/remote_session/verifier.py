@@ -185,7 +185,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
 
 def regions_of(layout, blocks: int) -> tuple[tuple[str, str, int, int], ...] | None:
     """The hello's layout of the registered store as regions `(kind, tier, first, blocks)` in index order, covering its
-    `blocks` exactly (`verity_vllm.protocols.remote_bandwidth.registry.Store.layout`'s), or None without one.  The labels are the prover's,
+    `blocks` exactly (`verity_vllm.protocols.remote_bandwidth.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
     public as protocol structure: that a plan's weights blocks hold the circuit's weights is the plan unit's to show
     (`audit.RequirementLink`), not this."""
     if layout is None:

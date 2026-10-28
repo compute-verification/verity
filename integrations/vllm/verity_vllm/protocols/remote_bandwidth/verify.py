@@ -1,4 +1,4 @@
-"""`verify_opening`: the verifier's side of one opening of a `Store`'s pass, the reference the store's openings are
+"""`verify_opening`: the verifier's side of one opening of a `NodeMemory`'s pass, the reference the store's openings are
 tested against."""
 from __future__ import annotations
 
