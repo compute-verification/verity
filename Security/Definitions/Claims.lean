@@ -1,4 +1,5 @@
 import Mathlib
+import Definitions.Hash.Basic
 import Definitions.Claims.Hm96
 import Definitions.Claims.Json
 
@@ -85,12 +86,11 @@ namespace Claims
 
 /-! ## Messages and the hash -/
 
-/-- `Msg = {0,1}^*` in whole bytes, as the deployed SHA-512 reads them: a padding convention for other lengths would
-make collisions that are not SHA-512's. -/
-abbrev Msg := List UInt8
+/-- A message, `Hash.Msg`: whole bytes, as the deployed SHA-512 reads them. -/
+abbrev Msg := Hash.Msg
 
-/-- A collision of `H`. -/
-def Collision (H : Msg → Msg) (u v : Msg) : Prop := u ≠ v ∧ H u = H v
+/-- A collision of `H`, `Hash.Collision`. -/
+abbrev Collision (H : Msg → Msg) (u v : Msg) : Prop := Hash.Collision H u v
 
 /-- **`H`'s outputs are 64 bytes**: the deployed oracle is SHA-512 with its whole output, and the random-oracle model
 draws 64-byte outputs. Completeness reads it (`Complete`); it fixes the length, not `H`. -/
