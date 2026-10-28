@@ -9,7 +9,7 @@ arm. Placement is FILL v1's
 per-point split: on a green split the filler adds ≤ 0.4% to the split's own cost, so decode's slowdown is the split's,
 whatever runs on the filler's SMs.
 
-  research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \\
+  research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \\
     -- python3 benchmarks/pouw/filler/score.py benchmarks/pouw/filler/pfill_arm.py:PFillE2m1Ram
 """
 
