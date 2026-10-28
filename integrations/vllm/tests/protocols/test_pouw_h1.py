@@ -659,6 +659,28 @@ def test_the_settings_unit_and_ks_are_h1s_and_ks_keeps_the_linears_at_those_ks()
         PHK.layers(model, (Linear,), (32,))
 
 
+def test_an_install_under_ks_commits_and_hooks_the_linears_at_those_ks_and_names_the_rest_uncovered():
+    """With ``ks`` the install commits and hooks only the linears at those K's; a MoE layer's down sites (K 16) serve on
+    their arm unhooked, and the run's ``details["uncovered"]`` names them (`pouw_h1_hooks.wire`)."""
+    moe = MoE(2, 5)
+    dense = Linear(32, 1)
+    model = Model(dense, moe, moe.router, moe.runner)
+    gate_up, down = moe.runner.quant_method.sites[0::2], moe.runner.quant_method.sites[1::2]
+    ctx = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(ks=[K]))
+    comp = PO.install(model, ctx)
+    try:
+        run = pouw.h1_run(_entry())
+        assert run.shapes_ == [(32, K)] * 3
+        assert run.details["uncovered"].endswith(f"outside the pouw setting 'ks' {[K]}, which serves on its arm unrecorded")
+        owners = {id(p.owner) for p in hooks.live(_entry())}
+        assert all(id(m.quant_method) in owners for m in (dense, *gate_up))
+        assert not any(id(m.quant_method) in owners for m in down)
+        assert pouw.commit_weights(PH.SCHEME, SimpleNamespace(model=model, context=ctx))["shapes"] == {
+            str(w): [32, K] for w in range(3)}
+    finally:
+        comp.close()
+
+
 def test_a_linear_the_checkpoint_keeps_bf16_is_not_recorded():
     """A linear ``modules_to_not_convert`` names (`engine.int8_vllm.Int8KeptLinearMethod`, bf16) is no call, as a router;
     an unmarked bf16 linear is still refused."""
