@@ -180,19 +180,19 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
 
 /-- **A templated circuit the hidden-output headlines cover** (its statement circuit is the flat
 circuit its template unrolls to, `HmOut.unrolled`), checked on the template's description, never on the rows it unrolls
-to: a `--zk` session of one table at hidden outputs without the verifier's own registered reads, whose unrolled unit
+to: a `--zk` session of one table at hidden outputs, with or without the verifier's own registered reads (which
+`circuitRules` and `Registered.check` hold to the ports and the public file, as for a flat statement), whose unrolled unit
 (`Tmpl.unroll`'s net: the root's columns, the template's ports) reads only its leaf group and returns the outputs, so the
 wires feed neither (`wiresFeed`), at most `2^32` rows, and `scopeOkI`'s rows. `TmplUnit.read` passed `Tmpl.unrollOk`,
 whose `Tmpl.ordered` makes the unrolled unit read only port bits among its inputs (`portReadsB`). -/
-def scopeOkT (hidden zk registered : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : Bool :=
-  hidden && zk && !registered && decide (count ≤ 1) && tu.t.inGroups.size == 1 && c.outNet == c.unitNet &&
+def scopeOkT (hidden zk : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : Bool :=
+  hidden && zk && decide (count ≤ 1) && tu.t.inGroups.size == 1 && c.outNet == c.unitNet &&
     decide (max 7 (log2ceil (tu.t.defs.getD tu.t.root default).cols) ≤ 32) && (v1Ports c || bitRows c)
 
 /-- Which part of `scopeOkT` a templated circuit fails, for the refusal. -/
-def scopeWhyT (hidden zk registered : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : String :=
+def scopeWhyT (hidden zk : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : String :=
   if !hidden then "a templated statement without hidden outputs"
   else if !zk then "a templated statement without --zk"
-  else if registered then "a templated statement with the verifier's registered reads (--registered)"
   else if count > 1 then s!"a templated statement in {count} tables"
   else if tu.t.inGroups.size != 1 then s!"a templated unit reading {tu.t.inGroups.size} input groups"
   else if c.outNet != c.unitNet then "a templated circuit whose outputs a tail stage computes (META out_net)"
@@ -268,8 +268,8 @@ def circuitRules (tags : Tags) (zk : Bool) (count : Nat) (registered : Bool) (c 
     .error (refusal "a shared-row public file (header shared_rows)")
   else match c.tmpl with
     | some tu =>
-      if scopeOkT tags.hiddenOutputs zk registered count c tu then .ok ()
-      else .error (refusal (scopeWhyT tags.hiddenOutputs zk registered count c tu))
+      if scopeOkT tags.hiddenOutputs zk count c tu then .ok ()
+      else .error (refusal (scopeWhyT tags.hiddenOutputs zk count c tu))
     | none =>
       if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
       else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()

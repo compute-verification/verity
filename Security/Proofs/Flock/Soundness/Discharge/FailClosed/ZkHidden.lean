@@ -45,7 +45,7 @@ theorem ScopeZ.parseHG {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = 
   cases ht : (circC (zkTags I) I).tmpl with
   | none => rfl
   | some tu =>
-    obtain ⟨-, -, -, -, -, -, -, -, -, hw⟩ := Checks.templated h ht
+    obtain ⟨-, -, -, -, -, -, -, -, hw⟩ := Checks.templated h ht
     rw [hw] at hf
     cases hf
 
