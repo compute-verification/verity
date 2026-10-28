@@ -11,6 +11,12 @@
 //            digest = frame-v3-sha512 leaf(c, c, "hm96-sha512/row/v2", value): a thread a leaf
 //   node     frame-v3-sha512 node(level, index, L, R), and pad(rank) past the pass's leaves: a thread a node
 //
+// The hm96 leaf after its salt, the frame-v3 leaf, the pad and the node are the GPU's one row commitment (`rc`,
+// verity/ml/kernels/row_commit.cuh), from the pass's constants kL (rc's leaf and pad templates under the pass's domain
+// and hm96's constants), kNodeTpl (a node's last two blocks), gNib (M_key's nibble table) and kC.node_mid; what is the
+// reader's own is the receipts, the row digest, the salts and which thread hashes what. Positions are at most 2^36,
+// so every leaf, pad and node index is below 2^32.
+//
 // A digest is kept as SHA-512's 8 state words: its bytes are their big-endian bytes, and as message words they are
 // themselves.
 #include <cstdint>
@@ -18,29 +24,32 @@
 #include <cuda_runtime.h>
 
 #include "sha512.cuh"
+#include "../../verity/ml/kernels/row_commit.cuh"
 
 namespace rb {
 
 using u32 = uint32_t;
 using u64 = uint64_t;
 
-constexpr int BLOCK = 4096, PER_LEAF = 16, SALT = 192, KEY_WORDS = 64;
-constexpr int HEAD_LEAF = 0, HEAD_NODE = 1, HEAD_PAD = 2;
-constexpr int NODE_LEVELS = 64, NODE_HEAD = 113;
+constexpr int BLOCK = 4096, PER_LEAF = 16, SALT = 192;
+constexpr int NODE_LEVELS = 64;
+constexpr u64 MAX_INDEX = 1ULL << 32;   // leaf, pad and node indices: rc's uint(index) is at most 4 bytes
 
 struct Consts {
-  u64 receipt_mid[8], row_mid[8], row_mid_last[8], salt_mid[8], leaf_mid[8];
-  u64 node_mid[NODE_LEVELS][8];  // a node's first block at each level (`node_digest`)
-  u32 key[KEY_WORDS];        // hm96-sha512's key, little-endian: bit t of the key is bit t % 32 of word t / 32
-  u64 head[3][16];           // frame-v3 FRAME ‖ u32be |tag| ‖ tag ‖ u64be 64 ‖ domain id, for leaf, node and pad, as
-                             // big-endian words, zero past head_len
-  u64 schema[4];             // the leaf schema, the same
+  u64 receipt_mid[8], row_mid[8], row_mid_last[8];
+  u64 node_mid[NODE_LEVELS][8];  // a node's first block at each level (rc::node_mid)
+  u64 kw_xpad[80];           // a leaf of PER_LEAF receipts' row/v2 all-padding last block, scheduled (session.cu's leaves)
   u64 salt_block[17];        // SHAKE256's block of salt_in ‖ u64be 0, padded, as little-endian lanes (`salt_of`)
-  int head_len[3], schema_len, salt_in_len;
+  int salt_in_len;
   int zero;                  // no padding: two passes' constants compare as bytes (rb_consts)
   u64 positions;             // the pass's positions L: ⌈L / 16⌉ leaves, the last of L − 16 (leaves − 1) receipts
 };
 __constant__ Consts kC;
+// rc's frame-v3 leaf and pad templates under the pass's domain (FrameK) and hm96's constants (Hm96K)
+struct Leaf : rc::FrameK, rc::Hm96K {};
+__constant__ Leaf kL;
+__constant__ u64 kNodeTpl[rc::MAX_NB][32];
+__device__ __align__(16) uint8_t gNib[rc::TN_BYTES];
 
 __host__ __device__ __forceinline__ u32 bswap32(u32 x) {
   return (x >> 24) | ((x >> 8) & 0xff00u) | ((x << 8) & 0xff0000u) | (x << 24);
@@ -468,89 +477,6 @@ __global__ void __launch_bounds__(32 * SK64R_WARPS, 1) sketch64_receipts_kernel(
   }
 }
 
-// --- framed messages ---------------------------------------------------------------------------------------------
-
-// A message of at most 16 W − 17 bytes as W big-endian words, zero past its n bytes. Its bytes land by compile-time
-// word index only (a byte array or a runtime word index would put it on the stack, and every append would be a local
-// store that reaches L2).
-template <int W>
-struct Msg {
-  u64 w[W];
-  int n;
-};
-// v's low `bytes` bytes, big-endian, at byte n.
-template <int W>
-__device__ __forceinline__ void put_be(Msg<W> &m, u64 v, int bytes) {
-  const u64 x = bytes == 8 ? v : v << (64 - 8 * bytes);
-  const int q = m.n >> 3, r = 8 * (m.n & 7);
-  const u64 hi = x >> r, lo = r ? x << (64 - r) : 0;
-#pragma unroll
-  for (int k = 0; k < W; ++k) m.w[k] |= k == q ? hi : k == q + 1 ? lo : 0;
-  m.n += bytes;
-}
-// A frame-v3 part `_uint(v)`: u64be its length, then v big-endian in the fewest bytes (at least one).
-template <int W>
-__device__ __forceinline__ void put_uint(Msg<W> &m, u64 v) {
-  int len = 1;
-  while (len < 8 && v >> (8 * len)) ++len;
-  put_be(m, len, 8);
-  put_be(m, v, len);
-}
-template <int W>
-__device__ __forceinline__ void put_digest(Msg<W> &m, const u64 *s) {
-  put_be(m, 64, 8);
-#pragma unroll
-  for (int k = 0; k < 8; ++k) put_be(m, s[k], 8);
-}
-template <int W>
-__device__ __forceinline__ void put_head(Msg<W> &m, int t) {
-#pragma unroll
-  for (int k = 0; k < W; ++k) m.w[k] = k < 16 ? kC.head[t][k] : 0;
-  m.n = kC.head_len[t];
-}
-template <int W>
-__device__ __forceinline__ void put_schema(Msg<W> &m) {
-  put_be(m, kC.schema_len, 8);
-#pragma unroll
-  for (int i = 0; i < 4; ++i) {
-    const int b = kC.schema_len - 8 * i;
-    if (b > 0) put_be(m, b >= 8 ? kC.schema[i] : kC.schema[i] >> (64 - 8 * b), b >= 8 ? 8 : b);
-  }
-}
-// Once m has passed its first block: that block compressed into s, the rest slid down a block (done counts the bytes).
-template <int W>
-__device__ __forceinline__ void flush_block(Msg<W> &m, u64 (&s)[8], int &done) {
-  if (m.n < 128) return;
-  sha512_compress(s, m.w);
-#pragma unroll
-  for (int k = 0; k < W; ++k) m.w[k] = k + 16 < W ? m.w[k + 16] : 0;
-  m.n -= 128;
-  done += 128;
-}
-// SHA-512's padding and last blocks of a message whose first done bytes are in s.
-template <int W>
-__device__ __forceinline__ void sha512_finish(Msg<W> &m, u64 (&s)[8], int done) {
-  static_assert(W == 32 || W == 48, "a framed message is two or three blocks");
-  const int n = m.n, nb = (n + 17 + 127) / 128;
-  put_be(m, 0x80, 1);
-  // Unconditional stores at fixed words: a store only where k = 16 nb − 1 folds to one store at a runtime index, and a
-  // loop over the blocks runs to the runtime nb with m.w + 16 blk a runtime index.
-  const u64 bits = (u64)(done + n) * 8;
-  m.w[15] = nb == 1 ? bits : m.w[15];
-  m.w[31] = nb == 2 ? bits : m.w[31];
-  if constexpr (W == 48) m.w[47] = nb == 3 ? bits : m.w[47];
-  sha512_compress(s, m.w);
-  if (nb > 1) sha512_compress(s, m.w + 16);
-  if constexpr (W == 48)
-    if (nb > 2) sha512_compress(s, m.w + 32);
-}
-template <int W>
-__device__ __forceinline__ void sha512_msg(Msg<W> &m, u64 (&s)[8]) {
-#pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
-  sha512_finish(m, s, 0);
-}
-
 // --- leaves ------------------------------------------------------------------------------------------------------
 
 __constant__ u64 kKeccakRC[24] = {
@@ -604,6 +530,30 @@ __device__ void salt_of(u64 c, u64 (&S)[24]) {
   for (int i = 17; i < 24; ++i) S[i] = A[i - 17];
 }
 
+// The hm96 leaf over x (a row's sha512/row/v2 digest) at position c under its salt S (salt_of(c)), and its frame-v3
+// leaf, into d.
+__device__ __forceinline__ void hm96_leaf(u64 c, const u64 (&x)[8], const u64 (&S)[24], u64 (&d)[8]) {
+  u64 Y[24], my[8], cd[8];
+#pragma unroll
+  for (int i = 0; i < 24; ++i) Y[i] = bswap64(S[i]);
+  u32 m[16];
+  rc::mask<false>(rc::NibTab<true>{gNib}, Y, m);
+  rc::mask_words(m, my);
+  rc::salt_digest(kL, Y, cd);
+  rc::frame_first_rt(kL, c, d);
+  rc::finish_leaf<0, true>(kL, kL, c, x, my, cd, d, nullptr, nullptr);
+}
+__device__ __forceinline__ void hm96_leaf(u64 c, const u64 (&x)[8], u64 (&d)[8]) {
+  u64 S[24];
+  salt_of(c, S);
+  hm96_leaf(c, x, S, d);
+}
+
+// node(h, i, L, R) under the pass's domain, h < NODE_LEVELS and i < 2^32
+__device__ __forceinline__ void node_of(int h, u64 i, const u64 *L, const u64 *R, u64 (&d)[8]) {
+  rc::node_rt_from(kNodeTpl, kC.node_mid[h], i, L, R, d);
+}
+
 // Thread tid's digest d to out + 8 tid, tid < n. A thread's own eight 8-byte stores, 64 bytes apart across the warp,
 // would fill each 32-byte sector a quarter at a time (4× the digests' bytes in L2 write sectors), so lanes 2a and
 // 2a + 1 write their 128 bytes as four whole sectors, each half from one lane. Every lane of the warp calls it.
@@ -654,63 +604,9 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
     sha512_compress(x, w);
   }
 
-  u64 S[24];
+  u64 S[24], d[8];
   salt_of(c, S);
-  u32 Ys[48];
-#pragma unroll
-  for (int i = 0; i < 24; ++i) Ys[2 * i] = (u32)S[i], Ys[2 * i + 1] = (u32)(S[i] >> 32);
-  // M_key · salt over GF(2): bit i = XOR_j salt_j key_(i + j). For each shift b the key's 63 shifted words serve all
-  // 16 output words (output word o, bit b reads shifted words o … o + 47).
-  u32 M[16];
-#pragma unroll
-  for (int o = 0; o < 16; ++o) M[o] = 0;
-#pragma unroll 1
-  for (int b = 0; b < 32; ++b) {
-    u32 kb[63];
-#pragma unroll
-    for (int u = 0; u < 63; ++u) kb[u] = __funnelshift_r(kC.key[u], kC.key[u + 1], b);
-#pragma unroll
-    for (int o = 0; o < 16; ++o) {
-      u32 acc = 0;
-#pragma unroll
-      for (int v = 0; v < 48; ++v) acc ^= kb[o + v] & Ys[v];
-      M[o] |= (u32)(__popc(acc) & 1) << b;
-    }
-  }
-
-  u64 cd[8], val[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) cd[i] = kC.salt_mid[i];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = bswap64(S[i]);
-  sha512_compress(cd, w);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = i < 8 ? bswap64(S[16 + i]) : 0;
-  w[8] = 0x80ULL << 56, w[15] = (u64)(128 + SALT) * 8;
-  sha512_compress(cd, w);
-
-#pragma unroll
-  for (int i = 0; i < 8; ++i) val[i] = kC.leaf_mid[i];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) w[i] = x[i] ^ bswap64(((u64)M[2 * i + 1] << 32) | M[2 * i]), w[8 + i] = cd[i];
-  sha512_compress(val, w);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = 0;
-  w[0] = 0x80ULL << 56, w[15] = 256 * 8;
-  sha512_compress(val, w);
-
-  Msg<32> msg;
-  u64 d[8];
-  int done = 0;
-#pragma unroll
-  for (int i = 0; i < 8; ++i) d[i] = sx::IV_DEV[i];
-  put_head(msg, HEAD_LEAF);
-  put_uint(msg, c);
-  put_uint(msg, c);
-  flush_block(msg, d, done);   // past 128 bytes (head 113, two uints of at least 9), at most 129 to come
-  put_schema(msg);
-  put_digest(msg, val);
-  sha512_finish(msg, d, done);
+  hm96_leaf(c, x, S, d);
   store_digest(dig, tid, nl, d);
   if (salts && tid < nl)
     for (int i = 0; i < 24; ++i)
@@ -721,57 +617,17 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
 
 __global__ void __launch_bounds__(128) pads_kernel(u64 r0, u64 n, u64 *__restrict__ out) {
   const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
-  Msg<32> msg;
-  put_head(msg, HEAD_PAD);
-  put_uint(msg, r0 + t);
   u64 d[8];
-  sha512_msg(msg, d);
+  rc::pad_rt(kL, r0 + t, d);
   store_digest(out, tid, n, d);
 }
 
 // Nodes [i0, i0 + n) of the level above level h: node i over in[2 (i − i0)] and in[2 (i − i0) + 1].
-// A node's message is head ‖ u64be 1 ‖ h ‖ u64be len(i) ‖ i ‖ u64be 64 ‖ L ‖ u64be 64 ‖ R. For h < NODE_LEVELS its
-// first 128 bytes (the 113-byte head, u64be 1, h and the first 6 bytes of u64be len(i)) are fixed by h, so the node
-// starts from kC.node_mid[h], and the rest, 146 + len(i) bytes, is built as words: two compressions in all.
-__device__ __forceinline__ void node_digest(const u64 *mid, u64 i, const u64 *L, const u64 *R, u64 (&s)[8]) {
-  int len = 1;
-  while (len < 8 && i >> (8 * len)) ++len;
-  const int a = 2 + len, q = a >> 3, r = 8 * (a & 7);   // the tail's bytes before L's frame, at most 8
-  u64 U[19];
-  U[0] = 64;
-#pragma unroll
-  for (int k = 0; k < 8; ++k) U[1 + k] = L[k], U[10 + k] = R[k];
-  U[9] = 64, U[18] = 0x80ULL << 56;
-  const u64 P = ((u64)len << (8 * len)) | i;            // 0x00 ‖ len ‖ i, a bytes big-endian
-  u64 w[32];
-#pragma unroll
-  for (int k = 0; k < 32; ++k) {
-    const u64 u0 = k < 19 ? U[k] : 0, u1 = k >= 1 && k <= 19 ? U[k - 1] : 0;
-    w[k] = q ? u1 : (u0 >> r) | (u1 << (64 - r));   // q = 1 only at a = 8, r = 0; else 24 ≤ r ≤ 56
-  }
-  w[0] |= a == 8 ? P : P << (64 - 8 * a);
-  w[31] = (u64)(128 + 146 + len) * 8;
-#pragma unroll
-  for (int k = 0; k < 8; ++k) s[k] = mid[k];
-  sha512_compress(s, w);
-  sha512_compress(s, w + 16);
-}
-
 __global__ void __launch_bounds__(128) level_kernel(const u64 *__restrict__ in, u64 *__restrict__ out, int h, u64 i0,
                                                     u64 n) {
   const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x, t = tid < n ? tid : n - 1;
   u64 d[8];
-  if (h < NODE_LEVELS && i0 + t < (1ULL << 48)) {
-    node_digest(kC.node_mid[h], i0 + t, in + 16 * t, in + 16 * t + 8, d);
-  } else {
-    Msg<48> msg;
-    put_head(msg, HEAD_NODE);
-    put_uint(msg, (u64)h);
-    put_uint(msg, i0 + t);
-    put_digest(msg, in + 16 * t);
-    put_digest(msg, in + 16 * t + 8);
-    sha512_msg(msg, d);
-  }
+  node_of(h, i0 + t, in + 16 * t, in + 16 * t + 8, d);
   store_digest(out, tid, n, d);
 }
 
@@ -789,17 +645,18 @@ __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ p, 
 // A pass's seed-dependent constants as rb_chain_set's templates, which chain_kernel completes from the pass's seed on
 // the device (wt.cu's g_pass.seed: s_j from root_(j−1)), so the receipt prefix, the tree's binding and domain and the
 // salts are s_j's, receipts.domain(s_j, plan) and Store.salt's: each message's 64 seed-derived bytes are zero in its
-// template, at its *_at.
+// template, at its *_at. The domain id it makes fixes the rest: kC's node chaining values and kL's frame leaf and pad.
 struct Chain {
   uint8_t receipt[128];   // prefix(seed)
   uint8_t binding[256];   // TREE_DOMAIN ‖ seed ‖ plan digest
   uint8_t domain[256];    // domain_message(binding, …)
-  uint8_t heads[3][128];  // head(t, domain id), the domain id at head_len[t] − 64
+  uint8_t schema[32];     // the leaves' schema, schema_len bytes
   u64 salt_block[17];     // salt_in ‖ u64be 0's SHAKE256 block, the seed's bytes at salt_at
-  int receipt_at, binding_at, binding_len, domain_at, domain_len, salt_at;
+  int receipt_at, binding_at, binding_len, domain_at, domain_len, salt_at, schema_len;
 };
 __device__ Chain g_chain;
 __device__ Consts g_stage;
+__device__ Leaf g_leaf;   // the chained pass's kL: its hm96 constants rb_chain_set's, its frame chain_kernel's
 
 __device__ __forceinline__ void be_load(const uint8_t *b, u64 *w) {
 #pragma unroll
@@ -832,9 +689,11 @@ __device__ void sha512_bytes(uint8_t *m, int n, u64 (&s)[8], uint8_t *out) {
 constexpr int CONST_WORDS = sizeof(Consts) / 8;
 static_assert(sizeof(Consts) % 8 == 0, "Consts is whole u64 words");
 
-// The pass's constants are made in shared memory (the messages too, so nothing goes to a stack) from g_stage's
-// seed-free ones, and stored back whole, a warp's stores whole sectors.
+// The pass's constants are made in shared memory from g_stage's seed-free ones (thread 0 the seed's messages, then each
+// thread its level's node chaining value) and stored back whole, a warp's stores whole sectors. Threads t < MAX_NB make
+// g_leaf's frame leaf template for len(uint(pos)) = t + 1 (thread 0 then fl_m15 from its own), the next MAX_NB its pad's.
 __global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__restrict__ seed) {
+  static_assert(NODE_LEVELS >= 2 * rc::MAX_NB, "a thread a frame template");
   __shared__ Consts sc;
   __shared__ uint8_t m[256], d[64];
   u64 *sw = reinterpret_cast<u64 *>(&sc), *gw = reinterpret_cast<u64 *>(&g_stage);
@@ -854,11 +713,6 @@ __global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__res
     for (int i = 0; i < 256; ++i) m[i] = c.domain[i];
     for (int i = 0; i < 64; ++i) m[c.domain_at + i] = d[i];
     sha512_bytes(m, c.domain_len, s, d);   // the domain id
-    for (int t = 0; t < 3; ++t) {
-      for (int i = 0; i < 128; ++i) m[i] = c.heads[t][i];
-      for (int i = 0; i < 64; ++i) m[sc.head_len[t] - 64 + i] = d[i];
-      be_load(m, sc.head[t]);
-    }
     for (int i = 0; i < 17; ++i) sc.salt_block[i] = c.salt_block[i];
     for (int i = 0; i < 64; ++i) {
       const int p = c.salt_at + i;
@@ -866,49 +720,16 @@ __global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__res
     }
   }
   __syncthreads();
-  u64 w[16], s[8];   // level threadIdx.x's first block: the node head (zero past NODE_HEAD), u64be 1, then the level
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = sc.head[HEAD_NODE][i];
-  w[(NODE_HEAD + 7) / 8] |= 1ull << 8 * (7 - (NODE_HEAD + 7) % 8);
-  w[(NODE_HEAD + 8) / 8] |= (u64)threadIdx.x << 8 * (7 - (NODE_HEAD + 8) % 8);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
-  sha512_compress(s, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) sc.node_mid[threadIdx.x][i] = s[i];
+  const int t = threadIdx.x;
+  rc::node_mid(d, t, sc.node_mid[t]);
+  if (t < rc::MAX_NB) {
+    rc::leaf_frame_nb(d, c.schema, c.schema_len, t + 1, g_leaf);
+    if (!t) rc::leaf_m15(g_leaf);
+  } else if (t < 2 * rc::MAX_NB) {
+    rc::pad_tpl_nb(d, t - rc::MAX_NB + 1, g_leaf);
+  }
   __syncthreads();
   for (int i = threadIdx.x; i < CONST_WORDS; i += NODE_LEVELS) gw[i] = sw[i];
-}
-
-void midstate(const uint8_t *block, u64 *out) {
-  u64 w[16];
-  for (int i = 0; i < 16; ++i) {
-    u64 v = 0;
-    for (int b = 0; b < 8; ++b) v = (v << 8) | block[8 * i + b];
-    w[i] = v;
-  }
-  sx::iv(out);
-  sha512_compress(out, w);
-}
-
-void be_words(const uint8_t *b, int bytes, u64 *out) {
-  for (int i = 0; i < bytes / 8; ++i) {
-    u64 v = 0;
-    for (int k = 0; k < 8; ++k) v = (v << 8) | b[8 * i + k];
-    out[i] = v;
-  }
-}
-
-int head(uint8_t *out, const char *tag, const uint8_t *domain_id) {
-  static const char FRAME[] = "veritor/protocol/merkle/frame/v3";
-  int n = 0;
-  for (size_t i = 0; i < sizeof FRAME; ++i) out[n++] = (uint8_t)FRAME[i];   // with its zero byte
-  const int t = (int)strlen(tag);
-  for (int i = 3; i >= 0; --i) out[n++] = (uint8_t)(t >> (8 * i));
-  for (int i = 0; i < t; ++i) out[n++] = (uint8_t)tag[i];
-  for (int i = 7; i >= 0; --i) out[n++] = (uint8_t)(64 >> (8 * i));
-  for (int i = 0; i < 64; ++i) out[n++] = domain_id[i];
-  return n;
 }
 
 inline unsigned grid(u64 n, int threads) { return (unsigned)((n + threads - 1) / threads); }
@@ -920,37 +741,31 @@ using namespace rb;
 extern "C" {
 
 // One pass's constants. The 128-byte blocks are the reference's own: prefix(seed), sha512_row_v2_prefix(8192) and
-// (8 · 64 m) for the pass's last leaf of m receipts, hm96's salt_prefix and leaf_prefix(key); key is hm96-sha512's
-// 256-byte key; salt_in is D(store salt) ‖ the store's key ‖ seed.
-static const char *const TAGS[3] = {"leaf", "node", "pad"};
-
-static int build(Consts &c, const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
-                 const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key, const uint8_t *domain_id,
-                 const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions) {
-  if (schema_len < 1 || schema_len > 32 || salt_in_len < 1 || salt_in_len + 9 > 136 || positions < 1) return 1;
-  midstate(receipt_prefix, c.receipt_mid);
-  midstate(row_prefix, c.row_mid);
-  midstate(row_prefix_last, c.row_mid_last);
-  midstate(salt_prefix, c.salt_mid);
-  midstate(leaf_prefix, c.leaf_mid);
-  for (int i = 0; i < KEY_WORDS; ++i)
-    c.key[i] = (u32)key[4 * i] | (u32)key[4 * i + 1] << 8 | (u32)key[4 * i + 2] << 16 | (u32)key[4 * i + 3] << 24;
-  uint8_t heads[3][128] = {};
-  for (int t = 0; t < 3; ++t) {
-    c.head_len[t] = head(heads[t], TAGS[t], domain_id);
-    be_words(heads[t], 128, c.head[t]);
+// (8 · 64 m) for the pass's last leaf of m receipts, hm96's salt_prefix and leaf_prefix(key); salt_in is D(store salt)
+// ‖ the store's key ‖ seed. With domain_id null the node chaining values and L's frame templates stay zero (chain_kernel
+// makes them). The schema is hm96-sha512/row/v2's 18 bytes and positions are at most 2^36, so every leaf, pad and node
+// index is below 2^32.
+static int build(Consts &c, Leaf &L, const uint8_t *receipt_prefix, const uint8_t *row_prefix,
+                 const uint8_t *row_prefix_last, const uint8_t *salt_prefix, const uint8_t *leaf_prefix,
+                 const uint8_t *domain_id, const uint8_t *schema, int schema_len, const uint8_t *salt_in,
+                 int salt_in_len, uint64_t positions) {
+  if (!receipt_prefix || !row_prefix || !row_prefix_last || !salt_prefix || !leaf_prefix || !schema || !salt_in ||
+      schema_len != 18 || salt_in_len < 1 || salt_in_len + 9 > 136 || positions < 1 || positions > (1ULL << 36))
+    return 1;
+  memset(&c, 0, sizeof c);
+  memset(&L, 0, sizeof L);
+  rc::midstate(receipt_prefix, c.receipt_mid);
+  rc::midstate(row_prefix, c.row_mid);
+  rc::midstate(row_prefix_last, c.row_mid_last);
+  rc::pad_schedule(128 + 64 * PER_LEAF, c.kw_xpad);
+  rc::midstate(salt_prefix, L.mid_salt);
+  rc::midstate(leaf_prefix, L.mid_leaf);
+  rc::pad_schedule(256, L.kw_leafpad);
+  if (domain_id) {
+    if (rc::leaf_frame(domain_id, schema, schema_len, L)) return 1;
+    rc::pad_tpls(domain_id, L);
+    rc::node_mids(domain_id, c.node_mid, NODE_LEVELS);
   }
-  if (c.head_len[HEAD_NODE] != NODE_HEAD) return 1;
-  for (int h = 0; h < NODE_LEVELS; ++h) {
-    uint8_t first[128] = {};
-    memcpy(first, heads[HEAD_NODE], NODE_HEAD);
-    first[NODE_HEAD + 7] = 1, first[NODE_HEAD + 8] = (uint8_t)h;
-    midstate(first, c.node_mid[h]);
-  }
-  uint8_t sch[32] = {};
-  memcpy(sch, schema, schema_len);
-  be_words(sch, 32, c.schema);
-  c.schema_len = schema_len;
   uint8_t blk[136] = {};
   memcpy(blk, salt_in, salt_in_len);
   blk[salt_in_len + 8] ^= 0x1F;
@@ -961,9 +776,21 @@ static int build(Consts &c, const uint8_t *receipt_prefix, const uint8_t *row_pr
     c.salt_block[i] = v;
   }
   c.salt_in_len = salt_in_len;
-  c.zero = 0;
   c.positions = positions;
   return 0;
+}
+
+// M_key's nibble table (key: hm96-sha512's 256-byte key) and a node's last two blocks, on stream s.
+static int tables(const uint8_t *key, cudaStream_t s) {
+  static uint8_t tab[rc::TN_BYTES];
+  static u64 tpl[rc::MAX_NB][32];
+  if (!key) return 1;
+  for (u32 t = 0; t < 512; ++t) rc::nib_entry(key, t, tab);
+  if (rc::node_tpls(tpl)) return 1;
+  return cudaMemcpyToSymbolAsync(gNib, tab, sizeof tab, 0, cudaMemcpyHostToDevice, s) ||
+                 cudaMemcpyToSymbolAsync(kNodeTpl, tpl, sizeof tpl, 0, cudaMemcpyHostToDevice, s)
+             ? 4
+             : 0;
 }
 
 int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
@@ -971,10 +798,16 @@ int rb_set(const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8
            const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions,
            cudaStream_t s) {
   static Consts c;
-  if (int e = build(c, receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, key, domain_id, schema,
+  static Leaf L;
+  if (!domain_id) return 1;
+  if (int e = build(c, L, receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, domain_id, schema,
                     schema_len, salt_in, salt_in_len, positions))
     return e;
-  return cudaMemcpyToSymbolAsync(kC, &c, sizeof c, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
+  if (int e = tables(key, s)) return e;
+  return cudaMemcpyToSymbolAsync(kC, &c, sizeof c, 0, cudaMemcpyHostToDevice, s) ||
+                 cudaMemcpyToSymbolAsync(kL, &L, sizeof L, 0, cudaMemcpyHostToDevice, s)
+             ? 4
+             : 0;
 }
 
 // A chained pass's constants (rb_chain completes them from its seed on the device): rb_set's, with the seed's 64 bytes
@@ -986,44 +819,52 @@ int rb_chain_set(const uint8_t *receipt_prefix, int receipt_at, const uint8_t *r
                  const uint8_t *key, const uint8_t *binding, int binding_len, int binding_at, const uint8_t *domain,
                  int domain_len, int domain_at, const uint8_t *schema, int schema_len, const uint8_t *salt_in,
                  int salt_in_len, int salt_at, uint64_t positions, cudaStream_t s) {
-  if (receipt_at < 0 || receipt_at + 64 > 128 || binding_len > 239 || binding_at < 0 || binding_at + 64 > binding_len ||
-      domain_len > 239 || domain_at < 0 || domain_at + 64 > domain_len || salt_at < 0 || salt_at + 64 > salt_in_len)
+  if (!binding || !domain || receipt_at < 0 || receipt_at + 64 > 128 || binding_len > 239 || binding_at < 0 ||
+      binding_at + 64 > binding_len || domain_len > 239 || domain_at < 0 || domain_at + 64 > domain_len || salt_at < 0 ||
+      salt_at + 64 > salt_in_len)
     return 1;
   static Consts c;
+  static Leaf L;
   static Chain ch;
-  const uint8_t zero[64] = {};
-  if (int e = build(c, receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, key, zero, schema,
+  if (int e = build(c, L, receipt_prefix, row_prefix, row_prefix_last, salt_prefix, leaf_prefix, nullptr, schema,
                     schema_len, salt_in, salt_in_len, positions))
     return e;
+  if (int e = tables(key, s)) return e;
   memset(&ch, 0, sizeof ch);
   memcpy(ch.receipt, receipt_prefix, 128);
   memcpy(ch.binding, binding, binding_len);
   memcpy(ch.domain, domain, domain_len);
-  for (int t = 0; t < 3; ++t) head(ch.heads[t], TAGS[t], zero);
+  memcpy(ch.schema, schema, schema_len);
   memcpy(ch.salt_block, c.salt_block, sizeof ch.salt_block);
   ch.receipt_at = receipt_at, ch.binding_at = binding_at, ch.binding_len = binding_len;
-  ch.domain_at = domain_at, ch.domain_len = domain_len, ch.salt_at = salt_at;
+  ch.domain_at = domain_at, ch.domain_len = domain_len, ch.salt_at = salt_at, ch.schema_len = schema_len;
   return cudaMemcpyToSymbolAsync(g_stage, &c, sizeof c, 0, cudaMemcpyHostToDevice, s) ||
-                 cudaMemcpyToSymbolAsync(g_chain, &ch, sizeof ch, 0, cudaMemcpyHostToDevice, s)
+                 cudaMemcpyToSymbolAsync(g_chain, &ch, sizeof ch, 0, cudaMemcpyHostToDevice, s) ||
+                 cudaMemcpyToSymbolAsync(g_leaf, &L, sizeof L, 0, cudaMemcpyHostToDevice, s)
              ? 4
              : 0;
 }
 
-// A chained pass's constants from its 64-byte seed on the device (wt.cu's g_pass.seed), into kC, on stream s.
+// A chained pass's constants from its 64-byte seed on the device (wt.cu's g_pass.seed), into kC and kL, on stream s.
 int rb_chain(const uint8_t *seed, cudaStream_t s) {
   if (!seed) return 1;
   chain_kernel<<<1, NODE_LEVELS, 0, s>>>(seed);
-  void *stage = nullptr;
-  if (cudaGetLastError() || cudaGetSymbolAddress(&stage, g_stage)) return 4;
-  return cudaMemcpyToSymbolAsync(kC, stage, sizeof(Consts), 0, cudaMemcpyDeviceToDevice, s) ? 4 : 0;
+  void *stage = nullptr, *leaf = nullptr;
+  if (cudaGetLastError() || cudaGetSymbolAddress(&stage, g_stage) || cudaGetSymbolAddress(&leaf, g_leaf)) return 4;
+  return cudaMemcpyToSymbolAsync(kC, stage, sizeof(Consts), 0, cudaMemcpyDeviceToDevice, s) ||
+                 cudaMemcpyToSymbolAsync(kL, leaf, sizeof(Leaf), 0, cudaMemcpyDeviceToDevice, s)
+             ? 4
+             : 0;
 }
 
-// The pass's constants as kC holds them (bytes = sizeof(Consts)), after the device is idle.
+// The pass's constants as kC and kL hold them (bytes = rb_consts_bytes()), after the device is idle.
 int rb_consts(uint8_t *out, uint64_t bytes) {
-  if (!out || bytes != sizeof(Consts)) return 1;
-  return cudaMemcpyFromSymbol(out, kC, sizeof(Consts)) ? 4 : 0;
+  if (!out || bytes != sizeof(Consts) + sizeof(Leaf)) return 1;
+  return cudaMemcpyFromSymbol(out, kC, sizeof(Consts)) || cudaMemcpyFromSymbol(out + sizeof(Consts), kL, sizeof(Leaf))
+             ? 4
+             : 0;
 }
-uint64_t rb_consts_bytes() { return sizeof(Consts); }
+uint64_t rb_consts_bytes() { return sizeof(Consts) + sizeof(Leaf); }
 
 // The receipts of n blocks at data (block q at byte 4096 q, store index j0 + q) into ys (8 words a receipt); zs holds
 // each block's spread z (4096 bytes a block) or is null for z's of zero bytes; mode is how a block is read (LOAD_*).
@@ -1039,7 +880,7 @@ int rb_receipts(const void *data, const void *zs, uint64_t j0, uint64_t n, uint6
 // sketch-sha512's pass constant: the seed block Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed)).
 int rb_sketch_set(const uint8_t *sketch_prefix, cudaStream_t s) {
   static u64 mid[8];
-  midstate(sketch_prefix, mid);
+  rc::midstate(sketch_prefix, mid);
   return cudaMemcpyToSymbolAsync(kSketchMid, mid, sizeof mid, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
 }
 
@@ -1127,19 +968,19 @@ int rb_sketch64_receipts(const void *data, const void *zs, uint64_t j0, uint64_t
 }
 
 int rb_leaves(const uint64_t *ys, uint64_t c0, uint64_t nl, uint64_t *dig, uint8_t *salts, cudaStream_t s) {
-  if (!ys || !dig || nl < 1) return 1;
+  if (!ys || !dig || nl < 1 || c0 > MAX_INDEX || nl > MAX_INDEX - c0) return 1;
   leaves_kernel<<<grid(nl, 128), 128, 0, s>>>(ys, c0, nl, dig, salts);
   return cudaGetLastError() ? 4 : 0;
 }
 
 int rb_pads(uint64_t r0, uint64_t n, uint64_t *out, cudaStream_t s) {
-  if (!out || n < 1) return 1;
+  if (!out || n < 1 || r0 > MAX_INDEX || n > MAX_INDEX - r0) return 1;
   pads_kernel<<<grid(n, 128), 128, 0, s>>>(r0, n, out);
   return cudaGetLastError() ? 4 : 0;
 }
 
 int rb_level(const uint64_t *in, uint64_t *out, int h, uint64_t i0, uint64_t n, cudaStream_t s) {
-  if (!in || !out || n < 1 || h < 0) return 1;
+  if (!in || !out || n < 1 || h < 0 || h >= NODE_LEVELS || i0 > MAX_INDEX || n > MAX_INDEX - i0) return 1;
   level_kernel<<<grid(n, 128), 128, 0, s>>>(in, out, h, i0, n);
   return cudaGetLastError() ? 4 : 0;
 }
@@ -1147,7 +988,7 @@ int rb_level(const uint64_t *in, uint64_t *out, int h, uint64_t i0, uint64_t n, 
 // Every level above n digests of level 0 (a power of two, the first leaf c0) into out, level after level up to the
 // root: n − 1 nodes in one call, so the narrow levels wait on the device and not on the host.
 int rb_tree(const uint64_t *in, uint64_t n, uint64_t c0, uint64_t *out, cudaStream_t s) {
-  if (!in || !out || n < 2 || n & (n - 1)) return 1;
+  if (!in || !out || n < 2 || n & (n - 1) || c0 >> 1 > MAX_INDEX || n / 2 > MAX_INDEX - (c0 >> 1)) return 1;
   for (int h = 0; n > 1; ++h, n /= 2) {
     level_kernel<<<grid(n / 2, 128), 128, 0, s>>>(in, out, h, c0 >> (h + 1), n / 2);
     in = out;
