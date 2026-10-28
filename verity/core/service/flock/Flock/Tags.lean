@@ -431,12 +431,15 @@ def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit6315
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 
-/-- `verity/flock-circuit/tmpl` (PRF-133): `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template
+/-- The templated statement's name (`circuitTmpl`, `isTmpl`). -/
+def tmplName : String := "verity/flock-circuit/tmpl"
+
+/-- `verity/flock-circuit/tmpl`: `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template
 and a layout mode in META (`HmOut.parseTmpl`), which the verifier unrolls and folds from the template
 (`Stmt.partialRangesT`). The identity and the statement digest's leading tag name it, with its own Σ tag and domain. -/
 def circuitTmpl : Tags :=
   { circuit with
-    name := "verity/flock-circuit/tmpl", statement := "verity/flock-circuit/tmpl", fileFormat := "flock-circuit/tmpl",
+    name := tmplName, statement := "verity/flock-circuit/tmpl", fileFormat := "flock-circuit/tmpl",
     sigmaTag := "verity/flock-circuit/tmpl/sigma", domainPrefix := "flock-circuit-tmpl/fast100x2/rep",
     identity := identityHidden false "verity/flock-circuit/tmpl" (leafScheme := leafSchemeHm96Os) }
 
@@ -445,8 +448,9 @@ name (`isTmpl`), beside `all` and `find?`; its statement check passes them only 
 covers. -/
 def templated : List Tags := [circuitTmpl]
 
-/-- A templated statement's tags (`templated`, by name, as `verify` reads them). -/
-def isTmpl (t : Tags) : Bool := templated.any (·.name == t.name)
+/-- A templated statement's tags (`templated`, by name, as `verify` reads them). It compares the name alone: building
+`circuitTmpl` would hash its identity's default key (`leafSchemeHm96Os`) inside the compiled verifier. -/
+def isTmpl (t : Tags) : Bool := t.name == tmplName
 
 /-- The tags `--statement` names, as `verify` and `statement` read them: a statement of `all` (`find?`), else a templated
 one (`templated`). -/
