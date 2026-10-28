@@ -404,7 +404,7 @@ def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_ga
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
                program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None,
                arrivals: Mapping[str, int] | None = None, context: str = "",
-               reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Window, list[list[Row]]]:
+               reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Binding, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
     template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
@@ -430,7 +430,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     table = work_table_of(law, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
-    window = CS.Window(program, query, law, run_root, tuple(ms), tables, context, table)
+    window = CS.Binding(program, query, law, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
         raise ValueError(f"the run's population ({', '.join(f'{t} x {n}' for t, n in n_of.items())}) is partition "
@@ -438,7 +438,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     return window, rows
 
 
-def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, Any]:
+def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str, Any]:
     """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
@@ -448,7 +448,7 @@ def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, 
             "partition_digest": window.partition_digest, "population": window.population}
 
 
-def circuit_record(window: CS.Window) -> dict[str, Any]:
+def circuit_record(window: CS.Binding) -> dict[str, Any]:
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
     and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it; a template of word rows has none (the verifier's
     input set lowers it)."""
