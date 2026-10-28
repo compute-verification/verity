@@ -929,6 +929,28 @@ def test_zy_words_are_record_words_of_the_records_split():
         assert got.dtype == np.uint16 and np.array_equal(got, SV.record_words(*ZR.split(records, rows, n), slots, tile))
 
 
+@pytest.mark.parametrize("mode", ["numpy", "gpu"])
+def test_an_empty_calls_z_table_is_record_words_of_no_rows(monkeypatch, mode):
+    """An empty call's z table (`Served._empty_zy`) is `record_words` of no rows: zeros on the host, and on the GPU a CUDA
+    u16 tensor of the same words, made on the hash's stream; a window whose last step is empty registers it either way."""
+    if mode == "gpu":
+        from verity_vllm.protocols.pouw.h1 import registered_device as D
+
+        if not D.available():
+            pytest.skip("no CUDA device the kernels build for")
+    monkeypatch.setattr(NR, "MODE", mode)
+    run, *_ = _window(W1)
+    served = run.served
+    assert not served.refused and [c.m for c in run.calls][-len(SHAPES):] == [0] * len(SHAPES)
+    for n in sorted({n for n, _k in SHAPES}):
+        want = SV.record_words(np.zeros((0, n), "<i4"), np.zeros((0, n), np.int16), served.m, served.tile)
+        got = served._empty_zy(n)
+        if mode == "gpu":
+            assert got.is_cuda and str(got.dtype) == "torch.uint16"
+            got = got.cpu().view(torch.uint8).numpy().view(np.uint16)
+        assert got.dtype == np.uint16 and got.shape == want.shape and np.array_equal(got, want)
+
+
 def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts_in_call_order():
     """GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
     share K = 16, then o: each step's A table of K is still its calls' rows in call order, registered at the call that
