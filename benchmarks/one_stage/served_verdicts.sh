@@ -300,16 +300,18 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
   f=$D/window-circuit-w$K-$tag.json
   timeout "${2#*=}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
     --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${pins[@]}" ${PIN:+--pin "$PIN"} \
-    "${cls[@]}" > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
+    "${cls[@]}" > "$D/window-circuit-$tag.count.json" 2> "$D/window-circuit-$tag.err"
   rc=$?
-  if [ "$rc" = 0 ]; then
+  if [ "$rc" = 0 ]; then  # the count's `bits` is the advice's length, which stays on the node
+    "$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); c.pop("bits", None); print(json.dumps(c, sort_keys=True))' \
+      "$D/window-circuit-$tag.count.json" > "$OUT/window-circuit-$tag.json"
     say "$head: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
       "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $wp; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
   elif [ "$rc" = 124 ]; then
     say "$head timed out after $2 (exit 124): no count"
   else
-    say "$head refused (exit $rc): $({ grep -m1 'window-circuit' "$OUT/window-circuit-$tag.err" \
-      || tail -1 "$OUT/window-circuit-$tag.err"; } | cut -c1-600)"
+    say "$head refused (exit $rc): $({ grep -m1 'window-circuit' "$D/window-circuit-$tag.err" \
+      || tail -1 "$D/window-circuit-$tag.err"; } | cut -c1-600)"
   fi
   return "$rc"
 }
