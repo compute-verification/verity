@@ -1,3 +1,4 @@
+import Flock.Merkle
 import Flock.RecLinkTree
 
 /-!
@@ -57,11 +58,14 @@ def okRef (UB PB : Nat) (row xr xw : ByteArray) : Bool :=
     (if field row 0 == 0 then field row 1 == 0 && (field row 2 == 0 && (field row 3 == 0 && field row 4 == 0))
      else xr.data == xw.data)
 
-/-- `rec_link._climb_ref`. -/
-def climbRef (start : ByteArray) (sibs : List ByteArray) (pos : Nat) : ByteArray :=
-  (List.range sibs.length).foldl (fun cur h =>
-    let s := sibs.getD h EMPTY
-    if (pos >>> h) % 2 == 1 then node s cur else node cur s) start
+/-- The rows trees' nodes as a Merkle scheme's: `SHA-512(left ‖ right)` (its leaves are `RecLinkTree.leaf`'s, not the
+scheme's). -/
+def scheme : MerkleScheme := MerkleScheme.sha512 "verity/rec-link/v1"
+
+theorem scheme_node (l r : ByteArray) : scheme.node l r = node l r := rfl
+
+/-- `rec_link._climb_ref`: `start` climbed by `sibs`, bottom up, at position `pos`. -/
+def climbRef (start : ByteArray) (sibs : List ByteArray) (pos : Nat) : ByteArray := climb scheme start pos sibs
 
 /-- An opening's `D` siblings, bottom up: 32 words each. -/
 def sibsOf (aux : List Nat) (D : Nat) : List ByteArray :=
