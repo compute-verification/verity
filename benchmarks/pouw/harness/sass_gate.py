@@ -57,6 +57,10 @@ cubin), as does a PTX entry with an .ftz or .approx instruction or div.full. Pas
 file's, the pins' and the tools' versions (``POUW_SASS_GATE_CACHE``, default ``~/.cache/pouw-harness/sass-gate``; ``none``
 disables).
 
+The file also holds the build gate every kernel family's build.sh runs on ptxas's report and its cubin's SASS (`mma_gate`):
+the kernels the family wants, compiled for its arch with no ptxas warning, serialization, spill or local memory, and no
+tensor-core form but the ones it allows. Each family's own sass_gate.py keeps its WANT table, its SASS pins and its CLI.
+
   python sass_gate.py BINARY... [--json OUT]     # exit 0: every binary passes; 7: one fails (named, with its instructions)
   python sass_gate.py --pin CUBIN...             # each cubin's tool notes and subroutine signatures
   python sass_gate.py --pin CUBIN... --toolkit NAME   # pin them in sass_pins.json as NAME (its numeric run kept while the
@@ -66,6 +70,7 @@ disables).
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -76,6 +81,7 @@ import subprocess
 import sys
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 VERSION = "sass-gate/v4"
@@ -1614,6 +1620,99 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
     pins["signatures"] = {sid: b for sid, b in sorted({**pins["signatures"], **blocks}.items()) if sid in live}
     path.write_text(json.dumps(pins, indent=1) + "\n")
     return pins["toolkits"][toolkit]
+
+
+# ---- the build gate: ptxas's report and cuobjdump's SASS of one kernel family -----------------------------------------
+# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/, torch_gpu's s8_linear/ and attn_bf16/) states the
+# kernels it wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
+# torch_gpu's units/ reads the build through `ptxas_report` and `sass_functions`.
+
+MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
+#: a ptxas line that refuses the build: a warning, an error or a serialized wgmma (C751x)
+PTXAS_REFUSED = re.compile(r"warning|error|C751\d|serializ", re.I)
+_ENTRY = re.compile(r"Compiling entry function '(\w+)' for '(\w+)'(.*?)(?=Compiling entry function|\Z)", re.S)
+_FRAME = re.compile(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads")
+
+
+def ptxas_report(ptxas: str, arch: str, smem: bool = False) -> tuple[dict[str, dict], list[str]]:
+    """ptxas -v's report: each entry function's registers, stack frame and spills (None where the report gives none) and,
+    with `smem`, its static shared memory; and what it refuses: a `PTXAS_REFUSED` line and an entry compiled for another
+    arch."""
+    problems = [line for line in ptxas.splitlines() if PTXAS_REFUSED.search(line)]
+    funcs: dict[str, dict] = {}
+    for m in _ENTRY.finditer(ptxas):
+        if m.group(2) != arch:
+            problems.append(f"{m.group(1)}: compiled for {m.group(2)}, want {arch}")
+        regs, frame = re.search(r"Used (\d+) registers", m.group(3)), _FRAME.search(m.group(3))
+        r = funcs[m.group(1)] = {"regs": int(regs.group(1)) if regs else None}
+        r.update(zip(("stack", "spill_stores", "spill_loads"), map(int, frame.groups()) if frame else (None,) * 3))
+        if smem:
+            s = re.search(r"(\d+) bytes smem", m.group(3))
+            r["static_smem"] = int(s.group(1)) if s else 0
+    return funcs, problems
+
+
+def sass_functions(sass: str) -> dict[str, list[str]]:
+    """cuobjdump -sass's listing: each function's lines after its `Function :` header, in the listing's order (a header
+    seen again starts that function's lines over)."""
+    out: dict[str, list[str]] = {}
+    cur = None
+    for line in sass.splitlines():
+        fm = re.search(r"Function : (\w+)", line)
+        if fm:
+            cur = fm.group(1)
+            out[cur] = []
+        elif cur is not None:
+            out[cur].append(line)
+    return out
+
+
+def mma_gate(ptxas: str, sass: str, want, *, arch: str, record: dict, counts: dict[str, str],
+             atom: Callable[[str, str, dict], bool], allowed: Callable[[str], str], line: Callable[[dict, str], None] | None = None,
+             check: Callable[[str, dict], list[str]] | None = None, local_ok: dict[str, int] | None = None,
+             smem: bool = False, unreported: bool = False) -> tuple[dict, list[str]]:
+    """A kernel family's build gate: `ptxas_report`'s records and refusals, then each SASS function's `record` (a fresh copy)
+    with `counts`' patterns counted over its lines, `line` run on each, and each MMA form `atom` counts into it (an MMA it
+    doesn't is the function's ``other_mma``). Refused: an entry with no ptxas resource line (with `unreported`, also a SASS
+    function ptxas didn't report); local memory, a stack frame or a spill (up to `local_ok`'s bytes for a kernel it names,
+    and then LDL and STL too); an MMA form other than `allowed`'s; what `check` says of it; and a kernel of `want` missing
+    from the build."""
+    funcs, problems = ptxas_report(ptxas, arch, smem)
+    for name, lines in sass_functions(sass).items():
+        r = funcs.setdefault(name, {})
+        r.update(copy.deepcopy(record))
+        for text in lines:
+            for key, pat in counts.items():
+                r[key] += len(re.findall(pat, text))
+            if line:
+                line(r, text)
+            for mm in MMA.finditer(text):
+                if not atom(name, mm.group(0), r):
+                    r["other_mma"].append(mm.group(0))
+    for name, r in funcs.items():
+        if ("regs" in r or unreported) and (r.get("regs") is None or r.get("stack") is None):
+            problems.append(f"{name}: no ptxas resource line")
+        bound = (local_ok or {}).get(name, 0)
+        if max(r.get(k) or 0 for k in ("stack", "spill_stores", "spill_loads")) > bound or \
+                (not bound and (r.get("LDL") or r.get("STL"))):
+            problems.append(f"{name}: local memory {r}")
+        if r.get("other_mma"):
+            problems.append(f"{name}: MMA forms other than {allowed(name)}: {sorted(set(r['other_mma']))}")
+        problems += check(name, r) if check else []
+    missing = sorted(set(want) - set(funcs))
+    if missing:
+        problems.append(f"kernels missing from the cubin: {missing}")
+    return funcs, problems
+
+
+def write_verdict(out: str, doc: dict, problems: list[str], passed: Callable[[], str], refused: str = "REFUSED") -> int:
+    """A build gate's CLI ending: `doc` as OUT_JSON, then exit 1 with the problems on stderr, or 0 with `passed()`'s line."""
+    Path(out).write_text(json.dumps(doc, indent=1))
+    if problems:
+        print(f"{refused}: " + "; ".join(problems), file=sys.stderr)
+        return 1
+    print(passed())
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

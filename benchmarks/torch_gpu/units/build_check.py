@@ -11,16 +11,31 @@ reasons on stderr):
 - any floating-point instruction in the integer kernels (units_argmax, units_relu), but HFMA2 of -RZ, RZ and two
   immediates (HFMA2.MMA on sm_90a), the compiler's way of loading a constant, and the compiler's unsigned integer
   division (`DIVISION`), exact by its correction steps, which sm_120a's ptxas uses for units_relu's unrolled trip count.
-Each kernel's registers and its floating-point opcodes with their counts are recorded.
+Each kernel's registers and its floating-point opcodes with their counts are recorded. ptxas's report and the SASS listing
+are read by the harness's build gate (benchmarks/pouw/harness/sass_gate.py's `ptxas_report`, `sass_functions`).
 
   python3 build_check.py PTXAS_TXT SASS_TXT OUT_JSON [ARCH]   (ARCH sm_90a or sm_120a, default sm_90a)
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import sys
 from collections import Counter
+from pathlib import Path
+
+
+def _harness():
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[2] / "pouw" / "harness" / "sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+H = _harness()
 
 BASE = ("units_rmsnorm", "units_quant", "units_quant4", "units_softmax", "units_argmax", "units_relu", "units_add",
         "units_sweep")
@@ -29,7 +44,6 @@ KERNELS = {"sm_90a": BASE, "sm_120a": BASE + ("units_sweep_words",)}
 EX2 = ("units_softmax", "units_sweep", "units_sweep_words")
 INTEGER = ("units_argmax", "units_relu")
 MUFU_OK = {"EX2", "RCP", "RSQ"}
-MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 FLOAT = re.compile(r"\b(FADD|FMUL|FFMA|FMNMX|FSETP|FSET|FSEL|FCHK|FRND|FSWZADD|MUFU|F2F|F2I|I2F|F2IP|I2FP|DADD|DMUL|DFMA|"
                    r"DSETP|DMNMX|HADD2|HMUL2|HFMA2|HMNMX2|HSETP2|HSET2|F2FP)(\.[\w.]+)?\b")
 IMM = r"[-+]?[\d.]+(?:e[-+]?\d+)?"
@@ -39,34 +53,18 @@ DIVISION = {"I2F.U32.RP", "I2F.U64.RP", "MUFU.RCP", "F2I.FTZ.U32.TRUNC.NTZ", "F2
 
 def check(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
     kernels = KERNELS[arch]
-    problems = [line.strip() for line in ptxas.splitlines() if re.search(r"warning|error|serializ", line, re.I)]
-    funcs: dict[str, dict] = {}
-    for m in re.finditer(r"Compiling entry function '(\w+)' for '(\w+)'(.*?)(?=Compiling entry function|\Z)", ptxas, re.S):
-        if m.group(2) != arch:
-            problems.append(f"{m.group(1)}: compiled for {m.group(2)}, want {arch}")
-        body = m.group(3)
-        frame = re.search(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads", body)
-        regs = re.search(r"Used (\d+) registers", body)
-        funcs[m.group(1)] = {"regs": int(regs.group(1)) if regs else None, "stack": int(frame.group(1)) if frame else None,
-                             "spill_stores": int(frame.group(2)) if frame else None,
-                             "spill_loads": int(frame.group(3)) if frame else None}
-    cur = None
+    funcs, problems = H.ptxas_report(ptxas, arch)
     ops: dict[str, Counter] = {}
-    for line in sass.splitlines():
-        fm = re.search(r"Function : (\w+)", line)
-        if fm:
-            cur = fm.group(1)
-            funcs.setdefault(cur, {}).update({"local": 0, "mma": []})
-            ops[cur] = Counter()
-            continue
-        if cur is None:
-            continue
-        r = funcs[cur]
-        r["local"] += bool(re.search(r"\b(LDL|STL)\b", line))
-        r["mma"] += [mm.group(0) for mm in MMA.finditer(line) if not CONSTANT.search(line)]
-        for fl in FLOAT.finditer(line):
-            if not CONSTANT.search(line):
-                ops[cur][fl.group(0)] += 1
+    for cur, lines in H.sass_functions(sass).items():
+        r = funcs.setdefault(cur, {})
+        r.update({"local": 0, "mma": []})
+        ops[cur] = Counter()
+        for line in lines:
+            r["local"] += bool(re.search(r"\b(LDL|STL)\b", line))
+            r["mma"] += [mm.group(0) for mm in H.MMA.finditer(line) if not CONSTANT.search(line)]
+            for fl in FLOAT.finditer(line):
+                if not CONSTANT.search(line):
+                    ops[cur][fl.group(0)] += 1
     for name in kernels:
         r = funcs.get(name)
         if r is None or "local" not in r:
