@@ -275,8 +275,9 @@ It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only
 file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The Lean
 verifier runs the same check (`SampledProofs.Registration.check`), and `Properties.SampledProofs.R1` to `R7`
 state what it accepts. `verity/core/service/sampled_proofs/tests/test_difftest.py` holds the Python to the Lean. The
-challenger's `service.Registration` is a record it accepted, with its receipt and its position in the stream. The
-format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s docstring.
+challenger's `service.WindowCommitmentRecord` is a record it admitted, with its receipt and its position in the
+stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
+docstring.
 
 Pinned by `tests/test_one_stage.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
 
