@@ -16,7 +16,7 @@ on that buffer.
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
   raises `StoreError` with the fixture's flag bits: 2 for a row that isn't a codeword or isn't below p, 3 for a last
   block nonzero past its tensor's end, 0 for the library's own flag. `EncodedRows.decode_into` by W offset is also the GPU
-  decode of `examples/h200`'s `P2Store` and of `verity_vllm`'s PoUS store, each under a layout of no tensors.
+  decode of `demos/h200`'s `P2Store` and of `verity_vllm`'s PoUS store, each under a layout of no tensors.
 - `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
   evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
 - `layer.py`: the GPU driver for one layer (the fixture's toy, encode a development store across leases, stage, gemm at
