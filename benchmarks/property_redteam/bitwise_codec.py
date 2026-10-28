@@ -38,7 +38,7 @@ at n = 8 (`Builder.nonlinear_units`), and a squaring ≈ 17n² of them; `EncodeC
 
 from __future__ import annotations
 
-from squaring import U8, Builder
+from gates import U8, Builder
 
 
 class Bits:
