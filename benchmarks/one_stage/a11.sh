@@ -2,14 +2,14 @@
 # One-stage audit, run A11, on a CPU machine: GLM-5.3 TP8 B1's served values through the one-stage audit (a11.py), or its census
 # and lowering probe (a11_kinds.py), on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean
 # flock-verify, cached under $A11_CACHE). From a clone, since the verifier of record builds the sampled-proofs Lean in the tree:
-#   research run --on auto --cpus 32 --mem-gb 256 --max-min 240 --source . --cwd clone --send FILE ... \
-#     --env A11_MODE=kinds|audit --env A11_MEM_GB=256 -- bash benchmarks/one_stage/a11.sh
+#   A11_MODE=kinds|audit A11_MEM_GB=256 bash benchmarks/one_stage/a11.sh
+#   (a job run from a clone of the tree, 32 CPUs, 256 GB, up to 240 min, with its inputs sent)
 # kinds: a11_kinds.py on each sent descriptor (inputs/*.json.gz), JSON in $OUT/kinds-<name>.json.
 # audit: a11.py on the sent value slices and checkpoint subset (inputs/a11-values*.tar, inputs/a11-ckpt*.tar, both from
 #   a11_slice.py), or on a11.py --save-values' directory (inputs/a11-saved*.tar, which skips the fold), the probe's table
 #   (inputs/kinds*.json) and the load-time roles (inputs/derive-report.json); records in $OUT/a11. With A11_REPROBE=K1,K2 the
 #   table's kinds K1 and K2 are probed again first (a11_kinds.py --table, $OUT/kinds-reprobe.json) and the audit reads that.
-# env: A11_MODE  A11_MEM_GB (the job's --mem-gb)  A11_JOBS (a11_kinds' --jobs)  A11_CHILD_GB (its --mem-gb)  A11_ONLY (its --only)
+# env: A11_MODE  A11_MEM_GB (the job's memory, GB)  A11_JOBS (a11_kinds' --jobs)  A11_CHILD_GB (its --mem-gb)  A11_ONLY (its --only)
 #      A11_K (a11.py's --k)  A11_CACHE (the build cache, kept on the node)  A11_ARGS (more a11.py arguments)  A11_REPROBE
 #      A11_BOOLEAN (a11_kinds' --boolean: kinds probed through their Boolean version first)
 # Kept in $OUT/a11: a11's records and logs, the public files and the sessions; never a prover's file (inst-*), a circuit (its
