@@ -76,7 +76,8 @@ region or recomputes its required gates, which gives the local cap h_w·(k + c/g
 - `training`: `TrainStep_v1` as a Program, at smollm2-135m's shape or at a scaled shape the registry refuses in five
   places, which `training.scaled` lifts.
 
-      uv run benchmarks/circuit_properties/run_certcheck.py [--shape scaled|real] [--tokens ..] [--layers ..] [--out DIR]
+      uv run benchmarks/circuit_properties/run_certcheck.py [--shape scaled|real] [--step L,B,S] [--tokens ..] [--layers ..] [--out DIR]
 
 runs every consumer of the scaled step (or the given tokens and layers of the real one), the explicit cross-checks
-(`upstream.holds` on a region listed gate by gate), and writes `certcheck.json`.
+(`upstream.holds` on a region listed gate by gate), and writes `certcheck.json`. Run it from the repository root: this
+directory isn't a workspace member, and `uv run` here installs PyPI's unrelated `verity`.
