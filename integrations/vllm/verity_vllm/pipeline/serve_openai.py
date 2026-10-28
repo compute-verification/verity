@@ -201,8 +201,8 @@ class Options:
                                        "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
                                        "leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy serve.json, requests.jsonl, request_users.jsonl, windows.jsonl and the step "
-                                              "traces into this directory (the run's $OUT) after each window and at the stop")
+                                         help="copy the public records (serve_commit.MIRRORED; never requests.jsonl or the step "
+                                              "traces) into this directory (the run's $OUT) after each block closes and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "

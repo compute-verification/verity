@@ -6,7 +6,7 @@ one table) on the committed inputs, bit-sliced (`verity.ml.circuits.evaluation.b
                                --revision REV] [--word]
 
 BUNDLE is the Commit's sealed replay bundle, or KEEP the slim keep its decided replay left (`commit/replay_slim_p<pair>`, the kept
-leaves; `cpu_replay.open_keep`).  The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied
+leaves, on the node; `cpu_replay.open_keep`).  Like the replay it reruns, it's a prover-side check on clear values.  The Commit's records (`runs.jsonl`, `verdict.json`, `summary.json`, the binding map) are copied
 into ``OUT/boolean`` beside a link to it, so the replay rewrites the copies and never the record; `cpu_replay.of_record` checks the
 copies and the bundle against each other (manifest sha256, run root, binding map), the draw is the replay's own (seeded from the
 run root), and the Program is the

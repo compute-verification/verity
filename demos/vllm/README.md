@@ -85,8 +85,8 @@ the run recorder from the tree root, on the node `placement.toml` names, and ret
 recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints the command.
 
 1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
-   that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
-   the Commit the endpoint commits under.
+   that seals its replay bundle. The bundle holds clear values and stays on the node; the run publishes the stages'
+   records (`research-outputs write`). `placement.toml`'s `COMMIT_RUN` names the Commit the endpoint commits under.
 2. `verity example vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and

@@ -1,11 +1,12 @@
 """The typed outputs of one sweep stage for the `research` store (`outputs.json`, schema research/outputs/v0.1).
 
-    verity-vllm research-outputs write <evidence-dir> <row-id> <stage> [--run-dir DIR] [--input build=art:...] [--input match=art:...]
+    verity-vllm research-outputs write <evidence-dir> <row-id> <stage>... [--run-dir DIR] [--input build=art:...] [--input match=art:...]
     verity-vllm research-outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
-`research.store.attempt.publish` turns into one artifact per entry:
+`research.store.attempt.publish` turns into one artifact per entry. A run of several stages (`demos/vllm/commit.sh`) names them
+all, and gets each stage's entries that stages.txt records (`build_stages`):
 
     plan    -> vllm-commit-plan/v1    plan/commit_plan.json (the Commit's plan: its key and the producer facts), plan.log,
                                       weights_of_record.log, manifest.log; meta {row, stage, program_digest, plan_key, stage_status}; refs.build
@@ -14,21 +15,31 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
                                       instances.json.gz), manifest.json (the required-value manifest, when built), target_family / admission /
                                       source_identity / tree / release records; meta {row, stage, program_digest, workload_digest,
                                       correspondence_digest?, required_manifest, stage_status}
-    match   -> vllm-match-record/v1   match/instances.jsonl, match/program.json, match/run.json, match/versions.json, match/control/tokens.json,
-                                      match/capture/tokens.json, global_match.json, match_summary.json, match_compare.json, match_decomp.json,
-                                      match_shape.json, match/fold_summary.json -- NOT the capture planes (match/capture/log.jsonl.gz);
+    match   -> vllm-match-record/v1   match/instances.jsonl, match/program.json, match/run.json, match/versions.json, global_match.json,
+                                      match_summary.json, match_compare.json, match_decomp.json, match_shape.json, match/fold_summary.json
+                                      -- NOT the capture planes (match/capture/log.jsonl.gz);
                                       meta {row, stage, program_digest, stage_status, global_match_ok}; refs.build = the consumed Build
     commit  -> vllm-verdict/v1        verdict.json (the verdict of record, vllm-verdict/v1), commit/ (commit_delta's verdict.json,
-                                      sampled_replay_p*.json, versions.json, manifest_verify.json, ...; small files), weights_of_record.log,
+                                      versions.json, manifest_verify.json, ...; small files), weights_of_record.log,
                                       manifest.log, manifest_verify.log; meta {row, stage, program_digest, verdict, outcome, stage_status};
                                       refs.build, refs.match  (commit_summary.json and the finalize board are retired);
                                       a config run (`config` verdict line) decides in config_record.json instead, at TP1 and TP
     replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record (a TP row that is not a config run decides in
-                                      commit/summary.json, as tp-commit-replay folded it); and one vllm-replay-slim/v1 per slim keep
-                                      (`replay_slim_p<pair>`: commit/replay_slim_p<pair>/ whole, planes included; meta = its slim.json's
-                                      pair, run_root, program_digest, picked, bytes, dump_sha256, commit_pass).  Never a replay bundle.
-    (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
+                                      commit/summary.json, as tp-commit-replay folded it)
+    (all)   -> execution-evidence/v1  stages.txt, admission.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
+
+No entry holds a private file (`private`), wherever it sits, and these stay on the node, prover-side:
+- a replay bundle or a slim keep (`cpu_replay.keep`), which hold clear values: committed values with their salts, the requests and
+  served tokens, and opened weights;
+- the requests' prompt and served token ids: the Match's token records (`tokens.json`), the Commit's token record
+  (`tokens_p<pair>.json`), the sampler value check's rows (`match_stoch.json`) and the C2 replay's executed-prefix facts
+  (`sampled_replay*.json`);
+- a served run's requests (`requests.jsonl`), its step traces (`step_trace.jsonl`, `advice_trace.jsonl`: each request's prompt
+  length, sampling parameters, rows a step and emitted ids) and the load's client records (`load*.jsonl`);
+- where each rank ran, its process and device (`topology.json`), and when each process ran (`timeline.jsonl`,
+  `timeline_report.json`).
+A check that reads them runs where they are: the regression harness takes such a candidate as row dirs, not as Attempts.
 
 A tensor-parallel row (tp_stage.sh; build_summary.json carries `tp.world` and `ranks`) keeps its Build per rank under build/rank<r>/:
 the build entry takes each rank's build_step/, build_request*/ and build_workload/{workload_program.json, descriptor.json.gz} (every
@@ -43,13 +54,14 @@ Stdlib only; never raises out of `main` (an outputs.json that could not be writt
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
 import shutil
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from verity_vllm.config import option
@@ -61,25 +73,24 @@ NEVER = ("instances.json.gz", "log.jsonl.gz")
 PLANE_SUFFIXES = (".npy", ".npz", ".pt", ".bin", ".safetensors")
 
 KINDS = {"build": "vllm-build/v1", "plan": "vllm-commit-plan/v1", "match": "vllm-match-record/v1", "commit": "vllm-verdict/v1", "replay": "vllm-verdict/v1"}
-SLIM_KIND = "vllm-replay-slim/v1"
-#: never in a stage's account files: the replay bundles (never published) and the slim keeps (published whole, as their own entries)
+#: never in a stage's outputs (`private`): the replay bundles and the slim keeps, which hold clear values
 KEPT_APART = ("replay_bundle_p", "replay_slim_p")
-SLIM_META = ("pair", "run_root", "program_digest", "picked", "bytes", "dump_sha256", "commit_pass")
+#: nor these files, wherever they sit: request values, where each rank ran and when each process ran
+PRIVATE = ("tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*.json", "requests.jsonl", "step_trace.jsonl",
+           "advice_trace.jsonl", "load*.jsonl", "topology.json", "timeline.jsonl", "timeline_report.json")
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
                "admission.json", "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
-MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", "match/versions.json", "match/control/tokens.json",
-               "match/capture/tokens.json", "global_match.json", "match_summary.json", "match_compare.json", "match_decomp.json",
-               "match_shape.json", "match/fold_summary.json", "match_stoch.json",
-               "match/tp2_match.json", "match/fold_match/tp2_fold_match.json", "match/capture/topology.json", "match/control/topology.json",
-               "match/capture/versions.json", "match/control/versions.json"]
+MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", "match/versions.json", "global_match.json",
+               "match_summary.json", "match_compare.json", "match_decomp.json", "match_shape.json", "match/fold_summary.json",
+               "match/tp2_match.json", "match/fold_match/tp2_fold_match.json", "match/capture/versions.json", "match/control/versions.json"]
 TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build/rank*/build_workload/workload_program.json",
                   "build/rank*/build_workload/descriptor.json.gz"]
 TP_LOG_GLOBS = ["build/rank*/*.log", "match/*.log"]
 PLAN_FILES = ["plan/commit_plan.json", "plan.log", "weights_of_record.log", "manifest.log"]
 COMMIT_FILES = ["verdict.json", "config_record.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
-EVIDENCE_FILES = ["timeline.jsonl", "stages.txt", "admission.json", "timeline_report.json"]
+EVIDENCE_FILES = ["stages.txt", "admission.json"]
 
 
 def _read_json(p: Path) -> Any:
@@ -139,6 +150,12 @@ def program_digest(d: Path, row: str = "") -> dict[str, Any]:
     return out
 
 
+def private(rel: str) -> bool:
+    """Whether the evidence dir's file `rel` stays on the node: under a replay bundle or a slim keep, or a file PRIVATE names."""
+    parts = PurePosixPath(rel).parts
+    return any(q.startswith(KEPT_APART) for q in parts) or any(fnmatch.fnmatchcase(parts[-1], p) for p in PRIVATE)
+
+
 def _eligible(p: Path) -> bool:
     if not p.is_file() or p.is_symlink():
         return False
@@ -148,22 +165,20 @@ def _eligible(p: Path) -> bool:
 
 
 def _collect(d: Path, rels: list[str], globs: list[str] = ()) -> tuple[list[str], list[str]]:
-    """(present, skipped) relative paths: the listed files plus every eligible file under the listed glob dirs."""
+    """(present, skipped) relative paths: the listed files plus every eligible file under the listed glob dirs, never a private one."""
     present: list[str] = []
     skipped: list[str] = []
     for rel in rels:
         p = d / rel
-        if p.is_file():
+        if p.is_file() and not private(rel):
             (present if _eligible(p) else skipped).append(rel)
     for pat in globs:
         for p in sorted(d.glob(pat)):
-            if p.is_dir():
-                for f in sorted(x for x in p.rglob("*") if x.is_file() and not any(q.startswith(KEPT_APART) for q in x.relative_to(p).parts)):
-                    rel = f.relative_to(d).as_posix()
+            files = sorted(x for x in p.rglob("*") if x.is_file()) if p.is_dir() else [p] if p.is_file() else []
+            for f in files:
+                rel = f.relative_to(d).as_posix()
+                if not private(rel):
                     (present if _eligible(f) else skipped).append(rel)
-            elif p.is_file():
-                rel = p.relative_to(d).as_posix()
-                (present if _eligible(p) else skipped).append(rel)
     seen: list[str] = []
     for r in present:
         if r not in seen:
@@ -192,28 +207,6 @@ def _entry(name: str, kind: str, meta: dict[str, Any], run_dir: Path, d: Path, p
     n = _stage_into(d, present, into)
     meta = {**meta, "files": len(present), "skipped": skipped, "evidence_dir": str(d)}
     return {"name": name, "kind": kind, "meta": meta, "tree": f"outputs/{name}", "refs": refs or {}, "staged": n}
-
-
-def slim_outputs(d: Path, row: str, stage: str, run_dir: Path) -> list[dict[str, Any]]:
-    """One `vllm-replay-slim/v1` entry per slim keep a decided replay left (`commit/replay_slim_p<pair>/`, `cpu_replay.keep`): every
-    file, the .bin planes and their sizes included, linked into the run dir (copied where a link can't be made)."""
-    out = []
-    for k in sorted((d / "commit").glob("replay_slim_p*")):
-        doc = _read_json(k / "slim.json")
-        if not k.is_dir() or k.name.endswith(".partial") or not isinstance(doc, dict):
-            continue
-        into = run_dir / "outputs" / k.name
-        for f in sorted(x for x in k.rglob("*") if x.is_file() and not x.is_symlink()):
-            dst = into / f.relative_to(k)
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            if not dst.exists():
-                try:
-                    os.link(f, dst)
-                except OSError:
-                    shutil.copy2(f, dst)
-        out.append({"name": k.name, "kind": SLIM_KIND, "tree": f"outputs/{k.name}", "refs": {},
-                    "meta": {"row": row, "stage": stage, **{x: doc.get(x) for x in SLIM_META}, "evidence_dir": str(d)}})
-    return out
 
 
 def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str, str]) -> dict[str, Any]:
@@ -292,8 +285,6 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         raise ValueError(f"unknown stage {stage!r}")
     if e is not None:
         entries.append(e)
-    if stage == "replay":
-        entries.extend(slim_outputs(d, row, stage, run_dir))
     present, skipped = _collect(d, EVIDENCE_FILES)
     e = _entry("evidence", "execution-evidence/v1", {"row": row, "stage": stage, "stage_status": status}, run_dir, d, present, skipped, optional=True)
     if e is not None:
@@ -309,6 +300,16 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
     return {"schema": SCHEMA, "outputs": entries, "row": row, "stage": stage, "evidence_dir": str(d), "inputs": refs}
 
 
+def build_stages(d: Path, row: str, stages: list[str], run_dir: Path, inputs: dict[str, str]) -> dict[str, Any]:
+    """`build_outputs` over the stages of `stages` that stages.txt records (the last one when it records none), in order, a later
+    stage's entry replacing an earlier one's of the same name: the replay's verdict the Commit's, whose files it holds too, and the
+    last stage's evidence and logs, which are cumulative."""
+    ran = [s for s in stages if s in verdicts(d / "stages.txt")] or stages[-1:]
+    docs = [build_outputs(d, row, s, run_dir, inputs) for s in ran]
+    entries = {e["name"]: e for doc in docs for e in doc["outputs"]}
+    return {**docs[-1], "outputs": list(entries.values()), "stage": " ".join(ran)}
+
+
 def inputs_from_job(run_dir: Path) -> dict[str, str]:
     job = _read_json(run_dir / "job.json") or {}
     ins = ((job.get("store") or {}).get("inputs") or {}) if isinstance(job, dict) else {}
@@ -317,11 +318,11 @@ def inputs_from_job(run_dir: Path) -> dict[str, str]:
 
 @dataclass(frozen=True, kw_only=True)
 class WriteOptions:
-    """Declare the stage's outputs in RUN_DIR/outputs.json."""
+    """Declare the stages' outputs in RUN_DIR/outputs.json."""
 
     evidence_dir: str = option("evidence_dir")
     row: str = option("row")
-    stage: str = option("stage", choices=sorted(KINDS))
+    stages: list[str] = option("stages", nargs="+", choices=sorted(KINDS), metavar="stage")
     run_dir: str | None = option("--run-dir", env="RESEARCH_RUN_DIR", default=None)
     input: list[str] = option("--input", action="append", default=[], metavar="NAME=art:...",
                               help="an input artifact (default: job.json store.inputs)")
@@ -354,7 +355,7 @@ def main(a: WriteOptions | DigestOptions) -> int:
             k, _, v = spec.partition("=")
             if k and re.fullmatch(r"art:[0-9a-f]{64}", v or ""):
                 inputs[k] = v
-        doc = build_outputs(Path(a.evidence_dir), a.row, a.stage, run_dir, inputs)
+        doc = build_stages(Path(a.evidence_dir), a.row, a.stages, run_dir, inputs)
         tmp = run_dir / "outputs.json.tmp"
         tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
         os.replace(tmp, run_dir / "outputs.json")
