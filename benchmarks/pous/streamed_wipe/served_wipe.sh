@@ -18,8 +18,10 @@
 # Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/core (WIPE_PROTOCOL_EXE names one built already), never in this tree's .lake, which
 # served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
-# wipe.case.json, summary.json), lake-build.log, answer.json (wipe.json's answer, whatever its verdict) and served.json (the
-# serve dir and window the wipe precedes, the server, the card, the lease, the run); its last line is `WIPE {...}`.
+# summary.json), lake-build.log, answer.json (wipe.json's answer, whatever its verdict) and served.json (the serve dir and
+# window the wipe precedes, the server, the card, the lease, the run). The leg's case, which holds the challenger's signed
+# session, goes to SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the
+# composite's piece beside it: case.json and the leg's own answer.json. Its last line is `WIPE {...}`.
 # Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -36,7 +38,8 @@ NODE=${WIPE_NODE:-$(hostname)} IDLE_MIB=${WIPE_IDLE_MIB:-1024} DEMO=${WIPE_DEMO:
 refuse() { echo "WIPE REFUSED: $*" | tee "$DIR/refused.txt"; exit 3; }
 
 if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Lean judge
-  rm -f "$DIR"/{answer,served,summary,wipe,wipe.case}.json "$DIR/refused.txt"
+  rm -f "$DIR"/{answer,served,summary,wipe,wipe.case}.json "$DIR/refused.txt" \
+    "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
   read -r -a C <<< "$CMD"
   KEY=
   for ((i = 0; i + 1 < ${#C[@]}; i++)); do [ "${C[$i]}" = -i ] && KEY=${C[$((i + 1))]}; done
@@ -76,7 +79,7 @@ unset PYTHONPATH VIRTUAL_ENV
 rc=0
 OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
   --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} "$@" || rc=$?
-python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" <<'EOF'
+HEADLINE=$(python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" <<'EOF'
 import json, os, sys
 from pathlib import Path
 
@@ -101,4 +104,15 @@ print("WIPE " + json.dumps({"verdict": answer["verdict"], "reason": answer["reas
                             "fill_GBps": (s.get("challenger") or {}).get("fill_GBps"), "t0": s.get("t0"), "t1": s.get("t1"),
                             "server": node, "card": card, "exit": int(rc)}, sort_keys=True), flush=True)
 EOF
+)
+P=$SERVE_DIR/private/wipe
+if [ -f "$DIR/wipe.case.json" ]; then
+  { install -d -m 700 "$P" && mv -f "$DIR/wipe.case.json" "$P/wipe.case.json" && chmod 600 "$P/wipe.case.json"; } \
+    || echo "WIPE CASE: the case didn't move to $P"
+fi
+if [ -f "$DIR/answer.json" ] && [ -f "$P/wipe.case.json" ]; then
+  PYTHONPATH=$ROOT "${PY:-python3}" "$ROOT/benchmarks/pous/served_case.py" --window "$DIR" --private "$P" \
+    || echo "WIPE CASE: served_case.py exited $?: the composite has no wipe piece"
+fi
+echo "$HEADLINE"
 exit "$rc"

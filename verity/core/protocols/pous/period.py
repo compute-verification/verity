@@ -18,14 +18,15 @@ What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
-holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap.
+holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. At
+`k ≥ 320` challenges and `2^19` to `2^27` blocks it is `2^-20` (`p2.wide320_certificate`, `ObligationWide320`).
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
-Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path
-(r20261025-202504-23f6), so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
+Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path,
+so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
-a block, r20261026-161817-7dd1). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
+a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
 `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
@@ -85,10 +86,13 @@ def point_for(size: int, w: int = P2.POINT[0], c0: int = P2.POINT[1], k: int = K
     return R.Point(P2.P2Params(w, c0, -(-blocks // segments), segments), k, limit_ns)
 
 
-def certificate(q: P2.P2Params) -> Any:
-    """`PousCheck.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
-    else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks), else the per-period guarantee's
-    (`p2.wide_certificate`, to `2^27` blocks), else none."""
+def certificate(q: P2.P2Params, k: int = K) -> Any:
+    """`PousCheck.RunProtocol.certificate`: at `k` of at least `p2.CERT_K_WIDE320` challenges, the 320-read window's
+    (`p2.wide320_certificate`, `2^19` to `2^27` blocks) where it holds `q`; else P2's registered certificate when `q`
+    is its point, segment count and all, else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks),
+    else the per-period guarantee's (`p2.wide_certificate`, to `2^27` blocks), else none."""
+    if k >= P2.CERT_K_WIDE320 and (wide := P2.wide320_certificate(q)) is not None:
+        return wide
     registered = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
     if registered is not None and registered.segments == q.segments:
         return registered
@@ -98,7 +102,7 @@ def certificate(q: P2.P2Params) -> Any:
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
     """`PousCheck.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does)."""
     q = point.params
-    cert = certificate(q)
+    cert = certificate(q, point.k)
     if cert is None:
         return None, [f"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})"]
     return cert, list(cert.refusals(point.k, point.limit_ns))
@@ -538,8 +542,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
     instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
     (`challenger_party.Party.of`; on this node by default, a process whose key and session log are beside the periods)
-    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean answers (the
-    verifier of record) and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
+    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
+    answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
     whether `trusted-host`'s premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted
     answer's profile (`placement`)."""
