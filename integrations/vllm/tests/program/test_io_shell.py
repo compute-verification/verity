@@ -1,7 +1,8 @@
 """`registry.io_shell` (ingress v0): the encoder's bytes in the layout, padded to whole SHA-512 blocks, `IngressPrompt_v1` as
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network
-certifier's scan state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`)."""
+certifier's scan state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`), and those
+two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`)."""
 from __future__ import annotations
 
 import json
@@ -12,6 +13,7 @@ import pytest
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.registry import boolean_io_shell as BX
 from verity.ml.definitions.registry import io_shell as X
+from verity.ml.definitions.registry.dead_free import TokenSelectCombineV2
 
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import bind
@@ -232,6 +234,35 @@ def test_a_slots_entry_counts_its_outputs_cuts_its_ids_and_is_zero_when_empty(KO
     for bad in ({"STOP": (1, 1)}, {"NP": 0}):
         with pytest.raises(ValueError, match="refuses this binding"):
             bind(X.SlotEntry, **{"KO": 2, "IDB": 17, "NP": 4, "STOP": (), **bad})
+
+
+@pytest.mark.parametrize("first", [True, False], ids=["first", "later"])
+def test_a_select_collected_and_the_last_ones_entry_are_the_combine_then_the_collector_and_the_entry(first):
+    """`SelectCollect_v1` is `TokenSelectCombine_v2`'s select and `OutCollect_v1` over it, and `SelectEntry_v1` those and
+    `SlotEntry_v1` over the state, on groups' bests drawn from a few bf16 values (ties and -inf among them), their indices,
+    heads or states whose w is in and out of the collector's KO, and both occupancy words."""
+    V, C, KO, NP, STOP = 200, 64, 3, 3, (107,)
+    combine = bind(TokenSelectCombineV2, V=V, C=C)
+    sc = bind(X.SelectCollect, V=V, C=C, KO=KO, FIRST=first)
+    se = bind(X.SelectEntry, V=V, C=C, KO=KO, FIRST=first, IDB=17, NP=NP, STOP=STOP)
+    words = (np.array([-1.0, 0.0, 1.0, 2.0, -np.inf], dtype=np.float32).view(np.uint32) >> 16).tolist()
+    rng = np.random.default_rng(5)
+    for _ in range(24):
+        x0, best = int(rng.choice(words)), [int(w) for w in rng.choice(words, 4)]
+        idx = [int(i) for i in rng.integers(0, C, 4)]
+        w = int(rng.integers(-NP - KO, 3)) & X.M32
+        a = [int(rng.integers(1, 5)), 9] if first else [w, 9, *[100 + i for i in range(KO)]]
+        tok = _run(combine, [x0], best, idx)[0]
+        state = X.collect_reference(a, tok, KO, first)
+        assert _run(sc, [x0], best, idx, a) == [tok, *state]
+        for occ in (0, 1):
+            bits = _run(se, [x0], best, idx, a, [occ])
+            got = [sum(bits[16 * k + b] << b for b in range(16)) for k in range(len(bits) // 16)]
+            assert got == X.entry_reference(occ, state, KO, 17, NP, STOP)
+    for fn, bad in ((X.SelectCollect, {"V": 1, "C": 1, "KO": 2, "FIRST": True}),
+                    (X.SelectEntry, {"V": 200, "C": 64, "KO": 2, "FIRST": True, "IDB": 17, "NP": 4, "STOP": (1, 1)})):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(fn, **bad)
 
 
 @pytest.mark.parametrize("st", [SMALL, {"MODEL": MODEL, "LP": 2, "V": V}], ids=["small", "served"])

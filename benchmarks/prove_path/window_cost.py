@@ -73,7 +73,7 @@ BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
 EXACT_KEYS = 128
 #: a shared output row's bytes (`P`): 1 KiB rows
 ROW_BYTES = 1024
-#: a member's units: V3c's cap
+#: a member's units: the window's member cap
 CAP = 64
 #: one port root's entry in `registration.json` (``indent=1``): a port name of about 40 characters, 128 hex of root and of
 #: domain, leaves
@@ -449,7 +449,7 @@ def served_ands(rest: list[Unit], heads: Heads, levers: frozenset[str], target: 
 
 def pad_pass(heads: Heads, traffic: Traffic, levers: frozenset[str], base_ands: float, step_s: float, target: str) -> dict:
     """The positions whose values the engine never computed, recomputed as batched decode steps over every slot at once, a
-    slot's run from its first such position (V3c's model: its continuation): an empty slot's every position and a request's
+    slot's run from its first such position (the class's model: its continuation): an empty slot's every position and a request's
     positions past its end, unless ``L2``; without ``L1``, from `EXACT_KEYS` on in a slot whose prompt passes it (its later
     positions read its inexact keys). Its positions, steps, seconds and ANDs (``base_ands`` a position and its heads')."""
     BN = EXACT_KEYS if "L1" in levers else heads.BN
@@ -514,20 +514,27 @@ def _slot_definition(lab: str, cls: WindowClass) -> object:
     fam, s = CS.statics(lab)
     if fam == CS.SCAN:
         return SS.bridge(cls.scan, cls.prompt)
-    make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.OutCollect, CS.ENTRY: IO.SlotEntry}[fam]
+    make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
     return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
 
 
-def _slot_unit(u: Unit, lab: str, at: WindowClass, cls: WindowClass) -> Unit:
+def _slot_unit(u: Unit, lab: str, at: WindowClass, cls: WindowClass, groups: int | None) -> Unit:
     """The probe's slot template ``u`` (at class ``at``) as ``lab`` at class ``cls``: its Definition's rows there (as
-    class_rows counts them, uncut), read through ``u``'s one kind of row; refused unless ``u`` is its Definition's at ``at``."""
+    class_rows counts them: a select's bests and indices a row a group unit of ``groups`` logits, the census's
+    `TokenSelectGroups_v1`, every other port uncut), read through ``u``'s one kind of row; refused unless ``u`` is its
+    Definition's at ``at``."""
     kind = [k for k in ("wired", "registered", "other") if getattr(u, k)]
     if len(kind) != 1:
         raise ValueError(f"the probe's {u.label} reads its rows through {len(kind)} kinds of row, not one")
 
     def rows(lab: str, c: WindowClass) -> Unit:
         fn = _slot_definition(lab, c)
-        ins, outs = IF.unit_rows(fn, None)
+        cut = None
+        if "V" in fn.bindings:
+            if groups is None:
+                raise ValueError(f"the probe's {u.label} selects over group units the census has none of")
+            cut = {"best": fn.bindings["V"] // groups, "idx": fn.bindings["V"] // groups}
+        ins, outs = IF.unit_rows(fn, cut)
         ob = [2 * w for _, w in IF.layout(fn).outs]
         return replace(u, label=lab, out=len(outs), out_bytes=sum(ob), x=sum(CR.blocks(128 + b) for b in ob),
                        **{kind[0]: len(ins), f"{kind[0]}_bytes": sum(bits // 8 for _, _, bits, _ in ins)})
@@ -548,11 +555,14 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"a probe of {c0['slots']} Programs: project one")
     rest, heads = split(units_of(census), c0, target)
     at, to = WindowClass(1, c0["prompt"], c0["outputs"]), WindowClass(slots, prompt, outputs, lanes, every)
+    groups = {CS.statics(u.label)[1]["C"] for u in rest if u.label.startswith("TokenSelectGroups_v1{")}
+    if len(groups) > 1:
+        raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
         lab, n = CS.projected(u.label, u.n, at, to)
         if CS.placed(u.label, 1, at.positions) is not None:
-            u = _slot_unit(u, lab, at, to)
+            u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))
     cls = {"slots": slots, "prompt": prompt, "outputs": outputs, "positions": to.positions}
     return out, replace(heads, S=slots, P=to.positions), cls
@@ -725,7 +735,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("census", help="class_rows.py --out's JSON")
     ap.add_argument("--target", choices=("h200", "sm120"), default="h200")
-    ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (V3c's estimate: 4 prefill and 63 "
+    ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (an estimate: 4 prefill and 63 "
                     "decode steps)")
     ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (a dry run's)")
     ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",
