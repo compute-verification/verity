@@ -85,9 +85,9 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.profile import Work, WorkStratum
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
-from verity.core.protocols.profile import Work, WorkStratum
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
