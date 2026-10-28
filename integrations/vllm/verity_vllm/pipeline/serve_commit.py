@@ -21,9 +21,10 @@ opens the next window, and the window's finalize, its readback, its records, its
 the sealer's thread in window order (`CommitWindows._finish`); a committer that detaches no window is finalized at the
 close and frozen for its seal (`serve_seal.freeze`). The window's line in ``windows.jsonl``, written once its finalize has
 run and before its seal, names its row dir (``seal``); what its seal wrote is its line in ``seals.jsonl``, once written,
-in window order. Each line says where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the
-loop's part, ``finalize_wait``, for the worker to absorb the window's steps, and ``seal_wait``, for the sealer's room) and
-``close_phases_s``. ``window_bytes`` closes a window once its steps have committed that many
+in window order; a sealer with a ``process`` (`seal_process.ProcessSealer`) writes only each seal's store files on its thread,
+and the rest of the seal runs in that spawned process. Each line says where its close's time went: ``seconds`` (``close``, and
+off the loop ``on_loop``, the loop's part, ``finalize_wait``, for the worker to absorb the window's steps, and ``seal_wait``,
+for the sealer's room) and ``close_phases_s``. ``window_bytes`` closes a window once its steps have committed that many
 bytes, which bounds its bundle. Every close is between engine steps, so a step's schedule, its committed values and its rows
 sit in one window, which runs past its bound by the step that crossed it (and by the steps the committer's worker had not
 yet absorbed); a request may still span windows. ``disk`` (`serve_seal.DiskFloor`) refuses the seal of a window that would take the
@@ -53,6 +54,7 @@ from typing import Any
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
+from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
@@ -580,8 +582,9 @@ class CommitWindows:
             tokens = {q["request_id"]: list(by_name[q["request_id"]].streamed) for q in reqs if q["request_id"] in by_name}
             kw = dict(rec=rec, reqs=reqs, request_rows=request_rows, tokens=tokens, sampling={}, extras=self._extras_of(c.com, rc), **self.seal)
             if c.off_loop:
-                for metas in c.com._layouts.values():
-                    iter(metas)         # a plan's TensorMetas built once, here, as `freeze` builds them
+                if self.sealer.process is None:
+                    for metas in c.com._layouts.values():
+                        iter(metas)     # a plan's TensorMetas built once, here, as `freeze` builds them
                 return c.com, rc, kw
             return (freeze(self.com) if self.sealer is not None else self.com), rc, kw
         except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
@@ -614,7 +617,13 @@ class CommitWindows:
             com, rc, kw = job
             t0 = self.clock()
             try:
-                sealed = seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
+                if self.sealer is not None and self.sealer.process is not None:
+                    sealed = self.sealer.process.seal(com, rc, Path(rec["seal"]["row_dir"]),
+                                                      written=(lambda: thaw(com)) if com is not self.com else None, **kw)
+                else:
+                    sealed = seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
+            except SealFailed as e:
+                sealed = {"error": str(e)[:500]}
             except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
                 sealed = {"error": f"{type(e).__name__}: {e}"[:500]}
             finally:
