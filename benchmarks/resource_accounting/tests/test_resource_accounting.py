@@ -484,10 +484,10 @@ class _Tagger:
 
 
 def _device(setup, fail_after: int | None = None):
-    """The store's one prover (`joint.Device` over `gpu.Prover`) on `_Tagger`, its raw read made up."""
+    """The store's one prover (`joint.BandwidthProver` over `gpu.Prover`) on `_Tagger`, its raw read made up."""
     store = setup.store
     tree = J.store_key(store.params, store.salt, b"".join(store.blocks))[1]
-    d = J.Device(J.load_gpu(), _Tagger(store, fail_after), 0, store.params.blocks, tree)
+    d = J.BandwidthProver(J.load_gpu(), _Tagger(store, fail_after), 0, store.params.blocks, tree)
     d.raw_read = lambda reps: {"kernel": "none", "bytes": len(store.blocks) * store.params.block_bytes,
                                "device_ms": [0.25] * reps}
     return d
