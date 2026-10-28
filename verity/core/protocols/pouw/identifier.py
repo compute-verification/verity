@@ -20,7 +20,7 @@ from verity.ml.circuits.codec import canonical_json, jcs_domain_error
 
 from .audit import Epoch
 from .protocol import DomainError, PoUWScheme
-from .schemes import SCHEMES
+from verity.ml.protocols.pouw.schemes import SCHEMES
 
 FORMAT = "verity/pouw/identifier/v1"
 SALT_BYTES = 32

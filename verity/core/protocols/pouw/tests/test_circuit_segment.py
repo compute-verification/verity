@@ -1,4 +1,4 @@
-"""The receipt spot checks (`verity.core.protocols.pouw.circuit.segment`): the meet-in-the-middle check
+"""The receipt spot checks (`verity.ml.protocols.pouw.circuit.segment`): the meet-in-the-middle check
 opens any committed window word through `PouwSegCheck_v2`, whose prefix sets are
 witness, and `PouwSegCheck_v3`, which recomputes every absorbed word, refuses the same committed data; each new check
 on bits is its word view, 1 on an honest instance and 0 once one receipt bit changes; and census/v1 counts the segment dots
@@ -10,7 +10,7 @@ import random
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import segment as SG
 from verity.ml.circuits.census import COUNTERS, PRODUCTS, census
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS

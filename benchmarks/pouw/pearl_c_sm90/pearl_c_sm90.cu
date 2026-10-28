@@ -1,4 +1,4 @@
-// Pearl-C on the H100 and H200 (sm_90a): the kernels of `pearl-c-h100-v1-h3` (verity/core/protocols/pouw/schemes/
+// Pearl-C on the H100 and H200 (sm_90a): the kernels of `pearl-c-h100-v1-h3` (verity/ml/protocols/pouw/schemes/
 // pearl_c.py on pearl_c_device.H100, hashing -h3) and the plain FP8 GEMMs, for run.py.  Every kernel takes one Args by value:
 // 16 pointers p[] and 16 ints i[].  The products are warpgroup MMAs (wgmma m64nNk32 E4M3 for every FP8 atom, m64nNk16 BF16
 // for the peel) on operands in shared memory that TMA fills, within 227 KB of shared memory per block.

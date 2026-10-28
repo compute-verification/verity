@@ -142,7 +142,7 @@ from verity_vllm.protocols.pouw.h1 import served as SV
 shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
 if j10r:
-    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1tile as HT, h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 t = time.monotonic()
@@ -159,8 +159,8 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 

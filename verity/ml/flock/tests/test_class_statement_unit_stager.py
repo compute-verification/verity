@@ -27,7 +27,7 @@ from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
-from verity.core.protocols.pouw.circuit import leaves as L, pc4
+from verity.ml.protocols.pouw.circuit import leaves as L, pc4
 
 #: a Boolean unit (a + b over 20 bits with its carry, a & c, and w[0] & w[2047] ^ w[1000]), its parameters' leaves off word
 #: boundaries in two rows that split c's, its 34-bit output padded to three words; w's row spans SHA-512 blocks, as a composed
@@ -88,7 +88,7 @@ def _tile(m: str) -> tuple:
 
 def _anchor() -> tuple:
     """`test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation`' statement: three public input ports."""
-    from verity.core.protocols.pouw.circuit.anchors import public_ports
+    from verity.ml.protocols.pouw.circuit.anchors import public_ports
 
     spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)

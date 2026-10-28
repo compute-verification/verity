@@ -34,9 +34,9 @@ from pathlib import Path
 import numpy as np
 
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 from verity.ml.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
@@ -237,7 +237,7 @@ def check(args) -> int:
 
 
 def targets(args) -> int:
-    path = Path(__file__).resolve().parents[3] / "verity/core/protocols/pouw/circuit/h1zy.circuit-check.py"
+    path = Path(__file__).resolve().parents[3] / "verity/ml/protocols/pouw/circuit/h1zy.circuit-check.py"
     spec = importlib.util.spec_from_file_location("h1zy_circuit_check", path)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)

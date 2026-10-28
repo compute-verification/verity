@@ -186,7 +186,7 @@ def units(shapes: Any, rows: int, steps: int) -> int:
     """The tile units of the window Program `served.declared` builds over ``shapes`` (each ``(n, K)``) at T ``rows`` and S
     ``steps``: the members of its batches, one a call (S × the linears), so the descriptor, the declare and the digest
     grow with the calls, not the units."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
 
     from verity_vllm.protocols.pouw import h1 as PH
 

@@ -33,9 +33,9 @@ from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.core.protocols.pouw.coins import coin_reason
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
@@ -541,9 +541,9 @@ def test_a_certified_window_credits_only_units_that_read_its_salt():
     """`unit_reason` refuses the served-zk window's drawn unit, `Pc8TileSide`, which reads two committed side rows and
     no salt (it declares no port), and passes the compiled Program's H1 tile (`PouwH1Tile`), whose ``salt`` is a coin
     port over the 64-byte salt; anything without a signature is refused."""
-    from verity.core.protocols.pouw.circuit import compile as C
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.circuit import compile as C
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import pc8
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 

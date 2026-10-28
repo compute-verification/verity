@@ -12,4 +12,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "verity/ml/crypto", "verity/ml/circuits", "verity/ml/kernels", "benchmarks/pouw/commit_gpu/reference.py",
           "benchmarks/pouw/accel_v31/v31.py", "benchmarks/pouw/accel_v31/v31lib.py",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
-          "verity/core/protocols/pouw/circuit"]
+          "verity/ml/protocols/pouw/circuit"]

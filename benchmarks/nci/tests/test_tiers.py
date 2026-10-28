@@ -27,7 +27,7 @@ def test_the_gpus_read_the_accel_models_card_table():
     sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
     mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
     assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
-    h1 = (ROOT / "verity/core/protocols/pouw/circuit/h1device.py").read_text()
+    h1 = (ROOT / "verity/ml/protocols/pouw/circuit/h1device.py").read_text()
     sm120 = h1[h1.index("SM120 = Device("):h1.index("SM90 = Device(")]
     assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
     assert T.DEFAULTS["clock_share"] == 0.0

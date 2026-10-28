@@ -12,8 +12,8 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 
-from verity.core.protocols.pouw.circuit import ncp2
-from verity.core.protocols.pouw.circuit import partition as P
+from verity.ml.protocols.pouw.circuit import ncp2
+from verity.ml.protocols.pouw.circuit import partition as P
 
 SHAPE = ncp2.Shape(32, 64, 32)
 
@@ -112,7 +112,7 @@ def test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule():
     # the verifier never takes this Program: it builds its own and compares digests (X-SPC-73)
     from verity.ml.circuits.codec import encode_program
     from verity.ml.circuits.program import Program
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     t = traced_as("ncp-v2-shift24", SHAPE.m, SHAPE.k, SHAPE.n)

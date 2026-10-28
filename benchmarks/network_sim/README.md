@@ -216,5 +216,5 @@ are read.
 N3, the content check (every frame a certified link carried is a committed crossing), was prototyped here: in the clear
 over the certifiers' records and as Boolean circuits over a sampling block, `N3Window_v3` to `N3Window_v5`, that no Spec
 ran. It is retired, superseded by the network certifier's step-indexed scan
-(`verity/core/protocols/certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
+(`verity/ml/protocols/certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
 in zero knowledge.

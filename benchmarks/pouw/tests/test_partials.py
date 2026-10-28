@@ -19,9 +19,9 @@ import numpy as np
 import pytest
 import torch
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 HERE = Path(__file__).resolve().parents[1] / "served_h1"
 

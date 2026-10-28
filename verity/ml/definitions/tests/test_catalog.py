@@ -1,7 +1,7 @@
 """`catalog.load()` registers exactly `COUNT` Definitions and primitives: a module that stops importing or registering, or
 one that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
 
-The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.core.protocols.pouw.circuit`
+The count is the registry's own: PoUW's circuit (the `Ncp*` and `Pouw*` Definitions `verity.ml.protocols.pouw.circuit`
 registers) is not in it."""
 from __future__ import annotations
 

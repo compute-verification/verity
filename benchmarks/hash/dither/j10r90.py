@@ -56,8 +56,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pou
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import j10r_units as J10R
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 settings = of(__file__)
 #: the frozen shape's linears (n, k), the H200 demo's MQA decoder (benchmarks/torch_gpu/j10r_sm90/shape.py's LINEARS:

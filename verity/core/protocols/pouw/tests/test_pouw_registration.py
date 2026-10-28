@@ -11,9 +11,9 @@ import epoch_coins as E
 from verity.core.protocols.pouw import registration as R
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
 from verity.ml.randomness import derive
 
 FP8, FP4 = "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0"

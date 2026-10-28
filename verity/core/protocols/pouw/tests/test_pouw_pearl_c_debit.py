@@ -12,9 +12,9 @@ import pytest
 
 from verity.ml.circuits.silicon.models import HOPPER_E4M3_K32
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 VECTORS = Path(__file__).parent / "vectors"
 #: P1's conformance vectors, one word per

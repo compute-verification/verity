@@ -17,7 +17,7 @@ import torch
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1tile as HT
 
 DITHER = Path(__file__).resolve().parents[2] / "hash" / "dither"
 SALT, RA, RB = (hashlib.sha512(x).digest() for x in (b"salt", b"A", b"B"))
@@ -67,7 +67,7 @@ def test_each_units_blocks_are_the_ones_credit_derives_at_the_slot(m):
     """At the decode slot T = 64 (its second row block past the 32 served rows, computed in full) and prefill's 2048, for
     every Llama-3.1-8B linear: unit u's blocks (`j10r_units.blocks`) are `core_check.j10r_blocks` of credit's tile t = u,
     (t // (n/C), t % (n/C)), at slot M = T, and the slot is `h1window.slot`'s for T rows."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     JU = dither("j10r_units")
     assert HW.slot(m, TILE) == m
     for n, k in LLAMA:
@@ -156,7 +156,7 @@ def test_only_a_j10r_arm_on_credits_layout_takes_3574s_basis():
     """`forms.j10r_part`: the slot rows mode on a slot T (64, 2048), every row block computed, is "j10r"; the live rows
     mode, skipped dead tiles, or a T credit's window can't have as its M (96, 16) is "j10r-off", which leaves the arm
     unadopted."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     F = dither("forms")
     assert [F.j10r_part("slot", False, t) for t in (64, 2048)] == ["j10r"] * 2
     assert all(HW.slot(t, TILE) == t for t in (64, 2048)) and all(HW.slot(t, TILE) != t for t in (96, 16))

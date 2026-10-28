@@ -47,7 +47,7 @@ from verity_machine_model import eps as E
 from verity_machine_model.model import device
 
 from fold_routes import keyed_round, u32
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 SEED = 0xF01D
 Q = 0.5                  # the sheet reading's q*

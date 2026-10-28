@@ -59,7 +59,7 @@ from hb_kbench import (
     x_seed,
 )
 
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 SCHEMA = "kernels-j10/hb/v1"
 
@@ -209,7 +209,7 @@ def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.
     non-leader row tile still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; credit's
     banded_reference on two 32 x 8 tiles (a leader and a non-leader at the first g), which holds the shape to the
     Definition (h1tile.Layout's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
     nrb, sms = rows // 32, torch.cuda.get_device_properties(0).multi_processor_count
     lays = {32: HT.Layout(32, 32, k), TW_C: HT.Layout(32, TW_C, k)}
@@ -264,7 +264,7 @@ def tw_ca(c, g0: int, workers: int) -> dict:
     """credit's banded_reference on row tile 0's 32 x 8 tiles J = g0 (a band leader) and g0 + 1 (a non-leader) at g0, unit
     (0, J) at c.base + J: z = A B^T, 2 sets receipt words each, both read the leader's position, and the leader's receipt
     is h1tile.reference's at its own position (its noise is its own) while the non-leader's is not."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     n, k = c.b.shape[0], c.a.shape[1]
     a = c.a.cpu().numpy().astype(np.int64)
     b = c.b.cpu().numpy().astype(np.int64)

@@ -14,8 +14,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.prims import BlackwellS8ImmaDot32  # noqa: F401  (registers the s8 steps' families)
 from verity.ml.circuits.silicon.integer import HOPPER_SM90_S8_K32
-from verity.core.protocols.pouw.circuit import dither as D
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import dither as D
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 SALT = hashlib.sha512(b"window salt").digest()
 COIN = hashlib.sha512(b"call coin").digest()

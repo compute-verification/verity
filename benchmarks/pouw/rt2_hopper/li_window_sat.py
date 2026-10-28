@@ -41,7 +41,7 @@ import z3
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.core.protocols.pouw.circuit import segment as SG  # noqa: E402
+from verity.ml.protocols.pouw.circuit import segment as SG  # noqa: E402
 
 LOW = ("LOP3", "IADD3", "IMAD", "LEA")
 HIGH = ("IMAD.HI", "IMAD.WIDE.HI", "SHF.L", "SHF.R", "LEA.HI", "PRMT")
