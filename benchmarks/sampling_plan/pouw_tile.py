@@ -85,11 +85,16 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--cap-log", type=int, default=27)
     ap.add_argument("--grid", type=int, default=61)
+    ap.add_argument("--compression-ands", type=int, default=W.O.SHA512_ANDS,
+                    help=f"a row opening's ANDs a SHA-512 compression (C-Flock's circuit: {W.FLOCK_SHA512_ANDS})")
+    ap.add_argument("--no-refit", action="store_true", help="keep the fit's own count of its measured blocks")
     args = ap.parse_args()
+    W.price_openings(args.compression_ands, refit=not args.no_refit)
     census = json.loads(Path(args.census).read_text())
     cands, table = tiles(census, 1 << args.cap_log)
     F = W.window_work(cands)
-    doc = {"cap_log": args.cap_log, "ands_a_mac": ANDS_A_MAC, "window_macs": F, "table": table, "runs": {}}
+    doc = {"cap_log": args.cap_log, "ands_a_mac": ANDS_A_MAC, "compression_ands": args.compression_ands,
+           "refit": not args.no_refit, "window_macs": F, "table": table, "runs": {}}
     h = 1 / W.SHA512_BPS["card 4 KiB"]
     split = {k: lanes_priced(m, table) for k, m in W.parts(W.fitted()).items()}
     for name, cm in (("mode1", W.costs()), ("mode2", W.costs(h=h, w=1.0))):

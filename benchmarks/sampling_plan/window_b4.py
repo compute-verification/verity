@@ -35,9 +35,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import h200 as H
+import inputs as IN
 import transformer as X
 from inputs import KEY, I, observations
 
+import verity.core.protocols.sampled_proofs.optimize as O
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import location_bits
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
@@ -51,11 +53,23 @@ SHA512_BPS = {"card 4 KiB": 398e9, "card 16 KiB": 521e9, "beside GEMM": 66.5e9}
 COMPRESSION = 128
 #: C-Flock's compose refuses a proof block of more ANDs, its rows' openings included (TOP-138, 19:14Z)
 MAX_PROVED_ANDS = 1 << 27
+#: C-Flock's SHA-512 circuit, ANDs a compression (inbox 20:00Z, GD-SIS's pin), against `optimize`'s 58,120
+FLOCK_SHA512_ANDS = 81_402
 #: the joint plans' leak targets, shares of the window's output bits
 JOINT_LEAK = (0.01, 0.001)
 ATTN = "AttnBlockFirst_v2"
 #: the attention buckets' widths, in key counts (35 is one template for the window's 35 positions)
 BUCKETS = (2, 3, 5, 7, 12, 18, 35)
+
+
+def price_openings(ands: int, *, refit: bool = True) -> None:
+    """Price a row opening at `ands` a SHA-512 compression, its hiding part's two with it: `optimize.row_ands`, which
+    `CostModel.ands` and these runners call, reads both constants when it runs. With `refit` the fit's measured blocks
+    are counted the same way (`inputs.s8_coord_ands`), so their measured seconds are spread over their recounted ANDs;
+    without it the fit's per-AND rates price the recounted openings, an upper bound. Call it before building candidates."""
+    O.SHA512_ANDS, O.HM96_ANDS = ands, 2 * ands
+    if refit:
+        IN.SHA512, IN.HM96 = ands, 2 * ands
 
 
 def proved_ands(e: dict) -> int:
@@ -237,7 +251,11 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--grid", type=int, default=61)
     ap.add_argument("--weights", default="1,10,100,1000,10000", help="mode 2's w, beside w = 1, for where s* moves")
+    ap.add_argument("--compression-ands", type=int, default=O.SHA512_ANDS,
+                    help=f"a row opening's ANDs a SHA-512 compression (C-Flock's circuit: {FLOCK_SHA512_ANDS})")
+    ap.add_argument("--no-refit", action="store_true", help="keep the fit's own count of its measured blocks")
     args = ap.parse_args()
+    price_openings(args.compression_ands, refit=not args.no_refit)
     census = json.loads(Path(args.census).read_text())
     cands = candidates(census)
     served = candidates(census, widths=())
@@ -258,6 +276,7 @@ def main() -> None:
     runs["mode1 attention buckets"] = run(bucketed(cands), costs(), split, grid=args.grid)
     runs["mode2 attention buckets"] = run(bucketed(cands), costs(h=h, w=1.0), split, grid=args.grid)
     doc = {"delta": DELTA, "eps": EPS, "lambda": log(1 / DELTA), "census": args.census,
+           "compression_ands": args.compression_ands, "refit": not args.no_refit,
            "rates": asdict(H.Rates.fitted()), "fits": {t: dict(getattr(f, t).coef) for t in ("prove", "verify", "stage")},
            "cpu": f.cpu, "fit_key": dict(f.key), "sha512_bps": SHA512_BPS,
            "grain_table": grain_table(cands, costs(), h), "runs": runs}
