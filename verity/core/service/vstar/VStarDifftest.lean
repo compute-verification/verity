@@ -2,6 +2,7 @@ import Difftest
 import VStar
 import Flock.RecResiduals
 import Flock.RecSetup
+import Flock.RecLinkRef
 
 /-!
 # V*'s difftest executable
