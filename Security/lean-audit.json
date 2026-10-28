@@ -18703,6 +18703,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
@@ -20621,28 +20622,9 @@
    ]
   },
   "Definitions.Flock.Circuit": {
-   "digest": "4fb1156b646e7459c37fe624f943c60a65f5cb3c50c8dbe14034b096e86c0bdf",
+   "digest": "02a8ef3204cbd27dbfb523188a2e50b5489cffd84f83606b03210bc3b2a6a4a6",
    "definitions": {
-    "FlockSoundness.Audit.Circuit": "eae3834eb80d05abdb52d58e58d3c548f90ac029f7714633011254b9b86ce639",
     "FlockSoundness.Audit.Circuit.InputsAgree": "946208bc30eceea43a59a532b892b35ffd7f158e33cbc6499dd192a9eb2b5ac3",
-    "FlockSoundness.Audit.Circuit.N": "2b5691665b0fbb60db49cdf4b0747640b7040dfa5bf45633080d74aba0ad1b78",
-    "FlockSoundness.Audit.Circuit.eval": "57422ea01448b310290b329076d199020ceed1cd3a4cd2802406443810c88dfc",
-    "FlockSoundness.Audit.Circuit.op": "97912b36c50d00a1dbe0dfc71e4078501f7f6ac4ff029f43397ff23629d59ecc",
-    "FlockSoundness.Audit.Circuit.outputs": "97687faac62607feefae89c9d9802053cfade7d48f155c95c6e3c7abe73a0412",
-    "FlockSoundness.Audit.Circuit.run": "7344d2539a14645ea847e2a24c10d5564626bb33c215b1677fbefd5757aaea11",
-    "FlockSoundness.Audit.Op": "75bebd7c162b9b7f27418d44dc50b25f09902fd3c7d8b106af390c8d6bb286c7",
-    "FlockSoundness.Audit.Op.and": "2826c574c26cf547071a45321935d27f979852961bdd8e252b4ef119a8de4ebf",
-    "FlockSoundness.Audit.Op.apply": "b1a23bed7333e4c0e0f9a7249959457f155f4ad3098ed5ea931016eef927160d",
-    "FlockSoundness.Audit.Op.args": "feaa0258468060300851a397170ccae05cdd531573e161570b64bdec262f1133",
-    "FlockSoundness.Audit.Op.casesOn": "68e61a592345106f03f09201521cec67e0aa7e72b8a6a1313d24322199973c55",
-    "FlockSoundness.Audit.Op.ctorIdx": "5c683427c86ede41231aec4d579cffa127c580ca9e923da6770cbfa363425a3d",
-    "FlockSoundness.Audit.Op.input": "93946cf1d6220a01fb4a02480fcf835edb8ea1a9245ceca8b900ac67c242b11e",
-    "FlockSoundness.Audit.Op.isInput": "e015c7679e24eb27509d6d17561f98222fcf9154a5e01328c30b070b971f502c",
-    "FlockSoundness.Audit.Op.isInput._sparseCasesOn_1": "87b2063dd85c18f50211e1c0c44fa4f049e2190f5e1b601badd9c1c01a128931",
-    "FlockSoundness.Audit.Op.not": "2bcdf9f429225986c3dd1d04b1be42f03676ab4e9bd9e34241f9d5a62301b0aa",
-    "FlockSoundness.Audit.Op.rec": "3c718220fecd306c81da0f7a18c687f3e0cdee3f9a83fd60e8333a0b11c5408e",
-    "FlockSoundness.Audit.Op.row": "c98f343a7b497c5240dc00c014258c27ab9436f94261c13bab71a8cac1250c07",
-    "FlockSoundness.Audit.Op.xor": "5c1dec09723d8ee00d06d1262a7a375eca9ee8f1487a265808a68457a7ed8a38",
     "FlockSoundness.Audit.Partition": "b65f35550e9e6cbc591e4686bca25d01c8306cec89ffb3e3422d0da96829111a",
     "FlockSoundness.Audit.Partition.Correct": "673ff897d997626aa6f690b571dbdd0b3f3a51e18d14d8b4f28bfd5a747fca69",
     "FlockSoundness.Audit.Partition.Refines": "f3677d05d10b8dc024add85643dd250ac1bc8ab49f8f93bc5e108dad1b2ca29e",
@@ -20651,8 +20633,7 @@
     "FlockSoundness.Audit.Partition.io": "ccffea3dcf3ab5824aeb3fd8cea2216dc0cf5c47dacd4a643cd9025c806d9b33",
     "FlockSoundness.Audit.Partition.localEval": "4971f4018cf27dbe5e7af66022e99f0de237dc1939794b0a248d2c3e699b9517",
     "FlockSoundness.Audit.Partition.unit": "d82fc1dedb29bad631c723bb99a0d7279d6147ed84f507a13d382fd8976e1b7b",
-    "FlockSoundness.Audit.Partition.wrong": "a28d9f647432dfcca4e96f89f2ef5e456005f9c5b2f2e0e49088a2b43eed7b91",
-    "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
+    "FlockSoundness.Audit.Partition.wrong": "a28d9f647432dfcca4e96f89f2ef5e456005f9c5b2f2e0e49088a2b43eed7b91"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -24106,7 +24087,7 @@
    ]
   },
   "Definitions.NetworkCertifier.Warden": {
-   "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
+   "digest": "55b2f5945bc1a63ab1ddafe71d25303c58f11545be094fa13afa94d8e93830d4",
    "definitions": {
     "NetTiming.Arrivals": "a9855f1bf335813d6e9e14389bc8ab6a12f280930f67aa9b05a90a5a61349651",
     "NetTiming.Arrivals.ready": "9072fe2fb441f0c20173208efd9171d9488df5c1e74d998285fa06303bda783a",
@@ -24121,9 +24102,6 @@
     "NetTiming.WardenSchedule.bucket": "e0ce0ff6f053a2e4387e402d84e7a74bf9ea9602b7b00d476186ed8e2fc8820d",
     "NetTiming.WardenSchedule.cells": "f2d947c4b4976dc66943a86b6225976ddc342fbc55ca6ce51caa06937c74aa68",
     "NetTiming.WardenSchedule.r": "945a3aa14d2585cf9cfcdd40e7a5c7699431cb29efe7115d4943315d0b7b8e2f",
-    "NetTiming.cellView": "ad3d6ac110b9552babae7054a6bccf9254038a208b06ec5ab49cc8ccd3c37dbe",
-    "NetTiming.clientView": "3f296e1831810a4a6dfe6346d75fea4f7321da3ce8c1597912aeb08acba7821c",
-    "NetTiming.failCell": "097fda151d174bc94cf33e7ba03e552958cfb91184001f9a4a2d1f95ccc5a664",
     "NetTiming.streamCell": "5099c8817f9762186ef5b7b163aeb9d09fbbd6106b964dacc1f3d757cdfbdd21",
     "NetTiming.wardenCode": "5e86c0bb2c509e1a3cfb9bfa856d1d78a8cb7848d92efa2c0ee0e078bc20cef8",
     "NetTiming.wardenLane": "589292a58aa331c6b10ec7993a4d55215213036b1b0a7f560deac23b35bc65c6"
