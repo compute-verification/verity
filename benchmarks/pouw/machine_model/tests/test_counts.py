@@ -7,7 +7,7 @@ from verity_machine_model import counts as cf
 from verity_machine_model import eps as E
 from verity_machine_model.cli import main
 
-PI = E.machine("VF3l-16")   # the vector these counts were checked at (note:20261017T0444Z-draft-eps1-predict)
+PI = E.machine("VF3l-16")   # the vector these counts were checked at
 C = cf.load("e-l7qs")
 
 
