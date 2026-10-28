@@ -1651,6 +1651,86 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
     assert "check: verdicts: gathering" in posted, posted
 
 
+def _shard_stub(tmp_path, refuse_shard=0):
+    """train.sh's `uv` for a sharded run: shard K (`--shard K/N`) launches run r20261009-05000K-aaaa with its arguments in
+    argv.K, shard ``refuse_shard`` exits 1 having launched none, `research cancel ID` is recorded in ``cancelled``, and
+    `--combine` prints the local run line of r20261009-060000-cccc."""
+    bin_ = tmp_path / "bin"
+    (bin_ / "uv").write_text(
+        f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}"
+        f'case "$*" in *"research cancel"*) echo "$5" >> {tmp_path / "cancelled"}; exit 0;; esac\n'
+        f'case "$*" in *--combine*) printf \'%s\\n\' "$@" > {tmp_path / "argv.combine"}; '
+        "echo 'research: run r20261009-060000-cccc -> /r'; exit 0;; esac\n"
+        "k=$(printf '%s\\n' \"$@\" | sed -n '/^--shard$/{n;s,/.*,,;p}')\n"
+        f"printf '%s\\n' \"$@\" > {tmp_path / 'argv'}.$k\n"
+        f'[ "$k" != {refuse_shard} ] || exit 1\n'
+        "echo \"research: run r20261009-05000$k-aaaa launched on vy-x (p) pid=1 -> /r\"\n"
+        f"touch {tmp_path / 'launched'}\n")
+
+
+def test_train_sh_runs_a_check_as_shards_one_per_machine_and_combines_them(tmp_path):
+    """Drive's after-landing run is the whole check as drive.toml's `shards`: shard K on the Kth machine of the list, round the
+    list again past its end, each with drive's flags; train.sh prints every shard's id in K's order, and `--combine` records
+    them as the one `check/v1` of the commit that `research merge` reads."""
+    git, train, _ = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    _shard_stub(tmp_path)
+    p = train("HEAD", "vy-a,vy-b", "--shards", "3", "--no-cache", "--circuit-cache", "--no-regenerate")
+    assert p.returncode == 0, (p.stdout, p.stderr)
+    assert p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa r20261009-050002-aaaa r20261009-050003-aaaa", p.stdout
+    for k, m in ((1, "vy-a"), (2, "vy-b"), (3, "vy-a")):
+        args = (tmp_path / f"argv.{k}").read_text().split()
+        assert args[args.index("--on"):] == ["--on", m, "--shard", f"{k}/3", "--no-cache", "--circuit-cache",
+                                             "--no-regenerate"], args
+        assert {"--record", "--priority", "--keep-going"} <= set(args) and "--deferred" not in args, args
+    assert not (tmp_path / "posted").exists()
+
+    p = train("HEAD", "vy-a,vy-b", "--combine", "r20261009-050001-aaaa", "r20261009-050002-aaaa", "r20261009-050003-aaaa")
+    assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-060000-cccc", (p.stdout, p.stderr)
+    args = (tmp_path / "argv.combine").read_text().split()
+    assert args[args.index("--record"):] == ["--record", "--combine", "r20261009-050001-aaaa", "r20261009-050002-aaaa",
+                                             "r20261009-050003-aaaa"], args
+    assert "--priority" not in args and "--on" not in args, args
+
+
+def test_train_sh_cancels_the_shards_it_launched_when_a_later_one_registers_no_run(tmp_path):
+    """A shard set missing a shard is no check: when shard 2 registers no run, train.sh cancels shard 1, so it doesn't hold a
+    check slot for a set nothing can combine, and says so in the merge thread."""
+    git, train, _ = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "change")
+    git("push", "-q", "origin", "HEAD:main")
+    _shard_stub(tmp_path, refuse_shard=2)
+    p = train("HEAD", "vy-a,vy-b,vy-c", "--shards", "3")
+    assert p.returncode == 1 and "RUN" not in p.stdout, (p.stdout, p.stderr)
+    assert (tmp_path / "cancelled").read_text().split() == ["r20261009-050001-aaaa"]
+    assert not (tmp_path / "argv.3").exists()
+    posted = (tmp_path / "posted").read_text()
+    assert "--shards 3 registered no run (exit 1)" in posted and "cancelled shard r20261009-050001-aaaa" in posted, posted
+
+
+def test_train_sh_refuses_a_shard_set_it_cannot_place(tmp_path):
+    """`--shards` runs the whole check, so it refuses `--deferred` (steps alone) and `auto` (each shard runs on the machine its
+    place in the list names), and `--combine` takes only run ids; each before anything is read or launched."""
+    import subprocess
+
+    def train(*a: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", *a],
+                              capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
+
+    for args, why in ((("vy-a,vy-b", "--shards", "2", "--deferred", "pytest"), "--shards refused with --deferred"),
+                      (("vy-a,auto", "--shards", "2"), "--shards takes machines, not auto"),
+                      (("vy-a", "--shards", "1"), "--shards needs N, 2 or more"),
+                      (("vy-a", "--combine"), "--combine needs the shards' run ids"),
+                      (("vy-a", "--combine", "r20261009-050001-aaaa", "--no-cache"), "--combine --no-cache: not a run id")):
+        p = train(*args)
+        assert p.returncode == 2 and why in p.stderr, (args, p.stderr)
+    p = train("vy-a,vy-b", "--shards", "2", "--no-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+
+
 def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_it(tmp_path, monkeypatch):
     """A train's Lean check passes a package whose only failures are record differences, and drive commits the
     regenerated locks as it lands. A tree whose lean_audit.py predates `--regenerate` runs as it always did."""
