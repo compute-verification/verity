@@ -21,6 +21,10 @@ the leaves the drawn blocks open.
   another window or protocol, fails that window's release by name; the server serves on.
 * **At the stop** the pending seals wait for their windows' draws as they wait for their sealer: a drawer must draw every window
   whose line was written before it stops the server, or the stop waits on it.
+* **Failures.** A window that reaches no release (its draws fail, or its close or seal job does) is discarded (`Draws.discard`):
+  its device-held values dropped and its pool pieces freed, so later windows' steps don't wait on it; any later draw or read of it
+  is refused by name. A failed run (`Draws.fail`, serve-openai's engine loop failing) ends every waiting release and every step
+  waiting on the device pool by name.
 """
 from __future__ import annotations
 
@@ -34,13 +38,14 @@ from typing import Any
 
 from verity_vllm.commit.native_ranges import DROPPED
 from verity_vllm.commit.opened import meta_by_name
+from verity_vllm.errors import Refused
 
 Read = tuple[int, str, int, int]
 FILE = re.compile(r"w(\d+)\.([A-Za-z0-9_:\-]+)\.json")
 
 
-class DrawRefused(RuntimeError):
-    """A draw the gate can't take: a protocol not named, a second draw, a draw after the release, a read of a dropped leaf."""
+#: a draw the gate can't take: a protocol not named, a second draw, a draw after the release or the discard, a release that can't come
+DrawRefused = Refused
 
 
 def protocols_of(spec: str) -> tuple[str, ...]:
@@ -84,13 +89,15 @@ def leaves_of(com: Any, reads: Iterable[Read]) -> dict[int, set[int]]:
 class Draws:
     """Each window's draws by protocol, as they come in, and each window's release once all of ``protocols`` have drawn it."""
 
-    def __init__(self, protocols: Sequence[str]) -> None:
+    def __init__(self, protocols: Sequence[str], pool: Any = None) -> None:
         if not protocols:
             raise ValueError("a draw-gated release needs at least one protocol whose draw it waits for")
         self.protocols = tuple(protocols)
         self._got: dict[int, dict[str, list[Read]]] = {}
         self._kept: dict[int, dict[int, frozenset[int]]] = {}
         self._refused: dict[int, str] = {}
+        self.discarded: dict[int, str] = {}
+        self.pool = pool                                 # the committer's `device_pool.DevicePool`, whose waiting steps `fail` ends
         self._cv = threading.Condition()
         self.failure: str | None = None
         self.releases: list[dict[str, Any]] = []
@@ -103,6 +110,8 @@ class Draws:
         with self._cv:
             if window in self._kept:
                 raise DrawRefused(f"window {window} was released: a draw after its release can't be kept ({protocol})")
+            if window in self.discarded:
+                raise DrawRefused(f"window {window} reached no release ({self.discarded[window]}): its values were dropped ({protocol})")
             got = self._got.setdefault(window, {})
             if protocol in got:
                 raise DrawRefused(f"window {window} was drawn by {protocol} already: a draw is never redrawn")
@@ -116,10 +125,25 @@ class Draws:
             self._cv.notify_all()
 
     def fail(self, why: str) -> None:
-        """Every waiting release fails with ``why``: no draw is coming."""
+        """Every waiting release fails with ``why``: no draw is coming. So does every step waiting on the device pool for an earlier
+        window's release (`DevicePool.fail`): it ends by name, uncommitted, rather than waiting on a release that won't come."""
         with self._cv:
             self.failure = why
             self._cv.notify_all()
+        if self.pool is not None:
+            self.pool.fail(f"no release is coming: {why}")
+
+    def discard(self, window: int, com: Any, why: str) -> dict[str, Any] | None:
+        """Window ``window`` reaches no release (``why``): its device-held values dropped and its pool pieces freed
+        (`device_pool.discard`), so later windows' steps don't wait on it; any read of it is refused by name."""
+        from verity_vllm.commit.committer import device_pool as DP
+
+        if not com._gpu_blocks or (rec := DP.discard(com, why)) is None:
+            return None
+        with self._cv:
+            self.discarded[window] = why
+            self._got.pop(window, None)
+        return rec
 
     def wait(self, window: int) -> dict[str, list[Read]]:
         """Every protocol's draw of ``window``, once all are in."""
@@ -137,19 +161,23 @@ class Draws:
     def release(self, window: int, com: Any, clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
         """Window ``window``'s release over its committer ``com``, after every protocol's draw: the union of the leaves the draws
         open kept on host, the rest dropped and the window's pool pieces freed (`release_drawn`); the record of it."""
-        t0 = clock()
-        got = self.wait(window)
-        waited = clock() - t0
-        union: dict[int, set[int]] = {}
-        by: dict[str, int] = {}
-        for p in self.protocols:
-            leaves = leaves_of(com, got[p])
-            by[p] = sum(len(v) for v in leaves.values())
-            for s, v in leaves.items():
-                union.setdefault(s, set()).update(v)
         from verity_vllm.commit.committer import device_pool as DP
 
-        rec = DP.release(com, {s: sorted(v) for s, v in union.items()})
+        t0 = clock()
+        try:
+            got = self.wait(window)
+            waited = clock() - t0
+            union: dict[int, set[int]] = {}
+            by: dict[str, int] = {}
+            for p in self.protocols:
+                leaves = leaves_of(com, got[p])
+                by[p] = sum(len(v) for v in leaves.values())
+                for s, v in leaves.items():
+                    union.setdefault(s, set()).update(v)
+            rec = DP.release(com, {s: sorted(v) for s, v in union.items()})
+        except Exception as e:
+            self.discard(window, com, f"{type(e).__name__}: {e}"[:500])
+            raise
         with self._cv:
             self._kept[window] = {s: frozenset(v) for s, v in union.items()}
             self._got.pop(window, None)
@@ -159,9 +187,10 @@ class Draws:
         return line
 
     def refused(self, window: int, reads: Iterable[Read], com: Any) -> list[str]:
-        """The reads of released window ``window`` that name a dropped leaf, each by name (none: every leaf they open was kept)."""
+        """The reads of released window ``window`` that name a dropped leaf, each by name (none: every leaf they open was kept); of
+        a discarded window (`discard`), every read."""
         with self._cv:
-            kept = self._kept.get(window)
+            kept = {} if window in self.discarded else self._kept.get(window)
         if kept is None:
             raise KeyError(f"window {window} has not been released")
         out = []
@@ -178,7 +207,7 @@ class Draws:
         return {"protocols": list(self.protocols), "released": len(self.releases),
                 "kept_bytes": sum(r.get("kept_bytes", 0) for r in self.releases),
                 "dropped_bytes": sum(r.get("dropped_bytes", 0) for r in self.releases),
-                "drawn_not_released": pending, "refused": refused, "failure": self.failure}
+                "drawn_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure}
 
 
 class DrawDir:
@@ -230,10 +259,10 @@ class DrawDir:
             self.sleep(self.period_s)
 
 
-def release_of(opts: Any, out: Path) -> tuple[Draws | None, DrawDir | None]:
-    """serve-openai's `Draws` and its `DrawDir` under ``--release-after`` (None, None without it)."""
+def release_of(opts: Any, out: Path, com: Any = None) -> tuple[Draws | None, DrawDir | None]:
+    """serve-openai's `Draws` over ``com``'s device pool and its `DrawDir` under ``--release-after`` (None, None without it)."""
     r = opts.retention
     if not r.release_after:
         return None, None
-    draws = Draws(protocols_of(r.release_after))
+    draws = Draws(protocols_of(r.release_after), getattr(com, "device_pool", None))
     return draws, DrawDir(Path(r.draws_dir) if r.draws_dir else Path(out) / "draws", draws)

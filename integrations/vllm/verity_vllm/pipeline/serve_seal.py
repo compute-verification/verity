@@ -111,7 +111,7 @@ def retention_record(opts: Any, com: Any) -> dict[str, Any]:
 def retention_refusal(opts: Any) -> str | None:
     """Why ``opts.retention`` can't hold (None: it can): ``--retain-exclude`` names attention interiors only, and the Commit under
     rows-sha512, whose committer leaves them on the device; ``--retain device`` the Commit under rows-sha512 too, with a pool of at
-    least ``--window-gb``."""
+    least ``--window-gb``, ``--seal`` and ``--release-after``."""
     r = opts.retention
     if r.retain == "device":
         if not opts.commit or opts.scheme != ROWS:
@@ -119,9 +119,9 @@ def retention_refusal(opts: Any) -> str | None:
         if r.retain_device_gb < float(getattr(opts, "window_gb", 0) or 0):
             return (f"--retain-device-gb {r.retain_device_gb:g} is under --window-gb {opts.window_gb:g}: the pool must hold the open window "
                     "beside those awaiting their release")
-        if getattr(opts, "seal", False) and not getattr(r, "release_after", ""):
-            return ("--retain device --seal: a window is sealed only after its draw-gated release, so name the subprotocols whose draws "
-                    "it waits for (--release-after)")
+        if not (getattr(opts, "seal", False) and getattr(r, "release_after", "")):
+            return ("--retain device: only a window's draw-gated release before its seal frees its device-held values, so it needs "
+                    "--seal and the subprotocols whose draws the release waits for (--release-after)")
     if getattr(r, "release_after", ""):
         if r.retain != "device" or not getattr(opts, "seal", False):
             return "--release-after gates the release of device-held values before each seal: it needs --retain device and --seal"
@@ -699,6 +699,16 @@ class Sealer:
 
     def summary(self) -> dict[str, Any]:
         return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
+
+
+def disk_floor_of(opts: Any, usage: Callable[[Any], Any] = shutil.disk_usage) -> DiskFloor | None:
+    """``--seal``'s `DiskFloor` over the filesystem ``--out`` is on (its nearest existing directory), None without a floor."""
+    if not (opts.seal and opts.disk_floor_gb > 0):
+        return None
+    p = Path(opts.out).resolve()
+    while not p.exists() and p != p.parent:
+        p = p.parent
+    return DiskFloor(p, int(opts.disk_floor_gb * GB), usage)
 
 
 class DiskFloor:

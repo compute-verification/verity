@@ -111,7 +111,8 @@ def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_wa
     draws.put(0, "sampled_proofs", [(0, "model.layers.9.mlp.down_proj", 0, 1)])
     with pytest.raises(KeyError, match="no committed member by that name"):
         draws.release(0, dev)
-    assert getattr(dev, "released", None) is None          # a window whose draws can't be read is not released
+    assert dev.released["discarded"].startswith("KeyError") and dev.released["kept_bytes"] == 0   # a window whose draws can't
+    assert dev.device_pool.held == 0                       # be read keeps nothing: never redrawn, so it would hold the pool forever
     with pytest.raises(KeyError, match="did not commit"):
         SL.leaves_of(dev, [(9, "model.embed_tokens", 0, 1)])
 
@@ -143,6 +144,71 @@ def test_a_failed_run_ends_every_waiting_release():
     assert "window 3: no release: the server stopped" in str(got["e"].value)
 
 
+def _waiting_take(pool, nbytes, key):
+    """A take of ``nbytes`` for window ``key`` on a thread, returned once it waits on the full pool."""
+    from tests.commit.test_device_pool import _Seen
+
+    pool._cv, got = _Seen(), {}
+
+    def take():
+        try:
+            got["v"] = pool.take(nbytes, key)
+        except RuntimeError as e:
+            got["e"] = e
+    t = threading.Thread(target=take)
+    t.start()
+    pool._cv.waiting.wait()
+    assert not got
+    return t, got
+
+
+def test_a_failed_run_ends_every_step_waiting_on_the_pool_by_name(cs):
+    _host, _rc, dev = committed(cs)
+    draws = SL.Draws(PROTOCOLS, dev.device_pool)
+    t, got = _waiting_take(dev.device_pool, dev.device_pool.capacity, "next window")
+    draws.fail("the server failed: RuntimeError: boom")
+    t.join()
+    assert "device pool: no release is coming: the server failed: RuntimeError: boom" in str(got["e"])
+    with pytest.raises(SL.DrawRefused, match="the server failed"):
+        draws.release(0, dev)
+    assert draws.discarded == {0: "Refused: window 0: no release: the server failed: RuntimeError: boom"}
+    assert dev.device_pool.held == 0 and dev.released["discarded"].startswith("Refused")
+
+
+def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name(cs):
+    _host, _rc, dev = committed(cs)
+    draws = SL.Draws(PROTOCOLS, dev.device_pool)
+    held, cap = dev.device_pool.held, dev.device_pool.capacity
+    t, got = _waiting_take(dev.device_pool, cap, "next window")
+    draws.refuse(0, "--draws-dir: w0.pouw_h1.json: ValueError: not JSON")
+    with pytest.raises(SL.DrawRefused, match="not JSON"):
+        draws.release(0, dev)
+    t.join()
+    assert got["v"][0].numel() == cap and dev.device_pool.held_by("next window") == cap
+    assert dev.released["kept_bytes"] == 0 and dev.released["device_freed_bytes"] == held
+    with pytest.raises(RuntimeError, match="draw-gated release"):
+        dev.open_range(0, 0, 1)
+    with pytest.raises(SL.DrawRefused, match="reached no release"):
+        draws.put(0, "sampled_proofs", [])
+    reads = [(2, "model.layers.0.mlp.down_proj", 0, 1)]
+    assert len(draws.refused(0, reads, dev)) == 1 and DROPPED in draws.refused(0, reads, dev)[0]
+    assert draws.summary()["discarded"] == {0: draws.discarded[0]}
+    assert draws.discard(0, dev, "again") is None
+
+
+def test_a_window_whose_close_fails_is_discarded_not_waited_on(cs):
+    from verity_vllm.pipeline.serve_commit import CommitWindows
+
+    _host, _rc, dev = committed(cs)
+    draws = SL.Draws(PROTOCOLS, dev.device_pool)
+    rec = {"window": 4, "error": "RuntimeError: finalize failed"}
+    CommitWindows._no_release(SimpleNamespace(release=draws), rec, dev, None)
+    assert rec["release"]["discarded"] == "not sealed: RuntimeError: finalize failed" and dev.device_pool.held == 0
+    rec = {"window": 5}
+    CommitWindows._no_release(SimpleNamespace(release=draws), rec, dev, ("com", "rc", {}))
+    assert "release" not in rec                 # a window with a seal job is released before its seal
+
+
 def opts(**retention):
     r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "sampled_proofs,pouw_h1", "draws_dir": "",
          **retention}
@@ -162,3 +228,7 @@ def test_serve_openai_gates_every_device_held_seal_on_named_draws(tmp_path):
     draws, d = SL.release_of(opts(), tmp_path)
     assert draws.protocols == ("sampled_proofs", "pouw_h1") and d.path == tmp_path / "draws" and d.path.is_dir()
     assert SL.release_of(opts(retain="host", release_after=""), tmp_path) == (None, None)
+    assert SL.release_of(opts(), tmp_path, SimpleNamespace(device_pool="the pool"))[0].pool == "the pool"
+    unsealed = opts()
+    unsealed.seal = False
+    assert "it needs --seal and the subprotocols" in SS.retention_refusal(unsealed)

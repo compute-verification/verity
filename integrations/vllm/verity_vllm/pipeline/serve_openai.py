@@ -3,7 +3,8 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--retain host|device [--retain-device-gb 32]
-        [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]] [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
+        [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
+        [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
@@ -63,9 +64,9 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
-device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
-blocks open (`serve_release`; the draws come in through ``--draws-dir``). Each
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`).
+``--retain device --release-after P,Q`` holds each window's values in a device pool until every subprotocol named has drawn
+it, then keeps on host and seals only the leaves their drawn blocks open (`serve_release`, draws via ``--draws-dir``). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
@@ -623,17 +624,6 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
-def disk_floor_of(opts: Options, usage: Callable[[Any], Any] = shutil.disk_usage) -> SS.DiskFloor | None:
-    """``--seal``'s `serve_seal.DiskFloor` over the filesystem ``--out`` is on (its nearest existing directory), None without
-    a floor."""
-    if not (opts.seal and opts.disk_floor_gb > 0):
-        return None
-    p = Path(opts.out).resolve()
-    while not p.exists() and p != p.parent:
-        p = p.parent
-    return SS.DiskFloor(p, int(opts.disk_floor_gb * SS.GB), usage)
-
-
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
               usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
@@ -647,7 +637,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+    if (floor := SS.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
@@ -699,7 +689,7 @@ def main(opts: Options) -> int:
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to)
     windows = sealer = warmed = arm = None
-    draws, draws_dir = SL.release_of(opts, out)
+    draws, draws_dir = SL.release_of(opts, out, com)
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
@@ -711,7 +701,7 @@ def main(opts: Options) -> int:
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
-                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=SS.disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm, release=draws)
     if draws_dir is not None:
         draws_dir.start()
@@ -788,6 +778,8 @@ def main(opts: Options) -> int:
                 mirror()
             return got
 
+        if draws is not None and loop.error is not None:   # no draw is coming: waiting releases and pool takes end by name
+            draws.fail(f"the server failed: {loop.error}")
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
