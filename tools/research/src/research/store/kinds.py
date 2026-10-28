@@ -144,7 +144,7 @@ KINDS: dict[str, str] = {
     "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
-    "verifier-run/v1": "one run of the verifier host's remote bandwidth verifier (benchmarks/live_verifier/host.py, vy-auditor-1): "
+    "verifier-run/v1": "one run of the verifier host's PoUB verifier (benchmarks/live_verifier/host.py, vy-auditor-1): "
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",

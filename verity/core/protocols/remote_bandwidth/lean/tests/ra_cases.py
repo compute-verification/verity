@@ -1,4 +1,4 @@
-"""The Python side of the remote audit's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
+"""The Python side of PoUB's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
 (`RemoteAudit`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
 (`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 

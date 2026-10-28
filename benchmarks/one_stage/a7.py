@@ -1,4 +1,4 @@
-"""One-stage audit, run A7: the requirement's two proof blocks (I4), sampled in one audit and wired to the remote bandwidth
+"""One-stage audit, run A7: the requirement's two proof blocks (I4), sampled in one audit and wired to the PoUB
 audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
 `PlanMatches`) and
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
@@ -49,7 +49,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
   it the wrong units the draw allows can carry (`uncertified`), its δ added to the ledger's error.
 * **Check 3.** The session draws ``--samples`` receipts a window, and nothing is opened: each draw goes through the
-  remote audit's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
+  PoUB's opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
   at the drawn position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
   registration's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
@@ -1263,7 +1263,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
               want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3, rs0) -> dict[str, dict]:
     """Each re-decides one input altered. The clause negatives are a cheating prover consistent everywhere (its canonical
     commitments and its session agree with the altered witness), so only the unit can refuse it: its ok row commits 0.
-    The appends negatives are a session the remote audit accepts whose appends aren't the map units' writes: the
+    The appends negatives are a session PoUB accepts whose appends aren't the map units' writes: the
     record's chain or a pass's head isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3
     is decided by its unit's reference (`opening.reference`), the run's own (``rs0``) by proofs. The stale negatives
     are map units whose lifetime cap isn't the record's (`mapped`, and the opening of their public rows) and a re-key the
@@ -1369,7 +1369,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     neg["written-block-without-a-value (dummy append or re-key)"] = {
         "refused": f["ok_output"] == 0 and not f["opens_to_1"], "step": tz, "unit": f}
 
-    # the appends: sessions the remote audit accepts whose appends aren't the map units' writes
+    # the appends: sessions PoUB accepts whose appends aren't the map units' writes
     def unmapped(name: str, **kw) -> None:
         rs = remote_session(req, layout, store, plans, salts, c3=c3, **kw)
         if not rs.accepted:

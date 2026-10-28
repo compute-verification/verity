@@ -16,7 +16,7 @@ whose wrong output can forfeit downstream work (a noise or form proof block ever
 **Cost.**  Per touched statement plus per proved proof block, as C-Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
 committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, PoUB's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
 witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
@@ -124,7 +124,7 @@ class ReplayDomain:
 class Commitment:
     """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
-    PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
+    PoUW's A rows or tile leaves, PoUB's receipts, a work block's pin) and `tensor` what; one tensor under two
     scales is an overlap (`overlaps`).  Decode is latency-bound: a decode step hashes `decode_bytes` of it, and `chain` is
     the dependent compressions its trees put on a step's critical path when its roots gate the step (a seed reads them
     before the next call), which they do when `gates`; a copy that doesn't gate trails the step."""

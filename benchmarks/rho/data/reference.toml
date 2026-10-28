@@ -201,7 +201,7 @@ horizon = "year"
 run = "v4-pretrain"
 families = ["full"]
 
-# The reference remote audit with today's sampled proofs (tiers T5): the faulty-outputs channel at their draw rate.
+# The reference remote protocol with today's sampled proofs (tiers T5): the faulty-outputs channel at their draw rate.
 [scenario.reference-remote-h200-sampled]
 fleet = "world-h200"
 regime = "remote-sampled"

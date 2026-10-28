@@ -56,7 +56,7 @@ plans before the first pass of window w, the first window that could not hold it
 write waits for its encode.  No margin past L is needed, provided the window of the next pass is open when the line
 closes (the binder takes the verifier's messages before `kv_append`).
 
-The header names the remote audit's `Registration.digest`, the one the verifier gives `Store.begin_window` for the
+The header names PoUB's `Registration.digest`, the one the verifier gives `Store.begin_window` for the
 session's first window; without it there is no map.  Its indices are one session's (`audit.Session`: a later session
 over the store starts again from N), so a store records one map.
 
@@ -85,7 +85,7 @@ def record(store: Any, path: str | Path | None = None, registration: bytes | Non
            on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
     """Start ``store``'s memory map (`Store.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.Store`)."""
     if registration is None:
-        raise ValueError("a memory map names the store's registration: pass the remote audit's Registration.digest, "
+        raise ValueError("a memory map names the store's registration: pass PoUB's Registration.digest, "
                          "the one the session's first window chains from (Store.begin_window)")
     if store.memory_map is not None:
         raise RuntimeError("the store already records a memory map")

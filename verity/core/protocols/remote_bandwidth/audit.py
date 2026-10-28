@@ -1,4 +1,4 @@
-"""The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
+"""PoUB v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
 many reads of a node's registered blocks the node made in each window, from receipts chained pass to pass.
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an

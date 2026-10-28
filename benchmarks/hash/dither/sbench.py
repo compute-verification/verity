@@ -199,7 +199,7 @@ built and timed under its own name (its own SBENCH_ARM_ENV, --arm-mem and DITHER
 timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps until then (a booked window's start),
 the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
---bw-passes GIB runs the remote bandwidth audit's passes beside the arms on their GPU once every arm is built, warm and
+--bw-passes GIB runs PoUB's passes beside the arms on their GPU once every arm is built, warm and
 gated (`dbw.py`: the prover's calibration beside the dither arms' decode ops, an idle session, each rep an off block of
 every arm's ops and an on block inside a session's passes, and a tampered session beside each dither arm; summary.json's
 "bw", per_arm's TPOT the off blocks' alone).  Not with --serial, whose arms are never up together.
@@ -960,7 +960,7 @@ def main() -> int:
                          "comes up, in --arms order (its reference arm first); for an arm that needs most of the GPU, as "
                          "Dither's window does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
-                    help="the remote bandwidth audit's passes beside the arms on their GPU, over a store of GIB GiB "
+                    help="PoUB's passes beside the arms on their GPU, over a store of GIB GiB "
                          "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
                          "an off block and an on block, a tampered session)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",

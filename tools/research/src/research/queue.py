@@ -655,7 +655,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 #: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked after
 #: landing, a failure reverting it; Lean anywhere else runs as code (C-Flock's verifier and the ZK
-#: server, the PoUS grader, the certifier program, the NCI check, the remote audit's verifier) and keeps its Lean check first
+#: server, the PoUS grader, the certifier program, the NCI check, PoUB's verifier) and keeps its Lean check first
 LEAN_PROOFS_TREE = "Security/"
 
 

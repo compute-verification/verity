@@ -467,8 +467,8 @@ class Unmonitored:
 
 @dataclass(frozen=True)
 class Remote:
-    """The remote audit: PoUW, detection, and the NCI check's registration. No certifier sees a server's links, so its
-    serving block is a server over the horizon, and the inference cut is the only one."""
+    """The remote protocol's audit: PoUW, detection, and the NCI check's registration. No certifier sees a server's
+    links, so its serving block is a server over the horizon, and the inference cut is the only one."""
 
     name: str
     pouw: Pouw
@@ -524,8 +524,8 @@ FORMS = ("certified", "links")
 
 @dataclass(frozen=True)
 class Onsite(Remote):
-    """The remote audit's envelopes plus the wipe and the certifier: each serving block, one server between two wipes,
-    gets the serving cut `q_T(c_S, k_S)` as well, and contributes the lesser."""
+    """The remote protocol's envelopes plus the wipe and the certifier: each serving block, one server between two
+    wipes, gets the serving cut `q_T(c_S, k_S)` as well, and contributes the lesser."""
 
     wipe: Wipe = Wipe()
     certifier: Certifier = Certifier()

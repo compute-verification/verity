@@ -135,7 +135,7 @@ case " $* " in *dither-a-hbc*)
     export DITHER_H1C_KC=$S/libh1c_kc.so
   fi ;;
 esac
-# --bw-passes (dbw.py): the remote bandwidth audit's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
+# --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
     -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
@@ -167,7 +167,7 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
-# and with --bw-passes the remote audit's verifier of record, under the lock lean_verifier.build takes (BW_LEAN_EXE);
+# and with --bw-passes PoUB's verifier of record, under the lock lean_verifier.build takes (BW_LEAN_EXE);
 # BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
   (mkdir -p verity/core/difftest/lean/.lake && cd verity/core/protocols/remote_bandwidth/lean \

@@ -48,7 +48,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*"]
 
-# the auditor host for the remote bandwidth audit's verifier (INF-179; uk-south2, trusted-host, as vy-challenger-1): it runs
+# the auditor host for PoUB's verifier (INF-179; uk-south2, trusted-host, as vy-challenger-1): it runs
 # the verifier as `auditor` from infra's pinned tree through vy-verifier-gate and takes no `research run` (/etc/vy/auditor), and no
 # cluster pool or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift
 # skips it (`admin`), as on vy-challenger-1.

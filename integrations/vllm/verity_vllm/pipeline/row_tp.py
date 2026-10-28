@@ -573,7 +573,7 @@ class TpRow(Row):
         if ck.serving_rows:
             cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
         if ck.remote_verifier:
-            raise SystemExit("REMOTE_VERIFIER: the remote bandwidth session is a single-GPU Commit's (one store per node)")
+            raise SystemExit("REMOTE_VERIFIER: the PoUB session is a single-GPU Commit's (one store per node)")
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()
 
     def commit_pending(self, rck: int, wall: int) -> bool:
