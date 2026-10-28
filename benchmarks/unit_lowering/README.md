@@ -120,32 +120,45 @@ The tile runs above predate run.py's read of k_log. `fit.py` over the nine tiles
 (2048, 32 × 32) at about 606M ANDs, 900 GiB and 320 min. That is consistent with ed19's kill at 600 GiB after 170 min, and the
 32 lanes of K 2048 hold 781M ANDs between them.
 
-Where the memory goes, from `mem_profile.py` at (64, 8 × 16), r20261028-190803-e482 (6,683,373 ANDs):
+## Where the memory goes
 
-| phase | peak GiB | B/AND at peak | RSS in → out GiB | seconds |
-| --- | --- | --- | --- | --- |
-| `ir_lower.standalone` | 2.82 | 453 | 0.97 → 2.41 | 25.9 |
-| `ir_lower.lower_gates` | 6.30 | 1,012 | 2.41 → 6.30 | 45.9 |
-| `ir_lower.layout` (`fast_stage.ands_layout`) | 10.24 | 1,645 | 6.33 → 9.50 | 55.1 |
-| `program_digest` | 9.34 | 1,501 | 9.34 → 9.34 | 2.8 |
-| `circuit.compose` (netlist, dummy) | 9.49 | 1,525 | 9.34 → 9.41 | 48.4 |
-| `write_text` | 9.54 | 1,532 | 9.41 → 9.41 | 3.9 |
+`mem_profile.py --unit lane` on the 32 × 32 leaf's lane, at K 2048 (r20261028-200838-4945, 24,411,115 ANDs) and K 4096
+(r20261028-200857-090d, 46,979,920 ANDs). A phase's peak includes its sub-phases', and its seconds leave out the census:
 
-The peak is the layout. Everything `lower_gates` built stays live through it, and the layout adds a list per row. These are the
-live objects at `ands_layout`'s exit, per unit AND:
+| phase | K 2048: peak GiB | B/AND | seconds | K 4096: peak GiB | B/AND | seconds |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ir_lower.lower_gates` | 30.10 | 1,323 | 208 | 86.85 | 1,984 | 433 |
+| `ir_lower.layout` (`fast_stage.ands_layout`) | **40.11** | 1,764 | 189 | **106.23** | 2,428 | 330 |
+| `circuit.compose` (the netlist, the dummy) | 38.02 | 1,672 | 262 | 103.66 | 2,369 | 596 |
+| `write_text` | 37.03 | 1,628 | 21 | 101.13 | 2,311 | 48 |
+| the whole lowering | 40.11 | 1,764 | 727 | 106.23 | 2,428 | 1,479 |
 
-| type | count | B/AND | what |
-| --- | --- | --- | --- |
-| list | 14,443,756 | 563 | the layout's rows |
-| tuple | 30,117,634 | 539 | the gates' operand forms |
-| L | 14,324,471 | 103 | the linear forms (`gf2.L`) |
-| frozenset | 862,585 | 92 | the linear forms' variable sets |
-| _Set | 4,273,974 | 51 | the IR's sets |
-| dict | 3,901 | 32 | a few large maps |
+The peak is the layout, on top of everything `lower_gates` built. These are the live objects, per unit AND, at the two
+phases' exits. The census counts objects the garbage collector tracks, by `sys.getsizeof`, so ints and the allocator's slack
+aren't in it:
 
-The lane runs at the same rate: 1,755 B an AND at K 448 and 1,693 at K 1024. The next lever is to stop holding the Boolean
-circuit and the rows as Python objects at once: stream each row to the netlist as it is laid out and drop dead wires, or hold
-the forms in flat integer arrays. At K 2048 a lane's 24.8M ANDs within 16 GiB is about 690 B an AND.
+| type | what | `lower_gates`, K 2048 | K 4096 | `ands_layout`, K 2048 | K 4096 |
+| --- | --- | --- | --- | --- | --- |
+| frozenset | the linear forms' variable sets (`gf2.L.s`) | 454 | 1,080 | 27 | 15 |
+| tuple | the gates' operand forms | 621 | 680 | 621 | 680 |
+| list | the layout's rows | 36 | 33 | 698 | 773 |
+| L | the linear forms (`gf2.L`) | 100 | 99 | 98 | 97 |
+
+Two things grow faster than the ANDs:
+
+- **The variable sets.** There are 2.0M of them at K 2048 and 3.0M at K 4096, averaging 5.7 KB and 17.1 KB each, so they hold
+  10.3 GiB and 47.3 GiB at `lower_gates`' exit. That is the superlinear term in the lane's peak. The layout frees them.
+- **The rows' nonzeros.** There are 57 an AND at K 2048 (1.40G) and 66 at K 4096 (3.11G), each an 8-byte pointer in a Python
+  list. Compose's time follows them: its netlist took 160 s and 367 s.
+
+The small tile has the same shape, at a smaller scale. At (64, 8 × 16) (r20261028-190803-e482) the peak is the same phase at
+1,645 B an AND, with the sets at 92.
+
+**The next lever.** Meeting 16 GiB at K 2048 takes about 590 B a lane AND. `lower_gates` alone ends at 1,323, so no single
+one of the three is enough: the sets, the gates' tuples and the rows all have to leave Python objects, or never be held
+whole. Lowering and laying out gate by gate would hold only the live forms: write each row as it's made, and drop a form once
+its last reader is laid out. If the rows must be held, int32 arrays take 228 B an AND at K 2048 (5.2 GiB) and 264 at K 4096
+(11.6 GiB). The sets' growth with K says the forms should be kept short as they're built, not only stored more compactly.
 
 ## Running it
 
