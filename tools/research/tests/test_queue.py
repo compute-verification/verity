@@ -288,9 +288,60 @@ def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_the
     again, _ = world.queue().sync()
     assert [m.pr for m in again] == [4, 2, 6, 3, 1, 5, 10, 11, 9]
     assert [m.commit for m in again[:6]] == [m.commit for m in members]      # what the sync keeps never moves for it
-    world.gh.put(4, world.change({"b.txt": "4 rewritten\n"}))                # off the bottom: everything is merged again
+    world.gh.put(4, world.change({"b.txt": "4 rewritten\n"}))                # off the bottom: the rest merged again, in order
     rebuilt, _ = world.queue().sync()
-    assert [m.pr for m in rebuilt] == [2, 6, 11, 4, 3, 1, 5, 10, 9]
+    assert [m.pr for m in rebuilt] == [2, 6, 3, 1, 5, 10, 11, 9, 4]
+
+
+def test_a_sync_with_one_new_admission_keeps_every_member_and_merges_only_it(world):
+    """Each PR a sync merges runs the landing gates (~15 s each), so a new admission placed low re-merged most of `next`, a
+    160-member pass taking 40-50 min.  A new PR, Lean or not, goes on top: the sync keeps every member."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/A.lean": "-- 2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    members, _ = world.queue().sync()
+    assert [m.pr for m in members] == [1, 3, 2]
+    for n, files in ((4, {"c.txt": "4\n"}), (5, {"pkg/B.lean": "-- 5\n"})):
+        world.gh.put(n, world.change(files))
+        again, _ = world.queue().sync()
+        assert [m.commit for m in again[:len(members)]] == [m.commit for m in members] and again[-1].pr == n
+        assert world.logs[-1].endswith(f"kept {len(members)}, merged 1"), world.logs[-1]
+        members = again
+
+
+def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_prs_go_nonlean_first(world):
+    """Members above a moved or dropped member are merged again in `next`'s order: sorting them non-Lean first again would undo
+    drive's lift (reviewed members first), and the next lift would merge them all again, each tick.  What comes new is sorted."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/A.lean": "-- 2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    world.gh.put(4, world.change({"pkg/B.lean": "-- 4\n"}))
+    q = world.queue()
+    q.sync()
+    q.lift = [2, 3]                                                          # drive's lift: #2 and #3 have a land verdict
+    assert [m.pr for m in q.sync()[0]] == [2, 3, 1, 4]
+    q.lift = []
+    world.gh.put(3, world.change({"b.txt": "3 rewritten\n"}))                # moved: to the top
+    world.gh.put(6, world.change({"pkg/C.lean": "-- 6\n"}))
+    world.gh.put(5, world.change({"c.txt": "5\n"}))
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [2, 1, 4, 3, 5, 6] and world.logs[-1].endswith("kept 1, merged 5"), world.logs[-1]
+    assert world.queue().sync()[0] == members and world.logs[-1].endswith("kept 6, merged 0")
+
+
+def test_a_first_pr_still_goes_to_the_bottom_and_sorts_what_is_above_it(world):
+    """`--first` restacks `next` from the bottom as it always has: the PRs it names go below every member, and what is merged
+    again above them goes non-Lean first; the next sync with the same `--first` keeps it all."""
+    world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"pkg/B.lean": "-- 3\n"}))
+    _git(world.dev, "push", "-q", "origin", f"{world.change({DRIVE_FLAGS: 'nonlean_first = false'})}:refs/heads/main")
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2, 3]
+    world.gh.put(9, world.change({"fix.txt": "9\n"}))
+    members, _ = world.queue(first=(9,), nonlean_first=True).sync()
+    assert [m.pr for m in members] == [9, 2, 1, 3] and world.logs[-1].endswith("kept 0, merged 4")
+    again, _ = world.queue(first=(9,), nonlean_first=True).sync()
+    assert again == members and world.logs[-1].endswith("kept 4, merged 0")
 
 
 def test_nonlean_first_off_at_main_keeps_first_then_admission_order_and_turning_it_on_rebuilds_nothing(world):
@@ -571,6 +622,40 @@ def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_t
     members, entries = q.sync()
     assert [m.pr for m in members] == [4]
     assert entries[1].state == "refused" and entries[1].why == _gate_says(main, "touches a.txt", merged=True)
+
+
+def test_a_member_merged_again_onto_the_tree_it_was_judged_on_takes_its_verdict_and_main_moving_judges_it_again(
+        world, monkeypatch):
+    """A lift merges every member above the lifted one again, each running the landing gates (~15 s), though those above where
+    it was have the same members below and so the same trees.  Their verdicts, a refusal too, are kept under `main` and the gates;
+    a new `main` judges every merge again."""
+    from research import queue as Q
+
+    main = _move_main(world, GATED)
+    real, judged = Q.gate_refusal, []
+
+    def gate_refusal(repo, m, merge, gates, onto):
+        judged.append(int(_git(repo, "log", "-1", "--format=%s", merge).split("#")[1].split()[0]))
+        return real(repo, m, merge, gates, onto=onto)
+
+    monkeypatch.setattr(Q, "gate_refusal", gate_refusal)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt"), (5, "bad.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 2, 3, 4] and judged == [1, 2, 3, 4, 5] and entries[5].state == "refused"
+    judged.clear()
+    q.lift = [2]
+    lifted, entries = q.sync()
+    assert [m.pr for m in lifted] == [2, 1, 3, 4] and judged == [2, 1], judged
+    assert [_git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in lifted[2:]] == [
+        _git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in members[2:]]
+    assert entries[5].state == "refused" and entries[5].why == _gate_says(main, "touches bad.txt", merged=True)
+    assert world.logs[-1].endswith("kept 0, merged 4, gates' verdicts reused for 3"), world.logs[-1]
+    judged.clear()
+    _move_main(world, {"x.txt": "x\n"})
+    q.lift = []
+    assert [m.pr for m in q.sync()[0]] == [1, 2, 3, 4] and judged == [1, 2, 3, 4, 5]
 
 
 #: the Markdown caps' landing gate and the caps it reads at `main`, committed into the origin as they are in this checkout
