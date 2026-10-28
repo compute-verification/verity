@@ -1,0 +1,7 @@
+# One fused Strassen level of the exact int8 GEMM on the H200 (sm_90a). Not a package: the kernel builds on a CPU node and
+# times on a GPU node; the numpy reference of the orbit and its carry corrections (orbit.py) runs here as a suite.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+inputs = []
