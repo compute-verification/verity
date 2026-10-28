@@ -8,7 +8,7 @@ import RemoteAudit.Flight
 At most one live registration a node (the red team's KB-4). `register` draws a codec seed (`Registration.register`) only
 for a node with none live: a second while one is live is refused and counted (`refused`), and draws nothing, so a retry
 never redraws. A session runs over its node's live registration, drawn by this registry, as its k-th, k its sessions so
-far: the epoch its coins are committed under (`coins.Coins`, epoch k of the one challenger). A registration ends only
+far: the epoch its coins are committed under (`coins.SessionCoins`, epoch k of the one challenger). A registration ends only
 when the verifier closes it (`close`), which counts each of its sessions as it stands: "accepted", the failure that
 rejected it, or `UNENDED`, counted as failed. `drawn` is R, the registrations a node has had, closed and live.
 `registerStored` draws for the store the deployment's registration log registers (`stored?`): its node, `N` and payload
