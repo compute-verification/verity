@@ -524,7 +524,7 @@ def metrics(a) -> None:
         # the GPU held while this job staged the statement itself (74-gemm-hill.sh STAGE_ONLY=1 stages it in a job without one)
         if not rec.get("stage_cached"):
             flags.append("staged-on-gpu")
-    # #554's untiled statements are reviewed (red-team-proofs-554's Q1 grant at 8a0b17250); a tiled one is a cost, not a claim,
+    # untiled GEMM statements are reviewed (at 8a0b17250); a tiled one is a cost, not a claim,
     # and a record without its stage can't show it isn't tiled. A changed statement digest starts a new curve
     if st.get("tile"):
         flags.append("tile-statement-unreviewed")
