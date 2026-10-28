@@ -24,6 +24,11 @@ out-of-bounds boxes read zeros), optionally warp-specialized.  The product needs
 padding: a row of X W^T reads only that row, so M < 17 is just a masked tile (int8_exact pads only because torch._int_mm
 refuses M <= 16).  Non-finite activations are outside the statement and not gated.
 
+On sm_90, `product` takes `int8_gemm_configs.WGMMA`'s plan where it has a row for the call's (N, K) and M: `int8_wgmma`, a
+persistent warp-specialized wgmma kernel in CUDA with the same s32 product and this epilogue in this order, so the
+same y bit for bit (`pick_wgmma`; where its library doesn't build or load, the Triton plan runs).  `product_zy` takes
+`int8_gemm_configs.WGMMA_ZY`'s row the same way (`int8_wgmma.scaled_mm_zy`, the same y and records byte for byte).
+
 `scaled_mm_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, `product_zy`) is `scaled_mm` at the same config whose epilogue also
 writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
 record's, and its grid covers the call's T slots, a row tile at or past M multiplying nothing and writing only its empty
@@ -37,6 +42,7 @@ import torch
 import triton
 import triton.language as tl
 
+from verity_vllm.engine import int8_wgmma
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
 
@@ -291,6 +297,12 @@ def pick(m: int, n: int, k: int, sm: str | None = None) -> Cfg:
     return default_cfg(m, n, k)
 
 
+def pick_wgmma(m: int, n: int, k: int, index: int, zy: bool = False) -> int8_wgmma.WgCfg | None:
+    """`int8_wgmma.row` on device `index`, where `int8_wgmma` builds and loads there."""
+    cfg = int8_wgmma.row(m, n, k, arch(index), zy)
+    return cfg if cfg is not None and int8_wgmma.available(index) else None
+
+
 class Workspace:
     """The int32 partial sums and per-tile counters a split-K launch needs, zero between calls; one per device, sized
     once, so a call allocates nothing."""
@@ -431,11 +443,17 @@ def _plan(m: int, n: int, k: int, device: torch.device) -> tuple[Cfg, Workspace 
 
 
 def product(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
-    """`verity_int8::scaled_mm`'s CUDA body: y [M, N] bf16, allocating only it, at `_plan`'s config."""
+    """`verity_int8::scaled_mm`'s CUDA body: y [M, N] bf16, allocating only it, at `pick_wgmma`'s config where it has one
+    and takes the operands, else at `_plan`'s."""
     m, n, k = xq.shape[0], w.shape[0], w.shape[1]
     y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
     if m:
-        scaled_mm(xq, s_a, w, s_w.reshape(-1), y, *_plan(m, n, k, xq.device))
+        s_a, s_w = s_a.reshape(-1), s_w.reshape(-1)
+        wg = pick_wgmma(m, n, k, xq.device.index)
+        if wg is not None and int8_wgmma.fits(xq, s_a, w, s_w, y):
+            int8_wgmma.scaled_mm(xq, s_a, w, s_w, y, wg)
+        else:
+            scaled_mm(xq, s_a, w, s_w, y, *_plan(m, n, k, xq.device))
     return y
 
 
@@ -447,7 +465,12 @@ def product_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.
     y = torch.empty((m, n), dtype=torch.bfloat16, device=xq.device)
     zy = torch.empty((zy_units(m, n, rows), ZY_BYTES), dtype=torch.uint8, device=xq.device)
     if m:
-        scaled_mm_zy(xq, s_a.reshape(-1), w, s_w.reshape(-1), y, zy, rows, *_plan(m, n, k, xq.device))
+        s_a, s_w = s_a.reshape(-1), s_w.reshape(-1)
+        wg = pick_wgmma(m, n, k, xq.device.index, zy=True)
+        if wg is not None and int8_wgmma.fits(xq, s_a, w, s_w, y, zy):
+            int8_wgmma.scaled_mm_zy(xq, s_a, w, s_w, y, zy, rows, wg)
+        else:
+            scaled_mm_zy(xq, s_a, w, s_w, y, zy, rows, *_plan(m, n, k, xq.device))
     else:
         zy.zero_()
     return y, zy
