@@ -2613,9 +2613,15 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
   "Definitions.Pous.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions", "Definitions.Pous.Guarantees"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core.Information",
+    "Definitions.Pous",
+    "Definitions.Pous.Assumptions",
+    "Definitions.Pous.Guarantees"
+   ],
    "except": [],
-   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
+   "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof; core's information theory (entropy and mutual information over a uniform finite space, Mathlib only) is shared vocabulary below every area",
    "sealed": true
   },
   "Definitions.Pous.Guarantees.P2": {
@@ -9574,6 +9580,12 @@
    "assumptions": [],
    "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255"
   },
+  "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsInfoStated : Pous.Guarantees.StreamedWipeMeetsInfoStated"],
+   "assumptions": [],
+   "type_hash": "413276f220ff5f0da10702f8a3fc55ad0586acaee0ec41098be683abe4f02df7"
+  },
   "Pous.SecurityProofs.StreamedWipeMeetsReads": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads"],
@@ -12932,7 +12944,9 @@
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous.",
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance.",
-   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text."
+   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
+   "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": "frozen (no-function): It states no property: it reads Pous.Guarantees.StreamedWipeMeetsInfo, so the lock records its text, and it leaves when StreamedWipeMeetsInfo's own theorem is proved and listed.",
+   "Pous.Guarantees.StreamedWipeMeetsInfo": "unstated: StreamedWipe's retention as conditional mutual information, I(z ; held | c) <= max(M + E - (g+1)b + log2(k C(N,g+1)), 0) + q((g/N)^k + listAdvantage) + 3 bits over uniform z, c and key, with the labels and key hidden (MEM-98, read by the end-to-end overhead bound's WipeState bridge); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under StreamedWipeMeetsInfoStated, and its theorem Pous.SecurityProofs.StreamedWipeMeetsInfo is due Mon 2 Nov with its honest and nontrivial lemmas."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -19915,6 +19929,15 @@
     "Verity.SecurityProofs.RangeGadget"
    ]
   },
+  "Definitions.Core.Information": {
+   "digest": "c165ed753bef79d112d770ba710b35b4706d78f85b68d4ee39e5e12d03f462f4",
+   "definitions": {
+    "Verity.Information.condEntropy": "1c2c2ac77ba84cba60e13b32cee75b3533be22ef00c6936830ce38b0c6ea5bda",
+    "Verity.Information.condMutualInfo": "91eb70a5794964627251bddc238130e02fcb97a8a8e7162ebaec6c8cb2d9a60b",
+    "Verity.Information.entropy": "8792ef9f5305d00d19a885187992abc27b76d93ff402acd9e09baa3883567a2f"
+   },
+   "guarantees": ["Pous.SecurityProofs.StreamedWipeMeetsInfoStated"]
+  },
   "Definitions.Core.NaiveStrassen": {
    "digest": "86de79e5f336e9ca92c6b775b26a02821e3a445c963d5f70997b4d35b89afe21",
    "definitions": {
@@ -25271,6 +25294,7 @@
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
     "Pous.SecurityProofs.StreamedWipeMeetsDisk",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily",
+    "Pous.SecurityProofs.StreamedWipeMeetsInfoStated",
     "Pous.SecurityProofs.StreamedWipeMeetsReads",
     "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
     "Pous.SecurityProofs.StreamedWipeMeetsServer",
@@ -25435,6 +25459,14 @@
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily"
    ]
+  },
+  "Definitions.Pous.Guarantees.StreamedWipeInfo": {
+   "digest": "eb54e4bd56a9ec6de4e7e1a77c2932fb839f225dc994338f10fb9f5e619def19",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeetsInfo": "47dc21ee0e637a3780badae902ee29dcdb96501cbe621eee539b1c273344d4e3",
+    "Pous.Guarantees.StreamedWipeMeetsInfoStated": "c72758b271a572633fc31d05b62b94d0acc1b2452d55568d042cca14c7a71247"
+   },
+   "guarantees": ["Pous.SecurityProofs.StreamedWipeMeetsInfoStated"]
   },
   "Definitions.Pous.Guarantees.StreamedWipeReads": {
    "digest": "a776db79696cc65dec20f466f3d75a87f62c8a16bae8e11b933ba24b5f734db2",
@@ -26128,6 +26160,7 @@
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
     "Pous.SecurityProofs.StreamedWipeMeetsDisk",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily",
+    "Pous.SecurityProofs.StreamedWipeMeetsInfoStated",
     "Pous.SecurityProofs.StreamedWipeMeetsReads",
     "Pous.SecurityProofs.StreamedWipeMeetsReadsTight",
     "Pous.SecurityProofs.StreamedWipeMeetsServer",
@@ -26147,6 +26180,15 @@
     "Pous.StreamedWipe.h200Disks": "5f1ecbed70e1f47f3bc0fa547d1f5e4c8d857771106515afaa706e688d609057"
    },
    "guarantees": ["Pous.Claims.StreamedWipeMeetsDisk_meets"]
+  },
+  "Definitions.Pous.Model.StreamedWipeInfo": {
+   "digest": "be30bb9e2988446e0a0e6de40ffdce50db34724f28f2957ace1d0d3b429dfbdd",
+   "definitions": {
+    "Pous.StreamedWipe.held": "07c83c6a68f12b030c08fe2aec122273d0d33f7f54e42c6ce6d5197c72aa9703",
+    "Pous.StreamedWipe.listAdvantage": "5fdda94d1d3e439e6133024814979aa23e9c51686e85e762a95df2a7ae8ae0f7",
+    "Pous.StreamedWipe.listDistinguisher": "1c2bd683fe39641a5e2e3ae50eed4c8695a7a1191357596c0cb0cf87c2cc8865"
+   },
+   "guarantees": ["Pous.SecurityProofs.StreamedWipeMeetsInfoStated"]
   },
   "Definitions.Pous.Model.StreamedWipeServer": {
    "digest": "59f9209fb81725e45ff96c305c51c5fc5812520550a421cb1ce9bfc7e621f311",
