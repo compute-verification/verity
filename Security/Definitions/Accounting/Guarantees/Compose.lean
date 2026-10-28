@@ -17,7 +17,7 @@ committing by the IR's cuts, a computed value only its own unit reads (a receipt
 `Declared.Live` and `LayerCommitted`), and describe the designed protocol.
 PoUW's code today has one salt a window and derives every noise in the scheme, so every window it runs is seeded, and
 its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), over the same circuit, at the
-grinding premium per seed group. The certificate records which (`Certificate.coins`). Nothing yet builds a
+grinding premium per seed group. The certificate records which (`CreditCertificate.coins`). Nothing yet builds a
 `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, its commit
 coins and its draw to the service's, is unproved: until both exist, these speak of the declared circuit, not of a
 served workload.

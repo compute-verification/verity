@@ -47,7 +47,7 @@ set_option exponentiation.threshold 20000
 memory-challenger keys and the session id the auditor designated, fixed for the period; the server's commitment and
 salt, its `C*` (`store`), setup's public outputs, the memory challenger's table of row digests and the payload as the
 ring game's bits (`W`), each fixed before the capacity coins are drawn, so a function of the compute and bandwidth audits'
-coins alone; and the memory challenger's signed session and its device record (`MemoryChallenger.Properties.Device`), a
+coins alone; and the memory challenger's signed session and its device record (`MemoryChallenger.Properties.Challengers`), a
 function of all the run's coins. -/
 structure Audits (ΩW ΩQ : Type) where
   /-- the verifier's list of memory-challenger keys (never the run's record) -/
@@ -68,7 +68,7 @@ structure Audits (ΩW ΩQ : Type) where
   session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) → PousCheck.Run.Session
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
-    MemoryChallenger.Properties.Device
+    MemoryChallenger.Properties.Challengers
 
 namespace Audits
 

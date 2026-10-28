@@ -371,7 +371,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 387
+KNOWN_MAX = 382
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -389,8 +389,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/CoinFlow.lean::Accounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
-    "Security/Definitions/Accounting/Compose.lean::Accounting.Compose.Certificate":
-        "homonym, a credit certificate: rename (lean)",
     "Security/Definitions/Accounting/ComposePeriod.lean::Accounting.Compose.Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Device":
@@ -453,8 +451,6 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "Security/Definitions/Accounting/Tag/PolyHash.lean::Accounting.Tag.Block":
-        "homonym, a chunk of the store: rename (lean)",
     "Security/Definitions/Claims.lean::Claims.Circuit":
         "duplicate of `Verity.Circuit`: becomes it (the claims layer's AND/XOR wire circuit) (lean)",
     "Security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
@@ -592,16 +588,12 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog":
         "homonym, relative security's proof-local program: rename (compute-accounting)",
     # Security/Properties/
-    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
-        "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
         "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
-    "Security/Properties/RemoteAudit/Live.lean::Properties.RemoteAudit.Live.Answer":
-        "homonym, a live answer: rename (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
@@ -831,7 +823,6 @@ KNOWN: dict[str, str] = {
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
-    "tools/verity/lean/run_daily.py::Node": "homonym, node 1's paths for the daily Lean run: rename (lean)",
     # verity/core/
     "verity/core/deploy/manifest.py::Link":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it (proofs)",
