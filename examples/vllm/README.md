@@ -18,7 +18,7 @@ remote's PoUW component reads. So the remote verdict can't accept on this run ye
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
-session, the committed transcript is outside the sampling relation with probability at most δ plus the proof system's
+session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
 yet, and remote's verifier reads one-stage v1, which takes the sessions' verdicts as evidence
 (`verity/core/protocols/remote/README.md`, "The open gap"). PoUW's proof layer needs `AcceptedLive`, which no served path
@@ -31,7 +31,7 @@ meets. Onsite's chain has a gap of its own: network certification's `NetTiming.G
 
 Llama-3.2-1B INT8 (`verity-int8/Llama-3.2-1B-INT8` at `15b0976d400d796ee589e7737d03a919526bf800`, the workload's `model`
 and `engine.revision`) with int8 linears (`--precision verity_int8`, the workload's quantization), batch-invariant eager.
-vLLM serves it on vy-dc-h200's one H200 through `verity_vllm`'s committing OpenAI endpoint. Its values are committed as
+vLLM serves it on the endpoint's H200 node through `verity_vllm`'s committing OpenAI endpoint. Its values are committed as
 it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. The chain is
 `benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
 
@@ -48,19 +48,20 @@ directory holds what is the demo's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
-Onsite (`verity/onsite/v0`, in `verity/core/protocols/onsite/`) is remote's superset: it adds PoUS, the bandwidth audit
-(PoUB, `verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
-isn't yet a component of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
+Onsite (`verity/onsite/v0`, in `verity/core/protocols/onsite/`) is remote's superset: it adds PoUS, PoUB
+(`verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
+isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.
 
-## The auditor's devices: not placed
+## The auditor's parties
 
-The auditor's devices are the verifier, the network certifier and the memory challenger. None of them is placed: the Lean
-verifier runs on the endpoint's node beside the prover, and the network certifier and the memory challenger, which onsite's
-pieces read, may run there too. Being placed needs each of them on a machine the prover doesn't control. The live coins
-are the challenger's, an auditor host reached through its gate: PoUW's always, and sampled proofs' when `PP_CHALLENGER`
-names it. Otherwise the Lean verifier's own coins sample the proof blocks.
+The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
+challenger is an auditor host reached through its gate, and its live coins are PoUW's always and sampled proofs' when
+`PP_CHALLENGER` names it; otherwise the Lean verifier's own coins sample the proof blocks. The other three are not
+placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
+challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the prover
+doesn't control.
 
 ## Workload and placement
 
