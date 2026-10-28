@@ -28,7 +28,7 @@ _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b"
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
-RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"')
+RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
@@ -43,6 +43,10 @@ DOC_TERMS = {
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
+    "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
+                                                             "registered compiler turns into the execution block",
+    "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
+    "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
@@ -57,7 +61,9 @@ DOC_TERMS = {
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
-                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?)"
+                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
+                       rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
+                       rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*)\b)|\bIUs?\b"
                        rf"|\bcommit{_SPACE}periods?\b")
@@ -84,7 +90,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "benchmarks/live_challenger/README.md": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/verity_vllm/program/predict/weights_tie.py": "queued PRs add the term here; the proof-service rename follows them",
@@ -93,7 +98,6 @@ PENDING: dict[str, str] = {
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/pouw/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
@@ -245,7 +249,8 @@ def test_no_retired_term_in_the_maintained_docs():
 def test_the_glossary_records_the_retired_terms():
     rows = [line for line in (ROOT / GLOSSARY).read_text(encoding="utf-8").splitlines() if line.startswith(RETIRED_ROWS)]
     assert len(rows) == len(RETIRED_ROWS), f"{GLOSSARY}'s retired-terms table has no row starting {RETIRED_ROWS}"
-    assert all(_TERM.search(row) for row in rows), f"{GLOSSARY}'s rows {RETIRED_ROWS} no longer name the terms"
+    assert all(_TERM.search(row) or _DOC_TERM.search(row) for row in rows), (
+        f"{GLOSSARY}'s rows {RETIRED_ROWS} no longer name the terms")
 
 
 def test_the_scan_reads_each_form():
@@ -296,3 +301,15 @@ def test_the_doc_scan_reads_the_protocol_terms():
         ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
         ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),
         ("a.md", 4, "flock-verify"), ("verity/ml/commitments/x/PROTOCOL.md", 1, "draw")]
+
+
+def test_the_doc_scan_reads_the_reporting_terms():
+    """The advice, the blocks and the challenger's coins (`GLOSSARY.md`), on toy files: Python's declared types, a suite's
+    declared inputs, unit tests and units of measure stay."""
+    docs = {
+        "a.md": "The declared work and a declared\nworkload; it declares its advice. Two sampled units, a unit class, the audit coins.\n"
+                "A suite's declared inputs, a declared type, a unit test, SI units and the units of a sampled proof block stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "declared work"), ("a.md", 1, "declared workload"), ("a.md", 2, "declares its advice"),
+        ("a.md", 2, "sampled units"), ("a.md", 2, "unit class"), ("a.md", 2, "audit coins")]

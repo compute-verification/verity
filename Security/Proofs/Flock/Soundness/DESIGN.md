@@ -62,8 +62,8 @@ in the circuit) fall into two cases (the lifetime-soundness desk study, §1 and 
   At `t ≥ 2^65` such roots need a hash of at least 288 bits.
 - **Not tight for serving roots in a sampled audit.** Serving registers its roots before the sample and nobody else holds
   an opening, so against arbitrary provers they need the rewinding argument too. `Rewinding.bad_sq_le` applies unchanged
-  with the unit sample in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
-  the leaves under every serving root registered before the sample, and `Q_s` the leaves the sampled units open.
+  with the proof-block sample in place of the proof coins: `δ_tree ≤ √(N_s·Q_s·Adv) ≤ t·√(2·N_s·Q_s)/2^256`. Here `N_s` counts
+  the leaves under every serving root registered before the sample, and `Q_s` the leaves the sampled proof blocks open.
   - `log2 √(2·N_s·Q_s)` is 17.4 to 34.0 over the study's audits, so this term exceeds the Flock proof term by up to
     2^17.
   - Clearing 2^-128 per audit needs `n ≥ 2·(log2 t + 128 + log2 √(2·N_s·Q_s))`: 475 bits at `t = 2^80` for the study's
