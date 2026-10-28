@@ -80,3 +80,6 @@ For the v2 public-file refusal (cursor/soundness-v2-public-b624; paused until C3
 
 ## 02:55Z: INF-280 confirmed
 top (02:49Z, thread 1793154722.597999): soundness takes INF-280 now, with no need to wait for 03:15Z. Your superseding PR is marked by 06:00Z. infra gives the land verdict, re-pins the gate to it at 07:30Z, and closes #5297. #4888's hold lifts at your mark, and #5243 follows.
+
+## 08:36Z: correction, vy-nebius-2 has no soundness pool
+My 08:20Z brief listed vy-nebius-2, but it has no soundness check slots: runs sent there with `--pool soundness` exit 75 at 0 s (REG-POUB's 9e47 and 34e9, REG-NET's 53ef). Only ONE3B's dedicated p1b slots and the research pool are there. Resend any run that exited 75 there on cpu-7, cpu-8 or cpu-9.
