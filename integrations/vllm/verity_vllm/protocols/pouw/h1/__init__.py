@@ -77,7 +77,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import commit_rows, weight_binding
+from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
 from verity.core.protocols.pouw.circuit import compile as C
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw import credit as CR
@@ -201,11 +201,20 @@ def units(k: int, n: int, m: int) -> int:
     return (mp // TILE[0]) * (np_ // TILE[1])
 
 
-def weight_root(w: int, rows: np.ndarray) -> bytes:
-    """The epoch's commitment to weight `w` (its int8 rows [n, k] in a SHA-512 row tree), which the salt coin is opened after
-    (`audit.weights_root`); not root(B), which is compute accounting's."""
+#: this process's 32-byte key for its weight trees' leaf salts (`weight_root`): from the OS's CSPRNG when the module is first
+#: imported (a forked child keeps its parent's) and held only in memory, never written to a record, a manifest or the store;
+#: a tensor-parallel rank draws its own, since each commits only the weights it holds
+WEIGHT_KEY = os.urandom(32)
+
+
+def weight_root(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+    """The epoch's commitment to weight `w`, which the salt coin is opened after (`audit.weights_root`): its int8 rows [n, k]
+    in a hiding tree, ``audit.commit_rows(weight_binding(w), -2, rows, HM96, key, HM96_WEIGHTS + w)`` (`requests.hiding_rows`,
+    the same tree), so the root says nothing of the rows to anyone without ``key`` (`WEIGHT_KEY` when None). Not root(B),
+    which is compute accounting's."""
+    key = WEIGHT_KEY if key is None else key
     rows = np.ascontiguousarray(rows, dtype=np.int8)
-    return commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], hash="sha512").commitment.root
+    return RQ.hiding_rows(weight_binding(w), -2, [r.tobytes() for r in rows], key, HM96_WEIGHTS + w).commitment.root
 
 
 def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int]:
@@ -783,4 +792,4 @@ class H1Run:
 __all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
            "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
            "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES"]
+           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES", "WEIGHT_KEY"]
