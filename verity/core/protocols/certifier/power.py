@@ -1,6 +1,6 @@
 """Power certificates: the power certifier's signed reading of one channel's energy over an interval (record v1).
 
-The power certifier is onsite's power sub-protocol's auditor-trusted device (CMP-251): an inline meter or a metered PDU
+The power certifier is onsite's power sub-protocol's auditor-trusted device: an inline meter or a metered PDU
 outlet on a machine the prover doesn't control, never the GPU's own sensor or the prover's BMC. Trust in it and its host
 is the named ``trusted-nebius-host`` assumption, as for the network certifier, whose certificate machinery it shares: the
 same hiding signed digest (`certificate.certificate_digest`, the certifier's fresh salt), LMS over SHA-512 (n = 64) and the
@@ -26,8 +26,8 @@ public tolerance, leaves at most the bar's share of hidden capacity:
     E − Σ_j e_j·N_j − τ₀·Δ − ρ·E − P₀·Δ ≤ β·e_h·θ·Δ
 
 over the interval's committed counts N_j (MACs per declared operand class, compressions, forming units), with the floors
-e_j, idle P₀, the hidden-MAC floor e_h, the capacity θ, the bar β and the tolerance (τ₀, ρ) public (`Threshold`). It is
-S8's U = (E − floors)/(e_h·θ·wall) ≤ β (CMP-248), per interval and with the tolerance. `power_check` proves it in
+e_j, idle P₀, the hidden-MAC floor e_h, the capacity θ, the bar β and the tolerance (τ₀, ρ) public (`Threshold`). It is the
+served bound's U = (E − floors)/(e_h·θ·wall) ≤ β, per interval and with the tolerance. `power_check` proves it in
 integers: energies in 2⁻⁴⁰ µJ and the gain 1 − ρ in 2⁻²⁰,
 
     gain · E_µJ · 2^(40 − 20) ≤ Σ_j floor_j · N_j + slack,

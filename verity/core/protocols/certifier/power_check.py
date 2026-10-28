@@ -1,4 +1,4 @@
-"""The power certifier's proof unit, zero-knowledge: one interval's power certificate against its committed counts and
+"""The power certifier's proof block, zero-knowledge: one interval's power certificate against its committed counts and
 the public threshold (`power`). A Boolean Definition whose one output is the verdict bit; drawn intervals are proved
 through the firewall like N2's link-windows, and the unit's Program holds it as one gate naming its pinned circuit digest
 (`gate`, `head_check.gate_of`).

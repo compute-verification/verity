@@ -1,4 +1,4 @@
-"""The power certifier's proof unit (`power_check`) on a period of four intervals: each part against its reference on
+"""The power certifier's proof block (`power_check`) on a period of four intervals: each part against its reference on
 honest intervals and on intervals wrong in one input (a tampered certificate, a tampered energy, an over-threshold run),
 the threshold's rounding against the prover, and the whole Definition against its reference."""
 
