@@ -4,7 +4,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 # Per-row seeds (P2) as the per-unit game on the split layout (trusted definitions; nothing assumed)
 
 P2 seeds A's noise per row: row `i` of unit `u` draws E_A from the oracle input the per-unit scheme uses for a one-row
-unit (`internal/pouw/rtx-pro/a-commit-latency.md`, "Row additivity for P2: it reduces to the per-unit TT_OUT", 10:20Z).
+unit ("Row additivity for P2: it reduces to the per-unit TT_OUT").
 So the row-seeded game on a workload `U` is the per-unit game on its **split workload**, where every row is its own
 unit, and rev1's TT_OUT on the split workload bounds it (`ttOutRowSeed_of_ttOut`, and per audit tile
 `ttOutTileRowSeed_of_ttOutTile`, in `RowSeedGamma.lean`). Row additivity is then a theorem, and no new assumption is
@@ -31,14 +31,14 @@ earns a credit `≥ 0`: arithmetic, discharged at the concrete records by `norm_
 assumptions): `TTOut` and `TTOutTile` with the error read at the row count.
 
 Three additions, also definitions only:
-- **The code-form seed (`-h3`, `internal/pouw/rtx-pro/theory-pearl-c-sm120.md` §14).** (C1-h3) `CodeSeedNoise sem' semC
+- **The code-form seed (`-h3`).** (C1-h3) `CodeSeedNoise sem' semC
   π`: the code's seed is C1's up to a fixed permutation of the oracle's inputs. (C5) `CostModel.RelabelClosed CM`:
   relabelling a program's oracle keeps its cost and calls. With them the row-seeded TT_OUT carries to the code's form
   at the same error (`ttOutRowSeed_code`, in `RowSeedCode.lean`).
-- **The fragment argument's counting side** (`a-commit-latency.md`, "The fragment argument, made rigorous"):
+- **The fragment argument's counting side** ("The fragment argument, made rigorous"):
   `SkipSetU`, `undebitedSkippable` and `fragCount`, which `fragSkip_count_le` (`RowSeedFragment.lean`) bounds a skip
   program's undebited slots by.
-- **The fragment argument's skip class** (option (a) of `internal/pouw-fp8/rowseed-fragdraw-ruling.md`, 16:05Z):
+- **The fragment argument's skip class** (option (a) of the fragment-draw ruling):
   `SkipProgram` and its class, `SkipEmbed`, (C4) `CostModel.FragmentPriced`, (C6) `PearlCSem.RowDrawn`, `rowWords` and
   `QTree.hits`, which `qtree_union_bound` and `ttOutRowSeed_skipClass` (`RowSeedSkip.lean`) read. The corollary's one
   named assumption, `Assumptions.FragDraw`, is in `RowSeedAssumptions.lean`. P2 rests on `ttOutRowSeed_of_ttOut` (and
@@ -155,7 +155,7 @@ noncomputable def pearlCProtocolDevRev1RowCapAt (d : PearlCDevice) (sem : PearlC
     capOK := fun H s U u act =>
       (pearlCProtocolDevRev1 d sem ρ).capOK H s U u act ∧ (pearlCProtocolDevRev1RowCap d sem ρr).capOK H s U u act }
 
-/-- **(C2)'s tiles at a wider row cap** (card a6872606, option (a)): `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
+/-- **(C2)'s tiles at a wider row cap**: `pearlCTilesDevRev1` at the cap `ρ`, whose tile is
 within the cap when its debit is at most `ρ` times its credited rows' credit and every credited row's is at most `ρr`
 times that row's share (`pearlCTilesDevRev1RowCap` at `ρr`). The credit is rev1's at `ρ`, `(1 − ρ)·C` times the
 credited rows' share. -/
@@ -257,7 +257,7 @@ def omittedAt (slots : Finset (ℕ × ℕ × ℕ)) (patch : ℕ × ℕ × ℕ �
 
 end Pouw.PearlC
 
-/-! ## The skip class (option (a) of the 16:05Z ruling) -/
+/-! ## The skip class (option (a) of the fragment-draw ruling) -/
 
 namespace Pouw.QTree
 
