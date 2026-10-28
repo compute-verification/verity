@@ -62,7 +62,7 @@ def test_tinys_census_rebuilt_is_class_rows_total_and_its_private_bodies_its_byt
     assert sum(u.compressions(W.CENSUS) for u in us) == doc["total"]["compressions"]
     t = doc["total"]
     rows = sum(v for k, v in t.items() if k.startswith("rows."))
-    assert W.Registration.of(us, False).private_bytes == sum(v for k, v in t.items() if k.startswith("bytes.")) + \
+    assert W.RegistrationSize.of(us, False).private_bytes == sum(v for k, v in t.items() if k.startswith("bytes.")) + \
         rows * W.SALT_BYTES
     assert sum(u.n * (u.ins + u.out) for u in us) == rows
 
