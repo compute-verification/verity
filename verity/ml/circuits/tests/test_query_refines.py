@@ -56,13 +56,17 @@ def _inside(x: tuple, y: tuple) -> bool:
     return True
 
 
-def oracle(P: Program, a: str, b: str) -> bool | None:
-    """Every set of `a` inside one set of `b`, from the sets themselves; None when either does not evaluate on `P`."""
+def oracle(P: Program, a: str, b: str) -> bool | QueryError:
+    """Every set of `a` inside one set of `b`, from the sets themselves; the refusal when either does not evaluate on `P`."""
     try:
         A, B = _sets(P, a), _sets(P, b)
-    except QueryError:
-        return None
+    except QueryError as e:
+        return e
     return all(any(_inside(x, y) for y in B) for x in A)
+
+
+def _holds(got: bool | QueryError) -> bool:
+    return got is True or isinstance(got, QueryError)
 
 
 def test_every_pair_it_accepts_refines_on_the_sets():
@@ -73,9 +77,9 @@ def test_every_pair_it_accepts_refines_on_the_sets():
                 continue
             for name, P in PROGRAMS.items():
                 got = oracle(P, a, b)
-                assert got in (True, None), (name, a, b)
+                assert _holds(got), (name, a, b)
                 checked += got is True
-    assert checked >= 150, checked
+    assert checked >= 600, checked
 
 
 @pytest.mark.parametrize("a,b", [
@@ -100,8 +104,8 @@ def test_every_pair_it_accepts_refines_on_the_sets():
 ])
 def test_the_rules(a, b):
     assert G.refines(a, b) and G.refines(parse(a), parse(b))
-    assert all(oracle(P, a, b) in (True, None) for P in PROGRAMS.values())
-    assert any(oracle(P, a, b) for P in PROGRAMS.values())
+    got = [oracle(P, a, b) for P in PROGRAMS.values()]
+    assert all(_holds(g) for g in got) and any(g is True for g in got)
 
 
 @pytest.mark.parametrize("a,b,on", [
