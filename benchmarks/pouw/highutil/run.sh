@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HIGHUTIL on one leased GPU (vy-nebius-1's RTX PRO 6000, sm_120, by default; H200: below), cwd = the source tree's root under
+# The highutil period on one leased GPU (vy-nebius-1's RTX PRO 6000, sm_120, by default; H200: below), cwd = the source tree's root under
 # `research run`:
 # the build and the config (the checkpoint's weights, params) outside the lease, then under it capture.py's activations
 # (a W8A8 forward of the checkpoint), period.py's diag (one step's openings on the GPU against the prover's recomputed rows)
@@ -18,7 +18,7 @@
 # lt,int_mm): period.py's --plain, the plain arm's baselines, gamma's first: cuBLASLt (v31's lt_setup) and torch._int_mm. CKPT: the pinned checkpoint's snapshot directory (default the node's HF cache), or `seeded`
 # (seeded A and B, no capture). BLOCKS, STEPS, Q, PERIODS (0: none), NEGATIVE: period.py run's; ROW (default 8192), LP, LP_MAX
 # and L (default 512, 512 and 16384: S = 1 at every layer, down as four K-slices at L' 512; LP_MAX=1024 runs it as two at
-# L' 1,024, 1.7% more GPU time a step on the RTX, r20261027-071030-adb5 against -071726-a30c): prep's; NSYS=1: after the
+# L' 1,024, 1.7% more GPU time a step on the RTX): prep's; NSYS=1: after the
 # periods, Nsight Systems over one plain period of each baseline and one protocol period (their
 # kernels' share of the GPU's time); NCU=1: Nsight Compute over two steps of each arm (pipes.py: each kernel's tensor-pipe
 # active share and INT8 MACs, kernels serialized; pipes-{plain,proto}.json); LEASE (default gpu-lease 1 --wait --max-min 25 --); PY (default uv run -q --no-project

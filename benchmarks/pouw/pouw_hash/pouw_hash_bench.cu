@@ -176,7 +176,7 @@ __global__ void k_leaf32(long long iters, const uint64_t* dg, int nleaf, Rec* re
 
 // ---- A's commitment, per row: m rows of k = 8,192 values, FP32 (32 KB) or BF16 (16 KB), in global memory
 //   sha   one thread per row: SHA-256 over the row's bytes (the protocol's row leaf, `audit.commit_rows`, up to its frame)
-//   seg   one thread per 1 KB segment: TurboSHAKE128 under 0x23 (#449's bench model; the segments' own tree not included)
+//   seg   one thread per 1 KB segment: TurboSHAKE128 under 0x23 (the bench model; the segments' own tree not included)
 //   tree  BLAKE3 of the row (1 KB chunks, P4): a lane per chunk, 32 / N rows per warp of N chunks each, then the tree
 //   fine  BLAKE3's tree over the row's 64-byte leaves (P4'): a block of N = row bytes / 64 threads per row
 __global__ void k_ac_fill(uint32_t* a, size_t words) {

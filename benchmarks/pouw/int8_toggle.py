@@ -1,5 +1,5 @@
 """int8_toggle: does an int8 GEMM run faster on narrow operands? Sustained `torch._int_mm` throughput, SM clock and power
-on one GPU for the operand patterns a zero instance feeds the tensor pipe (SKIP, note:20261017T0340Z-draft-skip): honest's
+on one GPU for the operand patterns a zero instance feeds the tensor pipe: honest's
 wide operands, CO-Dither's wide U against a bit (B), both-sided dither's bit against a bit (A), and zeros (record's clean
 product). A pattern that runs faster than `wide` is ε_clock a cheater gets from it on the binding facet.
 
