@@ -2441,7 +2441,8 @@
    "Claims.Recursion.accAt": "`F0`'s loop condition (does a run as it may abort accept), a finder's internal test that `KSFlockLin` reads through `F0`, no claim",
    "Claims.Recursion.opensAt": "`FC`'s loop condition (does a run as it may abort accept and open a cap position), a finder's internal test that `KSFlockLin` reads through `FC`, no claim",
    "Claims.Recursion.accAtI": "`F0I`'s loop condition (does a draw's opened inner view accept), a finder's internal test that `KSLin2` and `BitsLin2` read through `F0I`, no claim",
-   "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim"
+   "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim",
+   "Claims.Json.Ascii": "a helper the claims read: a text of ASCII without DEL, which `JsonSpec` reads"
   }
  },
  "layers": {

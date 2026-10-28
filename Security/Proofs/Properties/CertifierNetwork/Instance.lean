@@ -10,7 +10,7 @@ salt, and a one-window configuration with a declared sync whose run ticks each g
 salt that one. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
 the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
-`Digested` is the one hypothesis left as one: `parameters` reads `Flock.canon`, well-founded recursion the kernel does
+`Digested` is the one hypothesis left as one: `parameters` reads `Flock.canonUtf8`, well-founded recursion the kernel does
 not evaluate, so no proof evaluates it on a configuration (`DeviceOutputAccepted`'s module docstring).
 -/
 

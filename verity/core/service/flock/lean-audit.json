@@ -64,6 +64,7 @@
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
+  "Flock.Test.Canon",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
@@ -488,7 +489,7 @@
    ]
   },
   "Flock.Canon": {
-   "digest": "d5948c6105fe9f99cb87d5b0686f632a3bf51b28a8861c63e4ac19cdb62e7e43",
+   "digest": "355c3b62be6e24e04a22d1b0b4f60cd04f91d44f7b0a687bc6e469b4e68d0c36",
    "definitions": {
     "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
     "Flock.J.asArr": "1b27db679047d2f116aa1f9a34f952f53a203ac47471331311ff49f0937597b0",
@@ -497,8 +498,10 @@
     "Flock.J.get": "b9713926f46759187e8644c994f413c55b938954c67e17c896bc28271d5b02ef",
     "Flock.J.nat": "14651f660693f11c7c802159f9ef5dd00e9d1ab41c9994d1475731cc4fec6aa0",
     "Flock.J.str": "e3b64bf9e865f4b684f547639349e4d4af1dca863e4b32aa1becab9980d2fdaa",
-    "Flock.canon": "91721c8381191df75ed1970942b7cc109bf7ffde3d4daf2578471d7ec12e2fb1",
+    "Flock.ascii": "beb31478c715142b89e4d11f4ec248e0bd97c52cee1058811f2632d220133731",
+    "Flock.canon": "c87ae51bccab878e374830c0a80c1e4f669bf75da5ea5ab0e8fb48a0542a8a21",
     "Flock.canonStr": "004d0450163619de70153792b310392e674d6f8022604a84ab492ae059079804",
+    "Flock.notAscii": "d6322464f334502bd9e9c30ceaed16afb5bf260dd29ff281b3cd46826466daca",
     "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    },
    "guarantees": [
