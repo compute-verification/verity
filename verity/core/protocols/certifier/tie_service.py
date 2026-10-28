@@ -1,7 +1,6 @@
 """The ingress tie through the proof system: each bucket row of an ingress link-window of the warden's cells proved as
 `io_request.IoTieRequest`, and the verifier of record that builds `advised.IoTieVerdict`, the tie of an advised link's
-requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md,
-"The ingress tie").
+requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself.
 
 **What is committed** is the warden's own (`warden_rows`): an ingress link-window's T bucket rows, row t bucket t's
 S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under the

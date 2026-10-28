@@ -94,7 +94,7 @@ SHA-512("verity/net-cert/v1" ‖ salt_c ‖ `clock_digest(sync)`). What the cert
 salt are in neither the evidence nor the profile, and the check takes neither. The certifier is the auditor's trusted
 device (`trusted-host`), and its own code picks each window's sync from its schedule set Σ_sync, so no
 clear-text check that the sync is in Σ_sync is needed. N2's proof reading each window's sync through its opening
-against that salted digest is a later change to its circuit (the certifier PROTOCOL.md's gap "The clock's opening").
+against that salted digest is a later change to its circuit.
 
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
 

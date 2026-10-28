@@ -1,7 +1,7 @@
 """What `ChargeCount_v2`'s charge doesn't see of its witness, which the slice that wires it must pin. `WindowCharge.Window`
-keeps each field's values at the slots that hold one, in order, so the guarantees count advice values, not slot
+keeps each field's values at the slots that hold one, in order, so the charge is a function of advice values, not slot
 arrangements: the wiring takes `hen` and `oen` from the replay, as `en` is, and reads no disabled slot's value
-(`protocol/charge-chain.md`, "The slice")."""
+(`Security/Definitions/NetworkCertifier/WindowCharge.lean`)."""
 from __future__ import annotations
 
 import itertools

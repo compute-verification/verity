@@ -13,13 +13,13 @@ counting the bits it would write, which is what the composition charges, or chec
     coder = (low[32], high[32], open, x, used, ok)
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
-Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of the
+Under advice v1 each certifier window is one terminated segment of the
 32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
 codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
 for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile unit
 runs the encoder forward, since which value is read next, and so its window, is the replay's position.
 
-**The counting variant** is what the PROTOCOL composes. The committed advice is the values themselves, which the
+**The counting variant** is what the compile slice composes. The committed advice is the values themselves, which the
 replay scan reads, and the charge is their coded length: the encoder runs over the same symbols and counts the
 segment bits it would write, and the window's finish refuses unless the count is at most the declared charge c. A
 segment is `shifts + 2` bits, or none when nothing was used (code.py's `ArithEncoder`): each scaling puts one bit in it
@@ -87,7 +87,7 @@ composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context 
 **A window's charge** (`ChargeCount_v1{N}`) is the one call the compile unit makes a window, for a window that sends
 only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the window's
 decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing. In the
-replay's units they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
+replay's units they are the ones the window's load loads (`replay_chain.ReplayLoad`). It counts
 `code_v1._window`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more

@@ -1398,7 +1398,6 @@
     {"file": "verity/core/protocols/certifier/compile_slice.py", "count": 2},
     {"file": "verity/core/protocols/certifier/egress.py", "count": 2},
     {"file": "verity/core/protocols/certifier/ingress_scan.py", "count": 3},
-    {"file": "verity/core/protocols/certifier/protocol/coin-link.md", "count": 1},
     {"file": "verity/core/protocols/certifier/release.py", "count": 1},
     {"file": "verity/core/protocols/certifier/replay_step.py", "count": 1},
     {"file": "verity/core/protocols/certifier/service.py", "count": 1},

@@ -49,7 +49,7 @@ The resumes and the order of new requests that `derived._walk` would otherwise r
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
 derived hits with it.
 
-**The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
+**The windows** (no later than the first window whose rows the value changes). Step s's
 window is the earliest window an output at step s or later is released in (the last window where none follows). An
 arrival's ingress window is the earliest release window of it and every later arrival, so that it never decreases
 where the arrivals deviate from release order. A decision about arrival i at step k goes to the earlier of step k's

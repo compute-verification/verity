@@ -53,7 +53,7 @@ block (`charge`, `datacenter.account` on a profile that credits no work): withou
 at the uplink's full capacity; with it, everything the block's devices hold. With `--salt` its proxy reveals the salts
 of the windows it served, so the certifier's salt check, like its audit, finds nothing for window 1.
 
-`seal` measures what a sealed pair link costs (the certifier's `Proxy(pair=…)`, its PROTOCOL.md "Sealed pair links"), in
+`seal` measures what a sealed pair link costs (the certifier's `Proxy(pair=…)`), in
 bytes of frames per second per core, at each `--frame-bytes` (the calibrated 4096 and the tests' 512 by default), into
 `<out>/seal.json`: the Python halves in one process (`seal_python`: `active.Sealer`, then `active.Opener`, each on its
 CPU seconds); the same across the fabric, the first block's certifier sealing frames as fast as the link takes them to

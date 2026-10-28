@@ -136,7 +136,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--tokens`, the cap), and the responses written as id events (each sampled token's id), N2 on the advice profile;
   its own flags are `--rate` arrivals a second (above 0, at most 8), `--prompt-range LO:HI` (1 to 2048 tokens),
   `--seed`, `--eos-ids` (at most 8), `--compact B` (8 to 4096: compact egress framing, each sampled token's
-  compact record in a B-byte cell instead of an id event, the certifier PROTOCOL's "Compact records") and `--margin M`
+  compact record in a B-byte cell instead of an id event) and `--margin M`
   (1 to 8: the plan's margin over the probed rates and latencies, 2 otherwise; an endpoint that slows under a load its
   probes didn't meet needs more), each recorded and passed on only when given (`parse_varied`). `--prompts` sends the
   caller's own prompts in place of `--prompt-range`'s chat turns: the gate reads them off its stdin as a scan

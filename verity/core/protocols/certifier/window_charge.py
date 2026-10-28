@@ -1,6 +1,6 @@
 """Advice v1's whole window charged: its decisions, the hits it sends past the pool bound and the arrival order's
 deviations, every count and every value as `code_v1` codes them, with the carry chained from window to window
-(`protocol/charge-chain.md`, "The whole window").
+(`Security/Definitions/NetworkCertifier/WindowCharge.lean`).
 
     ChargeCount_v2{N, H, O}  (book, carry, en[N], bit[N], hen[H], short[H], oen[O], p[O], r[O]) -> (ok, bits[CW], carry')
     ChargeLink_v2{N, H, O}   (book, carry_in[160], carry_out[160], en[N], bit[N], hen[H], short[H], oen[O], p[O], r[O])

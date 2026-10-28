@@ -210,8 +210,7 @@ last two by `horizonWrongUnits` and `horizonLeak`). All 27 are under `shape.froz
 possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and an accepted run reaches the first 20 through
 `AcceptedRunsAreProgramRuns`. Four are the
-theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s
-"Capacity"):
+theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`):
 
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerWindow`;
@@ -344,7 +343,7 @@ constant-rate Program's five statements and the definitions they read were froze
 their proofs. Their statement review gave GO with one change: the four counts take
 `n ≤ W·T`. All 38 statements (25 guarantees, 13 lemmas) and 16 witnesses are proved. The reference
 implementation, `verity/core/protocols/certifier` (`verity.core.protocols.certifier`), mirrors 19 of the statements and the three
-lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
+lemmas by name in its tests. The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks
 

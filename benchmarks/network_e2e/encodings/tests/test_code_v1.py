@@ -206,7 +206,7 @@ def _plain(bits: list[int], n: int):
 
 
 def test_one_codeword_per_residual_where_the_plain_decoder_takes_several():
-    """Attack 10 (the certifier PROTOCOL): over the strings that differ from a residual's encoding only in its last 3 bits,
+    """Over the strings that differ from a residual's encoding only in its last 3 bits,
     the plain WNC decoder takes 2 to 4 as that residual, and `decode` takes the encoder's one."""
     most = 0
     for seed in range(1000, 1060):

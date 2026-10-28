@@ -31,7 +31,8 @@ both ways, one connection at a time, in the challenger's order:
 
 `CoinLink.summary` is what the link publishes for its window: its parameters, each link-window's status, the coins'
 frames and bytes, every counted frame's name and bytes, and the charge. Each bucket's occupancy and every frame's content
-stay witness. `protocol/coin-link.md` has the premises. The module imports only the standard library and `verity`.
+stay witness. Its premises are the challenger's `CoinsConfidential` and `OneClock`
+(`verity/core/protocols/sampled_proofs/README.md`). The module imports only the standard library and `verity`.
 """
 
 from __future__ import annotations

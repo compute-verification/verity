@@ -1,4 +1,4 @@
-"""The I/O tie (`PROTOCOL.md`, "The I/O tie"), a prototype on a fake upstream: the reference of one egress
+"""The I/O tie, a prototype on a fake upstream: the reference of one egress
 link-window's tie, a unit a bucket row that opens every cell of it, and the Boolean Definitions it is built from.
 Nothing here is in a Spec or proved. The cells are the warden's (`warden`, its rows as `warden_rows` registers them,
 registration v2); no Commit writes the port yet, so the fake upstream commits it as the design has the Commit commit

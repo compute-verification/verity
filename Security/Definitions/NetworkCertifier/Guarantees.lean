@@ -105,7 +105,7 @@ def EncardAccSeqsLeConstantRateFixedClock : Prop :=
     (hn : n ≤ W * T),
     (AccSeqs (constantRate (S := S) T W ss frames) op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
 
-/-- **A window's rows read only its own and earlier windows' syncs** (PROTOCOL.md, "The audit"; `expected_grids`).
+/-- **A window's rows read only its own and earlier windows' syncs** (`expected_grids`).
 Two lists of declared syncs that agree on every window up to step `t`'s, `t / T`, give the same row at `t`: a frame is
 eligible no earlier than its anchor, hand times only rise in canonical order, and the queue carries forward. The syncs
 are any clock-sync values, in the set or not, so an out-of-set sync never changes an earlier window's verdict. -/

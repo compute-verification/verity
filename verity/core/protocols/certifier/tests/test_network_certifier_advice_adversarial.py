@@ -1,5 +1,5 @@
 """Adversarial cases against advice v0 (`advice`), the content advice whose bit length is the accepted-runs bound's
-A_c (PROTOCOL.md, "Advice for arbitrary serving: what it can carry"). Each case is named for the attack or assumption
+A_c. Each case is named for the attack or assumption
 it pins and is expected to be refused (`MalformedAdvice`) or charged (`total_bits`, `bits_by_window`):
 
 - A5, the charge is a canonical encoding: every string `decode` accepts is the `encode` of its advice, so at most

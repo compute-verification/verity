@@ -1,5 +1,5 @@
 """A sealed pair link's AEAD (`verity.ml.crypto.aead`) and its two halves (`active.Sealer`, `active.Opener`): the
-construction the certifier's PROTOCOL.md states, recomputed from `hashlib` and `hmac` alone; a unit that opens only
+construction its docstring states, recomputed from `hashlib` and `hmac` alone; a unit that opens only
 whole, at its own nonce, under its own direction's keys of its own session; a sender that never seals two frames at
 one nonce; and a receiver that fails closed for good on the first unit that doesn't open."""
 

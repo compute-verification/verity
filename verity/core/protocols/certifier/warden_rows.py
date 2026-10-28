@@ -76,7 +76,8 @@ same row, say. A bare sequence of reads binds nothing (the value is the head's a
 it states `Units`. `bucket_port` names the head's value too, and needs no `Units`: its unit t reads row t whole, so a
 statement's positions are all it can vary, and Lean's registered reads hold each to its unit's row.
 
-**The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
+**The wiring is opened to the verifier for now** (a named gap, which a permutation argument over the cells,
+registered before the coins, is to close): it gives away each
 connection's first row and cells. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it,
 from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice request k
 (`order[k] + 1`).

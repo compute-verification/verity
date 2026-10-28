@@ -3,9 +3,8 @@ import Definitions.NetworkCertifier.Run
 /-!
 # The Program's logical schedule and the clock-sync advice: the constant-rate Program
 
-Definitions only. They mirror `verity/protocols/accounting/communication/certifier/schedule.py` one for one (PROTOCOL.md
-"The Program's logical schedule and the clock-sync advice"; `docs/network-transparency/timing-channel.md` §2.4), with
-each Python name in its docstring.
+Definitions only. They mirror `verity/core/protocols/certifier/schedule.py` one for one, with each Python name in its
+docstring.
 
 The Program gives every real frame an **anchor** and a **logical index**: the anchor is the recorded bucket, on the
 global bucket clock, of the request it answers; the logical index λ is its position within its session, in the

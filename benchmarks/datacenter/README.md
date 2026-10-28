@@ -26,7 +26,7 @@ declared crossings (`Profile.exported`). It counts as fresh input read by its re
 certifiers cover every link, so that `Datacenter.uncovered_links()`, the links no trusted device ends (a
 switch-to-switch link, an outside host's link to a switch), is empty; until then it is reported as not applicable, with
 those links named. With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default; the certifier's
-`PROTOCOL.md`, "Sealed pair links"), a crossing from one block to another is ciphertext between the two blocks'
+`active.Pair`), a crossing from one block to another is ciphertext between the two blocks'
 certifiers, so the export counts only the crossings to a reader off every block, the facility boundary
 (`Placed._exported`). The registration commits the occupancy profiles the developer may choose from
 (`register(..., profiles=...)`), the plan reads their number from it (`Plan(..., profiles=registration)`), so the
