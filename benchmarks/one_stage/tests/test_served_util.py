@@ -71,6 +71,7 @@ def test_steady_state_mean_and_losses(tmp_path):
     gaps = {g["us"]: (g["gaps"], g["time_pct"]) for g in w["idle_gaps"]}
     assert gaps["2000-20000"] == (4, pytest.approx(20.0)) and gaps["0-20"] == (0, 0.0)
     assert got["all"]["steps"] == 4
+    assert (got["queued_body"]["steps"], got["queued_body"]["last_step"]) == (3, 3)
 
 
 def test_queued_starts_once_the_last_request_is_sent(tmp_path):
