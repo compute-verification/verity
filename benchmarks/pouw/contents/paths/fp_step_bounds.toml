@@ -1,4 +1,0 @@
-order = 336
-path = "`theory/fp_step_bounds.py`"
-runs_on = "CPU"
-what = "FP-STEP: every MMA of the exact-integer FP8 routes (k3, k4 on sm_120; k3, k4, k3z, k4z, k4s, k4t, e4r on B200; k3h, e4r on H200) inside premise (a)'s small-grid regime (FpGridSmall, p = 24 and 14) over every int8 input and issue order, by exact per-pair maxima, with the word's bits reads and FFMA folds exact and a replay; controls: the routes measured wrong on H200 and k4t one word past its rebase fall outside; stdlib + exact_kit, seconds"
