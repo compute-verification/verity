@@ -371,7 +371,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 382
+KNOWN_MAX = 381
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -505,8 +505,6 @@ KNOWN: dict[str, str] = {
         "homonym, the boundary's gates in a program: rename (network-accounting)",
     "Security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "Security/Definitions/Population/DrawPressure.lean::Population.Exfil.Draw":
-        "duplicate of `Verity.Draw`: becomes it (k of n units, without replacement) (lean)",
     "Security/Definitions/Pous/Game/Oracle.lean::Pous.Prog":
         "homonym, PoUS's parallel oracle program: rename (memory-accounting)",
     "Security/Definitions/Pous/Model/Audit.lean::Pous.Outcome":
