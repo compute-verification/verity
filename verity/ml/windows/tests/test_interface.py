@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
 import json
 import re
 import subprocess
@@ -35,7 +36,7 @@ from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
-from verity.ml.windows import interface as I, rows as CS, wiring as WI
+from verity.ml.windows import flock_inputs as FI, interface as I, rows as CS, wiring as WI
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -813,8 +814,10 @@ class Bound(Held):
 
 
 def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
-    """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, and the
-    files `write` writes, byte for byte."""
+    """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, the files
+    `write` writes byte for byte, and each member's prover body as the files make it (`rows.read_private`), where ``refd``'s
+    leave a registered value's rows and salts out of the member's own file (``value_rows``); both leave a wired port's
+    (``wired_rows``)."""
     a, b = full.close(salt_key=bytes(32)), refd.close(salt_key=bytes(32))
     assert list(a.roots.items()) == list(b.roots.items()) and a.bc == b.bc and a.salts == b.salts
     assert list(a.rows) == list(b.rows) and all(np.array_equal(a.rows[p], b.rows[p]) for p in a.rows)
@@ -825,8 +828,12 @@ def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
     files = []
     for win, c, d in ((full, a, tmp_path / "full"), (refd, b, tmp_path / "refd")):
         win.write(c, d, {"by": "test"}, registrar=reg)
-        got = {f.name: f.read_bytes() for f in d.iterdir()}
-        got["window.json"] = {k: v for k, v in json.loads(got["window.json"]).items() if k != "seconds"}
+        doc = json.loads((d / "window.json").read_text())
+        got = {f.name: f.read_bytes() for f in d.iterdir() if not re.fullmatch(r"[mv][0-9]+-private\.bin", f.name)}
+        got["window.json"] = {k: v for k, v in doc.items() if k not in ("seconds", "value_rows", "members")}
+        got["members"] = [{f: v for f, v in m.items() if f != "value_rows"} for m in doc["members"]]
+        got["bodies"] = [CS.read_private(d, doc, k) for k in range(len(doc["members"]))]
+        assert got["bodies"] == [c.private_body(k) for k in range(len(doc["members"]))]
         files.append(got)
     assert files[0] == files[1]
 
@@ -972,6 +979,88 @@ def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
                          "digest": staticmethod(lambda rec: "d")})
     win.write(c, tmp_path, {"by": "test"}, registrar=reg)
     assert w.salts.reads == LAYERS
+
+
+def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_body_is_made_from_them(tmp_path):
+    """`fed_chain` recorded by reference: each chain member's ``m<k>-private.bin`` leaves out its ``w`` rows and salts and
+    its wired ``x``'s, ``v0-private.bin`` holds each row of ``w`` the window reads once, then its salt, and ``window.json``
+    each row's path once; each member's prover body as the files make it (`rows.read_private`: a wired row and its salt off
+    its writer's own file; `rows.Bodies`, with as few as one file mapped at a time) and its header (`rows.registered_header`) are the committed ones, and so is the circuit prover's
+    file staged from them (`flock_inputs.flock_input_files`). The 4,32,4 class's bodies held 3,200,960 rows of 32,768
+    words, 22,864 of them distinct, 9,657,548 wired rows of 3,750,680 output rows, and its ``window.json`` 5,282,638 paths,
+    37,788 of them distinct. A file short of its ports, a row its value's file doesn't hold, a row with no path, a row
+    given two paths, a wire to a writer that is no member or not of the port's words and a row of a value committed under
+    two salts are refused."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    c = win.close(salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
+                         "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
+    win.write(c, tmp_path, {"by": "test"}, registrar=reg)
+    doc, ms = json.loads((tmp_path / "window.json").read_text()), win.window.members
+    chained = [k for k, m in enumerate(ms) if m.template == GID]
+    assert len(chained) == 2 * LAYERS and [doc["members"][k].get("value_rows") for k in range(len(ms))] == [
+        ["w"] if k in chained else None for k in range(len(ms))]
+    assert [doc["members"][k].get("wired_rows") for k in range(len(ms))] == [["x"] if m.wired else None for m in ms]
+    assert all(m.wired for k, m in enumerate(ms) if k in chained)
+    assert doc["value_rows"] == {"w": {"words": 256, "positions": [0, 1], "file": "v0-private.bin"}}
+    assert (tmp_path / "v0-private.bin").read_bytes() == w.rows[[0, 1]].astype("<u2").tobytes() + w.salts[0] + w.salts[1]
+    assert doc["registered_paths"] == {"w": {"0": w.path(0).hex(), "1": w.path(1).hex()}}
+    files = CS.Bodies(tmp_path, doc)
+    for k, m in enumerate(ms):
+        body, leaves = c.private_body(k), CS.port_leaves(m)
+        left = {"w", "x"} if k in chained else {p for p, _o, _ws in m.wired}
+        assert CS.read_private(tmp_path, doc, k) == body
+        out = io.BytesIO()
+        files.copy(k, out)
+        assert out.getvalue() == body
+        assert (tmp_path / f"m{k}-private.bin").stat().st_size == len(body) - sum(
+            leaves[p] * (2 * n + CS.SALT_BYTES) for p, n in m.all_rows if p in left)
+        assert all("paths" not in e for e in doc["members"][k].get("registered", {}).values())
+        assert CS.registered_header(doc, k) == win._entries.get(m.key)
+    files = CS.Bodies(tmp_path, doc)
+    files.OPEN = 1
+    for k in range(len(ms)):
+        out = io.BytesIO()
+        files.copy(k, out)
+        assert out.getvalue() == c.private_body(k) and len(files._own) + len(files._values) <= 1
+    k, mem = chained[1], doc["members"][chained[1]]
+    meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
+            "out_ports": mem["out_ports"], "row_schemas": mem["row_schemas"], "vus_per_block": 1, "units_per_vu": 1,
+            "subcircuit": "gemm"}
+    got = FI.flock_input_files(tmp_path, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "staged")
+    head, body = Path(got["inst"]).read_bytes().split(b"\n", 1)
+    assert json.loads(head)["registered"] == win._entries[ms[k].key] and body == c.private_body(k) + c.public_body(k)
+    assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["registered"] == win._entries[ms[k].key]
+    row = mem["registered"]["w"]["positions"][0]
+    feed = _first(win.window, SID)
+    for edit, read, why in [
+            (lambda d: d["value_rows"]["w"].update(positions=[2, 3]), CS.read_private, "rows of 256 words the window's"),
+            (lambda d: d["registered_paths"]["w"].pop(str(row)), CS.registered_header, "no path for rows"),
+            (lambda d: d["members"][k]["registered"]["w"].update(positions=[0, 1]), CS.read_private, "rows of 256 words"),
+            (lambda d: d["members"][k]["wired"][0].update(writers=[10 ** 6] * mem["n"]), CS.read_private, "not output rows"),
+            (lambda d: d["members"][k]["wired"][0].update(writers=[ms[feed].base] * mem["n"], out="o1"), CS.read_private,
+             "not output rows"),
+            (lambda d: d["members"][k].pop("wired"), CS.read_private, "no wire gives")]:
+        other = copy.deepcopy(doc)
+        edit(other)
+        with pytest.raises(ValueError, match=why):
+            read(tmp_path, other, k) if read is CS.read_private else read(other, k)
+    own = tmp_path / f"m{k}-private.bin"
+    own.write_bytes(own.read_bytes()[:-1])
+    with pytest.raises(ValueError, match="bytes, not the"):
+        CS.read_private(tmp_path, doc, k)
+    other = next(j for j in chained if j != k and win._entries[ms[j].key]["w"]["positions"] == [row])
+    salts = dict(c.salts)
+    c.salts[ms[other].port("w")] = bytes(CS.SALT_BYTES)
+    with pytest.raises(ValueError, match="committed under two salts"):
+        win.write(c, tmp_path / "salted", {"by": "test"}, registrar=reg)
+    c.salts = salts
+    win._entries[ms[k].key] = {"w": {**win._entries[ms[k].key]["w"], "paths": ["00" * 64]}}
+    with pytest.raises(ValueError, match="given two paths"):
+        win.write(c, tmp_path / "again", {"by": "test"}, registrar=reg)
 
 
 def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):
