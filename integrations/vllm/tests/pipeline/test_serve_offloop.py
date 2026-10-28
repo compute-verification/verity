@@ -395,6 +395,35 @@ def test_with_a_seal_process_each_execution_block_is_sealed_there_and_its_refusa
     assert "error" not in seals[1] and seals[1]["row_dir"] == str(tmp_path / "windows" / "w1")
 
 
+def test_a_seal_process_seals_each_execution_block_only_after_its_draw_gated_release(tmp_path, monkeypatch):
+    """With ``release`` (`serve_release.Draws`), the seal in the sealer's ``process`` follows the window's draw-gated release,
+    as `seal_window` does, so the store it writes holds only the drawn leaves; its line carries the release's record."""
+    monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("sealed on the sealer's thread"))
+    order: list[tuple[str, int]] = []
+
+    class Release:
+        def release(self, window: int, com: Any, clock: Any) -> dict[str, Any]:
+            order.append(("release", window))
+            return {"window": window, "kept": 1}
+
+    class Process:
+        def seal(self, com: Any, rc: Any, d: Path, *, written: Any = None, **kw: Any) -> dict[str, Any]:
+            order.append(("seal", kw["rec"]["window"]))
+            written()
+            return {"row_dir": str(d)}
+
+    sealer = ss.Sealer(1 << 40)
+    sealer.process = Process()
+    s = Sealed(tmp_path, sealer=sealer, com=Detached)
+    s.windows.release = Release()
+    with s:
+        for i in range(2):
+            assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
+    sealer.close()
+    assert order == [("release", 0), ("seal", 0), ("release", 1), ("seal", 1)]
+    assert [x["release"] for x in records(tmp_path, "seals.jsonl")] == [{"window": 0, "kept": 1}, {"window": 1, "kept": 1}]
+
+
 def test_serve_openais_seals_run_where_its_sealing_options_say():
     """`seal_process.sealer_of`: under ``--seal`` a `ProcessSealer`, whose summary names its process and, once closed, how it
     ended; a `serve_seal.Sealer` sealing on its own thread with ``--no-seal-process``; none, the seals on the engine loop, with
