@@ -16,9 +16,10 @@
 #           gate: it credits nothing; the gate's own costs are not in this run)
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
-#           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off
+#           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
+#           scheduling a step's slots stay held until the step before it is processed, so SEQS=2·T/1024 fills every step
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments),
-# PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at PYHZ, 1000, for the host gaps).
+# PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs, T/1024).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -72,7 +73,7 @@ export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 nvidia-smi --query-gpu=name,uuid,clocks.max.sm,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
-      --admit arrival --window-requests "$SLOTS" --max-num-seqs "$SLOTS"
+      --admit arrival --window-requests "$SLOTS" --max-num-seqs "${SEQS:-$SLOTS}"
       --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
 [ "$ARM" = graphs ] || args+=(--required-manifest "$ROW/manifest.json")
 commit=(--scheme rows-sha512 --gpu-tree --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
