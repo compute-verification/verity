@@ -119,7 +119,7 @@ theorem satS (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S 
 /-- **A drawn table's acceptance** at a flat session's circuit (`accS` at `HmOut.parse`'s). -/
 noncomputable abbrev acc : AcceptedH (twin x.T.S x.twinA x.twinB) := x.accS ht (parseStmt_of_parseH hc) hv1
 
-include hc in
+include ht hc hv1 in
 /-- **A witness of a drawn table satisfies its statement without Δ's pinned copies**, at a flat session's circuit
 (`satS`). -/
 theorem sat (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x.twinA x.twinB).Satisfies z :=
