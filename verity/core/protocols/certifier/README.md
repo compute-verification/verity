@@ -204,15 +204,18 @@ A spec-level reference for network accounting's timing channel:
   registration the inference-only policy checks and not a private partition, so it is checked in the clear with no
   proof block;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
-  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
-  the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
-  ids appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its
+  warden ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
+  each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
+  slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a due, occupied
+  slot's output count and ids taken from its entry at its anchor, every other entry ignored, a slot held through its
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
-  occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Until each
-  due, occupied slot's entry is a wire from its Program's `SlotEntry_v1` unit, the read bit is the prover's word (an
-  entry of read 1 and no outputs passes), so the period check refuses every rows-form period of a link-window
-  (`NetworkCheck.Period`'s `unwired`);
+  occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
+  Programs' row is a compute audit's `SlotEntry_v1` template's entries, that template a pinned Definition (its closure
+  digest one of `slotEntryPins`), the read bit is the prover's word (an entry of read 1 and no outputs passes), so the
+  period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and
+  until a slot's Program's `SCAN_STATE` is tied to the scan's state it refuses every rows-form period of a link-window
+  (`untied`);
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
@@ -221,15 +224,17 @@ A spec-level reference for network accounting's timing channel:
   ids, which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
   `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
-  empty state's for row −1). A Program gives all its outputs to the Programs' row at its anchor (its read bit, n, u32,
-  and 64 ids of 17 bits at w63's class); an empty slot's entry is all zero (its outputs masked by `occ`, never on the
-  egress). A request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI`
-  ids (1,024 at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a
-  connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names
-  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
-  link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
-  scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
-  registered read of the warden's egress row t, so the chains are wires through the registered roots;
+  empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
+  ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes once it carries the read bit); a link-window's
+  bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
+  ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
+  unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
+  its anchor. A window whose warden refused a connection, traffic past its slots, has no certified record, and the
+  period check refuses it. `Class.serves` names the warden parameters it takes every run of.
+  `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one registration: ingress unit
+  t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
+  t + 1 and egress unit t read, and egress unit t's row as a registered read of the warden's egress row t, so the
+  chains are wires through the registered roots;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
