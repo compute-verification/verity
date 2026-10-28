@@ -1,13 +1,13 @@
 import Proofs.Accounting.DeclaredCircuit.Requirement
 import Properties.Accounting.DeclaredCircuit
-import Proofs.Properties.RemoteAudit.Schedule
+import Proofs.Properties.PoubCheck.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap, proved
 
 `Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`, the theorem of
 `Properties.DeclaredCircuit.ScheduledRequirement`: `Accounting.SecurityProofs.DeclaredCircuitRequirement`'s argument on
-the coins the schedule check accepts. At each prefix, `Properties.RemoteAudit.steered_of_checked` over the coins the
+the coins the schedule check accepts. At each prefix, `Properties.PoubCheck.steered_of_checked` over the coins the
 check accepts there makes the layout the slot of the schedule's `cap + 1` padded bits (`steered_on`). The session priced
 (`RateSketch.pr_session_le`) is `A` on summaries of `a + (cap + 1)` bits, the devices' `a` then the schedule's
 (`SketchSummarySession.widen`), on the schedule's slot, which is the layout on the accepted coins, so there each pass's
@@ -64,12 +64,12 @@ open Bandwidth (pr_mono)
 
 /-- **The layout steered on the accepted coins.** Under `ScheduleLayoutGap`, on coins `acc` at which the schedule check
 at the committed cap `cap` accepts, the layout is the slot of the schedule's `cap + 1` padded bits:
-`Properties.RemoteAudit.steered_of_checked` at each prefix, over the coins `acc` holds of there. -/
+`Properties.PoubCheck.steered_of_checked` at each prefix, over the coins `acc` holds of there. -/
 theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
     {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
-    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)
+    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : Properties.PoubCheck.ScheduleLayoutGap pos appended sent layout)
     (acc : Pfx → Y → Prop)
-    (hacc : ∀ c y, acc c y → ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
+    (hacc : ∀ c y, acc c y → ∃ sc passes b, PoubCheck.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ (sched : Pfx → Y → Pous.Bits (cap + 1)) (slot : Pfx → Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
       ∀ c y, acc c y → layout c y = slot c (sched c y) := by
@@ -77,7 +77,7 @@ theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
   have h : ∀ c, ∃ (sched : {y // acc c y} → Pous.Bits (cap + 1)) (slot : Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
       ∀ y : {y // acc c y}, layout c y.1 = slot (sched y) := by
     intro c
-    obtain ⟨sched, slot, hs⟩ := Properties.RemoteAudit.steered_of_checked (Pfx := Unit) (Y := {y // acc c y})
+    obtain ⟨sched, slot, hs⟩ := Properties.PoubCheck.steered_of_checked (Pfx := Unit) (Y := {y // acc c y})
       (blocks := blocks) (a := cap) (idx := fun _ => idx c) (pos := fun _ => pos c)
       (appended := fun _ y => appended c y.1) (sent := fun _ y => sent c y.1) (layout := fun _ y => layout c y.1)
       (fun (_ : Unit) (y : {y // acc c y}) => gap c y.1) (fun (_ : Unit) (y : {y // acc c y}) => hacc c y.1 y.2)

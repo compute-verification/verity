@@ -1,5 +1,5 @@
 """`verity.ml.commitments.gates.block_check`: the reference of the remote bandwidth audit's opening unit is its Python
-checks (`verity.core.protocols.remote_bandwidth.codec`, `receipts`, `audit`'s trees and `merkle.verify_opening`) on random
+checks (`verity.core.protocols.poub.codec`, `receipts`, `audit`'s trees and `merkle.verify_opening`) on random
 openings at p512/k2 and p1024/k3/masked, appended and registered, and names the check each wrong opening fails: a tampered
 block, a payload not the committed one or not the committed KV, a word at or above p, a wrong append coin, a wrong receipt
 leaf, salt or path, a plan without the block at the drawn position, a receipt the pass's tree commits but the block doesn't
@@ -13,9 +13,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.remote_bandwidth import audit as AU
-from verity.core.protocols.remote_bandwidth import codec as CO
-from verity.core.protocols.remote_bandwidth import receipts as RC
+from verity.core.protocols.poub import audit as AU
+from verity.core.protocols.poub import codec as CO
+from verity.core.protocols.poub import receipts as RC
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch

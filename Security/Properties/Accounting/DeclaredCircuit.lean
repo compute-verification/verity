@@ -1,18 +1,18 @@
 import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Properties.RemoteAudit.Schedule
+import Properties.PoubCheck.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap
 
 `Accounting.Guarantees.DeclaredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` with that premise
-replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`) at the steering cap the session
+replaced by what the verifier checks: the schedule check (`PoubCheck.Schedule.check`) at the steering cap the session
 committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`) accepts each pass of the
-session, under the named gap between the check and the model's layout, `Properties.RemoteAudit.ScheduleLayoutGap`. It is
+session, under the named gap between the check and the model's layout, `Properties.PoubCheck.ScheduleLayoutGap`. It is
 stated here because it reads the verifier's code, which the spec doesn't; its theorem,
 `Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement` in
 `Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
-layout steered there by `Properties.RemoteAudit.steered_of_checked`.
+layout steered there by `Properties.PoubCheck.steered_of_checked`.
 -/
 
 namespace Properties.DeclaredCircuit
@@ -31,7 +31,7 @@ blocks accepts some schedule for a session whose appends are `appended c y` and 
 `sent c y`. The gap: the pass's layout is the verifier's positions `pos c` of those appends and runs. `cap` is the one
 cap the session committed before its first coin, over which the check refuses a schedule, so on the coins the
 check accepts the layout reads `y` only through the accepted schedule's `cap + 1` padded bits
-(`Properties.RemoteAudit.steered_of_checked`).
+(`Properties.PoubCheck.steered_of_checked`).
 
 On a session the check refuses at some pass the ledger credits nothing after the seed, so no shortfall against its
 credit is counted there: the event, an accepted audit whose reads fall short of its credit, asks that the check accept
@@ -44,7 +44,7 @@ told only through `steer`, so the union in `G`'s query term runs over both summa
 `a = cap + 1`; devices told the schedule are told its bits in `steer`, at `a = cap + 1`, and pay them twice.
 
 Frozen (no-function, hash): `G`'s game, its premises but `SteeredLayout`, `ScheduleLayoutGap` and
-`RemoteAudit.Schedule.check`'s acceptance at the committed cap at every pass as the event's first conjunct. -/
+`PoubCheck.Schedule.check`'s acceptance at the committed cap at every pass as the event's first conjunct. -/
 def ScheduledRequirement : Prop :=
   ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
@@ -73,7 +73,7 @@ def ScheduledRequirement : Prop :=
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →
-    Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout →
+    Properties.PoubCheck.ScheduleLayoutGap pos appended sent layout →
     RateSketch.LifetimeCapped layout joined L →
     Gates.Restricted B Wc → Gates.Property caps Aud Wc → (∀ v < Aud.windows, Aud.reads v ≤ P * N * 4096) →
     (∀ x, (p x).Deadlines (bind x) τ ∧ (∀ w j w' j', w < w' ∨ w = w' ∧ j < j' → bind x w j < bind x w' j') ∧
@@ -104,7 +104,7 @@ def ScheduledRequirement : Prop :=
     let win := fun (x : RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) =>
       A.win w x.2 fun j => steer (RateSketch.SketchPrefix.of x.2 w j) x.1
     let accepted := fun (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) =>
-      ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
+      ∃ sc passes b, PoubCheck.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
         (passes[idx c]?).map Prod.snd = some (sent c y)
     pr (fun x : RateSketch.StackedCoins Ω Ca T n P N ρ G =>
       (∀ w j, accepted (RateSketch.SketchPrefix.of x.2 w j) x.1) ∧

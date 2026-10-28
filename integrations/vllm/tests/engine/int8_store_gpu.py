@@ -38,7 +38,7 @@ import torch
 from verity_vllm import config
 from verity_vllm.engine import int8_ops
 from verity_vllm.engine.int8_window import CreditedRead, LayerKeys
-from verity_vllm.protocols.remote_bandwidth.remote import session_module
+from verity_vllm.protocols.poub.remote import session_module
 
 RECORD = "int8_store_gpu.json"
 ROUNDS = 3
@@ -54,7 +54,7 @@ class Codec:
     """paged.cu's build at P1024 under the seed's key: its shape, token-layer words and in-place encoders."""
 
     def __init__(self, so: str) -> None:
-        self.P = session_module("paged", config.REMOTE_SESSION.parent / "vllm_encoded")
+        self.P = session_module("paged", config.POUB_SESSION.parent / "vllm_encoded")
         self.lib = self.P.PagedLib("p1024", so)
         self.P.KB.set_key(self.lib, self.P.KB.lib_key(self.lib, ROUNDS))
         self.F = self.lib.field
@@ -155,9 +155,9 @@ def engine(c: Codec) -> dict[str, Any]:
     from verity_vllm.engine.build import build_engine
     from verity_vllm.engine.int8_attention_vllm import install_credited_read
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.protocols.remote_bandwidth.decode_at_use import DecodeAtUse, encoded_weights, kv_decoder
-    from verity_vllm.protocols.remote_bandwidth.int8_kv import kv_refusal, layer_keys, token_layer_layout
-    from verity_vllm.protocols.remote_bandwidth.interface import Layout, RegionInfo
+    from verity_vllm.protocols.poub.decode_at_use import DecodeAtUse, encoded_weights, kv_decoder
+    from verity_vllm.protocols.poub.int8_kv import kv_refusal, layer_keys, token_layer_layout
+    from verity_vllm.protocols.poub.interface import Layout, RegionInfo
 
     entry = next(e for e in checkpoint_entries("manifests/checkpoints.json") if e.get("role") == "LLAMA31_8B_INT8")
     target = TargetProfile.from_device().with_overrides(int8_exact="all", async_scheduling=False)

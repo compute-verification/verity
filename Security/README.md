@@ -60,7 +60,7 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB | `Properties.PoubCheck.Line.LineHeld`, `Properties/PoubCheck/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Poub.Held.Assumptions`, `Accounting.Poub.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -83,8 +83,8 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
   `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
-- **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
-  (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
+- **Not PoUB.** `Accounting.Poub` and `Properties.PoubCheck` are PoUB, the proof of useful bandwidth
+  (`verity/core/protocols/poub`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a component of onsite only.
 
 ## Building and checking

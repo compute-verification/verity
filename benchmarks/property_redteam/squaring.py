@@ -59,7 +59,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.core.protocols.remote_bandwidth import codec
+from verity.core.protocols.poub import codec
 
 S32_MIN, S32_MAX = -(2 ** 31), 2 ** 31 - 1
 

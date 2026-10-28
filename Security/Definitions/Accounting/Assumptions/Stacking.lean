@@ -4,7 +4,7 @@ import Definitions.Accounting.Carrier
 # Stacking's named assumptions: bound keys, the declared circuit's carriers, the steered layout (trusted)
 
 What the stacking guarantees (`Definitions/Accounting/Guarantees/Stacking.lean`, `DeclaredCircuit.lean`) assume beyond the
-remote audit's own and the gate model's `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`,
+PoUB's own and the gate model's `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`,
 each a named `Prop` taken as a hypothesis, never an `axiom`:
 
 * `KeyBinding T M δ enc`: under the append-coin rule (`Accounting.appendCoinBlocks`), whatever the writers choose for
@@ -17,7 +17,7 @@ each a named `Prop` taken as a hypothesis, never an `axiom`:
   registration, are not bounded.
 * `SteeredLayout layout steer`: at each prefix of the session's coins, a pass's layout reads the codec and the append
   coins only through the `a`-bit summary `steer` its devices are told. What `a` is, is the schedule check's
-  (`Accounting.ScheduleDeterministic`, `RemoteAudit.Schedule.check`): the bits of the schedule each credited plan is
+  (`Accounting.ScheduleDeterministic`, `PoubCheck.Schedule.check`): the bits of the schedule each credited plan is
   the verifier's plan of.
 -/
 
@@ -35,7 +35,7 @@ codec and the coins of the appends before it, every layout `slot` of `N` distinc
   `Pr_{ω,κ}[appendCoinBlocks enc choose slot (ω, κ) ∈ ev] ≤ Pr_E[E ∈ ev] + δ`.
 
 `ω` is the codec in the ideal encoding model (its rounds' random function, below). The coins are the appends'
-(remote_bandwidth's PROTOCOL.md §3–§4), drawn at the node's one live registration and after: the registration is
+(poub's PROTOCOL.md §3–§4), drawn at the node's one live registration and after: the registration is
 append `0`, whose coin is the seed, drawn after its payload root; every other append's coin `c_a` is 32 bytes, drawn
 once, when the append's root arrives, after that root has committed every digest. A registered block is its payload
 encoded under the seed's key. An appended block is its payload `p_j` encoded with the bound tweak
@@ -61,7 +61,7 @@ values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a 
 choice among the registrations, which the one live registration rules out; and a layout chosen from the encodings
 after the coins, which the stacked guarantees fix before. Under the seed's key alone a writer picks an appended
 block's encoding by writing its decoding: measured in
-`verity/core/protocols/remote_bandwidth/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
+`verity/core/protocols/poub/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
 keys a block under each coin apart. -/
 def KeyBinding {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] (T M : ℕ) (δ : ℝ≥0∞)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B) : Prop :=
@@ -91,9 +91,9 @@ reads its append's coin, drawn after its payload is committed (`KeyBinding`), so
 carries nothing about its encoding, and only work after the coin helps rebuild it. Two claims about the code back the
 rest:
 
-* no pass reads an append's blocks `L` or more windows after the one it joined (remote_bandwidth's `lifetime`,
-  `Properties.RemoteAudit.LifetimeCapped`, proved), whose game form is this premise's hypothesis;
-* a re-key appends the block again and draws a fresh coin (`Properties.RemoteAudit.AppendsInOrder`, proved
+* no pass reads an append's blocks `L` or more windows after the one it joined (poub's `lifetime`,
+  `Properties.PoubCheck.LifetimeCapped`, proved), whose game form is this premise's hypothesis;
+* a re-key appends the block again and draws a fresh coin (`Properties.PoubCheck.AppendsInOrder`, proved
   with the live coins uniform): each append has its own uniform coin, as in the game's coins.
 
 So the work that helps rebuild an appended tile a pass reads lies in the `L` windows ending at the pass, counting the
@@ -130,15 +130,15 @@ writes at production, re-keys at the life cap only). What the prover chose after
 summary is the part of it the layout reads. The prover that steers the layout knows that part, so its devices are told
 it, and this premise is only that the layout reads nothing more of `y`. It holds of every layout at `a = |Y|`, so `a`
 is what the schedule check bounds (`Accounting.ScheduleDeterministic`): the verifier credits nothing after the seed
-unless every pass's plan is its own plan (`RemoteAudit.Schedule.plan`) of the schedule the prover publishes (when each
+unless every pass's plan is its own plan (`PoubCheck.Schedule.plan`) of the schedule the prover publishes (when each
 block is written and freed, and each pass's step), and that schedule is within the cap on its bits the prover
 committed before the session's first coin (`audit.Params.schedule_cap`), which is what it credits
 (`audit.Ledger.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
 published after the coins, whose length can follow them. A layout the check accepts at cap `a` at every coin is
-`SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, under
-`Properties.RemoteAudit.ScheduleLayoutGap`: the model's layout is the verifier's positions of the plan the pass
+`SteeredLayout` at `a + 1` (`Properties.PoubCheck.steered_of_checked`, under
+`Properties.PoubCheck.ScheduleLayoutGap`: the model's layout is the verifier's positions of the plan the pass
 sent), and a layout that follows a
-coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
+coin at a counted schedule is refused (`Properties.PoubCheck.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
 schedule holds the run inputs and arrival steps the prover chose after the coins of the blocks the pass holds
 (arrivals, lengths, prefix-cache hits and preemptions, and every run input that moves them), and more: the whole
 session's, so its bits bound theirs from above. -/

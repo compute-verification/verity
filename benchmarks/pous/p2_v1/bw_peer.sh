@@ -43,7 +43,7 @@ PORT=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0));
 "${SSHO[@]}" -f -N -M -S "$S/ctl" -o ExitOnForwardFailure=yes -L "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}"
 { hostname; echo "$PEER ${TO[-1]}, its 127.0.0.1:$PORT forwarded to this host's"; git rev-parse HEAD; } > "$O/hosts.txt"
 PARTY="${SSH[*]} cd $R '&&' exec /usr/bin/env -i PYTHONDONTWRITEBYTECODE=1 PATH=/usr/bin:/bin /usr/bin/python3 -s -E"
-PARTY+=" -m verity.core.protocols.remote_bandwidth.p2_party --device $R/party --listen 127.0.0.1:$PORT"
+PARTY+=" -m verity.core.protocols.poub.p2_party --device $R/party --listen 127.0.0.1:$PORT"
 PARTY+=" --registration $R/toy/registration.json"
 : > "$O/verdicts.txt"
 

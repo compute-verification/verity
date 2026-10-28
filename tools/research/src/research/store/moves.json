@@ -1516,6 +1516,41 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Assumptions/Remote.lean": "Security/Definitions/Accounting/Assumptions/Poub.lean",
+        "Security/Definitions/Accounting/Assumptions/RemoteDraw.lean": "Security/Definitions/Accounting/Assumptions/PoubDraw.lean",
+        "Security/Definitions/Accounting/Assumptions/RemoteHeld.lean": "Security/Definitions/Accounting/Assumptions/PoubHeld.lean",
+        "Security/Definitions/Accounting/Assumptions/RemoteOutside.lean": "Security/Definitions/Accounting/Assumptions/PoubOutside.lean",
+        "Security/Definitions/Accounting/Assumptions/RemoteP2.lean": "Security/Definitions/Accounting/Assumptions/PoubP2.lean",
+        "Security/Definitions/Accounting/Assumptions/RemoteSketch.lean": "Security/Definitions/Accounting/Assumptions/PoubSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditRemote.lean": "Security/Definitions/Accounting/Guarantees/RateAuditPoub.lean",
+        "Security/Definitions/Accounting/Guarantees/RemoteBinding.lean": "Security/Definitions/Accounting/Guarantees/PoubBinding.lean",
+        "Security/Definitions/Accounting/Guarantees/RemoteDraw.lean": "Security/Definitions/Accounting/Guarantees/PoubDraw.lean",
+        "Security/Definitions/Accounting/Guarantees/RemoteHeld.lean": "Security/Definitions/Accounting/Guarantees/PoubHeld.lean",
+        "Security/Definitions/Accounting/Guarantees/RemoteSketch.lean": "Security/Definitions/Accounting/Guarantees/PoubSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/RemoteSketchLine.lean": "Security/Definitions/Accounting/Guarantees/PoubSketchLine.lean",
+        "Security/Definitions/Accounting/Guarantees/RemoteSketchP2.lean": "Security/Definitions/Accounting/Guarantees/PoubSketchP2.lean",
+        "Security/Definitions/Accounting/RateAuditRemote.lean": "Security/Definitions/Accounting/RateAuditPoub.lean",
+        "Security/Definitions/Accounting/Remote.lean": "Security/Definitions/Accounting/Poub.lean",
+        "Security/Definitions/Accounting/Remote/": "Security/Definitions/Accounting/Poub/",
+        "Security/Proofs/Accounting/Remote.lean": "Security/Proofs/Accounting/Poub.lean",
+        "Security/Proofs/Accounting/RemoteHeld.lean": "Security/Proofs/Accounting/PoubHeld.lean",
+        "Security/Proofs/Accounting/RemoteHeld/": "Security/Proofs/Accounting/PoubHeld/",
+        "Security/Proofs/Properties/RemoteAudit.lean": "Security/Proofs/Properties/PoubCheck.lean",
+        "Security/Proofs/Properties/RemoteAudit/": "Security/Proofs/Properties/PoubCheck/",
+        "Security/Properties/RemoteAudit.lean": "Security/Properties/PoubCheck.lean",
+        "Security/Properties/RemoteAudit/": "Security/Properties/PoubCheck/",
+        "benchmarks/remote_session/": "benchmarks/poub_session/",
+        "integrations/vllm/tests/pipeline/test_serve_remote.py": "integrations/vllm/tests/pipeline/test_serve_poub.py",
+        "integrations/vllm/tests/protocols/remote_bandwidth/": "integrations/vllm/tests/protocols/poub/",
+        "integrations/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "integrations/vllm/tests/protocols/poub/test_poub_session.py",
+        "integrations/vllm/verity_vllm/pipeline/remote_session.py": "integrations/vllm/verity_vllm/pipeline/poub_session.py",
+        "integrations/vllm/verity_vllm/pipeline/serve_remote.py": "integrations/vllm/verity_vllm/pipeline/serve_poub.py",
+        "integrations/vllm/verity_vllm/protocols/remote_bandwidth/": "integrations/vllm/verity_vllm/protocols/poub/",
+        "verity/core/protocols/remote_bandwidth/": "verity/core/protocols/poub/"
+      }
     }
   ]
 }

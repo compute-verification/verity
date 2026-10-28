@@ -6,7 +6,7 @@ import Definitions.Pous.Model.StreamedWipe
 # The deployed uniform sampler on one word: its counts
 
 The sampler (`Accounting.Actual.wordIndex`) accepts `2^w − (2^w mod N)` words (`card_accepted`), and gives each index
-at most `⌊2^w / N⌋` of them (`card_fiber_le`), a uniform share. Beside them, the probability facts the remote audit's
+at most `⌊2^w / N⌋` of them (`card_fiber_le`), a uniform share. Beside them, the probability facts PoUB's
 opening draw is proved with: a count bounds a probability and back (`pr_le_ofReal`, `ofReal_le_pr`), a probability is
 the same over the coins in another order (`pr_comp_equiv`), and the real game is the ideal one plus the PRF's advantage
 (`pr_le_add_prfAdvantage`).

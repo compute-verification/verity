@@ -3,7 +3,7 @@ import Proofs.Accounting.RateAudit.Conservation
 import Proofs.Accounting.RateAudit.DeployedRun
 
 /-!
-# The remote bandwidth audit as deployed, with side sources that may relay receipts: the proof
+# PoUB as deployed, with side sources that may relay receipts: the proof
 
 **Completions as memory reads.** `Deployed.lean` simulates a pass device by reading its completions over the side
 link, which costs nothing while the side sources ignore the oracle. When they may relay receipts, every bit of the link
@@ -323,7 +323,7 @@ end DeployedWindow
 
 end Accounting.Rate
 
-namespace Accounting.Remote
+namespace Accounting.Poub
 
 open Accounting.Rate
 open scoped ENNReal
@@ -425,7 +425,7 @@ theorem ofDeployedWindow_paid_relay (A : DeployedSession n P N b h ρ S L q r s 
   have e : P * (S + (L - ρ) + X + (lam + m * b)) = P * (L - ρ) + P * S + P * X + P * (lam + m * b) := by ring
   omega
 
-/-- `RemoteSessionConservationRelay`'s reading on any store `store ω` drawn before the session's coins, from a bound
+/-- `PoubSessionConservationRelay`'s reading on any store `store ω` drawn before the session's coins, from a bound
 `ε_u` on some window's unpaid words at the slack `S + (L − ρ) + X + (λ + m·b)` a pass: the draws' terms hold at every
 store, and only the unpaid words read the store's distribution. -/
 theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
@@ -465,31 +465,31 @@ theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-end Accounting.Remote
+end Accounting.Poub
 
 namespace Accounting.SecurityProofs
 
-open Accounting.Rate Accounting.Remote
+open Accounting.Rate Accounting.Poub
 open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit as deployed, with side sources that may relay receipts**
-(`Accounting.Guarantees.RemoteSessionConservationRelay`). -/
-theorem RemoteSessionConservationRelay : Accounting.Guarantees.RemoteSessionConservationRelay := by
+/-- **PoUB as deployed, with side sources that may relay receipts**
+(`Accounting.Guarantees.PoubSessionConservationRelay`). -/
+theorem PoubSessionConservationRelay : Accounting.Guarantees.PoubSessionConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF
   refine (session_relay_of_unpaid id A tier lam m rounds cRoot F dbar dw hn hP hN hb hdw _
     (DeployedSession.pr_unpaid_le A tier _ _ (window_relay_le A tier hrc hW hF))).trans (le_of_eq ?_)
   ring
 
-/-- **The deployed session with relaying side sources conserves its words as a run of the remote audit**
-(`Accounting.Guarantees.RemoteSessionRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteSessionRunConservationRelay : Accounting.Guarantees.RemoteSessionRunConservationRelay := by
+/-- **The deployed session with relaying side sources conserves its words as a run of PoUB**
+(`Accounting.Guarantees.PoubSessionRunConservationRelay`), from `Accounting.SecurityProofs.Poub.Conservation`. -/
+theorem PoubSessionRunConservationRelay : Accounting.Guarantees.PoubSessionRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF
   have hs := ofDeployed_sampled A tier (Deployed.rebuildBits b rounds cRoot F) Nd a dbar hn hP hN hb hdbar hab hC
   have hp := ofDeployed_paid_relay A tier Nd a hrc ha hab hal hW hF
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
-  refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
+  refine Poub.holds_mono ?_ (Poub.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
   rintro x - ⟨h1, h2⟩
   refine ⟨h1, ?_⟩
   rw [ofDeployed_paid] at h2
@@ -506,14 +506,14 @@ theorem RemoteSessionRunConservationRelay : Accounting.Guarantees.RemoteSessionR
   rw [hCr] at h2 eΛ k ⊢
   nlinarith [h2, eΛ, k]
 
-/-- **Each window with relaying side sources conserves its words as a run of the remote audit**
-(`Accounting.Guarantees.RemoteWindowRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteWindowRunConservationRelay : Accounting.Guarantees.RemoteWindowRunConservationRelay := by
+/-- **Each window with relaying side sources conserves its words as a run of PoUB**
+(`Accounting.Guarantees.PoubWindowRunConservationRelay`), from `Accounting.SecurityProofs.Poub.Conservation`. -/
+theorem PoubWindowRunConservationRelay : Accounting.Guarantees.PoubWindowRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF
   have hs := ofDeployedWindow_sampled A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a dw hP hN hb hdw hab hC
   have hp := ofDeployedWindow_paid_relay A w tier Nd a hrc ha hab hal hW hF
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
-  refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dw _ _ hC0 hs hp)
+  refine Poub.holds_mono ?_ (Poub.Conservation (Fin τ) _ Nd a _ dw _ _ hC0 hs hp)
   rintro x - ⟨h1, h2⟩
   refine ⟨h1, ?_⟩
   rw [ofDeployedWindow_paid] at h2

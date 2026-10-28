@@ -84,7 +84,7 @@ ALLOWED = {
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
+    "core.protocols.poub": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs", "core.protocols.pous"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
@@ -118,7 +118,7 @@ ML_IMPORTS_CORE = {
     "ml/flock/tests/*": "C-Flock's tests check its prover and the Lean verifier against core's Python verifiers",
     "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.core.claims`",
     "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
-                                                "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
+                                                "decode, receipts and trees (`poub.codec`, `receipts`, `audit`)",
     "ml/windows/tests/test_blocks.py": "holds CMP-92's class circuit to network accounting's check of its servers "
                                        "(`certifier.blocks.server_blocks`), which refuses its two-server split (NET-92)",
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
@@ -143,7 +143,7 @@ CORE_ML_EDGES = {
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
+    "core.protocols.poub": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
@@ -179,12 +179,12 @@ BENCHMARKS_IMPORTERS = {
     "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
                                                        "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
                                                        "`config.P2_POUS` and `config.P2_STAGE`",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
-                                                                          "(`benchmarks/remote_session`, "
-                                                                          "`config.REMOTE_SESSION`) and `paged.py` "
+    "integrations/vllm/verity_vllm/protocols/poub/remote.py": "circuits (vllm): the remote session's processes "
+                                                                          "(`benchmarks/poub_session`, "
+                                                                          "`config.POUB_SESSION`) and `paged.py` "
                                                                           "(`benchmarks/vllm_encoded`)",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
-                                                                            "`inplace` (`benchmarks/remote_session`)",
+    "integrations/vllm/verity_vllm/protocols/poub/in_place.py": "proofs: the remote session's `device` and "
+                                                                            "`inplace` (`benchmarks/poub_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     "verity/core/protocols/pous/check/timed_audit.py": "memory-accounting: the memory challenger, the strict timed audit's "
                                                        "reference (`benchmarks/pous/band_gpu/memory_challenger.py`)",
@@ -579,7 +579,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
-    files' upper-case module constants read as attributes (``config.REMOTE_SESSION``), and through any function, wherever it
+    files' upper-case module constants read as attributes (``config.POUB_SESSION``), and through any function, wherever it
     is defined, that hands a parameter to such a load (``remote.session_module``).  Nothing is executed (AST only), and
     only files a text search can't rule out are parsed."""
     alt = "|".join(map(re.escape, sorted(packages)))
@@ -678,7 +678,7 @@ def test_a_benchmarks_import_is_found() -> None:
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.pouw.tool:POUW_VLLM'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
-        "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
+        "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'poub_session'\n",
         "x/loader.py": ("import importlib.util\nfrom x import config\ndef load(name, directory=config.SESSION):\n"
                         "    def named(n):\n        return n\n"
                         "    return importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')\n"),

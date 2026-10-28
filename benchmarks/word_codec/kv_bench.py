@@ -54,7 +54,7 @@ E_70B = K.LAYERS * sum(n * kd for n, kd in SHAPES_70B.values())
 CONTEXTS = (512, 2048, 8192)
 GATE_BASES = (77, (1 << 32) - 20, (1 << 33) + 77)
 BOUND_VECTORS = HERE / "tests" / "kv_vectors.json"
-REMOTE_VECTORS = HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"
+REMOTE_VECTORS = HERE.parents[1] / "verity" / "core" / "protocols" / "poub" / "tests"
 BOUND_BLOCKS = 6
 ATTN_CYCLE_BYTES = 1 << 30  # a cell's layers cover this much plain KV, 8x the L2
 ATTN_MAX_LAYERS = 256       # and at most this many, so a pass's launches queue behind one spin
@@ -287,15 +287,15 @@ def gate_bound(lib: Lib, torch, log) -> dict:
 
 
 def gate_coin(lib: Lib, torch, log) -> dict | None:
-    """The append coin's form of the bound key (remote_bandwidth's PROTOCOL.md §3), for a library at the remote
+    """The append coin's form of the bound key (poub's PROTOCOL.md §3), for a library at the remote
     audit's codec (`codec.DEFAULT`; None for another): `vectors.json`'s `codec.coin` blocks, each encoded by
     `kv_encode_bound` at its own indices under b_j(c_a), equal the pinned words (their SHA-512 and first word), decode
     back, and don't decode under the form without the coin."""
     for p in (str(HERE.parents[1]), str(REMOTE_VECTORS)):
         if p not in sys.path:
             sys.path.append(p)
-    import remote_bandwidth_vectors as RV
-    from verity.core.protocols.remote_bandwidth import codec as RC
+    import poub_vectors as RV
+    from verity.core.protocols.poub import codec as RC
 
     rc, f = RC.DEFAULT, lib.field
     if (f.name, lib.mask) != (rc.field.name, rc.masked) or rc.rounds > lib.kmax:

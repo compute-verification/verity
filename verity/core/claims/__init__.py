@@ -194,7 +194,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # a live coin drawn after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
     # (Security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
-    # encoding, and each coin keys a block apart (verity/core/protocols/remote_bandwidth/tests/test_key_binding.py)
+    # encoding, and each coin keys a block apart (verity/core/protocols/poub/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
           "the codec and the coins of earlier appends (the registration being append 0, whose coin is the seed; every "

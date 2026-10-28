@@ -4,7 +4,7 @@ Shadow's network graph.
 They read any `datacenter.Datacenter` (`benchmarks/datacenter`, the Lean physical model's mirror: `Zone`s, fabric
 `DeviceEntry`s and `LinkEntry`s, in bits, seconds and bit/s, every capacity a named `Assumption` with its source). The
 declarations themselves, the measured node and the leaf-spine datacenter of them among them, are
-`datacenter.examples`'s, the node's constants read from `verity.core.protocols.remote_bandwidth.timing`. Each block is
+`datacenter.examples`'s, the node's constants read from `verity.core.protocols.poub.timing`. Each block is
 one node, standing in for the whole block, each fabric device is another, and the links between two nodes are the
 network.
 

@@ -58,8 +58,8 @@ name = "verity_evaluate"
 path = "../../verity/core/primitives/evaluate"
 
 [[require]]
-name = "remote_audit"
-path = "../../verity/core/protocols/remote_bandwidth/lean"
+name = "poub_check"
+path = "../../verity/core/protocols/poub/lean"
 
 [[require]]
 name = "core_requirement"
@@ -82,9 +82,9 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",
   "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords", "Properties.NetworkPeriod",
-  "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
-  "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
-  "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
+  "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.PoubCheck",
+  "Properties.PoubCheck.Coins", "Properties.PoubCheck.Pooled", "Properties.Accounting.Served",
+  "Properties.Accounting.DeclaredCircuit", "Properties.PoubCheck.Line", "Properties.PoubCheck.Schedule",
+  "Properties.PoubCheck.Shared", "Properties.PoubCheck.Live", "Properties.PoubCheck.Component",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords"]

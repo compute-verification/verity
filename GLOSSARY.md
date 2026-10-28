@@ -98,7 +98,7 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
   needs no algorithmic premise: SAK (`SAKResidual`) is a premise of the overhead lower bound only. For the served PoUW,
   the one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's
-  no-fold receipt, which takes none. PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's guarantee
+  no-fold receipt, which takes none. PoUB (`Accounting.Poub`) bounds no hidden work itself, so PoUW's guarantee
   beside it is the size credit alone.
 - **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the declared circuit computes anyway, through inference-block yields) as well as free

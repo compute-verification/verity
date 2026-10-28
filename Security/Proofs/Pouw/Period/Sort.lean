@@ -1,5 +1,5 @@
 import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.PoubCheck.Sort
 
 /-!
 # `Array.qsort` sorts strings
@@ -245,13 +245,13 @@ list. -/
 theorem qsort_eq_of_perm {as bs : Array String} (h : as.toList.Perm bs.toList) :
     (as.qsort (· < ·)).toList = (bs.qsort (· < ·)).toList :=
   List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2) (qsort_sorted as) (qsort_sorted bs)
-    (((Properties.RemoteAudit.qsort_toList_perm as _).trans h).trans
-      (Properties.RemoteAudit.qsort_toList_perm bs _).symm)
+    (((Properties.PoubCheck.qsort_toList_perm as _).trans h).trans
+      (Properties.PoubCheck.qsort_toList_perm bs _).symm)
 
 /-- **The sort leaves a sorted array as it is.** -/
 theorem qsort_of_sorted {as : Array String} (h : as.toList.Pairwise (· < ·)) :
     (as.qsort (· < ·)).toList = as.toList :=
   List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2) (qsort_sorted as)
-    (h.imp le_of_lt') (Properties.RemoteAudit.qsort_toList_perm as _)
+    (h.imp le_of_lt') (Properties.PoubCheck.qsort_toList_perm as _)
 
 end Properties.Pouw.Period.SecurityProofs.Sort

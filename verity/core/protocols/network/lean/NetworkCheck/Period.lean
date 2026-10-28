@@ -135,7 +135,7 @@ the committed values `faultyBits` counts, the outputs a wrong unit computes and 
 `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment of a sync of
 Σ_sync to the `m` link-windows, so it is the same whichever syncs the certifier ran them under, and needs none of them.
 `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`: their exact sum in
-lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry theirs.
+lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and PoUB's publics carry theirs.
 
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows; the compute audits read none, so they are in no term (they are acceptance conditions):

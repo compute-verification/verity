@@ -78,7 +78,7 @@ from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, ste
 from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
-from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
+from verity_vllm.pipeline import commit_coins as CC, poub_session as RS  # noqa: E402
 
 # automatic stage telemetry of THIS process: hot/cold, engine built or reused (+ reason), warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
@@ -998,8 +998,8 @@ def hot_unsafe_reasons(args: Options) -> list[str]:
         why.append(f"VERITY_FAULT={settings.raw('VERITY_FAULT')!r} (deliberate fault: negative test)")
     if settings.raw("VERITY_SWITCH"):
         why.append("VERITY_SWITCH (interpreter switch interval is process-wide)")
-    if args.remote_verifier:
-        why.append("--remote-verifier (the store binder goes on the engine at its build)")
+    if args.poub_verifier:
+        why.append("--poub-verifier (the store binder goes on the engine at its build)")
     return why
 
 
@@ -1114,14 +1114,14 @@ class Options:
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer); with --replay-deferred (not slim) at the C2 site, before the bundle is sealed (c2_replay.serving_rows)")
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.remote_bandwidth.remote.CommitSession); a rejected session fails the Commit")
-    remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
-    remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.remote_bandwidth.binder.Binder.register_filler)")
-    remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
-    remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
-    remote_session_lib: str | None = option("--remote-session-lib", default=None, help="session.cu's build (benchmarks/remote_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --remote-kv-lib, with no copy (verity_vllm.protocols.remote_bandwidth.in_place)")
-    remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
+    poub_verifier: str | None = option("--poub-verifier", default=None, metavar="HOST:PORT", help="the remote bandwidth session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.poub.remote.CommitSession); a rejected session fails the Commit")
+    poub_plan: str = option("--poub-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
+    poub_kv_pages: int = option("--poub-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
+    poub_filler_gib: float = option("--poub-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.poub.binder.Binder.register_filler)")
+    poub_weight_blocks: int | None = option("--poub-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
+    poub_kv_lib: str | None = option("--poub-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
+    poub_session_lib: str | None = option("--poub-session-lib", default=None, help="session.cu's build (benchmarks/poub_session): the session reads the store where the engine holds it, its weights and filler encoded in place by --poub-kv-lib, with no copy (verity_vllm.protocols.poub.in_place)")
+    poub_step_ms: float = option("--poub-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
     memory_map: str | None = option("--memory-map", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: commit each KV layer's `<layer>/slot_mapping` (acquire.sources.kv_slots_source) and, after pair 0's roots are final, write memory-map/v1 of the run's KV to the request's path, its blocks from each request's Program of record at the pages those slots name, its digests from the committed K and V words (verity_vllm.pipeline.memory_map; the request: path, registration, store layout); the prover's witness, never published")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
@@ -1275,7 +1275,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
     _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
-    _rs is not None and _rs.before_build(_ekw)      # the hot worker refuses --remote-verifier: the session's engine is built here
+    _rs is not None and _rs.before_build(_ekw)      # the hot worker refuses --poub-verifier: the session's engine is built here
     _live = (_HOT or {}).get("eng")
     if _live is not None:
         # hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
@@ -1791,7 +1791,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 com.install()
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
             if _lock is not None:
-                r["remote_session"] = RS.end_run(_rs, pair, arm)
+                r["poub_session"] = RS.end_run(_rs, pair, arm)
             if arm != "control":
                 if getattr(args, "padded_finalize", False):
                     # the padding hook runs INSIDE finalize (after the worker drained: every executed step's leaf count / layout is
@@ -1826,8 +1826,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 "host_mem_kb": {"rss_before": rss0, "rss_after": rss1, "hwm": hwm},
                 "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
-            if "remote_session" in r:
-                row["remote_session"] = r["remote_session"]
+            if "poub_session" in r:
+                row["poub_session"] = r["poub_session"]
             if rc is not None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)

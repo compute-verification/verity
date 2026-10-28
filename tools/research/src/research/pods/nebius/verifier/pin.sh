@@ -3,13 +3,13 @@
 # it is unpacked root-owned at /opt/vy-verifier/COMMIT, never changed after. The Lean toolchain the remote audit's Lake package names
 # is installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
 # ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build
-# remote-audit-verifier remote-audit-difftest` and `sampled-proofs-verifier` (what a gate run's kit builds first) run there as
+# poub-check-verifier poub-check-difftest` and `sampled-proofs-verifier` (what a gate run's kit builds first) run there as
 # auditor, so neither a run nor a replay waits on a build. The pin (commit, UTC time) is appended to /opt/vy-verifier/pins.jsonl,
 # root's and append-only (`chattr +a`, host.py `record_pin`), and every run's request names its line (RT4-INT-40). Last,
 # /opt/vy-verifier/current -> COMMIT. A run runs from the tree it was requested at: host.py refuses one whose pin moved. Rerunning
 # it for an installed COMMIT skips the unpack and reads no TAR, and logs the pin again.
 #
-#   git archive COMMIT verity benchmarks/remote_session benchmarks/live_verifier tools/research/src/research \
+#   git archive COMMIT verity benchmarks/poub_session benchmarks/live_verifier tools/research/src/research \
 #     tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT
 set -euo pipefail
 die() { echo "vy-verifier-pin: $*" >&2; exit "${2:-1}"; }
@@ -24,14 +24,14 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  for f in benchmarks/live_verifier/host.py benchmarks/remote_session/verifier.py tools/research/src/research/store/cli.py; do
+  for f in benchmarks/live_verifier/host.py benchmarks/poub_session/verifier.py tools/research/src/research/store/cli.py; do
     [ -f "$tmp/$f" ] || { rm -rf "$tmp"; die "the archive has no $f"; }
   done
   chown -R root:root "$tmp"
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/core/protocols/remote_bandwidth/lean
+pkg=$T/verity/core/protocols/poub/lean
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then
@@ -56,7 +56,7 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
   install -d -m 0755 -o auditor -g auditor "$d/.lake"
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-verifier PATH="$T/.lean-bin:/usr/bin:/bin" \
-  sh -c "cd '$pkg' && lake build remote-audit-verifier remote-audit-difftest &&
+  sh -c "cd '$pkg' && lake build poub-check-verifier poub-check-difftest &&
          cd '$T/verity/core/service/sampled_proofs' && lake build sampled-proofs-verifier" | tail -1
 /usr/bin/python3 -I "$T/benchmarks/live_verifier/host.py" pinned "$c"
 ln -sfn "$c" "$O/current.tmp"

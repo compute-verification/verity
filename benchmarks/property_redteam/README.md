@@ -1,7 +1,7 @@
 # benchmarks/property_redteam
 
 Attacks on the stacking property (property/v1) and on the gate model's unit counts that the encode bound of the
-bandwidth audit (PoUB, `verity/core/protocols/remote_bandwidth`) rests on. `cases.py` is the refusal suite: Programs
+bandwidth audit (PoUB, `verity/core/protocols/poub`) rests on. `cases.py` is the refusal suite: Programs
 property/v1 must refuse or fully budget, and the honest shapes it must pass (`cases.json` is their metadata as data).
 `run.py` grades any check against them. `bitwise_codec.py` builds any number of codec words for 8 units a key byte,
 which falsified `EncodeChainHardness`, and `free_codec.py` is the construction before it. `squaring.py` attacks

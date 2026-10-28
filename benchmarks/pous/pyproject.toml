@@ -17,7 +17,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports
-          "verity/core/protocols/remote_bandwidth", "verity/core/protocols/profile.py",
+          "verity/core/protocols/poub", "verity/core/protocols/profile.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/circuits",
           # p2_v1/bandwidth.py serves the store through kernels' staging decode, whose modules it imports

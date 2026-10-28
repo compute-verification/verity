@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from verity.core.protocols.remote_bandwidth.codec import BLOCK_BYTES
+from verity.core.protocols.poub.codec import BLOCK_BYTES
 
 from .physical import Datacenter
 from .time import Interval

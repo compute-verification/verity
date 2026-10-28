@@ -21,7 +21,7 @@ b          its offset: LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 3 ‖
            LAYERS + layer, added to t(i) in every round of its words (0 under the seed's key)
 ~~~
 
-The table is the store's codec (`verity.core.protocols.remote_bandwidth.codec`), whose field, key, ρ, rounds and bound
+The table is the store's codec (`verity.core.protocols.poub.codec`), whose field, key, ρ, rounds and bound
 offset these are: `key` is its `derive` over a `Sloth` at the fields above and any k ≥ 1, which at p512 and p1024,
 k ≥ 2, is `codec.key` of the codec a registration names, and `encode_word`, `decode_word` and `binding` are its own.
 This module keeps the KV cache's layout and the kernel's root chain.
@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.core.protocols.remote_bandwidth.codec import (  # noqa: F401  the store codec's, which this module's users take
+from verity.core.protocols.poub.codec import (  # noqa: F401  the store codec's, which this module's users take
     BIND_INDEX, DOMAIN, P512, P1024, SEED_BYTES, Field, Key, Sloth, binding, decode_word, derive, encode_word, rho,
     rho_inv)
 

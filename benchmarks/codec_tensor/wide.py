@@ -23,7 +23,7 @@ K          a masked key's (`key(..., mask=True)`): LE(XOF(DOMAIN ‖ frame ‖ s
 ~~~
 
 The field, the key derivation (under this module's `DOMAIN`), ρ and the rounds are the store codec's
-(`verity.core.protocols.remote_bandwidth.codec`: `Field`, `derive` over a `Sloth`, `encode_word` and `decode_word`),
+(`verity.core.protocols.poub.codec`: `Field`, `derive` over a `Sloth`, `encode_word` and `decode_word`),
 with the payload check around them; this module keeps the tasks' layout and the tensor-core squaring.
 
 The seed is drawn after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each
@@ -37,9 +37,9 @@ task's stored bytes are the block the bandwidth tag (`ro-blake3/v1`) hashes.
 
 from __future__ import annotations
 
-from verity.core.protocols.remote_bandwidth.codec import (  # noqa: F401  the store codec's, which this module's users take
+from verity.core.protocols.poub.codec import (  # noqa: F401  the store codec's, which this module's users take
     MASK_INDEX, P512, P1024, SEED_BYTES, Field, Key, Sloth, derive, rho, rho_inv)
-from verity.core.protocols.remote_bandwidth import codec as RB
+from verity.core.protocols.poub import codec as RB
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 TASK_BYTES = 8192

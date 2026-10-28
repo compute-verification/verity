@@ -55,7 +55,7 @@
 #   session, so A5_JOBS covers every audited rank. It opens once every rank has passed its checks before the draw, with
 #   coins sized from every rank's draw, and not at all if one hasn't. The session's files, the ledger and the host's pins log are kept in
 #   $OUT/<name>/challenger/. The verifier's own copy of main's first-parent history (a5.py --main) is A5_MAIN, else this
-#   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/remote_session/auditor.sh writes it).
+#   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/poub_session/auditor.sh writes it).
 # A5_COINS=verifier (instead of A5_CHALLENGER): each rank draws by its partition file's rule through its own service.Stream
 #   on the verifier's own live coins (a5.py --coins verifier: the Lean's IO.getRandomBytes, read once the stream received
 #   the rank's registration), no challenger session, so A5_JOBS takes any number of ranks. Its record says source: verifier.

@@ -49,7 +49,7 @@ directory holds what is the demo's own: its placement and its commands.
 ## The onsite protocol on the same run
 
 Onsite (`verity/onsite/v0`, in `verity/core/protocols/onsite/`) is remote's superset: it adds PoUS, PoUB
-(`verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
+(`verity/poub/v0`) and network certification. The memory wipe has its piece on the same run too, and
 isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
 gets no verdict.

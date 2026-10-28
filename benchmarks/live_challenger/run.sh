@@ -2,7 +2,7 @@
 # The proof system's challenger on its auditor host (cwd = the source tree): `serve.py`, one session a run, its record,
 # key, release log, its signed close and address in $RESEARCH_RUN_DIR/out, which the run publishes from this machine. It runs on a
 # machine the prover doesn't control (AGENTS.md's auditor-trusted devices), never on PEER: once it listens it opens
-# `ssh -R PORT` to PEER (a name in /etc/vy/peers), as benchmarks/remote_session/run.sh's verifier does, so the prover's
+# `ssh -R PORT` to PEER (a name in /etc/vy/peers), as benchmarks/poub_session/run.sh's verifier does, so the prover's
 # client (`remote.RemoteChallenger.connect("127.0.0.1:PORT")`) connects to PEER's own 127.0.0.1:PORT. The auditor host
 # runs no such script: there a session is `vy-challenger-gate reserve ...` then `open --session S --root R` (auditor.py), as the auditor user
 # from the pinned tree, recorded in its ledger. This script runs a session elsewhere, for development, from the source tree:
@@ -11,7 +11,7 @@
 #     FAMILIES='[["opening-positions",8],["opening-identities",8],["replay",8],["kernel-check",8]]' \
 #     bash benchmarks/live_challenger/run.sh
 #
-# Run it, as remote_session's verifier, on a node that lets a run hold no check slot: a session waits on its client for the
+# Run it, as poub_session's verifier, on a node that lets a run hold no check slot: a session waits on its client for the
 # whole Commit, and a node under slot_only.py stops a run that holds none. SESSION is the session's id, the one the auditor's signed ledger opens
 # for its window (the key signs each id once). FAMILIES is the session's coin layout, [[label, count], ...] (the vLLM
 # Commit's is `challenge.layout(runs)`); EPOCH its epoch (default 0); KEY the challenger's LMS key directory on this

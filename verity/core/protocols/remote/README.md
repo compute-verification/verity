@@ -21,9 +21,9 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
 - PoUB, proof of useful bandwidth, an onsite subprotocol whose code still says "remote bandwidth": its package
-  `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
-  (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
-  its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
+  `verity/core/protocols/poub/`, its Lean verifier `PoubCheck`, its Lean vocabulary `Accounting.Poub`
+  (`Security/Definitions/Accounting/Poub.lean`) and `Accounting.Guarantees.Poub*`, its id `verity/poub/v0`,
+  its whole-node benchmark `benchmarks/poub_session/`, and serve-openai's `--poub-verifier`, the address of PoUB's
   verifier;
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;

@@ -35,7 +35,7 @@ import tagging as TG
 
 NAME = "ro-sketch-blake3/v0"
 SIGN_DOMAIN = "verity/bandwidth/sketch-signs/v0"
-PASS_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
+PASS_DOMAIN = b"verity/poub/seed/v0\0"
 KS = (16, 32, 64)
 STEP = 512
 ROWS = 16
@@ -71,7 +71,7 @@ def tiles_per_cta(nbs: int, groups: int, t: int) -> int:
 def pass_seed(sigma: bytes, j: int, root: bytes) -> bytes:
     """Pass j's seed from the window's σ and the previous pass's root (red team F29): its receipt is this module's at
     that seed, so the signs are fresh every pass and exist only once root_(j−1) does. The first 32 bytes of
-    `remote_bandwidth.receipts.seed` (the remote driver's chain; a tag's seed is 32 bytes)."""
+    `poub.receipts.seed` (the remote driver's chain; a tag's seed is 32 bytes)."""
     if len(sigma) != 32 or len(root) != 64 or not 0 <= j < 1 << 32:
         raise ValueError("σ is 32 bytes, the root 64 and j a u32")
     return hashlib.sha512(PASS_DOMAIN + sigma + j.to_bytes(4, "big") + root).digest()[:32]

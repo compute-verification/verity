@@ -1,6 +1,6 @@
 import Definitions.Accounting.RateAudit
 import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditRemote
+import Definitions.Accounting.RateAuditPoub
 import Definitions.Accounting.RateAuditHorizon
 
 /-!

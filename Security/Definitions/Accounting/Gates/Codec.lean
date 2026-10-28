@@ -9,7 +9,7 @@ import Definitions.Accounting.Gates.Model
 /-!
 # The word codec in the circuit model: what computing a block's encoding means (trusted)
 
-The codec of `verity/core/protocols/remote_bandwidth/codec.py` (masked, at `k` rounds over `p = 2^n − c`), and what a
+The codec of `verity/core/protocols/poub/codec.py` (masked, at `k` rounds over `p = 2^n − c`), and what a
 circuit of the model (`Model.lean`) computing its words is:
 
 * **The codec.** `rho p a` is `codec.rho`: `s = a^((p+1)/4) mod p`, the root of `a` or of `−a`, taken even when `a` is

@@ -1,10 +1,10 @@
 """The device reader (`reader.cu`): the remote bandwidth driver's receipts, leaves and receipt tree on the GPU, gated
-byte for byte against the driver (`verity/core/protocols/remote_bandwidth/receipts.py`) and timed against a read of
+byte for byte against the driver (`verity/core/protocols/poub/receipts.py`) and timed against a read of
 the same bytes.
 
 ~~~text
 segment     a device reader's part of a pass: count = 16 · 2^h chunks of one region, read in order from position
-            p = a multiple of count (`verity_vllm.protocols.remote_bandwidth.registry.aligned`); its root is the node (h + 4 levels above
+            p = a multiple of count (`verity_vllm.protocols.poub.registry.aligned`); its root is the node (h + 4 levels above
             the chunks) end_pass takes by segment number, and `open` serves an opening's leaf receipts and leaf path
 salts       the store's PRF, SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be leaf) (`Store.salt`), so none is kept
 ~~~
@@ -30,7 +30,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import receipts as rb
+from verity.core.protocols.poub import receipts as rb
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message

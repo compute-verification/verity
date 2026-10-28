@@ -16,15 +16,15 @@ contents are a circuit's values, which depend on the encodings only through the 
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
   the store, `I + q·b` for `I` input bits and `q` blocks encoded.
-* `StackedSessionConservationSketchDeployed`: the remote audit's conservation at the deployed parameters
-  (`RemoteSessionConservationSketchDeployed`) with a store per pass, made by the append-coin rule: each append's blocks
+* `StackedSessionConservationSketchDeployed`: PoUB's conservation at the deployed parameters
+  (`PoubSessionConservationSketchDeployed`) with a store per pass, made by the append-coin rule: each append's blocks
   are keyed by a coin drawn after its root has committed their digests, so the writers' choices for it are fixed
   before (`Accounting.appendCoinBlocks`), and pass `j` reads the blocks its layout names at the session's coins drawn
   before it (`RateSketch.coinStore`, `RateSketch.programmed`), for devices whose rebuilds beyond `X` are their
   carriers' sectors. The stacked stock is charged in every pass's rebuilds: `X` grows by the carriers' bits under the
   property, `8·R_in·life` input bits and `1024·(c_ρ·reads·life)/E` encoded bits over a carrier's life of `life`
   windows (the property's `L`; `L` here is the side link's bits, as in every rate-audit statement).
-* `StackedSessionConservationRelay`: the relay form, in the general class (`RemoteSessionConservationRelay`), where a
+* `StackedSessionConservationRelay`: the relay form, in the general class (`PoubSessionConservationRelay`), where a
   carrier's inputs may depend on the pass's oracle and so relay receipts: a carrier is a side source of the same bits.
   Its store is one for the session, made by the same rule.
 * `StackedRequirementSketchDeployed` and `StackedRequirementRelay`: the same sessions, with the shortfall read against a
@@ -37,12 +37,12 @@ contents are a circuit's values, which depend on the encodings only through the 
 The stacked sessions charge an encode at the gate model's cost (`encodeBitsCost`, nonlinear units of
 `Definitions/Accounting/Gates`: budgeted units and data products, `⊤` where the model has no circuit computing the
 words).
-They rest on the remote audit's random oracle and named assumptions, and on more: the gate model's two conjectures
+They rest on PoUB's random oracle and named assumptions, and on more: the gate model's two conjectures
 `Accounting.Assumptions.SquaringFloor` (a squaring mod `p` costs `e` nonlinear units) and
 `Accounting.Assumptions.ChainSum` (a codec word's `k · S` chained squarings cost their sum, so a word costs
 `E ≤ k · S · e`), and `Accounting.Assumptions.KeyBinding` (under the append-coin rule, the blocks a pass reads are
 uniform but for `δ`). The
-game orders every append's choices before its coin, as remote_bandwidth's protocol does, so no choice the writers make
+game orders every append's choices before its coin, as poub's protocol does, so no choice the writers make
 reads the encoding it is keyed under, and the sessions pay for no advice.
 
 **Idioms.** The carrier lemma is the counting step of incompressible encodings (Moran–Wichs, CRYPTO 2020: an
@@ -84,10 +84,10 @@ def CarrierBits : Prop :=
     (∀ E, c.inputs E ≤ I ∧ c.encoded E ≤ X) →
     Nat.card (Set.range fun E => c.run E) ≤ 2 ^ (I + X)
 
-/-- **The remote audit at the deployed parameters with a store per pass, with stacking: carriers are rebuilds of
+/-- **PoUB at the deployed parameters with a store per pass, with stacking: carriers are rebuilds of
 bounded size in every pass, and every appended block is keyed after its writers chose it.**
-`RemoteSessionConservationSketchDeployed`'s game and bound, with each pass on its own store, made by the append-coin
-rule (`Accounting.appendCoinBlocks`; remote_bandwidth's PROTOCOL.md §3–§4). The store is `T` appends of `M` block
+`PoubSessionConservationSketchDeployed`'s game and bound, with each pass on its own store, made by the append-coin
+rule (`Accounting.appendCoinBlocks`; poub's PROTOCOL.md §3–§4). The store is `T` appends of `M` block
 positions each, the registration first, whose coin is the seed. Append `a`'s choices `choose c ω a κ_<a` (its
 payloads, which may be a circuit's values over other blocks' encodings, their padding, the run inputs behind them, how
 many blocks, the schedule up to it) read the codec `ω`, the coins of the appends before it and the prefix `c`; its own
@@ -154,7 +154,7 @@ unpaid window has a rank-poor sign matrix or an unpaid pass; an unpaid pass is m
 at its prefix, where the writers' choices and the layout are fixed, and bounded there by the deployed guarantee's
 one-pass bound; and the draws are causal in the passes' correct receipts.
 
-Frozen (no-function, hash): `RemoteSessionConservationSketchDeployed`'s game with carriers on a store per pass made by
+Frozen (no-function, hash): `PoubSessionConservationSketchDeployed`'s game with carriers on a store per pass made by
 the append-coin rule, in the random-oracle and ideal encoding models, under the per-pass hash budget,
 `SquaringFloor`, `ChainSum` and `KeyBinding`. -/
 def StackedSessionConservationSketchDeployed : Prop :=
@@ -189,8 +189,8 @@ def StackedSessionConservationSketchDeployed : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
-/-- **The remote audit with relaying side sources on a store made by the append-coin rule, with stacking: a carrier is
-a side source of its circuit's bits.** `RemoteSessionConservationRelay`'s game and bound on a store made by the
+/-- **PoUB with relaying side sources on a store made by the append-coin rule, with stacking: a carrier is
+a side source of its circuit's bits.** `PoubSessionConservationRelay`'s game and bound on a store made by the
 append-coin rule (`Accounting.appendCoinBlocks`), one for the session: `T` appends of `M` block positions, each
 append's choices `choose ω a κ_<a` reading the codec and the coins of the appends before it, its own coin keying its
 blocks, and the session's blocks at the layout `slot`; under the rule the blocks are uniform but for `δ`
@@ -203,7 +203,7 @@ budgets, an encode costing `encodeBitsCost` over the codec's field `Fc` at `k` r
 `Accounting.Assumptions.SquaringFloor` at `es` nonlinear units a squaring and `Accounting.Assumptions.ChainSum`, at
 `E ≤ k · S · es` nonlinear units a word of `8·bytes` bits (`S = Field.squarings Fc`), inside their floor (`ε ≥ 2^−64`,
 `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`), as in `StackedSessionConservationSketchDeployed`, the bound is
-`RemoteSessionConservationRelay`'s at side link `L + C`,
+`PoubSessionConservationRelay`'s at side link `L + C`,
 
   `C = 8·R_in·life + 8·bytes·(c_ρ·reads·life)/E`,
 
@@ -216,10 +216,10 @@ session's tier reads fall short of `(1 − γ̄)` of its bits or some window's f
 **The reading.** Reading a carrier costs no link, but its contents are its circuit's values, so the device could
 rerun the circuit, taking its inputs and the bits it encodes over the link: `C` bits a pass. A carrier is thus a side
 source of `C` bits, the one place a receipt relayed through the circuit's inputs can come from, at `h` bits a relayed
-receipt (`RemoteSessionConservationRelay`'s term). The writers' choices are fixed before each append's coin, so they
+receipt (`PoubSessionConservationRelay`'s term). The writers' choices are fixed before each append's coin, so they
 add nothing to the side link, as in `StackedSessionConservationSketchDeployed`, and what stays outside the game is
 the same: a layout steered by encodings after their coins, and a node's re-registrations. The general class's receipt
-hashes the whole word, not the deployed sketch (as in `RemoteSessionConservationRelay`). The store is one for the
+hashes the whole word, not the deployed sketch (as in `PoubSessionConservationRelay`). The store is one for the
 session, made before the session's coins: this form covers an audit whose blocks written during a session are planned
 only from the next session on, the stricter of the two audit rules; the deployed sketch form
 (`StackedSessionConservationSketchDeployed`) takes a store per pass. `life` is a carrier's whole provenance's, as
@@ -227,10 +227,10 @@ there.
 
 Proof: `Accounting.SecurityProofs.StackedSessionConservationRelay`: each device is simulated by one that reruns its
 carrier's circuit over the side link and answers the carrier's reads from its values, within `L + C` link bits, with
-the same receipts, tier reads and completions; `RemoteSessionConservationRelay`'s argument bounds that session on any
+the same receipts, tier reads and completions; `PoubSessionConservationRelay`'s argument bounds that session on any
 store drawn before the coins, and `KeyBinding` moves its unpaid words' event to uniform blocks.
 
-Frozen (no-function, hash): `RemoteSessionConservationRelay`'s game with carriers on a store made by the append-coin
+Frozen (no-function, hash): `PoubSessionConservationRelay`'s game with carriers on a store made by the append-coin
 rule, in the random-oracle and ideal encoding models, under `SquaringFloor`, `ChainSum` and `KeyBinding`. -/
 def StackedSessionConservationRelay : Prop :=
   ∀ (n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M : ℕ) (cost : ℕ → ℕ)
@@ -259,7 +259,7 @@ def StackedSessionConservationRelay : Prop :=
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
 
-/-- **The stacked remote audit at the deployed parameters with a store per pass, read against a declared circuit's
+/-- **PoUB with stacking at the deployed parameters with a store per pass, read against a declared circuit's
 requirement.** `StackedSessionConservationSketchDeployed`'s session, hypotheses and bound, with the session's shortfall
 measured against a declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) over a window `win`
 of engine steps. The window has at most `n·P` steps, one for each pass the session's passes are bound to (a pass names
@@ -286,7 +286,7 @@ at most its bits of `W`'s reads (`RequirementMoved`). So an accepted session rea
 the audit credits and of the bits `W` reads from complete blocks, counted in bits; `RequirementUncredited` and
 `RequirementUnplanned` bound what a block still being written leaves out. Each pass reads its own store, the plan's
 blocks resident going into its step, made from the coins before it; that its tiles are the memory map's blocks, so
-that the bits read are `W`'s, is the binding's (`remote_bandwidth`'s Replay and each pass's bound step), and is not in this game.
+that the bits read are `W`'s, is the binding's (`poub`'s Replay and each pass's bound step), and is not in this game.
 
 **The memory map and the append coin.** With `mm`, the execution `e` and the layout `ℓ` fixed before the seed, as the
 statement takes them, which blocks are resident at each step, their indices and their order are fixed with `mm`: frees,
@@ -341,7 +341,7 @@ def StackedRequirementSketchDeployed : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
-/-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement.**
+/-- **PoUB with stacking with relaying side sources, read against a declared circuit's requirement.**
 `StackedSessionConservationRelay`'s session, hypotheses and bound, with the session's tier reads measured against a
 declared circuit `W`'s requirement over a window `win` of at most `n·P` engine steps, as in
 `StackedRequirementSketchDeployed`: at each step the memory map `mm` holds `W`'s credited blocks

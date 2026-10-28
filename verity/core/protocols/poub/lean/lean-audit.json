@@ -1,0 +1,18 @@
+{
+ "roots": ["PoubCheck", "PoubCheck.Difftest", "PoubCheck.Verifier", "PoubCheck.Protocol"],
+ "exempt": {
+  "PoubCheck.DifftestMain": "the poub-check-difftest executable's entry point, one line; it serves PoubCheck.Difftest.table, audited under PoubCheck.Difftest, through the difftest server's line protocol: a test and not a proof",
+  "PoubCheck.VerifierMain": "the poub-check-verifier executable's entry point, one line; it runs PoubCheck.Verifier.serve, audited under PoubCheck.Verifier",
+  "PoubCheck.ProtocolMain": "the poub-check-protocol executable's entry point, one line; its command is Core.Protocol.main of PoubCheck.Protocol.protocol, audited under PoubCheck.Protocol and CoreProtocol"
+ },
+ "layers": {
+  "PoubCheck": {
+   "imports": ["Std", "Flock", "Randomness", "CoreProtocol", "PousCheck.Merkle", "PoubCheck"],
+   "except": ["PoubCheck.Difftest"],
+   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (PoubCheck.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, PoubCheck.P2); no Mathlib and nothing of Security. The difftest's table (PoubCheck.Difftest) also imports the difftest server"
+  }
+ },
+ "dependencies": {
+  "toolchain": "7e5e738e4840d9266989ec372ac6a921cc3efa7fc3158d3d06f480b0b3ea0029"
+ }
+}

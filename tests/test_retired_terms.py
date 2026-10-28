@@ -74,7 +74,7 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/pouw/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "verity/core/protocols/poub/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
     "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
@@ -94,7 +94,7 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/network/tests/period_case.py": "#4721 rewrites its lines",
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#4721 adds lines",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
-    "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
+    "verity/core/protocols/poub/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
 }

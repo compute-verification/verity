@@ -4,7 +4,7 @@ serving loop, and the fixture a decode kernel's sketch is held to.
     serve.py [--steps 12] [--per-window 3] [--prompt 1]   # serve the toy, print its tokens and each window's verdict
     serve.py fixture [--out receipts.json]                 # write the kernel fixture (stdout by default)
 
-**The step.** Each engine step is one pass of the audit (`remote_bandwidth.p2`). It decodes the store layer by layer
+**The step.** Each engine step is one pass of the audit (`poub.p2`). It decodes the store layer by layer
 (`store.decode_block`: block `i`'s 2,056 bytes of `C*` to its 2,054 of `W`), runs the layer's matmuls on the staging
 buffer, and, as it decodes block `i`, sketches the same 2,056 bytes under the pass's seed (`p2.Sketcher.block`, π).
 At the step's end it sums each unit's four partials (σ), hashes them to the receipts (y), commits them in the pass's
@@ -20,7 +20,7 @@ window closes at its deadline.
 **The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
 leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π, every unit's σ and y, and
 the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
-`verity/core/protocols/remote_bandwidth` is the interface). It is regenerated, not tracked: the repository's data
+`verity/core/protocols/poub` is the interface). It is regenerated, not tracked: the repository's data
 budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
 """
 from __future__ import annotations
@@ -43,9 +43,9 @@ else:
 
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import expand_prefix
-from verity.core.protocols.remote_bandwidth import audit, coins, p2, receipts
+from verity.core.protocols.poub import audit, coins, p2, receipts
 
-FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
+FIXTURE_SCHEMA = "verity-poub/p2-sketch-fixture/v0"
 FIXTURE_SHA512 = ("658f6d40a5ecdcb252ca2d4b844f41c6b2af0550f291a4d2e33f975d3158fac2"
                   "b3da2a65666d146f6aabac37167b4d21aaf4d1ef5c02127ac1ad2f8380f88b9a")
 NODE = b"p2-toy-node"
@@ -271,7 +271,7 @@ def fixture(passes: int = 2) -> dict:
         previous = root
     return {
         "schema": FIXTURE_SCHEMA,
-        "interface": "verity/core/protocols/remote_bandwidth/PROTOCOL.md §11",
+        "interface": "verity/core/protocols/poub/PROTOCOL.md §11",
         "store": {"toy": "toy.json", "c_star_sha512": doc["c_star_sha512"], "blocks": store.params.blocks,
                   "units": units, "unaudited": list(range(p2.UNIT_BLOCKS * units, store.params.blocks))},
         "registration": {"node": NODE.hex(), "rows": reg.rows, "digest": reg.digest.hex()},

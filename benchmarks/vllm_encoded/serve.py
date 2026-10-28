@@ -587,7 +587,7 @@ def apply(idx: int, quant):
 
 
 class DeviceWords:
-    """The name and word of a codec whose words the arm's install encoded on the device (`verity_vllm.protocols.remote_bandwidth` registers
+    """The name and word of a codec whose words the arm's install encoded on the device (`verity_vllm.protocols.poub` registers
     them as they are, ``encode=False``)."""
 
     def __init__(self, name: str, word_bytes: int) -> None:
@@ -601,7 +601,7 @@ class DeviceWords:
 
 def store_weights(runner, install: Install, args) -> list:
     """The store's weight regions: every parameter left after the install (identity), and each encoded linear's words."""
-    from verity_vllm.protocols.remote_bandwidth.binder import WeightRegion, model_weights
+    from verity_vllm.protocols.poub.binder import WeightRegion, model_weights
     out = model_weights(runner)
     for name, lin in install.linears:
         nbytes = lin.store.numel() * lin.store.element_size()
@@ -847,7 +847,7 @@ def main() -> None:
     ap.add_argument("--profile-steps", type=int, default=0,
                     help="open a profiler window (cudaProfilerStart/Stop) over this many steady decode steps a point")
     ap.add_argument("--store", action="store_true",
-                    help="register the node's store through `verity_vllm.protocols.remote_bandwidth`'s binder: weights (the arm's encoded words, "
+                    help="register the node's store through `verity_vllm.protocols.poub`'s binder: weights (the arm's encoded words, "
                          "identity for the rest), the KV pool and its pages' life, a pass a step")
     ap.add_argument("--store-window", type=int, default=0,
                     help="with --store, run the passes in windows of this many (chained seeds and plan digests, the "
@@ -896,11 +896,11 @@ def main() -> None:
         hook_runner(hooks, install)
     binder = None
     if args.store:
-        from verity_vllm.protocols.remote_bandwidth.binder import Binder, Every
-        from verity_vllm.protocols.remote_bandwidth.registry import Store
+        from verity_vllm.protocols.poub.binder import Binder, Every
+        from verity_vllm.protocols.poub.registry import Store
         window = {}
         if args.store_window:
-            from verity.core.protocols.remote_bandwidth.audit import NoiseTiles
+            from verity.core.protocols.poub.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
