@@ -8351,6 +8351,15 @@
    "assumptions": [],
    "type_hash": "c4eb9f6f3eb171da49c3706a625d10ba7bc90ac1ca1672a9aa0ed2131ae404ed"
   },
+  "Nci.SecurityProofs.BlockDescriptionAdvice": {
+   "owner": "@training"
+  },
+  "Nci.SecurityProofs.BlockDescriptionAdviceHonest": {
+   "owner": "@training"
+  },
+  "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial": {
+   "owner": "@training"
+  },
   "Nci.SecurityProofs.CapabilityFloor": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor"],
@@ -8470,6 +8479,15 @@
    "signature": ["Nci.SecurityProofs.ExpandComplies : Nci.Guarantees.ExpandComplies"],
    "assumptions": [],
    "type_hash": "bdcdad57fd63b97150c3b5c625dbaed887016cd6836a34943e8a5eded68556e5"
+  },
+  "Nci.SecurityProofs.FaultyInjection": {
+   "owner": "@training"
+  },
+  "Nci.SecurityProofs.FaultyInjectionHonest": {
+   "owner": "@training"
+  },
+  "Nci.SecurityProofs.FaultyInjectionNontrivial": {
+   "owner": "@training"
   },
   "Nci.SecurityProofs.FitBound": {
    "owner": "@lean",
@@ -12814,7 +12832,13 @@
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
-   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code."
+   "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
+   "Nci.SecurityProofs.BlockDescriptionAdvice": "frozen (no-function): It is Lemma 1 with advice, about an arbitrary builder from advice to registrations of (c,k)-partitions, decoder and evaluator that reads the advice (Nci.Capability.EvaluatesAdvice, Security/Definitions/Nci/Capability/Fresh.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.FaultyInjection": "frozen (no-function): It is about an arbitrary registration of a (c,k)-partition, partition into proof blocks and trace, with the trace's faulty proof blocks (Verity.Partition.wrong) and what they inject (Nci.Capability.injected, Nci.Capability.cutReg, Security/Definitions/Nci/Capability/Fresh.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.BlockDescriptionAdviceHonest": "completeness: BlockDescriptionAdvice's honest witness (its witnesses entry): at the toy builder Ra (Security/Definitions/Nci/Capability/Toy.lean), whose one-bit advice gates the toy circuit's computed gates, the empty evaluator followed by any one-bit advice evaluates the extraction ya (the product's value when the advice is set, nothing otherwise) on every block, and every registration Ra makes is a (2,1)-partition, all proved, so BlockDescriptionAdvice's premises hold together there and BlockDescriptionAdvice is not vacuous.",
+   "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial": "completeness: BlockDescriptionAdvice's nontrivial witness (its witnesses entry): at the toy builder Ra under the advice [true], with ℓa = 0 so the premise a.length = ℓa is dropped, the extracted product's value has no description of at most k + clog2 B + aBlk + ℓa = 1 bits, since the toy decoder M reads only programs of two bits, so BlockDescriptionAdvice's conclusion is not a tautology and its ℓa term is needed.",
+   "Nci.SecurityProofs.FaultyInjectionHonest": "completeness: FaultyInjection's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the trace Xf holds the registered weight, and of the proof blocks P2 exactly one is faulty (gate 2 holds a wrong product), with one output bit, inside R1's one inference block, all proved, so FaultyInjection's premises hold together at m = w = 1 with a faulty block, and FaultyInjection is not vacuous.",
+   "Nci.SecurityProofs.FaultyInjectionNontrivial": "completeness: FaultyInjection's nontrivial witness (its witnesses entry): at the toy trace Xf, with m = 0 so the premise bounding the faulty proof blocks per inference block is dropped, the cut registration of R1 at what P2's faulty block injects is no (2, 1 + 0*1)-partition, since its inference block reads the token and the injected product, so FaultyInjection's conclusion is not a tautology and its m*w term is needed."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -60239,9 +60263,17 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   },
+  "Nci.SecurityProofs.BlockDescriptionAdvice": {
+   "honest": ["Nci.SecurityProofs.BlockDescriptionAdviceHonest"],
+   "nontrivial": "Nci.SecurityProofs.BlockDescriptionAdviceNontrivial"
+  },
   "Nci.SecurityProofs.CapabilityFloor": {
    "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
    "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
+  },
+  "Nci.SecurityProofs.FaultyInjection": {
+   "honest": ["Nci.SecurityProofs.FaultyInjectionHonest"],
+   "nontrivial": "Nci.SecurityProofs.FaultyInjectionNontrivial"
   },
   "Nci.SecurityProofs.HeldBudget": {
    "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
