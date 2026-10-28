@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from verity.ml.circuits.codec import _spec_id, program_digest
+from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.ml.circuits.refs import Refs
 
@@ -86,7 +86,7 @@ def _reachable(root: SpecializedDefinition) -> dict[str, object]:
     out: dict[str, object] = {}
 
     def visit(fn) -> None:
-        fid = _spec_id(fn)
+        fid = descriptor_id(fn)
         if fid in out:
             return
         out[fid] = fn
@@ -154,7 +154,7 @@ def _compare_bodies_(ba, bb, leaf_limit: int, names: list[str], fid: str, same_c
         if na.form != nb.form or not same_callee(na.fn, nb.fn) or na.out != nb.out or tuple(na.axes) != tuple(nb.axes) \
                 or na.n != nb.n or na.n_xs != nb.n_xs or len(na.args) != len(nb.args):
             return DefinitionCorrespondence(fid, "mismatch", ba.gates,
-                                     f"node {k}: {na.form} {_spec_id(na.fn)} n={na.n} vs {nb.form} {_spec_id(nb.fn)} n={nb.n}")
+                                     f"node {k}: {na.form} {descriptor_id(na.fn)} n={na.n} vs {nb.form} {descriptor_id(nb.fn)} n={nb.n}")
         if (na.name or None) != (nb.name or None):
             names.append(f"{fid} node {k}: {na.name!r} vs {nb.name!r}")
         for i, (aa, ab) in enumerate(zip(na.args, nb.args)):
@@ -179,7 +179,7 @@ def _worse(a: str, b: str) -> str:
 
 
 def _same_id(fa, fb) -> bool:
-    return _spec_id(fa) == _spec_id(fb)
+    return descriptor_id(fa) == descriptor_id(fb)
 
 
 def _statics_diff(fa, fb) -> dict:
@@ -221,7 +221,7 @@ def correspond_rebound(left, right, *, leaf_limit: int = 1 << 22) -> Corresponde
     work: list[tuple] = []
 
     def same_callee(fa, fb) -> bool:
-        ia, ib = _spec_id(fa), _spec_id(fb)
+        ia, ib = descriptor_id(fa), descriptor_id(fb)
         if ia in pair_of:
             return pair_of[ia] == ib
         if ib in rev:
@@ -242,7 +242,7 @@ def correspond_rebound(left, right, *, leaf_limit: int = 1 << 22) -> Corresponde
     n_ident = n_same = 0
     while work:
         fa, fb = work.pop(0)
-        ia, ib = _spec_id(fa), _spec_id(fb)
+        ia, ib = descriptor_id(fa), descriptor_id(fb)
         fid = ia if ia == ib else f"{ia} ~ {ib}"
         if isinstance(fa, PrimitiveDefinition):
             ok = fa.params == fb.params and fa.ret == fb.ret
@@ -309,10 +309,10 @@ def correspond(left, right, *, leaf_limit: int = 1 << 22) -> CorrespondenceRepor
             mism.append(v)
     # roots: the two `Root[...]` ids differ when the program functions' ids differ; compare them directly
     ra, rb = left.root, right.root
-    root_ids = {_spec_id(ra), _spec_id(rb)}
+    root_ids = {descriptor_id(ra), descriptor_id(rb)}
     if len(root_ids) == 2:
         mism = [m for m in mism if m.id not in root_ids]
-        v = _compare_bodies(ra, rb, leaf_limit, names, f"{_spec_id(ra)} ~ {_spec_id(rb)}")
+        v = _compare_bodies(ra, rb, leaf_limit, names, f"{descriptor_id(ra)} ~ {descriptor_id(rb)}")
         if v.verdict == "identical":
             n_ident += 1
         elif v.verdict == "same-references":

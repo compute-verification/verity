@@ -161,11 +161,11 @@ def program_digests(sub, statics: dict | None = None) -> dict[str, str]:
     """META ``program_digests``: core's ``program_digest`` of the subcircuit's Definition at the instance statics, keyed by its
     descriptor id (``verity.ml.circuits.codec``'s, the id the canonical partition and the verifier name a template by); a silicon
     reference no core Definition wraps keeps its own key."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
 
     digests = sub.program_digests([statics or {}])
     try:
-        key = _spec_id(sub.definition(**(statics or {})))
+        key = descriptor_id(sub.definition(**(statics or {})))
     except (AssertionError, AttributeError, TypeError, ValueError):
         return digests
     (value,) = digests.values()
