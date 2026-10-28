@@ -519,9 +519,10 @@ class Served:
             self.refused.append(f"call {call.index}: linear {call.layer}'s weight changed within the window")
 
     def commit(self, run: Any, call: Any, a: Any, s_a: Any, weight: Any, weight_scale: Any,
-               records: np.ndarray | None) -> dict[str, str]:
+               records: Any) -> dict[str, str]:
         """Register call ``call``'s z table (its z/y ``records`` over its T slots, `pouw_h1_records`', split back to z and
-        y and laid out in the Program's tile), add its A rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
+        y and laid out in the Program's tile, or read where they are when that tile is theirs, `zy_words`), add its A
+        rows (its served rows ``a`` [m, K] and scales ``s_a`` [m]) to its
         step's A table of K at its rows in call order, registered whole once the step's calls of K are all in (in
         whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
         held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
