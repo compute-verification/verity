@@ -4,7 +4,8 @@
                         [--arms served,contig] [--window-ms 2000 --lead-ms 500 --rounds 3] [--table table.md] > kfa3.jsonl
 
 The steps, caches and calls are attn_knobs.py's (32 query heads, 8 KV heads, head dim 64, causal, a --prompt BxL being B
-sequences of L tokens). The arms are FA3's `served` and `contig` (the wheel) and, per --fa3-so, a rebuilt kernel's `so:NS`
+sequences of L tokens; BxLs is that step with each sequence's first key spiked, `spike`, which an unchecked lazy max
+overflows on). The arms are FA3's `served` and `contig` (the wheel) and, per --fa3-so, a rebuilt kernel's `so:NS`
 and `so:NS:contig` (fa3_tile.sh). Its output need not equal FA3's bytes, so each arm must pass, before it is timed:
 
 - finite, and determinism: equal bytes on a rerun;
@@ -56,6 +57,23 @@ def reference(s: ak.Step) -> torch.Tensor:
         out[o:o + n] = torch.einsum("hqk,khd->qhd", sc.softmax(-1), v)
         o += n
     return out
+
+
+def spike(s: ak.Step, a: float = 16.0, b: float = 64.0) -> None:
+    """Each sequence's first key, which FA3's causal loop reaches last, made to outscore the rest by ~170 in log2 units.
+
+    Every query gains `a` on dimension 0 and that key is `b` there and 0 elsewhere, so it scores ~a * b * scale = 128
+    (185 in log2 units) against ~a * 3 * scale = 6 for the largest other key: past exp2's range (128 in log2 units) from
+    any other block's max. Its caches are rebuilt from the changed rows.
+    """
+    o = 0
+    for n in s.lens:
+        s.k[o] = 0
+        s.k[o, :, 0] = b
+        s.q[o:o + n, :, 0] += a
+        o += n
+    s.caches = {"served": ak.paged(s.k, s.v, s.lens, ak.BLOCK, True), "kattn": ak.paged(s.k, s.v, s.lens, ak.BLOCK, False),
+                "page128": ak.paged(s.k, s.v, s.lens, 128, True)}
 
 
 def dist(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -146,9 +164,11 @@ def main() -> None:
     emit({"kind": "device", "uuid": nv.uuid, "name": torch.cuda.get_device_name(0), "sms": st.nsm, "torch": torch.__version__,
           "cuda": torch.version.cuda, "arms": names, "sos": sos, "ulp_bound": ULP_BOUND, **nv.sample()})
     for pi, prompt in enumerate(args.prompt or PROMPTS):
-        lens = ar.parse_prompt(prompt)
+        lens = ar.parse_prompt(prompt.removesuffix("s"))
         arms.sched_cache.clear()
         s = ak.Step(m, lens, args.seed + pi)
+        if prompt.endswith("s"):
+            spike(s)
         bat = ak.batched(m, s, args.seed + 100 + pi)
         fa3 = ak.snap(arms.call("served", s, ak.poisoned(s))())
         ref = reference(s)
