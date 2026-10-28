@@ -2,7 +2,7 @@
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
-  the Commit reserves a challenge phase on the auditor's challenger gate (`GateHost`: ``reserve --peer NAME --scheme SCHEME --families
+  the Commit reserves a challenge phase on the auditor's challenger gate (`Gate`: ``reserve --peer NAME --scheme SCHEME --families
   families(runs)``, `benchmarks/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
   root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
@@ -58,7 +58,7 @@ def families(runs: int) -> list[list[Any]]:
 Run = Callable[[list[str]], "tuple[int, str]"]
 
 
-class GateHost:
+class Gate:
     """Infra's challenger gate over `command` (its argv prefix as one string, e.g. ``ssh -i KEY -o IdentitiesOnly=yes
     research@HOST``): each request goes as one shell-quoted word, which the gate's forced command splits. `run` replaces
     the subprocess (tests)."""
@@ -97,7 +97,7 @@ class Session:
     """The Commit's challenge phase on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
     run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
 
-    def __init__(self, gate: GateHost, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
+    def __init__(self, gate: Gate, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
         self.gate, self.reserved, self.runs = gate, dict(reserved), int(runs)
         self._address = address or (lambda port: f"127.0.0.1:{port}")
         self.given: dict[str, Any] | None = None
@@ -105,7 +105,7 @@ class Session:
         self.index = 0
 
     @classmethod
-    def reserve(cls, gate: GateHost, peer: str, runs: int, **kw: Any) -> Session:
+    def reserve(cls, gate: Gate, peer: str, runs: int, **kw: Any) -> Session:
         if runs < 1:
             raise SystemExit("--challenger-gate draws the coins of the Commit's instrumented runs: not without one")
         return cls(gate, gate.call("reserve", "--peer", peer, "--scheme", SCHEME, "--families", json.dumps(families(runs))),
@@ -167,7 +167,7 @@ def of_options(args: Any, runs: int, gate_run: Run | None = None) -> Session | N
     if getattr(args, "replay_challenge", None):
         raise SystemExit("--challenger-gate and --replay-challenge are two sources of the C2 replay's challenge: give one")
     try:
-        return Session.reserve(GateHost(gate, gate_run), peer, runs)
+        return Session.reserve(Gate(gate, gate_run), peer, runs)
     except CoinError as e:
         raise SystemExit(f"--challenger-gate: {e}") from e
 
@@ -279,6 +279,6 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     return None
 
 
-__all__ = ["CHALLENGER", "FAMILIES", "GateHost", "IDENTITIES", "IN_PROCESS", "POSITIONS", "REPLAY", "ROOT_BYTES", "SCHEME",
+__all__ = ["CHALLENGER", "FAMILIES", "Gate", "IDENTITIES", "IN_PROCESS", "POSITIONS", "REPLAY", "ROOT_BYTES", "SCHEME",
            "Session", "draw", "families", "identities", "of_options", "positions", "reason", "replay_challenge", "tp_draw",
            "tp_keys"]
