@@ -9,20 +9,21 @@ import Flock.Hash
 /-!
 # Soundness as a causal game at onsite's compiled verifier, and each subprotocol's target
 
-The verifier of record is one compiled Lean function, `Core.Onsite.protocol`'s `answer`: NCI's registration check
-(`NciCheck.Protocol.protocol`, in the commit phase, on the registration sampled proofs' one-stage audit commits to) and
-then the composition of the subprotocols that decide a period (`Core.Composition.registered`). Five of the six are its
-components today, one per `Accounting.Audit`:
+The verifier of record is one compiled Lean function, `Core.Onsite.protocol`'s `answer` on the caller's blobs: the
+composition of its components (`Core.Composition.sameB`), whose inference-only policy (`NciCheck.Protocol.protocol`)
+and sampled proofs' one-stage audit must commit to one record (`Core.Onsite.tied`). Five of its components decide a
+period, one per `Accounting.Audit`:
 
 | subprotocol | `Audit` | component |
 | --- | --- | --- |
-| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` |
-| PoUW | `.pouw` | `PouwCheck.protocol` (compute-accounting's period protocol `PouwCheck.period` once posted) |
+| sampled proofs | `.sampled` | `SampledProofs.OneStageZk.protocol` |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` |
 | the bandwidth audit | `.poub` | `RemoteAudit.Protocol.protocol` |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` |
 
-The sixth, the wipe (`MemoryChallenger.WipeProtocol.protocol`), is composed with them in `Properties.Verity.Wipe`.
+The policy's acceptance is in every verdict (`RecordAccepts`). The wipe (`MemoryChallenger.WipeProtocol.protocol`) is
+the seventh component, with no `Audit` and no target here.
 
 The statement's form is soundness's rulings R1, R4′, R5 and R6 and the one adversary form:
 
@@ -35,7 +36,7 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and the one adv
   from the files (`Flock.Bridge.circuitOfFile`, `unitsOfFile`, `partsOfFile` at v2's reading of the blob, `read`), and
   the positions are the files' and the commitment's (`place`), never the prover's world. The params hold the circuit
   file's digest (`programDigest`): a file whose SHA-512 isn't it is refused (`Registered`, conjoined beside onsite's
-  acceptance until onsite's sampled component is v2, ONE-3b).
+  acceptance).
 * **Sampled proofs' claim reads one fixed extractor's transcript (R4′).** The extractor (`extract`, the one
   `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
   The claim is that at most an `ε` share of the file's units are unbound in its transcript (`Accounting.unbound`): wrong in it, or
@@ -51,9 +52,10 @@ The statement's form is soundness's rulings R1, R4′, R5 and R6 and the one adv
   that way. The named assumption `ecr/sha-512` is asked only of the finder.
 * **The one vocabulary.** The period is `Accounting.PeriodLive` (`live`), and the claim is its `Holds`.
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict (`Verdict`) is the file check,
-  NCI's acceptance of the registration sampled proofs committed to (`RegistrationAccepts`, the conclusion of
-  `Properties.Composition.AcceptRegistration`), and `a`'s compiled component's acceptance of its own case. The releases
-  each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
+  onsite's cases an accepted composition whose policy and sampled proofs commit to one record (`RecordAccepts`, from
+  `Properties.Composition.AcceptMeans`), and `a`'s compiled component's acceptance of its own case. The blobs are
+  content-addressed bytes sent with the evidence, last, and each acceptance counts any blobs. The releases each
+  component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
 
@@ -74,9 +76,9 @@ open Accounting Core
 open scoped ENNReal
 
 /-- The compiled component of onsite that decides `Audit` `a`. -/
-def component : Audit → Protocol
-  | .sampled => SampledProofs.OneStage.protocol
-  | .pouw => PouwCheck.protocol
+def component : Audit → BlobProtocol
+  | .sampled => SampledProofs.OneStageZk.protocol
+  | .pouw => PouwCheck.Period.protocol
   | .pous => PousCheck.RunProtocol.protocol
   | .poub => RemoteAudit.Protocol.protocol
   | .network => NetworkCheck.Period.protocol
@@ -87,39 +89,39 @@ structure Sent where
   commitment : ByteArray
   evidence : ByteArray
 
-/-- **The verifier of record accepts what the prover sent.** -/
+/-- **The verifier of record accepts what the prover sent**, on some blobs. -/
 def Accepts (s : Sent) : Prop :=
-  (Onsite.protocol.answer s.params s.commitment s.evidence).verdict = .accept
+  ∃ bs, (Onsite.protocol.answer s.params s.commitment s.evidence bs).verdict = .accept
 
-/-- Onsite's three byte strings decode under its registered composition's formats: the registration's entry `n` and
-the components' `ps`, the components' binding `b` and the registration's digest `d`, the registration's case `k` and the
-components' `ev`. -/
-def Decoded (s : Sent) (n : Composition.Named) (ps : List Composition.Named) (b d : ByteArray) (k : Composition.Case)
-    (ev : List Composition.Case) : Prop :=
-  (canonicalJson s.params >>= Composition.decodeRegisteredParams) = .ok (n, ps) ∧
-    Composition.decodeRegisteredCommitment s.commitment = .ok (b, d) ∧
-      Composition.decodeRegisteredEvidence s.evidence = .ok (k, ev)
+/-- Onsite's components on the blobs `bs`, each reading them. -/
+def componentsOn (bs : Array ByteArray) : List Protocol := Onsite.components.map (·.onBlobs (Blobs.ofArray bs))
 
-/-- The protocol `P` accepts its own case in what the prover sent: onsite's three byte strings decode, and one of the
-components' cases is `P`'s, as one of onsite's components, which decodes under the parameters onsite names for it, and
-`P`'s check accepts it. -/
-def CaseAccepts (P : Protocol) (s : Sent) : Prop :=
-  ∃ n ps b d k ev, Decoded s n ps b d k ev ∧
-    ∃ x ∈ Properties.Composition.triples Onsite.components ps ev, x.1 = P ∧
+/-- Onsite's three byte strings decode under its composition's formats: the components' parameters `ps`, the binding
+`b` of their digests, and their cases `ev`. -/
+def Decoded (s : Sent) (ps : List Composition.Named) (b : ByteArray) (ev : List Composition.Case) : Prop :=
+  (canonicalJson s.params >>= Composition.decodeParams) = .ok ps ∧ Composition.decodeCommitment s.commitment = .ok b ∧
+    Composition.decodeEvidence s.evidence = .ok ev
+
+/-- The protocol `P` accepts its own case in what the prover sent, on some blobs: onsite's three byte strings decode,
+and one of the components' cases is `P`'s, as one of onsite's components on the blobs, which decodes under the
+parameters onsite names for it, and `P`'s check on the blobs accepts it. -/
+def CaseAccepts (P : BlobProtocol) (s : Sent) : Prop :=
+  ∃ bs ps b ev, Decoded s ps b ev ∧
+    ∃ x ∈ Properties.Composition.triples (componentsOn bs) ps ev, x.1 = P.onBlobs (Blobs.ofArray bs) ∧
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
 /-- `Audit` `a`'s component accepts its own case in what the prover sent. -/
 def ComponentAccepts (a : Audit) (s : Sent) : Prop := CaseAccepts (component a) s
 
-/-- **NCI accepted the registration sampled proofs committed to**: onsite's three byte strings decode, and what they
-decode to is `Properties.Composition.RegisteredAccepted` at onsite (its registration check NCI's, its committing
-component sampled proofs' one-stage audit): NCI's check accepts the registration's case, its digest is the one the
-commitment ends in and the one sampled proofs' case commits to, and the components' cases are an accepted
-composition. -/
-def RegistrationAccepts (s : Sent) : Prop :=
-  ∃ n ps b d k ev, Decoded s n ps b d k ev ∧ ∃ pub prof,
-    Properties.Composition.RegisteredAccepted "verity/onsite/v0" NciCheck.Protocol.protocol
-      SampledProofs.OneStage.protocol.id Onsite.components n ps b d k ev pub prof
+/-- **Onsite's cases are an accepted composition whose policy and sampled proofs commit to one record**: on some
+blobs, onsite's three byte strings decode, the cases are an accepted composition of its components on the blobs
+(`Properties.Composition.Accepted`: every component accepts its own case, the policy's among them, and the commitment
+binds their digests), and the cases of `Onsite.tied`, the policy's and sampled proofs' one-stage audit's, commit to one
+record: none has a digest other than the first's (`Composition.strays`). -/
+def RecordAccepts (s : Sent) : Prop :=
+  ∃ bs ps b ev, Decoded s ps b ev ∧ ∃ pub prof,
+    Properties.Composition.Accepted "verity/onsite/v0" (componentsOn bs) ps b ev pub prof ∧
+      Composition.strays Onsite.tied (componentsOn bs) ev = none
 
 /-- One release of the challenger device: the bytes it answers, and the coins it released after them. -/
 structure Release where
@@ -271,10 +273,11 @@ def Opens (θ F c : ByteArray) (g : Fin (V.circuitOf F).N) (v : BitVec ((V.circu
       Hash.RowLeaf.accepts sha512 sha512 p.verifier p.root p.rank o ∧
         ∀ i : Fin ((V.circuitOf F).w g), o.row[p.offset + i.val]? = some (v.getLsbD i.val)
 
-/-- **Subprotocol `a`'s verdict**: the committed blob passed the commit phase's check, NCI accepted the registration
-sampled proofs committed to, and `a`'s compiled component accepts its own case in what the prover sent. -/
+/-- **Subprotocol `a`'s verdict**: the committed blob passed the commit phase's check, onsite's cases are an accepted
+composition whose policy and sampled proofs commit to one record, and `a`'s compiled component accepts its own case in
+what the prover sent. -/
 def Verdict (a : Audit) (o : Ending) : Prop :=
-  V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧ ComponentAccepts a o.sent
+  V.Registered o.params o.file ∧ RecordAccepts o.sent ∧ ComponentAccepts a o.sent
 
 /-- **The period after `θ`, `F` and `c`, as the one vocabulary's `Accounting.PeriodLive`**: the committed files'
 units, the commitment's openings, the extractor, the finders, the gates computed, the world and the verdicts. -/
@@ -357,8 +360,8 @@ def PousSound : Prop := V.Target .pous
 /-- **The bandwidth audit's target (ONE-11)**: at least `Q` bits read from device memory. -/
 def BandwidthAuditSound : Prop := V.Target .poub
 
-/-- **The network certifier's target (ONE-12)**: at most `K` bits through the network certifiers, where NCI accepted
-the registration sampled proofs committed to. -/
+/-- **The network certifier's target (ONE-12)**: at most `K` bits through the network certifiers, where the
+inference-only policy accepted the record sampled proofs committed to. -/
 def NetworkCertifierSound : Prop := V.Target .network
 
 /-- **Subprotocol `a`'s honest lemma at the deployment**: at registered files, the deployment's honest prover meets

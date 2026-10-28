@@ -518,14 +518,14 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 /-- **The recursive configuration's verdict**: `Vocab.Verdict .sampled` with the recursive configuration's compiled
 component in place of onsite's sampled component. The conjuncts:
 * the circuit file passed the commit phase's check (`Registered`, R6);
-* NCI accepted the registration sampled proofs committed to (`RegistrationAccepts`);
+* onsite's cases are an accepted composition whose policy and sampled proofs commit to one record (`RecordAccepts`);
 * the parameters name the recursive form;
 * sampled proofs' component accepts what the prover sent, on some blobs.
 
 The blobs are content-addressed bytes sent with the evidence, last, and the event counts any blobs on which the
 component accepts. -/
 def RecVerdict (V : Vocab d α) (o : Verity.Ending) : Prop :=
-  V.Registered o.params o.file ∧ RegistrationAccepts o.sent ∧
+  V.Registered o.params o.file ∧ RecordAccepts o.sent ∧
     (∃ j p, Core.canonicalJson o.params = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)) ∧
     ∃ bs, (VStar.Recursive.Sampled.protocol.answer o.params o.commitment o.evidence bs).verdict = .accept
 

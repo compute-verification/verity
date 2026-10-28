@@ -1,13 +1,14 @@
-"""The proof service's own run of C-Flock's Lean verifier of record (`one_stage.proofs`), on a pinned `--zk --registered`
-session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
-one loopback session under a subset draw of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
-verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
+"""The proof system's own run of C-Flock's Lean verifier of record (`one_stage.proofs`), on a pinned `--zk --registered`
+session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
+output row registered too, proved by C-Flock in one loopback session under a subset draw of 16
+(`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
+file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
-verdict comes from core's own verifier run: the honest session passes every check with its program and registered
-finding read off that run, and is refused for its shared-row public file alone, which `verify --zk` refuses until a proof
-covers it (`Flock.KsScope`, `SampledKSLiveV4`), so it proves no proof block; a circuit file other than the committed one
+verdict comes from core's own verifier run: the honest session, whose public file is a shared-row file in the form
+`SampledKSLiveV5` covers (`Flock.KsScope.sharedWhy`), is accepted with its program and registered finding read off that
+run, and proves the proof blocks its draw drew; a circuit file other than the committed one
 is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
@@ -32,18 +33,22 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5"
+FIXTURE = "art:408690b5428fd1601a203143a5f10e0bcd43e2a435a0b642087c0c0dbb557ba8"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
-           "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
+#: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
+REGISTERED_ROOTS = {
+    "cs": {"value": "cs_table", "root": "0ad0988e660c21c93f2fbf0c69a90f7d8059b6b82e1d04ae1571d07b2353d898"
+                                        "253fcbaa4df6c63c1448e0749ae2671fe0ef2a6affd770ae9c30198a27e9cca4"},
+    "x": {"value": "x", "root": "112a4ebd3bd01cc4cc09459bdd4843e2a6f6334551f4e0b784fc886f9b5f22ca"
+                                "21cb9fe908d48c5efe1df9a0cb6e957ed1cf6d63349cf9588eb856aa23912e8c"},
+    "out": {"value": "rope_out", "root": "9a5618ef08d2c12d410b0ecd4bdd3e135181d655c1723cb176a9dcbbe2f9c8b6"
+                                         "bf183870bc20fbf0746ee9ca0c13a15090de772d352184d03d61386c69602301"},
+}
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
-#: `verify --zk`'s last refusal, of a shared-row public file (`KsScope.TABLES_WHY`)
-TABLES = ("refused: a shared-row public file (header shared_rows) under --zk: a statement form the soundness proof does "
-          "not cover")
+DRAWN = (0, 2, 6, 7, 8, 9, 13, 15, 18, 22, 25, 26, 27, 29, 30, 31)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -89,14 +94,15 @@ def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | No
 SCOPE = f"refused: {PF.SCOPE_WHY}: a statement form the soundness proof does not cover"
 FORMS = {"unit form, own rows": ({}, None), "two input groups": ({"groups": 2}, SCOPE),
          "a tail stage returns the outputs": ({"meta": {"out_net": "stage0"}}, SCOPE),
-         "shared rows": ({"header": {"shared_rows": {"x": 2}}}, TABLES),
-         "the scope before the rows": ({"groups": 2, "header": {"shared_rows": {"x": 2}}}, SCOPE)}
+         "shared rows, Lean's to refuse": ({"header": {"shared_rows": {"x": 2}}}, None),
+         "the scope at shared rows": ({"groups": 2, "header": {"shared_rows": {"x": 2}}}, SCOPE)}
 
 
 @pytest.mark.parametrize("form, want", FORMS.values(), ids=FORMS.keys())
 def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, want):
-    """`ks_form_why` on files' heads: `KsScope.filesWhy`'s refusals with its reasons, the scope's first
-    (`verity/ml/flock/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's files)."""
+    """`ks_form_why` on files' heads: `KsScope.filesWhy`'s scope refusal with its reason, a shared-row file left to
+    Lean's `sharedWhy` (`verity/ml/flock/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's
+    files)."""
     assert PF.ks_form_why(*_files(tmp_path, **form)) == want
 
 
@@ -136,18 +142,19 @@ def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-
 
 @lean
 @pytest.mark.slow
-def test_the_honest_session_passes_every_check_of_cores_own_verifier_run_but_its_shared_rows(fx):
+def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_rows(fx):
     """The honest session's draw is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
-    the registered root; the verifier refuses it for its shared-row public file alone, so it proves no proof block."""
+    the registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it
+    and it proves the drawn proof blocks."""
     got, why = _verify(fx, fx / "session")
     assert why is None, why
     (f,) = got
     partition = json.loads((fx / "stage" / "partition.json").read_text())
-    assert (f.accepted, f.why) == (False, TABLES), f
-    assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") == TABLES
+    assert (f.accepted, f.why) == (True, ""), f
+    assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") is None
     assert f.program == partition["program"]
-    assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT}}
-    assert f.units == ()
+    assert f.registered == REGISTERED_ROOTS
+    assert f.units == DRAWN
     draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
     assert tuple(draw["units"]) == DRAWN, draw
 
@@ -247,7 +254,7 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (refused for its shared rows alone, proving no proof block), a session
+    the files as blobs: on the honest session (accepted at its shared rows, proving its drawn proof blocks), a session
     whose proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's
     registered file, its finding is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),
@@ -259,7 +266,7 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
         _same(got, mine)
         if own and session == fx / "session":
             (f,) = mine
-            assert (f.accepted, f.why, f.units) == (False, TABLES, ()), f
+            assert (f.accepted, f.why, f.units) == (True, "", DRAWN), f
 
 
 @lean

@@ -210,14 +210,14 @@ def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray)
   let i ← (Flock.RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
   pure { i with holo := false, sparse := none, stacked := none }
 
-/-- `flock-verify`'s `registeredFile` on a canonical object: the ports, whether the file is complete, the known rows
-and the template parameters the ports read. -/
+/-- `flock-verify`'s `registeredFile` on a canonical object: the ports, `true` (`flock-verify` runs `checkComplete` on
+every registered file), the known rows and the template parameters the ports read. -/
 def registeredOf (j : Json) :
     V (Array Flock.Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
   let own ← Flock.Registered.ofJson j
   let known ← Flock.Registered.knownOf j
   Flock.Registered.checkKnownAll own known
-  pure (own, ← Flock.Registered.completeOf j, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
+  pure (own, true, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
     ← Flock.Registered.paramsOf j)
 
 /-- `pure ()` when `b`, else the refusal `why`. -/

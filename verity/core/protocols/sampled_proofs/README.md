@@ -50,7 +50,7 @@ only: no `.lean` file defines either.
 6. The audit record keeps the registration, the receipt, the draw, the proved proof blocks, the statement's digests and every
    verdict, and, when everything accepted, the integrity profile.
 
-**The proof service** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
+**The proof system** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
 - what it commits;
 - its selection rule;
 - the check, as a public Program;
@@ -78,7 +78,7 @@ has at most `2^-40`. The proof system adds, per proof block, its knowledge-sound
 Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
 plus a term for which proof blocks are faulty, and compute security by their work.
 
-Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
+Everything is committed at serve time: the proof system has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
@@ -131,12 +131,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. It is the one-stage form of onsite's and remote's sampled proofs component
-  (`verity/sampled-proofs/v1`, `VStar.Recursive.Sampled` in `../../service/vstar/recursive`, through
-  `Core.Composition.productB`), whose other form is the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s
-  compiled check), as the params' `form` names it; v1 and v2 alone are no component. `Properties.SampledProofs.OneStageZk.AcceptMeans` states what
-  its acceptance means for each session (`AcceptsZK` on the session's circuit, public file and proofs, the circuit
-  under the auditor's digest).
+  to `verify`'s. It is onsite's and remote's integrity component (`Core.Onsite`, `Core.Remote`, through
+  `Core.Composition.productB`), and v1 is no longer one. It is also the one-stage form of `verity/sampled-proofs/v1`
+  (`VStar.Recursive.Sampled` in `../../service/vstar/recursive`), whose other form is the recursive audit
+  (`verity/sampled-proofs/recursive/v1`, V*'s compiled check), as the params' `form` names it.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
@@ -156,7 +154,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
-  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
+  `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof system over it, whose `Stream`
   draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
   `plan` holds verification plans over IR Programs. `optimize`, `candidates` and
   `costfit` plan a sampling design (`benchmarks/sampling_plan`).
@@ -228,7 +226,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `verifier`: the verifier: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
   `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
   Python; `RECORD_VERDICT` names whose is the record's.
-- `proofs`: the proof service's own run of C-Flock's Lean verifier on a statement's proof files (`Proof`:
+- `proofs`: the proof system's own run of C-Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
@@ -472,7 +470,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
 
 Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
 
-### The proof service
+### The proof system
 
 `service.Stream` holds one protocol's registrations to its `Spec`, on the challenger's side:
 
@@ -505,7 +503,7 @@ log's history by `tests/test_service_history.py`, sessions by `tests/test_servic
 The draw of record is `coins.OwnRandomness` on the Lean verifier's coins (`one_stage.verifier.coins`:
 `IO.getRandomBytes`, under `UniformRandomBytes`; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
 hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
-`Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
+`Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
 
 A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes

@@ -22,8 +22,7 @@ Parts:
   columns a compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous, and GRIND's
   bound a seed at prefill and at decode.
 
-Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
-benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
+Run from the repository root: `uv run python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
 `benchmarks/pouw/tests/test_theory_attn_noise.py` runs it in the pouw suite.
 """
 from __future__ import annotations
@@ -34,6 +33,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
+
+from verity.core.protocols.pouw.credit import DELTA
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -89,7 +90,11 @@ def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
             "P·V, V column (b)": L, "P·V, P row (U)": u_bits_pv / d}
 
 
-def grind_eps(L, delta_log2=40, t_log2=128, d=128):
+#: The per-window δ's bits: δ = 2^-DELTA_LOG2 (PoUW's `credit.DELTA`).
+DELTA_LOG2 = DELTA.denominator.bit_length() - 1
+
+
+def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
     """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""

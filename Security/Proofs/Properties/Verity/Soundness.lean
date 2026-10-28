@@ -5,9 +5,9 @@ import Proofs.Core.Game.Prob
 /-!
 # Soundness at the verifier of record, from its subprotocols' targets
 
-Onsite's acceptance is NCI's on the registration sampled proofs committed to, and every component's on its own case
-(`accepts_registered`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at onsite and
-`acceptRegistration`). So the event `Verity.Soundness` bounds lies inside the union of the subprotocols' events, each at
+Onsite's acceptance is an accepted composition whose policy and sampled proofs commit to one record, and every
+component's on its own case (`accepts_record`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at
+onsite and `acceptMeans`, through `checkSame_accept`). So the event `Verity.Soundness` bounds lies inside the union of the subprotocols' events, each at
 most its target's error at the strategy (`prob_exists_finset_le`).
 
 Beside it, the two checks every guarantee carries: `soundness_of_subprotocols_honest`, at the honest deployment (the
@@ -27,22 +27,42 @@ open scoped ENNReal
 theorem component_mem (a : Audit) : component a ∈ Onsite.components := by
   cases a <;> simp [component, Onsite.components]
 
-/-- **What the verifier of record accepts, NCI accepted on the registration sampled proofs committed to.** -/
-theorem accepts_registered {s : Sent} (h : Accepts s) : RegistrationAccepts s := by
-  obtain ⟨⟨n, ps⟩, ⟨b, d⟩, ⟨k, ev⟩, hp, hc, he, pub, prof, hch⟩ := Properties.Composition.answerAccepts _ _ _ _ h
-  exact ⟨n, ps, b, d, k, ev, ⟨hp, hc, he⟩, pub, prof,
-    Properties.Composition.acceptRegistration "verity/onsite/v0" NciCheck.Protocol.protocol
-      SampledProofs.OneStage.protocol.id Onsite.components n ps b d k ev pub prof hch⟩
+/-- What `checkSame` accepts, `check` accepts, and the components it ties committed to one record. -/
+theorem checkSame_accept {id : String} {ss : List String} {cs : List Protocol} {ps : List Composition.Named}
+    {c : ByteArray} {ev : List Composition.Case} {pub prof : Composition.Keyed}
+    (h : Composition.checkSame id ss cs ps c ev = .accept pub prof) :
+    Composition.check id cs ps c ev = .accept pub prof ∧ Composition.strays ss cs ev = none := by
+  unfold Composition.checkSame at h
+  unfold Composition.check
+  cases hr : Composition.run cs ps ev with
+  | error r => rw [hr] at h; cases h
+  | ok answers =>
+    rw [hr] at h
+    cases hs : Composition.strays ss cs ev with
+    | some r => rw [hs] at h; cases h
+    | none => rw [hs] at h; exact ⟨h, rfl⟩
+
+/-- **What the verifier of record accepts is an accepted composition whose policy and sampled proofs commit to one
+record.** -/
+theorem accepts_record {s : Sent} (h : Accepts s) : RecordAccepts s := by
+  obtain ⟨bs, h⟩ := h
+  have h' : ((Onsite.protocol.on bs).answer s.params s.commitment s.evidence).verdict = .accept := h
+  obtain ⟨ps, b, ev, hp, hc, he, pub, prof, hch⟩ :=
+    Properties.Composition.answerAccepts (Onsite.protocol.on bs) _ _ _ h'
+  change Composition.checkSame "verity/onsite/v0" Onsite.tied (componentsOn bs) ps b ev = .accept pub prof at hch
+  obtain ⟨hck, hs⟩ := checkSame_accept hch
+  exact ⟨bs, ps, b, ev, ⟨hp, hc, he⟩, pub, prof,
+    Properties.Composition.acceptMeans _ _ _ _ _ _ _ hck, hs⟩
 
 /-- **What the verifier of record accepts, every component accepts on its own case.** -/
 theorem accepts_components {s : Sent} (h : Accepts s) (a : Audit) : ComponentAccepts a s := by
-  obtain ⟨n, ps, b, d, k, ev, hdec, pub, prof, hreg⟩ := accepts_registered h
-  obtain ⟨-, -, -, -, -, -, ⟨-, -, hfst, -⟩, hcases, -⟩ := hreg
-  have hm : component a ∈ (Properties.Composition.triples Onsite.components ps ev).map (·.1) := by
+  obtain ⟨bs, ps, b, ev, hdec, pub, prof, ⟨⟨-, -, hfst, -⟩, hcases, -⟩, -⟩ := accepts_record h
+  have hm : (component a).onBlobs (Blobs.ofArray bs) ∈
+      (Properties.Composition.triples (componentsOn bs) ps ev).map (·.1) := by
     rw [hfst]
-    exact component_mem a
+    exact List.mem_map.2 ⟨_, component_mem a, rfl⟩
   obtain ⟨x, hx, hx1⟩ := List.mem_map.mp hm
-  exact ⟨n, ps, b, d, k, ev, hdec, x, hx, hx1, hcases x hx⟩
+  exact ⟨bs, ps, b, ev, hdec, x, hx, hx1, hcases x hx⟩
 
 /-- The union bound over a finite family of events, for one strategy. -/
 theorem prob_exists_finset_le {β κ : Type} (S : Finset κ) (p : κ → β → Prop) (g : Game β)
@@ -75,7 +95,7 @@ theorem soundness_of_subprotocols : Soundness := by
           (V.game θ F c) σ
       ≤ Game.prob (fun o => ∃ a ∈ Finset.univ, V.Verdict a o ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
         Game.prob_mono (fun o ⟨hacc, hreg, a, hfail⟩ =>
-          ⟨a, Finset.mem_univ a, ⟨hreg, accepts_registered hacc, accepts_components hacc a⟩, hfail⟩) _ σ
+          ⟨a, Finset.mem_univ a, ⟨hreg, accepts_record hacc, accepts_components hacc a⟩, hfail⟩) _ σ
     _ ≤ ∑ a, Game.prob (fun o => V.Verdict a o ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ :=
         prob_exists_finset_le _ _ _ σ
     _ ≤ ∑ a, V.error a θ F c σ := Finset.sum_le_sum fun a _ => hT a θ F c σ

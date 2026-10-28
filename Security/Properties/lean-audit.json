@@ -28,7 +28,6 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
-  "Properties.SampledProofs.OneStageZk",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -349,7 +348,7 @@
  ],
  "layers": {
   "Properties.Composition": {
-   "imports": ["CoreComposition.Product", "CoreComposition.Registered"],
+   "imports": ["CoreComposition.Product"],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -1031,12 +1030,6 @@
    "signature": ["Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans"],
    "assumptions": [],
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320"
-  },
-  "Properties.Composition.acceptRegistration": {
-   "owner": "@soundness",
-   "signature": ["Properties.Composition.acceptRegistration : Properties.Composition.AcceptRegistration"],
-   "assumptions": [],
-   "type_hash": "2b69d1ebab2dbc01cb230d75376dded7450fa3910a2ef8f78a5f00418e6f9dc6"
   },
   "Properties.Composition.answerAccepts": {
    "owner": "@proofs",
@@ -3615,10 +3608,6 @@
     "function": "NciCheck.Protocol.check",
     "outcome": "accept"
    },
-   "Properties.Composition.acceptRegistration": {
-    "function": "Core.Composition.checkRegistered",
-    "outcome": "accept"
-   },
    "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
     "function": "PousCheck.SetupProtocol.protocol.check",
     "outcome": "accept"
@@ -3673,7 +3662,7 @@
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at onsite's compiled verifier in the causal game (the one adversary form: Verity.Vocab.game, params, the committed files and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.Soundness), over the one vocabulary's period (Accounting.PeriodLive, Verity.Vocab.live; Holds is PeriodLive.Holds): its event's acceptance is Core.Onsite.protocol.answer's, sampled proofs' claim reads the fixed extractor's transcript (Vocab.extract) under the commitment's openings (Vocab.Opens, a registered constant to its constant), the committed files read through Flock.Bridge.circuitOfFile, PoUW's claim counts gates (Vocab.computed), each verdict reads RegistrationAccepts (Properties.Composition.AcceptRegistration's conclusion), and each subprotocol's error at a strategy is conditional on a quantitative collision premise about its fixed finder only (Vocab.FinderCR: Pr[B^tau collides] at most crBound at the strategy's SHA-512 calls, with the finder's calls bounded by the strategy's, Vocab.finder_calls): its delta at those calls plus its loss at Pr[B^tau], else top (Vocab.error; C-Flock's conditional bound at loss = 0, the additive one at crBound = 1); it takes each subprotocol's target (Verity.Vocab.SampledProofsSound, PouwSound, PousSound, BandwidthAuditSound, NetworkCertifierSound) as a hypothesis until each is proved, Vocab's fields are given until they are defined, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked by soundness_of_subprotocols_honest (at the deployment's honest prover, from each subprotocol's Vocab.HonestHolds) and soundness_of_subprotocols_nontrivial",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at onsite's compiled verifier in the causal game (the one adversary form: Verity.Vocab.game, params, the committed files and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.Soundness), over the one vocabulary's period (Accounting.PeriodLive, Verity.Vocab.live; Holds is PeriodLive.Holds): its event's acceptance is Core.Onsite.protocol.answer's on some blobs, sampled proofs' claim reads the fixed extractor's transcript (Vocab.extract) under the commitment's openings (Vocab.Opens, a registered constant to its constant), the committed files read through Flock.Bridge.circuitOfFile, PoUW's claim counts gates (Vocab.computed), each verdict reads RecordAccepts (Properties.Composition.AcceptMeans's conclusion at onsite's components on the blobs, with the record Core.Onsite.tied names one: Core.Composition.strays), and each subprotocol's error at a strategy is conditional on a quantitative collision premise about its fixed finder only (Vocab.FinderCR: Pr[B^tau collides] at most crBound at the strategy's SHA-512 calls, with the finder's calls bounded by the strategy's, Vocab.finder_calls): its delta at those calls plus its loss at Pr[B^tau], else top (Vocab.error; C-Flock's conditional bound at loss = 0, the additive one at crBound = 1); it takes each subprotocol's target (Verity.Vocab.SampledProofsSound, PouwSound, PousSound, BandwidthAuditSound, NetworkCertifierSound) as a hypothesis until each is proved, Vocab's fields are given until they are defined, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked by soundness_of_subprotocols_honest (at the deployment's honest prover, from each subprotocol's Vocab.HonestHolds) and soundness_of_subprotocols_nontrivial",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkPeriod's claims; RegisteredBeforeDraw, DrawIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
@@ -3695,7 +3684,6 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
-   "Properties.SampledProofs.OneStageZk.AcceptMeans": "unstated: what the one-stage audit's v2 check (`SampledProofs.OneStageZk.checkBlobs`) accepts; no theorem proves it yet, and the guarantee that does replaces this entry",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session of at most MAX_READS reads with no egress, at eps = 2^-128 and foreign_bits the StreamedWipeMeetsReads threshold at r = ratio k, and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill the labels' n * 512 bits, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0"
@@ -4256,25 +4244,7 @@
     "_private.CoreComposition.Product.0.Core.Composition.keysOf._sparseCasesOn_1": "8c7327936ba35502233279cb8c67a11eec17be1a4589db306ed6e85b626187d6",
     "_private.CoreComposition.Product.0.Core.Composition.reasons": "f19dd4d38993b4aec3bfb2e367bea0f8433abfc65851e0abbb8d3828495332ad"
    },
-   "guarantees": [
-    "Properties.Composition.acceptMeans",
-    "Properties.Composition.acceptRegistration",
-    "Verity.soundness_of_subprotocols"
-   ]
-  },
-  "CoreComposition.Registered": {
-   "digest": "3037e203b2fe16649538f834a52bcc36c42dedc335734aa11c88505ba6ae591d",
-   "definitions": {
-    "Core.Composition.checkRegistered": "d29a35fd29641e41642e8667fbeaffa6f47accd108611d7e9f630782b86131cb",
-    "Core.Composition.committedBy": "ef69ce764880d33a7fa4cc847a8df03606bb921d342d969db90b5439ec359891",
-    "Core.Composition.decodeRegisteredCommitment": "7389dadbc68898b292b89f8e64ac43dad4c92ce3375e4c18d12bcbbd9c2c9d5e",
-    "Core.Composition.decodeRegisteredEvidence": "5e54bbbcf1e054b29eaa2cf6e2c02cdd5b4ea4d181e22042273b3acce84182e7",
-    "Core.Composition.decodeRegisteredParams": "045d9be51e9bfc7356cb6edc00a3fe3aebe91ee151922f12aeede654b4c41e6c",
-    "Core.Composition.mismatch": "132b91273d4c533824c6ab60af43a2c877b86ad12ce8cbc3ac297ec7010c20da",
-    "Core.Composition.registered": "90be31161e3f7b9752fc57fbf403511f506337102660f4eefef8b58872d3ac2f",
-    "Core.Composition.registrationAnswer": "55e71347b20cc427f4f97945d0cc45eda24cc7a386403e7765a2d697535f9c5a"
-   },
-   "guarantees": ["Properties.Composition.acceptRegistration", "Verity.soundness_of_subprotocols"]
+   "guarantees": ["Properties.Composition.acceptMeans", "Verity.soundness_of_subprotocols"]
   },
   "CoreOnsite": {
    "digest": "8aa3b15fac078acc092110f44df4ec07a2b0a7eabfd980ed9f73741e8edd3060",
@@ -4432,7 +4402,6 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.Composition.acceptMeans",
-    "Properties.Composition.acceptRegistration",
     "Properties.Composition.answerAccepts",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
@@ -7539,7 +7508,6 @@
     "Properties.CertifierDevice.linkSchedule",
     "Properties.CertifierDevice.records",
     "Properties.Composition.acceptMeans",
-    "Properties.Composition.acceptRegistration",
     "Properties.Composition.answerAccepts",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -7676,7 +7644,6 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.Composition.acceptMeans",
-    "Properties.Composition.acceptRegistration",
     "Properties.Composition.answerAccepts",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
@@ -8273,7 +8240,6 @@
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.Composition.acceptMeans",
-    "Properties.Composition.acceptRegistration",
     "Properties.Identity.streamIsFlock",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -9939,6 +9905,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -12402,7 +12369,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "69449ff98f32738ed984a00b474987896fe2cbdf79570f5acffe7ef4711df38a",
+   "digest": "13a8470e9700769a306a06e949dfe0879e3790ffa635fdbac76e40cb1be90164",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -12606,7 +12573,6 @@
     "PouwCheck.Credit.tileK": "e4ad183d940b4dda0d3fb50dd2bf0180ab46dc9b2405024859549925720afb59",
     "PouwCheck.Credit.tileOf": "ef888a2a964b35057888c226dbe84eaba8f51698704b4e58977db1b50ce25ffb",
     "PouwCheck.Credit.tileOf._sparseCasesOn_1": "abca97894aa5722346397160457c251915279b9013ba1976af3a05cecc562871",
-    "PouwCheck.Credit.tileOf._sparseCasesOn_7": "78239315ebcb5d9480bca09597c7a6d7a33e58fa9009337d79979ffc7484fc6b",
     "PouwCheck.Credit.treeAt": "1eff78f60fa733c562db3ceed944136346192685f89d767420c77eb2c4c33c82",
     "PouwCheck.Credit.treeRoot": "a6bb8f3a8a58b3166ed9ade9510247e8956599715e5016a640a9131140b8c17c",
     "PouwCheck.Credit.unpinnedModel": "95d773802cfe2bff29dede79e9cb709b91106fb18209d33851579cfd161b8942",
@@ -13578,13 +13544,11 @@
    "digest": "b47df2b560279be6f79d641db600ee1a73f8fbef5ead09426a29a4907bff51cb",
    "definitions": {
     "Properties.Composition.AcceptMeans": "b74b5f32f9ca94ba09cafef0ce9f3276e6056d3dd76c9bc77f59cabc5f114048",
-    "Properties.Composition.AcceptRegistration": "98c21c59231e10ae8758d7e2b29c299f0388765178f506a91af19a69af4c2fc0",
     "Properties.Composition.Accepted": "bf80cb850b5bafc41b003264ee2f01b909875cff3da4d37e7ef16c566c756e13",
     "Properties.Composition.AnswerAccepts": "3730657920dee4f71784d3f9a8da810a24e704fd3ab0eb044eec35a18b4675ff",
     "Properties.Composition.BindCollision": "68308da826df9ac33223c1420e45788084f3141cdfc6956c44a628ffbea9d024",
     "Properties.Composition.DecodedAccepted": "09ee34a6e081457094734878a34bdc6b085e3b581683ea26acb64d5497d4435a",
     "Properties.Composition.Fits": "17f56db7d8753eb5cb1b56cf5372c484416cfc401ba473cec8c93df4d2447b35",
-    "Properties.Composition.RegisteredAccepted": "8e5ed572dea9862d4dea4673e4ae6fcc23cd75c2053349c9885a82f82a266c6d",
     "Properties.Composition.bindMessage": "76a626fd935218f9c134cb4e676ba460da939bf3dbc01c541d16a611667c2e59",
     "Properties.Composition.digestOf": "2a96b9ee3bea5327b2ce55f309f13b9c82641b0c69f2b6c233df18f7f351ff42",
     "Properties.Composition.digests": "3f6c516221163d568ddc3ec0ad2128b6f40f10c8023f86cdbd9bc67367e89f38",
@@ -13592,7 +13556,6 @@
    },
    "guarantees": [
     "Properties.Composition.acceptMeans",
-    "Properties.Composition.acceptRegistration",
     "Properties.Composition.answerAccepts",
     "Verity.soundness_of_subprotocols"
    ]

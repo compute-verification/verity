@@ -4,8 +4,9 @@ import Proofs.Properties.Nci.BaselineSteps
 /-!
 # NCI's core protocol's property, proved
 
-`ProtocolAccepts` (`Properties.Nci.Protocol`) by unfolding `NciCheck.Protocol.check` past its `names` refusal, with the policy check's verdict
-from `BaselineSteps.evaluate_ok`: `NciCheck.Baseline.evaluate` returns the verdict `NciCheck.Desc.evaluate` gives.
+`ProtocolAccepts` (`Properties.Nci.Protocol`) by unfolding `NciCheck.Protocol.check` past its `names` refusal, with the
+policy check's verdict from `BaselineSteps.evaluate_ok`: `NciCheck.Baseline.evaluate` returns the verdict
+`NciCheck.Desc.evaluate` gives.
 -/
 
 namespace NciCheck.Properties.SecurityProofs

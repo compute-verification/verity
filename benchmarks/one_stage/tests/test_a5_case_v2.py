@@ -97,3 +97,13 @@ def test_case_with_form_names_the_form_in_the_params_and_the_evidence(RP):
     for bad in ({**case, "params": {"form": "x"}}, {**case, "evidence": RP.DT.canonical([1]).encode().hex()}):
         with pytest.raises(ValueError):
             a5.case_with_form(bad)
+
+
+def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):
+    monkeypatch.setattr(RP, "descriptor", lambda program: {"program": "p"})
+    monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
+    monkeypatch.setattr(RP, "python", lambda c: {"verdict": "accept"})
+    part = {"program": "p", "rule": "r"}
+    a5.write_case(tmp_path, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
+                  session_roots={}, served=[], partition=part)
+    assert json.loads((tmp_path / "case.json").read_text())["params"]["partition"] == part

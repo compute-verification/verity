@@ -22,9 +22,17 @@ def portReadsB (net : Net) : Bool :=
   (List.range (net.constPos - n)).all fun i =>
     ((net.a.row (n + i)).toList ++ (net.b.row (n + i)).toList).all fun x => decide (x < n → mask.getD x false = true)
 
+/-- No output port is pinned (META `pinned_outputs`, `HmRow.pinnedCount`): a form no soundness theorem covers yet. -/
+def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
+
+def pinnedWhy : String := HmRow.pinnedWhy
+
 /-- Every row is an unsegmented `sha512/row/v1` row: `16 · words` bits in at least one chunk. -/
-def v1Ports (c : Circuit) : Bool :=
+def v1Rows (c : Circuit) : Bool :=
   c.ports.all fun p => !p.v2 && p.segs.isNone && p.bits == 16 * p.words && 0 < p.chunks
+
+/-- `v1Rows`, and no pinned output (`unpinned`). -/
+def v1Ports (c : Circuit) : Bool := v1Rows c && unpinned c
 
 /-- The circuits the headlines cover: the unit reads only its leaf group, returns the outputs, has at most `2^32` rows and
 reads only port bits among its inputs, and every row is a `sha512/row/v1` row. -/
@@ -50,9 +58,12 @@ def segRow (p : Port) : Bool :=
       decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
 
 /-- Every row is a `v2Row` or a `segRow`, of any mix, and each output row is a `v2Row` holding one output port. -/
-def bitRows (c : Circuit) : Bool :=
+def bitRowsU (c : Circuit) : Bool :=
   c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
     (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
+
+/-- `bitRowsU`, and no pinned output (`unpinned`). -/
+def bitRows (c : Circuit) : Bool := bitRowsU c && unpinned c
 
 /-- The circuits the hidden-output headlines cover: `scopeOk`'s conditions on the unit, and every row a
 `sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
@@ -161,6 +172,7 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
   else if !hidden && c.outNet != c.unitNet then "a circuit whose outputs a tail stage computes (META out_net)"
   else if c.unit.unitLog > 32 then s!"a unit of 2^{c.unit.unitLog} rows"
   else if !portReadsB c.unit then "a unit row reading an input column that is not a port bit"
+  else if v1Rows c || (hidden && bitRowsU c) then pinnedWhy
   else if hidden then "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all \
     unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of \
     16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each"
