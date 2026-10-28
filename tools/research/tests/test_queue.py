@@ -2286,6 +2286,30 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     assert f"{h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where pkg passed" in world.logs[-1]
 
 
+def test_a_requirer_whose_record_the_run_regenerated_is_vouched_for_only_at_the_commit_of_that_record(world, capsys):
+    """`--records PKG --update` also updates a requirer that failed only on record differences, and its pass is
+    then on the record it wrote (`record/<path>/`), not the head's lock: the head is refused for it, and the commit of both
+    records is vouched for by that one run."""
+    world.with_store_remote()
+    req = "req/lean-audit.json"
+    h1 = world.change({LOCK: _lock(A="2"), req: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    rec, rreq = _lock(A="2", B="2"), _lock(A="2", C="2")
+    rid = _published(world, h1, files={"lean-audit/audit.json": _audit(), "lean-audit/requirer-req/audit.json": _audit("req"),
+                                       "lean-audit/record/lean-audit.json": rec, f"lean-audit/record/{LOCK}": rec,
+                                       f"lean-audit/record/{req}": rreq})
+    capsys.readouterr()
+    assert _mark(world, 1, h1) == 1
+    err = capsys.readouterr().err
+    assert f"records run {rid} of {h1[:12]} passed req only with the record its `--update` wrote" in err
+    assert f"commit its `record/{req}`" in err and "commit its `record/lean-audit.json`" in err
+    assert _mark(world, 1, world.change({LOCK: rec, req: _lock(A="2", C="3")}, base=h1)) == 1
+    h2 = world.change({LOCK: rec, req: rreq}, base=h1)
+    assert _mark(world, 1, h2) == 0
+    for pkg in ("pkg", "req"):
+        assert any(f"records gate: {pkg}: {h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where "
+                   f"{pkg} passed" in line for line in world.logs)
+
+
 def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_for_it_and_one_that_differs_or_cant_be_read_doesnt(
         world, capsys):
     """A PR that carries another PR's Lean change needn't rerun records at its own head, hours of queue on a full node, when the
