@@ -1,4 +1,4 @@
-"""serve-openai's draw-gated release (`pipeline.serve_release`, VLLM-157 B): a window's device-held values are released only once
+"""serve-openai's draw-gated release (`pipeline.serve_release`): a window's device-held values are released only once
 every named subprotocol has drawn it; the union of the leaves the drawn blocks open is kept, inputs an unsampled block wrote
 included, and opens against the pre-coin root after the drop; a later draw, or a read of a dropped leaf, is refused by name."""
 from __future__ import annotations
