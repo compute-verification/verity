@@ -145,8 +145,8 @@ def test_reconciliation_outside_its_hour_leaves_old_posts(world):
 
 
 def test_a_queue_with_events_waiting_and_nothing_done_rings_comms_hourly_and_a_working_one_never(world, tmp_path):
-    """19-23 Oct production consumed nothing while health looked clean (its last_success_at counts the crons).  The
-    watchdog compares the app's last publish with the consumer's last done."""
+    """Health looks clean while nothing is consumed (its last_success_at counts the crons), so the watchdog compares the
+    app's last publish with the consumer's last done."""
     import json
     from conftest import COORD, add_route
     box = world.slack.add(COORD, text=f"{world.deps.rs.INBOX_HEAD}comms. pointers", username="comms", bot_id=BOT)

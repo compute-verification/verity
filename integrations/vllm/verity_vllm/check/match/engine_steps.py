@@ -30,7 +30,7 @@ def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[i
         gis = sorted(by_step[s])
         owners = []
         block_last: list[int] = []
-        if fast:   # [R17 mprof] same blocks; the last attributed instance of each block kept while building them (O(1) per boundary below)
+        if fast:   # same blocks; the last attributed instance of each block kept while building them (O(1) per boundary below)
             owners, block_last = GMF.g7_owner_blocks(gis, glob2loc)
         else:
             for gi in gis:
@@ -72,7 +72,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
     engine_step_of, dep_viol, perm_facts = reqs.engine_step_of, reqs.dep_viol, reqs.perm_facts
     c = NamedCheck(res, "G8", "within_step_order: each request's own instances in its component order inside every engine step; cross-request interleaving = recorded runtime batch layout"
                   if within_step == "sequence" else
-                  "within_step_order: emission order inside an engine step recorded as batch layout (canonical addresses are structural, DECISION M-0021); "
+                  "within_step_order: emission order inside an engine step recorded as batch layout (canonical addresses are structural); "
                   "dependency order is G3's (a consumer before its producer is DAG-unequal)")
     layout = []
     nonmono_steps = {}
@@ -106,8 +106,8 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
     perms = []
     perm_targets = []
     # dependency order inside the fold's emission: every producer before its consumer.  Under `sequence` a violation is already a G3
-    # sequence/wiring failure; under `dag` G8 must FAIL on it explicitly (DECISION M-0021 (4): "every producer is emitted before its
-    # consumer" -- the recorded permutation is a layout only while the dependency order holds).
+    # sequence/wiring failure; under `dag` G8 must FAIL on it explicitly (every producer is emitted before its consumer -- the
+    # recorded permutation is a layout only while the dependency order holds).
     # `dep_viol`: collected per request by `leg` (the same scan over every request's projection -- P.canon(i) of every instance of every
     # local step, a node source whose producer is emitted at or after its consumer -- in request order, right where the canonical
     # sources were resolved); G8 names it here
@@ -132,7 +132,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
         if not perm_eligible(A, P, s):
             continue
         # Merkle (order-insensitive) matching of the step's instances: B instance -> A index with the same DAG hash -- the leg's
-        # matching when it ran (F-r17-07: computed where the hashes were), else this process's hashes on both sides
+        # matching when it ran (computed where the hashes were), else this process's hashes on both sides
         pi = (perm_facts.get(rid) or {}).get(s)
         if pi is None:
             pi = perm_match(A, P, s, ops.dag_hashes(A), ops.dag_hashes(P))
@@ -158,7 +158,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
             statement = ("emission order of the request's instances inside this engine step differs from its component's canonical layout "
                          "(fold encoding: AttentionScope groups the batch's rows by distinct T in first-occurrence order); the instances, their "
                          "wiring and dependency order are the component's (Merkle-identical), each is addressed by its canonical component index; "
-                         "recorded as batch layout, not re-sorted (DECISION M-0021)" if same_dag else
+                         "recorded as batch layout, not re-sorted" if same_dag else
                          "NOT a permutation of the component's step (different DAG): reported by G3")
         perms.append({"request_id": rid, "local_step": s, "engine_step": es, "n": len(pi), "moved": len(moved), "same_dag_multiset": same_dag,
                       "unmatched": sum(1 for x in pi if x is None), "offset_histogram": dict(offs.most_common(6)),
@@ -178,7 +178,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
 
 def _segmentation(c: NamedCheck, res: dict, proj: dict, per_req: dict[str, list[int]], engine_step_of: dict[int, int]) -> None:
     """A request's local steps, segmented at its TokenSelects, against the engine steps its fold rows record."""
-    # [rev-pm M-0171 TIP] a request's local steps are segmented at ITS TokenSelects (compare.Prog._segment, the rc3 rule); the fold rows
+    # a request's local steps are segmented at ITS TokenSelects (compare.Prog._segment, the rc3 rule); the fold rows
     # carry the engine step of every instance.  The two must agree: a local step lies inside ONE engine step, and one engine step holds
     # at most one TokenSelect-terminated local step of the request (its sampler is the last of its instances there), in increasing
     # engine-step order.  A mis-emitted sampler is named here (it would otherwise re-segment the request and surface as unrelated counts).

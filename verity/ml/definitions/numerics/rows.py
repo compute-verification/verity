@@ -24,6 +24,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static, register
 from verity.ml.definitions.numerics.moe_router_rows import moe_router_topk
 from verity.ml.definitions.numerics import value_rows as VR
@@ -143,10 +144,9 @@ EVALUATORS = {
                               "one RN multiply), f2fp_bf16 (F2fpBf16 = cvt.rn.bf16.f32, NaN -> 0x7FFF) -- b1.Bf16MulScalarTensor{N} node for node -> out",
 }
 
-#: WHAT PINNED an evaluator that is a fitted numerics twin rather than the Definition itself: the record carries it
-#: beside `evaluators` so the finalizer's Commit basis can name 'FP8 GEMM strata: twin pinned to H100 words (fixture <sha>)'.  The npz
-#: holds complete operand sets recorded on the H100: "p" (M=1, K=256,
-#: N=256; the swap_ab Pingpong CUTLASS variant) and "c" (M=4, K=384, N=256; the Cooperative variant), each = bf16 x, the kernel's xq / sx,
+#: WHAT PINNED an evaluator that is a fitted numerics twin rather than the Definition itself: the record carries it beside `evaluators` so the
+#: finalizer's Commit basis can name 'FP8 GEMM strata: twin pinned to H100 words (fixture <sha>)'.  The npz holds complete operand sets recorded on
+#: the H100: "p" (M=1, K=256, N=256; the swap_ab Pingpong CUTLASS variant) and "c" (M=4, K=384, N=256; the Cooperative variant), each = bf16 x, the kernel's xq / sx,
 #: the e4m3 w and f32 ws, the kernel's bf16 y.  The twins reproduce every word (tests/program/test_derived_rows_fp8.py) and agree with
 #: the gate-level Definitions gate by gate (`verity/ml/definitions/registry/fp8.py`; the k32 step vs `veritor.core.silicon_total_fp8.tc_dot_total_e4m3`).
 _FP8_TWIN_PROVENANCE = {
@@ -154,7 +154,7 @@ _FP8_TWIN_PROVENANCE = {
     "fixture_sha256": "80e176c0319f804ed574acb3ad63aa431ba03e3f55762fe07ae63477f2bf9a81",
     "captured_from": ["_C.per_token_group_fp8_quant (GroupShape(1, 128), eps 1e-10, [-448, 448])", "_C.cutlass_scaled_mm blockwise (CutlassFp8BlockScaledMMKernel, 128x128 weight_scale_inv)"],
     "device": "cp-h100, NVIDIA H100 80GB HBM3 (cc 9.0), vLLM 0.28.1rc1.dev472+gd9105ea80, torch 2.13.0+cu129",
-    "captured_utc": "2026-09-19",
+    "captured_utc": EVIDENCE["hopper_fp8_block_capture"]["captured_utc"],
     "shapes": {"p": "M=1 K=256 N=256 (swap_ab Pingpong)", "c": "M=4 K=384 N=256 (Cooperative)"},
     "tests": ["tests/program/test_derived_rows_fp8.py::test_scaled_mm_fp8_block_row_matches_the_kernel_words[p|c]",
               "tests/program/test_derived_rows_fp8.py::test_fp8_group_quant_row_matches_the_kernel_words[p|c]",

@@ -2,7 +2,7 @@
 copies, every thread) on every rank, never in `runs.jsonl` or the summary's timing (a profiler slows what it observes): a control run,
 then an instrumented one (`tp2_profiler_start` / `tp2_profiler_stop`), DIR/torch.<arm>/census.rank<r>.json, with the gzipped Kineto
 trace of the `--trace-ranks`.  No sampler from outside the process: `py-spy record --nonblocking` (0.4.2) looped in `process_vm_readv`
-on every loaded rank and never wrote a profile (r20261017-193316-4d59); `thread_cpu` stands in for it on every timed run.
+on every loaded rank and never wrote a profile; `thread_cpu` stands in for it on every timed run.
 
 The instrumented run is finalized for its roots only (`tp2_commit_finalize(checks=False)`) and reset; every run's walls go to
 DIR/traced.jsonl.  ``release``: the GPUs go back after the last run (`lease.stop`), the Commit's last device work."""

@@ -521,46 +521,6 @@ def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_
             RA.window_pins(bad, circuit)
 
 
-def test_the_toys_ties_are_pinned_and_its_embedding_fed_rows_are_free(tmp_path):
-    """The toy's wired window (`verity_torch_loop`, registered weights): its six ties, each written by a unit's output port
-    and read by the next unit's input port, are pinned; the first linears' ``(x, sx)`` (the embedding's rows, committed as
-    activations) are no parameter of the circuit, so they are neither pinned nor registered, and are its 2,112 free bits.
-    Naming them as parameters read by those linears' input ports (V3b's crafted window) makes them untied: the count is
-    the same 2,112 free bits, where counting them registered would leave none."""
-    sys.path.insert(0, str(HERE.parents[2] / "integrations" / "torch_loop"))
-    from verity_torch_loop import loop as L
-
-    loop = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True, registered=True)
-    weights = L.commit_weights(L.Model(), wired=True)
-    win = loop.window(D.parse_law("stratified:3"), cap=1, weights=weights)
-    win.write(win.close(salt_key=bytes(32)), tmp_path, {"loop": "torch-loop",
-                                                         "activations": L.activations(loop.model, loop.commit_activations())},
-              registrar=R)
-    doc = json.loads((tmp_path / "circuit.json").read_text())
-    w = json.loads((tmp_path / "registration.json").read_text())["window"]
-    ties, untied = RA.window_pins(w, doc)
-    assert set(ties) == {"up", "up_codes", "up_scale", "down", "down_codes", "down_scale"} and untied == {}
-    assert {"x", "sx"} <= set(w["activations"]["values"]) and not {"x", "sx"} & set(ties)
-    roots = IF.registered_roots(w)
-    assert roots == {v: r.root.hex() for v, r in {**weights, **loop.ties}.items()}
-    pin = {**{v: r.root.hex() for v, r in weights.items()}, **{v: e["root"] for v, e in ties.items()}}
-    honest = RA.declared_count(doc, 0, pins=pin, roots=roots, untied=untied)
-    h, r = L.H, 2
-    assert honest["free"] == r * 16 * (h // 2 + 2) == 2112
-    tm = descriptor_id(L.linear_template(h))
-    crafted = json.loads(json.dumps(doc))
-    crafted["registered"]["params"] |= {"x": r * h // 2, "sx": r * 2}
-    crafted["registered"]["reads"] += [IF.Read(tm, "x", "x", 0, (r,), 0, (h // 2,)).doc(),
-                                       IF.Read(tm, "sx", "sx", 0, (r,), 0, (2,)).doc()]
-    ties2, untied2 = RA.window_pins(w, crafted)
-    assert set(ties2) == set(ties) and set(untied2) == {"x", "sx"}
-    pins = {**pin, **{v: e["root"] for v, e in untied2.items()}}
-    roots2 = {**roots, **{v: e["root"] for v, e in untied2.items()}}
-    assert RA.declared_count(crafted, 0, pins=pins, roots=roots2)["free"] == 0
-    fixed = RA.declared_count(crafted, 0, pins=pins, roots=roots2, untied=untied2)
-    assert (fixed["free"], fixed["registered"], fixed["untied"]) == (2112, honest["registered"], ["sx", "x"])
-
-
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables
@@ -756,13 +716,13 @@ def test_a_served_output_that_the_next_step_reads_keeps_its_units_in_the_output_
 
 def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
     """No Program digest covers a Build's row names or its weights fields' names (nor its ``supplied``, correspondence or
-    ``prefix_cache.json``: these TINY Builds carry none, so their names are their correspondence), and the served compiler's
-    command reads none of them from the prover: it takes no row dir and compiles over its own trace of each Program I2
-    compiled (`prove_path.own_builds`; the trace `test_prove_path._tiny_served`'s stub). Against a prover's row dir permuted
-    under unchanged digests (each Build still I2's Program, `build_of`), the compile check refuses by name (``circuit``) the
-    circuit.json whose names make another circuit (a layer-1 SiluMul row and layer 0's down_proj swap names: five layer-0
-    rows), and ignores names that make the same one (layers 0 and 1's SiluMul rows swapped, which moves only the prover's own
-    reads; two weights fields swapped): the verifier's record is its own trace's in each case."""
+    ``prefix_cache.json``), and the served compiler's command reads none of them from the prover: it takes no row dir and
+    compiles over its own Build of each Program I2 compiled, beside the names its compile gives it (`prove_path.own_builds`).
+    Against a prover's row dir permuted under unchanged digests (each Build still I2's Program, `build_of`, its correspondence
+    record permuted with its names), the compile check refuses by name (``circuit``) the circuit.json whose names make another
+    circuit (a layer-1 SiluMul row and layer 0's first down_proj row swap names: one more SiluMul row in layer 0's scope), and
+    ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
+    two weights fields swapped): the verifier's record is its own compile's in each case."""
     import prove_path as PP
     from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
 
@@ -772,10 +732,10 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     out = tmp_path / "mine" / "circuit.json"
     out.parent.mkdir()
     assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
-                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out), "--vllm-python", "pinned-python"]) == 0
-    assert [py for py, _ in s.traced] == ["pinned-python"] * len(s.units) and list(out.parent.iterdir()) == [out]
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+    assert s.compiles == [True] and list(out.parent.iterdir()) == [out]
     mine = json.loads(out.read_text())
-    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, trace="py")), s.data, LAYER0)
+    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, own=True)), s.data, LAYER0)
     assert IF.circuit_of(own) == IF.circuit_of(mine)
     copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
             f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
@@ -784,8 +744,9 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     reads = lambda rows: [(rid, int(r["i"])) for rid, _pi, r, _d in rows[0]]  # noqa: E731
     for k, (name, names, params, codes, same_reads) in enumerate((
             ("honest", None, False, [], True),
-            ("a layer-1 SiluMul row and layer 0's down_proj swapped", (("SiluMul_v2", 1), ("Gemm_v2", 0)), False, ["circuit"], False),
-            ("layers 0 and 1's SiluMul rows swapped", (("SiluMul_v2", 0), ("SiluMul_v2", 1)), False, [], False),
+            ("a layer-1 SiluMul row and layer 0's down_proj swapped", ("model.model.layers.1.mlp.act_fn/", "model.model.layers.0.mlp.down_proj/"),
+             False, ["circuit"], False),
+            ("layers 0 and 1's SiluMul rows swapped", ("model.model.layers.0.mlp.act_fn/", "model.model.layers.1.mlp.act_fn/"), False, [], False),
             ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
         rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
         theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)

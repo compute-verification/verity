@@ -4,7 +4,7 @@ verifier's check that a served window's coins are that challenger's.
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and draw coins from one session of the auditor host's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
-  (``research fetch RUN --all``, its ``out/``), never from the prover's bundle, under its own challenger key (`pinned_key`),
+  (its ``out/``, fetched whole), never from the prover's bundle, under its own challenger key (`pinned_key`),
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
   that commitment's, its salt coin must have followed its own open root, the root the ledger opened its session on
@@ -20,7 +20,7 @@ verifier's check that a served window's coins are that challenger's.
   before the session's end or opens a second session for the window, is refused. The window's draw coin must have been
   opened once, after `pouw_h1_requests.draw_root` over its manifest, last receipts and every round's root and coin: a
   draw opened early, from another family, or never (a session closed at `finish` with no draw) is refused.
-* **Sessions** (RT4-INT-17, the pouw setting ``session``): a lane reserves a session on infra's challenger gate
+* **Sessions** (the pouw setting ``session``): a lane reserves a session on infra's challenger gate
   (``reserve --peer NAME --scheme S --families JSON``, `benchmarks/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
   root, opened from the serving process: `pouw_h1_window.Window`), and carries the gate's open answer (``commits["session"]``: its

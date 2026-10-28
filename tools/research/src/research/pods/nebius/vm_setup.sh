@@ -48,7 +48,9 @@ if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEB
 fi
 echo 'd /workspace/tmp 1777 root root 10d' > /etc/tmpfiles.d/workspace-tmp.conf
 touch /etc/environment
-for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp; do
+# UV_SYSTEM_CERTS (the pinned uv's name for what was --native-tls): uv reads the system trust store, not the roots it ships
+for kv in HF_HOME=/workspace/hf UV_CACHE_DIR=/workspace/cache/uv LEASE_DIR=$LEASE_DIR CUDA_DEVICE_ORDER=PCI_BUS_ID TMPDIR=/workspace/tmp \
+    UV_SYSTEM_CERTS=1; do
   grep -q "^${kv%%=*}=" /etc/environment || echo "$kv" >> /etc/environment
 done
 
@@ -83,6 +85,16 @@ apt-get update -q
 # python3 (node 2 and cpu-1 lacked it, 11 Oct). python3.12-dev and build-essential: Triton compiles cuda_utils.c against
 # Python.h at a vLLM engine's first start (vy-glm53-eu 16 Oct and vy-glm53-eu2 17 Oct lacked it; circuits)
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
+# The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
+# kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel
+# package moves under a run. Strict: a whitelist that isn't only raises its packages' priority and upgrades everything else
+# too. `research deploy drift` lists a node that still trusts a distrusted root.
+apt-get install -y -q --only-upgrade ca-certificates 'libnss3*'
+cat > /etc/apt/apt.conf.d/52vy-trust <<'EOF'
+Unattended-Upgrade::Package-Whitelist { "ca-certificates"; "libnss3"; };
+Unattended-Upgrade::Package-Whitelist-Strict "true";
+EOF
+systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
 UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
   || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh

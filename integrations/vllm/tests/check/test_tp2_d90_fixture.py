@@ -1,6 +1,6 @@
-"""[R17 D90, COORD R17-4] The two-rank fixture of the collective-received root class.
+"""The two-rank fixture of the collective-received root class.
 
-THE EXACT UNSUPPORTED CASE (reproduced from the TP2 B1 int-4 record, lane/r16-tp evidence `r15-tp04/match/per_rank_fold/`):
+THE EXACT UNSUPPORTED CASE (reproduced from the TP2 B1 record's `match/per_rank_fold/`):
 rank 0, engine step 0, event 88 = `vllm.all_reduce.default` issued by `model.embed_tokens` -- the FIRST collective of the step (k = 0), the
 embedding partial [256, 2048] bf16 reduced into a fresh storage (alloc a236).  The rank profile had no pattern for it -> Unsupported;
 event 92 (`_rms_norm_kernel`, `model.layers.0.input_layernorm`) then read a236 = "unresolved read of View(a236+0 bfloat16[2048]):
@@ -16,7 +16,7 @@ kernels that read the RECEIVED storages (RMSNorm x2, argmax).  `test_exact_unsup
 binds) compares instance by instance through `cb_a.compare` with the PEER canonical source; the cross-rank leg
 (`tp.rank_match.cross_rank_check`) links rank r's peers field (s, k) to rank 1-r's own partial at (s, k).
 
-NEGATIVES (must FAIL BY NAME): wrong peer, swapped rank, off-by-one step, wrong segmentation/count, reordered lanes,
+NEGATIVES (must FAIL BY NAME): wrong peer, swapped rank, off-by-one step, wrong segmentation/count, reordered collectives,
 equal-result-but-wrong-producer -- as mutations of the RECORD (the rank's log or the Program's link table), never of the checker.
 """
 
@@ -113,7 +113,7 @@ def _step_events(rank: int, step: int, plan: list[tuple[str, list[int]]], ids: I
     """One engine step of rank `rank` over the row plan [(request, positions)] (rows in plan order): EmbeddingShard -> all_reduce(k=0) ->
     RMSNorm -> Gemm(o_proj) -> all_reduce(k=1) -> RMSNorm(norm) -> logits rows -> Gemm(lm_head shard) -> all_gather(k=2) -> argmax.
     `mut` applies one named record mutation; `rows_override` replaces ONLY the StepStart row attribution (the tensors keep their rows):
-    the shifted-row-boundary record of rev M-0026 R4."""
+    the shifted-row-boundary record."""
     mut = mut or {}
     rows_attr = [(q, p) for q, ps in plan for p in ps]
     M, R = len(rows_attr), len(plan)
@@ -188,7 +188,7 @@ def _step_events(rank: int, step: int, plan: list[tuple[str, list[int]]], ids: I
     if mut.get("wrong_producer") and step == mut.get("at_step", 0):
         all_reduce(emb, h2, "model.layers.0.self_attn.o_proj")         # equal-shape but WRONG producer: reduces the embedding partial again
     elif mut.get("reorder") and step == mut.get("at_step", 0):
-        # reordered lanes: the o_proj reduction is issued AFTER the logits all-gather (k=1 <-> k=2 swapped on this rank)
+        # reordered collectives: the o_proj reduction is issued AFTER the logits all-gather (k=1 <-> k=2 swapped on this rank)
         pass
     else:
         all_reduce(g, h2, "model.layers.0.self_attn.o_proj")
@@ -217,7 +217,7 @@ def rank_log(rank: int, *, tp_note: bool = True, mut: dict | None = None):
 
 def rank_log_b2(rank: int, *, shift: bool = False):
     """The B2 form: r0 and r1 (LP 2 each) prefilled together in step 0 (rows r0:[0,1] r1:[2,3]), decoded together in step 1.  `shift`
-    = rev M-0026 R4: step 0's StepStart attributes the rows r0: 3 / r1: 1 instead of 2 / 2 while every tensor keeps its 4 rows."""
+    = the shifted row boundary: step 0's StepStart attributes the rows r0: 3 / r1: 1 instead of 2 / 2 while every tensor keeps its 4 rows."""
     ids = Ids()
     hdr = preamble(rank)
     hdr[0] = RunHeader(hdr[0].schema, hdr[0].created_utc, hdr[0].profile_id, hdr[0].profile, hdr[0].model,
@@ -405,7 +405,7 @@ def compare_rank(tmp_path, rank: int, result, spec: SpecializedDefinition, *, li
 
 
 def test_exact_unsupported_case_without_the_fold_rule():
-    """The R15/R16 record at toy size: without the collective rule the FIRST collective (k=0, model.embed_tokens) is Unsupported and the
+    """The older record at toy size: without the collective rule the FIRST collective (k=0, model.embed_tokens) is Unsupported and the
     RMSNorm that reads the received storage is an unresolved read of an UNWRITTEN view."""
     r = fold_rank(0, with_collectives=False)
     rep = r.report.to_dict()
@@ -554,7 +554,7 @@ REC_SHA = {0: "0" * 64, 1: "1" * 64}      # the recorder files' digests as the u
 
 
 def _provenance(n, mismatches=(), *, rec_sha=None, digested=None, digest_mismatches=()):
-    """tp2_match's provenance record: pass/count + [rev F-r17-03] the recorder-file digests it was bound to and the count of stored tensors
+    """tp2_match's provenance record: pass/count + the recorder-file digests it was bound to and the count of stored tensors
     digested against their rows (part + out, both ranks = 4 per collective)."""
     rs = rec_sha if rec_sha is not None else {str(r): v for r, v in REC_SHA.items()}
     return {"pass": not mismatches and not digest_mismatches, "steps_checked": 2, "collectives_checked": n, "n_mismatches": len(mismatches),
@@ -595,7 +595,7 @@ def test_cross_rank_negatives_fail_by_name():
     bad = fold_rank(1, mut={"drop_collective": 0})
     res = _xrank(r0, bad)
     assert res["verdict"] == "FAIL" and "count" in res["failed"], res["failed"]
-    # reordered lanes on rank 1: order fails (k=1 became the all_gather)
+    # reordered collectives on rank 1: order fails (k=1 became the all_gather)
     bad = fold_rank(1, mut={"reorder": True})
     res = _xrank(r0, bad)
     assert res["verdict"] == "FAIL" and {"order", "op"} & set(res["failed"]), res["failed"]
@@ -639,8 +639,8 @@ def test_cross_rank_negatives_fail_by_name():
     assert res["verdict"] == "FAIL" and res["failed"] == ["provenance"], res["failed"]
     res = _xrank(r0, r1, provenance=_provenance(5))
     assert res["verdict"] == "FAIL" and res["failed"] == ["provenance"], res["failed"]
-    # [rev F-r17-03] provenance of ANOTHER run (recorder digests not those of the rows loaded here), a record without digests (hand-written /
-    # pre-F-r17-03), stored tensors that do not digest to their rows, fewer tensors digested than 4 per collective -> each named
+    # provenance of ANOTHER run (recorder digests not those of the rows loaded here), a record without digests (hand-written /
+    # older), stored tensors that do not digest to their rows, fewer tensors digested than 4 per collective -> each named
     res = _xrank(r0, r1, provenance=_provenance(6, rec_sha={"0": "a" * 64, "1": "1" * 64}))
     assert res["failed"] == ["provenance"] and "provenance from ANOTHER run" in next(c for c in res["checks"] if c["name"] == "provenance")["fails"][0]
     res = _xrank(r0, r1, provenance={"pass": True, "collectives_checked": 6, "n_mismatches": 0})
@@ -814,7 +814,7 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
     assert [c["name"] for c in xr["checks"]] == ["count", "order", "op", "segmentation", "site", "shard_linkage", "producer", "step", "recorder",
                                                  "value", "provenance", "links", "complete"]
     assert len(xr["peer_binding"]) == 12 and res["cross_rank"]["peer_binding_n"] == 12
-    # [rev S-r17-07 n1] the record names the tp2_match.json it consumed, by digest, and the recorder digests that record was bound to
+    # the record names the tp2_match.json it consumed, by digest, and the recorder digests that record was bound to
     import hashlib
     from pathlib import Path as _P
     assert res["tp2_match"]["sha256"] == hashlib.sha256(_P(res["tp2_match"]["path"]).read_bytes()).hexdigest()
@@ -859,13 +859,13 @@ def test_a_tp_fold_of_a_v2_sampler_build_carries_the_builds_construction(tmp_pat
 
 @pytest.mark.slow
 def test_fold_match_entry_point_fails_by_name(tmp_path, monkeypatch):
-    # partner rank missing: rank 1 never logged -> the cross-rank leg names it, the row is not a PASS on rank 0's fold alone (rev R2)
+    # partner rank missing: rank 1 never logged -> the cross-rank leg names it, the row is not a PASS on rank 0's fold alone
     rc, res, _ = _e2e(tmp_path, monkeypatch, drop_rank1_log=True)
     assert rc == 1 and res["pass"] is False and res["cross_rank"]["failed"] == ["partner_rank"] and "partner rank missing" in res["problems"][0]
     # no provenance record -> named FAIL, not a skipped leg
     rc, res, _ = _e2e(tmp_path, monkeypatch, provenance=False)
     assert rc == 1 and "provenance_missing" in res["cross_rank"]["failed"]
-    # rank 1 reordered its lanes: rank 1's own compare fails AND the cross-rank order/op legs fail
+    # rank 1 reordered its collectives: rank 1's own compare fails AND the cross-rank order/op legs fail
     rc, res, _ = _e2e(tmp_path, monkeypatch, rank1_mut={"reorder": True})
     assert rc == 1 and res["legs"]["compare_per_rank"]["1"].startswith("FAIL") and res["legs"]["compare_per_rank"]["0"] == "PASS"
     assert {"order", "op"} & set(res["cross_rank"]["failed"])
@@ -875,21 +875,21 @@ def test_fold_match_entry_point_fails_by_name(tmp_path, monkeypatch):
     # the ranks received different bytes at one collective (recorder digests): the value leg names it
     rc, res, _ = _e2e(tmp_path, monkeypatch, recorder_mut=lambda x: dict(x, out_sha256=("x" if (x["step"], x["k"]) == (0, 2) else x["out_sha256"])))
     assert rc == 1 and res["cross_rank"]["failed"] == ["value"]
-    # [rev F-r17-04] no GM-01 leg (no --gprog/--workload): not a PASS, named
+    # no GM-01 stage (no --gprog/--workload): not a PASS, named
     rc, res, _ = _e2e(tmp_path, monkeypatch, gprog=False)
     assert rc == 1 and res["pass"] is False and res["legs"]["global_match_per_rank"] == {"0": None, "1": None}
-    assert any("GM-01 leg not run" in p for p in res["problems"]), res["problems"]
-    # [rev F-r17-03] --tp2-match from ANOTHER run (its recorder digests are not these rows'): the provenance leg names it
+    assert any("GM-01 stage not run" in p for p in res["problems"]), res["problems"]
+    # --tp2-match from ANOTHER run (its recorder digests are not these rows'): the provenance leg names it
     rc, res, _ = _e2e(tmp_path, monkeypatch, provenance_of_other_run=True)
     assert rc == 1 and res["cross_rank"]["failed"] == ["provenance"]
     assert "provenance from ANOTHER run" in json.dumps(res["cross_rank"]["checks"])
-    # [rev F-r17-03] stored .pt bytes that do not digest to the recorder rows (tp2_match named them): the leg refuses the record
+    # stored .pt bytes that do not digest to the recorder rows (tp2_match named them): the leg refuses the record
     rc, res, _ = _e2e(tmp_path, monkeypatch, provenance_digest_mismatch=True)
     assert rc == 1 and res["cross_rank"]["failed"] == ["provenance"] and "do not digest to their recorder rows" in json.dumps(res["cross_rank"]["checks"])
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# [rev M-0026 R1 at Commit] the Commit-stage binder of the peer inputs: fold peer leaf digest == recorder partial digest of the OTHER
+# the Commit-stage binder of the peer inputs: fold peer leaf digest == recorder partial digest of the OTHER
 # rank at (s, k) == the bytes that rank committed (match oracle).  Built from the two-rank fixture's Match artifacts.
 
 def _match_dir(tmp_path, *, binding_mut=None, drop_recorder_row=None, fold_pass=True, rank_match_verdict=None, omit=False):
@@ -962,7 +962,7 @@ def test_commit_binding_needs_the_commit_oracle(tmp_path):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-# [rev M-0026 R4] the B2 form: two co-scheduled requests; the peer field's M_r and the own-part read range derive from the StepStart row
+# the B2 form: two co-scheduled requests; the peer field's M_r and the own-part read range derive from the StepStart row
 # attribution.  Positive: both ranks fold, every request's projection equals its request Program (batch_decomp X-09), cross-rank PASS.
 # Negative: ONE row boundary shifted (r0 3 rows / r1 1 row instead of 2 / 2) FAILS BY NAME -- at the fold's stated segmentation, at
 # the cross-rank segmentation leg, and at the per-request compare -- not by value.

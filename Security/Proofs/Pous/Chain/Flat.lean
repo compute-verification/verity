@@ -42,7 +42,7 @@ trusted layer provides (`Security/Definitions/Pous/Model/P3Chain.lean`,
 namespace `PousX` of those copies is renamed `Pous.X`, so the proofs are about the trusted constants.
 `Security/Proofs/Pous.lean` states the pinned forms.
 
-Pruned on 27 Oct 2026 to what the modules importing this one use, by Lean's dependency graph, and the results the
+It keeps only what the modules importing this one use, by Lean's dependency graph, and the results the
 PoUS docs cite by name (`band_gap_attack`, `shared_domain_breaks`, `not_jointClassWeight`, `dense_pub_meets_64`,
 …), each with what it uses and its section's `@[simp]` lemmas. The other sections and declarations (refuted and
 superseded drafts among them) and the modules' own docs are in the graded originals in the store.

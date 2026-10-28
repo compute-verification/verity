@@ -19,7 +19,7 @@ ALIAS_OPS = frozenset({
     "aten.expand_as", "aten.alias", "aten.detach", "aten.narrow", "aten.as_strided", "aten.unbind", "aten.unfold",
     "aten.view_as_real", "aten.view_as", "aten.flatten", "aten.unflatten", "aten.lift_fresh", "aten.resolve_conj",
     "aten.resolve_neg", "aten.detach_", "aten.movedim", "aten.chunk", "aten.tensor_split",
-    "aten.numpy_T",   # [R15 fp8] `Tensor.T` (all axes reversed): the FP8 linears pass `weight.T` / `weight_scale_inv.T` to cutlass_scaled_mm
+    "aten.numpy_T",   # `Tensor.T` (all axes reversed): the FP8 linears pass `weight.T` / `weight_scale_inv.T` to cutlass_scaled_mm
 })
 MOVE_OPS = frozenset({"aten.clone", "aten.contiguous", "aten.copy_", "aten._to_copy", "aten.to", "aten.copy"})
 #: alias ops that torch documents as "view if possible, else copy": a fresh output allocation from one of these is the copy case
@@ -87,7 +87,7 @@ def classify_transparent(node: TreeNode, ctx: StepContext) -> Transparent | Unsu
         in_allocs = {v.alloc for v in ins}
         stray = [o for o in outs if o.alloc not in in_allocs]
         if stray:
-            # [R15 fp8 / Qwen3] `aten.reshape` (and `flatten`) COPY when the requested shape is not expressible as a view of the input's
+            # `aten.reshape` (and `flatten`) COPY when the requested shape is not expressible as a view of the input's
             # strides -- vLLM's `rms_norm_batch_invariant` does `q.view(M, NH, D).reshape(-1, D)` on the strided q slice of the fused
             # QKV output ([M, NH, D] strides (QKV, D, 1): viewable only at M == 1).  torch's contract for that case is an element-order-
             # preserving copy (`clone(contiguous)` of the logical row-major order), i.e. exactly the "reshaping copy" move below:

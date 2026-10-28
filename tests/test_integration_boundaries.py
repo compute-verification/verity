@@ -72,7 +72,6 @@ KNOWN = {
     ("verity/ml/flock/tests/test_ir_lowering.py", "verity.ml.definitions.registry.sampling"),
     ("verity/ml/flock/tests/test_ir_sampling.py", "verity.ml.definitions.registry"),
     ("verity/ml/flock/tests/test_ir_sampling.py", "verity.ml.definitions.registry.prims"),
-    ("verity/ml/flock/tests/test_lean_rope.py", "verity.ml.definitions.registry.prims"),
     ("verity/ml/flock/tests/test_lean_typed_statement.py", "verity.ml.definitions.registry.prims"),
     ("verity/ml/flock/tests/test_partition_units.py", "verity.ml.definitions.registry"),
     ("verity/ml/flock/tests/test_stage_typed.py", "verity.ml.definitions.registry.prims"),

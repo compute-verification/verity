@@ -144,7 +144,7 @@ def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_
     got = {}
     pace = verifier.pace_of("1:4:160:2", 1.0)
     sessions, proved = run_sessions("honest", paces=[pace], challenger=host.gate(out / "challenger", peer="vy-auditor-1"),
-                                    verdict="python", defer_openings=True,
+                                    defer_openings=True,
                                     then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     rc, closed = host.call(["period-close", "--name", "p-1"])
     assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed

@@ -4,13 +4,13 @@ import Proofs.Accounting.TS.ProofsSound
 /-!
 # An honest coin-keyed proof layer meets (I8)'s premises
 
-The positive twin of RT3-LOGIC-1's `coinLayer`: a served round's unit takes the round's salt σ_w and outputs a
-receipt keyed by it (`window.round_key`, `h1tile.live_salt`), committed after σ_w in a tree of its own, while the
-round's leaves, committed before σ_w, hold its operands. `keyedLayer n` is such a window over `n + 1` rounds, one proof a round: each
-proof accepted, opening its round's operand (`false`), its relation reading σ_w and the receipt the proof gives on the
-path (the operand keyed by σ_w). The receipt moves with σ_w (`keyedLayer_receipt_moves`), so as a leaf it would fork
-with every redraw of σ_w, as `coinLayer` does. Read by the relation instead, binding (both forms) and proof soundness
-hold at `0` and the relations pin (`keyedLayer_meets_budget`), so the restated premises hold for an honest
+The positive twin of a layer that commits a coin-keyed receipt as a leaf: a served round's unit takes the round's salt
+σ_w and outputs a receipt keyed by it (`window.round_key`, `h1tile.live_salt`), committed after σ_w in a tree of its
+own, while the round's leaves, committed before σ_w, hold its operands. `keyedLayer n` is such a window over `n + 1`
+rounds, one proof a round: each proof accepted, opening its round's operand (`false`), its relation reading σ_w and the
+receipt the proof gives on the path (the operand keyed by σ_w). The receipt moves with σ_w (`keyedLayer_receipt_moves`),
+so as a leaf it would fork with every redraw of σ_w. Read by the relation instead, binding (both forms) and proof
+soundness hold at `0` and the relations pin (`keyedLayer_meets_budget`), so the restated premises hold for an honest
 coin-dependent layer at the budget `S·(√δ_fork + n_π·δ_ZK) ≤ 2^-41`, `S = 48,000` (`keyedLayer_meets_budget_dc`).
 `keyedPlay n` is its honest play (every round passing at share `0`, `N_w = 1` fixed words), so `Of` and `RightFixed`,
 the premises that read the play, are met by an honest run too, and `ProofsSoundOfPinned` gives (I8) at `0`
@@ -24,9 +24,9 @@ position's cut (both forms), joint soundness and pinning at `0`, within the budg
 
 `guess_rel_last`: for a prover that guesses round `w`'s receipt (`true`) instead of keying its operand, the committed
 values satisfy every relation on one path and fail the last round's on its continuation that redraws the last coin, so
-`ProofLayer.Of` no longer has the ideal game accept every last coin (RT3-LOGIC's `game_accepts_last`): the relation
-reads the coin the receipt is keyed by. `guessLayer`'s relation takes the operand as free witness, so it lacks `Pins`
-(`guessLayer_not_pins`) and `ProofsSoundOfPinned` says nothing about it.
+`ProofLayer.Of` no longer has the ideal game accept every last coin: the relation reads the coin the receipt is keyed
+by. `guessLayer`'s relation takes the operand as free witness, so it lacks `Pins` (`guessLayer_not_pins`) and
+`ProofsSoundOfPinned` says nothing about it.
 
 The last-round cheater inside `Pins` is `lastLayer n`: a pinning check (each relation recomputes the operand,
 `v = false`, and reads the receipt the proof gives on the path, keyed by σ_w) against a prover honest in every round but
@@ -148,7 +148,7 @@ def guessLayer (n : ℕ) : ProofLayer Bool (n + 1) 1 Bool where
 /-- **The relation reads the last coin**: on the all-`true` path the guessing prover's committed values satisfy every
 relation, and on its continuation that redraws the last round's coin as `false` they fail the last round's. So `Of`'s
 tie to the ideal game reads the coin the receipt is keyed by, and a prover deficient in the last round is accepted by
-the ideal game on its lucky coins only (RT3-LOGIC's `game_accepts_last` had it accepted on every last coin). -/
+the ideal game on its lucky coins only (an earlier `Of` had it accepted on every last coin). -/
 theorem guess_rel_last (n : ℕ) :
     (∀ w i, (guessLayer n).rel (Paths.const true (n + 1)) w i
         ((guessLayer n).committed (Paths.const true (n + 1)) w i)) ∧

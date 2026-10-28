@@ -310,7 +310,7 @@ def self_check(target: Target, *, kernel: str = "numpy", n: int = 1024, seed: in
     for i, args in _reference_rows(t, params, arrays, np.arange(n)):
         try:
             ref = evaluate(t, *args)
-        except Exception as e:  # the reference's own domain check: the kernel must have declined
+        except Exception as e:  # noqa: BLE001 - the reference's own domain check: the kernel must have declined
             outside += 1
             if not declined[i]:
                 mismatches.append((i, args, vals[i].tolist(), f"reference raised {type(e).__name__}: {e}"))

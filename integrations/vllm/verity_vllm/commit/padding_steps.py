@@ -1,5 +1,5 @@
-"""Padding steps -- the INACTIVE rows of a padded Commit, synthesized by ENABLEMENT at finalize (explicit enablement; LIFTING-SPEC
-v0.7 A9.3 / B8 / B9; PADDED-TABLE candidates #3 / #4 `smollm2` earlystop / mixedstop).  One rule, two consumers:
+"""Padding steps -- the INACTIVE rows of a padded Commit, synthesized by ENABLEMENT at finalize (explicit enablement; the `smollm2`
+earlystop / mixedstop workloads).  One rule, two consumers:
 
   * the pod committer (`native_host.finalize`): after the run's executed steps are folded, the padding steps of every request are appended
     to the step list (their layouts published, their tree levels retained for openings) and the run root is the fold over ALL S steps of
@@ -7,13 +7,13 @@ v0.7 A9.3 / B8 / B9; PADDED-TABLE candidates #3 / #4 `smollm2` earlystop / mixed
   * the laptop conversion over a PULLED record (`padded_map_of_record`): the record's executed-step layouts + step roots, the same padding
     steps synthesized from its manifest, the same fold -> the padded map + coverage over the manifest, with the record's own step roots
     for the executed prefix.  (The run root of the conversion is NOT the record's: the pulled record carries no geometry digest and its
-    run root was the fold over the executed steps only; the conversion's root binds S = cap steps.  The one-root claim of PADDED-TABLE is
+    run root was the fold over the executed steps only; the conversion's root binds S = cap steps.  The one-root claim is
     made by the pod consumer; the conversion demonstrates the population, the bytes and the map.)
 
-The rule (SPEC A9.1 N2, A9.3, B9 R4'): request r's Program owns steps [arrival, arrival + cap); its EXECUTED PREFIX of record is
-`executed_prefix_of_record` (moe's rule: declared LAG + served tokens + declared EOS, never inferred from the trace); every identity the
+The rule: request r's Program owns steps [arrival, arrival + cap); its EXECUTED PREFIX of record is
+`executed_prefix_of_record` (declared LAG + served tokens + declared EOS, never inferred from the trace); every identity the
 manifest requires of r at a step >= arrival + executed_prefix_len is ⊥ BY ENABLEMENT (the step's call has `a_c = Active(0)`): its committed
-word is the canonical ⊥ of the lifted width, `1 || 0^w`, in the lifted representation (A11: the TRUE lifted width w+1, no split to
+word is the canonical ⊥ of the lifted width, `1 || 0^w`, in the lifted representation (the TRUE lifted width w+1, no split to
 fit 32 bits) -- a bf16 element (w = 16) is the u32 word 0x0001_0000, a 32-bit element (u32 / i32 / f32) the u64 word 1 << 32, a 64-bit
 element (i64 token id) the 16-byte word 1 << 64.  The synthesized stream of a padding step is tensor-major in the manifest's identity
 order, chunked into `chunk`-byte `pos_leaf` leaves and folded with the production rule (`scheme.fold_levels`); the step root is
@@ -40,12 +40,12 @@ from verity_vllm.records.declared_stop import DeclaredStop
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.served_tokens import ServedTokens
 
-PADDING_RULES_VERSION = "padded-v1"                 # LIFTING-SPEC v0.7 B8: the padded request Program's rules version
+PADDING_RULES_VERSION = "padded-v1"                 # the padded request Program's rules version
 PADDED_MAP_SCHEMA = "padded-binding-map/1"
 CHUNK = 256                                         # chunk-leaf-v1 with the GPU tree
 
-# committed dtype -> (payload width w, lifted container bytes, lifted dtype label).  The lifted word is w+1 bits wide (A11), carried in
-# the smallest power-of-two container that holds it; ⊥ = 1 << w (tag 1, zero payload: the canonical ⊥, A9.3 / R17-6).
+# committed dtype -> (payload width w, lifted container bytes, lifted dtype label).  The lifted word is w+1 bits wide, carried in
+# the smallest power-of-two container that holds it; ⊥ = 1 << w (tag 1, zero payload: the canonical ⊥).
 LIFTED_CONTAINER: dict[str, tuple[int, int, str]] = {
     "bf16": (16, 4, "lifted17/u32"), "f16": (16, 4, "lifted17/u32"), "fp16": (16, 4, "lifted17/u32"),
     "u32": (32, 8, "lifted33/u64"), "i32": (32, 8, "lifted33/u64"), "f32": (32, 8, "lifted33/u64"), "int32": (32, 8, "lifted33/u64"),
@@ -75,8 +75,8 @@ class PaddingMeta:
     stream_off: int
     committed_dtype: str = ""   # the identity's dtype in the executed steps (bf16, u32, i64): the payload width comes from it
     elements: int = 0
-    block_kind: str = "padding"  # [revb S-r17b-59 (i)] the block's domain, READ from the layout row (never inferred from a label): executed | padding
-    nb: int = 1                  # the CMT-2 chunk header's NB for this block (PADDING_BLOCK): 1 = padding block, 0 = executed block
+    block_kind: str = "padding"  # the block's domain, READ from the layout row (never inferred from a label): executed | padding
+    nb: int = 1                  # the hidden-path chunk header's NB for this block (PADDING_BLOCK): 1 = padding block, 0 = executed block
 
 
 @dataclass
@@ -113,8 +113,8 @@ def padding_tensor_name(op_path: str, member: str, request_id: str) -> str:
     """The name of the PADDING tensor that materializes identity (request_id, op_path, member): the executed member's name + `/<rid>/bot`
     (a shared plane's member already reads `<rid>/<g...>/bot`, kept).  A padding tensor is its OWN tensor: at a MIXED
     step it sits beside the executed member of the same identity name, and a committed reader asked for the executed member by its bare
-    name must find ONE meta (S-r17b-19 n3: two metas under one name -> None) -- on the first #4 pod run the padding tensor carried the
-    executed name and the C2 boundary linkage read `model.embed_tokens/in` at every mixed step as 'not retained' (24/44 linked)."""
+    name must find ONE meta (two metas under one name -> None) -- a padding tensor under the executed name would make the C2 boundary
+    linkage read `model.embed_tokens/in` at every mixed step as 'not retained'."""
     base = tensor_name(op_path, member)
     if base.endswith(PADDING_NAME_SUFFIX):
         return base
@@ -122,7 +122,7 @@ def padding_tensor_name(op_path: str, member: str, request_id: str) -> str:
 
 
 def member_plane_identity(shared: dict[str, Any], rid: str, engine_step: int, arrival: int) -> dict[str, Any]:
-    """[B9.1 (1) rule (a)] The ⊥ per-sequence plane of a listed member INACTIVE at a B>1 shared hidden launch row.
+    """Rule (a): the ⊥ per-sequence plane of a listed member INACTIVE at a B>1 shared hidden launch row.
     The launch row (`request_id "*"`, `requests` listed, `engine_step` e) is the manifest's PACKING of the members' own attention rows at
     e; the tap commits per-sequence planes.  An executing member requires the launch's whole stream at e (binding.coverage_check,
     `LaunchIdentity`), an inactive one a plane of that op at e bound to it (op-level, this ⊥ plane).  A member
@@ -380,7 +380,7 @@ def padding_for_committer(com: Any, *, manifest: dict[str, Any], requests: list[
         raise RuntimeError("padded finalize REFUSED: executed prefix of record not placeable: " + "; ".join(epr.get("problems") or ["(unnamed)"]))
     per_request = [d for d in ids if d.get("request_id") not in (None, "*") and d.get("family") != "weights" and d.get("step") != "*"
                    and d.get("element_range") and d["element_range"][1] is not None]
-    # [rule (a), F-r17b-64] the B>1 shared hidden launch rows: their listed members normalised to r<i> (workload ids | indices | r<i>)
+    # rule (a): the B>1 shared hidden launch rows: their listed members normalised to r<i> (workload ids | indices | r<i>)
     shared = [dict(d, requests=[_logical(str(r)) if not str(r).startswith("r") or not str(r)[1:].isdigit() else str(r) for r in d["requests"]])
               for d in ids if d.get("request_id") == "*" and isinstance(d.get("requests"), list) and d.get("engine_step") is not None
               and d.get("family") != "weights"]
@@ -426,12 +426,12 @@ def padded_binding_map_of_committer(com: Any, run: Any, program_digest_hex: str,
         entries.extend(padding_entries(pads[s], layout_version=bmap["layout"], step_root=run.steps[s].root))
     pm: dict[str, Any] = {"schema": PADDED_MAP_SCHEMA, "rules_version": bmap.get("rules_version"),
                           "program_rules_version": program_rules_version, "padding_rules_version": PADDING_RULES_VERSION,
-                          "consumer": "pod finalize (native_host.add_padding_steps; padding-steps/1, LIFTING-SPEC v0.7 B9.1 rule)",
+                          "consumer": "pod finalize (native_host.add_padding_steps; padding-steps/1)",
                           "record_map_rules_version": bmap.get("rules_version"), "program_digest": program_digest_hex,
                           "run_root": run.run_root.hex(), "rank": int(bmap.get("rank", 0)), "layout": bmap["layout"],
                           "collector": dict(bmap.get("collector") or {}, padding="synthesized by enablement at finalize (padding_steps.py; pod consumer)"),
                           "entries": entries}
-    pm["padding"] = {"rule": "LIFTING-SPEC v0.7 B9.1: every identity of a step outside its request's executed prefix of record is the canonical "
+    pm["padding"] = {"rule": "every identity of a step outside its request's executed prefix of record is the canonical "
                              "bot of its lifted width, synthesized at finalize; the executed prefix is executed_prefix_of_record, never inferred",
                      "steps": sorted(pads), "mixed_steps": sorted(s for s, ps in pads.items() if ps.appended),
                      "S": len(run.steps), "consumer": "pod (native_host.finalize)", "executed_prefix": executed_prefix}
@@ -530,10 +530,10 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
     for e in bmap["entries"]:
         if e["kind"] != "leaf":
             entries.append(dict(e, activity="registered-input"))
-    # [revb M-1335 CORRECTION 2 / R17-42] the map's program_digest is the RECORD's (unlifted) Program: its program_rules_version stays the
-    # record's -- stamping `padded-v1` on a conversion would be the post-hoc re-label R17-42 forbids; the padding rule is named beside it
+    # the map's program_digest is the RECORD's (unlifted) Program: its program_rules_version stays the record's -- stamping
+    # `padded-v1` on a conversion would be a forbidden post-hoc re-label; the padding rule is named beside it
     pm: dict[str, Any] = {"schema": PADDED_MAP_SCHEMA, "rules_version": bmap.get("rules_version"),
-                          "program_rules_version": bmap.get("program_rules_version"), "conversion": "padding-steps/1 (LIFTING-SPEC v0.7 B9.1 rule)",
+                          "program_rules_version": bmap.get("program_rules_version"), "conversion": "padding-steps/1",
                           "padding_rules_version": PADDING_RULES_VERSION,
                           "record_map_rules_version": bmap.get("rules_version"), "program_digest": pdg,
                           "run_root": (run_root.hex() if run_root is not None else None),
@@ -542,7 +542,7 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
                           "rank": int(bmap.get("rank", 0)), "layout": bmap["layout"],
                           "collector": dict(bmap.get("collector") or {}, padding="synthesized by enablement at finalize (padding_steps.py)"),
                           "entries": entries}
-    pm["padding"] = {"rule": "LIFTING-SPEC v0.7 A9.1 N2 / A9.3 / B9: every identity of a step outside its request's executed prefix of record is "
+    pm["padding"] = {"rule": "every identity of a step outside its request's executed prefix of record is "
                              "the canonical ⊥ of its lifted width, synthesized at finalize; the executed prefix is executed_prefix_of_record "
                              "(declared LAG + declared EOS + served tokens), never inferred from the trace",
                      "steps": sorted(pad_steps), "executed_steps": executed_steps, "S": S, "lag": lag, "run_id": run_id,
@@ -557,7 +557,7 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
     n_weights = sum(1 for d in ids if d.get("family") == "weights")
     cov = coverage_over_manifest(ids, pm)
     cov_before = coverage_over_manifest(ids, bmap)
-    # [rule (a)] the padding may only ADD member planes where the executed prefix of record places a member outside the step: the
+    # rule (a): the padding may only ADD member planes where the executed prefix of record places a member outside the step: the
     # executed launch bindings are untouched (same count before and after), the bot planes are the difference
     cov["shared_executed_bindings_unchanged"] = cov["shared"]["members_bound_executed_n"] == cov_before["shared"]["members_bound_executed_n"]
     cov["ok"] = bool(cov["ok"]) and cov["shared_executed_bindings_unchanged"]
@@ -604,24 +604,24 @@ def _all_bot(ps: PaddingStep) -> bool:
 
 # ------------------------------------------------------------------------------------------------------ the inactive stratum (C2 population)
 
-INACTIVE_RULE = ("R17-42 / B9.1: on a PADDED record the population of record is the FULL cap -- RequiredValues(P, Q_module_v1) with every "
-                 "identity outside a request's executed prefix of record a REQUIRED value assigned tau(e) = bot (R17-43: the call's enable is "
+INACTIVE_RULE = ("on a PADDED record the population of record is the FULL cap -- RequiredValues(P, Q_module_v1) with every "
+                 "identity outside a request's executed prefix of record a REQUIRED value assigned tau(e) = bot (the call's enable is "
                  "Active(0)).  Those identities are the named stratum `inactive_by_enablement` beside reached / uncovered (accounted = reached + "
                  "uncovered + inactive == |Q(P)|); their check is the committed word == enc(bot) of the lifted width, entry by entry, word by "
                  "word (a bot-by-enablement entry whose leaf is NOT the bot word FAILS); no Program evaluation -- the relation is the enable.  "
                  "There is no not-executed class on a padded record (not_executed_by_rule.n 0 on both sides, renamed, never dropped).")
 
-SIZING_RULE = ("S-r17b-67 C1 (revb M-1429): a bot plane's element count must equal the MEMBER'S OWN Program Attention row at e. "
+SIZING_RULE = ("a bot plane's element count must equal the MEMBER'S OWN Program Attention row at e. "
                "`declared` (members_geometry[rid] on the shared row) IS that; `launch-share` (HB / n_seq with the LAUNCH's M = the union's "
                "T_max) equals it only when the members' kv geometry at e coincide -- a named fallback, not the rule; `row-width` is "
-               "fixture-only.  Sign-against: every bot plane `declared`, or the record COUNTS the others and the cell carries the label.")
+               "fixture-only.  Every bot plane is `declared`, or the record COUNTS the others and the cell carries the label.")
 
 
 def bot_plane_sizing(pads: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    """[S-r17b-67 C1] How the ⊥ planes of a shared-plane family were SIZED, counted on the record (the padded map is an
-    excluded artefact; `geometry_source` lives per entry and never reached runs.jsonl / the README before this): the histogram of
+    """How the ⊥ planes of a shared-plane family were SIZED, counted on the record (the padded map is an
+    excluded artefact and `geometry_source` lives per entry, so this is what reaches runs.jsonl / the README): the histogram of
     `geometry_source` over the family's bot-by-enablement entries, the per-sequence geometry names (`g<HB>x<M>x<NB>[x<BN>x<D>]`, from the
-    entry's `identity.output_member`) and the words per plane, plus `all_declared` -- the C1 label the PADDED-TABLE cell must carry."""
+    entry's `identity.output_member`) and the words per plane, plus `all_declared` -- the label a padded table's cell must carry."""
     pads = list(pads)
     src = Counter(str(e.get("geometry_source") or "unstated") for e in pads)
     gname: Counter[str] = Counter()
@@ -651,7 +651,7 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
     pop = sr.setdefault("population", {}) if isinstance(sr.get("population"), dict) else sr.setdefault("population", {})
     ne = dict(pop.get("not_executed_by_rule") or {})
     n_ne = int(ne.get("identities") or 0)
-    # sampled_replay writes `not_executed_rule` / `not_executed_by_family` INSIDE `population` (the pod's sampled_replay_p0.json, #3 05:33Z);
+    # sampled_replay writes `not_executed_rule` / `not_executed_by_family` INSIDE `population` (the pod's sampled_replay_p0.json);
     # an older shape had them at the top level -- both are read, and renamed where they are
     holder = pop if isinstance(pop.get("not_executed_rule"), dict) else sr
     ner = holder.get("not_executed_rule") if isinstance(holder.get("not_executed_rule"), dict) else None
@@ -675,7 +675,7 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
     checked = words = 0
     mismatches: list[dict[str, Any]] = []
     unread: list[dict[str, Any]] = []
-    # [revb M-1482 (ii)] the dtypes ARE on the record: per committed dtype, the lifted container the bot word was read back through, the
+    # the dtypes ARE on the record: per committed dtype, the lifted container the bot word was read back through, the
     # bot word's hex, entries checked and words read -- so 'router_ids i32 / router_w f32 -> lifted33/u64, bf16 -> lifted17/u32' is a
     # line of the record, not of the reader
     by_dtype: dict[str, dict[str, Any]] = {}
@@ -712,14 +712,14 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
     if unread:
         problems.append(f"{len(unread)}+ padding entries not readable through the committed reader (e.g. {unread[0]})")
     if mismatches:
-        problems.append(f"{len(mismatches)}+ padding entries whose committed word is NOT the bot word (R17-42 s5): e.g. {mismatches[0]}")
+        problems.append(f"{len(mismatches)}+ padding entries whose committed word is NOT the bot word: e.g. {mismatches[0]}")
     # a BATCH-LEVEL family (request_id '*', the shared hidden launch planes at B>1): the population counts a plane identity inactive only when
     # EVERY listed member is past its stop (idle step) and states the (plane, past member) CELLS beside it (`plane_cells_not_executed.cells`,
-    # sampled_replay / moe M-0468); the Commit's rule (a) pads one bot plane per inactive listed member at MIXED and IDLE steps = the cells.
-    # The cells are the number the padding reconciles against (revb M-1419 (3): F-r17b-64 surfaces here the moment (b) lands)
+    # sampled_replay); the Commit's rule (a) pads one bot plane per inactive listed member at MIXED and IDLE steps = the cells.
+    # The cells are the number the padding reconciles against
     tot_by_fam = ((inactive.get("totals") or {}).get("by_family") or {}) if isinstance(inactive.get("totals"), dict) else {}
     fams = sorted(set(commit_by_family) | set(pop_by_family))
-    # [revb M-1482 (i)] the KIND of each family's padding on the Commit side, stated on the record: `shared-plane (rule a)` when its bot tensors
+    # the KIND of each family's padding on the Commit side, stated on the record: `shared-plane (rule a)` when its bot tensors
     # are per-member planes of a batch-level `*` row (`shared_of`), else `per-request` (one tensor per request-level identity)
     commit_kind = {f: ("shared-plane (rule a)" if any(e.get("shared_of") for e in pads if str(e.get("family") or "unstated") == f) else "per-request")
                    for f in fams if commit_by_family.get(f)}
@@ -756,7 +756,7 @@ def padded_population(sr: dict[str, Any], bmap: dict[str, Any], committed: Any, 
 
 
 def padding_vs_oracle(pp: dict[str, Any], oc: dict[str, Any] | None, bmap: dict[str, Any]) -> dict[str, Any]:
-    """[S-r17b-70 C3] the TWO documents of a padded record agree on ONE number: `oracle_compare.padding` (the entries the oracle
+    """The TWO documents of a padded record agree on ONE number: `oracle_compare.padding` (the entries the oracle
     stated apart as padding, per Q(P) family, with their (step, request) pairs) == `padded_population`'s inactive stratum (the Commit's
     padding entries per family, read back as bot words) == the padded map's own `bot-by-enablement` entries -- and the padding pairs are
     exactly the (step, request) pairs with NO executed entry (a request is active or inactive at a step, never both).  Agreement is what
@@ -781,9 +781,9 @@ def padding_vs_oracle(pp: dict[str, Any], oc: dict[str, Any] | None, bmap: dict[
                "map_by_family": dict(sorted(map_by_family.items())), "stratum_by_family": pop_by_family, "problems": problems}
         return out
     if not isinstance(opad, dict):
-        # an oracle that predates fix (d): its padding entries sit in the 'identity without a byte range' grade + the hidden_stream class
+        # an oracle without a padding block: its padding entries sit in the 'identity without a byte range' grade + the hidden_stream class
         nc = oc.get("not_compared") if isinstance(oc.get("not_compared"), dict) else {}
-        out = {"ok": False, "oracle": "predates fix (d): no `padding` block; the padding entries are graded 'identity without a byte range' + 'no oracle family: hidden_stream'",
+        out = {"ok": False, "oracle": "predates the `padding` block: the padding entries are graded 'identity without a byte range' + 'no oracle family: hidden_stream'",
                "map_padding_entries": len(pads), "map_pairs": len(map_pairs), "map_by_family": dict(sorted(map_by_family.items())), "stratum_by_family": pop_by_family,
                "oracle_not_compared": nc, "problems": problems + ["oracle_compare has no padding block (record predates eac07aca4)"]}
         return out
@@ -803,18 +803,18 @@ def padding_vs_oracle(pp: dict[str, Any], oc: dict[str, Any] | None, bmap: dict[
         problems.append(f"oracle padding.pairs {opad.get('pairs')} != the map's {len(map_pairs)} inactive (step, request) pairs (older oracle: count only)")
     if sorted(int(x) for x in (opad.get("steps") or [])) != sorted({s for s, _ in map_pairs}):
         problems.append("oracle padding.steps != the map's padding steps")
-    return {"ok": not problems, "oracle": "oracle_compare.padding (fix (d))", "entries": {"oracle": int(opad.get("entries_not_compared", 0)), "map": len(pads),
+    return {"ok": not problems, "oracle": "oracle_compare.padding", "entries": {"oracle": int(opad.get("entries_not_compared", 0)), "map": len(pads),
             "stratum": int(pp.get("padding_entries", 0))}, "by_family": {"oracle": dict(sorted(o_by_family.items())), "map": dict(sorted(map_by_family.items())), "stratum": pop_by_family},
             "pairs": {"oracle": int(opad.get("pairs", 0)), "map": len(map_pairs), "pair_list_compared": o_pairs is not None, "executed_and_padding_overlap": len(both)},
             "steps": sorted({s for s, _ in map_pairs}), "problems": problems,
-            "rule": "S-r17b-70 C3: oracle_compare.padding by family + pairs == padded_population's inactive stratum by family == the map's bot-by-enablement entries; "
+            "rule": "oracle_compare.padding by family + pairs == padded_population's inactive stratum by family == the map's bot-by-enablement entries; "
                     "the padding pairs are exactly the (step, request) pairs without an executed entry"}
 
 
 def coverage_over_manifest(identities: list[dict[str, Any]], bmap: dict[str, Any]) -> dict[str, Any]:
     """Request-aware coverage of the manifest by a map (`binding.coverage_check`, exact request / step / rank; the weights family excluded
     as in the record's rule) + the B>1 SHARED identities (`request_id == "*"`, a hidden launch plane with `requests` and `engine_step`)
-    under B9.1 (1) rule (a): a shared row is covered iff EVERY listed member has an entry of that (engine_step, invocation, op_path,
+    under the shared-row rule: a shared row is covered iff EVERY listed member has an entry of that (engine_step, invocation, op_path,
     member-prefix) -- the executed launch plane bound whole to the members it ran over (the record's hidden-launch rule), or the member's
     own ⊥ per-sequence plane (`member_plane_identity`) where the executed prefix of record places it outside the step.  Counted per
     member: bound by an executed plane / bound by a ⊥ plane / missing (named)."""
@@ -856,7 +856,7 @@ def coverage_over_manifest(identities: list[dict[str, Any]], bmap: dict[str, Any
     out["shared"] = {"n": shared_n, "bound_n": shared_bound, "missing_n": shared_n - shared_bound, "missing": shared_missing[:4],
                      "members_n": members_n, "members_bound_executed_n": members_exec, "members_bound_bot_n": members_pad,
                      "members_missing_n": members_n - members_exec - members_pad,
-                     "rule": "B9.1 (1) (a): a shared launch row is covered iff EVERY listed member has a plane of that op at the engine step -- "
+                     "rule": "a shared launch row is covered iff EVERY listed member has a plane of that op at the engine step -- "
                              "the executed launch (bound whole to the members it ran over) or the member's own bot per-sequence plane"}
     out["missing_examples"] = cov.get("missing", [])[:4]
     return out
@@ -864,7 +864,7 @@ def coverage_over_manifest(identities: list[dict[str, Any]], bmap: dict[str, Any
 
 def _served_tokens_of_record(rd: Path, wp: dict[str, Any]) -> dict[str, list[int]] | None:
     """The served tokens of record per request: the Match capture's `tokens.json` (`generated_token_ids` per request, the same source
-    reqval's sampled replay names as `a_r_source`), mapped to `r<k>` by the workload Program's request-id convention.  The commit's
+    the sampled replay names as `a_r_source`), mapped to `r<k>` by the workload Program's request-id convention.  The commit's
     `runs.jsonl` generated_tokens is a length-only witness and is NOT accepted: the stop rule needs the last token id.  A `tokens.json`
     missing a field every writer writes is refused (`RecordError`, naming the file and the field)."""
     p = rd / "match" / "capture" / "tokens.json"

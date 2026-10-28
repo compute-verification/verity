@@ -17,9 +17,9 @@
 # `--deferred STEP,...`: drive's after-landing run and its Lean checks in place of the check: only those ci.toml jobs and what
 # they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so no gate
 # reads it; drive reads its steps and suites. With it alone, `--agreement` sends the upstream build (a run of `main` has no
-# change to send it for), `--no-cache` reuses no pass, and `--no-regenerate` fails lean-audit on a lock record difference rather
-# than passing it on a regenerated record: drive's after-landing run (`after_landing_no_cache`), where nothing commits
-# regenerated records.
+# change to send it for), `--no-cache` reuses no pass (`--circuit-cache` beside it: but circuit-check's per-target ones), and
+# `--no-regenerate` fails lean-audit on a lock record difference rather than passing it on a regenerated record: drive's
+# after-landing run (`after_landing_no_cache`), where nothing commits regenerated records.
 #
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, and a COMMIT that is
@@ -27,11 +27,12 @@
 set -euo pipefail
 [ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= noregen=
+pass=() deferred= nocache= ccache= noregen=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
     --no-cache) nocache=1 ;;
+    --circuit-cache) ccache=1 ;;
     --no-regenerate) noregen=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
@@ -41,10 +42,13 @@ while [ $# -gt 0 ]; do
 done
 [ -z "$nocache" ] || [ -n "$deferred" ] \
   || { echo "train: --no-cache refused without --deferred: a train's check reuses the passes its inputs earned" >&2; exit 2; }
+[ -z "$ccache" ] || [ -n "$nocache" ] \
+  || { echo "train: --circuit-cache refused without --no-cache: it keeps circuit-check's reuse on under --no-cache" >&2; exit 2; }
 [ -z "$noregen" ] || [ -n "$deferred" ] \
   || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates the locks drive commits" >&2; exit 2; }
 [ -z "$deferred" ] || pass+=(--deferred "$deferred")
 [ -z "$nocache" ] || pass+=(--no-cache)
+[ -z "$ccache" ] || pass+=(--circuit-cache)
 [ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
@@ -59,7 +63,7 @@ tell() {
   if [ "$rc" -ne 0 ]; then
     { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${deferred:+ --deferred $deferred} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
-    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet \
+    uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --report \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
   fi
   rm -f "$why" "$why.post"

@@ -1,5 +1,5 @@
 """The check of the exact W8A8 GEMM on a staged matrix against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`. The GEMM is
-`int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, KS8-SIMPLE's path, HASH-11): the s32 sum by `torch._int_mm`
+`int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`): the s32 sum by `torch._int_mm`
 (cuBLASLt's s8 IMMA, exact for K < 2^17 whatever its k order), then the Definition's epilogue
 `cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)`, the token's scale first.
 

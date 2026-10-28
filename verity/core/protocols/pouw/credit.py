@@ -1525,18 +1525,29 @@ def _judged(layout: dict, c: int, reg: dict, got: list[PF.Finding], out: list[di
                                     f"root than the verifier's own {pub['value']} at port {PUB_PORT}: a unit's public "
                                     "row is the window's salt, its position and its call's roots, as credit builds "
                                     "them")
-        ok, opened = reg["ports"][OK_PORT], _finding(f.registered) or ()
-        if [(p, v, root) for p, v, root in opened if p == OK_PORT or v == ok["value"]] != [
-                (OK_PORT, ok["value"], ok["root"])]:
-            return ("registration", f"call {c}'s session {f.session} opened the ok rows at another port, value or root "
-                                    f"than the verifier's own {ok['value']} at port {OK_PORT}, or not at all: a unit's "
-                                    "ok row is the one word 1 under its public ok salt, as credit registers it, so a "
-                                    "unit that computed 0 opens none of it")
+        why = _ok_held(c, f.session, f.registered, reg["ports"][OK_PORT])
+        if why is not None:
+            return why
         for u in f.units:
             if not start <= u < start + sizes[c]:
                 return ("proof", f"call {c}'s session {f.session} proved unit {u}, which is no unit of call {c}: a "
                                  "call's statement proves its own call's units")
             out.append({"unit": u, "verdict": "accept", "program": f.program, "registered": f.registered})
+    return None
+
+
+def _ok_held(c: int, session: Any, registered: Any, ok: dict) -> tuple[str, str] | None:
+    """None when call `c`'s session `session`, whose registered finding is `registered`, opened the window's ok rows
+    once, at port ``o1`` (`OK_PORT`) and at the value and root of `ok` (the ok port of credit's ``--registered`` file,
+    `registered_file`'s); else the refusal (``registration``). The ok rows are the verifier's own, registered under the
+    window's open root, so a session that opened them at another root (rows registered without that root, another
+    window's, or a unit's row 0) or not at all credits nothing. `_judged`'s step for each finding."""
+    if [(p, v, root) for p, v, root in _finding(registered) or () if p == OK_PORT or v == ok["value"]] != [
+            (OK_PORT, ok["value"], ok["root"])]:
+        return ("registration", f"call {c}'s session {session} opened the ok rows at another port, value or root "
+                                f"than the verifier's own {ok['value']} at port {OK_PORT}, or not at all: a unit's "
+                                "ok row is the one word 1 under its public ok salt, as credit registers it, so a "
+                                "unit that computed 0 opens none of it")
     return None
 
 

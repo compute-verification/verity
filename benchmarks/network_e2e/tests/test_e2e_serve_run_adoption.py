@@ -1,12 +1,10 @@
-"""REDTEAM phase 13, target 1 (REDTEAM-ADVICE, note:network-accounting/20261024T0558Z-finding-redteam-v3) against #3778,
-NET-E2E's adapter that adopts `prove_path.py audit --serve-run` audits as these runs' prove path, as in G-A's report of
-record r20261024-163242-7e60. The attack is on the *assembly*, not the pieces.
+"""An adversarial case against the adapter that adopts `prove_path.py audit --serve-run` audits as these runs' prove
+path. The attack is on the *assembly*, not the pieces.
 
-The report of record reads OK with w212's advice registered **after serving** (the lane, 14.2 min before the first
-draw). The run's own `out/advice-check.json` is the content tie for that window: `the_audited_root_is_the_lanes` and
-`the_lanes_opening_opens_its_root_to_the_reports_w212_advice`, both True — the lane's opening opens 7679's committed root
-to exactly the report's w212 advice (`chain.opens`, which really binds content: the opening's bytes must equal the v0
-encoding of the report's advice, re-registered to the registered root). So in the run of record the content is pinned.
+A report could read OK with w212's advice registered **after serving**, before the first draw. A content tie for such
+a Commit window opens the audited arm's committed root to exactly the report's advice of that Commit window
+(`chain.opens`, which binds content: the opening's bytes must equal the v0 encoding of the report's advice,
+re-registered to the registered root).
 
 The finding was that this content tie was **not in the report's `ok`**. For a window registered apart (its own salt, as
 w212's), the report's prove-path binding (`served_commit`) held the audited arm by:
@@ -19,7 +17,7 @@ the adopted `--serve-run` arms, and `e2e.report`'s `ok` never referenced it or t
 `at_serve_time` was unverified job-stated metadata that gated nothing in `ok`; a prover could claim serve-time for late
 advice and only the disclosure (`stubs`, `_registered`) changed.
 
-The fix (NET-E2E, stacked on #3788), which these cases now hold as regressions: every adopted arm's advice is held by
+The fix, which these cases now hold as regressions: every adopted arm's advice is held by
 content (`chain.held_to`): its root is the registered root, and the registration's opening opens it to the report's
 advice of the window (`chain.opens`), which the report's `ok` requires; the bit count never passes. `at_serve_time` is
 read off the registration's own time, before the arm's draw (its `advice_before_draw` receipt) and no later than the next

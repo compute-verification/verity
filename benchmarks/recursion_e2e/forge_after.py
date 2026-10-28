@@ -7,7 +7,7 @@ honest firewalled prove instead, and put to the Lean verifier.
 it reuses) with 85's flock-verify; ``forge_after.sh`` runs it over an earlier run's data.
 
 A forgery staged before proving (`rec_vstage --forge`) puts a wrong row in the prover's ``inst.bin``, and the firewall refuses
-to release a proof of it, so Lean never sees a session. Here the session is an honest one pod 85 already proved behind the
+to release a proof of it, so Lean never sees a release. Here the release is an honest one pod 85 already proved behind the
 firewall (``v-sess/L0`` for coef and dirs, ``v-sess/alg-p0`` for message). Each forgery changes the verifier's statement
 alone, on copies of its files: row 0 of the port (``coef``, ``dirs``, ``m0``) gets bit 0 of its first word flipped under
 the row's own salt, so that the proved row and the verifier's registered row differ by one bit, as in the staged forgery.
@@ -15,7 +15,7 @@ the row's own salt, so that the proved row and the verifier's registered row dif
 * ``<kind>-bc``: that row's ``b || c`` in ``pub.bin``, and nothing else.
 * ``<kind>-stmt``: that ``b || c`` and the header's frame-v3 root of the port's table over it, so ``pub.bin`` is consistent.
 * ``<kind>-value``: the value registered again with the forged row, so the whole statement is: ``stmt``'s edits, ``pub.bin``'s
-  read paths, and the port's root in ``registered.json``. Only the session's binding is left to refuse it.
+  read paths, and the port's root in ``registered.json``. Only the release's binding is left to refuse it.
 
 Each case, and each statement's unmodified copy (the control, which must accept), is verified as pod 85's STEP=lean
 verifies it (`flock-verify verify --zk --registered` with its ``--rec-*`` flags), with each binary given. The run's
@@ -75,7 +75,8 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     pos = reg["positions"]
     rows, salts = table_rows(inst, text, port, len(pos))
     wb, schema = int(port_.get("word_bits", 16)), port_.get("row_schema", RG.SCHEMA)
-    bc = lambda row, salt: RG._INST.commit_string(RG._INST.default_key, RG.row_digest(row, wb, schema), salt)
+    def bc(row, salt):
+        return RG._INST.commit_string(RG._INST.default_key, RG.row_digest(row, wb, schema), salt)
     honest = bc(rows[0], salts[0])
     at = pub.find(honest, pnl)
     if at < 0 or pub.find(honest, at + 1) >= 0:
@@ -88,7 +89,7 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
         (out / case).mkdir(parents=True, exist_ok=True)
         for f in VERIFIER_FILES:
             shutil.copyfile(stmt / f, out / case / f)
-    # C-Flock's compact line (`verity_flock.circuit.public_file`), or the spaced one an earlier run's sessions were staged with
+    # C-Flock's compact line (`verity_flock.circuit.public_file`), or the spaced one an earlier run's releases were staged with
     dump = next((d for d in (lambda h: FC.public_file(h, b""), lambda h: json.dumps(h, sort_keys=True).encode() + b"\n")
                  if d(ph) == pub[:pnl]), None)
     if dump is None:
@@ -106,16 +107,18 @@ def forge(stmt: Path, inner: Path, port: str, out: Path) -> dict:
     (out / "stmt" / "pub.bin").write_bytes(dump(ph_s) + bytes(b[pnl:]))
     rec["stmt"] = {"pub.bin": f"row 0's b || c and the header's frame_v3 root of {port}",
                    "frame_root": [fv["roots"][port][:16], ph_s["frame_v3"]["roots"][port][:16]]}
-    skip = lambda why: (shutil.rmtree(out / "value"), rec.__setitem__("value", {"skipped": why}), rec)[-1]
+    def skip(why):
+        return (shutil.rmtree(out / "value"), rec.__setitem__("value", {"skipped": why}), rec)[-1]
     if sorted(pos) != list(range(int(port_["leaves"]))):
         return skip(f"the table reads positions {pos}, not all {port_['leaves']} of the value's rows")
     meta = json.loads(text.split("\n", 2)[1][5:])
     progs = [c for c in (O.session_program((inner / "public.json").read_bytes()), meta.get("program_sha512"))
              if c and RG.domain(c, port_["value"], len(rows[0]), int(port_["leaves"]), wb).domain_id.hex() == port_["domain"]]
     if not progs:
-        return skip("neither the session's program nor the statement's names the value's domain")
+        return skip("neither the release's program nor the statement's names the value's domain")
     by_pos = sorted(zip(pos, rows, salts))
-    mk = lambda rs: RG.Registered.commit(progs[0], port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
+    def mk(rs):
+        return RG.Registered.commit(progs[0], port_["value"], rs, [s for _, _, s in by_pos], wb, schema)
     h = mk([r for _, r, _ in by_pos])
     if h.root.hex() != port_["root"] or [h.path(p).hex() for p in pos] != reg["paths"]:
         return skip("the rows and salts do not register to the statement's root and paths")
@@ -223,7 +226,7 @@ def main() -> int:
     sess = {s: dd / "v-sess" / s for s in sorted({CASES[k][0] for k in kinds})}
     missing = [s for s in sess if not (dd / "v-sess" / f"{s}.stmt").is_file()]
     if missing:
-        raise SystemExit(f"{dd}/v-sess: no honest session of {', '.join(missing)} (STEP=oprove keeps one per statement)")
+        raise SystemExit(f"{dd}/v-sess: no honest release of {', '.join(missing)} (STEP=oprove keeps one per statement)")
     stmts = {s: Path((dd / "v-sess" / f"{s}.stmt").read_text().strip()) for s in sess}
     before = {s: tree_sha(p) for s, p in {**{f"sess-{k}": v for k, v in sess.items()}, **{f"stmt-{k}": v for k, v in stmts.items()}}.items()}
     rec = {"work": str(a.work), "tag": a.tag, "inner": str(inner), "sessions_sha256": before, "forgeries": {}, "verify": {}}

@@ -192,7 +192,7 @@ def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_ca
 
 
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
-    """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots (#1344). The quick
+    """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots. The quick
     tier takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
     from research import queue as Q
 

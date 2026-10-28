@@ -1,6 +1,6 @@
 """Utilization of vy-nebius-1 and vy-nebius-2 from the telemetry already on them; no sampler of our own.
 
-    python3 util_collect.py --since 2026-09-30T05:16Z [--out DIR] [--put]
+    python3 util_collect.py --since YYYY-MM-DDTHH:MMZ [--out DIR] [--put]
 
 - vy-nebius-1: Prometheus (DCGM GPU utilization and framebuffer, node-exporter CPU, memory and /workspace), 60 s steps, read
   through the k3s API server's service proxy over ssh (`n1`). DCGM is scraped twice there, so every GPU series is `max by (gpu)`.
@@ -168,9 +168,9 @@ def main(argv: list[str]) -> int:
     for s in ("vy-nebius-1", "vy-nebius-2"):
         print(s, json.dumps(summary[s]["total"]))
     if ns.put:
-        meta = json.dumps({"lane": "nebius-infra", "campaign": "overnight-sep30",
-                           "what": f"utilization of vy-nebius-1/2 {ns.since}..{summary['until']} (Prometheus + POUS sampler)"})
-        env = dict(os.environ, PYTHONPATH="/tmp/rmain/tools/research/src")
+        meta = json.dumps({"what": f"utilization of vy-nebius-1/2 {ns.since}..{summary['until']} (Prometheus + POUS sampler)"})
+        src = Path(__file__).resolve().parents[1] / "src"
+        env = dict(os.environ, PYTHONPATH=str(src)) if (src / "research").is_dir() else None
         r = subprocess.run([sys.executable, "-m", "research", "data", "put", "--kind", "evidence/v1", "--meta", meta, "--tree",
                             str(out), "--preserve", "--json"], capture_output=True, text=True, env=env)
         try:

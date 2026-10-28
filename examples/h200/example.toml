@@ -1,27 +1,29 @@
-# The H200 example's rung on the ladder (examples/README.md): the one-H200 demo (benchmarks/e2e_h200, its interfaces in
-# benchmarks/e2e_demo), which #4903's move makes this directory, its step driver's run.py the runner (`verity example h200
-# --out OUT`). Demo A's M3 proper is eight runs, one phase each: phases.sh. Its evidence is sampled proofs': the step committed
-# on the H200, 8 proof blocks drawn by one live coin, each proved by C-Flock --zk and accepted by Lean. The skeleton's other
-# legs (e2e_h200/legs.py: onsite's in skeleton form, on fixture coins) aren't claimed.
-# Placed where M3 proper's runs ran: the step committed and replayed on vy-dc-h200-2, the coin from vy-challenger-1, and the
-# drawn blocks proved and the Lean verifier run together on vy-nebius-cpu-4. Level 2 needs the Lean verifier off the
-# machines the prover runs.
-# Demo B's memory terms (PoUS and the bandwidth audit on the H200, M4) are memory-accounting's: once their run of record
-# exists, its id joins `runs` and `protocol` becomes a list with "pous" and "bandwidth". Nothing here claims them yet.
+# The H200 example (examples/README.md): the remote protocol's sampled-proofs half at a frozen shape on one H200, and
+# nothing else. `verity example h200 --out OUT` runs its step driver, run.py (on the CPU at small shapes, or the H200 at the
+# frozen shape), and writes a replay bundle and a block record; phases.sh runs the drawn-block proving, one phase a run.
+# Its evidence is sampled proofs': the step committed on the H200, 8 proof blocks drawn by one live coin, each proved by
+# C-Flock --zk and accepted by the Lean verifier. The other subprotocols in e2e_h200 (PoUS, the bandwidth audit, network
+# certification and the memory wipe) are a skeleton on fixture coins, not runs, and aren't claimed.
+# Placed where the drawn-block proving's runs ran: the step committed and replayed on the H200 node, the coin from the
+# challenger host, and the drawn blocks proved and the Lean verifier run together on a CPU node. Being placed needs the
+# Lean verifier off the machines the prover runs.
+# Once a run of record of PoUS and the bandwidth audit on the H200 exists, its id joins `runs` and `protocol` becomes a
+# list with "pous" and "bandwidth".
 protocol = "sampled_proofs"
 workload = "none"              # the frozen MQA shape on seeded INT8 weights, not yet an integration
 level = 1
 
 [placement]
-prover = "gpu-node"            # vy-dc-h200-2: the step's commit and the drawn slots' replay; the C-Flock prover on vy-nebius-cpu-4
-verifier = "cpu-node"          # vy-nebius-cpu-4, the Lean verifier beside the prover
-challenger = "auditor-host"    # vy-challenger-1, one live coin through the gate
+prover = "gpu-node"            # the H200 node: the step's commit and the drawn slots' replay; the C-Flock prover on a CPU node
+verifier = "cpu-node"          # the Lean verifier, on the CPU node beside the prover
+challenger = "auditor-host"    # the challenger host, one live coin through the gate
 
 [evidence]
-# DRAWPROVE (M3 proper): 8 live-drawn proof blocks, each proved by C-Flock --zk behind the firewall and accepted by Lean, one
-# flipped bit refused (at an 8-block draw, at most 43.77% of the step's proof blocks wrong at δ = 1%); Demo A's M3 report
-# v3.1 (#4964); the drawn blocks' tree it proved, whose manifest names every phase's run; the step registration, recorded
-# before the coin; then the phases' runs: commit, CMP-160's weights registration, coin, weights open, replay, build
+# The drawn-block proving: 8 live-drawn proof blocks, each proved by C-Flock --zk behind the firewall and accepted by the
+# Lean verifier, one flipped bit refused (at an 8-block draw, at most 43.77% of the step's proof blocks wrong at δ = 1%);
+# the H200 report (m3.template); the drawn blocks' tree it proved, whose manifest names every phase's run; the step
+# registration, recorded before the coin; then the phases' runs: commit, the weights registration, coin, weights open,
+# replay, build
 runs = ["r20261027-013625-8e25",
         "art:0e5de97332019dbd62a74222189ec65787fa52890f2acb8a083dda3244f4ed86",
         "art:c6dffca9da195a1fd516219c2008a350c48e861edcb9d0053436902f7d9585d6",

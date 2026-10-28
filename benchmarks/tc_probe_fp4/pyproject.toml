@@ -18,7 +18,9 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# What the tests import of `verity` (`verity.ml.circuits`) and of `research` (its store's tool declarations), in place of both trees.
+# What the tests import of `verity` (`verity.ml.circuits`), of `research` (its store's tool declarations) and of `verity_config`
+# (the SHARED settings the probes read the run's id, commit and devices through), in place of the three trees.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
-          "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py", "tools/research/src/research/store"]
+          "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py", "tools/research/src/research/store",
+          "tools/config/verity_config"]

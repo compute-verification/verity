@@ -45,6 +45,7 @@ two `sq` are 28,147,478 (each 14,040,852 for the square and 32,887 for the negat
 from __future__ import annotations
 
 from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits
+from verity.ml.circuits.boolean.trace import part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.commitments.gates.sha512 import IV, pad_tail
@@ -116,11 +117,9 @@ def finish(C, W: int, C0: int, u, t, c):
 
 # --- the Definitions -------------------------------------------------------------------------------------------------------
 
-PousSha512Head = CompositeDefinition(
-    "PousSha512Head", 1, (), lambda S: ((("msg", bits(1024)),), bits(512)),
-    _traced_body(lambda S: ("sha512-head",), lambda S: lambda C, m: compress(C, _iv_bits(), m),
-                 lambda S: ((("msg", bits(1024)),), bits(512))),
-    conformance="protocol-defined", doc="SHA-512's chaining value after one message block from the IV (FIPS 180-4)")
+PousSha512Head = part(
+    "PousSha512Head", (), lambda S: ((("msg", bits(1024)),), bits(512)), lambda C, S, m: compress(C, _iv_bits(), m),
+    "SHA-512's chaining value after one message block from the IV (FIPS 180-4)", conformance="protocol-defined")
 
 
 def _mid_sig(S):
@@ -159,13 +158,11 @@ def _chunk_sig(S):
     return _ctr_inputs(r), bits(512)
 
 
-PousSha512CtrChunk = CompositeDefinition(
-    "PousSha512CtrChunk", 1, ("L", "D", "I"), _chunk_sig,
-    _traced_body(lambda S: ("sha512-ctr-chunk", S.L, S.D, S.I),
-                 lambda S: lambda C, cv, *rest: ctr_chunk(C, S.L, S.D, S.I, cv, rest[0] if rest else []), _chunk_sig),
-    conformance="protocol-defined",
-    doc="SHA-512(base ‖ D ‖ u32be I) for an L-byte base, from the chaining value of its whole blocks and its rest: one "
-        "compression")
+PousSha512CtrChunk = part(
+    "PousSha512CtrChunk", ("L", "D", "I"), _chunk_sig,
+    lambda C, S, cv, *rest: ctr_chunk(C, S.L, S.D, S.I, cv, rest[0] if rest else []),
+    "SHA-512(base ‖ D ‖ u32be I) for an L-byte base, from the chaining value of its whole blocks and its rest: one "
+    "compression", conformance="protocol-defined")
 
 
 def _ctr_sig(S):

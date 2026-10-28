@@ -60,14 +60,14 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("feistel-indifferentiability", "assumption",
           "REFUTED: a 10-round Feistel network over SHAKE256 in place of the ideal permutation keeps the storage bound. "
           "It does not: a prover keeps five 200-byte post-absorb round states per 64 KiB block (1.53% of C) and "
-          "rebuilds any label in 481 sequential Keccak-f (red team, 4 Oct 2026, art:7617c8017e80)",
+          "rebuilds any label in 481 sequential Keccak-f",
           "Feistel-SHAKE256 as ideal (refuted)", "conjectured"),
     Entry("m1-ideal-permutations", "model",
           "Model M1: independent forward-only ideal permutations, one per block, each block the inverse image of its "
           "data", "M1"),
     Entry("sms-m1-instantiation", "assumption",
           "Square-mask-square with fresh per-block keys instantiates M1's slow-inverse permutation (novel and "
-          "algebraic; pending Daniel)", "SMS as M1", "conjectured"),
+          "algebraic; not accepted)", "SMS as M1", "conjectured"),
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
           "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),

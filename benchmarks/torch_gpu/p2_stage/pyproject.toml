@@ -7,13 +7,15 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # layout.py reads the registered scheme (verity.core.protocols.pous.schemes.p2) and the P2 spec's reference
-# (benchmarks/pous/p2_v1: reference.py, pinned by vectors.json; stage.py imports gpu.py); the toy test reads CMP-95 item
-# 2's toy store (p2_v1/store-toy, absent until memory-accounting's PR lands); gemm.py's check evaluates
+# (benchmarks/pous/p2_v1: reference.py, pinned by vectors.json; stage.py imports gpu.py); the toy test reads P2's toy
+# store (p2_v1/store-toy); gemm.py's check evaluates
 # ScaledMmS8Coordinate_v1 (verity.ml.circuits), and what those import; full.py's GEMM is s8_linear's int_mm.py.
 # sketch.py's receipts are the remote bandwidth audit's (verity.core.protocols.remote_bandwidth, which imports
 # sampled_proofs and the profile), held to serve.py's fixture (p2_v1/serve.py, store.py), with sha512_rows' engine
-# and its host twin's sources.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+# and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
+# verity_config.settings.
+inputs = ["tools/config/verity_config",
+          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/profile.py",

@@ -61,7 +61,7 @@ def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
 def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traffic):
     """Connection q's cell k of the link-window is at its row's slot `place` gives: the cells its client got that
     window, in order. Ordinals count connections from 1 in the order they reached the warden (the wire's ingress
-    ordinal: the active certifier's `Requests` and IO-TIE's map number them so). A bucket's cells are sorted by
+    ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are sorted by
     stream."""
     warden, clients = traffic
     seen, ordinals, shared = 0, set(), 0
@@ -229,7 +229,7 @@ def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traf
 
 
 def test_the_bucket_port_reads_every_row_whole(traffic, tmp_path):
-    """`bucket_port` (one unit a bucket, IO-TIE's) is `port`'s entry with unit `reads_from + t` reading row t, an idle
+    """`bucket_port` (one unit a bucket) is `port`'s entry with unit `reads_from + t` reading row t, an idle
     window's rows too, whose slots `port` can't name, under the head's value. The statement for those rows is accepted
     by the host's read of Lean's registered reads (`refusal`), and one naming a units' wiring or with two rows swapped
     is refused. A head of another schedule is refused."""

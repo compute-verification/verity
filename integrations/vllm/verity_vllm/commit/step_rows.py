@@ -25,6 +25,14 @@ over the tree root and the run root ``vllm_v1.run_root``, both under SHA-512: 64
 and the frame path; :func:`fold_path` recomputes ``h`` and folds the path as core's ``verify_opening`` does.  A range opening of
 leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`); :func:`fold_range`
 folds them as core's ``verify_multiproof`` folds those leaves' multiproof, which is the path's siblings in order.
+
+The registered weights are committed the same way (``NativeHostCommitter.register_weights``, which `pipeline.cpu_replay` opens
+against): registered tensor ``t``'s bytes are its rows (the last zero-padded), salted from ``Ks_t = SHA-512(WEIGHTS_TAG || Kw ||
+u64be t)`` under the registration's fresh key ``Kw``, in a tree under ``CommitmentDomain(binding_t, -1, RangeIndexedDomain(0, N_t),
+"sha512")`` with ``binding_t = identity_digest_sha512(WEIGHTS_TAG, {geo, tensor: t, entry, row_bits})`` over its names entry
+``[name, dtype, shape, bytes]``; the weights root is ``vllm_v1.weights_root`` over the tensor roots under SHA-512 (:func:`weights_root`).
+The tree (:func:`weights_tree`) keeps ``Kw`` beside the roots, so a replay of the registration reproduces them.  ``Kw`` stays in the
+private bundle: a published slim keep carries ``Ks_t`` of the tensors its replay opened instead (`pipeline.cpu_replay.slim_tree`).
 """
 from __future__ import annotations
 
@@ -33,20 +41,22 @@ from collections.abc import Sequence
 
 from verity.ml.commitments import hm96
 from verity.ml.commitments import vllm_v1 as V
+from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
-__all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "binding", "domain",
-           "fold_path", "fold_range", "hiding_leaf", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt", "step_root",
-           "t_nibbles", "t_table"]
+__all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
+           "domain", "fold_path", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
+           "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
 INST = hm96.SHA512
 KEY = INST.default_key
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 DOMAIN_TAG = "verity-vllm/step-rows/v1"
+WEIGHTS_TAG = "verity-vllm/weights-rows/v1"
 OWNER = -1
 ROW_BYTES = 4096
 SALT_BYTES = INST.salt_bytes
@@ -145,6 +155,61 @@ def step_root(program: bytes, ctx: bytes, geo: bytes, layout: bytes, n: int, tre
 
 def run_root(program: bytes, geo: bytes, step_roots: Sequence[bytes]) -> bytes:
     return V.run_root(program, geo, step_roots, hash="sha512")
+
+
+def weights_domain(geo: bytes, tensor: int, entry: Sequence, row_bits: int = 8 * ROW_BYTES) -> CommitmentDomain:
+    """Registered tensor ``tensor``'s tree domain, its names entry ``[name, dtype, shape, bytes]``: one leaf a row of its bytes."""
+    name, dtype, shape, nb = entry
+    b = identity_digest_sha512(WEIGHTS_TAG, {"geo": geo.hex(), "tensor": int(tensor), "name": str(name), "dtype": str(dtype),
+                                             "shape": [int(s) for s in shape], "bytes": int(nb), "row_bits": int(row_bits)})
+    return CommitmentDomain(b, OWNER, RangeIndexedDomain(0, -(-int(nb) // (row_bits // 8))), hash="sha512")
+
+
+def tensor_key(wk: bytes, tensor: int) -> bytes:
+    """Registered tensor ``tensor``'s salt key under the registration's key ``wk``."""
+    if len(wk) != KEY_BYTES:
+        raise ValueError(f"a weights key is {KEY_BYTES} bytes")
+    return hashlib.sha512(WEIGHTS_TAG.encode() + wk + int(tensor).to_bytes(8, "big")).digest()
+
+
+def tensor_hs(data: bytes | memoryview, ks: bytes, key: bytes = KEY) -> list[bytes]:
+    """The hiding digests ``h`` of a tensor's rows, its bytes in ``ROW_BYTES`` rows with the last zero-padded, under salt key ``ks``."""
+    mv = memoryview(data).cast("B")
+    n = -(-len(mv) // ROW_BYTES)
+    pre = hashlib.sha512(row_prefix(8 * ROW_BYTES))
+    xs = bytearray()
+    for i in range(n):
+        h = pre.copy()
+        row = mv[i * ROW_BYTES:(i + 1) * ROW_BYTES]
+        h.update(row)
+        if len(row) < ROW_BYTES:
+            h.update(bytes(ROW_BYTES - len(row)))
+        xs += h.digest()
+    return hm96_batch.tree_leaves(INST, key, bytes(xs), b"".join(salt(ks, i) for i in range(n)))
+
+
+def tensor_root(geo: bytes, tensor: int, entry: Sequence, data: bytes | memoryview, wk: bytes) -> bytes:
+    """Registered tensor ``tensor``'s root: its rows' tree under :func:`weights_domain`, salted from ``tensor_key(wk, tensor)``."""
+    return keyed_tensor_root(geo, tensor, entry, data, tensor_key(wk, tensor))
+
+
+def keyed_tensor_root(geo: bytes, tensor: int, entry: Sequence, data: bytes | memoryview, ks: bytes) -> bytes:
+    """:func:`tensor_root` under the tensor's own salt key ``ks``, for a reader that holds it and not ``Kw``."""
+    dom = weights_domain(geo, tensor, entry)
+    hs = tensor_hs(data, ks)
+    if len(hs) != dom.count:
+        raise ValueError(f"tensor {tensor}: {len(hs)} rows, its entry {list(entry)} is {dom.count}")
+    return tree_levels(dom, [leaf(dom, i, h) for i, h in enumerate(hs)])[-1][0]
+
+
+def weights_root(geo: bytes, names_digest: bytes, tensor_roots: Sequence[bytes]) -> bytes:
+    return V.weights_root(geo, names_digest, tensor_roots, hash="sha512")
+
+
+def weights_tree(geo: bytes, names: Sequence[Sequence], names_digest: bytes, tensor_roots: Sequence[bytes], wk: bytes) -> dict:
+    """The registration's tree as the replay bundle carries it (`replay_bundle.weights_extra`), ``Kw`` with it."""
+    return {"scheme": NAME, "names": [list(e) for e in names], "tensor_roots": [r.hex() for r in tensor_roots],
+            "root": weights_root(geo, names_digest, tensor_roots).hex(), "chunk": ROW_BYTES, "geo_digest": geo.hex(), "key": wk.hex()}
 
 
 def t_table(key: bytes = KEY) -> bytes:

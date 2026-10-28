@@ -1,13 +1,12 @@
 import Proofs.Accounting.TS.Session.Assumptions
 
 /-!
-# #2855's served layer is sound through its C-Flock sessions (the statement)
+# The served layer is sound through its C-Flock sessions (the statement)
 
-`Accounting.Guarantees.TS.SessionSoundAt`, #2909's bridge on #2855's proof layer `pf` itself, with the bridge's
-`AcceptedLive`, `WindowLaw`, `RelOfRows` and `OpenedPlurAt` taken from named premises (`Accounting.Assumptions.TS`).
-Its conclusion is `pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s served openings. It sits in
-the proofs package because the sessions do (`reads_exempt`).
--/
+`Accounting.Guarantees.TS.SessionSoundAt`, the bridge `Flock.SoundAtBridge` on the proof layer `pf` itself, with the
+bridge's `AcceptedLive`, `WindowLaw`, `RelOfRows` and `OpenedPlurAt` taken from named premises
+(`Accounting.Assumptions.TS`). Its conclusion is `pf.SoundAt`, so `BindingAt`, `Of` and `RightFixed` keep reading `pf`'s
+served openings. It sits in the proofs package because the sessions do (`reads_exempt`). -/
 
 namespace Accounting.Guarantees.TS
 
@@ -16,8 +15,8 @@ open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 /-- **A window of proofs is sound at `δs + δ` through its C-Flock sessions.** For any window of proofs
-(`pf : ProofLayer Ω S nπ V`, #2855's) whose proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i`
-(#2909's `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
+(`pf : ProofLayer Ω S nπ V`) whose proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i`
+(a `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's opening
 (`RowsSession.CR`; the rows link itself is `Flock.SecurityProofs.EndToEndRegisteredRows`), the proof service's
 acceptance rule (`Accounting.Assumptions.TS.AcceptedLive`), the window's law (`WindowLaw`), `pf`'s relation at the

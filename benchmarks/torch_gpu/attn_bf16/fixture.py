@@ -15,8 +15,8 @@ not read hold junk (NaN, infinities and huge values): the cache past lens[b], P 
 CASES, each CHECK/<case>.npz (Q, K, V, P, lens, nq: the inputs; S, O: the buffers after the kernels):
   h200_decode        the H200 model's decode step (MQA: 256 query heads of head dim 64 on one KV head, every KV length
                      1..32), 2,048 of its 20,480 sequences, with specials
-  h200_ctx96         compute-accounting's 22:45Z shape (the same heads, every KV length 1..96), 512 sequences
-  mha_decode_d64     the 22:20Z sketch (128 heads of head dim 64, each its own KV head, every KV length 1..32)
+  h200_ctx96         the H200 model's heads at every KV length 1..96, 512 sequences
+  mha_decode_d64     MHA decode (128 heads of head dim 64, each its own KV head, every KV length 1..32)
   decode_d128        head dim 128, GQA with 2 query heads a KV head, every KV length 1..160
   prefill_d64        MQA causal prefill and a prefill chunk, head dim 64
   prefill_d128       GQA (8 query heads a KV head) causal prefill and a chunk, head dim 128
@@ -27,7 +27,7 @@ CASES, each CHECK/<case>.npz (Q, K, V, P, lens, nq: the inputs; S, O: the buffer
   s16_mqa_d64        the s16 kernels' bounds (every query sees at most 32 keys): MQA, 2 head groups, PV's K = 32, specials
                      and decode, prefill and chunks in turn
   s16_gqa_d128       the same at head dim 128, GQA with 16 query heads a KV head (4 KV heads), PV padded to 16 alone
-  kinds_d64          the H200 model's decode shape over KINDS' generators (attn_ref's check data until HASH-32), 4 sequences
+  kinds_d64          the H200 model's decode shape over KINDS' generators, 4 sequences
                      of each kind, each at every KV length 1..32: normal, softmax rows, clustered exponents, the unit binade,
                      subnormal products, 5% specials, cancellation inside a step and across steps, uniform words, and PV
                      accumulators that are FP32 subnormals after the first step (subacc: K = 32's second step reads them)
@@ -52,7 +52,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gen  # noqa: E402
+import gen
 
 POISON = 0xA5A5
 SPECIALS = gen.SPECIALS
@@ -150,7 +150,7 @@ def kind_sequence(i: int, H: int = 256, D: int = 64, L: int = 32) -> dict:
             hit = rng.random(a.shape) < 0.05
             a[hit] = rng.choice(SPECIALS, int(hit.sum()))
     elif kind == "cancel_in":
-        # every second 8 of each 16-wide k block negates the first 8: Q's heads 1 mod 4 against K's keys 1 mod 4, and P's
+        # every second 8 of each 16-wide k segment negates the first 8: Q's heads 1 mod 4 against K's keys 1 mod 4, and P's
         # heads 1 mod 4 against every V column, cancel inside each step
         for s in range(D // 16):
             Q[1::4, 16 * s + 8:16 * s + 16] = Q[1::4, 16 * s:16 * s + 8] ^ 0x8000
@@ -203,7 +203,7 @@ def build(name: str):
         h = b % H
         kh = h // (H // Hkv)
         if L >= 2:
-            # QK^T: the first query against key 0 cancels exactly in every 16-wide k block (its second 8 products negate the
+            # QK^T: the first query against key 0 cancels exactly in every 16-wide k segment (its second 8 products negate the
             # first 8), and against key 1 every product is |q| x the largest finite, so the sum leaves FP32's range
             q, k0 = Q[b, h, 0].reshape(-1, 2, 8), K[b, kh, 0].reshape(-1, 2, 8)
             q[:, 1], k0[:, 1] = q[:, 0] ^ 0x8000, k0[:, 0]

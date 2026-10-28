@@ -52,7 +52,7 @@ PRECISIONS = ("bfloat16", "fp8", "int8_exact")
 ENGINE_SETTINGS = (
     "max_model_len", "max_num_seqs", "max_num_batched_tokens", "resident_gpu_memory_utilization",
     "block_gpu_memory_utilization", "resident_kv_cache_memory_bytes", "block_kv_cache_memory_bytes", "capture_sizes",
-    "serving_defaults", "cuda_graphs", "enforce_eager",
+    "serving_defaults", "attention_backend", "attention_config", "cuda_graphs", "enforce_eager",
 )
 #: A protocol arm's `control` that gives it none: its tokens are checked by no other arm's, and the table names it
 NO_CONTROL = "none"
@@ -234,7 +234,7 @@ def served(preset: Preset, eager: bool) -> tuple[Preset, bool]:
 
 def checkpoint_files(root: Path) -> list[Path]:
     """The files of a local checkpoint that bind it: all but a Hub snapshot's repository metadata (dot-files such as
-    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (vy-nebius-2's
+    ``.gitattributes``, and Markdown), which no loader reads and which a re-fetched snapshot can add (a node's
     llama-3.1-8b-instruct gained ``.gitattributes`` and ``README.md`` with every weight unchanged)."""
 
     return sorted(p for p in root.iterdir() if p.is_file() and not p.name.startswith(".") and p.suffix != ".md")

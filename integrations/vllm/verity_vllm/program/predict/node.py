@@ -34,8 +34,8 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive, launch_batch
-from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_rows
+from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive
+from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_batch, launch_rows
 from .phi import Phi
 
 

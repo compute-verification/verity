@@ -34,7 +34,8 @@ research run -- verity bench rho    # every scenario; writes rho.md, rho.json an
 `rho.md`, `rho.json` and `figures/` there. `research run` publishes them to the evidence store as an Attempt. `run.py`
 takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
-range, its parts by kind and its premises ranked.
+range, its parts by kind and its premises ranked; `periods.py --measured CIRCUIT` evaluates them with a measured training
+step's design in place of the FLOP model, after a table of the step beside it (`circuits.py`).
 
 ## Inputs
 
@@ -42,7 +43,8 @@ range, its parts by kind and its premises ranked.
   `value`, `unit`, a plausible range (`low`, `high`, which the sweeps span), `source` and `status` (`datasheet`,
   `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each named premise stands and up to what
-  block size.
+  block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
+  counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
 - `benchmarks/census` (devices and the world fleets) and `benchmarks/nci` (the remote regime's terms in `tiers.py`, its
@@ -84,7 +86,11 @@ is valid only under the named assumption `draft:no-straddle` (no counted operati
 gates), so every bound counting such gates cites it. A structure states its `basis`, and `Structure.check` refuses one
 whose `s_×` and `units.gates_per_flop` come from different sources. `structure.elementary` (one counted operation a
 gate, at most) needs no such premise; it is the `*-elementary` scenarios, and what `analysis.upto` falls back to for a
-status stronger than `draft`.
+status stronger than `draft`. A scenario that names no structure takes `structure.default` (`reference`). A measured
+structure (`structure.train-step-v1`, SmolLM2-135M's training step) is `s_×` in gates of one Boolean design, with
+`evidence`, the runs that measured it, cited beside the straddling premise; `circuits.in_place` puts it in place with
+`units.gates_per_flop` counted on the same design, where `G` no longer cancels and a gate holds `u/w = 2G / (κ s_×)` of
+the reference's weight.
 
 ## Modules
 
@@ -99,6 +105,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind) |
+| `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `Horizon` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
 | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` |
@@ -113,7 +120,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,
 `conditional` (proved under named assumptions), `draft` (a statement not yet in Lean, a `draft:` id) or `absent`. Its
 citations are its argument's and those of the cuts that bound it, and `draft:no-straddle` wherever a bound holds
-uncertified or dark gates at a structure whose `s_×` is above 1.
+uncertified or dark gates at a structure whose `s_×` is above 1, with the structure's `evidence` (which no status reads).
 
 ## Names
 
@@ -137,5 +144,8 @@ model's resource rate, not this number.
 - **A work or exfiltration reference**: a `work.<name>.flops` or `exfil.<name>.bits` table.
 - **A sensitivity**: give the parameter `low` and `high`; `tornado` and `dangers` pick it up.
 - **A structure** (a measured `s_×`): a `structure.<name>` table in `data/exclusion.toml` with its `basis`
-  (`"boolean:<design>"`), which a scenario names with `structure = "<name>"`, beside `units.gates_per_flop` and
-  `units.basis` from the same design (`Structure.check`).
+  (`"boolean:<design>"`) and its `evidence`, which a scenario names with `structure = "<name>"` (or every scenario
+  naming none, by `structure.default`), beside `units.gates_per_flop` and `units.basis` from the same design
+  (`Structure.check`).
+- **A measured circuit**: a `circuit.<name>` table in `data/circuits.toml` naming its Definition, its run and its
+  structure; `periods.py --measured <name>` evaluates with it in place.

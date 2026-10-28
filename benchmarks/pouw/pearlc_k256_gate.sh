@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TT_OUT's gate at k = 256 (Daniel's ASK-91, option A) on a CPU node holding GLM-5.3's snapshot (SNAP), a `research run
+# TT_OUT's gate at k = 256 on a CPU node holding GLM-5.3's snapshot (SNAP), a `research run
 # --cwd source` job writing under $OUT:
 #   * the census with the replayed debit, every family (the standing ones and the cross-group cancellation ones), the
 #     Hopper atom, s5 at line norm 16, δ = 1, tiles 64 x 64 and 64 x 16, runs 1-3, the cross-group search on every word

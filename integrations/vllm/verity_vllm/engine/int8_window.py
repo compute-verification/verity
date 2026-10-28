@@ -16,7 +16,7 @@ window    once a layer: `pg_window` of the layer's cache into the buffers at wor
           [KV heads][K ‖ V], `int8_attention_vllm.KV_LAYOUT`): each word decoded at its codec index, the layer's region's
           first word plus the physical word (a layer to a region, a 4 KiB block a slot: `store.int8_kv`), under the
           slot's bound offset (`LayerKeys.bj`; None: the seed's key), or read as it is where the slot's plaintext flag is
-          set (deferred residency, #2460); with ``encoded`` False, copied
+          set (deferred residency); with ``encoded`` False, copied
 ~~~
 
 The windows are the cache's plaintext K and V, so `int8_ops.window_attention`, reading each request's rows where

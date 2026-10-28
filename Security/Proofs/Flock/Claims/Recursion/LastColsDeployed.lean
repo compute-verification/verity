@@ -18,7 +18,7 @@ columns (`RecDeploy.PlainColsBind`), or in the decision's calls (`RecDeploy.Plai
   `root_B[0]`, every SHA-512 input of each in its decision's calls (`plain_opening_at`), which collide
   (`tiedColl_of_openings`).
 
-The calls half compares the two decisions' calls as sets (ASK-76): `Record.decodeWith` hashes the rounds in the
+The calls half compares the two decisions' calls as sets: `Record.decodeWith` hashes the rounds in the
 record's own stream order, which only S11's count and names constrain, so two records that list the streams in two
 orders are accepted with permuted calls and no collision (`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
 It holds at SHA-512 (`RecDeploy.plainCallsBindOrSlack_sha512`, in `CallsOfProofs`).
@@ -521,7 +521,7 @@ def PlainColsBind (H : Msg → Msg) : Prop :=
 /-- **The deployed plain verifier binds its last message's calls, up to the decoder's slack**: two last messages it
 accepts after the same rounds and coins, where it answered each earlier round with that round's coin, that differ in
 the set of the decision's calls, show a collision among those calls, or two proof files at one position that differ in
-their bytes and decode alike (`ProofSlack`). The calls are compared as sets (ASK-76): two records that list the same
+their bytes and decode alike (`ProofSlack`). The calls are compared as sets: two records that list the same
 streams in two orders give permuted calls, and a table's empty publics may come with their digest `H(ε)`, which S12
 already calls, or without. Proved at SHA-512 (`plainCallsBindOrSlack_sha512`): where a proof file differs, two reps
 accepted on one stream bind (`FlockDeploy.KS.plain_calls_tied`); where the files agree, the calls are one set
