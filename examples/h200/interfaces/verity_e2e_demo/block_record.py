@@ -20,9 +20,10 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   server and accepted, else pending with what is ``missing``), the run's own composed answer (``onsite``) when it wrote
   one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
-* ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
-  block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
+ * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
+  core's `PERIODS`, its blocks over all compute (machines × blocks a machine, core's `block_count`) and
+  JointHorizonLive's union bound over them at this block's errors (``error_sum`` × blocks), and the per-block error each
+  δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
 """
@@ -36,6 +37,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.periods import block_count
 from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
 from verity.core.protocols.profile import Stratified
 
@@ -147,8 +149,8 @@ def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dic
     """The monitoring period over all compute (module docstring), a block being one of a machine's ``window_s`` windows."""
     periods = {}
     for name, seconds in PERIODS:
-        per_machine = seconds // int(deployment["window_s"])
-        blocks = int(deployment["machines"]) * per_machine
+        window_s, machines = int(deployment["window_s"]), int(deployment["machines"])
+        per_machine, blocks = block_count(seconds, window_s), block_count(seconds, window_s, machines)
         union = error_sum * blocks
         periods[name] = {"seconds": seconds, "blocks_per_machine": per_machine, "blocks": blocks,
                          "joint_horizon": {"error_sum": str(union), "vacuous": union >= 1},
