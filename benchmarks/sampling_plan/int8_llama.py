@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, SHA512, Model, leaf_chain, observations,  # noqa: E402
                     s8_coord_ands, serve_rows, tree_chain)
 
-from verity.core.protocols.profile import WINDOW_DELTA  # noqa: E402
+from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
