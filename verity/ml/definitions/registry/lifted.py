@@ -71,7 +71,7 @@ LABEL = "lifted-padded"  # every result of this module is labelled so, never a p
 
 
 def enc_bot(w: int) -> int:
-    """`enc(⊥)` at payload width `w`: `1‖0^w` = `2^w` (AGREED A3)."""
+    """`enc(⊥)` at payload width `w`: `1‖0^w` = `2^w`."""
     return 1 << w
 
 
@@ -1585,7 +1585,7 @@ def check_served_prefix(request: Any, n_r: int, a_r: int, *, lag: int, n_events:
 
 
 def assign_inactive(request: Any, served: Sequence[int], eos_set: Sequence[int], n_events: int, *, lag: int, w: int = 32) -> list[int]:
-    """The pre-challenge ⊥ assignment rule (AGREED A7): from the **served** Active tokens `served[0..n_r−1]` (the
+    """The pre-challenge ⊥ assignment rule: from the **served** Active tokens `served[0..n_r−1]` (the
     prefill's event plus `n_r − 1` decode events), the full fixed `out[0..n_events−1]` is `0‖served[s]` for `s < n_r` and
     `enc(⊥)` for `s ≥ n_r` — admissible only if `n_r = a_r` with `a_r` derived from the served tokens themselves (the event
     after the committed EOS, or the cap).  A shortfall or excess is a named failure; nothing is filled with ⊥ silently."""
@@ -1609,7 +1609,7 @@ LIFTED_RULES_VERSION = "lifted-v1"  # every lifted result carries its own rules 
 PADDED_RULES_VERSION = "padded-v1"  # a Program built with B7's enables (Lifted[.]_v2, LIFT_VERSION 2) and a record read by R4' (B9)
 USE_KIND_LIFTED = "vu-partition-lifted"  # the use.kind of a lifted admissibility document (G8 refuses it by name)
 W_MAX = 32  # the ACTIVE-REFERENCE protocol parameter of `partition.validate_width` (unchanged; not the lifted one)
-W_MAX_LIFTED = 2 * W_MAX  # (PROPOSED value, AGREED that the parameter exists — A4.3): the tight universal admitting value
+W_MAX_LIFTED = 2 * W_MAX  # a proposed value of a parameter that exists by agreement: the tight universal admitting value
 W_MAX_LIFTED_STATUS = ("accepted-revb-M-0042 (w_max_lifted = 2*w_max = 64, the declared constant of lifted-v1; the "
                        "parameter's existence is agreed; its acceptance condition met on the first real-row lifted use document "
                        "(OLMoE B2): w_max_lifted 64, max_seen 33, n_out histogram (exact walk 50,000 sets = 1; structural bound complete over "
