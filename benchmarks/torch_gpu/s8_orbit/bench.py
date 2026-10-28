@@ -5,10 +5,13 @@ Each arm is one item of about --seconds: back-to-back calls on one stream betwee
   int_mm        torch._int_mm(x, wᵀ), int32 out
   wgmma         s8_linear's wgmma.scaled_mm at its default config, bf16 out (the exact linear), when its cubin is given
   orbit<BN>     the orbit kernel, int32 out (`orbit_gpu.Lib.mm(y32=)`), and orbit<BN>.bf16 with the bf16 epilogue
-  bfix          s8orbit_bfix, B's carries' corrections after the orbit, and orbit<best>+bfix the two together
-  bfix.empty    the same pass over empty lists: its staging of X and its pass over y32, without a correction
-κ, a correction MAC's time in tensor MACs (one MAC a B carry and a row of A, M/2 a carry), is bfix's time over those MACs
-against PEAK and against int_mm's time a MAC; the marginal κ is bfix's time less bfix.empty's over those MACs.
+  bfix          s8orbit_bfix, B's carries' corrections after the orbit at full width, and orbit<best>+bfix the two together
+  bfix.empty    the same pass over empty lists: its staging of X and its atomic adds of zeros into y32
+  pfix          s8orbit_pfix, the same corrections mod 2^10 only (X~·Gᵀ mod 4, 32 rows a word), what bit 9 of O alone needs
+  pfix.empty    the same pass over empty lists: its staging of X's two low bits and its stores of zero words
+κ, a correction MAC's time in tensor MACs (one MAC a B carry and a row of A, M/2 a carry), is a pass's time over those MACs
+against PEAK (and bfix's against int_mm's time a MAC); the marginal κ is its time less its empty pass's over those MACs.
+kappa_ratio is bfix's κ over pfix's, total and marginal. exact_tmacs is X·Wᵀ's MACs a second through orbit<best>+bfix.
 X is int8 uniform on ±127; W is the checkpoint's [N, K] int8 (q, k, v and gate, up concatenated as served). An arm records
 ms a call, θ = MACs / s / PEAK (PEAK MACs a second at F_MAX), its SM clock from NVML samples every 100 ms past the item's
 first second, and θ at that clock (θ · F_MAX / MHz). An orbit arm also records the clock its CTAs saw (clock64 over
@@ -238,6 +241,15 @@ def main() -> int:
             r = timed(lambda: lib.bfix(x, y32, *empty), a.seconds)
             r.update(smi.window(r["t0"], r["t1"]))
             arms["bfix.empty"] = r
+        pk = G.pack_lists(prep.cb) if G.pack_words(k) else None
+        if pk is not None:
+            pout = lib.pfix_out(a.m, n, k)
+            for arm, (pp, pe) in (("pfix", pk[:2]), ("pfix.empty", (torch.zeros_like(pk[0]),
+                                                                    torch.zeros(1, dtype=torch.int32, device="cuda")))):
+                r = timed(lambda pp=pp, pe=pe: lib.pfix(x, pout, pp, pe), a.seconds)
+                r.update(smi.window(r["t0"], r["t1"]))
+                arms[arm] = r
+            del pout
         base = arms["int_mm"]["ms"]
         for key, r in arms.items():
             r["vs_int_mm"] = r["ms"] / base
@@ -245,15 +257,24 @@ def main() -> int:
                 r["vs_wgmma"] = r["ms"] / arms["wgmma"]["ms"]
         rec = {"n": n, "k": k, "macs": macs, "b_carries": bc, "b_density": sum(bc) / (7 * (n // 2) * (k // 2)),
                "g_entries": prep.g_entries, "fix_slots": 32 * int(prep.fix[0][-1]) if prep.fix is not None else 0,
+               "pack_entries": pk[2] if pk else 0, "pack_slots": 32 * int(pk[0][-1]) if pk else 0,
                "best_tile": best, "arms": arms}
+        # a correction MAC is one carry against one row of the other side (M/2 of them); kappa is its time in tensor MACs
+        corr = sum(bc) * (a.m // 2)
+        rec["correction_macs"] = corr
         if "bfix" in arms:
-            # a correction MAC is one carry against one row of the other side (M/2 of them); kappa is its time in tensor MACs
-            per_mac = arms["bfix"]["ms"] / 1e3 / (sum(bc) * (a.m // 2))
-            rec["correction_macs"] = sum(bc) * (a.m // 2)
+            per_mac = arms["bfix"]["ms"] / 1e3 / corr
             rec["kappa_vs_peak"] = per_mac * PEAK
             rec["kappa_vs_int_mm"] = per_mac / (base / 1e3 / macs)
             rec["kappa_g_vs_peak"] = arms["bfix"]["ms"] / 1e3 / (prep.g_entries * (a.m // 2)) * PEAK
-            rec["kappa_marginal_vs_peak"] = (arms["bfix"]["ms"] - arms["bfix.empty"]["ms"]) / 1e3 / (sum(bc) * (a.m // 2)) * PEAK
+            rec["kappa_marginal_vs_peak"] = (arms["bfix"]["ms"] - arms["bfix.empty"]["ms"]) / 1e3 / corr * PEAK
+            rec["exact_tmacs"] = macs / (arms[f"orbit{best}+bfix"]["ms"] / 1e3) / 1e12
+        if "pfix" in arms:
+            rec["kappa_pack_vs_peak"] = arms["pfix"]["ms"] / 1e3 / corr * PEAK
+            rec["kappa_pack_marginal_vs_peak"] = (arms["pfix"]["ms"] - arms["pfix.empty"]["ms"]) / 1e3 / corr * PEAK
+            if "bfix" in arms:
+                rec["kappa_ratio"] = rec["kappa_vs_peak"] / rec["kappa_pack_vs_peak"]
+                rec["kappa_ratio_marginal"] = rec["kappa_marginal_vs_peak"] / rec["kappa_pack_marginal_vs_peak"]
         if sha:
             alone = timed(sha, a.seconds)
             alone["comps_per_s"] = sha.comps / (alone["ms"] / 1e3)
@@ -264,8 +285,9 @@ def main() -> int:
             for r in rec["beside"]:
                 r["vs_int_mm"] = r["ms"] / base
         doc["linears"][name] = rec
-        print(json.dumps({"linear": name, "kappa_vs_peak": rec.get("kappa_vs_peak"), "kappa_vs_int_mm": rec.get("kappa_vs_int_mm"),
-                          "kappa_marginal_vs_peak": rec.get("kappa_marginal_vs_peak"),
+        print(json.dumps({"linear": name, **{f: rec.get(f) for f in (
+                              "kappa_vs_peak", "kappa_vs_int_mm", "kappa_marginal_vs_peak", "kappa_pack_vs_peak",
+                              "kappa_pack_marginal_vs_peak", "kappa_ratio", "kappa_ratio_marginal", "exact_tmacs")},
                           **{key: {f: r.get(f) for f in ("ms", "theta", "theta_clk", "vs_int_mm", "vs_wgmma", "sm_mhz", "cta_mhz")}
                              for key, r in arms.items()},
                           "beside": [{f: r.get(f) for f in ("ctas", "ms", "vs_int_mm", "sha_frac_bar")} for r in rec.get("beside", [])]}),

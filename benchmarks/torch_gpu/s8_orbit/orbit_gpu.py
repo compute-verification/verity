@@ -8,7 +8,8 @@ X·Wᵀ exactly when no form carries (`Lib.flags` counts A's carry bits since `L
 X·Wᵀ mod 2^8 always. `corrections(x, w)` is the rest, 256·(c_A·w_Bᵀ + w_A·c_Bᵀ) + 65536·c_A·c_Bᵀ assembled, in torch.
 
 `fix_lists(c_B)` folds B's carries into s8orbit_bfix's lists once a weight, and `Lib.bfix` adds their 256·X~·Gᵀ to y32
-after the orbit: exact where A's forms don't carry; `a_terms` is the rest where they do.
+after the orbit: exact where A's forms don't carry; `a_terms` is the rest where they do. `pack_lists(c_B)` and `Lib.pfix`
+make X~·Gᵀ mod 4 only (all that bit 9 of O reads of 256·X~·Gᵀ), packed 32 rows a word (`unpack`).
 
 The plain int8 GEMM entry: `p = prepare(w)` once at load (w [N, K] int8), then `int_mm(x, p, out=None)` -> x·wᵀ int32
 [M, N], exact, with the cubin at $S8_ORBIT_CUBIN (else build/s8_orbit.cubin here).
@@ -62,13 +63,24 @@ class FixParams(C.Structure):
 
 
 assert C.sizeof(FixParams) == 48
-#: s8orbit_bfix<R>'s threads a CTA
+#: s8orbit_bfix<R>'s threads a CTA, and s8orbit_pfix<W>'s by W
 FIX_NT = 512
+PFIX_NT = {1: 384, 2: 512}
 
 
 def fix_rows(k: int) -> int | None:
     """The correction pass's rows a CTA at depth k: 16, or 8 where 16 rows' pair rows (2K bytes each) don't fit."""
     return next((r for r in (16, 8) if 2 * k * r <= SMEM_LIMIT), None)
+
+
+def pfix_smem(k: int, w: int) -> int:
+    """s8orbit_pfix<W>'s shared memory: two words of 32 rows a pair-row byte and W, and each warp's sums."""
+    return 16 * k * w + (PFIX_NT[w] // 32) * 2 * w * 32 * 4
+
+
+def pack_words(k: int) -> int | None:
+    """s8orbit_pfix's words of 32 rows a CTA at depth k: 2, or 1 where 2 don't fit."""
+    return next((w for w in (2, 1) if pfix_smem(k, w) <= SMEM_LIMIT), None)
 
 
 def stage_bytes(bn: int) -> int:
@@ -132,12 +144,10 @@ def _exact_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return (a.double() @ b.double().t()).long()
 
 
-def fix_lists(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
-    """s8orbit_bfix's lists of B's carries cb [7, N/2, K/2]: G_qb = Σ_j σ_qj s_jb c_B,j for quadrant q and A block b (the
-    sign of M_j in C_q times that of A_b in A_j), entry (o, g) of list q (N/2) + c at pair-row byte o = bm K + bk K/2 + k.
-    The lists go in groups of 32, a lane each, entry e of lane i at ent[32 e + i]: returns ptr int32 [groups + 1] (each
-    group's first e, its longest list rounded up to 4, the rest padded with (0, 0)), ent int32 (o << 8 | (uint8) g, a list's
-    by o) and G's entries."""
+def fix_terms(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int, int]:
+    """G's entries from B's carries cb [7, N/2, K/2]: G_qb = Σ_j σ_qj s_jb c_B,j for quadrant q and A block b (the sign of
+    M_j in C_q times that of A_b in A_j), entry (o, g) of list q (N/2) + c at pair-row byte o = bm K + bk K/2 + k. Returns
+    key = list · 2K + o (sorted), g (int16, |g| < 128), the lists (2N) and 2K."""
     _, hn, hk = cb.shape
     k2 = 4 * hk
     names = ("11", "12", "21", "22")
@@ -158,16 +168,65 @@ def fix_lists(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
     gv = torch.cat(gs) if gs else torch.zeros(0, dtype=torch.int16, device=cb.device)
     assert gv.numel() == 0 or int(gv.abs().max()) < 128
     key, order = torch.sort(key)
-    gv = gv[order]
-    groups = cdiv(4 * hn, 32)
+    return key, gv[order], 4 * hn, k2
+
+
+def chunk_lists(key: torch.Tensor, gv: torch.Tensor, lists: int, k2: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """The kernels' lists of entries (key = list · 2K + o, sorted, and g): lists in groups of 32, each group's entries cut
+    into 32 equal runs, a lane each, entry e of lane i's run at ent[32 e + i]. Returns ptr int32 [groups + 1] (each group's
+    first e, its runs' length rounded up to 4, padded with zeros) and ent int32 (o << 13 | list % 32 << 8 | (uint8) g)."""
+    assert k2 <= 1 << 15
+    groups = cdiv(lists, 32)
     lst = key // k2
-    counts = torch.bincount(lst, minlength=32 * groups)
-    ptr = torch.zeros(groups + 1, dtype=torch.int64, device=cb.device)
-    ptr[1:] = torch.cumsum((counts.view(groups, 32).amax(1) + 3) // 4 * 4, 0)
-    rank = torch.arange(key.numel(), device=cb.device) - (torch.cumsum(counts, 0) - counts)[lst]
-    ent = torch.zeros(max(32 * int(ptr[-1]), 1), dtype=torch.int32, device=cb.device)
-    ent[32 * (ptr[lst // 32] + rank) + lst % 32] = (((key % k2) << 8) | (gv.long() & 0xFF)).to(torch.int32)
-    return ptr.to(torch.int32), ent, int(key.numel())
+    grp = lst // 32
+    total = torch.bincount(grp, minlength=groups)
+    run = ((total + 31) // 32 + 3) // 4 * 4
+    ptr = torch.zeros(groups + 1, dtype=torch.int64, device=key.device)
+    ptr[1:] = torch.cumsum(run, 0)
+    pos = torch.arange(key.numel(), device=key.device) - (torch.cumsum(total, 0) - total)[grp]
+    ent = torch.zeros(max(32 * int(ptr[-1]), 1), dtype=torch.int32, device=key.device)
+    ent[32 * (ptr[grp] + pos % run[grp]) + pos // run[grp]] = (
+        ((key % k2) << 13) | ((lst % 32) << 8) | (gv.long() & 0xFF)).to(torch.int32)
+    return ptr.to(torch.int32), ent
+
+
+def fix_lists(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """s8orbit_bfix's lists of B's carries cb [7, N/2, K/2] (`fix_terms`, `chunk_lists`): ptr, ent and G's entries."""
+    key, gv, lists, k2 = fix_terms(cb)
+    return (*chunk_lists(key, gv, lists, k2), int(key.numel()))
+
+
+def pack_lists(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """s8orbit_pfix's lists: G's entries mod 4, those that are 0 dropped; ptr, ent and their entries."""
+    key, gv, lists, k2 = fix_terms(cb)
+    keep = (gv & 3) != 0
+    return (*chunk_lists(key[keep], gv[keep] & 3, lists, k2), int(keep.sum()))
+
+
+def lists_dense(ptr: torch.Tensor, ent: torch.Tensor, lists: int, k2: int) -> torch.Tensor:
+    """G [lists, 2K] int8 from `chunk_lists`' ptr and ent, read as the kernels read them."""
+    groups = ptr.numel() - 1
+    slots = torch.diff(ptr.long()) * 32
+    grp = torch.repeat_interleave(torch.arange(groups, device=ent.device), slots)
+    e = ent[:int(slots.sum())].long()
+    g = (e & 0xFF).to(torch.uint8).view(torch.int8)
+    real = g != 0
+    out = torch.zeros((lists, k2), dtype=torch.int8, device=ent.device)
+    out[(32 * grp + ((e >> 8) & 31))[real], (e >> 13)[real]] = g[real]
+    return out
+
+
+def pair_rows(x: torch.Tensor) -> torch.Tensor:
+    """X~ [M/2, 2K]: local row r is X[r] ‖ X[r + M/2]."""
+    hm = x.shape[0] // 2
+    return torch.cat([x[:hm], x[hm:]], 1).contiguous()
+
+
+def unpack(out: torch.Tensor, hm: int) -> torch.Tensor:
+    """s8orbit_pfix's words [blocks, 2N, 2] as sums mod 4, [M/2, 2N] int64."""
+    bits = (out.long().unsqueeze(-1) >> torch.arange(32, device=out.device)) & 1
+    s = bits[:, :, 0] + 2 * bits[:, :, 1]
+    return s.permute(0, 2, 1).reshape(-1, out.shape[1])[:hm]
 
 
 def a_terms(x: torch.Tensor, wb: torch.Tensor) -> torch.Tensor:
@@ -232,7 +291,8 @@ class Lib:
             self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(bn))
             self.fns[bn] = f
         self.fix = {r: self.fn(f"s8orbit_bfix{r}") for r in (16, 8)}
-        for f in self.fix.values():
+        self.pfix_fns = {w: self.fn(f"s8orbit_pfix{w}") for w in PFIX_NT}
+        for f in (*self.fix.values(), *self.pfix_fns.values()):
             self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, SMEM_LIMIT)
         self.maps: dict[tuple, bytes] = {}
         self.flags_t = torch.zeros(1, dtype=torch.int64, device="cuda")
@@ -260,7 +320,7 @@ class Lib:
         self._launch(self.fn("s8orbit_layout"), 1, 1, 0, u64(out.data_ptr()))
         got = out.tolist()
         want = [C.sizeof(Params), Params.sa.offset, Params.M.offset] + [v for bn in TILES for v in (smem(bn), stages(bn))]
-        want += [C.sizeof(FixParams), FIX_NT]
+        want += [C.sizeof(FixParams), FIX_NT, PFIX_NT[1], PFIX_NT[2]]
         if got[:len(want)] != want:
             raise RuntimeError(f"{self.path}'s s8orbit_layout {got[:len(want)]} is not orbit_gpu.py's {want}: rebuild or update")
         return {f"n{bn}": {"smem": smem(bn), "stages": stages(bn)} for bn in TILES}
@@ -341,6 +401,27 @@ class Lib:
         grid = cdiv(m // 2, r)
         self._launch(self.fix[r], grid, FIX_NT, 2 * k * r, p)
         return {"grid": grid, "rows": r}
+
+    @staticmethod
+    def pfix_out(m: int, n: int, k: int) -> torch.Tensor:
+        """s8orbit_pfix's output for x [M, K] and N outputs: [blocks of 32 local rows, 2N lists, 2 bits] int32."""
+        w = pack_words(k)
+        return torch.empty((cdiv(m // 2, 32 * w) * w, 2 * n, 2), dtype=torch.int32, device="cuda")
+
+    def pfix(self, x: torch.Tensor, out: torch.Tensor, ptr: torch.Tensor, ent: torch.Tensor) -> dict:
+        """out = X~·Gᵀ mod 4 packed (`pack_lists`' ptr and ent; `unpack`), the share of 256·X~·Gᵀ that O mod 2^10 reads."""
+        m, k = x.shape
+        n = out.shape[1] // 2
+        w = pack_words(k)
+        assert w and m % 2 == 0 and x.is_contiguous() and out.dtype == torch.int32 and out.is_contiguous()
+        assert out.shape == (cdiv(m // 2, 32 * w) * w, 2 * n, 2)
+        assert ptr.dtype == torch.int32 and ptr.numel() == cdiv(2 * n, 32) + 1 and ent.dtype == torch.int32
+        p = FixParams()
+        p.x, p.y32, p.ptr, p.ent = x.data_ptr(), out.data_ptr(), ptr.data_ptr(), ent.data_ptr()
+        p.M, p.N, p.K = m, n, k
+        grid = cdiv(m // 2, 32 * w)
+        self._launch(self.pfix_fns[w], grid, PFIX_NT[w], pfix_smem(k, w), p)
+        return {"grid": grid, "words": w}
 
 
 @functools.cache

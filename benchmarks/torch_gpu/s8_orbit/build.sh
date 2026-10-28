@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # s8_orbit.cubin for sm_90a (the H100 and H200), built off the card, and the ship run.sh unpacks there: the cubin, ptxas's
-# report (refused on a spill, local memory, a serialized wgmma, or an orbit kernel without IGMMA; the correction pass has none),
+# report (refused on a spill, local memory, a serialized wgmma, or an orbit kernel without IGMMA; the correction passes have none),
 # its SASS's instruction counts per kernel (sass.json),
 # the toolchain, the commit and MANIFEST.sha256.  On a CPU node with CUDA >= 12.8 (CUDA names the toolkit, default
 # /usr/local/cuda-13.0):  bash benchmarks/torch_gpu/s8_orbit/build.sh OUT
