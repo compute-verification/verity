@@ -3,9 +3,9 @@
 # engine behind the OpenAI API, writing serve-openai's records), the certifier rehearsal against it on varied traffic
 # (certifier_serve.py rehearse, honest and the tampers), the rehearsal kept as the gate keeps a certifier run
 # (request.json, out/, end.json with each file's SHA-512, as auditor.certifier_run writes them), then chain_record.sh on
-# it with the endpoint's records and CR_PATH=certifier-only. Off-host, in one of the network slots:
-#   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m -- \
-#     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
+# it with the endpoint's records and CR_PATH=certifier-only. Off-host, from a clone, in one of the network slots, as a
+# job of at most 240 minutes on a CPU node:
+#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_N2_ARGS="--draw 3" bash benchmarks/network_traces/demo_chain.sh
 # With DC_UPSTREAM the endpoint is that one (the H200's) and none is started here; CR_ENDPOINT then names its records.
 # The endpoint's records hold request values (requests.jsonl's prompt and streamed ids, advice_trace.jsonl's arrivals and
