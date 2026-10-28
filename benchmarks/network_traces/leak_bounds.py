@@ -4,11 +4,11 @@ reference datacenter has `datacenter_links`) and over the world's (`world`, the 
 its share of one copy of the weights (`WEIGHTS`) and ε, the union of its scans' δ. It is the one calculator of K:
 `chain_record.py leak` reads it on a warden run, and the slowdown ρ is derived from both bounds.
 
-A link is one network certifier on one uplink (`Link`, made by `link`), certifying ``rate`` requests a second of one
-scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer blocks, T
-buckets of τ seconds each way, every one proved as its own proof block, every proof block drawn, each sampling block's
-scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading of the
-scan's statement:
+A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
+second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
+blocks, T buckets of τ seconds each way, every one proved as its own proof block, every proof block drawn, each sampling
+block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
+of the scan's statement:
 
 * the schedules and the fail cells, ⌈log2(cap + 1)⌉ each a request (`capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c +
   1)`), a connection's cap its lane's egress_cells;
@@ -86,9 +86,9 @@ class Bound(NamedTuple):
 
 
 @dataclass(frozen=True)
-class Link:
-    """One network certifier on one uplink: its scan class, its certified requests a second, its sampling block's T
-    buckets each way of ``tau`` seconds, its egress cells a connection and its scan's δ."""
+class LinkLoad:
+    """What one network certifier on one uplink certifies: its scan class, its certified requests a second, its
+    sampling block's T buckets each way of ``tau`` seconds, its egress cells a connection and its scan's δ."""
     scan: IS.Class
     rate: float | Fraction
     T: int
@@ -136,7 +136,8 @@ class Link:
     def blocks(self, period: str | float | Fraction) -> float | Fraction:
         """m, the sampling blocks over ``period``: exact unless ``period`` or τ is a float."""
         s = seconds(period)
-        return s / self.block_s if isinstance(s, float) or isinstance(self.block_s, float) else Fraction(s) / self.block_s
+        exact = not (isinstance(s, float) or isinstance(self.block_s, float))
+        return Fraction(s) / self.block_s if exact else s / self.block_s
 
     def eps(self, period: str | float | Fraction) -> float | Fraction:
         """ε = m·δ_scan over ``period``."""
@@ -177,7 +178,8 @@ def _reference(name: str) -> dict:
 
 
 def datacenter_links() -> int:
-    """The census's reference datacenter's links (`deployments.json`): one network certifier on each machine's uplink."""
+    """The census's reference datacenter's links (`deployments.json`): one network certifier on each machine's
+    uplink."""
     return _reference("deployments.json")["machines"]
 
 
@@ -191,7 +193,7 @@ def world_links() -> int:
 
 
 def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float | Fraction = TAU,
-         egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA) -> Link:
+         egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA) -> LinkLoad:
     """The link of class ``cls`` certifying ``rate`` requests a second. ``cls`` is a scan class (`ingress_scan.Class`,
     which needs ``T``) or a window class (its `scan`, and its ``buckets`` the default T). ``egress_cells`` is by
     default the scan's KO + 1, the most `ingress_scan.Class.serves` takes."""
@@ -212,7 +214,7 @@ def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float |
         raise ValueError(f"egress_cells is an integer from 1 to KO + 1 = {scan.KO + 1}, not {egress_cells!r}")
     if not 0 < scan_delta < 1:
         raise ValueError(f"the scan's δ is in (0, 1), not {scan_delta!r}")
-    return Link(scan, rate, T, tau, egress_cells, scan_delta)
+    return LinkLoad(scan, rate, T, tau, egress_cells, scan_delta)
 
 
 def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, reading: str,
@@ -227,10 +229,10 @@ def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, r
     return Bound(bits, bits / weights.bits, delta, one.eps(period), statement, weights.label)
 
 
-def datacenter(links: Sequence[Link] | Mapping[Link, int], period: str | float | Fraction, reading: str,
+def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str | float | Fraction, reading: str,
                delta: float | Fraction | None = None, *, weights: Weights = WEIGHTS) -> Bound:
-    """K over a monitoring period summed over a datacenter's ``links`` (each Link, or each Link with its count), each at
-    δ / links (`STATEMENTS`'s ``datacenter``).
+    """K over a monitoring period summed over a datacenter's ``links`` (each a `LinkLoad`, or each with its count),
+    each at δ / links (`STATEMENTS`'s ``datacenter``).
 
     This is our composition: no Lean statement covers it. `PeriodLeakAccepted` and `HorizonLeakAccepted` are each
     about one device on one uplink. Summing their bits takes the secrets a sender moves through every link at once to
@@ -249,11 +251,11 @@ def datacenter(links: Sequence[Link] | Mapping[Link, int], period: str | float |
     pairs = list(links.items()) if isinstance(links, Mapping) else [(l, 1) for l in links]
     if not pairs:
         raise ValueError("a datacenter has at least one link")
-    if not all(isinstance(l, Link) for l, _ in pairs):
-        raise TypeError("a datacenter's links are Links (`link`)")
+    if not all(isinstance(l, LinkLoad) for l, _ in pairs):
+        raise TypeError("a datacenter's links are LinkLoads (`link`)")
     if not all(type(n) is int and n >= 1 for _, n in pairs):
         raise ValueError("a datacenter's link counts are positive integers")
-    counts: Counter[Link] = Counter()
+    counts: Counter[LinkLoad] = Counter()
     for l, n in pairs:
         counts[l] += n
     if delta is not None:
@@ -264,7 +266,7 @@ def datacenter(links: Sequence[Link] | Mapping[Link, int], period: str | float |
     return Bound(bits, bits / weights.bits, delta, eps, STATEMENTS["datacenter"], weights.label)
 
 
-def world(one: Link, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None, *,
+def world(one: LinkLoad, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None, *,
           weights: Weights = WEIGHTS) -> Bound:
     """K over a monitoring period summed over the world's links (`world_links`), each ``one``: `datacenter` at the
     adversary resource model's size. Each link certifies ``one``'s rate, and requests past it are uncertified, so K

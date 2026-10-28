@@ -135,7 +135,8 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
 def test_the_census_sets_the_datacenter_and_the_world():
     dc, world = _reference("deployments.json"), _reference("adversary.json")
     assert LB.datacenter_links() == dc["machines"] == 12_500
-    machines = world["total_flop"] / world["flop_per_s_per_h100"] / world["monitoring_period_s"] / dc["gpus_per_machine"]
+    flop_s = world["flop_per_s_per_h100"] * world["monitoring_period_s"]
+    machines = world["total_flop"] / flop_s / dc["gpus_per_machine"]
     assert LB.world_links() == math.ceil(machines) == 18_550_229
     one = LB.link(W63, RATE, T=32)
     for delta in (None, *LB.DELTAS):
@@ -208,7 +209,7 @@ def test_a_window_class_and_refusals():
             LB.datacenter([LB.link(KO1, RATE, T=32)] * 12_500, "week", "anchors", delta)
     with pytest.raises(ValueError, match="at least one link"):
         LB.datacenter([], "week", "anchors")
-    with pytest.raises(TypeError, match="Links"):
+    with pytest.raises(TypeError, match="LinkLoads"):
         LB.datacenter([KO1], "week", "anchors")
     with pytest.raises(ValueError, match="positive integers"):
         LB.datacenter({LB.link(KO1, RATE, T=32): 0}, "week", "anchors")
