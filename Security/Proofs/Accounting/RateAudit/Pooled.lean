@@ -1,5 +1,5 @@
 import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditHorizon
+import Definitions.Accounting.Guarantees.RateAuditPooled
 import Proofs.Accounting.RateAudit.Chain
 
 /-!
@@ -9,13 +9,13 @@ Rounds `0, …, n − 1` each draw a sample of `s_i` items, uniform over `M`, af
 `G_i` may be any function of the earlier rounds' coins, their samples among them, and of round `i`'s own other coins,
 but not of round `i`'s sample (`Rate.Causal`). Then every sample lands in its round's good set while the good sets,
 weighted by the sample counts, hold at most `K` items in all, with probability at most `(K / (M·∑ s_i))^(∑ s_i)`
-(`Horizon.pr_causal_le`). The proof peels round 0: its good set is fixed by its own coins, so its sample lands in it
+(`Pooled.pr_causal_le`). The proof peels round 0: its good set is fixed by its own coins, so its sample lands in it
 with probability `(g₀/M)^s₀` (`pr_sample`); given round 0's coins, the later rounds are a causal family with `K − s₀·g₀`
 left (`pr_and_le_mul`), and weighted AM–GM joins the two (`step_le`).
 
 A chain's passes (`Rate.Chain`) are such rounds, with `M = N`: pass `j` is accepted exactly when its sample lands in its
 correct receipts, which the store, the earlier passes' coins and its own stream and oracle family fix
-(`Chain.pr_horizon_le`). With `RateChainPaidRO`'s conservation at every count, the window's reads pay for the correct
+(`Chain.pr_pooled_le`). With `RateChainPaidRO`'s conservation at every count, the window's reads pay for the correct
 receipts the sample certifies (`RateChainSampledRO`).
 -/
 
@@ -24,7 +24,7 @@ namespace Accounting.Rate
 open Pous (Bits pr)
 open scoped ENNReal NNReal
 
-namespace Horizon
+namespace Pooled
 
 /-! ## Weighted AM–GM -/
 
@@ -235,7 +235,7 @@ theorem pr_causal_le' (n M K : ℕ) (X : Fin n → Type) [∀ i, Fintype (X i)] 
       exact Finset.prod_eq_zero (Finset.mem_univ i) (by simp [hi])
   · exact pr_causal_le hM n X s G hG K
 
-end Horizon
+end Pooled
 
 namespace Chain
 
@@ -243,7 +243,7 @@ variable {P N b h ρ S L q r s : ℕ}
 
 /-- A chain's passes are sampled as a whole: every pass accepted with at most `K` correct receipts in all is at most
 `(K/(P·N))^(s·P)`. -/
-theorem pr_horizon_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
+theorem pr_pooled_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
     pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
         (∀ j, (A.dev j x.2).Accepts x.1 (x.2 j).1 (A.oracle j x.1 x.2) (x.2 j).2.2) ∧
           ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K)
@@ -266,7 +266,7 @@ theorem pr_horizon_le (A : Chain P N b h ρ S L q r s) (K : ℕ) :
     have h₂ : (e.symm ω i).2.1 = (e.symm ω' i).2.1 := by simp [e, hi]
     simp only [G, Chain.dev, Chain.oracle]
     rw [hη, h₁, h₂]
-  have key := Horizon.pr_causal_le' P N (s * K) (fun _ => Bits ρ × (Bits r → Oracle N b h ρ)) (fun _ => s) G hG
+  have key := Pooled.pr_causal_le' P N (s * K) (fun _ => Bits ρ × (Bits r → Oracle N b h ρ)) (fun _ => s) G hG
   refine (Bandwidth.pr_mono (fun ω hω => ?_)).trans (key.trans (le_of_eq ?_))
   · refine ⟨fun i t => Finset.mem_filter.2 ⟨Finset.mem_univ _, hω.1 i t⟩, ?_⟩
     rw [← Finset.mul_sum]
@@ -291,20 +291,20 @@ open Accounting.Rate
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The causal bound over the monitoring period** (`Accounting.Guarantees.HorizonSampling`). -/
-theorem HorizonSampling : Accounting.Guarantees.HorizonSampling := by
+/-- **The causal bound over the monitoring period** (`Accounting.Guarantees.PooledSampling`). -/
+theorem PooledSampling : Accounting.Guarantees.PooledSampling := by
   intro n M K X _ s G hG
-  exact Horizon.pr_causal_le' n M K X s G hG
+  exact Pooled.pr_causal_le' n M K X s G hG
 
-/-- **A chain's passes are sampled as a whole** (`Accounting.Guarantees.RateHorizon`). -/
-theorem RateHorizon : Accounting.Guarantees.RateHorizon := by
+/-- **A chain's passes are sampled as a whole** (`Accounting.Guarantees.RatePooled`). -/
+theorem RatePooled : Accounting.Guarantees.RatePooled := by
   intro P N b h ρ S L q r s K A
-  exact Chain.pr_horizon_le A K
+  exact Chain.pr_pooled_le A K
 
 /-- **The route `Sampled`, with side sources that ignore the oracle** (`Accounting.Guarantees.RateChainSampledRO`). -/
 theorem RateChainSampledRO : Accounting.Guarantees.RateChainSampledRO := by
   intro P N b h ρ S L q r s K lam τ tier A hA
-  have h₁ := Chain.pr_horizon_le A K
+  have h₁ := Chain.pr_pooled_le A K
   have h₂ := RateChainPaidRO P N b h ρ S L q r s lam τ tier A hA
   refine (Bandwidth.pr_mono (fun x hx => ?_)).trans ((Bandwidth.pr_or_le _ _).trans (add_le_add h₁ h₂))
   by_cases hK : ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K
@@ -316,7 +316,7 @@ theorem RateChainSampledRO : Accounting.Guarantees.RateChainSampledRO := by
 /-- **The route `Sampled`, with any side sources** (`Accounting.Guarantees.RateChainSampled`). -/
 theorem RateChainSampled : Accounting.Guarantees.RateChainSampled := by
   intro P N b h ρ S L q r s K m lam τ tier A
-  have h₁ := Chain.pr_horizon_le A K
+  have h₁ := Chain.pr_pooled_le A K
   have h₂ := RateChainPaid P N b h ρ S L q r s m lam τ tier A
   refine (Bandwidth.pr_mono (fun x hx => ?_)).trans ((Bandwidth.pr_or_le _ _).trans (add_le_add h₁ h₂))
   by_cases hK : ∑ j, ((A.dev j x.2).correct x.1 (x.2 j).1 (A.oracle j x.1 x.2)).card ≤ K
