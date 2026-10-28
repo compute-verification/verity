@@ -159,7 +159,7 @@ class Smi:
             self.proc.terminate()
 
 
-def describe(layout: S.Layout) -> dict[str, Any]:
+def describe(layout: S.CommitShape) -> dict[str, Any]:
     return {"name": layout.name, "digest": S.layout_digest(layout).hex(), "groups": len(layout.groups),
             "distinct_groups": len({id(g) for g in layout.groups}), "units_a_slot": layout.unit_count,
             "rows_a_slot": layout.row_count, "bytes_a_slot": layout.slot_bytes}
@@ -328,7 +328,7 @@ def committed(shape: Any, fused: frozenset[str], uncommitted: frozenset[str]) ->
     return [[t for t in g if t.op.split(".")[-1] not in uncommitted] for g in CM.tables(shape, fused)]
 
 
-def check_sources(groups: list[list[Any]], layout: S.Layout) -> None:
+def check_sources(groups: list[list[Any]], layout: S.CommitShape) -> None:
     """Refuses a layout whose groups' tensors aren't ``groups``' tables (each one's codes, then a quantizer's word)."""
     if len(groups) != len(layout.groups):
         raise SystemExit(f"the layout has {len(layout.groups)} groups and the served map {len(groups)}")
@@ -663,7 +663,7 @@ def main(argv: list[str] | None = None) -> int:
         d.step(t, prompts[:, t])
     d.results = []
     plans: dict[tuple[str, int], G.Plan] = {}
-    current: tuple[str, S.Layout] | None = None
+    current: tuple[str, S.CommitShape] | None = None
 
     def drop(capped_only: bool) -> None:
         """Frees the plans (or the capped ones), and their partitions' streams and green contexts."""
