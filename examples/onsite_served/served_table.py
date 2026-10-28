@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SERVED_WINDOW, GATE, CHECK = "served-window", "gate", "check"
 RUNS = (SERVED_WINDOW, GATE, CHECK)
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
-RECORD = "benchmarks/one_stage/served_verdicts.py"
+VERDICTS_SCRIPT = "benchmarks/one_stage/served_verdicts.py"
 POUS_PIECE = "benchmarks/pous/served_piece.sh"
 WIPE_PIECE = "benchmarks/pous/streamed_wipe/served_wipe.sh"
 CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
@@ -266,7 +266,7 @@ def _certifier_piece(cfg, params, bound):
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then sampled proofs' records audit "
               "(C-Flock --zk behind the Lean firewall, the Lean verifier) and each listed component's piece",
-              scripts=(RUNNER, RECORD), hooks=_serve)
+              scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
@@ -280,7 +280,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
                        "coins", reaches=CHALLENGER, optional=tuple(_PP), hooks=_sampled_proofs_challenger),
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
                         "window's rows (the records audit's verdict the integrity row), the composed verdict and the "
-                        "block record", scripts=(RECORD,)),
+                        "block record", scripts=(VERDICTS_SCRIPT,)),
     },
     "pouw": {
         CHALLENGER: Piece("pouw", CHALLENGER, GATE, "the gate: each window's H1 coins from a session of its own"),
@@ -382,14 +382,14 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
     py, out = sys.executable, state / "out"
     serve, machine = out / "serve", out / "machine.txt"
     slots = str(cfg["workload"]["params"]["slots"])
-    pick = subprocess.run([py, str(ROOT / RECORD), "window", str(serve), "--slots", slots], cwd=ROOT,
+    pick = subprocess.run([py, str(ROOT / VERDICTS_SCRIPT), "window", str(serve), "--slots", slots], cwd=ROOT,
                           capture_output=True, text=True, check=False)
     if pick.returncode:
         raise Refused("window", pick.stderr.strip()[-800:] or "served_verdicts.py window picked no window")
     k = json.loads(pick.stdout)["window"]
     lines = machine.read_text().splitlines() if machine.is_file() else []
     node = ["--node", lines[1]] if len(lines) > 1 and lines[1].strip() else []
-    p = subprocess.run([py, str(ROOT / RECORD), "record", "--serve-run", str(serve), "--window", str(k),
+    p = subprocess.run([py, str(ROOT / VERDICTS_SCRIPT), "record", "--serve-run", str(serve), "--window", str(k),
                         "--sampled-proofs", str(out / "sampled-proofs" / "served"), "--pieces", str(out / "pieces"),
                         *node, "--out", str(state / "record" / "onsite")], cwd=ROOT, capture_output=True, text=True,
                        check=False)
