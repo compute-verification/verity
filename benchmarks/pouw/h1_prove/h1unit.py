@@ -33,7 +33,7 @@ prover and the verifier of `run.py` share.
   after call; and ``receipt`` over the window's tiles. The tables and ``b/<K>`` are registered values (`tables`,
   `register`: `registered.Registered.commit` under the window Program's digest, ``row/v2`` rows of 16-bit leaves,
   `value_words` a row; each table's domain, and ``ok``'s, binds the window's open root, `open_root`, and b/<K>'s none, as
-  it is held across windows: PRF-127, `credit.domain_of`), so the Lean verifier opens every row a statement reads
+  it is held across windows: `credit.domain_of`), so the Lean verifier opens every row a statement reads
   against their roots; ``receipt`` is the
   window's own tree (`domain`), opened outside the proof. Every unit's ``roots`` input is (the A tables' digest, root(b))
   (`window_roots`). `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's
@@ -112,8 +112,8 @@ def tile() -> str:
     return t
 
 
-#: the structural statement's layout mode under ``H1_TMPL=structural`` (#3226's struct_lower costs and #3249's structural
-#: verdicts are at it)
+#: the structural statement's layout mode under ``H1_TMPL=structural`` (struct_lower's costs and the structural verdicts
+#: are measured at it)
 LAYOUT = "iv/hybrid/4"
 #: ``H1_TMPL``'s values for the flat statement (also unset or empty) and for the structural one at `LAYOUT`
 FLAT, STRUCTURAL = "flat", "structural"
@@ -226,7 +226,7 @@ def registered_of(com: dict) -> dict[str, tuple[int, str]]:
 
 def open_root(window: str, weights_root: bytes) -> str:
     """The window's open root (`pouw.salt.window_open_root`, hex), which every per-window registered value's domain binds
-    (PRF-127, `credit.domain_of`): of the weights' root, root(b/<K>), a STAND-IN for the round-0 request table's root
+    (`credit.domain_of`): of the weights' root, root(b/<K>), a STAND-IN for the round-0 request table's root
     (SHA-512 of the window's name under `STAND_IN_REQUESTS_TAG`: this harness serves no requests) and the window's name as
     its session. A served window's is the auditor's ledger's, which opens the challenger's session on it; this harness has
     no ledger, so anyone computes it from the window's name and its b/<K> root, and the commitment that records it is
@@ -289,7 +289,7 @@ def value_words(name: str, tile: tuple[int, int] = TILE) -> int:
 
 def bound_root(name: str, window_root: str) -> str | None:
     """The window root the registered value ``name``'s domain binds: none for the weights' b/<K>, held across windows
-    (`credit.is_held`), and ``window_root``, the window's open root (`open_root`), for every other value (PRF-127)."""
+    (`credit.is_held`), and ``window_root``, the window's open root (`open_root`), for every other value."""
     return None if CR.is_held(name) else window_root
 
 
@@ -508,7 +508,7 @@ class Shape:
 
 def row_words(codes: np.ndarray, scales) -> np.ndarray:
     """int8 code rows ``(n, K)`` and their f32 scales ``(n,)`` as their bit rows' u16 words ``(n, K / 2 + 2)``: code t's
-    bits are leaves 8 t .. 8 t + 7, then the scale's 32 bits, little-endian (`h1zy.ROW`, #3053's A table leaf)."""
+    bits are leaves 8 t .. 8 t + 7, then the scale's 32 bits, little-endian (`h1zy.ROW`, the A table leaf)."""
     b = np.ascontiguousarray(np.asarray(codes).astype(np.int8).view(np.uint8))
     b = b.reshape(len(b), -1)
     s = np.ascontiguousarray(np.asarray(scales, "<f4").reshape(len(b))).view(np.uint8).reshape(len(b), 4)
@@ -539,7 +539,7 @@ def records(a: np.ndarray, b: np.ndarray, sa, sw) -> tuple[np.ndarray, np.ndarra
 
 def record_words(z, y) -> np.ndarray:
     """A unit's record, its cells' z (s32) and y (bf16 encodings), row-major, as its bit row's 3 R C u16 words: z's 32-bit
-    words little-endian, then y's (`h1zy.RECORD`, #3053's z table leaf)."""
+    words little-endian, then y's (`h1zy.RECORD`, the z table leaf)."""
     zw = np.ascontiguousarray((np.asarray(z, np.int64).reshape(-1) & M32).astype("<u4")).view("<u2")
     return np.concatenate([zw, np.asarray(y, np.uint16).reshape(-1)]).astype(np.uint16)
 

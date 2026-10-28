@@ -1284,7 +1284,7 @@ def a4_copies(run: Run, base: str, summary: dict, rec: dict) -> tuple[Any, dict,
 
 
 def a4(run: Run) -> Iterator[Case]:
-    """A4 (`a4.py`): #101's layer 0 on serving's own roots: the layout of record's members as one population (the
+    """A4 (`a4.py`): the Llama-3.2-1B row's layer 0 on serving's own roots: the layout of record's members as one population (the
     canonical `Q_template_instances` partition), serving's registration (or, with `--reaudit`, a new record naming it under
     the agreement's law, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
     SHA-512 of the map from template to its public file's SHA-512, one draw by the verifier's law with each member served
@@ -1411,7 +1411,7 @@ def a4_unaudited(run: Run) -> Iterator[Case]:
 
 def bundle_leaf_layer(run: Run) -> tuple[str, str | dict]:
     """A serving bundle's leaf layer: the SHA-512 of the map from each member's template to its public file's SHA-512
-    (`members.json`, #101's layers), or of its one public file (`compare.json`); each SHA-512 the file's where the
+    (`members.json`, the Llama-3.2-1B row's layers), or of its one public file (`compare.json`); each SHA-512 the file's where the
     bundle holds it, else the one serving recorded of it."""
     if run.has("members.json"):
         publics, how = {}, {}
@@ -1427,7 +1427,7 @@ def bundle_leaf_layer(run: Run) -> tuple[str, str | dict]:
 
 def serving_bundle(run: Run) -> Iterator[Case]:
     """A serving bundle (`vllm-serving-commit`'s files: `registration.json`, `window.json`, `index.json`, and
-    `compare.json` for one template or `members.json` and the members' public files for #101's layers) that no verifier
+    `compare.json` for one template or `members.json` and the members' public files for the Llama-3.2-1B row's layers) that no verifier
     audited in its own run: the registration alone, under the copies of each replayed audit of the same record (its
     digest) with the leaf layer from the bundle itself, and no draw. Its `registration-v0.json`, the window's record in
     `verity/one-stage/registration/v0`, is a format neither side reads."""
@@ -1453,7 +1453,7 @@ def serving_bundle(run: Run) -> Iterator[Case]:
 
 
 def registered_gemm(run: Run) -> Iterator[Case]:
-    """A4 of registered values (`a4.py` before A4 was #101's layer 0): `RegisteredGemm`, `n` Calls of the generated BF16
+    """A4 of registered values (`a4.py` before A4 was the Llama-3.2-1B row's layer 0): `RegisteredGemm`, `n` Calls of the generated BF16
     set's GEMM coordinate, Call `i` reading its activation row `x[i]` and the weight column `W[pos[i]]` of the root
     parameter W (`pos` the reads of `stage/registered.json`). Windows register W in a `verity/registration/v2` record (R7:
     the verifier expects `{W: K}`, and a later window's log holds the earlier windows' records), baselines in a v1 record

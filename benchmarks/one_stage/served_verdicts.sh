@@ -242,7 +242,7 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
 circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted)
   local bad=0 c
   grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py \
-    || { say "MISSING V3b's window circuit (#4317 with #4757, VLLM-103): this tree's prove_path.py has no window-circuit"; return 1; }
+    || { say "MISSING V3b's window circuit: this tree's prove_path.py has no window-circuit"; return 1; }
   for c in $CLASSES; do circuit "$c" "WC_TIMEOUT=${WC_TIMEOUT:-30m}" "WINDOW-CIRCUIT class $c" || bad=1; done
   return "$bad"
 }
