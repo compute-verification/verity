@@ -1,6 +1,5 @@
 import Definitions.Pouw.Guarantees.Barrier
 import Definitions.Pouw.Guarantees.Deadline
-import Definitions.Pouw.Guarantees.Dimension
 import Definitions.Pouw.Guarantees.Dither
 import Definitions.Pouw.Guarantees.DitherInstance
 import Definitions.Pouw.Guarantees.Eps1
