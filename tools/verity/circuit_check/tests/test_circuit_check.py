@@ -932,6 +932,20 @@ def test_redundant_ands_are_counted():
     assert CK.redundant_ands(C)[0] == 2
 
 
+def test_a_commit_is_a_copy_not_a_redundant_and():
+    from verity_flock import gf2
+
+    C = gf2.Circuit()
+    a, b, c = C.input("a", 3)
+    (x,) = C.commit([a ^ b])              # a carried form committed once: a row, no value computed again
+    C.output("o", [C.AND(x, c)])
+    assert CK.redundant_ands(C)[0] == 0
+    (y,) = C.commit([a ^ b])              # the same form committed again
+    (n,) = C.commit([c.inv()])            # a copy of one bit, which a NOT gives free
+    C.output("p", [y, n, C.AND(x ^ c, y ^ c)])   # equal operands once y is x
+    assert CK.redundant_ands(C)[0] == 3
+
+
 @pytest.mark.slow
 def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     from circuit_check import cli
