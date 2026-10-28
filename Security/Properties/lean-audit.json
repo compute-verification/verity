@@ -7524,6 +7524,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -8134,17 +8135,6 @@
     "Properties.SampledProofs.bernoulliBounds"
    ]
   },
-  "Flock.Public": {
-   "digest": "3884bfeaa41a93d6782996604d746354a90288863d80a01a9f6feb1615e58ab3",
-   "definitions": {
-    "Flock.FV3.FRAME": "7a59c990468cab7e2b8010a7dcb24e3ed28bce0494751048f05c32a61f8a71e8",
-    "Flock.FV3.hash": "b59ec9cab0b358159e9e87bbae75fb83fb1b8266134f3ad0d2959008ae422824",
-    "Flock.FV3.leaf": "027d85b9f1f1fbc3c30712279bc8edbae3ee86530a1a213a9f17487015cac266",
-    "Flock.FV3.root": "3f312addeaaede8670781070d6bcfb27b7ed5a7df60a536678d5db0e1d8ed3d3",
-    "Flock.FV3.uint": "f00ede6b3df22859c2566c85b1665172f6061ba7a25333f7f96b23c90f52252c"
-   },
-   "guarantees": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues"]
-  },
   "Flock.Qcall": {
    "digest": "0deb08c223d18d1d6411a9981770c33971aa5da6e1909aee6a9e743aa00f4aaf",
    "definitions": {
@@ -8242,14 +8232,11 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "98b1cae99f498cd66a018d69b4ffb86ae84da886d723695ae115b45e30dc1c46",
+   "digest": "8b24c98d063bedcd15a3a755791f4e14d40272a47fb3bf9c5eed127050891ce2",
    "definitions": {
     "Flock.Registered.Port": "8bf63b4f11162dce1bbc385541afd32990ae8951927d86e9839649edf19734a7",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
     "Flock.Registered.Port.schema": "195a10f870174a6b9ac9b51cc688df07d6ec5f6e3369b4059ce50514a1e78f6e",
-    "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
-    "Flock.Registered.leafAs": "a7fc4cfe446fe2cffc2c9cb01a9a0a0b9efd6894c75e872799b4fece18667eaf",
-    "Flock.Registered.node": "41c6d6d90c4fbfc4f762607cc2052780c452b0365f95f22323ff6d93f35d6bb1",
     "Flock.Registered.rowLeaf": "09ceb544a5a4910cbbfa21ac341e5fdcf6b3fd232451f5f63fb7d9ff9ea64cde",
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b"
    },
@@ -10017,7 +10004,7 @@
    "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
   },
   "PouwCheck.Check": {
-   "digest": "5ee41d3249ebeb1c925e21538618805431c9d23350dad366eeeacb8538adf8cd",
+   "digest": "77325be1b43d947faffad4e425b56a47d1a13c139d5587608c57f96615e43596",
    "definitions": {
     "PouwCheck.Ascending": "5b24f399fc5f235318482805b82195fcd9be209ce00f792764266c5d6b990d75",
     "PouwCheck.Ascending._sparseCasesOn_1": "0c39ffd45af4e037eade16be68e5fa6788d2bbe70b8d526e16bcd2e57c0da613",
@@ -10044,7 +10031,7 @@
     "PouwCheck.levelOf": "48f5e3917b350202b7eac92f3d54572ce99d84524251aeb9ae909a94f33bfa4c",
     "PouwCheck.oneStage": "7c719a8a358542840a7addee323c893bd08649baf8394bc21abdc81c1da2b026",
     "PouwCheck.outcome": "c0e1db9f48191685d37423553bba7e45af715d664dfb0c28f4da9bbbc605fae2",
-    "PouwCheck.registered": "84ff25d82e0157258f9d596e30c085f7327d53fe9cabb1a6326167fe2529f94a",
+    "PouwCheck.registered": "fe5666deda4c36eff5bdb8c093a635181b478455612badce290ae1aa7ad357b9",
     "PouwCheck.registeredSorted": "f3f3a15aa0a16dd4cffc22b3339539e97103a4defb099402d8529770c8ee58f4",
     "PouwCheck.rootWJson": "59a1924b50d1366c4da946502953c90fb8130f0ef9a79bb0e1d93705c7787fb6",
     "PouwCheck.subsetLaw": "55ca9133ec253a0ade5266bff2c39d16213c5ab5821cf83854ad3ad9fdf492d0",
@@ -10082,7 +10069,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "4ccbed0470ce3b000e5730e78f3550b48940fe24721f8286690f2154ab3e4a6c",
+   "digest": "c4c17904d0a517622c32c2d0284aa02cb028e61629bc9a8f5ee5323a91e20a40",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -10241,7 +10228,7 @@
     "PouwCheck.Credit.loads?": "932faa89f1d184a45caf3a21bfcd5dceb3877c15be2bb6fbbce8b5c7f6b7f12b",
     "PouwCheck.Credit.nDigits": "a51b2c456822dc1b03505b6ba6045106f22ad0810734a709ee4a9e7d74d3a54b",
     "PouwCheck.Credit.noBit": "37194b620292afafb155b3808df58d04735fef89b0dff38228a17297e1e12c95",
-    "PouwCheck.Credit.noFixedLength": "d1f995c8d378eef6023a26756e25e423f28d0953adfa4e373c532887a922a469",
+    "PouwCheck.Credit.noFixedLength": "127b6c7d252a25bc11c8f17837caaa54ff33a31650a87b6e768f9964aa94910d",
     "PouwCheck.Credit.noLiveTable": "bc5f6243be4f2d7ba14fa4dd7b790bc5436cf146af40b4f89cb5312779611e31",
     "PouwCheck.Credit.noModel": "515641eab14f4caec07ddfd0a29d25ff60d6cd2d71ce2a2549e888879a1a5546",
     "PouwCheck.Credit.noServed": "5c51a4a9e3f3eef5287effce328f8e64e6bdbada2a7d008bc419c8ac61b686bc",
@@ -10710,7 +10697,7 @@
    ]
   },
   "PouwCommit.Frame": {
-   "digest": "d1aa0ea6546eeaaffcacef466e8623e4db759e3617533a671e78c81712d2d25d",
+   "digest": "552d38e43ee048f26a0c3ed4dfe6864e6fe97d5fcd5479abb19b1b2f0263e5b0",
    "definitions": {
     "PouwCommit.Domain": "9fec723b34bd2909ea66bff49fb2c521467390aa31017d446d8cae7c122addd4",
     "PouwCommit.Domain.count": "656f0d5f545492183076ea329ae409106bab714818d56a577df3b42a746b0394",
@@ -10723,7 +10710,6 @@
     "PouwCommit.Domain.node": "a07df5fb653106a67dbe2437a6f7c173f7099c12596191f06457971993f8e24f",
     "PouwCommit.Domain.pad": "b7c15d799c9cc87e84ed7fc7e1d94d2e0e7ab3c9e0958e17ee801e3be74e4669",
     "PouwCommit.Domain.verify": "3c5fc91042e929bcca8dce56169ec91c2376cbbb051066b4a9b377fc9a357a0e",
-    "PouwCommit.FRAME": "57f7b9e4a4dba5d34e901ef8d86fff4f7f1048e98bbc3c9d8de929322821e65c",
     "PouwCommit.Hash": "82c1a2fbc19601eeaa4944bf92ec42b009a2d66dd9d76e3b8b0946504200757d",
     "PouwCommit.Hash.bytes": "43394d196090aee0653dd65bbd40708c1668dfe0974bcef22fa52793f0ce8e86",
     "PouwCommit.Hash.casesOn": "a20f46b00b521f1607e4675ea9b027d348fe13ae14bbe0c3150ff462f427635b",
@@ -10732,7 +10718,6 @@
     "PouwCommit.Hash.scheme": "b745c09fccb389e2ccab88931eac8d6bb7d374d2c074d759d1b0288bd0c719a4",
     "PouwCommit.Hash.sha256": "b570aa8301307f10f2f0af68ce4dc75ef3b451955346ea451bf9e759db000aca",
     "PouwCommit.Hash.sha512": "2d744f94140667fc2266d18cc60d4bdf6d961c9b5f2a1c359cc5cb2fccd8eacb",
-    "PouwCommit.Hash.tagged": "2292ef29bbfca4cc335440139f4e4501f37beb7965d42985847de7e3bfa98791",
     "PouwCommit.checkPath": "0588a9d5e634b7514c95675b40d8e1251a1cf22db15fdd8c32f77b7e3093a8b7",
     "PouwCommit.depth": "0136cc0777f5f29d54f92d6529872dbc95db24e16e35fe5f8135f58bc429c323",
     "PouwCommit.frameBytes": "7420514bfb220e10224efbe1bd8571acf54f4853ae6c47b6e0880dac76fa21f2",
@@ -10752,8 +10737,7 @@
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
-    "Properties.Pouw.Commit.leafRefusals",
-    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+    "Properties.Pouw.Commit.leafRefusals"
    ]
   },
   "PouwCommit.Py": {
