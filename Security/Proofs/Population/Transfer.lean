@@ -14,7 +14,7 @@ are its own dataflow's (`population_of_addressedBy`).
 * `eq_honest_off_padDown` (T1), `card_egress_le_pad` (T2), `card_leak_le_coneEgress_pad` and
   `card_leak_le_of_not_up_pad` (T3), `skipped_work_le_wt_pad` (T4).
 * `downAt_sub_padDown`: the padding's cone holds the cone of every honest run in `C`. It can hold more than their
-  union, a path joining reads of different runs; `HonestCone` states the damage theorems at the union.
+  union, a path joining reads of different runs.
 -/
 
 namespace Population.DynPopulation
