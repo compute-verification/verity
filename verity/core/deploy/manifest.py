@@ -1,12 +1,13 @@
-"""A protocol's manifest, and the placement check (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §3,
-§4.1, and its addenda of 23:50Z and 00:08Z).
+"""A protocol's manifest, and the placement check.
 
-The manifest is a typed object in each protocol's package (`render` writes it as TOML, which is only a rendering):
+The manifest is a typed object in each protocol's package (`render` writes it as TOML, which is only a rendering). Its
+`Role`s and `Channel`s are also what a protocol declares to a deployment configuration (`config.Component`):
 
 - its parties (`Role`): each one's principal (`developer`, `auditor` or `anyone`), its cardinality (`per` server, link,
   site, or `one`), and what its machine must provide (`needs`: `clock` and `coins` are sources the runtime attaches, the
   rest capabilities such as `gpu` or `signing-key`);
-- its channels (`Channel`): who may send which messages to whom, under what latency bound, and whether they carry coins;
+- its channels (`Channel`): who may send which messages to whom, under what latency bound, whether they carry coins,
+  and the messages sent before them (`after`);
 - its messages: the wire schemas (`verity.core.wire.Schema`), each with its kind;
 - what it needs of the workload (`needs`: `windows`, `store`, ...), which a workload's `provides` must cover
   (`workload`).
@@ -55,13 +56,15 @@ class Role:
 
 @dataclass(frozen=True)
 class Channel:
-    """Messages `sender` may send `receiver`, in a link whose latency is at most `latency_ms`."""
+    """Messages `sender` may send `receiver`, in a link whose latency is at most `latency_ms`, after the messages
+    `after`."""
 
     sender: str
     receiver: str
     messages: tuple[str, ...]
     latency_ms: int | None = None
     carries_coins: bool = False
+    after: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,9 +89,9 @@ class Manifest:
             if (c.sender, c.receiver) in pairs:
                 raise ValueError(f"{self.protocol}: one channel from {c.sender} to {c.receiver}")
             pairs.add((c.sender, c.receiver))
-            if not set(c.messages) <= types:
-                raise ValueError(f"{self.protocol}: {sorted(set(c.messages) - types)} on {c.sender} -> {c.receiver} "
-                                 "are not its messages")
+            if not set(c.messages) | set(c.after) <= types:
+                raise ValueError(f"{self.protocol}: {sorted(set(c.messages + c.after) - types)} on {c.sender} -> "
+                                 f"{c.receiver} are not its messages")
         Registry(self.messages)
 
     @property
@@ -147,6 +150,8 @@ def render(m: Manifest) -> str:
             out.append(f"latency_ms = {c.latency_ms}")
         if c.carries_coins:
             out.append("carries_coins = true")
+        if c.after:
+            out.append(f"after = {_toml(c.after)}")
     for s in m.messages:
         out += ["", f"[message.{s.type}]", f"version = {s.version}", f"kind = {_toml(s.kind)}"]
     return "\n".join(out) + "\n"
