@@ -24,7 +24,8 @@ product and epilogue with X and W read through host tensor descriptors (kernel p
 out-of-bounds boxes read zeros), optionally warp-specialized.  The product needs no row
 padding: a row of X W^T reads only that row, so M < 17 is just a masked tile (int8_exact pads only because torch._int_mm
 refuses M <= 16).  Non-finite activations are outside the statement and not gated.  The quantizer runs `quant_plan`'s
-warps and rows a program (`QUANT_PLANS`, else 16 warps a row); each row's arithmetic is the same in any plan.
+warps and rows a program (`engine.profiles.int8_quant_plans.QUANT_PLANS`, else 16 warps a row); each row's arithmetic is
+the same in any plan.
 
 `scaled_mm_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, `product_zy`) is `scaled_mm` at the same config whose epilogue also
 writes `int8_exact`'s z/y records from the same int32 accumulator: the y it computes once is both the served y and the
@@ -42,6 +43,7 @@ from triton.language.extra import libdevice
 
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
+from verity_vllm.engine.profiles.int8_quant_plans import QUANT_PLANS
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -319,13 +321,6 @@ def exactlin_scaled_mm_zy_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_p
 
 def quant_warps(k: int) -> int:
     return 16
-
-
-# Per architecture and K: (M floor, num_warps, rows a program), ksweep.py --quant-only's gated winners over 16 warps a row;
-# the quantizer is ALU-bound on its per-element division, so fewer warps a row win once M fills the SMs.
-QUANT_PLANS: dict[str, dict[int, tuple[tuple[int, int, int], ...]]] = {
-    "sm_90": {2048: ((2048, 4, 1), (1024, 8, 1)), 4096: ((1024, 8, 1),), 8192: ((1024, 8, 1),)},
-}
 
 
 def quant_plan(m: int, k: int, sm: str | None = None) -> tuple[int, int]:

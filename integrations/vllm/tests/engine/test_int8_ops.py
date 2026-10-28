@@ -86,7 +86,7 @@ def test_the_cuda_kernels_are_the_torch_bodies(m, k, n):
 
 @cuda
 def test_every_quantizer_plan_is_the_torch_body():
-    """Each `int8_fused.QUANT_PLANS` plan, forced on this device and as `row_quant` picks it, at its M floor and one row
+    """Each `profiles.int8_quant_plans.QUANT_PLANS` plan, forced on this device and as `row_quant` picks it, at its M floor and one row
     past it (a partial block of rows a program), on random rows with a zero row, a tiny row and a spike: xq and s_a bit
     for bit the CPU torch body's, and the kernel's PTX passes `ptx_check`.  A K's first plan whose floor M reaches wins,
     else 16 warps a row."""
