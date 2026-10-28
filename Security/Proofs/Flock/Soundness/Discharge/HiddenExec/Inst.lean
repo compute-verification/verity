@@ -55,7 +55,6 @@ theorem wiredDelta_out {tags : Tags} {st : Stmt} (Lf : FlockSoundness.Layout (Hi
     (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hrows : Hidden.Any.OutRowsP st.c)
     (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray) : WiredDelta st := by
   intro n g i o s hn hsha hhm hg hi hf j
-  have P : ParseFacts tags st.c := F.parse
   have C : CheckFacts st.c := F.check
   have hflat := delta_wired Lf F hn hsha hhm hg hi hf j
   obtain ⟨ho, -⟩ := feed_some hf
