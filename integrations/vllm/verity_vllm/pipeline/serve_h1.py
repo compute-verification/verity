@@ -409,7 +409,8 @@ class H1Windows:
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
         self.closer, self.clock = closer, clock
-        self.draws = draws if draws is not None and DRAWER in draws.protocols else None
+        self.draws: Any = None
+        self.drawing(draws)
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
         self.layers = PHK.layers(model, pouw.linear_types())
@@ -444,8 +445,8 @@ class H1Windows:
         return {"entry": ENTRY, "rows": self.rows, "steps": self.steps, "program": self.digest,
                 "weights_root": self.weights.root().hex(), "weights_key": "local", **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
-                "release": "on the loop" if self.closer is None else "off the loop",
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
+                "release": "on the loop" if self.closer is None else "off the loop",
                 "linears": len(self.layers), "config": dict(self.config)}
 
     def open(self, window: int) -> None:
@@ -543,6 +544,10 @@ class H1Windows:
                 with self._lock:
                     self.releasing -= 1
 
+    def drawing(self, draws: Any) -> None:
+        """Put each window's draw into ``draws`` (`serve_release.Draws`) from now on, when it waits for `DRAWER`'s."""
+        self.draws = draws if draws is not None and DRAWER in draws.protocols else None
+
     def drawn(self, window: int, run: Any, held: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
         """Window ``window``'s draw put into ``draws`` under `DRAWER` once its draw coin is open: the units its coin draws
         (`drawn_units`, at `draw_of`'s K and stream) and the Commit's values they open (`drawn_reads`). Its record for the
@@ -637,17 +642,15 @@ class H1Windows:
                 "releasing": releasing, "unused": unused[:20]}
 
 
-def arm_of(opts: Any, llm: Any, com: Any, out: Path, draws: Any = None) -> H1Windows | None:
+def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
     """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
     ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` and its
-    release on a `worker` of its own, which puts its draw into ``draws`` (``--release-after pouw``)."""
+    release on a `worker` of its own."""
     if not opts.protocols:
         return None
     return H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                     config=config_of(opts.protocols_config), sessions=sessions_of(opts), closer=worker("h1-release"),
-                     draws=draws)
+                     config=config_of(opts.protocols_config), sessions=sessions_of(opts), closer=worker("h1-release"))
 
 
-__all__ = ["AT", "DRAWER", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "MARGIN", "OWN", "POLLS", "SCHEME",
-           "SESSIONED", "arm_of", "config_of", "drawn_reads", "drawn_units", "listening", "refusal", "sessions_of", "units",
-           "worker"]
+__all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "MARGIN", "OWN", "POLLS", "SCHEME", "SESSIONED",
+           "arm_of", "config_of", "listening", "refusal", "sessions_of", "units", "worker"]
