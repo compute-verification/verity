@@ -1,4 +1,4 @@
-"""``attention.bf16.v1`` -- the *independent* relation for vLLM's FlashAttention-2 node (W11).
+"""``attention.bf16.v1`` -- the *independent* relation for vLLM's FlashAttention-2 node.
 
 ``independent_attention(node, opened_inputs) -> bytes`` predicts the committed BF16 bytes of one
 attention output row (all ``num_heads`` heads x ``head_size``) at position ``t`` from the opened
@@ -30,68 +30,7 @@ import numpy as np
 
 from verity.ml.circuits.ops import mufu
 from verity.ml.definitions.numerics import fa2_model as FA
-
-try:  # share W4b's node adaptation + error base when its module imports (it needs veritor.core.silicon, Python >= 3.12)
-    from verity.ml.definitions.numerics import gemm_relation as _R4
-
-    GemmRelationError = _R4.GemmRelationError
-    _words, _node_of, _extra, _const, _arg_cols = _R4._words, _R4._node_of, _R4._extra, _R4._const, _R4._arg_cols
-except Exception:  # noqa: BLE001  -- e.g. the pod's Python 3.11: the same helpers, copied verbatim from relations.py
-    _R4 = None
-
-    class GemmRelationError(ValueError):  # type: ignore[no-redef]
-        """Inputs the model cannot be applied to (dtype, shape, unresolved kernel)."""
-
-    def _words(value: Any) -> np.ndarray:
-        if isinstance(value, np.ndarray):
-            if value.dtype == np.uint16:
-                return value.reshape(-1)
-            if value.dtype == np.int16:
-                return value.view(np.uint16).reshape(-1)
-            raise GemmRelationError(f"numpy opening must be uint16 words, got {value.dtype}")
-        if hasattr(value, "data") and hasattr(value, "dtype") and hasattr(value, "shape"):  # W2 Value
-            if str(value.dtype) not in ("bfloat16", "torch.bfloat16"):
-                raise GemmRelationError(f"{getattr(value, 'canonical_id', '?')}: expected bfloat16, got {value.dtype}")
-            return np.frombuffer(value.data, dtype="<u2")
-        if hasattr(value, "array") and hasattr(value, "dtype"):
-            if str(value.dtype) not in ("bfloat16", "torch.bfloat16"):
-                raise GemmRelationError(f"{getattr(value, 'canonical_id', '?')}: expected bfloat16, got {value.dtype}")
-            return np.ascontiguousarray(value.array()).view(np.uint16).reshape(-1)
-        if isinstance(value, (bytes, bytearray, memoryview)):
-            return np.frombuffer(value, dtype="<u2")
-        raise GemmRelationError(f"cannot read an opening of type {type(value).__name__}")
-
-    def _node_of(node_or_inst: Any) -> Any:
-        return getattr(node_or_inst, "node", node_or_inst)
-
-    def _extra(node: Any) -> Mapping[str, Any]:
-        ex = getattr(node, "extra", None)
-        if isinstance(ex, Mapping):
-            return ex
-        if isinstance(node, Mapping):
-            ex = node.get("extra")
-            if isinstance(ex, Mapping):
-                return ex
-        return {}
-
-    def _const(node: Any, inputs: Mapping[str, Any], name: str) -> Any:
-        v = inputs.get(name)
-        if v is not None and not hasattr(v, "array"):
-            if isinstance(v, Mapping) and "const" in v:
-                v = v["const"]
-            return v
-        consts = _extra(node).get("consts")
-        if isinstance(consts, Mapping) and name in consts:
-            return consts[name]
-        if isinstance(node, Mapping):
-            attrs = node.get("attrs") or node.get("attributes") or {}
-            return attrs.get(name)
-        return None
-
-    def _arg_cols(node: Any, name: str) -> tuple[int, int] | None:
-        cols = (_extra(node).get("arg_cols") or {}).get(name)
-        return (int(cols[0]), int(cols[1])) if cols else None
-
+from verity.ml.definitions.numerics.gemm_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
 
 MODEL_VERSION = "fa2-sm8x-hdim128-bf16.v1"
 TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin

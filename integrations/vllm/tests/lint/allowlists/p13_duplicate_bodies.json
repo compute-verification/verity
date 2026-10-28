@@ -3,10 +3,6 @@
   "entries": [
     {"file": "verity_vllm/program/frontend/rules/profile.py", "kind": "duplicate-body", "symbol": "_row_tensor", "detail": "verity_vllm"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/operands.py", "kind": "duplicate-body", "symbol": "_row_value", "detail": "verity_vllm"},
-    {"file": "verity/ml/definitions/numerics/fa2_relation.py", "kind": "duplicate-body", "symbol": "_const", "detail": "verity_vllm"},
-    {"file": "verity/ml/definitions/numerics/fa2_relation.py", "kind": "duplicate-body", "symbol": "_words", "detail": "verity_vllm"},
-    {"file": "verity/ml/definitions/numerics/gemm_relation.py", "kind": "duplicate-body", "symbol": "_const", "detail": "verity_vllm"},
-    {"file": "verity/ml/definitions/numerics/gemm_relation.py", "kind": "duplicate-body", "symbol": "_words", "detail": "verity_vllm"},
     {"file": "verity/ml/definitions/registry/boolean_dsv4_compressor.py", "kind": "duplicate-body", "symbol": "traced", "detail": "verity_vllm"},
     {"file": "verity/ml/definitions/registry/boolean_dsv4_compressor.py", "kind": "duplicate-body", "symbol": "traced.build", "detail": "verity_vllm"},
     {"file": "verity/ml/definitions/registry/boolean_dsv4_indexer.py", "kind": "duplicate-body", "symbol": "traced", "detail": "verity_vllm"},
