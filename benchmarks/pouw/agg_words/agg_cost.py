@@ -3,11 +3,12 @@ ANDs, proving GPU-s a window at the draws the profile needs, the serve-time byte
 Every input is a cited measurement or an estimate, labelled in `INPUTS`; every output is an estimate.
 
 A group is a g_r x g_c tile of one call's cells (g = g_r g_c) and one segment of L inner indices; its word is
-W = sum f(T_s - T_(s-1)) mod 2^16 over the group's cells. A proof block is one group: g L MACs on the noised operands, f
-and the sum, and the openings of the g_r A rows, g_c B rows and the word's row, at C-Flock's 81,402 ANDs a SHA-512
-compression. Per-cell (g = 1) is Dither's block. Serve-time hashing is priced at GD-HASH's measured cost a byte beside the
-GEMM (no free share), scaled to the word row's size, and also, for comparison, at p1a-levers' free-share model. J is
-against the brief's stock step; `cap_knob` gives the best g and tile at each block cap 2^26..2^30."""
+W = sum f(T_s - T_(s-1)) mod 2^16 over the group's cells. A segment s < S's proof block is one group: g L MACs on the
+noised operands, f and the sum, and the openings of the g_r A rows, g_c B rows and the word's row, at C-Flock's 81,402
+ANDs a SHA-512 compression. The s = S block also checks O (see `block`), and the cap applies to the larger of the two.
+Per-cell (g = 1) is Dither's blocks. Serve-time hashing is priced at GD-HASH's measured cost a byte beside the GEMM (no
+free share), scaled to the word row's size, and also, for comparison, at p1a-levers' free-share model. J is against the
+brief's stock step; `cap_knob` gives the best g and tile at each block cap 2^26..2^30."""
 from __future__ import annotations
 
 import json
@@ -46,6 +47,9 @@ INPUTS = {
     "cap_padded": (2 ** 26, "the same with compose's power-of-two padding, k_pad 1 (note:compute-research/20261028T1915Z-report-gd-model)"),
     "sha512_ands": (81_402, "C-Flock's SHA-512 circuit, rows a compression, 1.40x optimize.SHA512_ANDS's 58,120 (inbox 20:00Z, "
                             "note:compute-research/20261028T1938Z-report-gd-sis); hm96's hiding part is two of them"),
+    "o_row": (16_384, "O's row in Dither's value root: 16 KiB hm96 rows of 4,096 u32 (dither PROTOCOL, the value root's layout)"),
+    "c_O": (2.0, "estimate: the s = S block's O check over K at 32 bits and the binding identity's whole-row dots, in "
+                 "noised-MAC equivalents a cell per inner index"),
     "f_instr_per_cell": (19, "mix4 in an epilogue: 4 x (SHF, LOP3, IMAD, LOP3) + SHF, LOP3 + IADD (estimate)"),
     "int_ops_per_s": (132 * 64 * 1.769e9, "H200 INT32 lanes: 132 SMs x 64 a clock at 1,769 MHz (estimate; 2x if IMAD on FMA)"),
 }
@@ -68,15 +72,32 @@ def tile(g: int, cA: float, cB: float) -> tuple[int, int]:
 
 
 def block(g: int, L: int, K: int, a_row: int, b_row: int | None, w_row: int, per_mac: float) -> dict:
+    """A group's two proof blocks, Dither's segments s < S and s = S, and their mean over a cell's S segments (the draws
+    taken uniform over segments). Per-cell (g = 1) is Dither's: its s = S block opens the whole rows, O's row and
+    T_(S-1)'s, and checks segment S and O. An aggregated group keeps no T_(S-1) a cell, so its s = S block recomputes
+    every segment over the whole K and checks the S - 1 words and O."""
+    S = ceil(K / L)
     cA = row_ands(a_row)
     cB = 0 if b_row is None else row_ands(b_row)
     gr, gc = tile(g, cA, cB) if g > 1 else (1, 1)
-    macs = g * L
-    parts = {"macs": macs * per_mac, "f_and_sum": (g * (V["f_ands"] + V["sum_ands_per_word"]) if g > 1 else 0),
-             "open_A": gr * cA, "open_B": gc * cB, "open_word": row_ands(w_row)}
-    total = sum(parts.values()) if per_mac == V["ands_per_mac"] else macs * per_mac + parts["f_and_sum"]
-    return {"g": g, "tile": [gr, gc], "L": L, "K": K, "w_row": w_row, "block_macs": macs, "parts": parts, "ands": total,
-            "fits_2^27": total <= V["cap"], "fits_2^26": total <= V["cap_padded"]}
+    fsum = g * (V["f_ands"] + V["sum_ands_per_word"]) if g > 1 else 0
+    word_rows = 1 if g > 1 else (1 + 2 * (S - 2)) / (S - 1) if S > 1 else 0
+    inner = {"macs": g * L * per_mac, "f_and_sum": fsum, "open_A": gr * cA, "open_B": gc * cB,
+             "open_word": word_rows * row_ands(w_row)}
+    last_macs = g * (L if g == 1 else K) + g * V["c_O"] * K
+    last = {"macs": last_macs * per_mac, "f_and_sum": fsum * (S - 1), "open_A": gr * cA, "open_B": gc * cB,
+            "open_O": row_ands(V["o_row"]), "open_word": row_ands(w_row) if S > 1 else 0}
+    if per_mac == V["ands_per_mac"]:
+        a_in, a_last = sum(inner.values()), sum(last.values())
+    else:
+        a_in, a_last = inner["macs"] + inner["f_and_sum"], last["macs"] + last["f_and_sum"]
+    if S == 1:
+        a_in = a_last
+    mean = ((S - 1) * a_in + a_last) / S
+    top = max(a_in, a_last)
+    return {"g": g, "tile": [gr, gc], "L": L, "K": K, "S": S, "w_row": w_row, "block_macs": g * L,
+            "parts": inner, "parts_last": last, "ands_inner": a_in, "ands_last": a_last, "ands": mean, "ands_max": top,
+            "fits_2^27": top <= V["cap"], "fits_2^26": top <= V["cap_padded"]}
 
 
 def window(g: int, L: int, K: int, steps: float, blk: dict, words_per_cell: float, cells: float) -> dict:
@@ -99,7 +120,7 @@ def main(out: str) -> None:
     K, L = 2048, 1024
     cells = V["cells_k2048_T8192"]
     res = {"inputs": {k: {"value": v, "source": s} for k, (v, s) in INPUTS.items()}, "rows": [], "breakeven": {}}
-    defaults = {"a_row": 4096, "b_row": 2048, "w_row": 1024}
+    defaults = {"a_row": 4096, "b_row": 2048, "w_row": 16384}
     for g in (1, 8, 16, 32, 64, 128, 256, 512):
         for per_mac_key in ("ands_per_mac", "ands_per_mac_cal"):
             b = block(g, L, K, defaults["a_row"], defaults["b_row"], defaults["w_row"], V[per_mac_key])
@@ -109,7 +130,7 @@ def main(out: str) -> None:
     for per_mac_key in ("ands_per_mac", "ands_per_mac_cal"):
         b1 = block(1, L, K, **defaults, per_mac=V[per_mac_key])
         w1 = window(1, L, K, 1, b1, 1, cells)
-        for g in (128, 256):
+        for g in (8, 32, 64):
             bg = block(g, L, K, **defaults, per_mac=V[per_mac_key])
             wg = window(g, L, K, 1, bg, 1, cells)
             for f_key in ("J_serve_hidden_f", "J_serve_unhidden_f"):
@@ -123,11 +144,11 @@ def main(out: str) -> None:
         for b_row in (2048, 16384, None):
             key = f"A{a_row}_B{b_row or 'public'}"
             b1 = block(1, L, K, a_row, b_row, defaults["w_row"], V["ands_per_mac"])
-            bg = block(128, L, K, a_row, b_row, defaults["w_row"], V["ands_per_mac"])
-            w1, wg = window(1, L, K, 1, b1, 1, cells), window(128, L, K, 1, bg, 1, cells)
+            bg = block(32, L, K, a_row, b_row, defaults["w_row"], V["ands_per_mac"])
+            w1, wg = window(1, L, K, 1, b1, 1, cells), window(32, L, K, 1, bg, 1, cells)
             d_serve = w1["J_serve_hidden_f"] - wg["J_serve_hidden_f"]
             res["row_sensitivity"][key] = {
-                "per_cell_ands": b1["ands"], "g128_ands": bg["ands"], "g128_tile": bg["tile"], "g128_fits": bg["fits_2^27"],
+                "per_cell_ands": b1["ands"], "g32_ands": bg["ands"], "g32_tile": bg["tile"], "g32_fits": bg["fits_2^27"],
                 "ratio": bg["ands"] / b1["ands"], "prove_s": [w1["prove_GPU_s_a_window"], wg["prove_GPU_s_a_window"]],
                 "breakeven_steps_f_hidden": (wg["J_prove"] - w1["J_prove"]) / d_serve}
             print(key, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in res["row_sensitivity"][key].items()})
@@ -160,14 +181,14 @@ def main(out: str) -> None:
     res["cap_knob"] = {}
     for k_log in (26, 27, 28, 29, 30):
         row = {"g_max": max(1 << k for k in range(0, 16)
-                            if block(1 << k, L, K, **defaults, per_mac=V["ands_per_mac"])["ands"] <= 2 ** k_log)}
+                            if block(1 << k, L, K, **defaults, per_mac=V["ands_per_mac"])["ands_max"] <= 2 ** k_log)}
         for steps in (1, 1000, 10_000, 100_000, 1_000_000):
             cands = []
             for k in range(0, 16):
                 g = 1 << k
                 b = block(g, L, K, **defaults, per_mac=V["ands_per_mac"])
                 w = window(g, L, K, steps, b, 1, cells)
-                cands.append((w["J_serve_hidden_f"] + w["J_prove"], g, b["tile"], b["ands"] <= 2 ** k_log))
+                cands.append((w["J_serve_hidden_f"] + w["J_prove"], g, b["tile"], b["ands_max"] <= 2 ** k_log))
             free = min(cands)
             capped = min(c for c in cands if c[3])
             row[steps] = {"g_opt": capped[1], "tile": capped[2], "J": capped[0], "g_opt_uncapped": free[1],
@@ -190,6 +211,16 @@ def main(out: str) -> None:
             entry[steps] = {"g_opt": g, "J": J, "J_serve": js, "J_prove": jp}
         res["w_row_sensitivity"][w_row] = entry
         print("w_row", w_row, entry)
+    saved = V["c_O"]
+    res["c_O_sensitivity"] = {}
+    for c in (0.0, 1.0, 2.0, 3.0):
+        V["c_O"] = c
+        fits = {cap: max(1 << k for k in range(0, 12)
+                         if block(1 << k, L, K, **defaults, per_mac=V["ands_per_mac"])["ands_max"] <= 2 ** cap)
+                for cap in (26, 27, 28)}
+        res["c_O_sensitivity"][c] = {"g_max": fits, "g1_mean": block(1, L, K, **defaults, per_mac=V["ands_per_mac"])["ands"]}
+    V["c_O"] = saved
+    print("c_O", res["c_O_sensitivity"])
     saved = V["sha512_ands"]
     res["sha_sensitivity"] = {}
     for sha in (58_120, 81_402):
@@ -198,18 +229,15 @@ def main(out: str) -> None:
         res["sha_sensitivity"][sha] = {"g1_ands": b1["ands"], "g128_ands": b128["ands"], "g128_tile": b128["tile"]}
     V["sha512_ands"] = saved
     print("sha", res["sha_sensitivity"])
-    res["g_min_bytes"] = {S: math.ceil(cells * 2 * (S - 1) / (V["free_pouw_GB_at_80"] * 1e9)) for S in (2, 4, 8)}
-    res["g_max_cap"] = {f"L{L_}": {k: int(V["cap"] // (L_ * V[k])) for k in ("ands_per_mac", "ands_per_mac_cal")}
-                        for L_ in (256, 512, 1024, 2048)}
     with open(out, "w") as fh:
         json.dump(res, fh, indent=1)
     for r in res["rows"]:
         if r["steps_a_window"] in (1, 10000):
-            print(f"g {r['g']:4d} {r['per_mac']:16s} tile {r['tile']} ands {r['ands'] / 1e6:7.2f}M fits27 {r['fits_2^27']!s:5s} "
+            print(f"g {r['g']:4d} {r['per_mac']:16s} tile {r['tile']} ands {r['ands'] / 1e6:7.2f}M last {r['ands_last'] / 1e6:7.2f}M fits27 {r['fits_2^27']!s:5s} "
                   f"fits26 {r['fits_2^26']!s:5s} "
                   f"GB {r['pouw_GB_a_step']:.3f} exp {r['hash_exposed_ms']:.2f}ms f {r['f_epilogue_ms_if_unhidden']:.2f}ms "
                   f"prove {r['prove_GPU_s_a_window']:.1f}s steps {r['steps_a_window']} J_prove {r['J_prove']:.3g}")
-    print(json.dumps({k: res[k] for k in ("breakeven", "g_min_bytes", "g_max_cap")}, indent=1))
+    print(json.dumps(res["breakeven"], indent=1))
 
 
 if __name__ == "__main__":
