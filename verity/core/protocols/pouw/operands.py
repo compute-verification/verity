@@ -8,7 +8,7 @@ reads of them at public positions (`interface.Read`), so the window commits each
 Lean's registered reads open it against the value's root.
 
 The registration's window names them (`block`, its ``activations``: ``{program, values: {value: entry}}``), so they are
-fixed before the draw, and their root X (`root`) before the window's salt: the salt is released against X (RT-LEAN L22).
+fixed before the draw, and their root X (`root`) before the window's salt: the salt is released against X.
 The verifier holds each entry to the domain its program, value, rows and the window's context make (`held`), and reads
 the tiles' rows against those entries alone.
 
@@ -28,7 +28,7 @@ TAG = CC.VALUES_TAG
 KEY = "activations"
 #: what a window's operands don't establish yet, named wherever a record reports them (`stated`)
 GAPS = ("the A rows are not proved to be the served activations x (an x row is one token's codes, an A row R tokens' "
-        "K/2 codes): a gather, CIR-100",
+        "K/2 codes): a gather",
         "the B rows are not proved to be the registered weights' rows")
 
 
