@@ -200,10 +200,10 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
   `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
   `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `MAX_RTT_ALLOWANCE_NS`
-  are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, and its salt, key prefix, tree and derivations are its own.
-  `wire.py` beside it is `p2-audit-wire/v4`
+  are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its salt, key prefix, leaves and derivations are its own, and
+  the tree over its leaves is `verifier.py`'s (`MerkleTree`, `verify_path`). `wire.py` beside it is `p2-audit-wire/v4`
   (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
-  `verify_path`, `parse_envelope`, `verify_audit`, `parse_final`).
+  `parse_envelope`, `verify_audit`, `parse_final`).
 - **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
   `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
   over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not

@@ -3,7 +3,7 @@ reference the harness's GPU kernels are gated against, and the one the wire veri
 (`vectors.py`) are built on. Its maps and key streams are the registered scheme's
 (`verity.core.protocols.pous.schemes.p2`, held to `PousCheck.P2` by its difftest), under the reference's names and with
 its refusals of non-canonical inputs; its own are its setup framing, `Params` with its refusals (which `PousCheck.Wire`
-mirrors), the verification tree and the audit's derivations.
+mirrors), v4's leaves and the audit's derivations.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
 W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
@@ -19,9 +19,9 @@ W commitment, the verification tree, the epoch id and the keys, which are counte
   counter-mode SHA-512 over a prefix of whole 128-byte blocks; `t` is rejection-sampled below `p`).
 - `d`, `rho`, `sigma`, `encode`, `decode`: the maps on `schemes.p2`'s field, `E_j(m) = ρ(σ_K(ρ(m + t)))` and
   `D_j(c) = d(σ_K(d(c))) − t`. They and the keys read only `w`, `c0` and `p`, so they take a `schemes.p2.P2Params` too.
-- `manifest`, `w_commitment`, `row_digest`, `leaf`, `node`, `root`, `epoch_id`, `audit_key`, `round_key`: the setup
-  commitment, the RFC 6962 verification tree over 0x00-tagged leaves of each block's `sha512/row/v2` digest, and the
-  audit's challenge derivation (mode 0 and mode 1).
+- `manifest`, `w_commitment`, `row_digest`, `leaf`, `epoch_id`, `audit_key`, `round_key`: the setup commitment, the
+  0x00-tagged leaf of each block's `sha512/row/v2` digest, and the audit's challenge derivation (mode 0 and mode 1). The
+  verification tree over the leaves is PoUS's (`verity.core.protocols.pous.verifier`: `MerkleTree`, `verify_path`).
 """
 from __future__ import annotations
 
@@ -205,34 +205,6 @@ def row_digest(data: bytes) -> bytes:
 def leaf(salt: bytes, segment: int, block: int, data: bytes) -> bytes:
     """`SHA512(0x00 ‖ setup salt ‖ u64be(segment) ‖ u16be(local block) ‖ row_digest(block))`: 107 bytes, one compression."""
     return hashlib.sha512(b"\x00" + salt + segment.to_bytes(8, "big") + block.to_bytes(2, "big") + row_digest(data)).digest()
-
-
-def node(left: bytes, right: bytes) -> bytes:
-    return hashlib.sha512(b"\x01" + left + right).digest()
-
-
-def root(leaves: list[bytes]) -> bytes:
-    """The RFC 6962 tree's root: split at the largest power of two below the count, nodes `SHA512(0x01 ‖ l ‖ r)`."""
-    if not leaves:
-        raise ValueError("a verification tree has at least one leaf")
-
-    def mth(lo: int, hi: int) -> bytes:
-        if hi - lo == 1:
-            return leaves[lo]
-        k = 1 << ((hi - lo - 1).bit_length() - 1)
-        return node(mth(lo, lo + k), mth(lo + k, hi))
-
-    return mth(0, len(leaves))
-
-
-def path(leaves: list[bytes], index: int) -> list[bytes]:
-    """Leaf `index`'s RFC 9162 inclusion path, siblings from the leaf toward the root."""
-    if len(leaves) == 1:
-        return []
-    k = 1 << ((len(leaves) - 1).bit_length() - 1)
-    if index < k:
-        return path(leaves[:k], index) + [root(leaves[k:])]
-    return path(leaves[k:], index - k) + [root(leaves[:k])]
 
 
 def epoch_id(params: Params, model: bytes, salt: bytes, verification_root: bytes) -> bytes:
