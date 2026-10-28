@@ -10,7 +10,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/pous/p2/PROTOCOL.md", "verity/core/protocols/interface",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
           # the registered site the wipe's tiers are read from, and the canonical JSON its digests take
           "verity/core/site/__init__.py", "verity/core/wire",
           "verity/core/protocols/bandwidth",
