@@ -1,4 +1,4 @@
-// CE7: the SWAR branch-select kernel of note lanes/compute-accounting *-draft-guarded-round5 (ce7_sim.py), on sm_120.
+// CE7: the SWAR branch-select kernel (ce7_sim.py), on sm_120.
 //
 // For X, Y in {+-1}^{M x K} x {+-1}^{K x N}, compute C = X * Y (int32) exactly. CE7 reads X as a guard: with
 // Y' = Y + 1 in {0, 2} packed four columns a 32-bit word (8-bit fields, biased at 128), one warp-uniform branch on a
