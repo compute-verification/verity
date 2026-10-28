@@ -349,16 +349,15 @@ class Builder:
                 g += 1
         assert g == prog.gates
         circuit = prog.circuit
-        self._program = (n, prog, index, circuit[0:circuit.size])
+        self._program = (n, prog, index, list(circuit[0:circuit.size]))  # the gates, resolved once for every run
         return prog, index
 
     def trace(self, x: dict[Hashable, int]) -> Trace:
         """The canonical evaluator's trace on input `x` (slot -> integer): every gate's encoding, by Program gate index."""
         prog, index = self.program()
         assert self._program is not None
-        sel = self._program[3]
         t: Trace = {index[i]: enc(x[slot]) for i, slot in self.slots.items()}
-        return evaluate_region(prog.circuit, sel, t)
+        return evaluate_region(prog.circuit, self._program[3], t)
 
     def values(self, x: dict[Hashable, int]) -> list[int]:
         """`values`: each gate's value on `x`, read off the canonical evaluator's trace."""

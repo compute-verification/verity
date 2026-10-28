@@ -57,7 +57,7 @@ def check_costs(b, n: int, rounds: int) -> None:
     assert sum(G.units(b, i, fixed=True, dyn=dyn) for i in gathers) == want
 
 
-@pytest.mark.parametrize("rounds", [2, 3])
+@pytest.mark.parametrize("rounds", [pytest.param(2, marks=pytest.mark.slow), 3])
 def test_codec_rows_at_n8(rounds):
     rows = [r for r in CODEC_ROWS if r[0] == 8 and len(r[2]) == rounds]
     words = sorted({r[5] for r in rows})
@@ -77,10 +77,12 @@ WORDS8 = [1, 2, 3, 7, 100, 200, 249, 250]
 
 @pytest.fixture(scope="module")
 def block8():
-    """The eight-word block at ⟨8, 5⟩, three rounds (553k gates, about 4 s to build), shared by the tests that read it."""
+    """The eight-word block at ⟨8, 5⟩, three rounds (553k gates, about 3 s to build and 4 s more for its Program), shared by
+    the tests that read it."""
     return BC.encode_block(8, 5, 3, WORDS8)
 
 
+@pytest.mark.slow
 def test_units_do_not_grow_with_the_block(block8):
     """One word or eight: the circuit reads the key once, and word `i`'s tweak is `i·t_1 mod p`, so the units stay
     `8·(k + 2)·n/8` = 40 at n = 8, k = 3, and the eight words are right on every draw tried."""
