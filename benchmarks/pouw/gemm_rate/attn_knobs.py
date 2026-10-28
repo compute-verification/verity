@@ -47,8 +47,8 @@ ARMS = ("served", "served-eager", "kattn", "sched", "contig", "contig-sched", "p
 BLOCK = 16
 
 
-def i32(xs) -> torch.Tensor:
-    return torch.tensor(list(xs), dtype=torch.int32, device="cuda")
+def i32(xs, device="cuda") -> torch.Tensor:
+    return torch.tensor(list(xs), dtype=torch.int32, device=device)
 
 
 def paged(k: torch.Tensor, v: torch.Tensor, lens: list[int], block: int, interleaved: bool):
@@ -71,7 +71,7 @@ def paged(k: torch.Tensor, v: torch.Tensor, lens: list[int], block: int, interle
             vc[b0 + j, :r] = v[o + j * block:o + j * block + r]
         rows.append(list(range(b0, b0 + nbi)) + [0] * (max(nbs) - nbi))
         b0, o = b0 + nbi, o + n
-    return kc, vc, i32(sum(rows, [])).view(len(lens), -1)
+    return kc, vc, i32(sum(rows, []), k.device).view(len(lens), -1)
 
 
 class Step:
