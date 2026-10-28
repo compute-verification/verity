@@ -16,13 +16,20 @@ DIR``).
    adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest run
    doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
-   commitment to ``W``, the salt drawn after it from the node's OS, ``C*`` encoded on the card (``libp2v1.so``,
-   ``--p2-lib``), the memory challenger's table and the root. Setup's own inputs are kept as it sent them, for the tie.
+   commitment to ``W``, then the salt, which the memory challenger draws after it from its own host's OS and logs under
+   the window's binding (`binding`; `challenger_party.salt`, the gate's ``challenger_party`` verb on a salt request),
+   ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory challenger's table and the root. Setup's own
+   inputs are kept as it sent them, for the tie. A challenger that draws no salt leaves the period undecided.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
-   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_party.session`).
+   indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_party.session`). The request names the window's
+   binding and setup's published outputs; the challenger refuses it unless they carry the salt it logged and the
+   commitment it was drawn after, and runs one session a binding, under the id derived from them
+   (`challenger_party.session_id`).
 4. **The verdict**: the run protocol's case (`period.case`: setup's published outputs, the session, the table and setup's
-   own inputs) and its answer on that case's bytes (`served_case.pous_answer`, `period.answer`): the tie, the run's
+   own inputs) under the session id the verdict derives itself from the window's binding and what setup published,
+   never the report's (a report of a session under any other id is a reject), and its answer on that case's bytes
+   (`served_case.pous_answer`, `period.answer`): the tie, the run's
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
    an accepted run certifies (`period.certify`): at `ROUNDS` challenges, ``⌊ρ·|C|⌋`` bits at ``2^-20``
    (`p2.wide320_certificate`); at 105, at ``1% + 2^-128``. The check takes about 2.3 minutes at the registered point at
@@ -30,12 +37,13 @@ DIR``).
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
-   setup's published outputs, the session, the trusted key, the table, and the case with the run protocol's own answer
-   on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to ``--private`` (by default
+   setup's published outputs, the session and its id, the rounds' latencies, the trusted key, the table, and the case with
+   the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to
+   ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
    placement and the weights' public properties: their model, count and size.
 
-Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes, timings and the rounds' latencies) and prints one ``POUS`` line.
+Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes and the phases' timings) and prints one ``POUS`` line.
 Weights that aren't the pin's are a reject, and a session the challenger's side couldn't complete is undecided, each with
 its reason. Exit 0 on accept, 1 on any other answer, 2 when no answer could be made (no serve.json, no snapshot).
 """
@@ -45,7 +53,6 @@ import argparse
 import hashlib
 import json
 import os
-import secrets
 import shlex
 import socket
 import statistics
@@ -60,6 +67,7 @@ from typing import Any
 
 import torch
 
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
@@ -143,9 +151,20 @@ def _linear_types() -> tuple[type, ...]:
     return (Linear,)
 
 
-def _salt_source(commitment: bytes) -> bytes:
-    """The salt's source, drawn from this node's OS once the commitment exists."""
-    return secrets.token_bytes(32)
+class NoSalt(Exception):
+    """The memory challenger drew no salt for the window's setup."""
+
+
+def _salt_source(party: Side, audit: bytes):
+    """The salt's source: drawn by the memory challenger on ``party`` once the commitment exists, and logged there under
+    the window's binding ``audit`` (`challenger_party.salt`)."""
+
+    def source(commitment: bytes) -> bytes:
+        try:
+            return CP.salt(party, audit, commitment)
+        except (OSError, RuntimeError, ValueError) as e:
+            raise NoSalt(f"{type(e).__name__}: {e}") from e
+    return source
 
 
 @dataclass(frozen=True)
@@ -261,7 +280,7 @@ def _private(directory: Path, docs: Mapping[str, Any], digests: bytes) -> None:
 
 
 def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
-        node: str | None = None, party: CP.Party | None = None, trusted_sha512: str = TRUSTED_SHA512,
+        node: str | None = None, party: Side | None = None, trusted_sha512: str = TRUSTED_SHA512,
         private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS) -> dict[str, Any]:
     """The piece (module docstring): its answer, written with ``pous.json`` to ``out``; `Refusal` when none can be made.
@@ -277,8 +296,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     if not snapshot.is_dir():
         raise Refusal(f"no snapshot of {repo}@{rev} under {hf_home}")
     node = node or socket.gethostname()
-    party = party or CP.Party(CHALLENGER_HOST, tuple(os.path.expanduser(a) for a in CHALLENGER_COMMAND),
-                              _address(CHALLENGER_ADDRESS))
+    party = party or Side(CHALLENGER_HOST, tuple(os.path.expanduser(a) for a in CHALLENGER_COMMAND),
+                          _address(CHALLENGER_ADDRESS))
     private = private or serve_dir / "private" / "pous" / f"w{window}"
     out.mkdir(parents=True, exist_ok=True)
     reg_file = serve_dir / "weights_registration.json"
@@ -312,10 +331,14 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     types = pous.linear_types
     pous.linear_types = _linear_types
     try:
-        ctx = PO.Context(stage="serve", enabled=PO.parse([ENTRY]),
-                         settings={"pous": {"salt_source": _salt_source, "p2_lib": p2_lib, "experimental": True}})
+        ctx = PO.Context(stage="serve", enabled=PO.parse([ENTRY]), settings={"pous": {
+            "salt_source": _salt_source(party, bind), "p2_lib": p2_lib, "experimental": True}})
         t = time.monotonic()
-        comp = PO.install(model, ctx)
+        try:
+            comp = PO.install(model, ctx)
+        except NoSalt as e:
+            return done(_no("undecided", f"the memory challenger on {party.host} drew no salt for the setup: {e}"[:1000],
+                            None, protocol))
         install_s = round(time.monotonic() - t, 3)
         try:
             opt = comp.get("pous")
@@ -328,18 +351,24 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                        "share": str(Fraction(details["tensor_bytes"], total))}
             summary |= {"load_s": load_s, "install_s": install_s, "weights": weights, "outside": outside,
                         "details": details}
+            published = s.published()
+            sid = CP.session_id(bind, s.commitment, s.salt)
             t = time.monotonic()
             try:
-                rep = CP.session(party, CP.request_of(node, point, s.root), opt.prover(()))
-                key, sid = bytes.fromhex(rep["public_key"]), bytes.fromhex(rep["session_id"])
+                rep = CP.session(party, CP.request_of(node, point, s.root, audit=bind, published=published),
+                                 opt.prover(()))
+                key = bytes.fromhex(rep["public_key"])
                 session = R.Session.from_json(rep["session"])
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
                 return done(_no("undecided", f"the memory challenger's session on {party.host} did not complete: "
                                 f"{type(e).__name__}: {e}"[:1000], None, protocol), session_s=round(time.monotonic() - t, 3))
             session_s = round(time.monotonic() - t, 3)
+            if rep.get("session_id") != sid.hex():
+                return done(_no("reject", "the memory challenger's report is of a session under another id than the one "
+                                "the window's binding and its setup fix (challenger_party.session_id)", None, protocol),
+                            session_s=session_s)
             key_sha = hashlib.sha512(key).hexdigest()
             trusted = (key,) if key_sha == trusted_sha512 else ()
-            published = s.published()
             t = time.monotonic()
             case = period.case(point, sid, trusted, published, s.digests, session,
                                period.setup_case(s.point.params, *inputs))
@@ -355,7 +384,9 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                                  "salt": opening.salt.hex()},
                 "run.json": {"answer": inner, "point": period.point_json(point), "published": published.to_json(),
                              "session": rep["session"], "session_id": sid.hex(), "trusted": [k.hex() for k in trusted],
-                             "public_key": key.hex(), "host": rep.get("host")}}, s.digests)
+                             "public_key": key.hex(), "host": rep.get("host"), "rounds_answered": rep.get("rounds"),
+                             "warmups": rep.get("warmups"), "latency": _latencies(session, point.limit_ns)}},
+                     s.digests)
             SC.write(private, case, inner)
             del case
             answer = inner | {"commitment": hidden.root.hex()}
@@ -365,14 +396,13 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                                    "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
                                    "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
                     "placement": CP.placement(node, party.host) | {
-                        "salt": f"drawn on the prover's node {node} from its OS after the commitment"},
+                        "salt": f"drawn by the memory challenger on {party.host} from its OS after the commitment, "
+                                "logged under the window's binding, with the session's id derived from both"},
                     "weights": weights | {"held": "loaded from the served snapshot on the card the window served on, "
                                                   "after its serve ended"},
                     "outside": outside, "window": window}
             return done(answer, session_s=session_s, answer_s=answer_s, key_sha512=key_sha,
-                        key_pinned=bool(trusted), reported_host=rep.get("host"), rounds_answered=rep.get("rounds"),
-                        warmups=rep.get("warmups"), latency=_latencies(session, point.limit_ns),
-                        private=str(private), public=inner["public"])
+                        key_pinned=bool(trusted), private=str(private), public=inner["public"])
         finally:
             comp.close()
     finally:
@@ -412,7 +442,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
     a = ap.parse_args(argv)
     command = tuple(shlex.split(a.challenger_command)) if a.challenger_command else CHALLENGER_COMMAND
-    party = CP.Party(a.challenger_host, tuple(os.path.expanduser(x) for x in command), _address(a.challenger_address))
+    party = Side(a.challenger_host, tuple(os.path.expanduser(x) for x in command), _address(a.challenger_address))
     try:
         answer = run(a.serve_dir, a.window, a.out, hf_home=a.hf_home, device=a.device, p2_lib=a.p2_lib, node=a.node,
                      party=party, trusted_sha512=a.trusted_sha512, private=a.private, rounds=a.rounds)
