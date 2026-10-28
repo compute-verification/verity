@@ -1,6 +1,7 @@
-"""The int8 linears' producers fused with their quantizer: on each Llama decoder layer whose linears run the plain int8 arm
-(`int8_experts.PlainGemm`), the kernel that writes a linear's input also writes its codes and scales, so the quantizer
-never reads x again:
+"""The int8 linears' producers fused with their quantizer: on each decoder layer that runs vLLM's Llama forwards
+(`LlamaDecoderLayer`'s, `LlamaAttention`'s and `LlamaMLP`'s, which hand each of these producers' outputs straight to its
+linear) and whose linears run the plain int8 arm (`int8_experts.PlainGemm`), the kernel that writes a linear's input also
+writes its codes and scales, so the quantizer never reads x again:
 
     input_layernorm, with a residual (layers 1 on)  -> self_attn.qkv_proj    `int8_fused.add_norm_quant`
     post_attention_layernorm                        -> mlp.gate_up_proj      `int8_fused.add_norm_quant`
@@ -11,8 +12,9 @@ op writes, bit for bit (`tests/engine/test_int8_producers.py`), and hands its co
 ``verity_int8::row_quant`` (`take`), whose CUDA body returns them instead of quantizing when its x is the producer's output:
 the same storage, shape, strides and dtype.  The hand-off holds that output, so no other tensor takes its memory, and the
 next ``row_quant`` of the device takes the hand-off either way.  Nothing writes a producer's output before its linear
-quantizes it (a forward hook only reads it), so its bytes are the ones the codes were made from.  The op still runs: the
-int8 source, a capture and ``observe`` see the same calls with the same values.
+quantizes it (those forwards pass it on directly, and a forward hook only reads it), so its bytes are the ones the codes
+were made from.  ``row_quant`` is still called: the int8 source, a capture and ``observe`` see the same calls with the
+same values.
 
 A producer runs vLLM's own op instead when its call isn't the served one it reproduces: a dispatch mode or a compile is
 active, a CUDA graph is capturing, the norm has no residual, vLLM's op is patched (the norm-scale tap replaces
@@ -32,8 +34,6 @@ from verity_vllm.engine import hooks
 
 ENV = "VERITY_INT8_FUSED_PRODUCERS"
 TAG = "int8_producers"
-#: the decoder layers whose forward this reads (each producer's output goes straight to its linear)
-LAYERS = ("LlamaDecoderLayer",)
 
 _HANDOFF: dict[torch.device, tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
 
@@ -94,14 +94,15 @@ def _act(act: Any, original: Any) -> Any:
 
 
 def install(model: Any) -> dict | None:
-    """Install the fused producers on `model`'s decoder layers (`LAYERS`) whose consumer linears run the plain int8 arm; a
-    record of what was installed, or None when nothing was (``VERITY_INT8_FUSED_PRODUCERS`` off, vLLM not batch invariant,
-    no such layer).  The patches carry `TAG` (`hooks.live(TAG)`)."""
+    """Install the fused producers on `model`'s decoder layers that run vLLM's Llama forwards and whose consumer linears run
+    the plain int8 arm; a record of what was installed, or None when nothing was (``VERITY_INT8_FUSED_PRODUCERS`` off, vLLM
+    not batch invariant, no such layer).  The patches carry `TAG` (`hooks.live(TAG)`)."""
     if not settings.get(ENV):
         return None
     from vllm import envs
     from vllm.model_executor.layers.activation import SiluAndMul
     from vllm.model_executor.layers.layernorm import RMSNorm
+    from vllm.model_executor.models.llama import LlamaAttention, LlamaDecoderLayer, LlamaMLP
 
     from verity_vllm.engine.int8_experts import PlainGemm
     if not envs.VLLM_BATCH_INVARIANT:
@@ -109,9 +110,10 @@ def install(model: Any) -> dict | None:
     h = hooks.Hooks(TAG)
     sites: list[tuple[Any, type, Any]] = []
     for _, layer in model.named_modules():
-        if type(layer).__name__ not in LAYERS:
-            continue
         attn, mlp = getattr(layer, "self_attn", None), getattr(layer, "mlp", None)
+        if (type(layer).forward is not LlamaDecoderLayer.forward or type(attn).forward is not LlamaAttention.forward
+                or type(mlp).forward is not LlamaMLP.forward):
+            continue
         for producer, consumer, kind in ((getattr(layer, "input_layernorm", None), getattr(attn, "qkv_proj", None), RMSNorm),
                                          (getattr(layer, "post_attention_layernorm", None), getattr(mlp, "gate_up_proj", None),
                                           RMSNorm),
@@ -137,4 +139,4 @@ def uninstall() -> None:
 
 _INSTALLED: list[hooks.Hooks] = []
 
-__all__ = ["ENV", "LAYERS", "TAG", "install", "take", "uninstall"]
+__all__ = ["ENV", "TAG", "install", "take", "uninstall"]

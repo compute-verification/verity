@@ -43,7 +43,7 @@ from triton.language.extra import libdevice
 
 from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
-from verity_vllm.engine.profiles.int8_quant_plans import QUANT_PLANS
+from verity_vllm.engine.profiles.int8_quant_plans import PRODUCER_WARPS, QUANT_PLANS
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -405,8 +405,13 @@ def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: in
                                                      BLOCK_K=triton.next_power_of_2(k), num_warps=warps, **OPTS)
 
 
-#: num_warps of the fused producers' one row a program, by K, else `quant_warps`
-FUSE_WARPS: dict[str, dict[int, int]] = {"silu": {}, "norm": {}}
+#: num_warps of a fused producer at a row width `PRODUCER_WARPS` doesn't list
+FUSE_FALLBACK = {"norm": 1, "silu": 16}
+
+
+def producer_warps(kind: str, k: int, sm: str | None = None) -> int:
+    """num_warps of the fused producer `kind` ("norm", "silu") on rows of k on `sm` (default: the current device's)."""
+    return PRODUCER_WARPS.get(sm or arch(), {}).get(kind, {}).get(k, FUSE_FALLBACK[kind])
 
 
 def silu_mul_quant(gu: torch.Tensor, h: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None):
@@ -416,7 +421,7 @@ def silu_mul_quant(gu: torch.Tensor, h: torch.Tensor, xq: torch.Tensor, s: torch
     assert gu.dtype == h.dtype == torch.bfloat16 and gu.shape == (m, 2 * i) and gu.stride(1) == 1 and h.stride(1) == 1
     assert xq.dtype == torch.int8 and xq.shape == h.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or FUSE_WARPS["silu"].get(i, quant_warps(i))
+    warps = num_warps or producer_warps("silu", i, arch(h.device.index))
     return exactlin_silu_mul_quant[(m,)](gu, h, xq, s, m, i, gu.stride(0), h.stride(0), xq.stride(0), BLOCK_M=1,
                                          BLOCK_K=triton.next_power_of_2(i), num_warps=warps, **OPTS)
 
@@ -440,7 +445,7 @@ def add_norm_quant(x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor
     assert x.stride(1) == 1 and residual.stride(1) == 1 and weight.is_contiguous()
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or FUSE_WARPS["norm"].get(h, quant_warps(h))
+    warps = num_warps or producer_warps("norm", h, arch(x.device.index))
     return exactlin_add_norm_quant[(m,)](x, residual, weight, xq, s, h, eps, x.stride(0), residual.stride(0), xq.stride(0),
                                          NT=nt, R=triton.next_power_of_2(triton.cdiv(h, nt)), num_warps=warps, **OPTS)
 

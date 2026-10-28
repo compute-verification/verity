@@ -9,14 +9,17 @@
   sweep    each fused kernel's num_warps, timed interleaved in short items; the fastest is the fused arm below.
   launch   per launch, interleaved arm by arm: the unfused pair, its two kernels alone, and the fused kernel.
   forward  per forward, the int8 producers of one Llama-3.2-1B prefill (16 layers): 31 add-norms (every input norm but layer
-           0's, every post-attention norm) and 16 silu-and-muls, each with its quantizer, unfused against fused.
+           0's, every post-attention norm) and 16 silu-and-muls, each with its quantizer, unfused against fused at the
+           engine's warps (`int8_fused.producer_warps`, which the sweep's fastest should be).
 
 Each arm is captured in a CUDA graph and replayed in items of about ITEM_MS, the arms alternating item by item (order rotated
 each rep), for at least `--sustain` seconds an arm; inputs are copied enough times to pass 3x the L2.  Reported: median
 microseconds a launch (a forward), per-item spread, SM clocks around each item, and the saving per forward.
 
     cd integrations/vllm; PY=...venv/bin/python                      # PYTHONPATH=.:../..
-    $PY tests/engine/int8_producers_gpu.py --out DIR [--ms 8192,16384,32768] [--sustain 2.0]
+    $PY tests/engine/int8_producers_gpu.py --out DIR [--ms 8192,16384,32768] [--sustain 2.0] [--shape 4096,14336,32]
+
+`--shape H,I,LAYERS` times another model's widths (Llama-3.1-8B: 4096,14336,32).
 """
 from __future__ import annotations
 
@@ -24,14 +27,14 @@ import os
 
 os.environ["VLLM_BATCH_INVARIANT"] = "1"  # read once a process by vLLM's C++ (the served stack's norm launch)
 
-import argparse  # noqa: E402
-import json  # noqa: E402
-import math  # noqa: E402
-import statistics  # noqa: E402
-import sys  # noqa: E402
-from pathlib import Path  # noqa: E402
+import argparse
+import json
+import math
+import statistics
+import sys
+from pathlib import Path
 
-import torch  # noqa: E402
+import torch
 
 H, I, LAYERS, EPS = 2048, 8192, 16, 1e-5
 NORMS, SILUS = 2 * LAYERS - 1, LAYERS
@@ -158,8 +161,9 @@ class Silu:
         return same((fh, uh), (fq, uq), (fs, us))
 
 
-def forward(norm: Norm, silu: Silu, fused: bool, nw: int | None, sw: int | None):
-    """One prefill's int8 producers: per layer its input norm (not layer 0's), its post-attention norm and its silu."""
+def forward(norm: Norm, silu: Silu, fused: bool):
+    """One prefill's int8 producers: per layer its input norm (not layer 0's), its post-attention norm and its silu, the
+    fused ones at the engine's warps."""
     from verity_vllm.engine import int8_fused as F
     x0, x1, r = norm.xs[0], norm.xs[-1], norm.rs[0]
     gu = silu.gus[0]
@@ -168,12 +172,12 @@ def forward(norm: Norm, silu: Silu, fused: bool, nw: int | None, sw: int | None)
         for layer in range(LAYERS):
             for x in ((x0, x1) if layer else (x1,)):
                 if fused:
-                    F.add_norm_quant(x, r, norm.w, EPS, norm.xq, norm.s, nw)
+                    F.add_norm_quant(x, r, norm.w, EPS, norm.xq, norm.s)
                 else:
                     torch.ops._C.fused_add_rms_norm(x, r, norm.w, EPS)
                     F.quant_rows(x, norm.xq, norm.s)
             if fused:
-                F.silu_mul_quant(gu, silu.h, silu.xq, silu.s, sw)
+                F.silu_mul_quant(gu, silu.h, silu.xq, silu.s)
             else:
                 torch.ops._C.silu_and_mul(silu.h, gu)
                 F.quant_rows(silu.h, silu.xq, silu.s)
@@ -233,12 +237,16 @@ def timed(fns: dict, seconds: float, clock, calls: dict) -> dict:
 
 
 def main() -> int:
+    global H, I, LAYERS, NORMS, SILUS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--ms", default="8192,16384,32768")
     ap.add_argument("--sustain", type=float, default=2.0)
     ap.add_argument("--sweep-seconds", type=float, default=0.3)
+    ap.add_argument("--shape", default=f"{H},{I},{LAYERS}", help="H,I,LAYERS")
     a = ap.parse_args()
+    H, I, LAYERS = (int(v) for v in a.shape.split(","))
+    NORMS, SILUS = 2 * LAYERS - 1, LAYERS
     a.out.mkdir(parents=True, exist_ok=True)
     import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
     from verity_vllm.engine import int8_fused as F
@@ -268,11 +276,12 @@ def main() -> int:
                         "quant_i_alone": silu.unfused("quant"), "silu_fused": silu.fused(sw)}, a.sustain, clock,
                        {"norm_unfused": norm.n, "norm_alone": norm.n, "quant_h_alone": norm.n, "norm_fused": norm.n,
                         "silu_unfused": silu.n, "silu_alone": silu.n, "quant_i_alone": silu.n, "silu_fused": silu.n})
-        fwd = timed({"forward_unfused": forward(norm, silu, False, nw, sw), "forward_fused": forward(norm, silu, True, nw, sw)},
+        fwd = timed({"forward_unfused": forward(norm, silu, False), "forward_fused": forward(norm, silu, True)},
                     a.sustain, clock, {"forward_unfused": 1, "forward_fused": 1})
         d_norm = launch["norm_unfused"]["us"] - launch["norm_fused"]["us"]
         d_silu = launch["silu_unfused"]["us"] - launch["silu_fused"]["us"]
         row = {"m": m, "gates": gates, "norm_copies": norm.n, "silu_copies": silu.n, "norm_warps": nw, "silu_warps": sw,
+               "engine_warps": {"norm": F.producer_warps("norm", H), "silu": F.producer_warps("silu", I)},
                "sweep": {**sweep_n, **sweep_s}, "launch": launch, "forward": fwd,
                "saving_per_launch_us": {"norm": d_norm, "silu": d_silu},
                "saving_per_forward_us_modelled": NORMS * d_norm + SILUS * d_silu,
@@ -281,7 +290,7 @@ def main() -> int:
                "norm_fused_tb_s": (norm.m * H * 2 * 4 + norm.m * H) / (launch["norm_fused"]["us"] * 1e6),
                "silu_fused_tb_s": (silu.m * I * 2 * 3 + silu.m * I) / (launch["silu_fused"]["us"] * 1e6)}
         doc["rows"].append(row)
-        print(json.dumps({k: row[k] for k in ("m", "norm_warps", "silu_warps", "saving_per_launch_us",
+        print(json.dumps({k: row[k] for k in ("m", "norm_warps", "silu_warps", "engine_warps", "saving_per_launch_us",
                                               "saving_per_forward_us_modelled", "saving_per_forward_us_timed",
                                               "norm_fused_tb_s", "silu_fused_tb_s")}), flush=True)
         print(json.dumps({k: round(v["us"], 2) for k, v in {**launch, **fwd}.items()}), flush=True)
@@ -289,8 +298,8 @@ def main() -> int:
         torch.cuda.empty_cache()
     doc["ok"] = ok
     doc["versions"] = {"triton": __import__("triton").__version__, "torch": torch.__version__}
-    (a.out / "int8_producers_gpu.json").write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps({"ok": ok, "out": str(a.out / "int8_producers_gpu.json")}), flush=True)
+    (a.out / f"int8_producers_gpu_{H}x{I}.json").write_text(json.dumps(doc, indent=1) + "\n")
+    print(json.dumps({"ok": ok, "out": str(a.out / f"int8_producers_gpu_{H}x{I}.json")}), flush=True)
     return 0 if ok else 4
 
 

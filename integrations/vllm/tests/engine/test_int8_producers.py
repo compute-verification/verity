@@ -194,7 +194,8 @@ def test_add_norm_quant_is_the_definitions_twin(norm_refs):
         gx, gr = x.cuda(), r.cuda()
         xq, s = torch.empty(x.shape, dtype=torch.int8, device="cuda"), torch.empty(x.shape[0], device="cuda")
         F.add_norm_quant(gx, gr, w.cuda(), eps, xq, s)
-        words = (lambda t: t.cpu().view(torch.int16).numpy().view(np.uint16))
+        def words(t):
+            return t.cpu().view(torch.int16).numpy().view(np.uint16)
         normed, res, _, _ = RF.fused_rows(words(x)[fin], words(r)[fin], np.repeat(words(w)[None], fin.sum(), 0), eps,
                                           RF.variance_v2)
         assert np.array_equal(normed, words(gx)[fin]) and np.array_equal(res, words(gr)[fin]), x.shape
@@ -209,11 +210,12 @@ WIRING = textwrap.dedent('''
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from vllm.model_executor.layers.activation import SiluAndMul
     from vllm.model_executor.layers.layernorm import RMSNorm
+    from vllm.model_executor.models.llama import LlamaAttention, LlamaDecoderLayer, LlamaMLP
 
     from verity_vllm.engine import hooks, int8_fused, int8_ops, int8_producers
     from verity_vllm.engine.int8_experts import PlainGemm
 
-    H, N, I, T, EPS = 2048, 3072, 8192, 37, 1e-5
+    H, KV, I, T, EPS = 2048, 512, 8192, 37, 1e-5
     seen = []
 
     class Gemm(PlainGemm):
@@ -230,35 +232,40 @@ WIRING = textwrap.dedent('''
             self.quant_method = Gemm(name)
 
         def forward(self, x):
-            return self.quant_method.apply(self, x)
+            return self.quant_method.apply(self, x), None
 
-    class LlamaDecoderLayer(nn.Module):
-        """vLLM's LlamaDecoderLayer.forward with attention and o_proj replaced by a slice of qkv."""
+    class Attn(nn.Module):
+        """vLLM's LlamaAttention.forward, its rotary embedding the identity and its attention q."""
+        forward = LlamaAttention.forward
+
+        def __init__(self, i, g):
+            super().__init__()
+            self.q_size, self.kv_size = H, KV
+            self.qkv_proj, self.o_proj = Lin(f"l{i}.qkv", H + 2 * KV, H, g), Lin(f"l{i}.o", H, H, g)
+            self.rotary_emb = lambda positions, q, k: (q, k)
+            self.attn = lambda q, k, v: q.contiguous()
+
+    class Mlp(nn.Module):
+        forward = LlamaMLP.forward
+
+        def __init__(self, i, g):
+            super().__init__()
+            self.gate_up_proj, self.down_proj = Lin(f"l{i}.gate_up", 2 * I, H, g), Lin(f"l{i}.down", H, I, g)
+            self.act_fn = SiluAndMul()
+
+    class Layer(nn.Module):
+        forward = LlamaDecoderLayer.forward
 
         def __init__(self, i, g):
             super().__init__()
             self.input_layernorm, self.post_attention_layernorm = RMSNorm(H, eps=EPS), RMSNorm(H, eps=EPS)
-            self.self_attn, self.mlp = nn.Module(), nn.Module()
-            self.self_attn.qkv_proj = Lin(f"l{i}.qkv", N, H, g)
-            self.mlp.gate_up_proj, self.mlp.down_proj = Lin(f"l{i}.gate_up", 2 * I, H, g), Lin(f"l{i}.down", H, I, g)
-            self.mlp.act_fn = SiluAndMul()
-
-        def forward(self, x, residual):
-            if residual is None:
-                residual = x
-                x = self.input_layernorm(x)
-            else:
-                x, residual = self.input_layernorm(x, residual)
-            x = self.self_attn.qkv_proj(x)[:, :H].contiguous()
-            x, residual = self.post_attention_layernorm(x, residual)
-            x = self.mlp.down_proj(self.mlp.act_fn(self.mlp.gate_up_proj(x)))
-            return x, residual
+            self.self_attn, self.mlp = Attn(i, g), Mlp(i, g)
 
     g = torch.Generator(device="cuda").manual_seed(5)
     prev = torch.get_default_dtype()
     torch.set_default_dtype(torch.bfloat16)
     with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
-        model = nn.Sequential(LlamaDecoderLayer(0, g), LlamaDecoderLayer(1, g)).cuda()
+        model = nn.Sequential(Layer(0, g), Layer(1, g)).cuda()
     torch.set_default_dtype(prev)
     with torch.no_grad():
         for m in model.modules():
@@ -280,9 +287,10 @@ WIRING = textwrap.dedent('''
         seen.clear()
         quants.clear()
         x, r = x0.clone(), None
+        positions = torch.arange(T, device="cuda")
         with torch.inference_mode():
             for layer in model:
-                x, r = layer(x, r)
+                x, r = layer(positions, x, r)
         torch.cuda.synchronize()
         return [x, r] + [t for rec in seen for t in rec[1:]], [rec[0] for rec in seen], list(quants)
 
@@ -332,10 +340,11 @@ WIRING = textwrap.dedent('''
 
 @cuda
 def test_the_producers_hand_their_codes_to_the_linears_they_feed():
-    """Two of vLLM's Llama decoder layers (its RMSNorm and SiluAndMul, the plain int8 arm's linears; attention and o_proj a
-    slice of qkv), batch invariant, in a child process: with the producers installed every output and every linear's
-    observed codes, scales and y are bit for bit the unfused forward's, and the quantizer runs only for layer 0's qkv (its
-    input norm has no residual).  Under a dispatch mode the producers stand aside, under the norm tap (a patched
+    """Two decoder layers running vLLM's LlamaDecoderLayer, LlamaAttention and LlamaMLP forwards (its RMSNorm and
+    SiluAndMul, the plain int8 arm's linears; the rotary embedding the identity and attention q), batch invariant, in a
+    child process: with the producers installed every output and every linear's observed codes, scales and y are bit for
+    bit the unfused forward's, and the quantizer runs only for layer 0's qkv (its input norm has no residual) and each
+    o_proj.  Under a dispatch mode the producers stand aside, under the norm tap (a patched
     `_C.fused_add_rms_norm`) the norms do, and an int8 source wrapping `int8_ops.row_quant` acquires the same values;
     uninstalled, the forward is the unfused one again."""
     pytest.importorskip("vllm")
@@ -344,8 +353,8 @@ def test_the_producers_hand_their_codes_to_the_linears_they_feed():
     import json
     out = json.loads(r.stdout.strip().splitlines()[-1])
     assert out["installed"] == {"norms": 4, "acts": 2} and out["live"] == 6 and out["live_after"] == 0, out
-    assert out["calls"] == ["l0.qkv", "l0.gate_up", "l0.down", "l1.qkv", "l1.gate_up", "l1.down"], out
-    assert out["quants_unfused"] == out["quants_dispatch"] == out["quants_after"] == [2048, 2048, 8192] * 2, out
-    assert out["quants_fused"] == out["quants_int8_source"] == [2048], out
-    assert out["quants_norm_tap"] == [2048, 2048, 2048, 2048], out
+    assert out["calls"] == [f"l{i}.{n}" for i in range(2) for n in ("qkv", "o", "gate_up", "down")], out
+    assert out["quants_unfused"] == out["quants_dispatch"] == out["quants_after"] == [2048, 2048, 2048, 8192] * 2, out
+    assert out["quants_fused"] == out["quants_int8_source"] == [2048, 2048, 2048], out
+    assert out["quants_norm_tap"] == [2048] * 6, out
     assert all(out[k] for k in ("fused_equal", "dispatch_equal", "norm_tap_equal", "int8_source_equal", "after_equal")), out
