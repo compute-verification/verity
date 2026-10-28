@@ -26,7 +26,7 @@
   table ``pub@<c>`` holds its statement's public row ``pub`` (`h1window.PUBS`): row t proof block u0 + t's,
   `core_check.public_words` of the window's Program salt, u0 + t and (root(``a/<K>@<s>``), root(``b/<K>``)), salted
   `core_check.public_row_salt` of the open root and u0 + t, so anyone rebuilds it, as credit's `registered_file` and
-  Lean's ``registeredFile`` do; its rows are kept. Those are the salt, position and roots the proof block's receipt is seeded
+  Lean's ``registeredFile`` do, and the window does on read (`PublicRows`). Those are the salt, position and roots the proof block's receipt is seeded
   from. At `close` the window commits its ok rows ``ok`` (`Served.ok`, the statement's output row o1): row u
   `core_check.OK_ROW` under `core_check.ok_salt` of the open root and u, in no entry, since credit registers them itself
   and refuses a window that does.
@@ -53,7 +53,7 @@
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
   (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
-  (`Served._pubs`) and, with ``receipts``, its receipt table. A z table hashed on the GPU hashes there while the step's
+  (`Served._pubs`) and, with ``receipts``, its receipt table. A z or public table hashed on the GPU hashes there while the step's
   later calls run, its place in `registered` taken when it's recorded and its tree and root put in once hashed
   (`Served.settle`, at the latest when `H1Run.tables` reads the step's roots at its round's close). Each root goes into
   that call's manifest row (``tables.registered``), so its
@@ -86,6 +86,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import weakref
@@ -331,6 +332,78 @@ def model_key(answer: Mapping[str, Any]) -> ModelKey:
     return ModelKey(answer["model"], answer["circuit"], answer["weights_root"], key)
 
 
+@dataclass(frozen=True)
+class PublicRows(Sequence):
+    """A call's public table's rows (`Served._pubs`), built again on read rather than held: row t `core_check.public_words`
+    of the window's Program ``salt``, position u0 + t and the call's two ``roots``, and with ``blocks`` ``(M, K, (R, C),
+    q)`` a J10-R call's u0 and unit t's blocks (`core_check.j10r_blocks` of unit (t // q, t % q), as
+    `h1window.call_blocks` lays them). Items as `pouw_h1_registered.Rows` gives them; `words` builds rows of a NumPy
+    array there, `tensor` every row on a torch device."""
+
+    salt: bytes
+    roots: tuple[bytes, bytes]
+    u0: int
+    n: int
+    blocks: tuple[int, int, tuple[int, int], int] | None = None
+
+    def __post_init__(self) -> None:
+        if any(len(x) % 4 for x in (self.salt, *self.roots)) or len(self._base()) * 32 != (
+                CC.PUBLIC_ROW_BITS if self.blocks is None else CC.PUBLIC_ROW_J10R_BITS):
+            raise ValueError(f"a public row is {CC.PUBLIC_ROW_BITS} bits, a J10-R unit's {CC.PUBLIC_ROW_J10R_BITS}, "
+                             "its position on a u32 word")
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, j: Any) -> Any:
+        if isinstance(j, slice):
+            return self.words(np.arange(self.n)[j])
+        if not -self.n <= j < self.n:
+            raise IndexError(j)
+        return tuple(int(v) for v in self.words(np.array([j % self.n]))[0])
+
+    def at(self, positions: Sequence[int] | np.ndarray) -> np.ndarray:
+        """Rows ``positions`` (each in [0, n)) as their words ``(·, W)`` u16."""
+        at = np.asarray(positions, dtype=np.int64)
+        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
+            raise IndexError(f"a position outside the table's {self.n} rows")
+        return self.words(at)
+
+    def words(self, t: np.ndarray) -> np.ndarray:
+        """Rows ``t`` (unit indices, int64) as ``(len(t), W)`` u16 words."""
+        out = self._fill(np.repeat(self._base()[None], len(t), axis=0), np.asarray(t, dtype=np.int64))
+        return out.astype("<u4").view("<u2").astype(np.uint16)
+
+    def tensor(self, device: Any) -> Any:
+        """Every row as an ``(n, W)`` u16 tensor on torch ``device``, written on its current stream; the only copy to it is
+        the one row of what's common to all of them, from pinned memory, so the host waits on nothing there."""
+        import torch
+
+        base = torch.from_numpy(self._base())
+        base = (base.pin_memory() if torch.device(device).type == "cuda" else base).to(device, non_blocking=True)
+        out = self._fill(base.expand(self.n, -1).clone(), torch.arange(self.n, dtype=torch.int64, device=device))
+        return out.view(torch.uint8).view(self.n, -1, 8)[:, :, :4].contiguous().view(torch.uint16).view(self.n, -1)
+
+    def _base(self) -> np.ndarray:
+        """The row's u32 words (`core_check.public_row`'s 4-byte groups, each big-endian) with the position, and a J10-R
+        call's u0 and blocks, zero; as int64."""
+        tail = bytes(24) if self.blocks is not None else b""
+        return np.frombuffer(self.salt + bytes(8) + self.roots[0] + self.roots[1] + tail, ">u4").astype(np.int64)
+
+    def _fill(self, out: Any, t: Any) -> Any:
+        """``out`` (rows ``t``'s `_base`, a NumPy array or a tensor) with each row's own: its position, and a J10-R call's
+        u0 and blocks, each u64 its high word then its low."""
+        cols = [(len(self.salt) // 4, self.u0 + t)]
+        if self.blocks is not None:
+            m, k, tile, q = self.blocks
+            b0, b1 = CC.j10r_blocks(m, k, tile, t // q, t % q)
+            at = (len(self.salt) + 8 + len(self.roots[0]) + len(self.roots[1])) // 4
+            cols += [(at, self.u0), (at + 2, b0), (at + 4, b1)]
+        for i, v in cols:
+            out[:, i], out[:, i + 1] = v >> 32, v & 0xFFFFFFFF
+        return out
+
+
 @dataclass
 class Served:
     """How an `H1Run` commits its calls' tables and its weights as the window Program's registered values. ``tile``: the
@@ -446,20 +519,23 @@ class Served:
                                 "each K's b/<K> under the period's declared Program")
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
-              session: str | None = None, row_salts: bytes | None = None, later: bool = False) -> G.Registered | NR.Later:
+              session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
+              rows: Sequence | None = None) -> G.Registered | NR.Later:
         return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         later=later, window=window, session=session)
+                         later=later, rows=rows, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
         reg = self.registered[value] = self._tree(run, value, words, first, window, row_salts=row_salts)
         return reg.root.hex()
 
-    def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None]) -> None:
-        """`_register` of a call's z table into ``out``, its hash left running on the GPU where it hashes there
+    def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None],
+                        row_salts: NR.PublicSalts | None = None, rows: Sequence | None = None) -> None:
+        """`_register` of a call's z or public table into ``out``, its hash left running on the GPU where it hashes there
         (`pouw_h1_registered.commit`'s ``later``): it takes its place in `registered` now, and `settle` puts its tree there
         and its root in ``out``."""
-        got = self.registered[value] = self._tree(run, value, words, first, self.root, later=True)
+        got = self.registered[value] = self._tree(run, value, words, first, self.root, row_salts=row_salts, later=True,
+                                                  rows=rows)
         if isinstance(got, NR.Later):
             out[value] = None
             self._later.append((value, out))
@@ -593,7 +669,8 @@ class Served:
         whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
         held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
         table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
-        row commits under its round's root, the z table's once `settle` has it. Nothing once the window is refused."""
+        row commits under its round's root, the z and public tables' once `settle` has them. Nothing once the window is
+        refused."""
         self.settle(wait=False)
         if self.root is None and not self.refused:
             self.open(run)
@@ -634,7 +711,7 @@ class Served:
         if b not in self.registered and not self._take_b(run, call, b, out):
             return {}
         if whole is not None and b in self.registered:
-            out.update(self._pubs(run, mine, value, b))
+            self._pubs(run, mine, value, b, out)
         if self.receipts is not None:
             self._held.setdefault(value, []).append((call, codes, scales))
             if whole is not None:
@@ -667,29 +744,26 @@ class Served:
             out[b] = self.registered[b].root.hex()
         return True
 
-    def _pubs(self, run: Any, calls: Sequence[int], a: str, b: str) -> dict[str, str]:
+    def _pubs(self, run: Any, calls: Sequence[int], a: str, b: str, out: dict[str, str | None]) -> None:
         """Each of ``calls``' (a step's calls of one K) public table ``pub@<c>`` (`pub_table`), registered once its step's
         A table ``a`` and the weights' ``b`` are: row t proof block u0 + t's public row, `core_check.public_words` of the
         window's Program salt, u0 + t and (root(a), root(b)), and in a J10-R window (`h1window.is_j10r`) u0 and the proof block's
         blocks (`h1window.call_blocks`), salted `core_check.public_row_salt` of the open root and u0 + t, as credit's
-        `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
-        units, out, j10r = HW.call_units(self.program), {}, HW.is_j10r(self.program)
+        `registered_file` builds it (`h1window.public_table`). Its rows and salts are built again on read (`PublicRows`,
+        `pouw_h1_registered.PublicSalts`); on the GPU its rows are built on the hash's stream and hashed there, its root
+        put in ``out`` by `settle` (`_register_later`)."""
+        from verity_vllm.protocols.pouw.h1 import registered_device as D
+
+        units, ks, j10r = HW.call_units(self.program), {name: (k, n) for name, k, n in self.linears}, HW.is_j10r(self.program)
         ctx = self.root.encode()
         head = CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
-        x = np.frombuffer(run._salt + bytes(8) + self.registered[a].root + self.registered[b].root, np.uint8)
-        for c in calls:
-            u0, n = units[c]
-            rows = np.tile(x, (n, 1))
-            rows[:, len(run._salt):len(run._salt) + 8] = (
-                np.arange(u0, u0 + n, dtype=">u8").view(np.uint8).reshape(n, 8))
-            if j10r:
-                tail = np.array([(u0, b0, b1) for b0, b1 in HW.call_blocks(self.program, c)], dtype=">u8")
-                rows = np.concatenate([rows, tail.view(np.uint8).reshape(n, 24)], axis=1)
-            words = np.ascontiguousarray(rows.reshape(n, -1, 4)[:, :, ::-1]).reshape(n, -1).view("<u2")
-            salts = NR.public_salts(head, u0, n)
-            v = self.pub_table(c)
-            out[v] = self._register(run, v, words, 0, self.root, salts)
-        return out
+        roots = (self.registered[a].root, self.registered[b].root)
+        with D.hashing() if NR.path() == "gpu" else contextlib.nullcontext() as device:
+            for c in calls:
+                (u0, n), (k, cols) = units[c], ks[self.calls[c][0]]
+                rows = PublicRows(run._salt, roots, u0, n, (self.m, k, self.tile, cols // self.tile[1]) if j10r else None)
+                words = rows.words(np.arange(n)) if device is None else rows.tensor(device)
+                self._register_later(run, self.pub_table(c), words, 0, out, NR.PublicSalts(head, u0, n), rows)
 
     def _weight_args(self, call: Any) -> tuple[np.ndarray | None, np.ndarray | None]:
         w = self._weights.get(call.layer)
@@ -805,7 +879,7 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
 
 
-__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Registration", "Served",
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "PublicRows", "Registration", "Served",
            "V2", "Weights", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of"]
