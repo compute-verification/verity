@@ -594,13 +594,15 @@ def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
 
 
 def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
-    """Each round's root lists step r's A tables ``a/<K>@<r>``, one a K, whole, as aligned subtrees (`credit.cover`) whose
-    tree is the table's registered root, and no other round lists them (`credit.round_root`)."""
+    """Each round's root lists step r's A tables ``a/<K>@<r>``, one a K, and its calls' z tables ``zy@<c>``, whole, as
+    aligned subtrees (`credit.cover`) whose tree is the table's registered root, and no other round lists them
+    (`credit.round_root`)."""
     run, _ws, _got = _window(W1)
     served = run.served
     for r, log in enumerate(run.round_log):
         segs = served.segments(run, r)
-        assert list(segs) == [f"{SV.PREFIX}a/{k}@{r}" for k in KS]
+        assert list(segs) == [f"{SV.PREFIX}a/{k}@{r}" for k in KS] + [f"{SV.PREFIX}zy@{c.index}" for c in run.calls
+                                                                      if c.step == r]
         for v, got in segs.items():
             reg = served.registered[v]
             assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root
@@ -667,7 +669,8 @@ def test_each_calls_receipts_are_its_receipt_table_once_its_roots_are_registered
     assert served.tables()[-len(run.calls):] == [pre + f"receipt@{c}" for c in range(len(run.calls))]
     for r, log in enumerate(run.round_log):
         segs = served.segments(run, r)
-        assert list(segs) == [f"{pre}a/{k}@{r}" for k in KS] + [pre + f"receipt@{c.index}" for c in run.calls if c.step == r]
+        assert list(segs) == [f"{pre}a/{k}@{r}" for k in KS] + [pre + f"{t}@{c.index}" for t in ("zy", "receipt")
+                                                                for c in run.calls if c.step == r]
         for v, got in segs.items():
             reg = served.registered[v]
             assert CR.tree_root(reg.domain.domain_id, reg.leaves, {(lv, ix): h for lv, ix, h in got}) == reg.root

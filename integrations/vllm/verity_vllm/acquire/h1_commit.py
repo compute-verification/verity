@@ -8,26 +8,31 @@ rows-sha512 collector), `tap` puts H1's tap on that Commit instead.
 A MoE layer's routed experts (`engine.int8_experts.ExpertSite`) are no modules: each expert projection's site is
 named as H1 names it (`pouw_h1_hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
 acquired under that name inside the call (`ExpertGemm.apply`), as `Int8ExpertsMethod` runs every expert on every forward:
-an expert no token routed to is a call of zero rows, acquired as its zero rows [0, K] and scales [0]."""
+an expert no token routed to is a call of zero rows, acquired as its zero rows [0, K] and scales [0]. Each linear's output
+y, what its forward (an expert's call) returned, is acquired under `out_site` of its name, so the Commit commits the
+linear's output that each call's z table is held to (`CommitTap.outputs`)."""
 from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 
 from verity_vllm.acquire.sources.int8_source import Int8Source
-from verity_vllm.protocols.pouw.h1.commit import SCHEME, CommitTap, Sites, _EveryStep, site
+from verity_vllm.protocols.pouw.h1.commit import SCHEME, CommitTap, Sites, _EveryStep, out_site, site
 from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
 
 
 class H1Source(Int8Source):
     """`Int8Source` at H1's linears: a named module's site under its module's forward, and each routed expert's under its
-    call (``experts``, name -> `ExpertSite`)."""
+    call (``experts``, name -> `ExpertSite`); and each one's output y when its forward or call returns."""
 
     def __init__(self, com: Any, model: Any, modules: Sequence[str], experts: dict[str, Any]) -> None:
         sites = Sites([*modules, *experts])
         super().__init__(com, model, sites, [])
         # the modules whose forward opens their site's scope; an expert's call opens its own (`_scoped`)
         self.modules = sorted(modules)
+        self._at[0].update({f"{out_site(m)}/0": 1 for m in (*modules, *experts)})
+        self._names = frozenset(self._at[0])
+        self.stats.update(out_tensors=0, out_bytes=0)
         self.quant, self._at, self.experts = sites, _EveryStep(self._at), dict(experts)
 
     def install(self) -> None:
@@ -36,9 +41,23 @@ class H1Source(Int8Source):
         for name, s in self.experts.items():
             self._hooks.append(hooks.wrap(s.quant_method, "apply", lambda orig, name=name: self._scoped(name, orig)))
 
+    def _leave(self, op: str) -> Any:
+        base = super()._leave(op)
+
+        def post(module: Any, args: tuple, out: Any) -> None:
+            base(module, args, out)
+            self._take_out(op, out)
+        return post
+
+    def _take_out(self, name: str, out: Any) -> None:
+        job = self.c._cur
+        if job is not None and self.torch.is_tensor(out):
+            self._take(f"{out_site(name)}/0", out.contiguous(), job, "out")
+
     def _scoped(self, name: str, orig: Any) -> Any:
         """Expert site ``name``'s ``apply`` with the source's scope at ``name``, so its ``row_quant`` is acquired as the
-        site's; a call of zero rows runs no ``row_quant`` and is acquired as its zero rows, before the call."""
+        site's, then its output y; a call of zero rows runs no ``row_quant`` and is acquired as its zero rows, before
+        the call."""
         me = self
 
         def apply(layer: Any, x: Any, bias: Any = None) -> Any:
@@ -54,9 +73,11 @@ class H1Source(Int8Source):
                     me._take(f"{site(name)}/1", x.new_empty(0, dtype=me.torch.float32), job, "quant")
             me._scope.append(name)
             try:
-                return orig(layer, x, bias)
+                out = orig(layer, x, bias)
             finally:
                 me._scope.pop()
+            me._take_out(name, out)
+            return out
         return apply
 
 

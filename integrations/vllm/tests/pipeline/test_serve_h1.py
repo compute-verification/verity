@@ -65,9 +65,11 @@ class _Server:
 
 def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_that_credit_nothing(tmp_path, monkeypatch):
     """Two Commit windows, each one H1 window over the committer's steps 0 and 1: each window's A tables and input ids are
-    the rows the server's Commit acquired (ROOTS1 tied, none of the Commit's own trees), under the period's one Program and
-    weights' root, on the epoch's in-process coins (a fresh epoch a window), so no row is gate-passed; at each close H1's
-    hooks and its tap come off, leaving the committer as it was. A window that served no step is neither tied nor not."""
+    the rows the server's Commit acquired, under the period's one Program and weights' root, on the epoch's in-process
+    coins (a fresh epoch a window), so no row is gate-passed; but the bench row's int8 source acquires no linear's output,
+    so each call's z table is a tree of the Commit's own and ROOTS1 is untied until the server's Commit commits each
+    linear's y. At each close H1's hooks and its tap come off, leaving the committer as it was. A window that served no
+    step is neither tied nor not."""
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
     described = arm.describe()
@@ -80,8 +82,10 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
         run = srv.serve(prompts, w)
         salts.append(run.salt)
         out = arm.close(w)
-        assert out["tied"] and out["roots1"] == {"tied": True, "reason": None, "values": 4, "own_trees": 0,
-                                                 "steps": {"0": 0, "1": 1}}, out
+        assert not out["tied"] and out["roots1"] == {
+            "tied": False, "values": 8, "own_trees": len(run.calls), "steps": {"0": 0, "1": 1},
+            "reason": ("roots1: call 0's z table h1/zy@0 is not the Commit's coord-out/0 (model.layers.0/out at engine "
+                       "step 0): its y is not the linear's output the Commit acquired")}, out
         assert (out["window"], out["steps_served"], out["coin_source"], out["refused"]) == (w, STEPS, "in-process", [])
         assert out["weights_root"] == described["weights_root"] and run.served.program_digest == described["program"]
         assert out["gate"]["coins"] == "in-process" and out["gate"]["gate_passed"]["rows"] == 0
@@ -92,7 +96,7 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     arm.open(2)
     idle = arm.close(2)
     assert (idle["tied"], idle["steps_served"], idle["gate"]["gate_passed"]["rows"]) == (None, 0, 0), "it served no step"
-    assert arm.summary() == {"windows": 3, "tied": 2, "untied": [], "gate_passed_rows": 0}
+    assert arm.summary() == {"windows": 3, "tied": 0, "untied": [0, 1], "gate_passed_rows": 0}
     srv.src.uninstall()
 
 
@@ -121,7 +125,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
     window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
     session's, its record carries the session without its secret, and the verifier's check of the record against the
-    auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
+    auditor's ledger (`pouw_h1_challenger.session_reason`) passes. The server's Commit commits no linear's y, so no
+    window ties at its z tables and none is gate-passed."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
@@ -136,7 +141,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
         out = arm.close(w)
         sid = out["session"]["session"]
         sids.append(sid)
-        assert out["tied"] and out["coin_source"] == PH.CHALLENGER and out["gate"]["gate_passed"]["rows"] > 0, out
+        assert not out["tied"] and out["coin_source"] == PH.CHALLENGER and out["gate"]["gate_passed"]["rows"] == 0, out
+        assert "is not the Commit's coord-out/0" in out["roots1"]["reason"], out
         assert {k: out["session"][k] for k in ("window", "peer", "port", "listen_polls", "unopened", "closed", "end")} == {
             "window": w, "peer": PEER, "port": 7811, "listen_polls": 0, "unopened": None, "closed": {"closed": True},
             "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
