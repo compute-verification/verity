@@ -7,6 +7,7 @@ prover answers with the collector paused, as the challenger does. `Party.of` rea
 
 from __future__ import annotations
 
+import functools
 import gc
 import hashlib
 import json
@@ -15,8 +16,8 @@ import threading
 
 import pytest
 
+import pous_fakes
 import pous_test_signer as ts
-from pous_fakes import Clock
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period, run
@@ -24,13 +25,14 @@ from verity.core.protocols.pous import period, run
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
+Clock = functools.partial(pous_fakes.Clock, 10 ** 9, 1_000)
 
 
 def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:
     """`period.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
     labels and table."""
     point = period.point_for(len(STORE), period.W, period.C0)
-    p = period.run("n0", STORE, COINS, signer=ts.TestSigner(b"in process", 2), log=ts.session_log(), clock=Clock(10 ** 9, 1_000),
+    p = period.run("n0", STORE, COINS, signer=ts.TestSigner(b"in process", 2), log=ts.session_log(), clock=Clock(),
                    point=point, schemes=ts.SCHEMES, protocol=TEST_ID)
     published = run.Setup.from_json(json.loads(bytes.fromhex(p.case["commitment"])))
     _, _, encoded = period.setup_inputs(p.setup_case)
@@ -47,7 +49,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer,
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["session"] = CP.serve(f, CP.request_of("n0", point, root), signer=signer, log=ts.session_log(),
-                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(10 ** 9, 1_000), warmups=warmups)
+                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(), warmups=warmups)
 
     t = threading.Thread(target=side)
     t.start()
