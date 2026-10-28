@@ -1,6 +1,5 @@
 import Proofs.Flock.Recursive.Sound
 import Proofs.Flock.Recursive.Multi
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
 import Proofs.Flock.Recursive.ZkReg.Vals
 import Proofs.Flock.Recursive.ZkReg.Off
 import Proofs.Flock.Recursive.Finds

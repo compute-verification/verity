@@ -1,5 +1,5 @@
-import Proofs.Flock.Claims.Recursion.RestVerdictDraw
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 
 /-!
 # `hrest`'s base checks, at every reader

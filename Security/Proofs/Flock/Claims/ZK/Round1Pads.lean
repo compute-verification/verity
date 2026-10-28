@@ -1,4 +1,5 @@
-import Proofs.Flock.Claims.ZK.Round1
+import Proofs.Flock.Claims.Complete.ZkTables.Round1
+import Proofs.Flock.Claims.ZK.Sent
 
 /-!
 # Round `1` of the masked session: the pads trees by tree position

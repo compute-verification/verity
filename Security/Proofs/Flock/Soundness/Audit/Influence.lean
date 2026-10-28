@@ -1,5 +1,4 @@
 import Proofs.Flock.Soundness.Audit.TwoStage
-import Proofs.Flock.Soundness.Audit.Harm
 
 /-!
 # Influence through a separator

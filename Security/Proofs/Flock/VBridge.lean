@@ -47,7 +47,6 @@ import Proofs.Flock.VBridge.Runs.Rs
 import Proofs.Flock.VBridge.Runs.Prog
 import Proofs.Flock.VBridge.Runs.Lg
 import Proofs.Flock.VBridge.Runs.Rep
-import Proofs.Flock.VBridge.Top
 import Proofs.Flock.VBridge.Family
 import Proofs.Flock.VBridge.Family.Commits
 import Proofs.Flock.VBridge.Family.ReadTransfer

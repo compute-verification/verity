@@ -1,6 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainDrawJCols
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.Recursion.NextR
+import Proofs.Flock.Claims.KS.PlainDrawJRun
 
 /-!
 # The plain verdict at the draw from an accepting `nextR` step, at its reader's columns

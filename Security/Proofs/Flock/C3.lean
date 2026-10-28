@@ -92,7 +92,6 @@ import Proofs.Flock.C3.Reps.WRead
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.C3.Reps.PortNames
 import Proofs.Flock.C3.Reps.RoundReads
-import Proofs.Flock.C3.Reps.RoundSel
 import Proofs.Flock.C3.Reps.RoundOfHolo
 import Proofs.Flock.C3.Reps.ReadWholeAt
 import Proofs.Flock.C3.Reps.WithReads

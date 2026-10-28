@@ -10,7 +10,6 @@ import Proofs.Flock.Claims.Scope.System
 import Proofs.Flock.Claims.Scope.Tables
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Deployed
-import Proofs.Flock.Claims.Scope.Witness
 import Proofs.Flock.Claims.Scope.Split
 
 /-! Flock's scope at the deployed verifier: the verifier's statement read as `Claims.Flock.Stmt` (`Readable`),

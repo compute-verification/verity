@@ -1,5 +1,5 @@
-import Proofs.Flock.Claims.ZK.MaskFamily
 import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.ZK.MaskTape
 
 /-!
 # The deployed masked session at one tape

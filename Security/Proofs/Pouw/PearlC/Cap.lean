@@ -2,7 +2,6 @@ import Proofs.Pouw.PearlC.Cap.Grid
 import Proofs.Pouw.PearlC.Cap.Certs
 import Proofs.Pouw.PearlC.Cap.IntForm
 import Proofs.Pouw.PearlC.Cap.Verdict
-import Proofs.Pouw.PearlC.Cap.Pins
 import Proofs.Pouw.PearlC.Cap.SaltDeadStep
 import Proofs.Pouw.PearlC.Cap.SaltDead
 

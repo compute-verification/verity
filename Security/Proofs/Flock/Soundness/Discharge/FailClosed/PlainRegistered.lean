@@ -1,7 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.PlainReg
 import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
 import Proofs.Flock.Soundness.Discharge.FailClosed.General
 import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
 /-!
 # The hidden-output headlines without `--zk`, over what `verify --registered F` accepts

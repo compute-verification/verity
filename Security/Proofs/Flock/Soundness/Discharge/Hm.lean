@@ -22,5 +22,4 @@ import Proofs.Flock.Soundness.Discharge.Hm.Copies
 import Proofs.Flock.Soundness.Discharge.Hm.Copy
 import Proofs.Flock.Soundness.Discharge.Hm.Flat
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.Discharge.Hm.Typed
 import Proofs.Flock.Soundness.Discharge.Hm.Site

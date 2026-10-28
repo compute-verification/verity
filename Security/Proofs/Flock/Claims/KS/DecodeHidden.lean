@@ -1,5 +1,4 @@
 import Proofs.Flock.Claims.KS.DecodeDeploy
-import Proofs.Flock.Soundness.Discharge.HiddenDec
 
 /-!
 # The deployed plain decoders at hidden outputs

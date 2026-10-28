@@ -4,9 +4,7 @@ import Proofs.Pouw.H1Zy.CombineBits
 import Proofs.Pouw.H1Zy.DequantVectors
 import Proofs.Pouw.H1Zy.Lane
 import Proofs.Pouw.H1Zy.LaneBits
-import Proofs.Pouw.H1Zy.Stream
 import Proofs.Pouw.H1Zy.Tile
-import Proofs.Pouw.H1Zy.LaneChunk
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads

@@ -1,5 +1,4 @@
 import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Claims.Sampling.AssembledPlain
 import Proofs.Flock.Claims.Sampling.Bext
 import Proofs.Flock.Claims.Sampling.Committed
 import Proofs.Flock.Claims.Sampling.Count
@@ -11,15 +10,10 @@ import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 import Proofs.Flock.Claims.Sampling.EndToEndDraw
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
-import Proofs.Flock.Claims.Sampling.PooledPr
 import Proofs.Flock.Claims.Sampling.InputSlot
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Sampling.Leaf
-import Proofs.Flock.Claims.Sampling.Live
 import Proofs.Flock.Claims.Sampling.Path
-import Proofs.Flock.Claims.Sampling.Raise
-import Proofs.Flock.Claims.Sampling.Reference
-import Proofs.Flock.Claims.Sampling.Select
 import Proofs.Flock.Claims.Sampling.Seq
 import Proofs.Flock.Claims.Sampling.Runs
 import Proofs.Flock.Claims.Sampling.RunsExp
@@ -28,6 +22,10 @@ import Proofs.Flock.Claims.Sampling.Tables
 import Proofs.Flock.Claims.Sampling.Universal
 import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.Claims.Sampling.ZK
+import Proofs.Flock.Claims.Sampling.Select.Code
+import Proofs.Flock.Claims.Sampling.Select.OS
+import Proofs.Flock.Claims.Sampling.Select.Refusals
+import Proofs.Flock.Soundness.Audit.Pooled
 
 /-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
 executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), the audit layer's pooled escape (`Sampling.PooledPr`) and every law's live draw's (`Sampling.Live`); each

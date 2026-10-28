@@ -1,6 +1,4 @@
-import Proofs.Accounting.Defs
 import Proofs.Accounting.Memory
-import Proofs.Accounting.MemoryShare
 import Proofs.Accounting.Device
 import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
@@ -81,7 +79,6 @@ import Proofs.Accounting.TS.Session.Lanes.KnownFields
 import Proofs.Accounting.TS.Session.Lanes.KnownRead
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Accounting.TS.Session.Lanes.Lane
-import Proofs.Pouw.H1Zy.Stream
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.Session.Tile.Computes
 import Proofs.Accounting.TS.TileSound
@@ -94,5 +91,6 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
+import Proofs.Pous.Obligation
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

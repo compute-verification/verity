@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Top
+import Proofs.Flock.VBridge.AlgHolds
+import Proofs.Flock.VBridge.Algebra.BitsOk
+import Proofs.Flock.VBridge.Stages
 import VStar.Stage
 import VStar.Compose
 import Flock.RecVStar

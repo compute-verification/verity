@@ -8,7 +8,7 @@ leaf and cut bits are elsewhere (the unit is neither row net), and so are the wi
 read the pin and the unit range's forced-zero row (`Aliased.zeroPos_block`).
 -/
 import Proofs.Flock.Soundness.Discharge.Hm.Copy
-import Proofs.Flock.Soundness.Discharge.Aliased
+import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
 
 open Flock FlockLevel3
 

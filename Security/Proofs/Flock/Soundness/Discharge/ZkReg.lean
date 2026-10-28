@@ -1,12 +1,9 @@
 import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
 import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundH
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHCustody
 import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
@@ -16,6 +13,8 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
 import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
 import Proofs.Flock.Soundness.Discharge.ZkReg.PublicInst
+import Proofs.Flock.Soundness.Discharge.Composed.Sound
+import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 
 /-!
 # One `--zk` sampled session with registered reads
