@@ -30,7 +30,7 @@ import math
 import operator
 import re
 import sys
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import cache
@@ -309,7 +309,7 @@ class _Module:
         match target, value:
             case ast.Name(id=n), _:
                 v = self._emit(n, prefix + n, value, env, stmt)
-                if v is _NotLiteral:
+                if isinstance(v, _NotLiteral):
                     env.pop(n, None)
                 else:
                     env[n] = v
@@ -327,11 +327,11 @@ class _Module:
                         env.pop(node.id, None)
 
     def _emit(self, name: str, key: str, value: ast.expr, env: dict, at: ast.AST) -> object:
-        """Record `key` for each concept `name` and `value` restate; the literal's value, or `_NotLiteral`."""
+        """Record `key` for each concept `name` and `value` restate; the literal's value, or the `_NotLiteral` it isn't."""
         try:
             v = self.literal(value, env)
-        except _NotLiteral:
-            return _NotLiteral
+        except _NotLiteral as e:
+            return e
         for concept, (_, test) in CONCEPTS.items():
             if _NAME[concept].fullmatch(name) and test(name, v):
                 src = " ".join((ast.get_source_segment(self.text, value) or "").split())
@@ -359,10 +359,8 @@ def scanned(files: list[str]) -> list[str]:
 
 
 def _read(f: str) -> str | None:
-    try:
-        return (ROOT / f).read_text(encoding="utf-8")
-    except (FileNotFoundError, IsADirectoryError, UnicodeDecodeError):
-        return None
+    """A tracked file's text; None for one deleted from the working tree."""
+    return (ROOT / f).read_text(encoding="utf-8") if (ROOT / f).is_file() else None
 
 
 def scan(files: list[str], read: Callable[[str], str | None] = _read) -> list[Hit]:
