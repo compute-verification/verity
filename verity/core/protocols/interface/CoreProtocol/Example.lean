@@ -77,6 +77,23 @@ private def rootHex : String := Flock.hexOf root
 #guard (protocol.answer "{}".toUTF8 root "{\"drawn\":2,\"passed\":2}".toUTF8).reason ==
   some "params: k is missing or not a natural number"
 #guard (protocol.case "not json").reason.map (·.startsWith "case: not JSON") == some true
+-- a string outside ASCII without DEL is refused, in its bytes or escaped
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"dé\"}".toUTF8).reason ==
+  some "evidence: not ASCII without DEL (a byte at or above 0x7f)"
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"\x7f\"}".toUTF8).reason ==
+  some "evidence: not ASCII without DEL (a byte at or above 0x7f)"
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"d\\u00e9\"}".toUTF8).reason ==
+  some ("evidence: " ++ Flock.notAscii)
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"d\\u007f\":1,\"drawn\":2,\"passed\":2}".toUTF8).reason ==
+  some ("evidence: " ++ Flock.notAscii)
+#guard (protocol.answer "{\"k\":2,\"x\":\"dé\"}".toUTF8 root "{\"drawn\":2,\"passed\":2}".toUTF8).reason ==
+  some "params: not ASCII without DEL (a byte at or above 0x7f)"
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"d~\"}".toUTF8).verdict == .accept
+-- an outcome's reason is free text, and its line prints it whatever its characters
+private def freeReason : Answer :=
+  { protocol := "p", verdict := .reject, reason := some "Δ ≥ 1", digest := none, published := none, profile := none }
+#guard freeReason.canonical.toOption == some ("{\"commitment\":null,\"profile\":null,\"protocol\":\"p\"," ++
+  "\"public\":null,\"reason\":\"Δ ≥ 1\",\"verdict\":\"reject\"}")
 
 private def reread (params evidence : String) : String :=
   let go : V String := do

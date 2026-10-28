@@ -414,6 +414,8 @@ theorem same_commitment {c c' : LiveCommitment} {o o' : LiveOpening} {dom dom' :
   refine (eq_or_collides dm.1 dm'.1 hdm).elim (fun e => ?_) Or.inr
   have eb : b = b' := first_eq rfl (by rw [hbs, hbs', hash_size, hash_size]) e
   refine (eq_or_collides dm.2 dm'.2 (by rw [← hbs, ← hbs', eb])).elim (fun e2 => ?_) Or.inr
+  replace hs := Canon.canonLine_of_canon hs
+  replace hs' := Canon.canonLine_of_canon hs'
   rw [Canon.canon_binding] at hs hs'
   obtain ⟨he, hfam, hsch⟩ :=
     Canon.binding_inj ((Except.ok.inj hs).trans ((taggedBytes_inj e2).trans (Except.ok.inj hs').symm))
