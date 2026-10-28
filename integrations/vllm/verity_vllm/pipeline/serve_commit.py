@@ -626,34 +626,32 @@ class CommitWindows:
         that waited; the seal is returned for the second."""
         t_close = self.clock() if here is None else here[0]
 
-        def failure(e: Exception) -> dict[str, Any]:
-            return {"error": (str(e) if isinstance(e, SealFailed) else f"{type(e).__name__}: {e}")[:500]}
+        def attempt(fn: Callable[[], Any]) -> tuple[Any, dict[str, Any] | None]:
+            """``fn``'s value, or its failure as the window's seal line carries it: a window that can't be released or sealed."""
+            try:
+                return fn(), None
+            except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
+                return None, {"error": (str(e) if isinstance(e, SealFailed) else f"{type(e).__name__}: {e}")[:500]}
 
         def run(waited: float = 0.0) -> Callable[[], None]:
             com, rc, kw = job
             t0 = self.clock()
-            released: dict[str, Any] | None = None
-            failed: dict[str, Any] | None = None
-            try:
-                if self.release is not None:
-                    released = self.release.release(rec["window"], com, self.clock)
-            except Exception as e:  # noqa: BLE001  (a window that can't be released fails visibly; the server goes on)
-                failed = failure(e)
+            released, failed = (attempt(lambda: self.release.release(rec["window"], com, self.clock)) if self.release is not None
+                                else (None, None))
+
+            def seal_one() -> dict[str, Any]:
+                if self.sealer is not None and self.sealer.process is not None:
+                    return self.sealer.process.seal(com, rc, Path(rec["seal"]["row_dir"]),
+                                                    written=(lambda: thaw(com)) if com is not self.com else None, **kw)
+                return seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
 
             def seal() -> None:
-                sealed = failed
                 try:
-                    if sealed is None and self.sealer is not None and self.sealer.process is not None:
-                        sealed = self.sealer.process.seal(com, rc, Path(rec["seal"]["row_dir"]),
-                                                          written=(lambda: thaw(com)) if com is not self.com else None, **kw)
-                    elif sealed is None:
-                        sealed = seal_window(com, rc, Path(rec["seal"]["row_dir"]), **kw)
-                except Exception as e:  # noqa: BLE001  (a window that can't be sealed fails visibly; the server goes on)
-                    sealed = failure(e)
+                    sealed, err = (None, failed) if failed is not None else attempt(seal_one)
                 finally:
                     if com is not self.com:
                         thaw(com)
-                line = {"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), **sealed,
+                line = {"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), **(err or sealed),
                         "queued_s": round(t0 - t_close, 3), "seal_wait_s": round(waited, 4)}
                 if self.release is not None:
                     line["release"] = released
