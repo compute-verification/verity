@@ -189,7 +189,8 @@ class P2Codec:
                 "segments": self.segments, "w": self.w}
 
 
-def _xof(message: bytes, length: int) -> bytes:
+def xof(message: bytes, length: int) -> bytes:
+    """`XOF(message)[0 : length]`: SHA-512 in counter mode, each output whole."""
     out = b""
     ctr = 0
     while len(out) < length:
@@ -204,7 +205,7 @@ def _message(f: Field, seed: bytes, r: int) -> bytes:
 
 
 def _element(f: Field, seed: bytes, r: int) -> int:
-    return int.from_bytes(_xof(_message(f, seed, r), f.word_bytes + 8), "little") % f.p
+    return int.from_bytes(xof(_message(f, seed, r), f.word_bytes + 8), "little") % f.p
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,7 +234,7 @@ def key(seed: bytes, codec: Codec = DEFAULT) -> Key:
     if type(codec) is not Codec:
         raise ValueError("a key is of a Codec")
     f = codec.field
-    mask = int.from_bytes(_xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if codec.masked else None
+    mask = int.from_bytes(xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if codec.masked else None
     c = tuple(_element(f, seed, r) for r in range(codec.rounds))
     return Key(codec, c, _element(f, seed, TWEAK_INDEX) or 1, mask, seed)
 
@@ -260,7 +261,7 @@ def binding(d: bytes, j: int, k: Key, coin: bytes | None = None) -> int:
         raise ValueError(f"an append's coin is {COIN_BYTES} bytes")
     else:
         message = _message(f, k.seed, COIN_INDEX) + at + d + coin
-    return int.from_bytes(_xof(message, DIGEST_BYTES), "little") % f.p
+    return int.from_bytes(xof(message, DIGEST_BYTES), "little") % f.p
 
 
 def rho(a: int, f: Field) -> int:

@@ -22,6 +22,8 @@ arena      one engine's weights (one GPU, tensor parallelism 1): every parameter
            norms and biases (one dimension) stay outside it
 store      `engines` arenas of `arena_blocks` each, in GPU order, then `host_blocks` of zero filler: each arena's
            weights chunks labelled (weights, hbm) and its rest (filler, hbm), the host tier (filler, host)
+salt       store_salt(key, label, c) = `codec.xof`(m)[0 : 192], SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖
+           SHA512(m ‖ u32be 2), m = "verity/store/salt/v1\0" ‖ key ‖ label ‖ u64be c (`SALT_VERSION`)
 payload    `audit.payload_tree` over the store, chunk j salted with store_salt(key, PAYLOAD_LABEL, j) under the
            verifier's key (its payload-key message), so its root follows from the pin, the store's shape and that key
            (`expected_root`, in worker processes: at a whole node's 130M chunks 665 s on 11 cores, the Lean's
@@ -53,7 +55,9 @@ from verity.ml.commitments.merkle import merkle_depth
 from . import audit, codec, receipts
 
 BLOCK = codec.BLOCK_BYTES
-SALT_DOMAIN = b"verity/store/salt/v0\0"
+SALT_VERSION = "verity/store/salt/v1"
+"""The salts' format, which `Binding.record` names beside the roots they make."""
+SALT_DOMAIN = SALT_VERSION.encode() + b"\0"
 PAYLOAD_LABEL = hashlib.sha512(b"verity/remote-session/payload-salts/v0").digest()
 KEY_BYTES = 32
 """The verifier's payload salt key."""
@@ -77,7 +81,8 @@ class Refused(ValueError):
 
 
 def store_salt(key: bytes, label: bytes, c: int) -> bytes:
-    return hashlib.shake_256(SALT_DOMAIN + key + label + struct.pack(">Q", c)).digest(receipts.SALT_BYTES)
+    """Salt `c` under `key` and `label` (the module's docstring), `RemoteAudit.Store.storeSalt`."""
+    return codec.xof(SALT_DOMAIN + key + label + struct.pack(">Q", c), receipts.SALT_BYTES)
 
 
 def canonical_json(obj) -> bytes:
@@ -516,4 +521,4 @@ class Binding:
     def record(self) -> dict:
         return {"name": self.role, "checkpoint_sha512": self.pin["checkpoint_sha512"], "pin": str(self.pin_path),
                 "checkpoint": str(self.directory), "files": len(self.pin["checkpoint"]), "workers": self.workers,
-                **self.state}
+                "salt": SALT_VERSION, **self.state}
