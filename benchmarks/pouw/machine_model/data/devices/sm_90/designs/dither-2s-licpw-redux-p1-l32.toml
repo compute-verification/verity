@@ -1,4 +1,4 @@
-# dither-2s-licpw-redux-l32 with ffill at p = 1, no luck credit (decision 99: a filler's credit is the theorem its check
+# dither-2s-licpw-redux-l32 with ffill at p = 1, no luck credit (a filler's credit is the theorem its check
 # meets): the H200's reading without ffill's check (ffill_ref.receipt). Honest still runs the filler, so γ counts it; the
 # floor program ♭ and the cheater leave it out, so ε_skip is this design's own at that ♭.
 base = "dither-2s-licpw-redux-l32"

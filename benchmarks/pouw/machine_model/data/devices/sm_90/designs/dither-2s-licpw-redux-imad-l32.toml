@@ -1,4 +1,4 @@
-# dither-2s-licpw-redux-l32 with an integer filler on the IMAD pipe in place of ffill (DC r12's route b), kept to price
+# dither-2s-licpw-redux-l32 with an integer filler on the IMAD pipe in place of ffill (route b), kept to price
 # the comparison: two steps a MMA on a thread's words, each m = IMAD(w, 2, 1) and v = IMAD(v, m, c). No kernel or check
 # exists; ffill (route a) is the headline's.
 base = "dither-2s-licpw-redux-l32"
