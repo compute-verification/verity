@@ -17,7 +17,6 @@
   "entries": [
     {"file": "verity_vllm/acquire/served.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "served"},
     {"file": "verity_vllm/check/capture_map.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "capture-map"},
-    {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "hidden-gpu"},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "capture-identities"},
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "fp8-checkpoint"},
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "kernel-identity"},

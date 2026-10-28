@@ -260,7 +260,6 @@
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "BLE001", "symbol": "_program_splits", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "F401", "symbol": "recompute_run", "detail": "`verity_vllm.properties.admission.evaluate_spec` imported but unused"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "RUF100", "symbol": "draw_accounting", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
-    {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "F841", "symbol": "cmd_bench", "detail": "Local variable `e` is assigned to but never used"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "RUF100", "symbol": "NativeCollectCommitter._commit_step", "detail": "Unused `noqa` directive (unused: `BLE001`)"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F821", "symbol": "tp_partials_bad", "detail": "Undefined name `Counter`"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "F841", "symbol": "NativeHostCommitter._commit_step", "detail": "Local variable `n_stream` is assigned to but never used"},

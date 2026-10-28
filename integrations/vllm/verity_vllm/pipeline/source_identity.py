@@ -1,7 +1,7 @@
 """Verity source identity + precheck: the job runs the tree it names, and a mixed tree is refused by construction.
 
     verity-vllm source-identity [--tree ROOT] [--sha SHA] [--out FILE] [--stage NAME]
-        exit 0  every important package (verity, verity_vllm, hidden_gpu, research) resolves from ROOT
+        exit 0  every important package (verity, verity_vllm, research) resolves from ROOT
         exit 3  PRECHECK_FAIL_SOURCE_IDENTITY -- the first line of stderr names the class, the following lines each mismatch
 
 The tree of record is the VERITY REPO ROOT: the checkout (or the shipped `git archive`, <root>/src/<sha>/) holding `.`,
@@ -15,9 +15,8 @@ A shipped tree has no .git and no EXPORT.json, so its sha comes from `--sha` or,
 `research` runner from request.json's tree_sha; see research.result.ENV_SOURCE_SHA).  Packages that resolve from the requested tree but
 whose tree carries no sha of its own are recorded with that sha (git_sha_source names where it came from).
 
-In-process: `precheck(stage)` is called by the Commit (commit_delta.main, before the engine is built -> before any inference), and
-`assert_loaded_module_is_ours` after an import a sys.path insertion made possible (the module that actually loaded must be this tree's).
-Both raise research.telemetry.source_identity.SourceIdentityError, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY.
+In-process: `precheck(stage)` is called by the Commit (commit_delta.main, before the engine is built -> before any inference).  It
+raises research.telemetry.source_identity.SourceIdentityError, whose message starts with PRECHECK_FAIL_SOURCE_IDENTITY.
 
 Import layout: the generic half is `research.telemetry.source_identity` and must be importable as such -- on a pod row_pod.sh exports
 PYTHONPATH=<integration root>:<repo>:<repo>/tools/research/src.  No sys.path is manipulated here: a `research` that
@@ -53,16 +52,13 @@ FAIL_CLASS = _sid.FAIL_CLASS
 SourceIdentityError = _sid.SourceIdentityError
 tree_identity = _sid.tree_identity
 
-# hidden_gpu resolves from <integration>/out/gen/r9/cmt-hidden/src (materialised by pod_hidden_gpu.sh from the shipped copy
-# verity_vllm/commit/committer/hidden_gpu_src) or from that shipped copy; both are candidates, the r9 path first
-HIDDEN_GPU_CANDIDATES = ("integrations/vllm/out/gen/r9/cmt-hidden/src/hidden_gpu.py", "integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py")
 # package name -> (import name, the sys.path entries it must resolve from, relative to the repo root); core's are the requested tree's
 # workspace roots that ship it (research.pythonpath.package_dirs)
 PACKAGE_ROOTS = {
     "verity_vllm": ("verity_vllm", ("integrations/vllm",)),
     "research": ("research", ("tools/research/src",)),                 # the runner/telemetry package of the tree of record
 }
-PACKAGES = ("verity", "verity_vllm", "hidden_gpu", "research")
+PACKAGES = ("verity", "verity_vllm", "research")
 ENV_SOURCE_SHA = "RESEARCH_SOURCE_SHA"
 
 
@@ -136,19 +132,16 @@ def resolve(tree: str | os.PathLike[str] | None = None, *, sha: str | None = Non
     sha, sha_src = declared_sha(sha)
     ids: dict[str, dict[str, Any]] = {}
     for name in PACKAGES:
-        if name == "hidden_gpu":
-            rec = _sid.resolve_file("hidden_gpu", [os.path.join(root, c) for c in HIDDEN_GPU_CANDIDATES], ROOT_MARKERS)
-        else:
-            import_name, rels = roots[name]
-            rec = _sid.resolve_module(import_name, ROOT_MARKERS)
-            rec["package"] = name
-            rec["import_name"] = import_name
-            rec["expected_sys_path_entry"] = os.pathsep.join(os.path.normpath(os.path.join(root, rel)) for rel in rels)
-            if rec.get("resolved_path"):
-                # <entry>/<import_name>/__init__.py, or each portion <entry>/<import_name> of a namespace -> the sys.path entries that resolved it
-                portions = [p["path"] for p in rec.get("portions") or ()]
-                rec["sys_path_entry"] = (os.pathsep.join(str(Path(p).parent) for p in portions) if portions
-                                         else str(Path(rec["resolved_path"]).parent.parent))
+        import_name, rels = roots[name]
+        rec = _sid.resolve_module(import_name, ROOT_MARKERS)
+        rec["package"] = name
+        rec["import_name"] = import_name
+        rec["expected_sys_path_entry"] = os.pathsep.join(os.path.normpath(os.path.join(root, rel)) for rel in rels)
+        if rec.get("resolved_path"):
+            # <entry>/<import_name>/__init__.py, or each portion <entry>/<import_name> of a namespace -> the sys.path entries that resolved it
+            portions = [p["path"] for p in rec.get("portions") or ()]
+            rec["sys_path_entry"] = (os.pathsep.join(str(Path(p).parent) for p in portions) if portions
+                                     else str(Path(rec["resolved_path"]).parent.parent))
         _fill_sha(rec, root, sha, sha_src)
         ids[name] = rec
     return ids
@@ -163,7 +156,7 @@ def manifest(tree: str | os.PathLike[str] | None = None, *, sha: str | None = No
         root, env_mm = e.requested_root, e.mismatches
     ids = resolve(root, sha=sha)                  # resolve() applies the same --sha / $RESEARCH_SOURCE_SHA precedence
     sha, sha_src = declared_sha(sha)
-    mm = env_mm + _sid.check(ids, root, requested_sha=sha, optional=("hidden_gpu",))
+    mm = env_mm + _sid.check(ids, root, requested_sha=sha)
     doc = _sid.document(ids, root, mm)
     if doc.get("requested") is not None and sha and doc["requested"].get("git_sha") is None:
         doc["requested"]["git_sha"] = sha            # the requested tree's own sha, when the tree cannot say it (git archive)
@@ -185,19 +178,6 @@ def precheck(stage: str, tree: str | os.PathLike[str] | None = None, *, sha: str
     if not doc["ok"]:
         raise SourceIdentityError(doc["mismatches"], doc["requested_root"])
     return doc
-
-
-def assert_loaded_module_is_ours(mod: Any, name: str, tree: str | os.PathLike[str] | None = None) -> dict[str, Any]:
-    """After an import that a sys.path insertion made possible (`import hidden_gpu` from the r9 directory), the module that LOADED must live in
-    the requested tree -- the by-construction guard at the import site itself."""
-    root = normalise_tree(tree)
-    f = getattr(mod, "__file__", None)
-    rec = {"package": name, "resolved_path": os.path.realpath(f) if f else None, "repo_root": _sid.repo_root_of(f, ROOT_MARKERS) if f else None, "loaded": True}
-    rec.update(_sid.tree_identity(rec["repo_root"]))
-    mm = _sid.check({name: rec}, root)
-    if mm:
-        raise SourceIdentityError(mm, root)
-    return rec
 
 
 @dataclass(frozen=True, kw_only=True)

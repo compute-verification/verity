@@ -56,9 +56,9 @@ def committers():
 def test_the_hot_key_takes_the_environment_as_before(env: pytest.MonkeyPatch) -> None:
     for k, v in {"PATH": "/bin", "PYTHONPATH": "/src", "VLLM_BATCH_INVARIANT": "1", "VERITY_WINDOW_MB": "256", "VERITY_TIMELINE": "/t",
                  "VERITY_HOT_SUBMIT": "1", "HASH_THREADS": "4", "CUDA_HOME": "/cuda", "TORCH_X": "", "OMP_NUM_THREADS": "8",
-                 "NATIVE_COLLECT_BUILD": "/no-such-build", "HIDDEN_GPU_BUILD": "", "HOME": "/h", "NCCL_P2P_DISABLE": "1"}.items():
+                 "NATIVE_COLLECT_BUILD": "/no-such-build", "HOME": "/h", "NCCL_P2P_DISABLE": "1"}.items():
         env.setenv(k, v)
-    assert _digest([hot.env_identity(), hot.so_identity([])]) == "0019aeeec8c143005b7a8b4b19531a0c"
+    assert _digest([hot.env_identity(), hot.so_identity([])]) == "7580fb5e57fd51d29eb814efbade623e"
 
 
 @pytest.mark.parametrize(("values", "digest"), [

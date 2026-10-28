@@ -98,12 +98,12 @@ def test_release_json_records_the_collector_source_digest():
     """release_json keeps the source_digest= / bindings= a collector build line prints beside the sha."""
     from verity_vllm.pipeline import release_json as rj
 
-    arts = rj.parse_artifacts("HIDDEN-GPU-OK 1111 /a.so sm_89", "FA2-TAP-OK 2222 /b.so arch=8.9",
+    arts = rj.parse_artifacts("FA2-TAP-OK 2222 /b.so arch=8.9",
                               "3333 /workspace/cp/nc_build/ab12cd34ef56/verity_native_collect.so source_digest=ab12cd34ef56ff bindings=48")
     assert arts["verity_native_collect.so"] == {"sha256": "3333", "path": "/workspace/cp/nc_build/ab12cd34ef56/verity_native_collect.so",
                                                 "source_digest": "ab12cd34ef56ff", "bindings": "48"}
     # the two-token line still parses (records written by earlier releases)
-    assert rj.parse_artifacts("HIDDEN-GPU-OK 1 /a sm", "FA2-TAP-OK 2 /b", "3 /nc/verity_native_collect.so")["verity_native_collect.so"] == \
+    assert rj.parse_artifacts("FA2-TAP-OK 2 /b", "3 /nc/verity_native_collect.so")["verity_native_collect.so"] == \
         {"sha256": "3", "path": "/nc/verity_native_collect.so"}
 
 

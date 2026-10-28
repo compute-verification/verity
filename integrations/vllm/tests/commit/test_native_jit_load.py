@@ -214,9 +214,7 @@ def test_a_killed_holder_leaves_no_lock_behind(tmp_path):
     assert p.exitcode == -signal.SIGKILL and not _held(bd), "the kernel drops the lock with its holder"
 
 
-@pytest.mark.parametrize("module", ["native_ext", "hidden_gpu"])
-def test_every_torch_jit_extension_of_the_commit_loads_through_jit_load(module):
+def test_the_commit_torch_jit_extension_loads_through_jit_load():
     here = os.path.dirname(os.path.abspath(nj.__file__))
-    path = {"native_ext": "native_ext.py", "hidden_gpu": os.path.join("hidden_gpu_src", "hidden_gpu.py")}[module]
-    src = open(os.path.join(here, path)).read()
+    src = open(os.path.join(here, "native_ext.py")).read()
     assert "native_jit.jit_load(" in src and "cpp_extension import load" not in src

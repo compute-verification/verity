@@ -20,7 +20,7 @@ export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-topp-pin}
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 if grep -q staged_sources "$TREE/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
-  export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+  export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 fi
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "base $BASE"; nvidia-smi -L; } | tee "$OUT/machine.txt"

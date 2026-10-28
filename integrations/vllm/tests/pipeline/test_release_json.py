@@ -16,14 +16,13 @@ from verity_vllm.pipeline import release_json as rj
 HERE = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
 EXPORT = {"commit": "a2dabe49314ec6d85d1d62096551cf76751c7ea0", "branch": "lane/r16-int", "dirty_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "dirty_patch_bytes": 0, "exported_utc": "2026-09-20T10:08:00Z"}
-HG = "HIDDEN-GPU-OK 1111 /root/.cache/torch_extensions/hidden_gpu_tree/hidden_gpu_tree.so sm_89"
 TP = "FA2-TAP-OK 2222 /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so arch=8.9 hdims=64,96,128 mask=14 layout=v8"
 NC = "3333 /workspace/cp/nc_build-r16-int-3/verity_native_collect.so"
 TP3 = "FA3-TAP-OK 4444 /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so hdims=64,128 mask=6 layout=v9"
 
 
 def _rec(tree: Path, tag="r16-int-3", cwd=None, **kw):
-    return rj.release_record(tag=tag, export=EXPORT, tree=str(tree), cwd=str(cwd or tree), artifacts=rj.parse_artifacts(HG, TP, NC),
+    return rj.release_record(tag=tag, export=EXPORT, tree=str(tree), cwd=str(cwd or tree), artifacts=rj.parse_artifacts(TP, NC),
                              env={"python": "3.12"}, gpu={"name": "L40S"}, installed_utc="2026-09-20T10:08:55Z", **kw)
 
 
@@ -32,7 +31,7 @@ def test_record_tree_is_the_installed_tree_never_the_default(tmp_path):
     rel = _rec(own)
     assert rel["tree"] == os.path.realpath(str(own))
     assert rel["schema"] == rj.SCHEMA and rel["tag"] == "r16-int-3" and rel["commit"] == EXPORT["commit"]
-    assert set(rel["artifacts"]) == {"hidden_gpu_tree.so", "verity_fa2_matReq.so", "verity_native_collect.so"}
+    assert set(rel["artifacts"]) == {"verity_fa2_matReq.so", "verity_native_collect.so"}
 
 
 def test_record_refuses_a_tree_that_is_not_the_cwd(tmp_path):
@@ -50,14 +49,12 @@ def test_record_resolves_symlinked_trees(tmp_path):
 
 
 def test_parse_artifacts_fa3_optional_and_fail_closed():
-    arts = rj.parse_artifacts(HG, TP, NC, TP3)
+    arts = rj.parse_artifacts(TP, NC, TP3)
     assert arts["verity_fa3_matReq.so"] == {"sha256": "4444", "path": "/workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so", "hdims": "64,128", "mask": "6", "layout": "v9"}
-    assert arts["verity_fa2_matReq.so"]["arch"] == "8.9" and arts["hidden_gpu_tree.so"]["arch"] == "sm_89"
-    assert "verity_fa3_matReq.so" not in rj.parse_artifacts(HG, TP, NC, "")
+    assert arts["verity_fa2_matReq.so"]["arch"] == "8.9"
+    assert "verity_fa3_matReq.so" not in rj.parse_artifacts(TP, NC, "")
     with pytest.raises(ValueError):
-        rj.parse_artifacts("HIDDEN-GPU-FAIL nvcc", TP, NC)
-    with pytest.raises(ValueError):
-        rj.parse_artifacts(HG, "FA2-TAP-FAIL build", NC)
+        rj.parse_artifacts("FA2-TAP-FAIL build", NC)
 
 
 def test_m0477_shape_does_not_name_the_own_tree():
@@ -100,7 +97,7 @@ def test_release_line_two_trees_on_one_pod(tmp_path):
     base = _tree_with_export(tmp_path, "shared", exp2)
     own = _tree_with_export(tmp_path, "r16-int-3")
     pod = tmp_path / "RELEASE.json"
-    rel2 = rj.release_record(tag="r16-int-2", export=exp2, tree=str(base), cwd=str(base), artifacts=rj.parse_artifacts(HG, TP, NC), env={}, gpu={}, installed_utc="t")
+    rel2 = rj.release_record(tag="r16-int-2", export=exp2, tree=str(base), cwd=str(base), artifacts=rj.parse_artifacts(TP, NC), env={}, gpu={}, installed_utc="t")
     rj.write_record(rel2, str(base), str(pod))
     rj.write_record(_rec(own), str(own), str(pod))          # the later own-tree ship overwrites the pod-wide file
     assert json.load(open(pod))["tag"] == "r16-int-3"

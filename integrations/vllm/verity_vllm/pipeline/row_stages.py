@@ -177,7 +177,7 @@ class SingleRow(Row):
             except (OSError, ValueError, AttributeError) as e:
                 self.log(f"job.json not updated with the source identity: {e}")
         self.tl("precheck", "end", ("rc", 0))
-        self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm hidden_gpu research)",
+        self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm research)",
                      quiet=True)
 
     def shape(self) -> None:

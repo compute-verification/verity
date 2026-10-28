@@ -1,7 +1,6 @@
 {
   "rule": "P3 (one evaluator interface, one challenge derivation)",
   "entries": [
-    {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "rng", "symbol": "cmd_check", "detail": "numpy.random.default_rng", "count": 2},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "if-ladder", "symbol": "StreamLayout.word_index", "detail": "cls"},
     {"file": "verity_vllm/commit/hidden_stream.py", "kind": "if-ladder", "symbol": "thread_word_offset", "detail": "cls"},
     {"file": "verity_vllm/correspondence/capture_identities.py", "kind": "rng", "symbol": "run", "detail": "numpy.random.default_rng"},

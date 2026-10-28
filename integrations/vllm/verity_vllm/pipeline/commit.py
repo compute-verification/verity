@@ -1103,8 +1103,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
         faulthandler.dump_traceback_later(tracedump, repeat=True)
-    # source identity precheck BEFORE anything else runs: verity.ml.circuits, verity_vllm, vllm-poc,
-    # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
+    # source identity precheck BEFORE anything else runs: verity.ml.circuits, verity_vllm
+    # (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
     from verity_vllm.pipeline import source_identity as _sid
 

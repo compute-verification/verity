@@ -15,7 +15,7 @@ a record names its tree or none.  Rules:
 
 Stdlib only at import time; `write` imports torch/vllm lazily for the env identity.
 
-  verity-vllm release-json write --tag <tag> --tree <tree> --hg "HIDDEN-GPU-OK ..." --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
+  verity-vllm release-json write --tag <tag> --tree <tree> --tp "FA2-TAP-OK ..." --nc "<sha> <path>" [--tp3 "FA3-TAP-OK ..."] [--nc-build <dir>]
   verity-vllm release-json check --tree <tree> --tag <tag> --commit <sha>      -> RELEASE-TREE-OK ... | RELEASE-TREE-FAIL <why> (exit 1)
   verity-vllm release-json line <tree>                                          -> "<release line>\t<record path or ->"
 """
@@ -49,17 +49,14 @@ def native_collect_build_dir(tree: str) -> str:
     return f"{DEFAULT_NC_BUILD}-{os.path.basename(t.rstrip('/')) or 'tree'}"
 
 
-def parse_artifacts(hg: str, tp: str, nc: str, tp3: str = "") -> dict:
-    """The three (four on cc 9.x) built artifacts from the pod-side OK lines."""
-    hg_f, tp_f, nc_f = hg.split(), tp.split(), nc.split()
-    if len(hg_f) < 3 or not hg_f[0].startswith("HIDDEN-GPU-OK"):
-        raise ValueError(f"hidden_gpu line not OK: {hg!r}")
+def parse_artifacts(tp: str, nc: str, tp3: str = "") -> dict:
+    """The two (three on cc 9.x) built artifacts from the pod-side OK lines."""
+    tp_f, nc_f = tp.split(), nc.split()
     if len(tp_f) < 3 or not tp_f[0].startswith("FA2-TAP-OK"):
         raise ValueError(f"fa2 tap line not OK: {tp!r}")
     if len(nc_f) < 2:
         raise ValueError(f"native collector line malformed: {nc!r}")
-    arts = {"hidden_gpu_tree.so": {"sha256": hg_f[1], "path": hg_f[2], "arch": hg_f[3] if len(hg_f) > 3 else None},
-            "verity_fa2_matReq.so": {"sha256": tp_f[1], "path": tp_f[2], **dict(kv.split("=", 1) for kv in tp_f[3:] if "=" in kv)},
+    arts = {"verity_fa2_matReq.so": {"sha256": tp_f[1], "path": tp_f[2], **dict(kv.split("=", 1) for kv in tp_f[3:] if "=" in kv)},
             # source_digest = the key of the JIT dir the .so was built in (native_jit); bindings = the pybind names checked
             "verity_native_collect.so": {"sha256": nc_f[0], "path": nc_f[1], **dict(kv.split("=", 1) for kv in nc_f[2:] if "=" in kv)}}
     if tp3:
@@ -187,7 +184,6 @@ class WriteOptions:
 
     tag: str = option("--tag")
     tree: str = option("--tree")
-    hg: str = option("--hg")
     tp: str = option("--tp")
     nc: str = option("--nc")
     tp3: str = option("--tp3", default="")
@@ -238,7 +234,7 @@ def main(a: WriteOptions | CheckOptions | LineOptions | NcBuildOptions) -> int:
     if a.cmd == "write":
         export = json.load(open(a.export))
         env, gpu, freeze = _env_identity()
-        arts = parse_artifacts(a.hg, a.tp, a.nc, a.tp3)
+        arts = parse_artifacts(a.tp, a.nc, a.tp3)
         bd = {"native_collect": a.nc_build} if a.nc_build else None
         rel = release_record(tag=a.tag, export=export, tree=a.tree, cwd=os.getcwd(), artifacts=arts, env=env, gpu=gpu, build_dirs=bd)
         paths = write_record(rel, a.tree, a.out)

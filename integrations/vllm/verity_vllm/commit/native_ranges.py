@@ -32,8 +32,7 @@ class RangeOpening:
 
 
 def open_levels(levels: list, index: int) -> tuple:
-    """Sibling path from level tensors (int32 [n, 8], or rows-sha512's uint8 [n, 64], leaves first) -- the same rule as CMT-2's
-    `hidden_gpu.gpu_open`, device or host."""
+    """Sibling path from level tensors (int32 [n, 8], or rows-sha512's uint8 [n, 64], leaves first), device or host."""
     path: list = []
     cursor = index
     for lv in levels[:-1]:

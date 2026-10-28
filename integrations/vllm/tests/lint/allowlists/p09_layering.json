@@ -18,8 +18,6 @@
     {"file": "verity_vllm/check/match/global_match.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.global_match -> pipeline.gc_tuning"},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.rank_match -> pipeline.build"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "layer", "symbol": "<module>", "detail": "check.weights_of_record -> pipeline.experiment"},
-    {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.hidden_gpu_src.hidden_gpu -> verity_vllm"},
-    {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "sys-path", "symbol": "<module>", "detail": "sys.path.insert"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_collect -> acquire.committer_api"},
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_hidden -> acquire.sources.hidden_source"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.committer_api"},

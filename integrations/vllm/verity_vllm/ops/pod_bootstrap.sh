@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pod runtime for the Verity x vLLM integration (research/infra; no Verity semantics): ONE Python 3.12 environment (torch cu129, vLLM
 # d9105ea80, numpy, safetensors),
-# the native taps (hidden_gpu chunk tree, FA2 matReq tap; FA3 on sm_90; the default-on workload taps), the pinned checkpoints, and a readiness record.
+# the native taps (FA2 matReq tap; FA3 on sm_90; the default-on workload taps), the pinned checkpoints, and a readiness record.
 #
 #   research run --on <machine> --project verity --source <verity checkout> -- bash -c "cd integrations/vllm && bash verity_vllm/ops/pod_bootstrap.sh [--cases B0[,B1]] [--out DIR] [--cpu|--gpu] [--dry-run]"
 #
@@ -14,15 +14,15 @@
 # PROTOCOL SUMMARY (pod readiness; runs once per pod, before any row_pod.sh)
 #   Purpose: make a fresh pod able to run workloads from THIS shipped tree: venv312 (Python 3.12) + the sha256-pinned vLLM d9105ea80 cu129
 #     wheel + torch cu129, the pinned checkpoints (manifests/checkpoints.json: sha256 per safetensors shard), the native taps
-#     (hidden_gpu chunk tree, FA2 matReq tap, FA3 tap on cc 9.0) and a mechanical readiness record.
+#     (FA2 matReq tap, FA3 tap on cc 9.0) and a mechanical readiness record.
 #   Inputs: --cases B0[,B1] (checkpoint roles of checkpoints.json), --out DIR, --cpu | --gpu (force a mode), --dry-run; the env above.
 #   Modes: gpu (default when `nvidia-smi` is on PATH) runs every step.  cpu (`--cpu`, or auto-selected when `nvidia-smi` is absent)
 #     runs steps 1-3 unchanged, skips the native taps (step 4), and writes the same readiness record with the
-#     GPU checks (torch_cuda, hidden_gpu_so, fa2_tap_so, fa3_tap_so) replaced by torch_cpu, plus "mode": "cpu",
+#     GPU checks (torch_cuda, fa2_tap_so, fa3_tap_so) replaced by torch_cpu, plus "mode": "cpu",
 #     "cuda_available": <torch.cuda.is_available()> and a cpu{nproc, model} measurement; `ok` = AND of the CPU checks.  The gpu-mode
 #     record is unchanged (no "mode" key = gpu).  `--dry-run` prints the resolved mode and the steps it would run, touches nothing, exits 0.
 #   Outputs: $OUT/readiness.json (schema verity-vllm/readiness/v1: checks{ok, value|error}, identities, measurements network/disk/memory),
-#     $OUT/{pip,checkpoints,hidden_gpu,fa2_tap,fa3_tap,fa2_tap_guarded,fa3_tap_guarded,norm_tap,router_tap}.log, $OUT/bootstrap.fail on a
+#     $OUT/{pip,checkpoints,fa2_tap,fa3_tap,fa2_tap_guarded,fa3_tap_guarded,norm_tap,router_tap}.log, $OUT/bootstrap.fail on a
 #     failure, $OUT/staged-<case> for a checkpoint this run staged (and its `staged` label in the store); the last stdout line is BOOTSTRAP-OK.
 #   Invariants: idempotent (every step checks before it builds); a failing step exits 3 with the named class BOOTSTRAP_FAIL_<STEP>;
 #     readiness.json is written BEFORE its verdict is taken (a failed check still leaves the record; `ok` = AND of the checks);
@@ -44,7 +44,7 @@ if [ "$MODE" = auto ]; then
 fi
 if [ "$DRY_RUN" = 1 ]; then
   echo "mode=$MODE cases=$CASES out=$OUT venv=$VENV"
-  echo "steps: 1 venv312; 2 vLLM d9105ea80 + torch cu129; 3 checkpoints $CASES; $([ "$MODE" = gpu ] && echo "4 native taps (hidden_gpu, fa2_tap, fa3_tap on cc 9.0; row taps ROW_TAPS=${ROW_TAPS:-1}); " || echo '4 native taps SKIPPED (cpu mode); ')5 readiness.json ($MODE)"
+  echo "steps: 1 venv312; 2 vLLM d9105ea80 + torch cu129; 3 checkpoints $CASES; $([ "$MODE" = gpu ] && echo "4 native taps (fa2_tap, fa3_tap on cc 9.0; row taps ROW_TAPS=${ROW_TAPS:-1}); " || echo '4 native taps SKIPPED (cpu mode); ')5 readiness.json ($MODE)"
   echo BOOTSTRAP-DRY-RUN; exit 0
 fi
 mkdir -p "$OUT" "$WORK/wheels"
@@ -154,8 +154,6 @@ done
 if [ "$MODE" = gpu ]; then
 CC=$($PY -c "import torch; cc=torch.cuda.get_device_capability(0); print(f'{cc[0]}.{cc[1]}')" 2>/dev/null) || fail CUDA "torch sees no CUDA device ($($PY -c 'import torch;print(torch.__version__)' 2>&1))"
 export MAX_JOBS=${MAX_JOBS:-$(nproc)}
-VENV=$VENV bash verity_vllm/ops/pod_hidden_gpu.sh >"$OUT/hidden_gpu.log" 2>&1; grep -q '^HIDDEN-GPU-OK' "$OUT/hidden_gpu.log" || fail HIDDEN_GPU "$(tail -2 "$OUT/hidden_gpu.log")"
-HG_LINE=$(grep '^HIDDEN-GPU-OK' "$OUT/hidden_gpu.log" | tail -1); log "$HG_LINE"
 VENV=$VENV FA2_TAP_HDIMS=${FA2_TAP_HDIMS:-64,96,128,256} bash verity_vllm/ops/pod_fa2_tap.sh >"$OUT/fa2_tap.log" 2>&1; grep -q '^FA2-TAP-OK' "$OUT/fa2_tap.log" || fail FA2_TAP "$(tail -2 "$OUT/fa2_tap.log")"
 log "$(grep '^FA2-TAP-OK' "$OUT/fa2_tap.log" | tail -1)"
 if [ "$CC" = "9.0" ]; then
@@ -175,14 +173,13 @@ if [ "${ROW_TAPS:-1}" = 1 ]; then       # the taps config.CommitConfig runs by d
   log "$(grep '^ROUTER-TAP-OK' "$OUT/router_tap.log" | tail -1)"
 fi
 else
-CC=""; HG_LINE=""; log "cpu mode: native taps (hidden_gpu, fa2_tap, fa3_tap, row taps) skipped"
+CC=""; log "cpu mode: native taps (fa2_tap, fa3_tap, row taps) skipped"
 fi
 
 # ---- 5. readiness: prove the environment mechanically and record the identities --------------------------------------------------
-HG_SO=$(echo "$HG_LINE" | awk '{print $3}')
-$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$HG_SO" "$CC" "$RESEARCH" "$MODE" "$CORE/verity/core" <<'EOF' || fail READINESS "see $OUT/readiness.json"
+$PY - "$ROOT" "$CORE" "$OUT/readiness.json" "$CC" "$RESEARCH" "$MODE" "$CORE/verity/core" <<'EOF' || fail READINESS "see $OUT/readiness.json"
 import hashlib, importlib, json, os, platform, subprocess, sys
-root, core, out, hg_so, cc, research, mode, verifiers = sys.argv[1:9]
+root, core, out, cc, research, mode, verifiers = sys.argv[1:8]
 gpu = mode == "gpu"
 r = {"schema": "verity-vllm/readiness/v1", "checks": {}, "identities": {}}
 if not gpu:
@@ -218,8 +215,6 @@ def distributions_from_tree():
 check("distributions_from_tree", distributions_from_tree)
 check("numpy_import", lambda: __import__("numpy").__version__)
 check("no_old_tree_on_path", lambda: [p for p in sys.path if "/workspace/cp/veritor" in p or p.endswith("/vllm-poc")] == [] or (_ for _ in ()).throw(RuntimeError(str(sys.path))))
-if gpu:
-    check("hidden_gpu_so", lambda: {"path": hg_so, "sha256": sha(hg_so)})
 fa2 = "/workspace/cp/fa2/build/matReq/verity_fa2_matReq.so"
 def fa2_check():
     import torch
@@ -242,7 +237,7 @@ r["identities"] = {"python": sys.version.split()[0], "executable": sys.executabl
                    "driver": nvsmi("driver_version"), "gpu": nvsmi("name"), "cuda_home": os.environ.get("CUDA_HOME"),
                    "nvcc": subprocess.run(["bash", "-lc", "nvcc --version | tail -1"], capture_output=True, text=True).stdout.strip(),
                    "tree": {"integration_root": root, "verity_core": core, "research": research},
-                   "native": {k: r["checks"][k].get("value") for k in ("hidden_gpu_so", "fa2_tap_so", "fa3_tap_so") if k in r["checks"]}}
+                   "native": {k: r["checks"][k].get("value") for k in ("fa2_tap_so", "fa3_tap_so") if k in r["checks"]}}
 r["ok"] = all(c["ok"] for c in r["checks"].values())
 # ---- measurements: the pod's non-GPU admission resources, MEASURED at bootstrap and recorded beside the checks.  Advisory:
 # none fails the bootstrap (a slow or small pod can still compute); the launcher and the attempt's conditions read them.  Why each:

@@ -19,7 +19,6 @@ verity_vllm/ops/compiled_commit.sh
 verity_vllm/ops/fa3_row_negatives.sh
 verity_vllm/ops/pod_fa2_tap.sh
 verity_vllm/ops/pod_fa3_tap.sh
-verity_vllm/ops/pod_hidden_gpu.sh
 verity_vllm/ops/pod_norm_tap.sh
 verity_vllm/ops/pod_router_tap.sh
 verity_vllm/ops/stoch_negative_n3.sh

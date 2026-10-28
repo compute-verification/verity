@@ -6,7 +6,6 @@
     {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "compile_settings", "detail": "except Exception"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
-    {"file": "verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py", "kind": "environ", "symbol": "<module>", "detail": "VERITY_TREE"},
     {"file": "verity_vllm/acquire/sources/moe_source.py", "kind": "broad-except", "symbol": "MoeBlockSource._sites", "detail": "except Exception"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter.verify", "detail": "except Exception"},

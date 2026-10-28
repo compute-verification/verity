@@ -1031,7 +1031,6 @@
     {"file": "integrations/vllm/verity_vllm/ops/pod_bootstrap.sh", "count": 5},
     {"file": "integrations/vllm/verity_vllm/ops/pod_fa2_tap.sh", "count": 7},
     {"file": "integrations/vllm/verity_vllm/ops/pod_fa3_tap.sh", "count": 3},
-    {"file": "integrations/vllm/verity_vllm/ops/pod_hidden_gpu.sh", "count": 7},
     {"file": "integrations/vllm/verity_vllm/ops/stoch_negative_n3.sh", "count": 2},
     {"file": "integrations/vllm/verity_vllm/ops/stoch_negatives.sh", "count": 1},
     {"file": "integrations/vllm/verity_vllm/pipeline/admission_bound.py", "count": 2},
