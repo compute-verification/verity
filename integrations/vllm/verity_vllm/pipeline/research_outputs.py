@@ -26,7 +26,7 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
     replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record (a TP row that is not a config run decides in
                                       commit/summary.json, as tp-commit-replay folded it).  Never a replay bundle or a slim keep
                                       (`cpu_replay.keep`): both hold clear values (committed values with their salts, the requests
-                                      and served tokens, opened weights), so they stay on the node, prover-side (VLLM-148).
+                                      and served tokens, opened weights), so they stay on the node, prover-side.
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
