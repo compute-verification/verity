@@ -63,11 +63,15 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
 - **The memory challenger's parties**: `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
   run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
-  (`challenger_party.py`, port 47610) as `auditor` from the pinned tree, one session per ssh connection: the request line
-  on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
+  (`challenger_party.py`, port 47610), and `bw_party [--pous-session SID] [--minutes M]` the remote bandwidth audit's P2
+  party (`verity/core/protocols/remote_bandwidth/p2_party.py`, port 47612, with the registration the host names), as
+  `auditor` from the pinned tree, one session per ssh connection: the request line on the gate's stdin, `{"listening"}`
+  and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
-  on the host, never leaving it; `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
+  on the host, never leaving it. `bw_party`'s registration is the host's, never the caller's: with `--pous-session SID`, the
+  setup the block challenger kept for its PoUS session SID (`<root>/parties/pous/setups/SID.json`, the store that session
+  bound), else the fixture store's in the pinned tree (`PARTY_FIXED`). `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
   `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
   t1). A lane
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
@@ -135,7 +139,12 @@ STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
-           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610)}
+           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610),
+           "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
+PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
+"""Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
+which `bw_party` holds when no PoUS session names its store."""
+SESSION_ID = re.compile(r"[0-9a-f]{64}")
 PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
 PARTY_MINUTES = (1, 180)
 """A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
@@ -560,15 +569,21 @@ def party_args(verb: str, rest: list[str]) -> tuple[list[str], int]:
 def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     """The party's command line for `verb` (`PARTIES`): its module from the pinned tree as `auditor`, its key and session log in
     `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
-    `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, and nothing of
-    `challenger_party`'s; never a path, an address or an egress count (the session signs UNCOUNTED, which bounds nothing,
-    until the network certifier's count reaches the host)."""
+    `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
+    `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host;
+    `PARTY_FIXED`'s without it), and nothing of `challenger_party`'s; never a path, an address or an egress count (the
+    session signs UNCOUNTED, which bounds nothing, until the network certifier's count reaches the host)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)
     while args:
         flag = args.pop(0)
-        if verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:
+        if verb == "bw_party" and flag == "--pous-session" and args and "--pous-session" not in extra:
+            sid = args.pop(0)
+            if not SESSION_ID.fullmatch(sid):
+                raise Refused(f"bw_party --pous-session takes a PoUS session id, 64 lowercase hex digits; got {sid!r}")
+            extra += ["--pous-record", str(host.parties / PARTIES["challenger_party"][0]), "--pous-session", sid]
+        elif verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:
             extra += ["--streamer", "build"]
         elif verb == "wipe_party" and flag in PARTY_INTS and args and flag not in extra:
             lo, hi = PARTY_INTS[flag]
@@ -577,11 +592,13 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
                 raise Refused(f"{verb} {flag} takes an integer in [{lo}, {hi}], got {v!r}")
             extra += [flag, v]
         else:
-            raise Refused(f"{verb} takes {'[--reads K] [--native] [--threads T]' if verb == 'wipe_party' else 'no flags'}"
-                          f"; got {flag!r}")
+            takes = {"wipe_party": "[--reads K] [--native] [--threads T]", "bw_party": "[--pous-session SID]"}
+            raise Refused(f"{verb} takes {takes.get(verb, 'no flags')}; got {flag!r}")
     if "--threads" in extra and "--streamer" not in extra:
         raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
-    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *extra)
+    fixed = [] if "--pous-record" in extra else PARTY_FIXED.get(verb, [])
+    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *fixed,
+                              *extra)
 
 
 def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
@@ -613,8 +630,9 @@ def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
 
 def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime, busy: Callable[[], list[str]],
                own: Callable[[Path], None], run: Callable[[list[str], BinaryIO, Path, int], int], sink: BinaryIO) -> int:
-    """`wipe_party` / `challenger_party`: one session of the party, served while the ssh connection lasts; refused while a
-    verifier unit runs (its cores would time the reads) or the same party serves another session. Each session's request
+    """`wipe_party` / `challenger_party` / `bw_party`: one session of the party, served while the ssh connection lasts;
+    refused while a verifier unit runs (its cores would time the reads) or the same party serves another session. Each
+    session's request
     and end go to `<root>/parties/<name>/requests.jsonl`, its stdout to `log/<utc>.jsonl` beside it."""
     rest, minutes = party_args(verb, rest)
     argv = party_argv(verb, rest, host)
@@ -703,8 +721,8 @@ def run_keygen(argv: list[str]) -> str:
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
-         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
-         "on stdin) "
+         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] "
+         "| bw_party [--pous-session SID] [--minutes M] (the request line on stdin) "
          "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
          "| party_log wipe|pous [LOG]")
 
