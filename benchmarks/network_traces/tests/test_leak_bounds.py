@@ -2,7 +2,8 @@
 and `datacenter` gives its 1,000-machine rows. `datacenter` is links × `per_link` for identical links, each link at
 δ / links.
 
-The KO 1 class's points reproduce at the census's reference datacenter:
+The KO 1 class's points reproduce at the census's reference datacenter, with an entry of 32 + KO·IDB bits and with
+`ingress_scan.entry_layout`'s read bit beside them:
 - a week for one link, as registered and at the anchors, and for every link of the datacenter;
 - the datacenter's rates at which K reaches the weights, summed from per-link statements each at δ = 1%, whose union
   fails with at most links · δ;
@@ -94,18 +95,35 @@ def test_datacenter_is_links_times_per_link():
         3 * LB.per_link(KO1, RATE, "week", "anchors", T=32).bits + LB.per_link(ko64, 1, "week", "anchors", T=32).bits)
 
 
-def test_the_ko1_points_reproduce():
+#: the KO 1 points at the anchors, by whether an entry carries its read bit: a request's entry bits, one link's week
+#: (bits, share), one link's week at 0.5 requests a second, the datacenter's week, the datacenter's rates summed from
+#: per-link statements at δ = 1% (a week, a month) and its per-period rates (a week, a month, a year)
+POINTS = {False: (49, 7.6485e7, "0.387%", "0.0774%", "48.4", [348, 81], [646.3, 150.8, 12.4]),
+          True: (50, 7.79965e7, "0.394%", "0.0789%", "49.3", [341, 80], [633.8, 147.9, 12.2])}
+
+
+@pytest.fixture(params=[False, True], ids=["no read bit", "entry_layout"])
+def read(request, monkeypatch):
+    """An entry of 32 + KO·IDB bits, without its read bit, and `ingress_scan.entry_layout`'s, with it."""
+    if not request.param:
+        layout = IS.entry_layout
+        monkeypatch.setattr(IS, "entry_layout", lambda cls: tuple(e for e in layout(cls) if e[0] != "read"))
+    return request.param
+
+
+def test_the_ko1_points_reproduce(read):
+    entry, bits, share, slow, many, _, _ = POINTS[read]
     link = LB.link(KO1, RATE, T=32)
     assert link.widths == {"NS": 145_360, "NP": 208, "NV": 608} and link.b == 145_968 and link.egress_cells == 2
     week = {reading: LB.per_link(KO1, RATE, "week", reading, T=32) for reading in LB.READINGS}
     assert f"{week['registered'].bits:.6g}" == "1.26038e+09" and f"{week['registered'].share:.2%}" == "6.37%"
-    assert week["anchors"].bits == pytest.approx(7.6485e7, rel=1e-5) and f"{week['anchors'].share:.3%}" == "0.387%"
-    assert week["anchors"].bits == pytest.approx(RATE * 604_800 * (49 + math.log2(3)))
-    assert f"{LB.per_link(KO1, 0.5, 'week', 'anchors', T=32).share:.4%}" == "0.0774%"
+    assert week["anchors"].bits == pytest.approx(bits, rel=1e-5) and f"{week['anchors'].share:.3%}" == share
+    assert week["anchors"].bits == pytest.approx(RATE * 604_800 * (entry + math.log2(3)))
+    assert f"{LB.per_link(KO1, 0.5, 'week', 'anchors', T=32).share:.4%}" == slow
     n = _links()
     assert n == 12_500
     dc = {reading: LB.datacenter([link] * n, "week", reading) for reading in LB.READINGS}
-    assert f"{dc['registered'].share:.0f}" == "797" and f"{dc['anchors'].share:.1f}" == "48.4"
+    assert f"{dc['registered'].share:.0f}" == "797" and f"{dc['anchors'].share:.1f}" == many
 
 
 def _rate(period: str, delta: Fraction | None, n: int, *, each_at_delta: bool = False) -> float:
@@ -120,15 +138,15 @@ def _rate(period: str, delta: Fraction | None, n: int, *, each_at_delta: bool = 
     return (LB.WEIGHTS_BITS - floor) / (k(Fraction(1, n)) - floor)
 
 
-def test_the_datacenter_rates_and_what_they_hold_at():
+def test_the_datacenter_rates_and_what_they_hold_at(read):
+    *_, summed, per_period = POINTS[read]
     n, one = _links(), Fraction(1, 100)
-    assert round(_rate("week", one, n, each_at_delta=True)) == 348
-    assert round(_rate("month", one, n, each_at_delta=True)) == 81
+    assert [round(_rate(p, one, n, each_at_delta=True)) for p in ("week", "month")] == summed
     assert n * one == 125
     floor = LB.datacenter([LB.link(KO1, 0, T=32)] * n, "week", "anchors", one)
     assert LB.fmax(one / n) == 15 and floor.share > 1 and f"{floor.share:.3g}" == "1.38"
     assert _rate("week", one, n) < 0
-    assert [round(_rate(p, None, n), 1) for p in ("week", "month", "year")] == [646.3, 150.8, 12.4]
+    assert [round(_rate(p, None, n), 1) for p in ("week", "month", "year")] == per_period
 
 
 def test_a_window_class_and_refusals():

@@ -218,6 +218,16 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   than an idle one. The warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
+Each `prog` entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is
+refused), so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request. Until each
+due, occupied slot's entry is a wire from its Program's `SlotEntry_v1` unit, that bit is the prover's word (an entry
+of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses every rows-form period of a link-window,
+last, by name (`unwired`), and the rows form publishes no K yet.
+Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), these rows are a compute audit's outputs
+and the scan's own free term is 0: the bits are that audit's free inputs (the toy block's `x`), which the rows form's
+K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
+tied audit's inputs; K is unchanged in what it bounds, 143,872 bits a link-window at w63.
+
 The two forms:
 - The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ faulty proof blocks of b = NS + NV = 154,480 bits,
   and Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶ for one link. The form is conditional: `hesc` and
@@ -263,8 +273,8 @@ This second table is what the generator-form lowering would give if it registers
 It is not the record's number.
 
 K also rests on these conditions:
-- The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
-  That reading is a claim, with lean and Daniel.
+- The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
+  reading is a claim, with lean and Daniel.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
@@ -274,7 +284,8 @@ K also rests on these conditions:
 - At light traffic (40 requests over 43 sampling blocks, 0.93 a sampling block, its scan's every proof block drawn)
   the anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is
   1.37× a machine-week either way.
-- The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
+- An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
+  audit's (the toy block's) are the sampling block's free inputs above.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
 `HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

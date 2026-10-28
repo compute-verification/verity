@@ -632,7 +632,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int | None = None) -
     (`scan_zk.CLASS`) and its draw of every proof block, by `leak_bounds`: one machine is one link certifying the run's
     own request rate (`leak_bounds.per_link`), and 1,000 machines are as many identical links summed
     (`leak_bounds.datacenter`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
-    pooled one (`HorizonLeakAccepted`'s at q = 1), and in both readings of the scan's free inputs
+    pooled one (`HorizonLeakAccepted`'s at q = 1), and in both readings of the sampling block's free inputs
     (`leak_bounds.READINGS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
@@ -686,8 +686,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int | None = None) -
                       "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS}},
             "weights_bits": weights_bits, "rows": rows, "theorems": dict(LB.STATEMENTS),
             "conditions": [
-                "the generator reading of the scan's statement (each proof block's registered rows its boundary "
-                "values): a claim, with lean and Daniel",
+                "the generator reading of the scan's statement (each unit's registered rows its boundary values): "
+                "a claim, with lean and Daniel",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
                 "and the server can't move an admission (not met today)",
                 f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
@@ -697,7 +697,11 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int | None = None) -
                 f"the {MACHINES[-1]:,}-machine rows sum {MACHINES[-1]:,} identical links (leak_bounds.datacenter), "
                 f"each link pooled at δ / {MACHINES[-1]:,} ({split}) and paying its own faulty proof blocks: our "
                 "composition, which no Lean statement covers",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
+                "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
+                "sum",
+                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so its T·NP bits are "
+                "the tied audit's free inputs, which Lean's rows-form K charges to the sampling block's term "
+                "(tiedAudits), as this K does"]}
 
 
 def leak_markdown(doc: dict) -> str:
