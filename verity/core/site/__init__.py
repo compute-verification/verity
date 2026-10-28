@@ -667,10 +667,16 @@ def _first(composite: str, s: Site, head: str, e: Entry, auditor: Auditor) -> tu
     return None
 
 
-def refusal(log: Registration, e: Entry, auditor: Auditor) -> str | None:
-    """**The refusal** (`Registration.Entry.refusal`): the first check `e` fails against the log before it, or None."""
-    r = _first(log.composite, Site.of_log(log), log.head, e, auditor)
+def entry_refusal(composite: str, site: Site, head: str, e: Entry, auditor: Auditor) -> str | None:
+    """**The refusal** (`Registration.Entry.refusal`): the first check `e` fails against the site `site` and head `head`
+    of the log before it, or None."""
+    r = _first(composite, site, head, e, auditor)
     return None if r is None else r[0]
+
+
+def refusal(log: Registration, e: Entry, auditor: Auditor) -> str | None:
+    """`entry_refusal` against the log before `e`."""
+    return entry_refusal(log.composite, Site.of_log(log), log.head, e, auditor)
 
 
 def check_registration(log: Registration, e: Entry, auditor: Auditor) -> Registration:
