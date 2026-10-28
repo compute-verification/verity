@@ -202,16 +202,17 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
         out["reason"] = f"{judged.get('reason')}; {scope}"
         return out
     public = dict(judged["public"])
-    if r_bytes_per_s is not None and public["span_ns"] > 0:
-        from fractions import Fraction
-
-        public |= {"gamma": str(1 - Fraction(public["q_bytes"] * 10**9, r_bytes_per_s * public["span_ns"])),
-                   "r_bytes_per_s": r_bytes_per_s}
     profile = {k: v for k, v in judged["profile"].items() if k != "registration"} | {
         "scope": scope, "eps_terms": p2_case.EPS_TERMS,
         "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.ml.commitments.advice)", "rows": 1,
                        "n_bits": 8 * len(row), "binding": bind.hex(),
                        "of": "the session's case digest (p2_case.digest), its registration and plan"}}
+    if r_bytes_per_s is not None and public["span_ns"] > 0:
+        from fractions import Fraction
+
+        public |= {"gamma": str(1 - Fraction(public["q_bytes"] * 10**9, r_bytes_per_s * public["span_ns"])),
+                   "r_bytes_per_s": r_bytes_per_s}
+        profile["gamma_terms"] = p2_party.GAMMA_TERMS
     return out | {"public": public, "profile": profile}
 
 

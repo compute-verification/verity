@@ -394,7 +394,8 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert advice.verify(bytes.fromhex(bw["commitment"]), 1, 512, SP.HB.binding(REPO, REV, 3), op)
     row = SV.piece_row("bandwidth", s.out.parent)
     assert row["verdict"] == "accept" and row["protocol"] == p2_case.PROTOCOL
-    assert json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
+    assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}
+    assert bw["profile"]["gamma_terms"] and json.loads((s.out / "pous.json").read_text())["bandwidth"]["verdict"] == "accept"
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))
     digests = (s.private / "digests.bin").read_bytes()
