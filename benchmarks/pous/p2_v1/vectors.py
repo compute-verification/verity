@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from verity.core.protocols.pous.verifier import MerkleTree
@@ -30,7 +31,7 @@ AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
 KEYS_FIXTURE = ROOT / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
 PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
 
-POINTS = (R.Params(64, 189, 7), R.Params(96, 17, 11), R.Params(128, 173, 15), R.DEPLOYMENT)
+POINTS = (*(R.vector_params(w, c0) for w, c0 in ((64, 189), (96, 17), (128, 173))), R.DEPLOYMENT)
 """The least c0 ≡ 1 mod 4 with 2^w − c0 prime at each reduced width, and the deployment's."""
 PRIMALITY_METHOD = "GMP BPSW plus 64 Miller-Rabin repetitions"
 """The kit's screen of each point's p (`p2-test-vectors/v1`'s `primality`, whose results this carries: they are facts
@@ -68,10 +69,6 @@ def _sha512(data: bytes) -> str:
 def _counter(label: str, n: int) -> bytes:
     """The first n bytes of SHA512(label ‖ u32be 0) ‖ SHA512(label ‖ u32be 1) ‖ …: the vectors' own test inputs."""
     return b"".join(hashlib.sha512(label.encode() + i.to_bytes(4, "big")).digest() for i in range(-(-n // 64)))[:n]
-
-
-def _width_params(w: int, c0: int) -> R.Params:
-    return R.DEPLOYMENT if (w, c0) == (R.DEPLOYMENT.w, R.DEPLOYMENT.c0) else R.Params(w, c0, w // 8 - 1)
 
 
 # --- vectors.json ----------------------------------------------------------------------------------------------------------
@@ -127,7 +124,7 @@ def _setup(params: R.Params, w_bytes: bytes, payloads: list[int], source: bytes)
 
 
 SMALL = R.Params(64, 189, 7, blocks_per_segment=8, segments=1, profile="p2-63b")
-FULL = R.Params(R.DEPLOYMENT.w, R.DEPLOYMENT.c0, 2054, blocks_per_segment=1, segments=1)
+FULL = replace(R.DEPLOYMENT, blocks_per_segment=1, segments=1)
 
 
 def small_vector() -> dict:

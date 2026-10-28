@@ -13,8 +13,8 @@ the P2 reference on the CPU. Every stage is checked against the reference's refu
 payload): a refused block raises, never stages.
 
 Stores:
-* `P2Store`: the encoded rows C, in host memory or on a CUDA device; built by `encode` (the CPU reference, ~1 s a block with
-  gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
+* `P2Store`: the encoded rows C, in host memory or on a CUDA device; built by `encode` (the CPU reference, seconds a
+  block: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
 * `GeneratorStore`: no store; ``stage`` regenerates the tensor from the seed. The FIXTURE for running the frozen shape's
   compute before C* is on the card; the record says so.
 * `FileStore`: W itself, the file network's load sink writes, read in place. Before it serves, every tensor's
@@ -43,7 +43,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.DEPLOYMENT
 ROW, PAYLOAD = PARAMS.block_bytes, PARAMS.payload_bytes     # 2,056 and 2,054
 SALT_BYTES = 24
 
