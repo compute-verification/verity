@@ -10,8 +10,9 @@ the leaves the drawn blocks open.
   refused by name.
 * **When.** `Draws.release` runs on the sealer's thread before the window's seal: it waits, on a condition and never a clock,
   until every protocol of ``--release-after`` has drawn window k, then hands the union to the device pool's `release` (the
-  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. A
-  release can't come before the last draw, and a window is released once: a second draw of a window by the same protocol is
+  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. The step-input port's
+  committed positions, which the seal holds to the rows the window ran (`serve_seal.positions_off_of`), are read just before
+  (`served_record.committed_raw`'s ``read_before_release``); no bundle holds them. A release can't come before the last draw, and a window is released once: a second draw of a window by the same protocol is
   refused (a draw is never redrawn), as is any draw once the window was released. The sealed bundle then holds the kept set,
   and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
   the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
@@ -40,6 +41,7 @@ from typing import Any
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.native_ranges import DROPPED
 from verity_vllm.commit.opened import meta_by_name
+from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
 
@@ -177,6 +179,7 @@ class Draws:
                 by[p] = sum(len(v) for v in leaves.values())
                 for s, v in leaves.items():
                     union.setdefault(s, set()).update(v)
+            com.read_before_release = {(s, PORT_NAMES[1]): committed_raw(com, s, PORT_NAMES[1]) for s in sorted(com._layouts)}
             rec = DP.release(com, {s: sorted(v) for s, v in union.items()})
         except Exception as e:
             self.discard(window, com, f"{type(e).__name__}: {e}"[:500])

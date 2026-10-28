@@ -84,6 +84,57 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
             com.open_range(1, 0, 1)                 # no draw read step 1
 
 
+def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(cs, tmp_path):
+    """The seal holds the step-input port's committed positions to the rows the window ran, at every step
+    (`serve_seal.port_positions`, and `seal_process`'s handoff): they are read just before the release, which still keeps
+    only the draw's leaves."""
+    from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
+
+    pos = bytes(range(40, 48)) * 8
+    _host, rc, dev = committed(cs, {1: [(PORT_NAMES[1], pos)]})
+    before = committed_raw(dev, 1, PORT_NAMES[1])
+    assert before is not None and before[0] == pos
+    draws = SL.Draws(("pouw",))
+    draws.put(0, "pouw", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
+    draws.release(0, dev)
+    assert committed_raw(dev, 1, PORT_NAMES[1]) == before
+    with pytest.raises(RuntimeError, match="draw-gated release"):
+        dev.open_range(1, 0, 1)
+    SD.dump(dev, rc, tmp_path)
+    assert [s["ranges"] for s in json.loads((tmp_path / "store.json").read_text())["steps"]][:2] == [[], []]
+    del dev.read_before_release
+    with pytest.raises(KeyError, match="draw-gated release"):
+        committed_raw(dev, 1, PORT_NAMES[1])
+
+
+def test_a_released_window_seals_and_its_bundle_holds_exactly_the_draws_leaves(tmp_path):
+    import torch
+
+    from tests.pipeline.test_serve_seal import NAMES, ROWS, _ledgers
+    from verity_vllm.pipeline import deferred_rows as DR
+    from verity_vllm.pipeline import replay_bundle as RB
+    from verity_vllm.pipeline import serve_seal as SS
+
+    host, rc, dev = committed(R.NAME)
+    dev.weights_tree, dev.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
+    down = (2, "model.layers.0.mlp.down_proj", 0, dev.chunk)
+    draws = SL.Draws(("pouw",))
+    draws.put(0, "pouw", [down])
+    draws.release(0, dev)
+    leds = _ledgers()
+    reqs, rows = SS.window_requests(ROWS, NAMES.get, leds.get)
+    d = tmp_path / "windows" / "w0"
+    s = SS.seal_window(dev, rc, d, rec={"window": 0, "run_id": "t/w0", "steps": len(rc.steps), "passed": True}, reqs=reqs,
+                       request_rows=rows, tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t")
+    assert "error" not in s
+    assert DR.of_record(s["bundle"], str(d)).run.run_root == rc.run_root
+    store, run = SD.load(RB.path(d / "commit", 0) / "store")
+    doc = json.loads((RB.path(d / "commit", 0) / "store" / "store.json").read_text())
+    assert [s_["ranges"] for s_ in doc["steps"]] == [[], [], [[0, dev.chunk]]]
+    base = {m.name: m.dev_off for m in dev._layouts[2]}["model.layers.0.mlp.down_proj"]
+    assert OpenedReader(store, run)(*down) == host[2][base:base + dev.chunk]
+
+
 def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name(cs):
     _host, rc, dev = committed(cs)
     draws = SL.Draws(("sampled_proofs",))
