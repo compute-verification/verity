@@ -13,9 +13,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "hidden_zk"))
 
-import compact_stage as CST  # noqa: E402
-from verity.ml.circuits.boolean import forms  # noqa: E402
-from verity_flock import ir_lower as IL  # noqa: E402
+import compact_stage as CST
+from verity.ml.circuits.boolean import forms
+from verity_flock import ir_lower as IL
 
 IN = {"in0": 5, "in1": 130, "in2": 7}
 OUT = {"out0": 12, "out1": 4}
