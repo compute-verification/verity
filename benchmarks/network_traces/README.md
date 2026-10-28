@@ -84,11 +84,15 @@ the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpo
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors. Its records are
-published as an artifact without `requests.jsonl`, whose prompt ids stay on the served node, and with
-`request_users.jsonl`, each engine request's `engine_id` and its warden user in `requests.jsonl`'s order. `chain`
-rebuilds `requests.jsonl` from that map and the kept warden run's certified I/O in a 0700 directory beside the kept
-fetch, so the endpoint step checks the endpoint's trace against the certified I/O. The session's fetch, with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
+(prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
+endpoint step runs there: `io` writes the kept warden run's certified I/O to a 0600 file in the kept fetch's directory,
+and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it
+in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
+warden user) and the certified I/O. Its art is the step's report, `windows.jsonl` and `serve.json`; it writes nothing
+unless `serve.json` shows the endpoint's flags and no published file holds a prompt's ids, a trace's arrive, step or
+finish record, or a request-valued field. `chain` reads that report as the served node's. The session's fetch, with
 `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
 session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
@@ -156,15 +160,19 @@ synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report accept
 says why.
 
 **The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
-each gate sent under `inputs/` to the quarantine once it is unpacked, and on every exit runs the guard on the run dir.
-The guard moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file
-that holds a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an
-aligned witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through.
-The run then fails (exit 3), and `out/leak-guard.json` names each find by its path alone. A piece the gate's public
-files hold, as they are or with their JSON written again, is no find. The false positives are declared data,
-`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests; the one there
-excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. A signal before the guard runs, or a
-guard that can't run, withholds `out/`, `inputs/` and the logs whole.
+each gate sent under `inputs/` to the quarantine once it is unpacked, writes every output (its own stdout and stderr
+too) to a hold outside the run dir (`$Q/held`), and on every exit runs the guard on the run dir and the hold. The guard
+moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file that holds
+a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an aligned
+witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through. Only then
+does it release the rest of the hold to `out/`. A find fails the run (exit 3), and `out/leak-guard.json` names each find
+by its path alone. A file equal to one of the gate's public files (by sha256, so a gate's published bundle and its
+members aren't scanned) is no find, nor is a piece those files hold, as they are or with their JSON written again. The
+false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
+counts and digests; the one there excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. The
+guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
+the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
+whole; a SIGKILL leaves the hold where it is, out of the record.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
