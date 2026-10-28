@@ -232,19 +232,19 @@ theorem signed_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {
       wipeSessionStrings pk c e fs fe batches eg := by
   simp [wipeSessionStrings, hm, hI]
 
-theorem own_mem {s : StreamedWipe.Signed} {dev : Challenger} {x : ByteArray}
+theorem own_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {x : ByteArray}
     (hx : x ∈ wipeSessionStrings s.publicKey s.commitment s.ended s.fillStartNs s.fillEndNs s.batches s.egressBits) :
     x ∈ wipeRunStrings s dev :=
   List.mem_append_left _ (List.mem_append_left _ hx)
 
-theorem wipe_mem {s : StreamedWipe.Signed} {dev : Challenger} {r : WipeRun} (hr : r ∈ dev.wipes s.publicKey)
+theorem wipe_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : WipeRun} (hr : r ∈ dev.wipes s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
     (hx : x ∈ wipeSessionStrings s.publicKey r.commitment e r.fillStartNs r.fillEndNs r.recorded.batches r.egressBits) :
     x ∈ wipeRunStrings s dev := by
   refine List.mem_append_left _ (List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩))
   simpa only [he] using hx
 
-theorem pous_mem {s : StreamedWipe.Signed} {dev : Challenger} {r : Run} (hr : r ∈ dev.device.sessions s.publicKey)
+theorem pous_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : Run} (hr : r ∈ dev.device.sessions s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
     (hx : x ∈ sessionStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ wipeRunStrings s dev := by
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
@@ -254,7 +254,7 @@ theorem pous_mem {s : StreamedWipe.Signed} {dev : Challenger} {r : Run} (hr : r 
 
 /-- Under no collision among the run's strings, a wipe whose message the challenger signed is one of its wipes, with
 that wipe's commitment, ending, fill readings, batches and egress. -/
-theorem same_run {s : StreamedWipe.Signed} {dev : Challenger} (cf : CF (wipeRunStrings s dev)) {m M : ByteArray}
+theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wipeRunStrings s dev)) {m M : ByteArray}
     (hm : s.message = .ok m)
     (hM : memoryChallengerMessage (s.publicKey.extract 0 16) s.commitment.session m = .ok M)
     (hsig : dev.Signed s.publicKey M) :
@@ -672,7 +672,7 @@ theorem wipeSigned_acceptAll
       Core.Outcome WipeProtocol.Public (StreamedWipe.Params × Int))
     (hall : ∀ p c e, ∃ out prof, check p c e = .accept out prof) :
     ¬ ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
-      (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int) (dev : Challenger),
+      (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int) (dev : SignedWipeParty),
       check p c e = .accept out prof → WipeRanAccepted dev p c e := by
   intro h
   obtain ⟨out, prof, hc⟩ := hall unencodedParams measuredCommitment ⟨some unencoded⟩
