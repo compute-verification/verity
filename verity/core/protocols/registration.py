@@ -4,65 +4,44 @@ this module to the Lean (`composition/tests/test_registration_difftest.py`).
 
 A deployment's registration is one append-only log of entries, each naming the head of the log before it (`previous`):
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.
-An entry is one of two formats:
+An entry is one of two kinds:
 
-* `verity/registration/hardware/v1`: the cards, locations and links it adds to the site (`Site`);
-* `verity/registration/information/v1`: its items, each registered once in the log (`item_key`): θ, each registered
-  value by its committed root, and the builder B (its digest, its advice's format and its public cap ℓ on one
-  declaration's advice, in bits). Registration registers the site, θ and B, not the circuit B builds; a subprotocol's
-  Program and parameters, and the proof system, are that protocol's public verifier parameters.
+* a site entry, the Site's own (`verity.core.site.Entry`, `verity/registration/site/v1`): the sheets, locations and
+  links it adds to the Site, its JSON, digest and check the Site's;
+* an information entry (`Information`, `verity/registration/information/v1`): its items, each registered once in the
+  log (`item_key`): θ, each registered value by its committed root, and the builder B (its digest, its advice's format
+  and its public cap ℓ on one declaration's advice, in bits). Registration registers the site, θ and B, not the circuit
+  B builds; a subprotocol's Program and parameters, and the proof system, are that protocol's public verifier
+  parameters.
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
-card digest    SHA-512("verity/registration/card/v1" ‖ 0 ‖ canon(card))
-genesis        SHA-512("verity/registration/genesis/v1" ‖ 0 ‖ canon({"composite": NAME}))
+genesis        the Site's: SHA-512("verity/registration/genesis/v1" ‖ 0 ‖ canon({"composite": NAME}))
 the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   committed; its digest is its head
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
-fails (`REFUSALS`, in order). A component reads its view of an accepted log (`View`): the site, θ's values
+fails (`REFUSALS`): a site entry by the Site's (`verity.core.site.entry_refusal`), an information entry by `previous`
+and then `duplicate-information`. A component reads its view of an accepted log (`View`): the Site, θ's values
 (`View.value`) and the builder, at the head. Decoding takes exactly what the encoders write and raises `Malformed`
-otherwise; registration is ASCII-only without DEL, and a log or parameters holding any other character is `Malformed` as
-`ascii` before any digest is taken.
+otherwise; parameters holding a character outside ASCII without DEL are `Malformed` as `ascii`, as the Lean's canonical
+JSON refuses them.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
+from verity.core import site as S
+from verity.core.site import Auditor, Malformed
 from verity.core.wire import canonical
 
-HARDWARE = "verity/registration/hardware/v1"
 INFORMATION = "verity/registration/information/v1"
-CARD = "verity/registration/card/v1"
-GENESIS = "verity/registration/genesis/v1"
 PROTOCOL = "verity/registration/log/v1"
-OUTSIDE = "outside"
-"""The rest of the world: an end every site has, whose id no location may take."""
-COMPOSITES = ("onsite", "remote")
-KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "outside")
-TIERS = ("hbm", "dram", "disk")
-OWNERS = ("prover", "auditor")
-PARENTS: dict[str, tuple[str | None, ...]] = {
-    "site": (None,), "host": ("site",), "device": ("host",), "memory": ("device", "host"), "certifier": ("site",),
-    "challenger": ("site",), "outside": ()}
-"""The kinds of parent a location of each kind may have, None being the root."""
-LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
-"""The pairs of kinds a link may join, in either order."""
-AUDITOR_KINDS = ("certifier", "challenger")
-REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "card-digest", "figures", "capacity", "owner",
-            "uncertified", "challenger-reach", "duplicate-information")
-OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
-"""The operand classes of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands drawn uniformly
-over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value 0."""
-
-
-class Malformed(ValueError):
-    """Bytes or JSON that aren't what the encoders write."""
+REFUSALS = (*S.REFUSALS, "duplicate-information")
 
 
 class Refused(Exception):
@@ -73,78 +52,24 @@ class Refused(Exception):
         self.entry, self.name = entry, name
 
 
-def tagged(tag: str, obj: Any) -> str:
-    """`SHA-512(tag ‖ 0 ‖ canon(obj))` as hex."""
-    return hashlib.sha512(tag.encode() + b"\0" + canonical(obj)).hexdigest()
-
-
-@dataclass(frozen=True)
-class Card:
-    """A device's card, its registered figures: `DeviceFigures`' SKU, tensor clock in Hz and peak rate of tensor-core
-    multiply-adds a second for each of `OPERAND_CLASSES` (`peak_rate`, in that order), and its memory figures: bits from
-    device memory to the chip a tick, bits of on-chip state and bytes of device memory."""
-
-    sku: str
-    clock: int
-    peak_rate: tuple[int, int, int, int, int]
-    bw: int
-    chip: int
-    mem: int
-
-    def to_json(self) -> dict[str, Any]:
-        return {"bw": self.bw, "chip": self.chip, "clock": self.clock, "mem": self.mem,
-                "peakRate": dict(zip(OPERAND_CLASSES, self.peak_rate, strict=True)), "sku": self.sku}
-
-    def digest(self) -> str:
-        return tagged(CARD, self.to_json())
-
-
-@dataclass(frozen=True)
-class Loc:
-    """A location and its owner: a device names its card's digest, a memory leaf its tier and bytes, the auditor's
-    devices their keys."""
-
-    id: str
-    kind: str
-    parent: str | None = None
-    owner: str = "prover"
-    card: str = ""
-    tier: str | None = None
-    bytes: int = 0
-    key: str = ""
-
-    def to_json(self) -> dict[str, Any]:
-        return {"bytes": self.bytes, "card": self.card, "id": self.id, "key": self.key, "kind": self.kind,
-                "owner": self.owner, "parent": self.parent, "tier": self.tier}
-
-
-@dataclass(frozen=True)
-class Link:
-    """Two ends, a capacity `beta` in bits a tick each way and a latency in ticks."""
-
-    id: str
-    ends: tuple[str, str]
-    beta: int
-    latency: int
-
-    def to_json(self) -> dict[str, Any]:
-        return {"beta": self.beta, "ends": list(self.ends), "id": self.id, "latency": self.latency}
-
-
-@dataclass(frozen=True)
-class Hardware:
-    cards: tuple[Card, ...] = ()
-    locs: tuple[Loc, ...] = ()
-    links: tuple[Link, ...] = ()
-
-
 @dataclass(frozen=True)
 class Information:
-    """The items an information entry registers, each canonical JSON with its `kind`: `theta` (`value`, `root`,
+    """An information entry: the items it registers, each canonical JSON with its `kind`: `theta` (`value`, `root`,
     `leaves`, `words`, `domain`, `word_bits` when it is 32, `checkpoint_sha512` for public weights) or `builder`
-    (`digest`, `advice`, `cap`)."""
+    (`digest`, `advice`, `cap`), and the head of the log it follows (`previous`, set by `chain`)."""
 
     items: tuple[Mapping[str, Any], ...] = ()
+    previous: str = ""
+
+    def to_json(self) -> dict[str, Any]:
+        return {"format": INFORMATION, "items": [dict(i) for i in self.items], "previous": self.previous}
+
+    def digest(self) -> str:
+        return S.tagged(INFORMATION, self.to_json())
+
+
+Entry = S.Entry | Information
+"""An entry of the registration log: the Site's site entry, or an information entry."""
 
 
 def item_key(item: Mapping[str, Any]) -> str:
@@ -152,42 +77,21 @@ def item_key(item: Mapping[str, Any]) -> str:
     return "theta " + item["value"] if item["kind"] == "theta" else item["kind"]
 
 
-@dataclass(frozen=True)
-class Entry:
-    previous: str
-    body: Hardware | Information
-
-    @property
-    def format(self) -> str:
-        return HARDWARE if isinstance(self.body, Hardware) else INFORMATION
-
-    def to_json(self) -> dict[str, Any]:
-        b = self.body
-        if isinstance(b, Hardware):
-            return {"cards": [k.to_json() for k in b.cards], "format": HARDWARE,
-                    "links": [k.to_json() for k in b.links], "locs": [x.to_json() for x in b.locs],
-                    "previous": self.previous}
-        return {"format": INFORMATION, "items": [dict(i) for i in b.items], "previous": self.previous}
-
-    def digest(self) -> str:
-        return tagged(self.format, self.to_json())
-
-
-def genesis(composite: str) -> str:
-    """The head of a composite's empty log."""
-    return tagged(GENESIS, {"composite": composite})
+def site(sheets: Sequence[S.Sheet] = (), locs: Sequence[S.Loc] = (), links: Sequence[S.Link] = ()) -> S.Entry:
+    """A site entry adding `sheets`, `locs` and `links`, its `previous` for `chain` to set."""
+    return S.Entry("", tuple(sheets), tuple(locs), tuple(links))
 
 
 def head(composite: str, log: Sequence[Entry]) -> str:
     """The log's head, which names it."""
-    return log[-1].digest() if log else genesis(composite)
+    return log[-1].digest() if log else S.genesis(composite)
 
 
-def chain(composite: str, bodies: Sequence[Hardware | Information]) -> list[Entry]:
-    """The log of `bodies` in order, each entry following the head of the log before it."""
+def chain(composite: str, entries: Sequence[Entry]) -> list[Entry]:
+    """The log of `entries` in order, each following the head of the log before it."""
     log: list[Entry] = []
-    for b in bodies:
-        log.append(Entry(head(composite, log), b))
+    for e in entries:
+        log.append(replace(e, previous=head(composite, log)))
     return log
 
 
@@ -237,35 +141,6 @@ def _hex64(j: Any, what: str) -> str:
     return s
 
 
-def _optional(f: Callable[[Any], Any], j: Any) -> Any:
-    return None if j is None else f(j)
-
-
-def card_of(j: Any) -> Card:
-    _exactly(j, ["bw", "chip", "clock", "mem", "peakRate", "sku"], "a card")
-    _exactly(j["peakRate"], sorted(OPERAND_CLASSES), "a card's peakRate")
-    return Card(_str(j["sku"], "sku"), _nat(j["clock"], "clock"),
-                tuple(_nat(j["peakRate"][c], c) for c in OPERAND_CLASSES),  # type: ignore[arg-type]
-                _nat(j["bw"], "bw"), _nat(j["chip"], "chip"), _nat(j["mem"], "mem"))
-
-
-def loc_of(j: Any) -> Loc:
-    _exactly(j, ["bytes", "card", "id", "key", "kind", "owner", "parent", "tier"], "a location")
-    return Loc(_str(j["id"], "id"), _one_of(j["kind"], KINDS, "kind"),
-               _optional(lambda p: _str(p, "parent"), j["parent"]), _one_of(j["owner"], OWNERS, "owner"),
-               _str(j["card"], "card"), _optional(lambda t: _one_of(t, TIERS, "tier"), j["tier"]),
-               _nat(j["bytes"], "bytes"), _str(j["key"], "key"))
-
-
-def link_of(j: Any) -> Link:
-    _exactly(j, ["beta", "ends", "id", "latency"], "a link")
-    ends = _list(j["ends"], "ends")
-    if len(ends) != 2:
-        raise Malformed("a link: ends: not two ends")
-    return Link(_str(j["id"], "id"), (_str(ends[0], "an end"), _str(ends[1], "an end")), _nat(j["beta"], "beta"),
-                _nat(j["latency"], "latency"))
-
-
 THETA_KEYS = ["domain", "kind", "leaves", "root", "value", "words"]
 """A θ item's keys, besides `word_bits` (present only as 32) and `checkpoint_sha512` (a public checkpoint's pin)."""
 BUILDER_KEYS = ["advice", "cap", "digest", "kind"]
@@ -294,8 +169,8 @@ def item_of(j: Any) -> dict[str, Any]:
 
 
 def ascii(j: Any, what: str) -> None:
-    """Registration is ASCII-only without DEL: `j`'s JSON, unescaped, holds no character from 0x7f up, so its digest
-    is the same however a canonical JSON escapes the rest. Checked before `canonical`, which raises on such a string."""
+    """ASCII without DEL, which the Lean's canonical JSON refuses anything outside of: `j`'s JSON, unescaped, holds no
+    character from 0x7f up."""
     if any(ord(c) >= 0x7F for c in json.dumps(j, ensure_ascii=False)):
         raise Malformed(f"ascii: {what} holds a character outside ASCII")
 
@@ -304,179 +179,52 @@ def entry_of(j: Any) -> Entry:
     if not isinstance(j, dict) or "format" not in j:
         raise Malformed("an entry: format missing")
     fmt = _str(j["format"], "an entry's format")
-    if fmt == HARDWARE:
-        _exactly(j, ["cards", "format", "links", "locs", "previous"], "a hardware entry")
-        previous = _hex64(j["previous"], "previous")
-        return Entry(previous, Hardware(tuple(card_of(k) for k in _list(j["cards"], "cards")),
-                                        tuple(loc_of(x) for x in _list(j["locs"], "locs")),
-                                        tuple(link_of(k) for k in _list(j["links"], "links"))))
+    if fmt == S.SITE:
+        return S.Entry.of_json(j)
     if fmt == INFORMATION:
         _exactly(j, ["format", "items", "previous"], "an information entry")
-        previous = _hex64(j["previous"], "previous")
-        return Entry(previous, Information(tuple(item_of(i) for i in _list(j["items"], "items"))))
-    raise Malformed(f"an entry: format {fmt} is not one of [{HARDWARE}, {INFORMATION}]")
+        return Information(tuple(item_of(i) for i in _list(j["items"], "items")), _str(j["previous"], "previous"))
+    raise Malformed(f"an entry: format {fmt} is not one of [{S.SITE}, {INFORMATION}]")
 
 
 def log_of(j: Any) -> tuple[str, list[Entry]]:
     """The committed log's composite and entries."""
-    ascii(j, "the log")
     _exactly(j, ["composite", "entries"], "the log")
-    return _one_of(j["composite"], COMPOSITES, "the log's composite"), [entry_of(e) for e in _list(j["entries"], "entries")]
-
-
-# --- the site's reading -----------------------------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class Site:
-    """The cards, locations and links the log's hardware entries add, in order."""
-
-    cards: tuple[Card, ...] = ()
-    locs: tuple[Loc, ...] = ()
-    links: tuple[Link, ...] = ()
-
-    def add(self, h: Hardware) -> Site:
-        return Site(self.cards + h.cards, self.locs + h.locs, self.links + h.links)
-
-    def loc(self, i: str) -> Loc | None:
-        return next((x for x in self.locs if x.id == i), None)
-
-    def kind(self, i: str) -> str | None:
-        if i == OUTSIDE:
-            return "outside"
-        x = self.loc(i)
-        return None if x is None else x.kind
-
-    def known(self, i: str) -> bool:
-        return i == OUTSIDE or any(x.id == i for x in self.locs)
-
-    def ids(self) -> list[str]:
-        return [x.id for x in self.locs] + [k.id for k in self.links] + [OUTSIDE]
-
-    def card(self, x: Loc) -> Card | None:
-        return next((k for k in self.cards if k.digest() == x.card), None)
-
-    def held(self, i: str) -> int:
-        return sum(x.bytes for x in self.locs if x.kind == "memory" and x.parent == i)
-
-    def joins(self, k: Link, a: str, b: str) -> bool:
-        return (self.kind(k.ends[0]), self.kind(k.ends[1])) in ((a, b), (b, a))
-
-    def boundary(self, k: Link) -> bool:
-        return self.joins(k, "host", "outside") or self.joins(k, "certifier", "host")
-
-    def certified(self, k: Link) -> bool:
-        return "certifier" in (self.kind(k.ends[0]), self.kind(k.ends[1]))
-
-    def far(self, i: str) -> list[str]:
-        return [e for k in self.links if i in k.ends for e in k.ends if e != i]
-
-    def host(self, x: Loc) -> str | None:
-        if x.parent is None:
-            return None
-        if self.kind(x.parent) == "host":
-            return x.parent
-        p = self.loc(x.parent)
-        return None if p is None else p.parent
-
-    def reached(self) -> list[str]:
-        return [e for k in self.links if "challenger" in (self.kind(k.ends[0]), self.kind(k.ends[1])) for e in k.ends]
-
-    def to_json(self) -> dict[str, Any]:
-        return {"cards": [k.to_json() for k in self.cards], "links": [k.to_json() for k in self.links],
-                "locs": [x.to_json() for x in self.locs]}
+    return _one_of(j["composite"], S.COMPOSITES, "the log's composite"), [entry_of(e) for e in _list(j["entries"], "entries")]
 
 
 # --- the check --------------------------------------------------------------------------------------------------------
-
-def within(tolerance: tuple[int, int], e: int, x: int) -> bool:
-    """`x` is within tolerance `num / den` of `e` in both directions, `(1 - τ)·e ≤ x ≤ (1 + τ)·e`, with `1 - τ`
-    truncated at 0, cleared of its denominator."""
-    num, den = tolerance
-    return max(den - num, 0) * e <= den * x <= (den + num) * e
-
-
-@dataclass(frozen=True)
-class Auditor:
-    """The auditor's estimate of each SKU's card (its data sheet), the key of each of its own devices, and the
-    tolerance `(num, den)` it allows a card's clock and peak rates around its sheet's."""
-
-    sheets: tuple[Card, ...] = ()
-    keys: tuple[tuple[str, str], ...] = ()
-    tolerance: tuple[int, int] = (0, 1)
-
-    def sheet(self, sku: str) -> Card | None:
-        return next((k for k in self.sheets if k.sku == sku), None)
-
-    def accepts(self, e: Card, k: Card) -> bool:
-        """`k` is within its sheet `e`: the clock and every peak rate within the tolerance in both directions, every
-        peak rate positive (as `DeviceFigures.Accepted` requires), and its memory figures `e`'s."""
-        return (within(self.tolerance, e.clock, k.clock)
-                and all(within(self.tolerance, a, b) and b > 0 for a, b in zip(e.peak_rate, k.peak_rate, strict=True))
-                and (k.bw, k.chip, k.mem) == (e.bw, e.chip, e.mem))
-
-    def key(self, i: str) -> str | None:
-        return next((k for d, k in self.keys if d == i), None)
-
 
 def _nodup(xs: Sequence[str]) -> bool:
     return len(set(xs)) == len(xs)
 
 
-def hardware_refusal(auditor: Auditor, composite: str, site: Site, h: Hardware) -> str | None:
-    """The first check a hardware entry adding `h` to `site` fails, or None."""
-    t = site.add(h)
-    digests = [k.digest() for k in t.cards]
-    if not (_nodup(t.ids()) and _nodup(digests)):
-        return "duplicate-id"
-    if not (all(x.parent is None or t.known(x.parent) for x in h.locs)
-            and all(t.known(k.ends[0]) and t.known(k.ends[1]) for k in h.links)):
-        return "unknown-ref"
-    if not (all((None if x.parent is None else t.kind(x.parent)) in PARENTS[x.kind] and (x.kind == "memory") == (x.tier is not None)
-                for x in h.locs)
-            and all(k.ends[0] != k.ends[1] and any(t.joins(k, a, b) for a, b in LINKS) and k.beta > 0 for k in h.links)
-            and all(x.kind != "certifier" or [t.kind(e) for e in t.far(x.id)] in (["host", "outside"], ["outside", "host"])
-                    for x in t.locs)):
-        return "kind"
-    if not (all(auditor.sheet(k.sku) is not None for k in h.cards)
-            and all(x.kind != "device" or x.card in digests for x in h.locs)):
-        return "card-digest"
-    if not all(auditor.accepts(auditor.sheet(k.sku), k) for k in h.cards):  # type: ignore[arg-type]
-        return "figures"
-    if not (all(x.kind != "memory" or x.bytes > 0 for x in h.locs)
-            and all(x.kind != "device" or (k := t.card(x)) is None or t.held(x.id) <= k.mem for x in t.locs)):
-        return "capacity"
-    if not all((x.owner == "auditor" and auditor.key(x.id) == x.key) if x.kind in AUDITOR_KINDS else x.owner == "prover"
-               for x in h.locs):
-        return "owner"
-    if composite == "onsite" and not all(not t.boundary(k) or t.certified(k) for k in t.links):
-        return "uncertified"
-    if composite == "onsite":
-        reached = t.reached()
-        if not all(x.kind != "memory" or (g := t.host(x)) is None or g in reached for x in t.locs):
-            return "challenger-reach"
-    return None
+def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.Entry) -> str | None:
+    """The first check a site entry `e` fails against the Site `s` and head `head` of the log before it, or None: the
+    Site's (`verity.core.site.entry_refusal`)."""
+    return S.entry_refusal(composite, s, head, e, auditor)
 
 
 @dataclass(frozen=True)
 class State:
-    """The log so far, folded: its site, its information items in order, its head and its length."""
+    """The log so far, folded: its Site, its information items in order, its head and its length."""
 
-    site: Site
+    site: S.Site
     items: tuple[Mapping[str, Any], ...]
     head: str
     entries: int
 
     def refusal(self, auditor: Auditor, composite: str, e: Entry) -> str | None:
+        if isinstance(e, S.Entry):
+            return site_refusal(auditor, composite, self.site, self.head, e)
         if e.previous != self.head:
             return "previous"
-        if isinstance(e.body, Hardware):
-            return hardware_refusal(auditor, composite, self.site, e.body)
-        return None if _nodup([item_key(i) for i in self.items + e.body.items]) else "duplicate-information"
+        return None if _nodup([item_key(i) for i in self.items + e.items]) else "duplicate-information"
 
     def add(self, e: Entry) -> State:
-        if isinstance(e.body, Hardware):
-            return replace(self, site=self.site.add(e.body), head=e.digest(), entries=self.entries + 1)
-        return replace(self, items=self.items + e.body.items, head=e.digest(), entries=self.entries + 1)
+        if isinstance(e, S.Entry):
+            return replace(self, site=self.site.add(e), head=e.digest(), entries=self.entries + 1)
+        return replace(self, items=self.items + e.items, head=e.digest(), entries=self.entries + 1)
 
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
@@ -485,7 +233,7 @@ class State:
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
     """The log folded entry by entry, each held to the log before it; `Refused` at the first entry that fails."""
-    s = State(Site(), (), genesis(composite), 0)
+    s = State(S.Site(), (), S.genesis(composite), 0)
     for e in log:
         if r := s.refusal(auditor, composite, e):
             raise Refused(s.entries, r)
@@ -495,9 +243,9 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 
 @dataclass(frozen=True)
 class View:
-    """What a component reads of an accepted log, at its head: the site, θ's registered values in order, the builder."""
+    """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder."""
 
-    site: Site
+    site: S.Site
     theta: tuple[dict[str, Any], ...]
     builder: dict[str, Any] | None
     head: str
@@ -513,30 +261,15 @@ class View:
 # --- the core protocol ------------------------------------------------------------------------------------------------
 
 def params_of(j: Any) -> tuple[str, Auditor]:
-    """The auditor's parameters: `{"composite", "keys": [{"id", "key"}], "sheets": [CARD], "tolerance": {"den",
-    "num"}}`."""
+    """The auditor's parameters: `{"auditor": AUDITOR, "composite"}`, the auditor as `verity.core.site.Auditor.of_json`
+    reads it."""
     ascii(j, "the params")
-    _exactly(j, ["composite", "keys", "sheets", "tolerance"], "the params")
-    sheets = tuple(card_of(k) for k in _list(j["sheets"], "sheets"))
-    _exactly(j["tolerance"], ["den", "num"], "the params' tolerance")
-    tolerance = (_nat(j["tolerance"]["num"], "num"), _nat(j["tolerance"]["den"], "den"))
-    if tolerance[1] == 0:
-        raise Malformed("the params' tolerance: den is positive")
-    keys = []
-    for k in _list(j["keys"], "keys"):
-        _exactly(k, ["id", "key"], "a key")
-        keys.append((_str(k["id"], "id"), _str(k["key"], "key")))
-    if not _nodup([k.sku for k in sheets]):
-        raise Malformed("the params: a data sheet's SKU is named twice")
-    if not _nodup([d for d, _ in keys]):
-        raise Malformed("the params: a device's key is named twice")
-    return _one_of(j["composite"], COMPOSITES, "the params' composite"), Auditor(sheets, tuple(keys), tolerance)
+    _exactly(j, ["auditor", "composite"], "the params")
+    return _one_of(j["composite"], S.COMPOSITES, "the params' composite"), Auditor.of_json(j["auditor"])
 
 
 def params(composite: str, auditor: Auditor) -> dict[str, Any]:
-    return {"composite": composite, "keys": [{"id": d, "key": k} for d, k in auditor.keys],
-            "sheets": [k.to_json() for k in auditor.sheets],
-            "tolerance": {"den": auditor.tolerance[1], "num": auditor.tolerance[0]}}
+    return {"auditor": auditor.to_json(), "composite": composite}
 
 
 def check_log(p: tuple[str, Auditor], c: tuple[str, list[Entry]]) -> tuple:

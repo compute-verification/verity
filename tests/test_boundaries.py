@@ -69,9 +69,9 @@ ALLOWED = {
     # views a protocol reads. Its digests are canonical JSON's, the wire's.
     "core.site": {"core.wire"},
     "core.deploy": {"core.wire"},
-    # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
-    # and SHA-512 only, so it reaches no ml.
-    "core.protocols.registration": {"core.wire"},
+    # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: the Site's
+    # entries and check, canonical JSON and SHA-512 only, so it reaches no ml.
+    "core.protocols.registration": {"core.wire", "core.site"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
