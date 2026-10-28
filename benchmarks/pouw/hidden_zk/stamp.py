@@ -49,7 +49,7 @@ class Template:
     B constant)`` over local bits (below ``m`` an operand's rank, else AND ``j`` at ``m + j``), its output forms, and ``vis``,
     the ANDs its outputs read: all a later call can read of it."""
 
-    __slots__ = ("id", "label", "m", "n", "rows", "outs", "vis", "closures")
+    __slots__ = ("id", "label", "m", "n", "rows", "outs", "vis", "closures", "build_s")
 
     def __init__(self, tid: int, label: str, m: int, S: forms.Circuit, outs: list):
         if S.lookups or S.asserts or any(k != "and" for k in S.kind[m:]):
@@ -59,6 +59,7 @@ class Template:
         self.outs = [(tuple(sorted(f.s)), f.c) for f in outs]
         self.vis = np.array(sorted({v - m for s, _ in self.outs for v in s if v >= m}), dtype=np.int64)
         self.closures: dict[bytes, Closure] = {}
+        self.build_s = 0.0
 
 
 class Closure:
@@ -162,6 +163,7 @@ class Stamp:
         key = tuple(enc)
         t = self.keys.get(key)
         if t is None:
+            tb = time.time()
             S = forms.Circuit()
             if cse:
                 S.cse = {}
@@ -170,6 +172,7 @@ class Stamp:
             loc = [[f if not f.s else forms.L(frozenset([rank[v] for v in f.s]), f.c) for f in g] for g in groups]
             label = key0[1] if key0[0] == "piece" else getattr(key0[1], "id", str(key0[1]))
             t = self.keys[key] = Template(len(self.templates), str(label), len(V), S, fn(S, *loc))
+            t.build_s = time.time() - tb
             self.templates.append(t)
         m, base = t.m, self.nv
         if t.n:
@@ -591,9 +594,13 @@ def _top(st: Stamp, lay: StampLayout, n: int = 12) -> str:
     calls_t = np.bincount(tids, minlength=len(st.templates))
     agg: dict[str, list[int]] = {}
     for t in st.templates:
-        a = agg.setdefault(t.label, [0, 0, 0])
+        a = agg.setdefault(t.label, [0, 0, 0, 0, 0.0])
         a[0] += 1
         a[1] += int(calls_t[t.id])
         a[2] += int(by_t[t.id])
+        a[3] += t.n
+        a[4] += t.build_s
     rank = sorted(agg.items(), key=lambda kv: -kv[1][2])[:n]
-    return "; ".join(f"{lb} templates={a[0]} calls={a[1]} live={a[2]}" for lb, a in rank)
+    built = sum(t.n for t in st.templates)
+    return (f"built={built} build_s={sum(t.build_s for t in st.templates):.1f}; "
+            + "; ".join(f"{lb} templates={a[0]} built={a[3]} build_s={a[4]:.1f} calls={a[1]} live={a[2]}" for lb, a in rank))
