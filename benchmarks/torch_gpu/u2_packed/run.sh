@@ -25,8 +25,8 @@ CUDA_VISIBLE_DEVICES= "${UV[@]}" python -c "import torch; print(torch.__version_
 export U2_PACKED_CUBIN=$OUT/packed.cubin
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${MAX_MIN:-15}" -- bash -c '
-  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit,enforced.power.limit --format=csv > "$OUT/gpu.txt" 2>&1
-  nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,power.draw.instant,temperature.gpu,clocks_throttle_reasons.active \
+  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm --format=csv > "$OUT/gpu.txt" 2>&1
+  nvidia-smi --query-gpu=timestamp,clocks.sm,temperature.gpu,clocks_throttle_reasons.active \
     --format=csv,noheader -lms 100 > "$OUT/smi.csv" 2>&1 &
   S=$!
   "$@" --out "$OUT"

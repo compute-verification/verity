@@ -82,6 +82,20 @@ def test_the_hash_log_and_beside_specs():
     assert B.HASH_LOG * B.HASH_CHUNK_S >= 2 * 2 * 4.0
 
 
+def test_a_beside_item_is_set_against_its_arm_alone_and_states_kappa():
+    tag = "8x8x8:u2"
+    alone = [{"name": "p2m", "tag": tag, "round": rnd, "mma": True, "steady": {"tmac_s": v, "of_4096": v / 1000}}
+             for rnd, v in ((0, 500.0), (1, 520.0))]
+    beside = {"name": "p2m+w4", "arm": "p2m", "tag": tag, "round": 0, "mma": True,
+              "beside": {"tmac_s": 255.0, "of_4096": 0.255}, "hash": {"gcomp_s": 2.5, "of_bar": 0.574}}
+    # 510 T MAC/s alone, 255 beside: half kept, and 255e12 MAC/s displaced by 2.5e9 compressions/s
+    assert B.beside_terms(beside, 510.0) == {"of_alone": 0.5, "kappa": 102000.0}
+    assert B.beside_terms(beside, None) == {}
+    assert B.beside_terms({**beside, "hash": {}}, 510.0) == {"of_alone": 0.5}
+    row = B.summary(alone + [beside]).splitlines()[-1]
+    assert "| 0.500 | 0.574 | 102000 |" in row
+
+
 def test_pack_and_unpack_are_inverse_and_the_format_is_the_documented_one():
     g = torch.Generator().manual_seed(1)
     v = torch.randint(0, 4, (5, 64), dtype=torch.int8, generator=g)

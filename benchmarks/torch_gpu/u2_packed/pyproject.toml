@@ -1,5 +1,5 @@
 # The filler's exact GEMM on 2-bit operands streamed packed, four values a byte, and unpacked on chip before wgmma
-# (packed.cu), sustained at the H200's power cap, beside SHA-512 and against the same schedule on int8 operands and
+# (packed.cu), sustained on the H200, beside SHA-512 and against the same schedule on int8 operands and
 # cuBLASLt (bench.py, run on a GPU node by run.sh). Not a package: bench.py's host side, the packed format and the SASS gate
 # run here as a suite, no GPU.
 [tool.pytest.ini_options]
