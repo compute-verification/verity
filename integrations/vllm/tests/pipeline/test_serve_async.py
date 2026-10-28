@@ -1,5 +1,7 @@
-"""serve-openai under ``--async-scheduling`` on CPU: for a fixed load the server commits the same steps, rows and values, and
-H1 gets the same rounds and admissions, as it does synchronously.
+"""serve-openai's loop under async scheduling on CPU: for a fixed load its Commit windows see the same steps, rows and values,
+and H1 gets the same rounds and admissions, as synchronously. The committer is a stand-in (`Committer`), not the native
+collector, whose staging isn't held to async scheduling yet, so serve-openai refuses ``--async-scheduling`` with the
+Commit on (`serve_row.commit_refusal`).
 
 The engine stands in for vLLM's in-process engine core at d9105ea80: a schedule runs on the runner at once (its
 ``execute_model``, an empty schedule's too, then ``sample``), and under async scheduling ``step`` is
