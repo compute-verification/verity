@@ -454,9 +454,10 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
     } else {
       // the reduction: chunk c's four atoms take accumulator groups 4 c .. 4 c + 3, in A's order, as A.  The first half's
       // atoms run under the second half's y words and the second half's under the first's, so no thread reads an accumulator
-      // an atom in flight reads.  Before each half's fence, its R stages arrive and its accumulators are put in A's order:
-      // nothing between a fence and its atoms, where a barrier's wait loop would make ptxas serialize them.  Each R stage is
-      // released once no atom reads it (s8mrb: once the bulk add has read the sums over it)
+      // an atom in flight reads.  Every group is put in A's order before the first fence, and each half's R stages arrive
+      // before its fence: nothing between the two halves' atoms writes a register a wgmma reads (ptxas would serialize
+      // them), and no barrier's wait loop sits between a fence and its atoms.  Each R stage is released once no atom reads
+      // it (s8mrb: once the bulk add has read the sums over it)
       using G = Red<TM, BN, RR>;
       constexpr int CH = G::CH, Q = G::Q, RST = G::RST;
       int rs[RST];
@@ -467,13 +468,13 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
           rs[i] = s;
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
-      a_order<0, NA / 8>(d);
+      a_order<0, NA / 4>(d);
       WG_FENCE;
 #pragma unroll
       for (int c = 0; c < CH; c++) {
         if (c == CH / 2) {
           WG_COMMIT;
-          y_store<NA / 8, NA / 4>(d, p, row, col0, live0, live1, r0, r1);
+          y_store<NA / 8, NA / 4, true>(d, p, row, col0, live0, live1, r0, r1);
           WG_WAIT(0);
           if constexpr (FL == 0) {
 #pragma unroll
@@ -487,7 +488,6 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
               rs[i] = s;
               if (++s == STAGES) { s = 0; ph ^= 1; }
             }
-          a_order<NA / 8, NA / 4>(d);
           WG_FENCE;
         }
         const uint32_t a = base + rs[c / Q] * T::STAGE + (c % Q) * G::CHUNK;
