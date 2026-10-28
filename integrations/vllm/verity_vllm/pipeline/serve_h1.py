@@ -143,6 +143,26 @@ class GateOptions:
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
                                         "owner-only, for proving its drawn units and rounds after the close; never a "
                                         "published path")
+    h1_model: str | None = option("--h1-model", default=None, metavar="ROLE",
+                                  help="with --challenger-gate: the auditor's registration role of the served model (e.g. "
+                                       "LLAMA32_1B_INT8_K2048); its b/<K> are committed under the salt key the gate's "
+                                       "model-key hands for the window Program's circuit, so the windows' weights root is the "
+                                       "registry's, the root the period signs; without it the key is local and credits nothing")
+    h1_weights_root: str | None = option("--h1-weights-root", default=None, metavar="HEX",
+                                         help="with --h1-model: the registration's weights root (the period's signed one), "
+                                              "required when the role is registered more than once under the circuit")
+
+
+def model_key_of(gate: Any, model: str, weights_root: str | None) -> Callable[[str], tuple[bytes, str]]:
+    """The salt key of ``model``'s auditor registration under a window Program's circuit, from the gate's ``model-key``
+    (`auditor.gate_model_key`), with the registry's weights root it opens: a callable of the circuit's digest."""
+    def key(circuit: str) -> tuple[bytes, str]:
+        words = ["model-key", "--model", model, "--circuit", circuit]
+        if weights_root:
+            words += ["--weights-root", weights_root]
+        answer = gate.call(*words)
+        return bytes.fromhex(answer["key"]), str(answer["weights_root"])
+    return key
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -225,9 +245,9 @@ def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, s
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.sampled_proofs.challenger import LiveOpening
 
-    draw = commits.get("draw") or {}
-    if draw.get("coin") is None:
-        raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw.get("refused") else ""))
+    draw = commits.get("draw")                              # None: the window committed no draw root
+    if draw is None or draw.get("coin") is None:
+        raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw and draw.get("refused") else ""))
     got, why = CR.drawn(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
                         {"receipts": draw.get("receipts")}, dict(layout), k)
     if why is not None:
@@ -432,7 +452,7 @@ class H1Windows:
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
-                 draws: Any = None,
+                 draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -462,7 +482,15 @@ class H1Windows:
                                     self.out / "h1", rows=self.rows, steps=self.steps)
         print(f"[serve-h1] declared in {t1 - t0:.1f} s, its digest {self.digest[:16]} and {PROGRAM} in "
               f"{time.perf_counter() - t1:.1f} s", flush=True)
+        registered = None
+        if model_key is not None:
+            key, registered = model_key(self.digest)
         self.weights = SV.register_weights(self.digest, shapes, SV.weights_of(self.layers), key or os.urandom(32))
+        self.weights_key = "local" if registered is None else "auditor"
+        if registered is not None and self.weights.root().hex() != registered:
+            raise ValueError(f"{ENTRY}: the served weights committed under the auditor's key give root "
+                             f"{self.weights.root().hex()[:16]}, not the registration's {registered[:16]}: the served "
+                             f"checkpoint or the window Program's linears differ from the registered ones")
         self.tap: Any = None
         self.comp: Any = None
         self.run: Any = None
@@ -516,7 +544,7 @@ class H1Windows:
         coins = {"coins": "in-process"} if self.sessions is None else {"coins": "challenger", "peer": self.sessions.peer}
         return {"entry": ENTRY, "rows": self.rows, "steps": self.steps, "program": self.digest,
                 "program_file": f"h1/{PROGRAM}",
-                "weights_root": self.weights.root().hex(), "weights_key": "local", **coins,
+                "weights_root": self.weights.root().hex(), "weights_key": self.weights_key, **coins,
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
@@ -541,7 +569,10 @@ class H1Windows:
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
         prover = self.prover_of(window)
-        served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
+        # on a gate session the tables bind the window's open root (`Served.key`), the root the ledger opens it on and
+        # credit's domains bind; in-process coins credit nothing, and a random root stands in for the session's
+        served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap,
+                           window=None if self.sessions is not None else os.urandom(64),
                            program=self.program, program_digest=self.digest,
                            prover=None if prover is None else str(prover))
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
@@ -685,7 +716,8 @@ class H1Windows:
             if why is not None:
                 raise ValueError(f"{why[0]}: {why[1]}")
             self._period_k[period] = k
-        return self._period_k[period], (run.commits.get("session") or {}).get("root"), f"period {period}'s open"
+        session = run.commits.get("session")                # None: no gate session carried the run's coins
+        return self._period_k[period], session.get("root") if session else None, f"period {period}'s open"
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
                  seconds: dict[str, float]) -> dict[str, Any]:
@@ -744,13 +776,17 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
     sessions = sessions_of(opts)
     if sessions is not None:
         sessions.ahead_of(0)
+    model_key = None
+    if sessions is not None and opts.gate.h1_model:
+        model_key = model_key_of(sessions.gate, opts.gate.h1_model, opts.gate.h1_weights_root)
     arm = H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
                     config=config_of(opts.protocols_config), sessions=sessions, prover=opts.gate.h1_prover,
-                    closer=worker("h1-release"))
+                    closer=worker("h1-release"), model_key=model_key)
     arm.ready()
     return arm
 
 
 __all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "LISTEN_S", "MARGIN", "OWN", "POLLS", "PROGRAM",
-           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "refusal", "sessions_of", "units",
+           "PROGRAM_META", "SCHEME", "SESSIONED", "arm_of", "config_of", "listening", "model_key_of", "refusal", "sessions_of",
+           "units",
            "worker"]
