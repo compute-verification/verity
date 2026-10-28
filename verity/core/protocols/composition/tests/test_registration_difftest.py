@@ -1,5 +1,5 @@
-"""The registration log's Lean (`core-registration serve`: `Core.Registration.protocol`, `verity/registration/v1`, in
-the core interface's package) against its Python (`verity.core.protocols.registration`). Hypothesis draws a log for
+"""The registration log's Lean (`core-registration serve`: `Core.Registration.protocol`,
+`verity/registration/log/v1`, in the core interface's package) against its Python (`verity.core.protocols.registration`). Hypothesis generates a log for
 either composite, from the honest example site and its information (`EXAMPLE`, the Lean's `Core.Registration.Example`)
 with a few changes, or from small random entries, chained or with a broken `previous`; it checks it under the
 example's auditor or a changed one, and sometimes breaks the JSON of the log, the params or the evidence. The two must

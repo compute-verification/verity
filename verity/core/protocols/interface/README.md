@@ -93,7 +93,7 @@ the log before it and refuses the first that fails by name (`previous`, `duplica
 `card-digest`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`). A
 component reads its view of an accepted log by projection (`View`: the site, θ's values and the builder, at the head).
 Registration is ASCII-only: a log or parameters holding any other character is refused as `ascii` before any digest is
-taken. As a core protocol, `protocol` (`verity/registration/v1`, the `core-registration` executable) takes the
+taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
 auditor's parameters (`{"composite", "keys", "sheets"}`), the log as commitment (`{"composite", "entries"}`, its head
 the digest) and `{}` as evidence; it makes public the log's view and rejects as `entry I: REFUSAL`.
 `verity.core.protocols.registration` is its Python, held to it by the composition suite's difftest

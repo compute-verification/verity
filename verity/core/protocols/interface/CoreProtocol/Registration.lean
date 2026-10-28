@@ -44,7 +44,7 @@ The hardware checks are an information entry's too, and hold of it whenever they
 no hardware; so an information entry is held to `previous` and `duplicate-information` alone.
 
 A component reads its view of the log by projection (`View`): the site, θ's values and the builder, at the head. As a
-core protocol (`protocol`, `verity/registration/v1`) the log is the commitment, its head the
+core protocol (`protocol`, `verity/registration/log/v1`) the log is the commitment, its head the
 digest, and the parameters the auditor's own: the composite and, for the hardware checks, its data sheets and its
 devices' keys.
 -/
@@ -58,7 +58,7 @@ def HARDWARE : String := "verity/registration/hardware/v1"
 def INFORMATION : String := "verity/registration/information/v1"
 def CARD : String := "verity/registration/card/v1"
 def GENESIS : String := "verity/registration/genesis/v1"
-def protocolId : String := "verity/registration/v1"
+def protocolId : String := "verity/registration/log/v1"
 
 /-- `SHA-512(tag ‖ 0 ‖ canon(j))` as hex. Every JSON the log's types write holds integers only, which `Flock.canon`
 always writes, so the fallback is never taken. -/
@@ -605,7 +605,7 @@ def checkLog (p : Params) (c : Commitment) (_ : Unit) : Outcome Json Json :=
     | .error (i, r) => .reject s!"entry {i}: {r.name}"
     | .ok s => .accept s.view.toJson (Json.mkObj [("entries", Lean.toJson s.entries)])
 
-/-- **The registration log's check** as a core protocol, `verity/registration/v1`: the parameters are the auditor's
+/-- **The registration log's check** as a core protocol, `verity/registration/log/v1`: the parameters are the auditor's
 (`{"composite", "keys": [{"id", "key"}], "sheets": [CARD]}`), the commitment is the log
 (`{"composite", "entries": [ENTRY]}`) with its head as digest, the evidence is `{}`. It accepts a log the check passes,
 making public its view (`View.toJson`) and keeping its length, and rejects the first entry the check refuses as

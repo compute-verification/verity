@@ -39,7 +39,7 @@ HARDWARE = "verity/registration/hardware/v1"
 INFORMATION = "verity/registration/information/v1"
 CARD = "verity/registration/card/v1"
 GENESIS = "verity/registration/genesis/v1"
-PROTOCOL = "verity/registration/v1"
+PROTOCOL = "verity/registration/log/v1"
 OUTSIDE = "outside"
 """The rest of the world: an end every site has, whose id no location may take."""
 COMPOSITES = ("onsite", "remote")
