@@ -1,6 +1,6 @@
 """`certcheck` on the Definitions the training step's consumers are read from: what a counted product's lane reads, a row
-GEMM's coordinates and classes on the unsplit and the serial split-K routes, an output's required gates against the
-explicit checker, the interval overlap weights against `upstream.weights_by_multiplicity`, and (opt-in) the scaled step."""
+GEMM's coordinates and classes on each route the training step takes, an output's required gates against the explicit
+checker, the interval overlap weights against `upstream.weights_by_multiplicity`, and (opt-in) the scaled step."""
 
 from __future__ import annotations
 
@@ -56,6 +56,14 @@ def _serial(K: int = 64, N: int = 3):
     return CB.route_gemm({"kernel": "serialk", "SPLIT_K": 2}, K, N)
 
 
+#: the row GEMM's routes in the training step: unsplit, serial split-K (the M = 4096 LM head), split-K with bf16 partials
+#: (the M = 256 MLP input gradients and LM head) and its aligned form (the M = 4096 weight gradients)
+ROUTES = {"nosplit": lambda K, N: bind(BG.Gemm, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16), "serialk": _serial,
+          "splitk": lambda K, N: CB.route_gemm({"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"}, K, N),
+          "aligned": lambda K, N: CB.route_gemm({"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16", "align": 8,
+                                                 "tile_k": 32}, K, N)}
+
+
 def test_a_dot_step_lane_reads_its_x_sign_and_its_w_element():
     gemm = _serial().body.nodes[0].fn
     steps = {node.fn.id: node.fn for node in gemm.body.nodes if CC.OPS.fullmatch(node.fn.id)}
@@ -75,10 +83,10 @@ def _row(fn):
     return C, C.root_scope, range(xs, xs + 16 * fn.signature()[0][0][1].n)
 
 
-@pytest.mark.parametrize("route", ["nosplit", "serialk"])
+@pytest.mark.parametrize("route", sorted(ROUTES))
 def test_a_rows_coordinates_are_disjoint_and_read_x_through_their_products(route):
     K, N = 64, 3
-    fn = bind(BG.Gemm, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16) if route == "nosplit" else _serial(K, N)
+    fn = ROUTES[route](K, N)
     C, row, x = _row(fn)
     res = RG.Resolver()
     spans = []
@@ -93,13 +101,13 @@ def test_a_rows_coordinates_are_disjoint_and_read_x_through_their_products(route
     assert n == N and len(first) == K
     xs = [sorted(g for g in c if g in x) for c in first]
     assert xs == [sorted(g for g in c if g in x) for c in last]
-    want = [[x[16 * k + 15]] if route == "serialk" else list(x[16 * k:16 * k + 16]) for k in range(K)]
+    want = [list(x[16 * k:16 * k + 16]) if route == "nosplit" else [x[16 * k + 15]] for k in range(K)]
     assert xs == want
 
 
-@pytest.mark.parametrize("route", ["nosplit", "serialk"])
+@pytest.mark.parametrize("route", sorted(ROUTES))
 def test_an_output_bits_required_gates_agree_with_the_explicit_checker(route):
-    fn = bind(BG.Gemm, K=32, N=2, DOT=BG.HopperBF16WgmmaDot16) if route == "nosplit" else _serial(32, 2)
+    fn = ROUTES[route](32, 2)
     C, row, _x = _row(fn)
     acts = CC.coordinate(row, 1)
     A = frozenset(g for s in acts for g in range(s.offset, s.offset + s.spec.gates))
