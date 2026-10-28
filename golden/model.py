@@ -67,7 +67,8 @@ ZK_RUN = "r20261018-060433-b55e (C-Flock --zk sessions of ScaledMmS8Coordinate_v
 ZK_ROWS = 1.355
 H200_RUN = "r20261028-191928-57a0 (GD-PROVER's zk_cost on vy-dc-h200-5, firewall on, 64 staged; K 1,024 / 4,096 / " \
            "16,384 / 65,536 blocks of 2.66 / 6.97 / 24.2 / 93.2 M rows at k_log 22 / 24 / 25 / 27, 8 drawn, and K 1,024 " \
-           "at 64; fit T = a + b s + c s P in rows, /tmp/gd/h200fit.py, h200_fit.json in GD-MODEL's final art)"
+           "at 64; fit T = a + b s + c s P in rows: h200fit.py and h200_fit.json in art:8cbbeaa90c52c99687eed713a2d5b2c5" \
+           "d2759529e66edfc268de705705b932ea)"
 
 INPUTS: dict[str, tuple[float, str, str]] = {
     # the card
