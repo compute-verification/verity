@@ -81,7 +81,7 @@ RANGES = {
     "years": (0.25, 3.0, "guess"),
 }
 
-#: compute-accounting's modelled design, where the residual sits below the memory cap
+#: the modelled design, where the residual sits below the memory cap
 DESIGN = {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
 SCENARIOS = {
     "defaults": {},
