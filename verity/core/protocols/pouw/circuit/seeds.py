@@ -1,4 +1,4 @@
-"""The seed and the noise a PoUW unit derives inside its own proof (decisions 105 and 106, `PROTOCOL.md` §`compile`).
+"""The seed and the noise a PoUW unit derives inside its own proof (`PROTOCOL.md` §`compile`).
 
 A drawn unit's noise is neither a public nor a coin input: the unit computes its seed from the window's salt
 (`pouw.salt`, the one coin), its position and its operands' roots, all inputs of the unit bound before the draw, and its
@@ -14,7 +14,7 @@ position, roots), which makes every gate of the seed read the unit's own positio
 ``block_0, block_1, ...`` in order, each as 16 big-endian 32-bit halves, bit β the bit β mod 32 (least significant first) of
 half (β mod 512) // 32 of block β // 512 (`stream`); a Boolean unit reads it as the leaves of its blocks.
 
-σ_R keys a unit's receipt folds and starts their chains (decision 121): a hash of its own tag, never the noise seed, so no
+σ_R keys a unit's receipt folds and starts their chains: a hash of its own tag, never the noise seed, so no
 fold key is a function of seed_j. A unit with receipt keys calls `PouwUnitSeeds` once, for both, rather than two seeds at
 one position.
 
@@ -104,7 +104,7 @@ def seed(salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
 
 
 def receipt_seed(salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
-    """σ_R of the unit at `position` (decision 121): seed_j's message under `RECEIPT_TAG`, its receipt folds' keys."""
+    """σ_R of the unit at `position`: seed_j's message under `RECEIPT_TAG`, its receipt folds' keys."""
     return _tagged(RECEIPT_TAG, salt, position, root_a, root_b)
 
 
@@ -211,7 +211,7 @@ PouwSeed = _word_def("PouwSeed", _SEED_PARAMS, _seed_body, "seed_j from the salt
                      "operands' roots (A's, then B's): `seeds.seed`, the message words after the first XORed with the position.",
                      ports=_coin_salt)
 PouwUnitSeeds = _word_def("PouwUnitSeeds", _SEED_PARAMS, _unit_seeds_body, "A unit's two seeds, one seed role: [seed_j, "
-                          "σ_R], `seeds.seed` and `seeds.receipt_seed` (decision 121: σ_R keys the receipt folds, under a "
+                          "σ_R], `seeds.seed` and `seeds.receipt_seed` (σ_R keys the receipt folds, under a "
                           "tag of its own), the masked salt and roots shared.", ports=_coin_salt, ret=SEED_PAIR)
 PouwNoiseBlock = _word_def("PouwNoiseBlock", _BLOCK_PARAMS, _block_body, "Block t of seed_j's noise stream: "
                            "SHA-512(NOISE_TAG ‖ seed ‖ u64(t)), `seeds.noise_block`.")
