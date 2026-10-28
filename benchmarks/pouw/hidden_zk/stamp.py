@@ -38,6 +38,8 @@ W = IL.WORD
 TASK_ANDS = 1 << 16
 #: rendered tasks held ahead of the writer, per worker
 AHEAD = 2
+#: a template of more than one call keeps its rows as Python lists (for its evaluations) up to this many columns
+KEEP_COLS = 1 << 20
 
 
 class Unstampable(Exception):
@@ -45,41 +47,61 @@ class Unstampable(Exception):
 
 
 class Template:
-    """One (builder, sharing pattern)'s circuit: ``m`` operand bits, then ``n`` ANDs as ``rows`` ``(A bits, A constant, B bits,
-    B constant)`` over local bits (below ``m`` an operand's rank, else AND ``j`` at ``m + j``), its output forms, and ``vis``,
-    the ANDs its outputs read: all a later call can read of it."""
+    """One (builder, sharing pattern)'s circuit: ``m`` operand bits, then ``n`` ANDs over local bits (below ``m`` an operand's
+    rank, else AND ``j`` at ``m + j``), AND ``j``'s A bits ``cols[ptr[2 j]:ptr[2 j + 1]]`` and B bits
+    ``cols[ptr[2 j + 1]:ptr[2 j + 2]]``, each sorted, and their constants ``cst[2 j]``, ``cst[2 j + 1]``; its output forms, and
+    ``vis``, the ANDs its outputs read: all a later call can read of it. ``calls`` is set once the walk ends."""
 
-    __slots__ = ("id", "label", "m", "n", "rows", "outs", "vis", "closures", "build_s")
+    __slots__ = ("id", "label", "m", "n", "cols", "ptr", "cst", "outs", "vis", "closures", "build_s", "calls", "_lists")
 
     def __init__(self, tid: int, label: str, m: int, S: forms.Circuit, outs: list):
         if S.lookups or S.asserts or any(k != "and" for k in S.kind[m:]):
             raise Unstampable(f"{label}'s template makes {sorted(set(S.kind[m:]) - {'and'}) or 'assertions or reads'}")
         self.id, self.label, self.m, self.n = tid, label, m, len(S.kind) - m
-        self.rows = [(tuple(sorted(a.s)), a.c, tuple(sorted(b.s)), b.c) for a, b in S.data[m:]]
+        flat: list[int] = []
+        lens, cst = [], []
+        for a, b in S.data[m:]:
+            for f in (a, b):
+                s = sorted(f.s)
+                flat += s
+                lens.append(len(s))
+                cst.append(f.c & 1)
+        self.cols = np.array(flat, dtype=np.int32)
+        self.ptr = np.concatenate([[0], np.cumsum(np.array(lens, dtype=np.int64))]).astype(np.int64)
+        self.cst = np.array(cst, dtype=np.uint8)
         self.outs = [(tuple(sorted(f.s)), f.c) for f in outs]
         self.vis = np.array(sorted({v - m for s, _ in self.outs for v in s if v >= m}), dtype=np.int64)
         self.closures: dict[bytes, Closure] = {}
-        self.build_s = 0.0
+        self.build_s, self.calls, self._lists = 0.0, 0, None
+
+    def lists(self) -> tuple[list, list, list]:
+        """``cols``, ``ptr`` and ``cst`` as lists, kept for a template of more than one call whose columns are few."""
+        if self._lists is not None:
+            return self._lists
+        ls = (self.cols.tolist(), self.ptr.tolist(), self.cst.tolist())
+        if self.calls > 1 and len(self.cols) <= KEEP_COLS:
+            self._lists = ls
+        return ls
 
 
 class Closure:
     """A template's live ANDs when later rows read ``ext`` of its ``vis``: ``mask`` and ``rank`` (each live AND's place among
-    them, -1 dead), and ``need``, the operand ranks the live rows read."""
+    them, -1 dead), and ``need``, the operand ranks the live rows read. ``uses`` is set once liveness ends."""
 
-    __slots__ = ("id", "t", "mask", "rank", "count", "need", "prog")
+    __slots__ = ("id", "t", "mask", "rank", "count", "need", "prog", "uses")
 
     def __init__(self, cid: int, t: Template, ext: bytes):
+        cols, ptr, _ = t.lists()
         live = bytearray(t.n)
         stack = [int(j) for j, e in zip(t.vis, ext) if e]
         need: set[int] = set()
-        rows, m = t.rows, t.m
+        m = t.m
         while stack:
             j = stack.pop()
             if live[j]:
                 continue
             live[j] = 1
-            a, _, b, _ = rows[j]
-            for v in a + b:
+            for v in cols[ptr[2 * j]:ptr[2 * j + 2]]:
                 if v >= m:
                     if not live[v - m]:
                         stack.append(v - m)
@@ -90,29 +112,28 @@ class Closure:
         self.count = int(self.mask.sum())
         self.rank = np.where(self.mask, np.cumsum(self.mask) - 1, -1).astype(np.int64)
         self.need = np.array(sorted(need), dtype=np.int64)
-        self.prog = None
+        self.prog, self.uses = None, 0
 
     def program(self, const: int):
         """The live rows' text as a %-format of their columns, and per column ``(operand rank or -1, offset from the call's
-        first column)``."""
-        if self.prog is None:
-            t, m, rank = self.t, self.t.m, self.rank
-            text, ops = [], []
-            for j in np.flatnonzero(self.mask):
-                a, ac, b, bc = t.rows[j]
-                tok = []
-                for s, c in ((a, ac), (b, bc)):
-                    tok.append(str(len(s) + c))
-                    for v in s:
-                        tok.append("%d")
-                        ops.append(v if v < m else -1 - int(rank[v - m]))
-                    if c:
-                        tok.append(str(const))
-                text.append(" ".join(tok))
-            ops = np.array(ops, dtype=np.int64)
-            isb = ops >= 0
-            self.prog = ("\n".join(text) + "\n" if text else "", isb, ops[isb], -1 - ops[~isb])
-        return self.prog
+        first column)``; kept for a closure of more than one call."""
+        if self.prog is not None:
+            return self.prog
+        t, m = self.t, self.t.m
+        J = np.flatnonzero(self.mask)
+        s0, s1, s2 = t.ptr[2 * J], t.ptr[2 * J + 1], t.ptr[2 * J + 2]
+        tot = s2 - s0
+        idx = np.repeat(s0 - np.concatenate([[0], np.cumsum(tot)[:-1]]), tot) + np.arange(int(tot.sum()), dtype=np.int64)
+        v = t.cols[idx].astype(np.int64)
+        ops = np.where(v < m, v, -1 - self.rank[np.where(v >= m, v - m, 0)])
+        k = f" {const}"
+        text = [f"{a + x}{' %d' * a}{k if x else ''} {b + y}{' %d' * b}{k if y else ''}"
+                for a, x, b, y in zip((s1 - s0).tolist(), t.cst[2 * J].tolist(), (s2 - s1).tolist(), t.cst[2 * J + 1].tolist())]
+        isb = ops >= 0
+        prog = ("\n".join(text) + "\n" if text else "", isb, ops[isb], -1 - ops[~isb])
+        if self.uses > 1:
+            self.prog = prog
+        return prog
 
 
 class Stamp:
@@ -301,6 +322,8 @@ class StampLayout(IL.Layout):
                 for v in w.s:
                     live[v] = 1
         T, closures = st.templates, []
+        for t, k in zip(T, np.bincount(np.asarray(st.tids, dtype=np.int64), minlength=len(T)).tolist()):
+            t.calls = k
         cid = [0] * len(st.tids)
         for i in range(len(st.tids) - 1, -1, -1):
             t = T[st.tids[i]]
@@ -315,16 +338,15 @@ class StampLayout(IL.Layout):
         del live
         self.closures = closures
         self.cid = np.array(cid, dtype=np.int64)
+        for c, k in zip(closures, np.bincount(self.cid, minlength=len(closures)).tolist()):
+            c.uses = k
         counts = np.array([c.count for c in closures], dtype=np.int64)[self.cid] if cid else np.zeros(0, np.int64)
         self.n_live = int(counts.sum())
         self.colbase = self.first + np.concatenate([[0], np.cumsum(counts)[:-1]]).astype(np.int64) if cid else counts
-        nz = [[0, 0] for _ in closures]
+        nz = np.zeros((len(closures), 2), dtype=np.int64)
         for c in closures:
-            for j in np.flatnonzero(c.mask):
-                a, ac, b, bc = c.t.rows[j]
-                nz[c.id][0] += len(a) + ac
-                nz[c.id][1] += len(b) + bc
-        nz = np.array(nz, dtype=np.int64).reshape(-1, 2)
+            per = np.diff(c.t.ptr) + c.t.cst
+            nz[c.id] = per[0::2][c.mask].sum(), per[1::2][c.mask].sum()
         self.nnz = nz[self.cid].sum(axis=0).tolist() if cid else [0, 0]
 
     def _bind_cols(self) -> None:
@@ -497,14 +519,15 @@ class StampLayout(IL.Layout):
 
 
 def _eval_template(t: Template, x: np.ndarray) -> np.ndarray:
+    cols, ptr, cst = t.lists()
     lv = x.tolist() + [0] * t.n
     m = t.m
-    for j, (a, ac, b, bc) in enumerate(t.rows):
-        p = ac
-        for v in a:
+    for j in range(t.n):
+        p = cst[2 * j]
+        for v in cols[ptr[2 * j]:ptr[2 * j + 1]]:
             p ^= lv[v]
-        q = bc
-        for v in b:
+        q = cst[2 * j + 1]
+        for v in cols[ptr[2 * j + 1]:ptr[2 * j + 2]]:
             q ^= lv[v]
         lv[m + j] = p & q
     return np.array([lv[m + int(j)] for j in t.vis], dtype=np.uint8)
