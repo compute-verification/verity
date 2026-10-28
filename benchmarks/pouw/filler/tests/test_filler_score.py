@@ -2,7 +2,7 @@
 filler's rate over its windows, coverage with the proved and provisional certified fractions, SCORE as the time-weighted
 mean, the gates (slowdown, receipts, anti-replay, honesty against the interleaved standalone reference and its positive
 control, DRAM with its counter's control, clocks), the settled power and the arms' placement policies; filler-scorer/v5's
-fold reading, modelled served part and SCORE-TP."""
+fold reading, modelled served part and the TP score."""
 
 from __future__ import annotations
 
@@ -355,7 +355,7 @@ def test_clock_gate():
 def test_margin_per_point():
     """filler-scorer/v3's margin readout: the limit less each point's slowdown, with its worst and best rounds', so a
     point whose rounds reach the limit shows it has none even where its median passes (decode 32/1K, whose serving alone
-    reads 7.69 or 7.75 ms by process, r20261016-071637-cb1f)."""
+    reads 7.69 or 7.75 ms by process)."""
     stats = all_points(slow=1.02)
     thin = row("step", 32, 1024, "split", alone_ms=10.0, arm_ms=10.41, fill_sms=92)
     thin["blocks"][0]["arm"]["reps"] = [[10.6, 2000.0, 300.0]] * 3
@@ -578,7 +578,7 @@ def test_program_facts_read_the_filler_wherever_it_is_called_from():
 
 
 def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
-    """A dfill_k device function that writes global memory (dfill_k_put, coordinator 11:05Z) holds stores and address
+    """A dfill_k device function that writes global memory (dfill_k_put) holds stores and address
     arithmetic only and stores its arguments as they came; an MMA function that stores, a put that computes, combines or
     calls, is refused. A dfill_k kernel (the split filler) is its own driver's and isn't held to it."""
     def facts(put_body=PUT_BODY, warp_body=WARP_BODY):
@@ -599,7 +599,7 @@ def test_a_store_only_dfill_k_function_may_take_the_receipt_pointers():
         v = facts(put_body=body)["violations"]
         assert v and all("writes global memory" in x for x in v) and any(why in x for x in v), (body, v)
         assert not S.paths_gate(facts(put_body=body))["ok"]
-    # the put as nvcc places its arguments (HC-COMM's tp_dfill_k_put split of c286d4f81): register-to-register moves
+    # the put as nvcc places its arguments (tpcomm's tp_dfill_k_put split of c286d4f81): register-to-register moves
     # copy an argument, and the self-branch after the last RET never runs
     placed = ["LDCU.64 UR4, c[0x0][0x358]", "MOV R20, R27", "MOV R27, 0x0", "MOV R21, R28", "IMAD.MOV.U32 R5, RZ, RZ, R11",
               "STG.E.64 desc[UR4][R2.64], R20", "STG.E desc[UR4][R4.64], R5", f"RET.REL.NODEC R8 `({SERVE})", ".L_x_9:",
@@ -639,7 +639,7 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
     bad = S.program_facts({"fscore": nvd(serving(before=["STG.E desc[UR4][R4.64], R1"]), (WARP, False, WARP_BODY))})
     assert S.credit_fixed([fixed_row()], bad)[1]["credited"] == 0
     assert "no program facts" in S.credit_fixed([fixed_row()], None)[1]["dropped"][0]
-    # filler warps inlined into a serving kernel (FILL r3's form): nothing v4 reads as the filler did that work
+    # filler warps inlined into a serving kernel (the inlined form): nothing v4 reads as the filler did that work
     r3 = S.program_facts({"fscore": nvd((DFILL, True, K_TILE), (SERVE, True, [*CONSUMER, *K_TILE]))})
     assert r3["violations"] == [] and r3["fixed_from"] == {"fscore": 0}
     assert "no function in fscore it can come from" in S.credit_fixed([fixed_row()], r3)[1]["dropped"][0]
@@ -662,7 +662,7 @@ def test_fixed_work_is_credited_from_checked_public_tiles_of_a_read_binary():
 
 def test_record_limits_are_checked_when_the_arm_loads():
     """filler-scorer/v3 refuses, before any build or lease, an arm whose record the ledger or the store would refuse
-    after the run (HC-PROVED's 249-character hypothesis reached `score.record` only after a scored run)."""
+    after the run (a 249-character hypothesis reached `score.record` only after a scored run)."""
     import dataclasses
 
     v1 = A.FillV1()
@@ -697,19 +697,19 @@ def test_arms():
     v1, idle = A.load("fill-v1"), A.load("idle")
     assert A.placed(idle, "decode", 32, 2048) == A.NONE
     assert A.placed(v1, "prefill", 8192, 0) == A.NONE
-    assert A.placed(v1, "decode", 1, 2048) == A.Placement("split", 108)
+    assert A.placed(v1, "decode", 1, 2048) == A.Colocation("split", 108)
     assert A.placed(v1, "decode", 32, 2048).fill_sms == 92  # FILL's rule: (32, 1K), the longest L ≤ 2K at B 32
     assert A.placed(v1, "decode", 144, 5120).fill_sms == 60
     assert A.placed(v1, "decode", 8, 16384).fill_sms == 124  # B 32's longest L ≤ 16K: (32, 8K)
     assert S.honesty(v1, all_points(), S.points())["ok"]
     assert not S.honesty(v1, all_points(), S.points(), has_filler=True)["ok"]  # no positive control
     with pytest.raises(A.ArmError):
-        A.Placement("split", 0)
+        A.Colocation("split", 0)
     with pytest.raises(A.ArmError):
         A.load("no-such-arm")
 
 
-#: pf_absorb<NC>'s MMA word entries as the sm_120a builds compile them (FILL-SEC c259a89b5): one 16832 IMMA's four
+#: pf_absorb<NC>'s MMA word entries as the sm_120a builds compile them (c259a89b5): one 16832 IMMA's four
 #: words R28..R31, y in R9, the keys in R20/R21
 IMMA4 = "IMMA.16832.S8.S8 R28, R12.ROW, R40.COL, RZ"
 RAM = [IMMA4, "LEA.HI R9, R9, R28, R9, 0x7", "IMAD R9, R9, R20, R29", "LEA.HI R9, R9, R30, R9, 0x13",
@@ -718,7 +718,7 @@ XIN = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0x7, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c,
        "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
 DUO = [IMMA4] + [x for w in (28, 29, 30, 31) for x in (f"LOP3.LUT R9, R9, R{w}, R22, 0x96, !PT", "IMAD R9, R9, R20, R10",
                                                      "IADD3 R10, R9, R11, RZ")] + ["EXIT"]
-#: P2-FF r9's folds (note:20261016T1117Z-draft-fullfloor-s-r9) as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
+#: The r9 folds as the scratch -DPFILL_XIN13 and -DPFILL_LI builds of
 #: c259a89b5's pfill.cuh compile them: XOR-in at rotations 13 and 19; LOP3+IMAD's y ^ d0 ^ k0 in one LOP3, no shift
 XIN13 = [IMMA4, "SHF.L.W.U32.HI R9, R9, 0xd, R9", "LOP3.LUT R9, R9, R28, RZ, 0x3c, !PT", "IMAD R9, R9, R20, R29",
          "SHF.L.W.U32.HI R9, R9, 0x13, R9", "LOP3.LUT R9, R9, R30, RZ, 0x3c, !PT", "IMAD R9, R9, R21, R31", "EXIT"]
@@ -756,7 +756,7 @@ def test_the_fold_reads_from_the_sass_of_the_instantiation_that_runs():
 
 
 def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
-    """Decision 43: duo reads in full and XOR-in at Theorem K's proved half (RS-E-REF r7), each only where declared and
+    """duo reads in full and XOR-in at Theorem K's proved half, each only where declared and
     the SASS, the NC and the recorded NVCC_APPEND_FLAGS confirm it; ram reads half; undeclared or unconfirmed reads as
     ram where the build shows any
     fold v5 reads, else no fold (no theorem entry); the folded fraction is the entry's times the share."""
@@ -811,11 +811,11 @@ def test_the_fold_is_read_from_the_declaration_and_what_the_build_confirms():
 
 
 def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_provisionally():
-    """P2-FF r9's folds (coordinator 12:10Z): XOR-in (13, 19) and LOP3+IMAD read where declared and confirmed, told
+    """The r9 folds: XOR-in (13, 19) and LOP3+IMAD read where declared and confirmed, told
     apart from the superseded XOR-in (7, 19) by the state's funnel-shift rotation into each XOR (through a move); XORs
     and addends at rotations no fold lists read as ram; each of the three is provisional, which the filler's certified
-    status and the score's flags carry. All three read at Theorem K's proved half, 0.45, with 0.9 if P2-FF r10's
-    select-charging lemma lands as the entry's secondary readout, never its fraction (coordinator 13:09Z, RS-E-REF r7);
+    status and the score's flags carry. All three read at Theorem K's proved half, 0.45, with 0.9 if the r10
+    select-charging lemma lands as the entry's secondary readout, never its fraction;
     ram and duo have no such readout. duo reads in full and provisionally (its binding is proved up to four words);
     ram reads proved."""
     def ff(nc, body):
@@ -865,7 +865,7 @@ def test_the_r9_folds_are_told_apart_by_the_rotation_into_their_xor_and_read_pro
     assert (ram_e["fraction"], ram_e["if_fold"], duo_e["fraction"], duo_e["if_fold"]) == (0.45, None, 0.9, None)
     ram = S.certified_v5(ram_e)
     assert ram["filler"]["status"] == "proved" and not S.score(all_points(), ram)["flags"]
-    # duo's binding is proved for runs of one to four words only (coordinator 16:50Z): provisional, and flagged
+    # duo's binding is proved for runs of one to four words only: provisional, and flagged
     duo = S.certified_v5(duo_e)
     assert duo["filler"]["fraction"] == 0.9
     assert duo["filler"]["status"] == f"provisional (fold duo: {S.FOLDS['duo']['provisional']})"
@@ -913,9 +913,9 @@ def test_score_v5_is_the_measured_filler_part_plus_the_modelled_served_part():
 
 
 def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
-    """Coordinator 12:10Z and 14:42Z: the deferred pass's shown share s and displacement come from measurement, TP's s
-    and d (lost MACs a ms of the whole pass) fitted by TP, batch and context to HC-COMM r3 (ram) and r6 (duo) jointly
-    (each point's residual reported, the filler's remaining share among them), one GPU's share from STAGE-COST (B 32,
+    """The deferred pass's shown share s and displacement come from measurement, TP's s
+    and d (lost MACs a ms of the whole pass) fitted by TP, batch and context to rounds 3 (ram) and 6 (duo) jointly
+    (each point's residual reported, the filler's remaining share among them), one GPU's share from stage_cost (B 32,
     held flat) and its displacement u(1 − s), u the larger of TP 2's r3 fit and the MAC-for-MAC rule; read at B and L
     clamped to the points."""
     def point(tp, b, l, s, u, mhz=2000.0, served=1e12):
@@ -938,8 +938,8 @@ def test_the_deferred_pass_is_calibrated_to_measurement(monkeypatch):
         assert "u" not in xd and xd["d"] == pytest.approx(xu["u"] * (1 - xu["s"]))
     with pytest.raises(ValueError, match="measured at"):
         S.defer_fit(2048)
-    assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # HC-COMM r4: TP 2 alone
-    # one GPU's u: the fit to HC-COMM r3 at T = 4096, every residual reported
+    assert S.defer_fit(8192)["tps"] == S.defer_fit(16384)["tps"] == [2]  # tpcomm: TP 2 alone
+    # one GPU's u: the fit to tpcomm at T = 4096, every residual reported
     fit = S.DEFER_FIT
     assert fit["T"] == 4096 and fit["tps"] == [2, 4] and fit["n"] == 12 and len(fit["points"]) == 12
     assert fit["s"]["batch"] < 0 and fit["s"]["rms"] < 0.15 and fit["u"]["rms"] < 0.15 and fit["slowdown_err_pts_max"] < 2
@@ -984,7 +984,7 @@ def tp_log(rank, tp=2, b=32, l=2048, *, base=40.0, phase=41.0, fill=1e12, served
 
 
 def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
-    """SCORE-TP (HC-COMM r2's suite): each TP point over the slowest rank's step, per GPU, its served MACs at 0.9 with
+    """The TP score (tpcomm's suite): each TP point over the slowest rank's step, per GPU, its served MACs at 0.9 with
     the deferred pass and the filler at the folded fraction, weighted TP × wall time; the slowdown, pf_gate, receipts
     and NCCL gates read every rank."""
     rows = S.tp_rows({0: tp_log(0, phase=41.0), 1: tp_log(1, phase=42.0, fill=2e12)})

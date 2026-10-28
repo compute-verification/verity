@@ -89,6 +89,7 @@ class Lib:
             "v31_levels_async": ([vp, u64, vp], i),
             "v31_pad": ([vp, vp], i),
             "v31_sync": ([vp], i),
+            "v31_stream": ([vp, i], vp),
             "v31_destroy": ([vp], None),
             "v31_lt_create": ([i, i, i, vp, vp, vp, vp], vp),
             "v31_lt_run": ([vp] * 5, None),
@@ -239,6 +240,14 @@ class Prover:
     def sync(self) -> None:
         self.lib.check(self.lib.sync(self.h))
 
+    def stream(self, which: int) -> int:
+        """The shared compute (0) or commit (1) stream's handle, for timing events: a call's compute is on the first,
+        and its commit and `levels_async`'s copies follow on the second."""
+        s = self.lib.stream(self.h, which)
+        if not s:
+            raise RuntimeError("v31_stream: called from a thread other than the binding's")
+        return int(s)
+
 
 call_seeds = v31.call_seeds
 served_seeds = v31.served_seeds
@@ -323,7 +332,7 @@ def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int
         if a_kind == "pad":
             A = v31.pad_rows(seeds, range(m), k)
             rep["pad_equal"] = p.pad() == A.tobytes()
-        co = v31.Coins.expand(f, seeds)
+        co = v31.CallNoise.expand(f, seeds)
         if cheat == "nodither":
             co = dataclasses.replace(co, dA=np.zeros_like(co.dA), dB=np.zeros_like(co.dB))
         skip = int(cheat.split(":")[1]) if cheat.startswith("skip:") else None
@@ -426,7 +435,7 @@ def gate_point_levels(lib: Lib, rng: np.random.Generator) -> dict:
             p.levels_async(p.prove(seeds[x]), buf.ctypes.data)
         p.sync()
         for x, (sd, buf) in enumerate(zip(seeds, bufs)):
-            values = v31.fill_buffer(f, *v31.fill_values(f, v31.pad_rows(sd, range(m), k), B[x // 2], v31.Coins.expand(f, sd)))
+            values = v31.fill_buffer(f, *v31.fill_values(f, v31.pad_rows(sd, range(m), k), B[x // 2], v31.CallNoise.expand(f, sd)))
             equal.append(buf.byteswap().tobytes() == v31.levels_bytes(v31.fill_commit(f, values, p.ks, x * f.leaves).levels))
         kept = holder.pad() == B[0].tobytes()
         with ThreadPoolExecutor(1) as other:
@@ -439,7 +448,7 @@ def _pipeline_check(p: Prover, ops: tuple, c: int, seeds: dict[str, bytes]) -> d
     f, (A, B, _) = p.f, ops
     if A is None:
         A = v31.pad_rows(seeds, range(f.m), f.k)
-    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds)))
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
     ref = v31.fill_commit(f, values, p.ks, c * f.leaves)
     return {"shape": f"{'served' if f.o else 'filler'} {f.m}x{f.n}x{f.k} L {f.L}", "call": c, "root_equal": p.root(c) == ref.root}
 

@@ -9,7 +9,7 @@ hgref.py pins it) behind the e2e slice's round (cursor/e2e-slice-ea24's challeng
     (c) the coin sigma, 64 bytes, only after (b)
     (d) the prover commits the call's receipts: a word a thread every S 32-steps (`segment_e2e`'s windowed layout,
         (tile, window, thread), RW words a leaf), the products W' X'^T with W' = W + U (U in ±1..±16, period 32 along k, H1's
-        noise on the weights) and X' = X + d (decision 29's dither, d in {0, 1}), U, d and the fold's keys from sigma
+        noise on the weights) and X' = X + d (the dither, d in {0, 1}), U, d and the fold's keys from sigma
     (e) after (d), the draw with fresh coins: a 128 x 128 tile, one of its 512 threads and a 32-step j
     (f) the statement: the thread's W and X tile leaves at j and the receipt leaf holding its window's word, each a
         committed hm96-sha512/row/v2 row whose commit string b || c the public file carries; the public rows (asel, xu,
@@ -65,7 +65,7 @@ NCT, RL, RW, NCH, TM = SG.NCT, SG.RL, SG.RW, SG.NCH, 128
 ROW_BITS = RL * 32 * 8
 TAG = b"verity/e2e-120/v1\0"
 TREE_TAG = "verity/e2e-120/tree/v1"
-#: fx1's multiplier of entry q = 4 t + e (decision 83; cgemm_ref.fx1_keys: key_mul(1, 32 q) of floored_gemm's ref.py)
+#: fx1's multiplier of entry q = 4 t + e (cgemm_ref.fx1_keys: key_mul(1, 32 q) of floored_gemm's ref.py)
 FX1 = tuple(SG.mix32(0xA0000000 + 2 * (16 + 32 * q)) | 1 for q in range(32))
 #: receipt folds: the check's (`segment_e2e.FOLDS`) and the served design's fx1 (one keyed IMAD a word, then duo)
 FOLDS = ("duo", "xin", "fx1")
@@ -193,7 +193,7 @@ def verify_leaf(label: dict, count: int, root: bytes, pos: int, bc: bytes, path:
 
 
 def tile_rows(A: np.ndarray) -> np.ndarray:
-    """Decision 46's tile leaves of an operand (rows x k int8): leaf j (rows / RL) + i' is rows RL i' .. RL i' + RL - 1 at
+    """The tile leaves of an operand (rows x k int8): leaf j (rows / RL) + i' is rows RL i' .. RL i' + RL - 1 at
     values 32 j .. 32 j + 31, row-major, as (leaves, RL 16) u16."""
     rows, k = A.shape
     blocks = np.ascontiguousarray(A).reshape(rows // RL, RL, k // 32, 32).transpose(2, 0, 1, 3)

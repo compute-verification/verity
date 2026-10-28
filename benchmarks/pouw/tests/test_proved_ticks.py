@@ -32,7 +32,7 @@ def test_the_sheet_is_h1_fx1_on_ds120():
 def test_b_flat_is_the_floor_programs_issue_bound_with_its_skippable_work():
     data = P.device(S.family)
     assert P.EB.prices(S.design, data, S.vector).mma == pytest.approx(1 + 1 / 39 + 8 + 8, abs=5e-7)
-    assert P.unit_cycles(S) == pytest.approx(17.097571, abs=5e-7)     # Accounting.TS.Headline.Sm120.flat (#2482)
+    assert P.unit_cycles(S) == pytest.approx(17.097571, abs=5e-7)     # Accounting.TS.Headline.Sm120.flat
 
 
 def test_a_gpu_second_of_linears_is_one_minus_eps_of_b_flat_seconds():

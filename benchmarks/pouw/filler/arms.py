@@ -14,7 +14,7 @@ workload, the timing and its serving-alone controls, the gates and the arithmeti
   declares its operands (`NOISE`); filler-scorer/v3 reads it, with the facts of its own build, to pick the filler's
   certified-fraction entry (`scoring.filler_entry`). ``Filler.fold`` optionally declares its receipt's fold (`FOLDS`),
   which filler-scorer/v5 reads (`scoring.fold_reading`). Neither is part of the variant's run-time config (`config`).
-- ``placement(phase, B, L)``: where the filler runs beside serving at a suite point, a `Placement`. ``phase`` is
+- ``placement(phase, B, L)``: where the filler runs beside serving at a suite point, a `Colocation`. ``phase`` is
   ``"decode"`` (the decode step at batch B, context L) or ``"prefill"`` (the 32 layers of linears at M = B rows, L = 0).
   It is a pure function of the point: the same placement on every call, chosen before the run (desideratum 5's fixed work
   per round), never from the run's own measurements.
@@ -42,8 +42,8 @@ PLACES = ("none", "split", "co")
 PHASES = ("decode", "prefill")
 SMS = 188  # the RTX PRO 6000's SMs
 #: a filler's declarable operands: its chain's own outputs, fresh uniform ±1, fresh uniform {0,1} bits on both sides,
-#: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU, note:20261016T0710Z-draft-filler-floor-r2 §5), or
-#: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit; note:20261016T0525Z-draft-fullfloor-s-r6 §2)
+#: fresh bits A ∈ {0,1} with B = U uniform on {±1..±64} (pfill-bU), or
+#: the dither ⌊x/s⌋ + b (data quantized down plus a fresh uniform bit)
 NOISE = ("chained", "pm1", "bits01", "bitsU", "dither")
 #: a filler's declarable receipt folds (pfill.cuh's pf_absorb): ram (NC 4), duo (NC 2), and at NC 4 XOR-in (rotations 7
 #: and 19, -DPFILL_XIN; superseded), XOR-in (13, 19) (-DPFILL_XIN13) and LOP3+IMAD (-DPFILL_LI); filler-scorer/v5
@@ -73,7 +73,7 @@ def config(filler: Filler | None) -> dict[str, str]:
 
 
 @dataclass(frozen=True)
-class Placement:
+class Colocation:
     place: str = "none"
     fill_sms: int = 0
 
@@ -86,7 +86,7 @@ class Placement:
             raise ArmError(f"only a split names filler SMs ({self.place} with {self.fill_sms})")
 
 
-NONE = Placement()
+NONE = Colocation()
 
 
 def _record_rules():
@@ -175,10 +175,10 @@ def check_arm(arm, *, record: bool = False) -> list[str]:
     return bad
 
 
-def placed(arm, phase: str, b: int, l: int) -> Placement:
+def placed(arm, phase: str, b: int, l: int) -> Colocation:
     p = arm.placement(phase, b, l)
-    if not isinstance(p, Placement):
-        raise ArmError(f"{arm.name}.placement({phase}, {b}, {l}) returned {p!r}, not a Placement")
+    if not isinstance(p, Colocation):
+        raise ArmError(f"{arm.name}.placement({phase}, {b}, {l}) returned {p!r}, not a Colocation")
     if p.place != "none" and arm.filler is None:
         raise ArmError(f"{arm.name} places a filler at {phase} {b}/{l} but has none")
     return p
@@ -201,7 +201,7 @@ class Idle:
 
 
 #: FILL v1's split per (B, L), cuBLASLt re-tuned on the decode partition, chosen on runs 2–5 so decode slows ≤ 5% and
-#: re-measured in the holdout r20261016-040257-cec0 (note:20261016T0318Z-draft-dram-free-filler §0)
+#: re-measured in a holdout run
 FILL_V1_SPLIT = {(1, 2048): 108, (32, 1024): 92, (32, 5120): 108, (32, 8192): 124, (32, 24576): 124, (48, 16384): 124,
                  (128, 2048): 92, (132, 5120): 60, (144, 5120): 60, (256, 1024): 60, (256, 2048): 60}
 
@@ -238,7 +238,7 @@ class FillV1:
     def placement(self, phase, b, l):
         if phase == "prefill":
             return NONE
-        return Placement("split", point_lookup(FILL_V1_SPLIT, b, l))
+        return Colocation("split", point_lookup(FILL_V1_SPLIT, b, l))
 
 
 ARMS = {"idle": Idle, "fill-v1": FillV1}
