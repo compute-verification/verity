@@ -2,6 +2,7 @@ import Properties.NetworkScan
 import NciCheck.Desc
 import Proofs.Properties.Nci.BodiesOk
 import Proofs.Properties.Nci.OperandsResolve
+import Proofs.Properties.Nci.ReadsExact
 
 /-!
 # The walk lemma
@@ -326,9 +327,9 @@ theorem gate_below {k m g p : ℕ} {ops : Array ℕ} {sc : Scope} (hk : k < (P.d
   simp only [hng, ite_false, bind, Except.bind] at h
   have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
   have h0 := gateStep_root P hroot hB hL hk hc hm hg1 hg2
-  rw [hF, Flock.Steps.run.eq_2, h0] at h
+  rw [hF] at h
   generalize Flock.Steps.FUEL - 1 = fuel at h
-  simp only [bind, Except.bind] at h
+  replace h := ReadsExact.run_inr h0 h
   refine DescAgree.run_inv "gate location" (gateStep P g)
     (fun sc => Below (P.child P.rootScope k m) sc ∧ Walk.Reach P g sc)
     (fun b => ∀ a ∈ b.2.1, ∃ r, Resolve.Inv P ((P.child P.rootScope k m).off +
