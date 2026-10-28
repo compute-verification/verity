@@ -35,7 +35,7 @@ def execution (i : Instance) : Accounting.Requirement.Execution ℕ where
   value := i.valueOf
 
 /-- The layout an instance denotes. -/
-def layout (i : Instance) : Accounting.Requirement.Layout ℕ where
+def layout (i : Instance) : Accounting.Requirement.Store.Placement ℕ where
   block := i.blockOf
   offset := i.offsetOf
   encoded := i.encodedOf

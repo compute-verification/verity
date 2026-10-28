@@ -4,7 +4,7 @@
 `core_requirement` (lib `CircuitRequirement`, exe `requirement-difftest`). On one instance (a declared circuit's wiring, one
 scheduled execution of it and a layout of its values) and the audit's store, it computes each step's live and read values,
 their bits by value and by block, those in complete blocks (every value produced, and the step at or after the block's
-first encoded read, `Layout.encoded`: memory-map/v1's deferred residency), which the audit credits (`credited`,
+first encoded read, `Store.Placement.encoded`: memory-map/v1's deferred residency), which the audit credits (`credited`,
 `creditedReads`), the resident blocks, `held` and `read` over a window, and whether the store and a step's plan are W's (`StoreMatches`,
 `PlanMatches`: the credited values' blocks are resident, and planned for the steps that read them, and other blocks, filler
 among them, may be too, earning W nothing); and, the execution placed on devices (each value's device and the tick at
