@@ -24,7 +24,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
 
-The verifier of record is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
+The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
 `RemoteAudit.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
 reads the prover's request and every root and openings line as the prover sent it, each opening's four blocks checked
@@ -377,7 +377,7 @@ class _Ended(Exception):
 
 
 class Twin:
-    """A P2 session through the Lean verifier of record (session `k` of `lean`, `RemoteAudit.P2Session`) with the
+    """A P2 session through the Lean verifier (session `k` of `lean`, `RemoteAudit.P2Session`) with the
     Python's books beside it (`books`), which can only veto: each event goes to both and its result is the Lean's
     where the two agree; where they differ, or the Lean answers an error, the session is rejected `disagreement` at
     the event's window (`disagreement` says where and what each answered) and the event raises `_Ended`."""
@@ -654,7 +654,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                     "the verifier's own record of them")
     record.add_argument("--device", type=Path, help="the party's directory, as the auditor's gate gives it: --answer "
                                                     "is its answers.jsonl")
-    ap.add_argument("--lean-exe", type=Path, help=f"the built {p2_lean.EXE}, the verifier of record (default: built "
+    ap.add_argument("--lean-exe", type=Path, help=f"the built {p2_lean.EXE}, the Lean verifier (default: built "
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
     a = ap.parse_args(argv)
