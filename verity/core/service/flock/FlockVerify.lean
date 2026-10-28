@@ -996,8 +996,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
 
 /-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
 (`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a draw, as one
-line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). It accepts no session: it is the check the Python mirror
-(`one_stage.proofs.ks_form_why`) is held to. -/
+line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit is read as `HmOut.parse` reads
+it, which refuses it: what passing the check establishes (`KsScope.check_ok`) is stated at that parse only. It accepts no
+session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held to. -/
 def ksFormCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -1010,7 +1011,7 @@ def ksFormCmd (args : List String) : IO UInt32 := do
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
-  let ksParsed := if tags.hiddenOutputs then ProvedScope.circuitOf tags circuitB tables
+  let ksParsed := if tags.hiddenOutputs && !tags.isTmpl then ProvedScope.circuitOf tags circuitB tables
     else HmOut.parse tags circuitB tables
   match KsScope.checkOf ksParsed tags pubB count none with
   | .ok () => IO.println "KS-FORM ok"; return 0
