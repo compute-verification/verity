@@ -120,7 +120,7 @@ def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
     """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
     assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]
     assert "the network certifier" in capsys.readouterr().out
-    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "bandwidth", "pous"]
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "pous", "bandwidth"]
     assert "the network certifier" not in capsys.readouterr().out
 
 
