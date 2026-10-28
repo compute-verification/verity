@@ -124,7 +124,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Refs, runs
 from verity.ml.circuits.types import Tuple
 from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.registry import b1 as B1
+from verity.ml.definitions.registry import rmsnorm_fused_split as NS
 from verity.ml.definitions.registry import int8_exact as IX
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.dead_free import AttentionV19, AttnBlockFirstV2, TokenSelectGroupsV1
@@ -412,11 +412,11 @@ class _Program:
             raise Unexpressible(f"{node.fn.id}: its {N} elements aren't parts of the grain's {C}")
         parts = []
         for at in range(N // C):
-            tid, u = self.b.unit(bind(B1.RMSNormFusedCudaAdd, N=N, C=C, AT=at))
+            tid, u = self.b.unit(bind(NS.RMSNormFusedCudaAdd, N=N, C=C, AT=at))
             self.b.feed(tid, "x", u, 1, self.rows(x.refs.slice(at * C, (at + 1) * C)))
             self.b.feed(tid, "res", u, 1, rs)
             parts.append(Row(tid, u, "o0", C))
-        tid, u = self.b.unit(bind(B1.RMSNormFusedCudaTail, N=N, EPS=eps))
+        tid, u = self.b.unit(bind(NS.RMSNormFusedCudaTail, N=N, EPS=eps))
         self.b.feed(tid, "r", u, 1, parts)
         self.b.read(tid, "w", u, (1,), self.weight(w.refs, N), (0,))
         self.outs[j] = [(0, N, Row(tid, u, "o0", N)), (N, 2 * N, Row(tid, u, "o1", N))]
