@@ -1576,27 +1576,6 @@ struct Cheat {
   int tau = 0, s0 = 0;
   double frac = 1.0;
 };
-static Cheat parse_cheat(const std::string& s) {
-  Cheat c;
-  if (s == "none" || s.empty()) return c;
-  if (s == "nodither") { c.kind = 4; return c; }
-  if (!s.compare(0, 5, "skip:")) { c.kind = 1; c.tau = atoi(s.c_str() + 5); return c; }
-  if (!s.compare(0, 6, "forge:")) {
-    c.kind = 2;
-    c.s0 = atoi(s.c_str() + 6);
-    const char* f = strchr(s.c_str() + 6, ':');
-    if (f) c.frac = atof(f + 1);
-    return c;
-  }
-  if (!s.compare(0, 6, "forgeO")) {
-    c.kind = 3;
-    const char* f = strchr(s.c_str(), ':');
-    if (f) c.frac = atof(f + 1);
-    return c;
-  }
-  fprintf(stderr, "cheat %s: none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | nodither\n", s.c_str());
-  exit(2);
-}
 
 static int env_int(const char* name, int dflt) {
   const char* v = getenv(name);
@@ -2714,6 +2693,27 @@ static int fail(const std::string& why) {
   return -1;
 }
 static LibCtx* ctx_of(void* h) { return static_cast<LibCtx*>(h); }
+static Cheat parse_cheat(const std::string& s) {   // kind -1: not a cheat v31_prove knows
+  Cheat c;
+  if (s == "none" || s.empty()) return c;
+  if (s == "nodither") { c.kind = 4; return c; }
+  if (!s.compare(0, 5, "skip:")) { c.kind = 1; c.tau = atoi(s.c_str() + 5); return c; }
+  if (!s.compare(0, 6, "forge:")) {
+    c.kind = 2;
+    c.s0 = atoi(s.c_str() + 6);
+    const char* f = strchr(s.c_str() + 6, ':');
+    if (f) c.frac = atof(f + 1);
+    return c;
+  }
+  if (!s.compare(0, 6, "forgeO")) {
+    c.kind = 3;
+    const char* f = strchr(s.c_str(), ':');
+    if (f) c.frac = atof(f + 1);
+    return c;
+  }
+  c.kind = -1;
+  return c;
+}
 static int foreign() { return g_live && std::this_thread::get_id() != g_thread ? fail("another thread made the live contexts") : 0; }
 #define V31_FILL(h) if (foreign()) return -1; Fill& f = ctx_of(h)->f
 
@@ -2803,9 +2803,8 @@ int v31_load_a(void* h, const void* A, void** dev) {
 int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, const char* cheat, uint64_t* call) {
   V31_FILL(h);
   const std::string cs = cheat ? cheat : "none";
-  if (cs != "none" && cs != "nodither" && cs.compare(0, 5, "skip:") && cs.compare(0, 6, "forge:") && cs.compare(0, 6, "forgeO"))
-    return fail("cheat " + cs + ": none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | nodither");
   const Cheat ch = parse_cheat(cs);
+  if (ch.kind < 0) return fail("cheat " + cs + ": none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | nodither");
   if (ch.kind == 1 && (ch.tau < 0 || ch.tau >= f.NT)) return fail("skip: a noise tile 0 .. K / L' - 1");
   if (ch.kind == 2 && (ch.s0 < (f.o ? 0 : 1) || ch.s0 > f.Wn || ch.frac <= 0))
     return fail(f.o ? "forge: S0 in 0 (O) .. W, FRAC > 0" : "forge: S0 in 1 .. S, FRAC > 0");
