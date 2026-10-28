@@ -94,17 +94,9 @@
    "owner": "@proofs",
    "digest": "e5a4891075e9f3dfe8ceb86685685ffe4b4fc49af34341d02000f77ef3cc221f"
   },
-  "Accounting.Assumptions.TS.BindingForkAt": {
-   "owner": "@compute-accounting",
-   "digest": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d"
-  },
   "Accounting.Assumptions.TS.CountsFixed": {
    "owner": "@compute-accounting",
    "digest": "f70a1fa98f6c8dbc527b0667187fae860c0494ef903c54d0b857f385220270c3"
-  },
-  "Accounting.Assumptions.TS.FanIn": {
-   "owner": "@compute-accounting",
-   "digest": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71"
   },
   "Accounting.Assumptions.TS.LinSteer": {
    "owner": "@compute-accounting",
@@ -125,14 +117,6 @@
   "Accounting.Assumptions.TS.OperandHMu": {
    "owner": "@compute-accounting",
    "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc"
-  },
-  "Accounting.Assumptions.TS.ProofSoundAt": {
-   "owner": "@compute-accounting",
-   "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c"
-  },
-  "Accounting.Assumptions.TS.ProofsPin": {
-   "owner": "@compute-accounting",
-   "digest": "37838c7a2f826edc8cd369742ec0ad9a827db051952f9efa824a9b89f7cca1f6"
   },
   "Accounting.Assumptions.TS.ProofsSound": {
    "owner": "@compute-accounting",
@@ -161,10 +145,6 @@
   "Accounting.Assumptions.TS.UnitFixed": {
    "owner": "@compute-accounting",
    "digest": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
-  },
-  "Accounting.Assumptions.TS.WholeLuckAt": {
-   "owner": "@compute-accounting",
-   "digest": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd"
   },
   "Accounting.Assumptions.TS.WindowLaw": {
    "owner": "@compute-accounting",
@@ -210,17 +190,9 @@
    "owner": "@compute-accounting",
    "digest": "2447883de3f6050f8d969bc675f053109b84e74bb3b95c77929ea30eba738b7d"
   },
-  "Accounting.Compose.Fits": {
-   "owner": "@compute-accounting",
-   "digest": "8da744ce2e27b9f1b11a40cbe064c66a95c475f1885683fd628bd8da291af787"
-  },
   "Accounting.Compose.LayerCommitted": {
    "owner": "@compute-accounting",
    "digest": "9631e40676c8108f96425b1d7557958d12e19e7a302e1a994d2bc6e1142e0840"
-  },
-  "Accounting.Compose.ModelScope": {
-   "owner": "@compute-accounting",
-   "digest": "8deb60f7cd69f270957a1c18997eff222422468c5340df3bdbc036c5c7258850"
   },
   "Accounting.Compose.PerTile": {
    "owner": "@compute-accounting",
@@ -554,10 +526,6 @@
    "owner": "@memory-accounting",
    "digest": "ab7db8fd6792ca63814601cfcd42c9d07942f59b4e2b9f7af85cf7ca024908c0"
   },
-  "Accounting.TS.Anatomy.Split": {
-   "owner": "@compute-accounting",
-   "digest": "574d7e6a2a8791d55387b1098a07899a8dc88a5daec43433a2922077d99f17b2"
-  },
   "Accounting.TS.Dataflow.Sees": {
    "owner": "@compute-accounting",
    "digest": "1aaf6acf17a26090bb6aae2c0c56ee10b0ce47a73c72270c33101cea3e89a3a0"
@@ -593,10 +561,6 @@
   "Accounting.TS.Fx1CPUnits.same": {
    "owner": "@compute-accounting",
    "digest": "82a7e5698384e30bf8b532029b10d1179dba6215cb2340641f7ef12180156839"
-  },
-  "Accounting.TS.IsCert": {
-   "owner": "@compute-accounting",
-   "digest": "3e2c0c6c1b11d9a2b3ffac2af6ef3bbdda68c9fda5832bb07ce34f3eeee16e19"
   },
   "Accounting.TS.Lanes.CombineLowers": {
    "owner": "@circuits",
@@ -1649,14 +1613,6 @@
   "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
    "owner": "@compute-accounting",
    "digest": "ef3e5acc5423c8a6eab3ad67be8ddc3fa6c5ae38afe8f5784630ea198756c785"
-  },
-  "Pouw.FpG1.Leaves.Fp8": {
-   "owner": "@compute-accounting",
-   "digest": "881fe7602bcca20287b67054e76f3cadff019a7458cfb0b5546052274ad61428"
-  },
-  "Pouw.FpG1.Leaves.W4a8": {
-   "owner": "@compute-accounting",
-   "digest": "7cfd18e0250ce18f4e28679c438c71ac38537b955ef174309651294dde643402"
   },
   "Pouw.Gγ": {
    "owner": "@compute-accounting",
@@ -12424,8 +12380,6 @@
     "Accounting.Assumptions.Compose.WholeEntropyAt": "0506b11a4a3f1738de9dabb70892c42e45fc8838e62bf1820606b0ffe0c242d5"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.WholeLuckOfEntropy",
@@ -12572,33 +12526,6 @@
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
-  "Definitions.Accounting.Assumptions.Sheet": {
-   "digest": "e430a97d67e112236beeb55fd27d9e1630ec47ff36f07038c3cb2278412a320b",
-   "definitions": {
-    "Accounting.Assumptions.TS.SheetClock": "c27bc92a531574e652f708a8b56724dee41b9f5ac2ddf6a99041454ba111f4ad",
-    "Accounting.Assumptions.TS.SheetDispatch": "f9634f4244e50365a3d6e8b7819892b9e6b1078e1d48153821f641e7086e5dc8",
-    "Accounting.Assumptions.TS.SheetPipe": "37651d89ede633ff5ef4bf579cbb463627ca2653e8dcd615665c09a04cf948a3",
-    "Accounting.Assumptions.TS.SheetSemantics": "3b3d03419951bbb4b2a714f059b4e4edd8420ca7bfb145c8ac4f6dd49f72f425",
-    "Accounting.Assumptions.TS.SheetSmem": "7fd5d664da6fd8bbe5347c3767cf9a22f3c9cbbd05e7010c0076abf6e89d76ac",
-    "Accounting.Assumptions.TS.SheetTensor": "f6ecb9bffb0d12d13ecc2daeabcc41ef4cdff64ba928a8485b973207955e01cb",
-    "Accounting.Assumptions.TS.SheetWords": "318d32c829f132eecfda9d7e485bf9b6051ca679d424dca3f8787d33e605e8e1"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
-   ]
-  },
   "Definitions.Accounting.Assumptions.SquaringChain": {
    "digest": "d3f557ec4786889bf3792a5089fb223da3e0e107fb8c472003a10cf4d4974fe9",
    "definitions": {
@@ -12635,59 +12562,27 @@
    "definitions": {
     "Accounting.Assumptions.TS.StageLuck": "3a5cf6fec99a82206ca55ce1040805252587d207a2fad7f3d74e9cabf33b83e7"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.CompilerStage",
-    "Accounting.SecurityProofs.TS.StageBudget",
-    "Accounting.SecurityProofs.TS.StageIdeal"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.TS.StageBudget"]
   },
   "Definitions.Accounting.Assumptions.TS": {
-   "digest": "1af8edfd2fd123fa4033dab482ec1cf4d897df146265a4f120f2c76a547e4133",
+   "digest": "b5ffe9ff76e71f1ff2fc22fb2e2eb833a0cc697bf98d1f23117aa1b28721950f",
    "definitions": {
-    "Accounting.Assumptions.TS.BindingForkAt": "4d7e04e16c77829a8aadc6429665b8a54544e18cb7bf2cc66379ac8267b9d23d",
-    "Accounting.Assumptions.TS.FacetCeilings": "fa76dfe63e705d955b2dec4c6d8e3b6826c2bf36058b476ef8f1b7a8bb7c0d3b",
-    "Accounting.Assumptions.TS.FanIn": "58d244d68b77d25572471c47056a7c4eac1f9e128db1d335c3cf3fc9a8414b71",
-    "Accounting.Assumptions.TS.FillOpt": "32e6f1ad9b1cd5704affa13c87dae03fad67a20aa3acd62efdde326a1702a503",
-    "Accounting.Assumptions.TS.FoldOpt": "68ce0cf852f288923e7ba2879c1a6ecb92a012defbe6b431c1b6ebb6ffbbe3b3",
-    "Accounting.Assumptions.TS.FoldOptFoldedAt": "91fb9f38e574977bdd9de6b21e14a5de470d977e53a8f9cb881a4709d8404edb",
     "Accounting.Assumptions.TS.LinSteer": "d35cd62dcdb221885081311e5039c9b69c00ef1cd32a3f539093bc8496a74d5e",
     "Accounting.Assumptions.TS.LuckAt": "28ff53f429206bbd8f8447d74044812a42bfe9123fb10443321873882cb02cac",
-    "Accounting.Assumptions.TS.NoSum": "b15287f80f20515d6d017205278b5209546abfab825e4f5e01da4875e74b2fda",
     "Accounting.Assumptions.TS.OperandHMu": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
-    "Accounting.Assumptions.TS.ProofSoundAt": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
-    "Accounting.Assumptions.TS.ProofsPin": "37838c7a2f826edc8cd369742ec0ad9a827db051952f9efa824a9b89f7cca1f6",
     "Accounting.Assumptions.TS.ProofsSound": "2dd67bf94ae505daf300e0b2cf43706a0f4da5f2ed8e6b08a8156cd3abd1d5d3",
     "Accounting.Assumptions.TS.ReceiptLuckAt": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
     "Accounting.Assumptions.TS.RightFixed": "0bb42a1edd93a51a2123ec06ceec56b614dfb5c73b386c15ed6651da5f2b0561",
-    "Accounting.Assumptions.TS.ScalarRoute": "414a164b2927884959719a19f4157ef08125017896884da53459996b1212b5bd",
-    "Accounting.Assumptions.TS.SideUnits": "36404ba2e20a614ee48738159240c66e7f023670dba8cf261be8b3b73921e179",
-    "Accounting.Assumptions.TS.UnitFixed": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2",
-    "Accounting.Assumptions.TS.WholeLuckAt": "1e851edb0f896c3309adb12243fdcf80b215f4b90c1fe171da3489f24dac14bd",
-    "Accounting.Assumptions.TS.WordsWritten": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
+    "Accounting.Assumptions.TS.UnitFixed": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.AdaptSteerFail",
-    "Accounting.SecurityProofs.TS.CompilerC",
-    "Accounting.SecurityProofs.TS.CompilerStage",
-    "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor",
-    "Accounting.SecurityProofs.TS.DecompositionD",
-    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
-    "Accounting.SecurityProofs.TS.FloorCreditD3",
-    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.LinSteerFalse",
     "Accounting.SecurityProofs.TS.LinSteerSegments",
     "Accounting.SecurityProofs.TS.LuckCaseA",
@@ -12696,18 +12591,6 @@
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
-    "Accounting.SecurityProofs.TS.StageIdeal",
-    "Accounting.SecurityProofs.TS.TimeBound",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords"
    ]
   },
@@ -13043,13 +12926,8 @@
    ]
   },
   "Definitions.Accounting.Compose": {
-   "digest": "feffb0c5a34be3526ae3f944c21609eee7bcee7be0f4bbd99f51b8718049d808",
+   "digest": "b260010a12395b8d5e71eb71c8dbe6ad991dee291a053577d60af7f947e5dcfc",
    "definitions": {
-    "Accounting.Compose.Certificate": "2be237058a4c505964aab774cfdf272a361b1d72721e5f0c0d2111e79bd2e1ac",
-    "Accounting.Compose.Certificate.Holds": "3e92b034ff8ce9ebb63fb0b334e1d23d3f79ae9c3dd482a45baa64dc262d0d12",
-    "Accounting.Compose.Certificate.credit": "b644a3af20b09317bb4643402f0d4de3a625fcb4bbec06b2a3601d9e3a4ba4ec",
-    "Accounting.Compose.Certificate.delta": "42dae3042c7bb7a64ba6b47cfafbec0e9c0a94e350c6e7d7a2ba19c58f8a964b",
-    "Accounting.Compose.Certificate.eps": "bedd4c4c82295bb918e1f2140636d8fc167c72e4b8a55fe0d1b96f051d2dc057",
     "Accounting.Compose.CoinMode": "9ec656e568e719e9703d5a190c652794acbcbe559148d41adf8cc7687254f945",
     "Accounting.Compose.CoinMode.live": "2a68d126173b167c465fa76c5b175f40be66fdcb462dfd4ffec8a79e3df05a54",
     "Accounting.Compose.CoinMode.seeded": "9c0d4051e6619f468c7e15eede94f4be51890734b7d6d3d5f76f8628212a0b04",
@@ -13085,7 +12963,6 @@
     "Accounting.Compose.Declared.stageOf": "3b1cbac7cbe4f09424260605660b56d8687b0ff08db90548132fa4298ede0f5d",
     "Accounting.Compose.Declared.unit": "af472cc35f80a4d37bb38230165699ab0b444534c7ddd772ebd11a506cc2d99e",
     "Accounting.Compose.Declared.units": "901c69120fac55848feb9493a00dadaca6b059f8920e655f7ac9d0ff30696a30",
-    "Accounting.Compose.Fits": "8da744ce2e27b9f1b11a40cbe064c66a95c475f1885683fd628bd8da291af787",
     "Accounting.Compose.JointRun": "674c5de608d75b45ac87b7df66c6931c0a30667bac0840a22a8e0ee977914981",
     "Accounting.Compose.JointRun.mode": "ade79cf37f13ba4e8a34a49a50d91f7eafc7b972d0dc3ce79a89bdd68d6c3a9c",
     "Accounting.Compose.JointRun.same": "f5204e0ffb05d3684139aa89a20d09316ae12ec83b2031cd7ed69b246bc97231",
@@ -13093,8 +12970,6 @@
     "Accounting.Compose.Kind": "b0b9b8cd8171035c1fd446f9962fb6d610fe13eba0af7743840281f7885d99b7",
     "Accounting.Compose.Kind.actA": "ae7c93ae22a46cb9d99d26588ed093d2011e3556f14c2c7e38e51fcd9b1144cc",
     "Accounting.Compose.Kind.actB": "1a51d635a49a5a36f17308b6b54f295a6a083f29ab1a381e7ec25fe710f8b9be",
-    "Accounting.Compose.Kind.casesOn": "e8498df9be87af22a5ddabfea8d4d3a120f634c84af1a7b54da1a06e8dddc479",
-    "Accounting.Compose.Kind.rec": "a5c7929617b09acce53286f70c69348de8d492da70c07c63d2bf73d3f5a5ae04",
     "Accounting.Compose.LayerCommitted": "9631e40676c8108f96425b1d7557958d12e19e7a302e1a994d2bc6e1142e0840",
     "Accounting.Compose.LuckForm": "0746d53685cf9cbc55c9882d5158c716e938a74a3835555ad467c69553318c57",
     "Accounting.Compose.LuckForm.casesOn": "b8097269b634324259a8e974b77559fe33583226cef4eff3a69fdd3ea3adbc5e",
@@ -13104,7 +12979,6 @@
     "Accounting.Compose.LuckForm.rec": "149d052fd2f8a3224084907b1dff9b78871bb86a6e78ae32697dc864bfbe8232",
     "Accounting.Compose.LuckForm.unproved": "55c8b9153ea5d53052edfa852391aed4cc2ea237f9152199352bb5a1bc0659fd",
     "Accounting.Compose.LuckForm.value": "a9986702adf4cd337025ba4a1b92a8218716cff132466251d1c836a8802745dd",
-    "Accounting.Compose.ModelScope": "8deb60f7cd69f270957a1c18997eff222422468c5340df3bdbc036c5c7258850",
     "Accounting.Compose.PerTile": "13419da38b56a985a7e9d380082513956a1014123de6551f02858585df159139",
     "Accounting.Compose.ProofRun": "5f3c01865966c4c433259a487b5d3e0a4198521c6c42ab8e8113248ce4f0aeb9",
     "Accounting.Compose.ProofRun.accepted": "ef597cb8540f052b48f2aaee21c336ef6b772f4038b54485ff86c0c0fc13b169",
@@ -13115,7 +12989,6 @@
     "Accounting.Compose.Scheme.LuckProved": "11fd41abc0b15526b1a17a1efc08af47f68a4ef526eb2d1e74b268eed29fcfe5",
     "Accounting.Compose.Scheme.SeedPriced": "021cfda4adda1243dd5a9963a03ac33765206e43d98fb3cf9fabcbc5fd0f0645",
     "Accounting.Compose.Scheme.credited": "829294dadc71d5b78ddbc4699e8becab6d5fd3dbc6a3366c28a782d2aaa51d0c",
-    "Accounting.Compose.Scheme.floor": "345e26e6e6ef41df99ba366a6cc5497d6f7ac08eb63c9a4021c003bd1453bed4",
     "Accounting.Compose.Scheme.foldLuck": "b887f3bda7111794649c7dce7aaf09152affbeb0da9f46da163976817d9a31d9",
     "Accounting.Compose.Scheme.form": "fa8723a742f767e0d3dff71fe534b6bade63b04a8dd5c7128bb7b66fffcd3b80",
     "Accounting.Compose.Scheme.guess": "1a56583dfdae24f0f5c2981a40663350b942ec5fd00db503bf6fa5ffae7854a4",
@@ -13143,25 +13016,14 @@
     "Accounting.Compose.SplitStages.sameAt": "2439db0f4798466e990cc3e3c0efee0c828f6b2a3b8eadc759b96282d8da1236",
     "Accounting.Compose.SplitStages.stage": "57fc70f23c0dde87f800f9478876950d95b2977aaaf85864552c6aeab365a02a",
     "Accounting.Compose.WorkAt": "c786810e5192b85c62797ddee3bd7abd25776e4bee69ebcc99c11284c3b325f6",
-    "Accounting.Compose.aOf": "079e9468ad534d7673c5c31d86108f36167db89715f78616de1704488d2c5c75",
-    "Accounting.Compose.bOf": "ec8b72c3b1a9a655a8b817fec1d3ef9b7e09d37a004b1a57fe44633ca3022efa",
-    "Accounting.Compose.certOf": "b926bde611d195fa1d53062643727909c3265b53021808eec19369c1aa338840",
     "Accounting.Compose.coinMark": "9e6218bc74079d497e488b7c98c2503d18f2da013aa0bef5bd8c86c474ac2b26",
     "Accounting.Compose.coinMark._sparseCasesOn_1": "f074c6de7ce65c67311dc56c64f2c2df788b37bf3a2575cda2a9a375135633d7",
-    "Accounting.Compose.creditOf": "61cd4a488138ad2b4cdb402229a9ac058c87c2d478f6af23aca9e76c1e57bfa0",
     "Accounting.Compose.creditedWords": "ed557392592f557454c8d0e4df66ac6dcbcf79efc8a74849f713916d09929b79",
     "Accounting.Compose.drawOf": "2d630bb8d78056177573f561d2be92dc11d691e1eeabd7f1066ed77d39048376",
-    "Accounting.Compose.epsFlat": "20dbb09caab72d3306e986ea713e931016aad38277336698faf518366141def3",
-    "Accounting.Compose.epsMu": "c906d2e88a8a08bca21064a29782eb076232be80e517c429b25013fc75b892e3",
-    "Accounting.Compose.epsOf": "cc64a812eb60397da16db6459ff34526f70243d663da42f20dd99cd1035bd8ef",
-    "Accounting.Compose.floorOf": "edeea3f2342a97f873299d346e8405a4bd7522cde80b9dcbb83a077c0ec67fc4",
-    "Accounting.Compose.instDecidableEqKind": "e4a3258727a988ec89d59fd010e71c16c21268ea17a4fa039db77b45647006fb",
-    "Accounting.Compose.instDecidableEqKind.decEq": "0794fd28eb7bf2aee3856899b89d47972371c92c215a1f1bc05c6d456d512d15",
     "Accounting.Compose.isWord": "51e936e29906b260a488aba782c6f34cb6bc579c9bf5f7b64e2f16cb90f89f47",
     "Accounting.Compose.jointGame": "7138827f751625eeb84630bc029c7cbf750b321d2365b4dc83e11eadea06de90",
     "Accounting.Compose.jointMode": "c4881a295f506a26466744a6172d0d40b3789204acf5f2bfe625b5d931a49a8b",
     "Accounting.Compose.kindAt": "511a5a15ff5c6a3afa40284af18845438739df3422a0b2a8ac31cabaff66ab5a",
-    "Accounting.Compose.kindCount": "65ebfb82b90e0b7f278f8b0510af4776f7b734df2264a4fd4052b80f5280a377",
     "Accounting.Compose.kindOfGate": "501453e3f030d6ff2131961731a94e9a931869221e1c8a78e05b2eac41b9319e",
     "Accounting.Compose.mmaK": "107e8c3bda6af24049cb221777a8233357a5f85799123cfce78c6fbcd1a7eee7",
     "Accounting.Compose.mmaK._sparseCasesOn_1": "91f9c882a51811e235395cfd5f736147dde253343481957fc89d95ce48ce3c93",
@@ -13201,11 +13063,8 @@
     "Accounting.Compose.zeroCone": "58f849d71562e10878a430f24a3620a57b61f64433b8abe48c5f61220b25ddd8"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.Compose.SplitRateClosed",
@@ -13379,8 +13238,6 @@
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPouw",
@@ -13527,7 +13384,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Model": {
-   "digest": "1a91531c65239b40e20f745e5f69f369876fe4745ba87ccef005201657f890b4",
+   "digest": "68a8067ce7695264c64ce8e809ad27245b3f34e5e0476de7bbe561160929c205",
    "definitions": {
     "Accounting.Gates.Audit": "fe61c4f5697390b50450c728a1be07af859a208e40eb950dcabcb11d1ec58ce1",
     "Accounting.Gates.Audit.reads": "777cbb0f97dae2e1110f03d6eeaa958843d1e2c9b625cb1a1fcab1c386384c7e",
@@ -13668,8 +13525,6 @@
     "Accounting.Gates.instDecidableEqBudget": "a307ac75553476baaab9b68d57defd0e736446010350a74e318830a9e771255a",
     "Accounting.Gates.instDecidableEqRole": "060f5579c9290124a07e11792ac0f38be5501c23a4ba05ef13de96b994173a91",
     "Accounting.Gates.instDecidableEqRole.decEq": "0ca8916bfd897deb7c0e85312c77ce09b4f4616fd364b3dd7177ce7bbe908308",
-    "Accounting.Gates.instDecidableEqSite": "b26691ec714e15621c644f7ff481e8bf83fc9cf2bca9af5ad57e651b8af0a149",
-    "Accounting.Gates.instDecidableEqSite.decEq": "eedf45b797f297dfbc5aee854b73d785d4f32f478aa71c371ded5f4a948dfdfc",
     "Accounting.Gates.instReprInt8Fmt.repr.match_1": "27b187bac098a49a6690f49a6e16e36a222794d0eeb13b8fbb7e3c49a36e4193",
     "Accounting.Gates.instReprSite.repr.match_1": "bb1680845d03568fe9d22e2ff7775881d0064b870e7076ddb9eca0cf162b0b2f",
     "Accounting.Gates.intervals": "9993429af07ac947d5ed6caa8eb580766f809611089baadd207afd5f71fefc48",
@@ -13692,11 +13547,8 @@
     "Accounting.Gates.wrapS32": "c2b80b5f88ef1f826eadce16b5aa10d1c1b8a090ecd6b15863701843163ab56f"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
@@ -13966,14 +13818,11 @@
    ]
   },
   "Definitions.Accounting.Guarantees.Compose": {
-   "digest": "64ee21517f8a17c68cd88e4992911abab9d3722c0ee4d43024cc462d48cfc35b",
+   "digest": "21ccb1ef15be2d2e2934dd38ed7650ab02a44373e26a0b7db5f65c6f7f1b2d18",
    "definitions": {
     "Accounting.Guarantees.Compose.BindingOfECR": "8e43d0b09314ed116f676b9729e152e469f185a084ca4dbb959283d765afc404",
-    "Accounting.Guarantees.Compose.CircuitCredit": "1c6414747c82e2e2d2903f843e88ebdf2c20e4e8f44fecd444a0f59779b7d8af",
-    "Accounting.Guarantees.Compose.CircuitCreditSeeded": "0fe828ca1973645cafdd68c4a93e43f3a178c03847d37500202d45be0ed67384",
     "Accounting.Guarantees.Compose.CircuitWork": "4d02042bd0b4b7fe277c97e4d71c7e61e3f9e207411f3eda4098b98c5212eee3",
     "Accounting.Guarantees.Compose.CircuitWorkSeeded": "133552579bafa61f378cb49179734bc6a2da3cebb9f0bf46a52a065a1ef87db2",
-    "Accounting.Guarantees.Compose.CreditOfWork": "0420d0893a0a372a395a7dde30646251a656f7be658e03aa2f7e5a298fba89e6",
     "Accounting.Guarantees.Compose.ServiceBudget": "6cd77d6bbf32a74a7ea3d5ca101e758caf2aa2866aab1b29aa414a3e03fd3337",
     "Accounting.Guarantees.Compose.ServiceCovers": "0e0517d9549c17d24bbb1cbfebe0601f0b38707baa1c72bcbbbb291aed64b81c",
     "Accounting.Guarantees.Compose.SplitRateClosed": "5b597d3cb9621e8368a3a539f022b411f9671c656357382aa1aa31221bfd5abe",
@@ -13983,11 +13832,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.BindingOfECR",
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.Compose.SplitRateClosed",
@@ -14049,21 +13895,6 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt"
-   ]
-  },
-  "Definitions.Accounting.Guarantees.FpG1": {
-   "digest": "5a8e41ad6fb5a4cd61fc6edd4393c30de18fc58f6f749b187d4e493d35ad9349",
-   "definitions": {
-    "Accounting.Guarantees.FpG1.Sm120FpG1MeasuredHeadline": "b0c4499ed07b90e492574a9b08b309caa870d2956f2dc624b2c8073097123ab0",
-    "Accounting.Guarantees.FpG1.Sm120FpG1SheetHeadline": "7a08d8ea36e23b38e12a914529b83204294a0bdeed2582a718f998b025101a2a",
-    "Accounting.Guarantees.FpG1.Sm120W4a8G1MeasuredHeadline": "61bced753f31e19edf524b4e88e0bd579c406536f746a5c2d0306e86d5166757",
-    "Accounting.Guarantees.FpG1.Sm120W4a8G1SheetHeadline": "eb7646db3e1481aee6d8b41906c88408ce615e373a6ed7429b1fdcac4dd1cd41"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
    ]
   },
   "Definitions.Accounting.Guarantees.Gates": {
@@ -14149,31 +13980,6 @@
     "Accounting.SecurityProofs.HMu.PersistentOneWord",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
-   ]
-  },
-  "Definitions.Accounting.Guarantees.Headline": {
-   "digest": "d55876e37139c20a7d0fa80abea99ad3c1c6d8ce9cb955bbea5ab02583570274",
-   "definitions": {
-    "Accounting.Guarantees.TS.Sm120MeasuredHeadline": "bae07f933ee02e72d88651a068c4ee94eacfeaddf8423aac6bbc714cf546e68c",
-    "Accounting.Guarantees.TS.Sm120SheetHeadline": "30817f7fabe9b49af37106c5856ada7503ca2061d514649929ad7d10c55d3945"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm120MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm120SheetHeadline"]
-  },
-  "Definitions.Accounting.Guarantees.HeadlineDc": {
-   "digest": "3e7afe223d04e8538272748d2e438da29e2a1fce2b351960bb40c444f2d7f947",
-   "definitions": {
-    "Accounting.Guarantees.TS.Sm100MeasuredHeadline": "03569acb8aa478542701191c5fbe978c416c1084431c96a15f7d7d9850a9a849",
-    "Accounting.Guarantees.TS.Sm100SheetHeadline": "a25bfa02582f235092289880987c97001343d674b470f38cd4edf7b487bb735a",
-    "Accounting.Guarantees.TS.Sm90MeasuredHeadline": "8daafb44a2c7b41745e82db50bd5ef8f663cdd68a52f241200ee980ea2619e93",
-    "Accounting.Guarantees.TS.Sm90MeasuredI3Headline": "a5c6260b3c6fde4c6ffb34ab2c0de9a808622b5493fd5800b3579ef2007830c7",
-    "Accounting.Guarantees.TS.Sm90SheetHeadline": "ab4db96af136e4fa6e15441ef0e20811778b55628531d122125dfc147f66e36f"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.Guarantees.Joint": {
@@ -14591,19 +14397,6 @@
     "Accounting.SecurityProofs.TimelyTicks"
    ]
   },
-  "Definitions.Accounting.Guarantees.Sheet": {
-   "digest": "58e46b2c2e135fe61b791f31d973eddf337907405f23f2f564a283152cc1f7fc",
-   "definitions": {
-    "Accounting.Guarantees.TS.SheetDIdealFloor": "bbb6d4905523d82982bc355b456a8c2f98fb1b6f81652c6e78e15ac4d70b137e",
-    "Accounting.Guarantees.TS.SheetFacetCeilings": "704461e1cd2845f76fe760c1990e73fac6b7788b528abab6c32b6277e18b24b9",
-    "Accounting.Guarantees.TS.SheetScalarRouteHalf": "d7f04f6876faae85d815c5819970bf581a0964eb63c5976ae8098320c039f506"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf"
-   ]
-  },
   "Definitions.Accounting.Guarantees.Sketch": {
    "digest": "b0f902b6c4a59615f713c7b8e4761a2b41f6505fa1f9612ea7aa985b9b450a0c",
    "definitions": {
@@ -14641,54 +14434,32 @@
    ]
   },
   "Definitions.Accounting.Guarantees.TS": {
-   "digest": "3765d1f3a52f2a6e7024d54505a3e54cf0c1103ec42c1f1514edce4cf2d98ed9",
+   "digest": "2a69482b75f4105e6c7ad3678f3fbf0d0936ef42d44a42d57e073abcfda5a7bf",
    "definitions": {
-    "Accounting.Guarantees.TS.BindingFacetD1": "a17c578d0bc020c50567b3b8f50848237bddadf7d54aab6ce18ef007d4af1c6e",
     "Accounting.Guarantees.TS.BindingOfFork": "3eccd9186cd22f86da6fbc02ad9f003aad9cd0f43259388a0dbbd1485039a911",
-    "Accounting.Guarantees.TS.CompilerC": "f682a20b0128c7e27115eb3896b65e7979b26b401d5b9b453ec4b33356fe1ac1",
-    "Accounting.Guarantees.TS.DIdeal": "77a519583df833db703098e098abccdb8e01aa5370400d7cc7b6f07174790679",
-    "Accounting.Guarantees.TS.DIdealFloor": "91de155feb20dd52c94faa3da0da1246fc8d2153a753adc41713ba576fb74de5",
-    "Accounting.Guarantees.TS.DecompositionD": "237b5d1e8dbe814eaa3942aa253b33b7b0d4856b390e60d95cd596728134446d",
     "Accounting.Guarantees.TS.DrawnBindingOfFork": "3f00bbe68e077334311594bbb560cab0b43f3986df7c63119be570847ef24b80",
     "Accounting.Guarantees.TS.DrawnRightOff": "cb3a5ec9bd3f99d70cdcfe4374fdda8fb80f7d713182c09cf6b47d8075bb50bf",
     "Accounting.Guarantees.TS.FanInCount": "4e0d50170ff6629c2482a916f67d65372e84abd7fe807c0002b25cf41f2ae968",
-    "Accounting.Guarantees.TS.FillOptOfFanIn": "2ee0a91e36c20f0235bb273dbb16885455a3ce273c27bdf38dc8872150ff93d6",
-    "Accounting.Guarantees.TS.FloorCreditD3": "012916939463cfd453565042c4696d6cc8fbad47c52bd373d88d9258b3893e54",
-    "Accounting.Guarantees.TS.FoldOptOfFanIn": "e64d6ca924502dc29f1552d6a665ea376f37b395b25fc268a33d0b5eb176df8d",
     "Accounting.Guarantees.TS.OutputCount": "aec5f1a001e3ac62af705b8bcbf3a64f9664f671f3b2d0595814c9143f03e3e9",
     "Accounting.Guarantees.TS.ProofsSoundOfDrawn": "6f934e6048cdf00443897f4f460dab8b8bc1fe976d9c7c2c605954a5029f92c8",
     "Accounting.Guarantees.TS.ProofsSoundOfPinned": "e48267c41cc05ac1f732246f23962a9568bd4af6ce6376ddb300c4241552383b",
-    "Accounting.Guarantees.TS.RoutesOffD2": "8b5d8b812b583f648a13c6890d2c0b70eb09e092f01708ef3945f7f1a0f0b4e7",
     "Accounting.Guarantees.TS.SeesOfInjective": "8c308b249f905c56ff79fef320af48088b1fd2a300d119fafcdb7286f25d263f",
     "Accounting.Guarantees.TS.TensorSlotCount": "749efbc6ec8a01cb4f02f3f2e68d33a67489e518b471a5d8873bbe3d85209045",
     "Accounting.Guarantees.TS.TensorSlotTight": "d6115b12104006a38f9ccceda9590623dacece975558f8d2869debd163255152",
-    "Accounting.Guarantees.TS.ThinFoldInjective": "dbec3572f7457ebd43b9a03179aefa0dc838674edc5d9dcedf119df0419b27ac",
-    "Accounting.Guarantees.TS.TimeBound": "167e804d2f0758365a5401590f0a11076853f7e54a902672e6b8146a4a3d6497",
-    "Accounting.Guarantees.TS.VectorThresholdD1": "28fc206aca7c35c86211bc5db5ea90b24f2de5d9f94b0128ab9877f519fd93d0"
+    "Accounting.Guarantees.TS.ThinFoldInjective": "dbec3572f7457ebd43b9a03179aefa0dc838674edc5d9dcedf119df0419b27ac"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.TS.BindingFacetD1",
     "Accounting.SecurityProofs.TS.BindingOfFork",
-    "Accounting.SecurityProofs.TS.CompilerC",
-    "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor",
-    "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
     "Accounting.SecurityProofs.TS.FanInCount",
-    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
-    "Accounting.SecurityProofs.TS.FloorCreditD3",
-    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.OutputCount",
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
-    "Accounting.SecurityProofs.TS.RoutesOffD2",
     "Accounting.SecurityProofs.TS.SeesOfInjective",
     "Accounting.SecurityProofs.TS.TensorSlotCount",
     "Accounting.SecurityProofs.TS.TensorSlotTight",
-    "Accounting.SecurityProofs.TS.ThinFoldInjective",
-    "Accounting.SecurityProofs.TS.TimeBound",
-    "Accounting.SecurityProofs.TS.VectorThresholdD1"
+    "Accounting.SecurityProofs.TS.ThinFoldInjective"
    ]
   },
   "Definitions.Accounting.Guarantees.TS.Fixed": {
@@ -14790,19 +14561,12 @@
    ]
   },
   "Definitions.Accounting.Guarantees.TS.Stages": {
-   "digest": "00ddb0970d9e2c2fa8cd34a3eb692456ccfc00bb83736258180f1738f89abde0",
+   "digest": "75cf7175931760949f06da8696caf134d15184b80aae8a53df6144c6df0319f6",
    "definitions": {
-    "Accounting.Guarantees.TS.CompilerStage": "d0d8974e64fcae3dd53af7bd4300a8adca8b189b71546f7e1bf15682f8a82867",
     "Accounting.Guarantees.TS.SampledBudget": "b2c6377f393a2db83494159420de4f0ae08f6296c00ac2a3b56e3bdc2c4f8efb",
-    "Accounting.Guarantees.TS.StageBudget": "02e0f19f5a590cea02fda9ba85414f8519bb7960da55422fdbd6833b080ed583",
-    "Accounting.Guarantees.TS.StageIdeal": "1de7a024b7d573ab49fed9fa074e2639dc469a19559f9aba072136963b71efc5"
+    "Accounting.Guarantees.TS.StageBudget": "02e0f19f5a590cea02fda9ba85414f8519bb7960da55422fdbd6833b080ed583"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.CompilerStage",
-    "Accounting.SecurityProofs.TS.SampledBudget",
-    "Accounting.SecurityProofs.TS.StageBudget",
-    "Accounting.SecurityProofs.TS.StageIdeal"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.TS.SampledBudget", "Accounting.SecurityProofs.TS.StageBudget"]
   },
   "Definitions.Accounting.Guarantees.TS.Steer": {
    "digest": "9cebbf653c4aafbafd80406a5ee990e076e7d0671c420545fc8546d3d2ff8566",
@@ -14872,245 +14636,16 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.CoinFlow.PointMass",
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
     "Accounting.SecurityProofs.HMu.PersistentOneWord",
     "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoin",
-    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
+    "Accounting.SecurityProofs.HMu.ReceiptLuckOfCoins"
    ]
-  },
-  "Definitions.Accounting.Headline.Encoding": {
-   "digest": "de76fe4cd1caab7861b2407763fbf6143fcc74b209b95ad7649ba06cc11d597f",
-   "definitions": {
-    "Accounting.TS.Headline.DesignData": "9d82dbbbe3b9effd6c80f7e4795afb12bc7d8dfb36b99b4fb137e2dacf08ea93",
-    "Accounting.TS.Headline.DesignData.Nw": "b6f5ce0360cc7ae94b2ede2f2d4b401a3e3a306d30489fcef9bff472d29f135b",
-    "Accounting.TS.Headline.DesignData.bytes": "0e0021c0c95eb62395f65eeb4bc7269aff35a058062ead5598127af4258d2e86",
-    "Accounting.TS.Headline.DesignData.folds": "f9a24408e14e94c7c8f0e9e46d305746032ad9bce1770e76516d743d310d4366",
-    "Accounting.TS.Headline.DesignData.model": "730678e18f9e657b24e02f5c3cce1e325a649772115822b2cdc51a1091d9f654",
-    "Accounting.TS.Headline.DesignData.q": "93e519de76cb1f65985054eb03f43d0957f65f90854727a4b702e6cf1c028964",
-    "Accounting.TS.Headline.DesignData.qT": "472d5d2638cb54ab7e274f4f6c64832761e9a276c36757371b12ccb1caa6341c",
-    "Accounting.TS.Headline.DesignData.vec": "5816bf009ae487c78d26e722e7b15f1fe746a6e56bd662a0cada5f3174a29815",
-    "Accounting.TS.Headline.DesignData.writers": "6726d149d105fd6efdfb649107895d364af3b962e52d1155cd842ac5b81e1d60",
-    "Accounting.TS.Headline.SheetData": "f1193ba9c08e2d68f6ceeec0eb5e44b8f800192a568e3c638b2b32253a37ec8e",
-    "Accounting.TS.Headline.SheetData.fmax": "3614767666a23c3458f97caaa32ddd7f93a33a4ea70ce35eebfaab03e9744864",
-    "Accounting.TS.Headline.SheetData.macs": "9866f3110c5abdd7b8895acc80933ed6b2476a867bc70ff486136f2a123b1cb6",
-    "Accounting.TS.Headline.SheetData.peak": "eb71a233b0d6c331f2557fcda5c9f65a3df2b63072724c0447093eaa92ce5724",
-    "Accounting.TS.Headline.SheetData.pipe": "cc704d91bedb7cf63d10f529c2c4661578c8e0bd32935599f02cef529b2fe3e5",
-    "Accounting.TS.Headline.SheetData.sheet": "1e2d6796adaf241db10e3b185c1cd39c3537fe045f7141e44fb479a0cdc8a19c",
-    "Accounting.TS.Headline.SheetData.smem": "cdb864a1b846d6a3fe8e5a19cfbb2e6c3048d6658a50bd64e3ac502af4e84aa8",
-    "Accounting.TS.Headline.SheetData.width": "c27aa76ffff40f09cc011177a3330c136c9bede624506bab44a94d1d64fc766e",
-    "Accounting.TS.Headline.Sparse": "719c786f86357711611023d0221c264c3e96645d698b2bc96a1c4533deeac658",
-    "Accounting.TS.Headline.Sparse.coeff": "76451a40b638950fc540999485eb0cc327052d950a9fbb88e01a59b4ba17c957",
-    "Accounting.TS.Headline.Sparse.counts": "436c235b9c6aa6d31f4fa046e7166edb62f41afcd59001f3e7e10a865b01b4c2",
-    "Accounting.TS.Headline.Sparse.ratio": "711c15ccc52eb978d0f5503e727422d88c7a4f34343b5d15572052b39ec4501c",
-    "Accounting.TS.Headline.idx": "17b428bfc84e715129eddc925ad55739e066c24c430dac8852cce0945a885d91",
-    "Accounting.TS.Headline.labelled": "4d15c0c955724b0182fb7b37f0589ab47a2087a7e52f5ac3a2d63bd72bd7da58",
-    "Accounting.TS.Headline.rowsMachine": "5e9aabf80511ea661b5ff64967978bde21f94bfab89db17b7c9a4d9099354a0b"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
-   ]
-  },
-  "Definitions.Accounting.Headline.Sm120": {
-   "digest": "0645a51843070602775f7653106ad4cdfec7ceb7b6756402a28742fd30ac6101",
-   "definitions": {
-    "Accounting.TS.Headline.Sm120.Pipe": "2bca7649adecea1103990e84d41626c2c5668255a78c1bb2873d0352526d9791",
-    "Accounting.TS.Headline.Sm120.Pipe.casesOn": "1ad14beedcf4e7eb5471c4eaec9f632e73e2cfcbbb00a27bccb236d3b1474036",
-    "Accounting.TS.Headline.Sm120.Pipe.ctorIdx": "7f28e616c999d42414778437148a7a9c1536fc3c471ba25fb4ac0f29d3fdddc5",
-    "Accounting.TS.Headline.Sm120.Pipe.imad": "9e7b26b87361019791bb58d6739dab32ac19f7b2f1886d6cf3e43b9f7fd73b1b",
-    "Accounting.TS.Headline.Sm120.Pipe.lop": "107595302622e782dcb01efdc8a8b41a981effa45adfc42074573c3d628db777",
-    "Accounting.TS.Headline.Sm120.Pipe.rec": "e7e73765f42521dee161d766c99997a5976168a0537a569dbda886b8e9a5f4f4",
-    "Accounting.TS.Headline.Sm120.Pipe.shfl": "9ab83c003749ed3be802329c5092e15f57eb300466214518b23c77348feb8aaf",
-    "Accounting.TS.Headline.Sm120.Pipe.width": "967c3954f1f19da8bcecd1b8c63729f198d15d3563990e8287aea75a814d1fca",
-    "Accounting.TS.Headline.Sm120.Pipe.xu": "f11d4a1ddd9e9ff1e84072565b410aa104ea8117ea87c06b3f7cd9d5c8f2476f",
-    "Accounting.TS.Headline.Sm120.checks": "ae8e4e4c25c4bb8b27f6aeb5a139de2a1e13bbd7f2ed9873b72d4e16fbfd9aae",
-    "Accounting.TS.Headline.Sm120.ds120": "ca5adebb9d3d7604da9bde09dab665949eaf168a9c64623c87a100e2550d9119",
-    "Accounting.TS.Headline.Sm120.flat": "b9b8b48bf0020f9970ba8177c790d7dbe2e06bd802f1848b0510f23c6d7e4f73",
-    "Accounting.TS.Headline.Sm120.flatFold": "6eea49af7038931fa768c5996e8b13cf32cc893f41fa3b611d9dfc0e6326d62c",
-    "Accounting.TS.Headline.Sm120.flatSkip": "69e0e59c9db3f2313694ee525565f3170a27d53be94eb6f91a81564d8d7e6351",
-    "Accounting.TS.Headline.Sm120.flatWords": "5c72accfb9c15a5146ef8ec1cd9e8783c002e3e4b057175febaeec4d9fe7d804",
-    "Accounting.TS.Headline.Sm120.h1fx1": "98ec71f2dc4fa7436956df11a2c33954ca55294a1dfa1c5b388a6d25dde748e9",
-    "Accounting.TS.Headline.Sm120.instDecidableEqPipe": "2148dcd54c0370d8d493176ba9386343c2091052e0f0f4ebdb3f5e3ddd323ea1",
-    "Accounting.TS.Headline.Sm120.instFintypePipe": "774f748010c4154f00a1134416cdc8c1f2d6113fb889b81de897cf54de8370f4",
-    "Accounting.TS.Headline.Sm120.model": "c0bf0929b7382d341511c5a65d85eb11562c726ec1c5e70846616d0b5ab6deb8",
-    "Accounting.TS.Headline.Sm120.piStar": "168fae4183bb819574bb473cfabe7a5f13d5faf90a988b79a30c23a8d05f81c9",
-    "Accounting.TS.Headline.Sm120.sheet": "d04a18d0b47bd9bea70b7ce3c1d5686023929761a8bd6cea221fbdc82b970f88"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline"
-   ]
-  },
-  "Definitions.Accounting.Headline.Sm120Measured": {
-   "digest": "382797e234f81375e846f98ef896092b89329dadf4e2c789c2a924b61dee47a6",
-   "definitions": {
-    "Accounting.TS.Headline.Sm120Measured.flat": "c8965f5cd36248f02301a08d05949b542de290e1aca341c23263557c5ac3cea5",
-    "Accounting.TS.Headline.Sm120Measured.flatSkip": "d583a1bd3658b6ba3bdf3e97529fa5928fe50517af10d3acabbc1d139d9341c8",
-    "Accounting.TS.Headline.Sm120Measured.h1fx1": "1e91ad967a39b4a74d6adaf6696b1d4019f02708453c6a7aa8002303e13ec5ec",
-    "Accounting.TS.Headline.Sm120Measured.machine": "55bce2c751bb35027fb668ece07dda52dad0846ba0c4477f59c5c9deb27f116a",
-    "Accounting.TS.Headline.Sm120Measured.model": "1532e86eba864104bfb89c29129a38fabc827a3d52e095ee1e849a54fa79d5f7",
-    "Accounting.TS.Headline.Sm120Measured.piStar": "c1de65e34966627832062e95e941279474355bf7dbd9f34cfc3ddae0573b0239",
-    "Accounting.TS.Headline.Sm120Measured.vf3s16": "df7561232e082fdc78ba414b646d5e6cbfd6cfda4a907e9b45e8846aac2b0bdc"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline"
-   ]
-  },
-  "Definitions.Accounting.HeadlineDc.Encoding": {
-   "digest": "ca069f58b5da9f7c4c112765f82ccde630f44bdfd778f46316176f974efed67d",
-   "definitions": {
-    "Accounting.TS.Headline.SheetDataQ": "e888df9b570af6c0289c53952a0946df666828ddd1f5a00f57179b582deae878",
-    "Accounting.TS.Headline.SheetDataQ.fmax": "6caebc62997534b3842e3c41105fc919f9db40780f802860e0f5b0503697acb2",
-    "Accounting.TS.Headline.SheetDataQ.macs": "7ef13426c4a3ccce24b14edfe239f6497adc97b07ef1fe129d82763b45f13d01",
-    "Accounting.TS.Headline.SheetDataQ.peak": "7ff0b81d04f189589a4ab4147f8505dfb5810c2183dbad0c618b7f411d81138f",
-    "Accounting.TS.Headline.SheetDataQ.pipe": "2a31c4908502e10f05f1be0316d1df37443c0d5bd2264e886d6fc2bddf3ba2a8",
-    "Accounting.TS.Headline.SheetDataQ.sheet": "146eafa7bf883a27a929c1827c3b23db4ef0b5f216f19edc38002e7eb81f11e3",
-    "Accounting.TS.Headline.SheetDataQ.smem": "bb0eca201edab13cbe836398c68bf4ae53d136be39851067abf58795141fee7d",
-    "Accounting.TS.Headline.SheetDataQ.width": "01bc60d7d11433ecea672a6f76ecf76385dbc0ce9e0c9008df7a3229ee1e0bd9",
-    "Accounting.TS.Headline.cert": "5eb044716ab7efdd65e45e7990b2d1d799ec55745abf8bf6031d7c8300c4ef6f"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
-   ]
-  },
-  "Definitions.Accounting.HeadlineDc.Sm100": {
-   "digest": "11f03c91ded7bc7b5fe05f642d69b3e39c0f4d51a5a6ec2a69db2d52e09ced80",
-   "definitions": {
-    "Accounting.TS.Headline.Sm100.Pipe": "9ed9396a3aaacf4fb87ceb3b02a74a7ea4cc5358741ae256a9d110782c05ce6e",
-    "Accounting.TS.Headline.Sm100.Pipe.alu": "056c9f4bda75465c486da1ec056b982e792b340690b014459d1d4dba0eed4850",
-    "Accounting.TS.Headline.Sm100.Pipe.casesOn": "20798bac9bfd83c07f93471b0f48e877d3bc8ac0bd27cde624b2aa1eb3db3109",
-    "Accounting.TS.Headline.Sm100.Pipe.ctorIdx": "b8748cdac19acaee469e1740a1b95c891d4db52ce28904abdbb15174fad39698",
-    "Accounting.TS.Headline.Sm100.Pipe.imad": "10444a8f11f244ffcc49b8a02258a529322a9e1ce23c14534774d4abda101d10",
-    "Accounting.TS.Headline.Sm100.Pipe.rec": "a7fe2a5d05f2ca995b32a735a14e8ed44580da12b3b47eecff8e1f81b1b06348",
-    "Accounting.TS.Headline.Sm100.Pipe.shfl": "39a3f768bf33458bddd2a61dc0511c180b8c2992f919c7c028cfdc3285cd1c0e",
-    "Accounting.TS.Headline.Sm100.Pipe.uniform": "cdd0cad8fb006256cb570489daa45573a94b8e6c8bfad19659b649fcd1202c65",
-    "Accounting.TS.Headline.Sm100.Pipe.width": "ab8dd1aaa41b91d1ec092515153db7801940a2a32e43a6382f497e90a0746d09",
-    "Accounting.TS.Headline.Sm100.checks": "6aa4873db21b385e65c3d2c64beda7079c7a2288bac53a147fb4ad9627760076",
-    "Accounting.TS.Headline.Sm100.d2s": "25aa61fd4e9e04df71bf23cbd9872a511658657ed590cb67cb179a97b29422ff",
-    "Accounting.TS.Headline.Sm100.ds100": "82fef4da2821aa47ebf30e1e56c942bff2334a54b6d6ab6186af284bde088928",
-    "Accounting.TS.Headline.Sm100.flat": "7eef8129497b726a345b48afc2272782adb779cffc8afdd46f3cb78c18bb0193",
-    "Accounting.TS.Headline.Sm100.flatFill": "f00359a65ad39b14f48d2d7242e9fa53914d3213e172c989325ca467e385d489",
-    "Accounting.TS.Headline.Sm100.flatFold": "b524d25dbb6bffbf5a7d4154ecc076eaaac653eed5b595faa34305d55f3c4a83",
-    "Accounting.TS.Headline.Sm100.flatSkip": "c1d6c1c5a8ecfa72d0eb4b1f2a780137610cae5fa7f1914398a7d1fd5c997e0c",
-    "Accounting.TS.Headline.Sm100.flatWords": "da31939e6d7aff952dc7bb73cbd68c2022ed5a5311ad2179907626b5351802e6",
-    "Accounting.TS.Headline.Sm100.instDecidableEqPipe": "14cb944b13734427a0e528fadf4f611bac2babccd42e70e9f072e32d06128367",
-    "Accounting.TS.Headline.Sm100.instFintypePipe": "b79f75bff7f14a9c98e3fb5d38657fa6183c2f0272e8ce022e7d792a1ace99f4",
-    "Accounting.TS.Headline.Sm100.lamStar": "d5012a51274967d23d8c091a8170941d896ec4aa20ce7444052161e40d17aa80",
-    "Accounting.TS.Headline.Sm100.lamStar._sparseCasesOn_1": "945f5abde8c2eb3da19e067ceebca61eaee2c8079d3a877411552caf457a91ba",
-    "Accounting.TS.Headline.Sm100.lamStar._sparseCasesOn_2": "e7f134502f5a79bf61a8b1becacfabc8a3e1c1958d591656f156995a24c82b85",
-    "Accounting.TS.Headline.Sm100.model": "473f722c71713f129c497578a87a57202777ff9876e24afa1915c009db913f66",
-    "Accounting.TS.Headline.Sm100.sheet": "d4b7c2bb5572b464f105d0e6d01b505a55c5acc24bebb6980d78c659cbc949a1"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline", "Accounting.SecurityProofs.TS.Sm100SheetHeadline"]
-  },
-  "Definitions.Accounting.HeadlineDc.Sm100Measured": {
-   "digest": "a812d91577bc1b14b7d4ff6a0f8d0779190cf3f88cb83374c2d3e86add8cca8f",
-   "definitions": {
-    "Accounting.TS.Headline.Sm100Measured.d2s": "a060f99deb4a5d228bd36b31261b7b824fbf420cbca607cc8e55fd917ff89d0a",
-    "Accounting.TS.Headline.Sm100Measured.dc100ri": "0225a224e35b76667b1fd6ed06b3bbf5bd276c7bee8373921b744882688f644f",
-    "Accounting.TS.Headline.Sm100Measured.flat": "4deaa73f2f2ba31f2a80ef7a67e37cd9a5a8d4becf24be9b31fa21e333f47e16",
-    "Accounting.TS.Headline.Sm100Measured.flatFold": "b7b10cb8ae010a0ee66b62fc12331764d8abb7ae0cb430e6a1534bdd30cb3d1d",
-    "Accounting.TS.Headline.Sm100Measured.flatSkip": "930d8e5a6732e1c11823d0557bd43fb02544c216a4e53042d79c5683378fe447",
-    "Accounting.TS.Headline.Sm100Measured.lamStar": "9deb6e0e13fe43f49574ac87fa2c32e36b5e0e6517d3d278158a5ee7de3f313d",
-    "Accounting.TS.Headline.Sm100Measured.machine": "143e70ca16397d6e525997f48542e71a9b323fae7dfe370dfe237bd4f68c33d0",
-    "Accounting.TS.Headline.Sm100Measured.model": "106a7a808b7d4836378681acf0ae239c0b92e0e8c346d44d8332611d00edcab8"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm100MeasuredHeadline"]
-  },
-  "Definitions.Accounting.HeadlineDc.Sm90": {
-   "digest": "65f988a373c6232943f0c95f22e8d9d95e62f507d9f8d805c9bcd65b0ce65761",
-   "definitions": {
-    "Accounting.TS.Headline.Sm90.Pipe": "2daf4548527ab21798473e5bf0b7f72af5db897611217553ac09ea4b6c159382",
-    "Accounting.TS.Headline.Sm90.Pipe.alu": "9ea444bc9223c89d02761528d72ebce4721d9cc57a1bdb47c82f15b9fb43420f",
-    "Accounting.TS.Headline.Sm90.Pipe.casesOn": "115943cd48699727bc070237a7988259ebbddbbdb8cc2404737704e7907a24d4",
-    "Accounting.TS.Headline.Sm90.Pipe.ctorIdx": "cc6bc57d645f50a8b346b07052a0a229718f0b2cf96ab443d2503399e70a6e3e",
-    "Accounting.TS.Headline.Sm90.Pipe.imad": "174f055470b2d3e2586886e5f3103f435e390233aae7780443fb8051b5bcf17c",
-    "Accounting.TS.Headline.Sm90.Pipe.rec": "754b1bc4539a21e5f447743b29b050092829d3b50b0f964ac7fdf5adc22d78c0",
-    "Accounting.TS.Headline.Sm90.Pipe.shfl": "6bcf1cc04637823d9de7080183a1f1fbfae822d9bebe0b546a84bb574cf60942",
-    "Accounting.TS.Headline.Sm90.Pipe.uniform": "9cd6ce24d97a3b5da86c45c8c79793008bec8b683831f3e0ea7ca40463626281",
-    "Accounting.TS.Headline.Sm90.Pipe.width": "bd3365a43ecdbc538038b8bc75de4158af1ea0102ff8e86f797e38142d26e270",
-    "Accounting.TS.Headline.Sm90.checks": "8af3a8490f038e3001fb56cad1a762ed4b611e76f9f1b09ab05116a7977fd795",
-    "Accounting.TS.Headline.Sm90.d2s": "2321de1adfee329dfba95650d4503605617e126ab5b893ceee85cf24959fb507",
-    "Accounting.TS.Headline.Sm90.ds90": "4dd25493356137d67db933779c466744cae4687ecdd7ae5596b83e7e8d3aaf9c",
-    "Accounting.TS.Headline.Sm90.flat": "7bcc271183615132232f50753c5e1cab288b574b32e456d6f1bd2c81582f0f43",
-    "Accounting.TS.Headline.Sm90.flatFill": "d299a9ea951b59864e8b87c74d0f263b9b6aeeb7360f06a60989db1b70bc7811",
-    "Accounting.TS.Headline.Sm90.flatFold": "c8f00de96c7e2e62feb2323a1e5396a3ec30f7e007e6bf9187327100f26bf16d",
-    "Accounting.TS.Headline.Sm90.flatSkip": "f74b33e1c65fd3b809390e7d268f723fa707eba17045ff51cd9fee3464dd8fb5",
-    "Accounting.TS.Headline.Sm90.flatWords": "09798bc528058c495238893cb8caec3c0c93fd828af4fd951bb3451c439ccc8a",
-    "Accounting.TS.Headline.Sm90.instDecidableEqPipe": "e6f72d7e67d44def3c0999ccf44cba9cbe48f831a63b66b5d2e2a3e43157eb80",
-    "Accounting.TS.Headline.Sm90.instFintypePipe": "0e1e56d8aee279ff115b94cbbeac7fb99eb1e81b199f702863925f8a2d908822",
-    "Accounting.TS.Headline.Sm90.lamStar": "0671d39e333de8038b0e24f6145903c5fbdac2b47c87e5ee63bae27b8aa48e4e",
-    "Accounting.TS.Headline.Sm90.lamStar._sparseCasesOn_1": "87d91216e42a91d2f67510e9ab72bb938562db55f78e4c687bbb3cdb535396f0",
-    "Accounting.TS.Headline.Sm90.model": "e635aba4409d17615b79c6ddc999b58fdb55430b80c4bcf8fde2773cf9d293b6",
-    "Accounting.TS.Headline.Sm90.sheet": "d5ea25e39bc4e4f292d90f9b36eda80f47141f8afc0799c5d78f22758e2c4857"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
-   ]
-  },
-  "Definitions.Accounting.HeadlineDc.Sm90Measured": {
-   "digest": "2b46a760a1d8001f0c3cda00b5f30aa41ab5e51f72586f5dab66253b6f3ccf13",
-   "definitions": {
-    "Accounting.TS.Headline.Sm90Measured.d2s": "ae6ffdb77225f70cb0fce11653c579f117b7fd8baf016cc6055ac59563ad05bb",
-    "Accounting.TS.Headline.Sm90Measured.dc90ri": "592700914b9123af9569118aa6f7ffc0535c702a71c8beee8dfc0b40516e866f",
-    "Accounting.TS.Headline.Sm90Measured.flat": "37184a81c1cc9d1d02deee0224158dda7168ecd4028759a587cafb90f6199a88",
-    "Accounting.TS.Headline.Sm90Measured.flatFold": "bdaed5ac7a28f970a18964bdbd3093152f30e3cb884fb3846df6d8b2d73bf1f4",
-    "Accounting.TS.Headline.Sm90Measured.flatSkip": "06ebf526953b18c6f0099a4bdd16bcf10b7d307a64d1d323808842e1e134c9d2",
-    "Accounting.TS.Headline.Sm90Measured.lamStar": "17ad9c62bcfff39a83bf8a34e88e8ae77a58fb32344ee9ba9c33f0624876474f",
-    "Accounting.TS.Headline.Sm90Measured.machine": "2fe754fcf17a61b0dbcd8b581ccbc1ea6cbc67d0acdf7a7b1f413e37aa91fad0",
-    "Accounting.TS.Headline.Sm90Measured.model": "0b77bbf65ed51e82ca3b5b5d848ae4c7627f2e2f7db5e45439af35baab3d90d0"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline"
-   ]
-  },
-  "Definitions.Accounting.HeadlineDc.Sm90MeasuredI3": {
-   "digest": "e4bb8f4f71acc74032fad6f5af295f0584c17273d6993c6246c1d29e03fff096",
-   "definitions": {
-    "Accounting.TS.Headline.Sm90MeasuredI3.d2s": "23213dc2b863daa9e886d935c4ee7ca195a703c41813f0ac38e6f201b66a004a",
-    "Accounting.TS.Headline.Sm90MeasuredI3.lamStar": "cc2596227f998ec9ef3c5c91e0cf578373b4bae2e427e8b589e9985623fbc4c4",
-    "Accounting.TS.Headline.Sm90MeasuredI3.model": "99b2d04aea0d200affb3188846996ad51e14e1e6526efed5806e162ee3d89b6a"
-   },
-   "guarantees": ["Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline"]
   },
   "Definitions.Accounting.Joint": {
    "digest": "e7071ec7ee29f00f35223386652b2e0f647fd2a1a865fdde31f5751142f979ab",
@@ -16369,8 +15904,6 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.BindingOfECR",
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
@@ -16394,12 +15927,11 @@
    ]
   },
   "Definitions.Accounting.TS.FanIn": {
-   "digest": "14abbaaf0750b664e1e0a60e94892364d0e5692e950a462bf0cae6e29ec22de2",
+   "digest": "86d0e97b3ef9646e55febbc06c54a0c2be39a786c4060b72d056220a3e6c41ac",
    "definitions": {
     "Accounting.TS.Dataflow": "71d86a964562ef29d79fe68c7e4255a74b48a6be8802cc5641acf376141533ca",
     "Accounting.TS.Dataflow.Runs": "40634b2e7a2eab515450a98e875ace3b1421497dc4de80f971d169da87f1bf60",
     "Accounting.TS.Dataflow.Sees": "1aaf6acf17a26090bb6aae2c0c56ee10b0ce47a73c72270c33101cea3e89a3a0",
-    "Accounting.TS.Dataflow.issued": "68f6df325f2d4db66dddd5c2b76dd9caba00300bac62d75d66a0c1f606db73c1",
     "Accounting.TS.Dataflow.merges": "25a6c42a890dd16e21efb1f5f6c672f7dc86fe9071939557319da9a8eb3a345d",
     "Accounting.TS.Dataflow.n": "b05b582735e5dbc794a63e5fc56f12b10ead2a9d43c2eb50dee380d34afefb66",
     "Accounting.TS.Dataflow.op": "76d257614895b715217211ba6b497434cdab8ac5a89c4e9174d72f9a8d8689ca",
@@ -16410,9 +15942,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.TS.DuoFoldFanIn",
     "Accounting.SecurityProofs.TS.FanInCount",
-    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
     "Accounting.SecurityProofs.TS.FoldFanIn",
-    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.Fx1FoldFanIn",
     "Accounting.SecurityProofs.TS.SeesOfInjective",
     "Accounting.SecurityProofs.TS.ThinFoldInjective"
@@ -16459,66 +15989,6 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.FoldFanIn", "Accounting.SecurityProofs.TS.OneRegisterLowBit"]
   },
-  "Definitions.Accounting.TS.Machine": {
-   "digest": "14155d8d7579d0f76acfc5d2bfe15eb21dd222a817df9da2cd141ded2c31c6f0",
-   "definitions": {
-    "Accounting.TS.IsCert": "3e2c0c6c1b11d9a2b3ffac2af6ef3bbdda68c9fda5832bb07ce34f3eeee16e19",
-    "Accounting.TS.Machine": "b9145b2a4aec30ed0a649d7c876cc2c6b9dca56070665e6a4ddd887388d2fb6d",
-    "Accounting.TS.Machine.a": "498ee7275ac6d7e737a9dfd05034e1316635d13e902cf2b22d4c02a65cd982cc",
-    "Accounting.TS.Machine.bound": "6ed1217cfe0e258f269bb2a5203c0266175daade41c38f2fcbb1b938c7b58583",
-    "Accounting.TS.Machine.fmax": "80b3be46f24aa02eba4293a8a7b70da8d21a259216165f602d70096d08550b71",
-    "Accounting.TS.Machine.load": "7d8e49593ece8622d110a5c49aef3c44812a58de2f02bb1def305a295136a6d6",
-    "Accounting.TS.Machine.price": "bb64e3a08824d6ed5f62bb7cc15186c6816c2bf760d889e633966a950864a6eb",
-    "Accounting.TS.Machine.smClocked": "fea2d8bb0334248fea931e37a736435b3e4a7c2065c7fcaea3e9f06ec61e6dfc",
-    "Accounting.TS.Run": "3ef082b3d83e89810e99ff7698fc3ab8fc824405e38d111a6a6a1d8fc0757c6c",
-    "Accounting.TS.Run.clock": "733d1d748012c40c669e8230b97f009826ff36db02406ad09a81fed26947e04e",
-    "Accounting.TS.Run.cycles": "ebec710036673c7cea880e6ce79eb30f38537bf9dd4e6a9d1d443cd94ef50849",
-    "Accounting.TS.Run.n": "128e046eac99a336516cc2f31c2d40b31e1f5e960ab0951adc7a094f93fd2216",
-    "Accounting.TS.Run.time": "1c7dffa4d043d6d3a18276c3ab5a248763e6deaa50eed045b8afd329b4c8d477",
-    "Accounting.TS.demandPrice": "df698475dabccfd1e39f33f0c5874daeb79f190e44557ca4b937e19914df6745",
-    "Accounting.TS.onFacet": "850cfeb0d37054d602d058fcbfbb3f5eea8b861b1f50278d40c70a74fe94be6f"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
-    "Accounting.SecurityProofs.Compose.CircuitWork",
-    "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
-    "Accounting.SecurityProofs.Compose.ServiceCovers",
-    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
-    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.BindingFacetD1",
-    "Accounting.SecurityProofs.TS.CompilerC",
-    "Accounting.SecurityProofs.TS.CompilerStage",
-    "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor",
-    "Accounting.SecurityProofs.TS.DecompositionD",
-    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
-    "Accounting.SecurityProofs.TS.FloorCreditD3",
-    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
-    "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
-    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
-    "Accounting.SecurityProofs.TS.RoutesOffD2",
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
-    "Accounting.SecurityProofs.TS.StageIdeal",
-    "Accounting.SecurityProofs.TS.TimeBound",
-    "Accounting.SecurityProofs.TS.UnitFixedOfWords",
-    "Accounting.SecurityProofs.TS.VectorThresholdD1"
-   ]
-  },
   "Definitions.Accounting.TS.Play": {
    "digest": "1341fe8278dfd7b3ac596dcc6057d8e7b37456018825456780bca70ec680d074",
    "definitions": {
@@ -16530,8 +16000,6 @@
     "Accounting.TS.RoundGame.LuckAt": "ed20de7ced73a673a93adb8b77525ccc0aa1979b64c52801b16d6f8813b3a096"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
@@ -16544,14 +16012,6 @@
     "Accounting.SecurityProofs.FillerLuck.FillerLuckAt",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.CompilerC",
-    "Accounting.SecurityProofs.TS.CompilerStage",
-    "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor",
     "Accounting.SecurityProofs.TS.LuckCaseA",
     "Accounting.SecurityProofs.TS.LuckCaseACube",
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
@@ -16559,16 +16019,7 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SampledBudget",
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
-    "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords"
    ]
   },
@@ -16596,16 +16047,10 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.BindingOfECR",
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
@@ -16616,13 +16061,6 @@
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.TileSessionSound",
     "Accounting.SecurityProofs.TS.UnitFixedOfWords",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous"
@@ -16698,14 +16136,9 @@
     "Accounting.TS.xorAll": "e79c7bb80c4a340fa20f2ac319de5139cc27cdb654e1d37262bb86e7309933b9"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
     "Accounting.SecurityProofs.TS.DuoSegmentsBind",
     "Accounting.SecurityProofs.TS.Fx1SegmentsBind",
@@ -16716,14 +16149,7 @@
     "Accounting.SecurityProofs.TS.LuckCaseAKeyed",
     "Accounting.SecurityProofs.TS.LuckOfReceipt",
     "Accounting.SecurityProofs.TS.OperandLuckCube",
-    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
+    "Accounting.SecurityProofs.TS.ReceiptLuckCaseA"
    ]
   },
   "Definitions.Accounting.TS.ReceiptHMu": {
@@ -16732,130 +16158,48 @@
     "Accounting.TS.ReceiptGame.OperandPointMass": "6df5cc888c4948e81cfd63c48efd7e5cb7c956f25c2a3bf31d645fb38dc3aed3"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
-    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod"
    ]
   },
   "Definitions.Accounting.TS.Routes": {
-   "digest": "30c8abcb6735ac3215f7f48cfa482adc6e2ae2096c61de3f69ef8282eb1c6166",
+   "digest": "2d43e500d7698df384002b293bf16f873a5ff8b4c4082a372c26fd4270fe4d80",
    "definitions": {
     "Accounting.TS.Anatomy": "f684ce1a5d169b07e97d6d7398c358c3a5ca195ea5752cc4e457d4625307e4a7",
-    "Accounting.TS.Anatomy.Split": "574d7e6a2a8791d55387b1098a07899a8dc88a5daec43433a2922077d99f17b2",
     "Accounting.TS.Anatomy.fixed": "b79a000763a1c8f8637ca3e7481dda3a341bf06533fdfac95dd93001fb6cd09e",
-    "Accounting.TS.Anatomy.nfill": "e23673a751d6a0c245731ba990f2fab82b70e3a685083024ecba249bca16e9ef",
-    "Accounting.TS.Anatomy.nfold": "15c80b7e8a9b454977d36dff7b74fccce855687f5b36bd397ec29846e986df7e",
-    "Accounting.TS.Anatomy.nword": "a0641c50b56d40a12089dbcf6f6cd56373ffbc08e47756ed9189c9bf4af90260",
-    "Accounting.TS.Anatomy.run": "ce66b07fe93382a454c405d26b7c62aafd021e51d3930c78bec9a45348c7e0ac",
-    "Accounting.TS.Anatomy.words": "00650d73f0f001f8e874ad3b19ec4611047459fffc5a60fbec225cfa3d819ced",
     "Accounting.TS.Head": "4998a25b2ca160306d29989f85b8bba1aa09658701a33dac53a07dac39adda27",
-    "Accounting.TS.Head.casesOn": "6105ae2b6335d9de6f643fcc7fe47ad3115f7f78ab0331e4b4049806541333a5",
-    "Accounting.TS.Head.equiv": "462caf138c931647f8992a296e40ca28d7e7da938cf25c9c8343c2f28f49570e",
-    "Accounting.TS.Head.rec": "1a90bad96b088679777460b0b4b95673e975613e8a9c4d5d6e2e9e7ddac4a580",
     "Accounting.TS.Head.side": "aaa53a8c70e7a0bcceca502bf9782c476bb3b5dbe16665c81180f5ad7135fff5",
     "Accounting.TS.Head.table": "232919138dc79e2dc93719d236074c37b618b91103c3d6aaed8b2c49deb7d069",
     "Accounting.TS.Head.vector": "14f9ff90b798685b3a6591654924ce58addeeefa8a5a563cdfa5c6b7008e6f58",
     "Accounting.TS.Head.writer": "fe67966d4083b487a52a4cd0169e51c81f774acf80a7a7823d45b12c6cb32027",
-    "Accounting.TS.Honest": "13390ffb263a583d0b51f91a72fe0f697f1dcc7a68307d37b08148a2d29856b7",
-    "Accounting.TS.Honest.CH": "3012b013b9c42d9b4bc240335918cbe75150951582f1285d5a5ad29315631f5f",
-    "Accounting.TS.Honest.fH": "1875848a4440e3ac1a21cf7028b496273779ca6f2de7b60aa9ddf0537ba1480e",
-    "Accounting.TS.Honest.prog": "ae6e1ced38ddbd360c3168387936192132c55ab9c5694fe0d96082b1e542cac8",
-    "Accounting.TS.Honest.time": "a8ebd016bc9fd43159740431d386d154bfdde82dd7e9959e417750fe51bc40a2",
-    "Accounting.TS.Labelled": "c0d114226df6e350ec6fc4c8d85142796b74b8283ae11bf223d97162bf41d871",
-    "Accounting.TS.Labelled.n": "e2f4743440bdae8934bfdb753df85e98171650c813e0783e23f5a999c8f0850d",
-    "Accounting.TS.Labelled.nf": "3273d98258d8fa8045f9f2cce9061eb18ccc889389a80177053cc95ccecb684c",
-    "Accounting.TS.Labelled.ns": "33294a6b8acf8bafa2c86d4b2fbe4339a1ba26e789595b701e1577b55108da46",
-    "Accounting.TS.Labelled.nw": "4af836f93ba2243cc83ee2a89daf5bb344d044f217649060406c0f7bad29f46d",
-    "Accounting.TS.Labelled.nx": "0ceb806917fe6c0ab5e7c7597bff3642d24497e0c5e064c6850a4d360ffc20b3",
-    "Accounting.TS.Model": "61a7c9b5f96a5f602a16f0abc7ecc9dc733cf7d0737b14fa2aae15962ae67a49",
-    "Accounting.TS.Model.FloorKnown": "8b85e4070adec68ec3d4328b59d53909c02eed7179cfea7f2d6d79f45f868c6c",
-    "Accounting.TS.Model.G": "25f9639bb1c44f48afcf182d37325974e76489eab1a7f2eb7576792b01743a21",
-    "Accounting.TS.Model.Nw": "aad173f0d8c0992bbf322c4449efde761049c087b50ddbaacaf80036b8eab949",
-    "Accounting.TS.Model.RouteDominated": "c43c3ef66cba3fd2b0af7274ddb89c4f4d51b94e088417a4fe85c136bcc9d588",
-    "Accounting.TS.Model.Wf": "e8b70e175080b78a3d162ea19115c49f185439b11cd4d765fa55f65f52a71c73",
-    "Accounting.TS.Model.bT": "fec9ad17153e56f4cf7fef35b95569d27e6a18972a5cc4bf89d3c907347ef128",
-    "Accounting.TS.Model.bnd": "e1b92eb159c0648c08716dc6f6d6e578e0c5d18018e3c84d44399e6b4a772ffc",
-    "Accounting.TS.Model.bytes": "445ca484400785fc63a6ce10282f05bcf17b32cf2bde2191e505c9ebc2b309d5",
-    "Accounting.TS.Model.chiStar": "fef07a96c3c07d6d96563005b650769cde8fcdfe3b4d3b90d5f037f7763bc8f2",
-    "Accounting.TS.Model.cls": "c01eeaa141e3d4a48936f1a71b321cff1ee89276470bc50980eeaaac51f54f93",
-    "Accounting.TS.Model.credit": "e82db0be2493d01812064d277b2d1e66aeaa87658510f829f183aae26cbffe53",
-    "Accounting.TS.Model.demand": "8bbb2d6ad9a453b325a349d66d4c1f6c3eb8af0438cb01e359776201df2ad663",
-    "Accounting.TS.Model.epsAdapt": "d62eb2bf7da1453f367ff2eecca81e2923c07f9277a91d0201922732ce02f7ba",
-    "Accounting.TS.Model.epsCert": "2388c3ccd9d8adf8bd7d689d35b20c6beb48ae918eacdaacea0b46d1579a2fb8",
-    "Accounting.TS.Model.epsClock": "d327b74b2d3523027e9d84fd87cd3675da4c5cf45d4a35b02c974398a271c104",
-    "Accounting.TS.Model.epsJl": "96fa3d443af4c0618e37e5b4a547a6b88ca283097bb775ecabb433af08a0823f",
-    "Accounting.TS.Model.epsLuck": "f1abe064cc9e59e0811a5daa0a938d8d645c973ebccd4c0bbb0f3b24a18e9a42",
-    "Accounting.TS.Model.epsMachine": "fa77a0b3a9334d69e7296d78a791715a58f95cfe013bc958c1bfa69cde25e72d",
-    "Accounting.TS.Model.epsMand": "e083c1fea67c92ef1e2f5aa0e7d0f7af6b3b33e4e258b52f40b145e33d55c7d7",
-    "Accounting.TS.Model.epsRoute": "5f363afe9c7a9161c4a2d9d02dbc8270e299eea681877b7e92473ecfd66b8231",
-    "Accounting.TS.Model.epsSample": "ed71294020df0c27d4cf29dfb3d89f0a71cd6aa8f368c2dfd6980905592960db",
-    "Accounting.TS.Model.epsSched": "70fc2da759503bf5de3f897547d63283c872698292834beb2e73061de9b1bcec",
-    "Accounting.TS.Model.epsSkip": "690e76c8727052434614ce48ae7ed59631afc3a30fafd148bff4339ea959985f",
-    "Accounting.TS.Model.fill": "620886f9a9244fd52dc0b767423520387fc79d4d0f0a031cf0f340a3a5e20d40",
-    "Accounting.TS.Model.fold": "2948b0c4c35b5c22366a96dea08a79876f42da1ddf242b9a4a436742eefa90e6",
-    "Accounting.TS.Model.gammaFloor": "f2fb980208553ce63a9d5efb094f7f8c757da0b52e208b99540106c1eccf9f89",
-    "Accounting.TS.Model.kappa": "aed69b19f700796dfc01febb1dd81b0acca268082afc711ff30e2357bb48bf89",
-    "Accounting.TS.Model.muF": "ab292d6bb3cacbfbfcaf432f7abebde5f74c27044307d4792b78a8b82e62ea4a",
-    "Accounting.TS.Model.muX": "58ad9333f477f85ec8d7d855f378a64d0f5d0e7bbef43313e70e5c5cee66059f",
-    "Accounting.TS.Model.omega": "d0b206442b2ec88a9131ad95a7c295f25b94e7f8be5cad81fdf6872a21c07af7",
-    "Accounting.TS.Model.phiStar": "7f26de2815710fc515fff8ba554dc6606ef1fb72cd6cf805d5ec8a99607054e9",
-    "Accounting.TS.Model.q": "c9964629ad0601458a49ba293f6acab20d9730e3cebc1ed65b50a4111e318675",
-    "Accounting.TS.Model.qT": "a8599354442e9a1ad37ae65a4146e5edac0833ad957a8a60b9fccf10e5a7226c",
-    "Accounting.TS.Model.side": "3712ab59c21a0477512977600f6d48c432d7a6d46e49105d013410e6e4df8c7c",
-    "Accounting.TS.Model.tensorDemandDel": "0c58e3b30de4658267e1c69c0624e2f5d45c0dcd80bee1b226e2289e1dc14b4e",
-    "Accounting.TS.Model.vec": "bdd18159776efe05fee0b9b9a061e7c0988b80fdd5a2a243e185e82af915e0e9",
-    "Accounting.TS.Model.vecMin": "98177a95b25d3f58d8e7f1bcf8df17de3709a7278a44cbf779e3ccde9d719aaf",
-    "Accounting.TS.Model.wStar": "f92977f39902adb5d7c2cf46b16418a03ab900c8b8eac7b5abf46957a1dce1d4",
-    "Accounting.TS.instFintypeHead": "b7c57ef6926da68a1ac20397bcf6f1912d3322e75bd72cc82abae4b3e6a7cd49"
+    "Accounting.TS.Labelled": "c0d114226df6e350ec6fc4c8d85142796b74b8283ae11bf223d97162bf41d871"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.Compose.ServiceCovers",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.BindingFacetD1",
-    "Accounting.SecurityProofs.TS.CompilerC",
-    "Accounting.SecurityProofs.TS.CompilerStage",
-    "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor",
-    "Accounting.SecurityProofs.TS.DecompositionD",
-    "Accounting.SecurityProofs.TS.FillOptOfFanIn",
-    "Accounting.SecurityProofs.TS.FloorCreditD3",
-    "Accounting.SecurityProofs.TS.FoldOptOfFanIn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
     "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.SheetScalarRouteHalf",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
-    "Accounting.SecurityProofs.TS.StageIdeal",
-    "Accounting.SecurityProofs.TS.UnitFixedOfWords",
-    "Accounting.SecurityProofs.TS.VectorThresholdD1"
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords"
+   ]
+  },
+  "Definitions.Accounting.TS.Run": {
+   "digest": "2279040738c1521c54f6a556c516019dc0610aedc92e30143707cc28cdbae52a",
+   "definitions": {
+    "Accounting.TS.Run": "3ef082b3d83e89810e99ff7698fc3ab8fc824405e38d111a6a6a1d8fc0757c6c"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Compose.CircuitWork",
+    "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
+    "Accounting.SecurityProofs.Compose.ServiceCovers",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
+    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn",
+    "Accounting.SecurityProofs.TS.ProofsSoundOfPinned",
+    "Accounting.SecurityProofs.TS.UnitFixedOfWords"
    ]
   },
   "Definitions.Accounting.TS.SharedNoise": {
@@ -16864,45 +16208,6 @@
     "Accounting.TS.ReceiptGame.CondReceiptLuck": "4d6a2e9169250dc3be6a7303e25e7765d0d48a57b536298487c6e19b922dcba5"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.CondReceiptLuckMarginal"]
-  },
-  "Definitions.Accounting.TS.Sheet": {
-   "digest": "75db1d09a07b87e29568e9fd23b79bd56b9dd1a90b77897873c35004836bf29b",
-   "definitions": {
-    "Accounting.TS.Sheet": "e4ac34c1d3a252753762139ebcb218e7f59cb8b7f98b57e34b1be60342fe8bbb",
-    "Accounting.TS.Sheet.fmax": "96206b791af38cbd657f608e98fbb2325a372b4965ead42e95b62dfeb421a758",
-    "Accounting.TS.Sheet.machine": "b9c8ddec6ba9df8d81dc7e59b11dd3233cc35c5e4269e2afa0168c8607fe9167",
-    "Accounting.TS.Sheet.macs": "163c97b08b2add7dd923911d67c1eee6790634e362b1cd2a05dfc015b27ba069",
-    "Accounting.TS.Sheet.peak": "c914cfb2a966b32c4bcad3e23f7f75bf0160b1cf2605d5397f29efa5bfbe6d5f",
-    "Accounting.TS.Sheet.pipe": "3c5b8e9a91567d4c197014f4fd1f6674a8cd4613a4ae82863d85a7d35517b5a0",
-    "Accounting.TS.Sheet.smem": "cfebc3588b873b8ee1393dd1f352680ca11d60c422e589ce588f2a2fdb6872ca",
-    "Accounting.TS.Sheet.width": "190f3ddbbd5e58b38fae4f0b3e654c3bd41e973f9b9dade35615106ccfbf33eb",
-    "Accounting.TS.SheetRow": "63a57f01f0937de08170bd92e2d36e1365cbafdb20828a0595d2f787e1db6d32",
-    "Accounting.TS.SheetRow.casesOn": "6d5ae7e7676550f851432c989a210d0e01c04b8c1c78a3ba4a6208a6bfd69a3b",
-    "Accounting.TS.SheetRow.ctorIdx": "77115ea0806e28b6203f70563fd3461525eb09a6b9895093ceb9e74ad5b888d9",
-    "Accounting.TS.SheetRow.issue": "d34f0e27b245e34f3f5a8362f839b1d8537e61b2036081d85138395c0783d6c4",
-    "Accounting.TS.SheetRow.pipe": "b6b800e5a547b04d83ca67abf5561ae7ae94a6b0bc54639a5326fa4db59779e2",
-    "Accounting.TS.SheetRow.proxyTypeEquiv": "aeb5d2e7ae32146d663e416573e5fc5232694a52b2f9e3d885b9513fb1d039de",
-    "Accounting.TS.SheetRow.rec": "0f00eb7ee0bf9b1faa0d522f91dc2ecfb6a145886ec24bdbced2985a57b73d82",
-    "Accounting.TS.SheetRow.smem": "366015ce7d4e265e5ce79298d3698590413049c0c4b3ff01c8cb284328f6ee6b",
-    "Accounting.TS.SheetRow.tensor": "48c50f19eac83ff47bac7949c3c94a426790827f1dec8012b7e03c44aa57f26f",
-    "Accounting.TS.instDecidableEqSheetRow": "25f449097a33d9383adcafa26d9ae094f77c21da75ad5209908845bf275a708d",
-    "Accounting.TS.instDecidableEqSheetRow.decEq": "de18110aa419f9da2286ad2348b7b43b9e797e75d56f6a480456707a271a0efc",
-    "Accounting.TS.instFintypeSheetRow": "3da30af8c579da1302161a47f364b102f812db3a1412a36006a57983085fecfe",
-    "Accounting.TS.instFintypeSheetRow.match_3": "9afbb3d57117ea303b093c1babded32ccfa2876821e4730474ffc427877c80f0",
-    "Accounting.TS.instFintypeSheetRow.match_5": "9d7e13656b63f7e674f8703098a4843c3053a146b71b18edc3ddfe2ae7689ab6"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
-    "Accounting.SecurityProofs.Compose.CreditOfWork",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.SheetFacetCeilings",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
-   ]
   },
   "Definitions.Accounting.TS.Slots": {
    "digest": "f53a4573d3e15326d2f4872f87e46e20d6828ae8a21c989aaaa8250f16505b1e",
@@ -16964,12 +16269,7 @@
     "Accounting.TS.StageWindow.rec": "8eae1aec1ef41728817a469c27bc00d18f1e1d0fca591cc596a617de117cb575",
     "Accounting.TS.StageWindow.round": "a80fef05c42fb24bbd3303f0a332ea6981ca794ac290b072c0be5b940eb831c0"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.TS.CompilerStage",
-    "Accounting.SecurityProofs.TS.SampledBudget",
-    "Accounting.SecurityProofs.TS.StageBudget",
-    "Accounting.SecurityProofs.TS.StageIdeal"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.TS.SampledBudget", "Accounting.SecurityProofs.TS.StageBudget"]
   },
   "Definitions.Accounting.TS.Steer": {
    "digest": "99f02fa2e644a824624cf5c937d3ec38dec4503f394d2e7d76e5e90644000399",
@@ -16985,34 +16285,6 @@
     "Accounting.SecurityProofs.TS.LinSteerFalse",
     "Accounting.SecurityProofs.TS.LinSteerSegments",
     "Accounting.SecurityProofs.TS.SegmentSteer"
-   ]
-  },
-  "Definitions.Accounting.TS.Unfolded": {
-   "digest": "db560d83d2af1e9493ba8784c7419e0683e495dee551d7f46b85c73d985293b9",
-   "definitions": {
-    "Accounting.TS.ReceiptGame.WholeLuck": "0fb26594c15b8d1762accc0966bed20f6c49edbfbf47555738dea92dfe950b1b",
-    "Accounting.TS.Unfolded": "18f50cc35425f194dd6c741f04e1a37fb1fa987adce501602f34c1643259c7f3",
-    "Accounting.TS.Unfolded.below": "fb0bf2f6cac9316770d83c85d945374b1a7cec4cee81eadfa5153a85b966ec3a",
-    "Accounting.TS.Unfolded.brecOn": "07bdb8dabf47e3097caaa1e26492b2029785baa0205ac65fbb5b9afb0850702d",
-    "Accounting.TS.Unfolded.brecOn.go": "c03d5b2ec2a629743f46156746aad3931a993da9228b9087007949c048d84e86",
-    "Accounting.TS.Unfolded.casesOn": "959aebf46603f06e92de62c1f0366ccaee8dae1cad6c3115b46967dc248aba42",
-    "Accounting.TS.Unfolded.done": "8a82b6f9e28adc63f0029cf2618157d69f424a2770807c7fe8b8a831d5b82681",
-    "Accounting.TS.Unfolded.rec": "bb7c868ff6b06c922d8ffe2e35efdbbe95cfc1e5e47678cb1d321464049f3ece",
-    "Accounting.TS.Unfolded.round": "7d37232d94dabc302c97bc664c8b1e986e5ee1578f7e8e582682e288e324bb86",
-    "Accounting.TS.Unfolded.share": "378870a4b597b08fc1c4a5ae28c39f9eb10c60ab9486286b57d4b2e25804b50d"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
    ]
   },
   "Definitions.Accounting.Tag.PolyHash": {
@@ -18615,6 +17887,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
@@ -20533,28 +19806,9 @@
    ]
   },
   "Definitions.Flock.Circuit": {
-   "digest": "4fb1156b646e7459c37fe624f943c60a65f5cb3c50c8dbe14034b096e86c0bdf",
+   "digest": "02a8ef3204cbd27dbfb523188a2e50b5489cffd84f83606b03210bc3b2a6a4a6",
    "definitions": {
-    "FlockSoundness.Audit.Circuit": "eae3834eb80d05abdb52d58e58d3c548f90ac029f7714633011254b9b86ce639",
     "FlockSoundness.Audit.Circuit.InputsAgree": "946208bc30eceea43a59a532b892b35ffd7f158e33cbc6499dd192a9eb2b5ac3",
-    "FlockSoundness.Audit.Circuit.N": "2b5691665b0fbb60db49cdf4b0747640b7040dfa5bf45633080d74aba0ad1b78",
-    "FlockSoundness.Audit.Circuit.eval": "57422ea01448b310290b329076d199020ceed1cd3a4cd2802406443810c88dfc",
-    "FlockSoundness.Audit.Circuit.op": "97912b36c50d00a1dbe0dfc71e4078501f7f6ac4ff029f43397ff23629d59ecc",
-    "FlockSoundness.Audit.Circuit.outputs": "97687faac62607feefae89c9d9802053cfade7d48f155c95c6e3c7abe73a0412",
-    "FlockSoundness.Audit.Circuit.run": "7344d2539a14645ea847e2a24c10d5564626bb33c215b1677fbefd5757aaea11",
-    "FlockSoundness.Audit.Op": "75bebd7c162b9b7f27418d44dc50b25f09902fd3c7d8b106af390c8d6bb286c7",
-    "FlockSoundness.Audit.Op.and": "2826c574c26cf547071a45321935d27f979852961bdd8e252b4ef119a8de4ebf",
-    "FlockSoundness.Audit.Op.apply": "b1a23bed7333e4c0e0f9a7249959457f155f4ad3098ed5ea931016eef927160d",
-    "FlockSoundness.Audit.Op.args": "feaa0258468060300851a397170ccae05cdd531573e161570b64bdec262f1133",
-    "FlockSoundness.Audit.Op.casesOn": "68e61a592345106f03f09201521cec67e0aa7e72b8a6a1313d24322199973c55",
-    "FlockSoundness.Audit.Op.ctorIdx": "5c683427c86ede41231aec4d579cffa127c580ca9e923da6770cbfa363425a3d",
-    "FlockSoundness.Audit.Op.input": "93946cf1d6220a01fb4a02480fcf835edb8ea1a9245ceca8b900ac67c242b11e",
-    "FlockSoundness.Audit.Op.isInput": "e015c7679e24eb27509d6d17561f98222fcf9154a5e01328c30b070b971f502c",
-    "FlockSoundness.Audit.Op.isInput._sparseCasesOn_1": "87b2063dd85c18f50211e1c0c44fa4f049e2190f5e1b601badd9c1c01a128931",
-    "FlockSoundness.Audit.Op.not": "2bcdf9f429225986c3dd1d04b1be42f03676ab4e9bd9e34241f9d5a62301b0aa",
-    "FlockSoundness.Audit.Op.rec": "3c718220fecd306c81da0f7a18c687f3e0cdee3f9a83fd60e8333a0b11c5408e",
-    "FlockSoundness.Audit.Op.row": "c98f343a7b497c5240dc00c014258c27ab9436f94261c13bab71a8cac1250c07",
-    "FlockSoundness.Audit.Op.xor": "5c1dec09723d8ee00d06d1262a7a375eca9ee8f1487a265808a68457a7ed8a38",
     "FlockSoundness.Audit.Partition": "b65f35550e9e6cbc591e4686bca25d01c8306cec89ffb3e3422d0da96829111a",
     "FlockSoundness.Audit.Partition.Correct": "673ff897d997626aa6f690b571dbdd0b3f3a51e18d14d8b4f28bfd5a747fca69",
     "FlockSoundness.Audit.Partition.Refines": "f3677d05d10b8dc024add85643dd250ac1bc8ab49f8f93bc5e108dad1b2ca29e",
@@ -20563,8 +19817,7 @@
     "FlockSoundness.Audit.Partition.io": "ccffea3dcf3ab5824aeb3fd8cea2216dc0cf5c47dacd4a643cd9025c806d9b33",
     "FlockSoundness.Audit.Partition.localEval": "4971f4018cf27dbe5e7af66022e99f0de237dc1939794b0a248d2c3e699b9517",
     "FlockSoundness.Audit.Partition.unit": "d82fc1dedb29bad631c723bb99a0d7279d6147ed84f507a13d382fd8976e1b7b",
-    "FlockSoundness.Audit.Partition.wrong": "a28d9f647432dfcca4e96f89f2ef5e456005f9c5b2f2e0e49088a2b43eed7b91",
-    "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
+    "FlockSoundness.Audit.Partition.wrong": "a28d9f647432dfcca4e96f89f2ef5e456005f9c5b2f2e0e49088a2b43eed7b91"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -27401,49 +26654,6 @@
    },
    "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
   },
-  "Definitions.Pouw.FpG1.Encoding": {
-   "digest": "d02079a1db3ee60f58f1c2431dff87b509346a77983836f5b5c09ba5288c0b1f",
-   "definitions": {
-    "Pouw.FpG1.E2M1x2Nat": "076676250b0ffb460b9b8240376ae7b4ce2ec3bda6223330f636efea3be7428a",
-    "Pouw.FpG1.E4M3Nat": "fd5a155bba503b075b9f75d0d6b077fae059ffba1cbc25357b9edd0c99af8a5c",
-    "Pouw.FpG1.Grids": "2c0868fe3093b7ad5f5a39a9a3d626d93dc076756e6b79ca1773b5c4463649e1",
-    "Pouw.FpG1.Grids.act": "0d9d1d4467df5fcb4965251cee2357b58660c85680b93bd4d5b0ada54ef1a178",
-    "Pouw.FpG1.Grids.scale": "8eff7424a5a5173e9b246dc2fa098df8b02c9492429f96236772a350b4f031df",
-    "Pouw.FpG1.Grids.wt": "10d27f6e052cce965f5b062ccb1827b0289e80bb073dfa6c2706c10a9b81c745",
-    "Pouw.FpG1.e2m1x2Grid": "9e8ef481b346ec482a402d77713be91e0d4918ed6b0a749a8fbed58c67e8ec14",
-    "Pouw.FpG1.e4m3Grid": "2fdf73b8a7295edee2a28ddb84063bd50f805aaec112b867deb7cbd1b27de611",
-    "Pouw.FpG1.grid": "1e1f3e336b6d03bffe23c5d5a2d6ceface8dd4435f2b7ec03a87883910ab92d3",
-    "Pouw.FpG1.instDecidablePredE2M1x2Nat": "81b559fdf2920de4d289cf19312b32bb84249a8042817919b412cce4b7416e5e",
-    "Pouw.FpG1.instDecidablePredE4M3Nat": "526915b0330ba3929f6abb76e69f31df11fc22bd8d50f0ebcf9964e2e0037692"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
-   ]
-  },
-  "Definitions.Pouw.FpG1.H1": {
-   "digest": "405ed512825a3ce82fc984692777e9c0b7f991a6c84be67d3a897bb0ac71a8bb",
-   "definitions": {
-    "Pouw.FpG1.Grids.h1": "60b1afdc2bd1cc568ef9c22565e6e3b11330cca6e1ea50ca2dcf53f580159b4d",
-    "Pouw.FpG1.Leaves": "42d9c345f00329666b350be98111b0ddabd1a467dc1c2d12b9f2af47f8f09f29",
-    "Pouw.FpG1.Leaves.Fp8": "881fe7602bcca20287b67054e76f3cadff019a7458cfb0b5546052274ad61428",
-    "Pouw.FpG1.Leaves.W4a8": "7cfd18e0250ce18f4e28679c438c71ac38537b955ef174309651294dde643402",
-    "Pouw.FpG1.Leaves.act": "20c98f9f1987a4547f2028b23506ee6c5eb27106260bcd72efcc6e8d71f03fad",
-    "Pouw.FpG1.Leaves.wt": "c459dbdaffe07c787c72bccb421b84fee93ff79cec62b323161e81c4fb5d6114",
-    "Pouw.FpG1.Level": "0cf9dbc28d9f936a22fb885014b0b7198bc4cf2386c50fdd194076c1fdc98fc3",
-    "Pouw.FpG1.Level.fp4": "11887085bd1c808fa9c199fcfbb46d4d977a119b56a1aca1a6aded858029eada",
-    "Pouw.FpG1.Level.fp8": "533779fb6ab3ae558a486d0c554ac8a98bb2ec86b123c7530d2d7025d660f017",
-    "Pouw.FpG1.Level.int8": "b9e394d4d9a7b4ba06082916111fbb0e0a10f2189fe292d7010eb605cc081dee"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline"
-   ]
-  },
   "Definitions.Pouw.Game.Deadline": {
    "digest": "5536c2433ec0cf835b20e6ee638e233db5052b022359c9c6d3f4bbf2c1f50e40",
    "definitions": {
@@ -31612,8 +30822,6 @@
    "guarantees": [
     "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.Compose.BindingOfECR",
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
@@ -31632,10 +30840,6 @@
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBlocksDeficit",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillBudget",
     "Accounting.SecurityProofs.FillerLuck.PinnedFillLuckAt",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1MeasuredHeadline",
-    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline",
     "Accounting.SecurityProofs.HMu.CoinPointMass",
     "Accounting.SecurityProofs.HMu.CoinPointMassHalf",
     "Accounting.SecurityProofs.HMu.LemmaB",
@@ -31644,16 +30848,10 @@
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.BindingOfFork",
     "Accounting.SecurityProofs.TS.CheckedSessionSound",
-    "Accounting.SecurityProofs.TS.CompilerC",
-    "Accounting.SecurityProofs.TS.CompilerStage",
     "Accounting.SecurityProofs.TS.CondReceiptLuckMarginal",
-    "Accounting.SecurityProofs.TS.DIdeal",
-    "Accounting.SecurityProofs.TS.DIdealFloor",
-    "Accounting.SecurityProofs.TS.DecompositionD",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
     "Accounting.SecurityProofs.TS.ExchangeTail",
-    "Accounting.SecurityProofs.TS.FloorCreditD3",
     "Accounting.SecurityProofs.TS.GridLuck",
     "Accounting.SecurityProofs.TS.GridTemplateMoment",
     "Accounting.SecurityProofs.TS.GrindPremium",
@@ -31673,16 +30871,7 @@
     "Accounting.SecurityProofs.TS.ReceiptLuckCaseA",
     "Accounting.SecurityProofs.TS.SampledBudget",
     "Accounting.SecurityProofs.TS.SessionSoundAt",
-    "Accounting.SecurityProofs.TS.SheetDIdealFloor",
-    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm100SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm120MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
-    "Accounting.SecurityProofs.TS.Sm90MeasuredI3Headline",
-    "Accounting.SecurityProofs.TS.Sm90SheetHeadline",
     "Accounting.SecurityProofs.TS.StageBudget",
-    "Accounting.SecurityProofs.TS.StageIdeal",
     "Accounting.SecurityProofs.TS.SteerUnion",
     "Accounting.SecurityProofs.TS.TemplateMoment",
     "Accounting.SecurityProofs.TS.TileLuck",
@@ -31768,8 +30957,6 @@
     "Pouw.Window.subsetDraw": "5235633a94df404eff6518c9dca6e5cb35bd86ce6fe06c02e8cd08281d8c9c4b"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
     "Accounting.SecurityProofs.Compose.ServiceBudget",
