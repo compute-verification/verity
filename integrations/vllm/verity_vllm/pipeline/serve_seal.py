@@ -310,6 +310,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
     com.arena_sizing_record = com.size_arena({"batch": opts.max_num_seqs, "max_prompt": tokens, "max_new": 1,
                                               "max_num_batched_tokens": tokens, "max_model_len": opts.max_model_len},
                                              hidden_m1=hidden_m1)
+    com.gpu_ext_warm_s = warm_gpu_ext(com)
     if getattr(com, "windowed", False):
         com.window_ring = com.enable_windows(com.arena_sizing_record)     # windowed staging's ring replaces the per-step blocks
     if opts.retention.retain == "device":
@@ -704,6 +705,17 @@ def warm_pool(com: Any, gb: float, clock: Callable[[], float] = time.perf_counte
     t0 = clock()
     made = pool.reserve([WARM_BLOCK] * n)
     return {"gb": round(made / GB, 1), "blocks": n, "seconds": round(clock() - t0, 2)}
+
+
+def warm_gpu_ext(com: Any, clock: Callable[[], float] = time.perf_counter) -> float | None:
+    """The seconds the committer took to build and load its GPU tree's extension before serving; None when its worker never
+    loads it (neither windowed nor ``--gpu-tree``). Left to the worker's first step, a cold build (about 30 s) keeps the worker
+    from handing any windowed staging slot back, and the engine loop waits on the ring once it has filled it."""
+    if not (getattr(com, "windowed", False) or getattr(com, "gpu_tree", False)):
+        return None
+    t0 = clock()
+    com._gpu_ext_load()
+    return round(clock() - t0, 2)
 
 
 def extras_of(com: Any, rc: Any) -> Any:
