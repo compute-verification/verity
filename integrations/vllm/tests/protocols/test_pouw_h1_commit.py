@@ -390,7 +390,7 @@ UNTIED_A = "roots1: round 0's A table h1/a/64@0 of calls [0, 1] is not the Commi
 
 @pytest.mark.parametrize("edit,own", [(_zero, 2), (_one_row, 1)], ids=["a-all-zero", "one-a-row-off"])
 def test_a_served_a_off_the_commits_arow_credits_nothing(tmp_path, monkeypatch, edit, own):
-    """H1 handed codes other than the ones the Commit acquired (every A all zero, the RT4 A = 0 probe; or one row of call
+    """H1 handed codes other than the ones the Commit acquired (every A all zero, the A = 0 probe; or one row of call
     0), with an honest Commit: the Commit registers those steps' rows as trees of its own at another root, so the
     serving process credits no call (`UNTIED`), and core's credit refuses the window at ``arow`` (also
     `test_credit_gate.test_a_window_whose_tables_are_not_the_commits_is_refused_by_core`)."""
@@ -513,7 +513,7 @@ def test_one_expert_calls_rows_off_the_commits_are_refused_by_core(tmp_path, mon
 
 def test_the_source_takes_every_linears_site_at_every_engine_step():
     """`source` names each of H1's linears by its module's name and taps its Int8RowQuant_v1 site at every engine step, so
-    X-03's targets at any step are each site's x_q and s_a; a layer not in the model is refused."""
+    The targets at any step are each site's x_q and s_a; a layer not in the model is refused."""
     model = Model()
     src = HC.source(Committer(), model, list(model.model.layers))
     want = {f"{CT.site(f'model.layers.{w}')}/{p}": 1 for w in range(2) for p in "01"}
@@ -605,7 +605,7 @@ def test_h1_taps_the_servers_commit_only_where_it_acquires_every_linear_at_every
 
 class Top(nn.Module):
     """vLLM's top model as the step-input port's pre-hook sees it, called as ``(input_ids, positions)``: two linears and
-    an embedding it never calls, as GLM-5.3 at TP1 gathers its table fused (r20261024-015257-abac)."""
+    an embedding it never calls, as GLM-5.3 at TP1 gathers its table fused."""
 
     def __init__(self):
         super().__init__()
@@ -692,7 +692,7 @@ def test_the_gpu_harness_holds_each_window_to_cores_roots1_steps(tmp_path, monke
 
 def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tmp_path, monkeypatch):
     """A forward that calls linear 1 before linear 0, as GLM-5.3's DSA attention runs fused_qkv_a_proj and q_b_proj before
-    its indexer's wq_b, which module order puts first (r20261023-224227-ea5a, refused on layout): each call sits at its
+    its indexer's wq_b, which module order puts first (refused on layout before): each call sits at its
     (step, linear) index, each round's root is over its step's calls, and step s maps to the Commit's engine step at its
     first call, whichever linear that is. The two share K, so step s's A table of K is taken whole at linear 0's call,
     the last to come, with its rows (and the Commit's) in call order, linear 0's first. Core ties the honest window, and
@@ -814,7 +814,7 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
 
 
 def test_a_commit_window_on_coins_held_in_process_credits_nothing(tmp_path, monkeypatch):
-    """`pouw_h1_gpu.py --commit` without ``--challenger`` (LLAMAE2E's r20261024-180517-c69e): the Commit ties and core's
+    """`pouw_h1_gpu.py --commit` without ``--challenger``: the Commit ties and core's
     ROOTS1 steps pass, but the window's coins were drawn in the serving process, so its credit gate refuses every served
     call as ``coins-not-the-auditors`` and the harness's summary under a challenger run would not be ok."""
     from tests.protocols import pouw_h1_gpu as G

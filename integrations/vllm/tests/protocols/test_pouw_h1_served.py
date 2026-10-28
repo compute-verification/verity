@@ -798,10 +798,10 @@ class _Staged(_Prepared):
 
 
 def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_its_asked_them(monkeypatch):
-    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA device
-    (kernels' device codes, note:kernels-rcpt/20261024T0430Z-draft-served-device-codes): the engine's tensor itself, in call
-    order, before any of its step's calls of K are asked; each receipt table is still the producer's ask's words. Rows on
-    the host stage nothing, and a ``stage`` that refuses refuses the window, naming the call."""
+    """A receipt producer with a ``stage`` is handed each served call and its rows ``a`` where they are on a CUDA
+    device: the engine's tensor itself, in call order, before any of its step's calls of K are asked; each receipt table
+    is still the producer's ask's words. Rows on the host stage nothing, and a ``stage`` that refuses refuses the
+    window, naming the call."""
     commit, seen = SV.Served.commit, {}
 
     def on_device(self, run, call, a, *rest):
@@ -907,18 +907,19 @@ def test_chunk_words_are_the_specs_leaf_bytes(k, n):
 
 def test_k_up_to_4096_roots_are_unchanged():
     """SPLITK leaves every K <= 4096 as it was: the mixed-K window's A tables and ``b/<K>`` (K = 16 and 32), served
-    from a seeded torch, have the roots they had before chunk rows."""
+    from a seeded torch, have the roots they had before chunk rows. Every root is registered under the declared Program's
+    digest, so a change to the window's layout repins them."""
     with torch.random.fork_rng():
         torch.manual_seed(0)
         ws = _weights()
         period = _period(ws)
         run, _ws, _got = _window(W1, weights=period)
     got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
-    assert period.root().hex()[:32] == "b13d326fd1047f67c7981396b4b65156"
+    assert period.root().hex()[:32] == "0b889e954429d1cdac365f8e23e8153c"
     assert got == {SV.PREFIX + v: h for v, h in {
-        "a/16@0": "5f173d832fee3e3bd52ff128b2c32023", "a/16@1": "f1e0c408b7c261e2bdfdba32dfe500d6",
-        "a/32@0": "fc273f9145df0611d6daf4d4633ed36e", "a/32@1": "8b0fc9c2aaefbf95fcd4ebe001d312c1",
-        "b/16": "743121b755ff9a0b55d5a101e86a0f1a", "b/32": "46ce3580838d89e8869932d15afc0ac2"}.items()}
+        "a/16@0": "04b9eb08e826e1494240fc36ab0bc5e4", "a/16@1": "e899d34fbfa90038cbdf2585410f56b5",
+        "a/32@0": "3087ac7de2b46030df6a89c0dde76fca", "a/32@1": "9d7cca0084a5daad92b6536fba6fd31c",
+        "b/16": "9af66bcd442455a00f1bbc66995815c7", "b/32": "da3a215e48a1fa5f72401e28e5791cc6"}.items()}
 
 
 #: kernels' SPLITK vectors (``tests/vectors/splitk_rows.json``, `splitk_rows_vectors`): their

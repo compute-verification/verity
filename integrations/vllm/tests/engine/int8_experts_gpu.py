@@ -23,7 +23,7 @@ One process writes `<out>/int8_experts_gpu.json` and `<out>/pin_entry.json` (the
             and the served weight against the oracle's `quant_rows(w.float(), 127)` of the base weight.
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY tests/engine/int8_experts_gpu.py --out DIR --at 2026-10-23T00:00:00Z --by LANE
+    $PY tests/engine/int8_experts_gpu.py --out DIR --at ISO_TIME --by LANE
 """
 from __future__ import annotations
 
