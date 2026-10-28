@@ -12,7 +12,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import importlib.util
-import itertools
 import json
 import socket
 import stat
@@ -55,6 +54,7 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
+fakes = _load("pous_fakes", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_fakes.py")
 ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
@@ -111,11 +111,6 @@ def served(tmp_path, monkeypatch) -> Served:
     return Served(serve, tmp_path / "hf", pins, tmp_path / "pieces" / "pous", tmp_path / "private", tensors)
 
 
-def _ticks(step: int = 1_000):
-    counter = itertools.count(0, step)
-    return lambda: next(counter)
-
-
 def _in_process_party(signer, log):
     """`challenger_party.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock) and the prover's over a socket pair (`challenger_party.answer`)."""
@@ -127,7 +122,7 @@ def _in_process_party(signer, log):
         def challenger():
             with b, b.makefile("rwb") as f:
                 return CP.serve(f, request, signer=signer, log=log, coins=COINS, domain=period.SESSION_DOMAIN,
-                                clock=_ticks())
+                                clock=fakes.Clock(step=1_000))
         with futures.ThreadPoolExecutor(1) as pool:
             served_side = pool.submit(challenger)
             try:
