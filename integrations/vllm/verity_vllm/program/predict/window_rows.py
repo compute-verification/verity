@@ -11,8 +11,9 @@ is a node the engine computed under other statics of its Definition than the cla
 node's on its operands: FA3's key block follows its launch's query rows (`targets.fa3_kblock_n`), so a prefill's
 attention isn't the class Program's one-row decode's, though at as few keys as one block of either holds the two agree.
 
-A unit its node's lowering filled holds its rows of that value (`_Program.outs`). Every other unit holds its Definition's
-function of the window's values:
+A unit its node's lowering filled holds its rows of that value (`_Program.outs`), and so does each add part of a fused norm
+cut at its residual add (`_Program.norms`): part AT its words of the node's second field, the sum. Every other unit holds
+its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
   prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `OutCollect_v1` the select
@@ -30,7 +31,8 @@ function of the window's values:
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
 fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
 node's value came from (`SOURCES`) are the scan state's and the rows' own, committed hiding, and the labels show none of
-them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`).
+them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`). The index they make is the prover's, bound
+by its hiding leaf under `index_salt`.
 """
 from __future__ import annotations
 
@@ -73,6 +75,8 @@ Weights = Callable[[str, int, int], np.ndarray]
 #: the salt nonce of window 0's stand-in scan state under the committer's key (`standin_state`), each next window's the
 #: next: above every weight parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
 STATE_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
+#: the salt nonce of window 0's index (`index_salt`), each next window's the next: above every window's scan state's
+INDEX_NONCE = STATE_NONCE + (1 << 32)
 
 
 def positions(fn: Any) -> list[int]:
@@ -432,7 +436,9 @@ class Rows:
         nodes = self.lowered.fn.body.nodes
         for j, pieces in P.outs.items():
             w = _words(S.values[j])
-            for lo, hi, r in pieces:
+            parts = P.norms.get(j, ())
+            sums = [(len(w) // 2 + at * r.words, r) for at, r in enumerate(parts)]
+            for lo, hi, r in [*pieces, *((lo, lo + r.words, r) for lo, r in sums)]:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
                 self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
@@ -591,5 +597,14 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
     return state_value(program, cls, [IS.encode(scan, st) for st in states], key, index, window=window)
 
 
-__all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served", "Slot", "positions",
-           "scan_slots", "standin_state", "state_value"]
+def index_salt(key: bytes, index: int) -> bytes:
+    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): drawn under the
+    committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
+    takes, so the committer draws it again from its key alone."""
+    if not 0 <= index < 1 << 32:
+        raise ValueError(f"window {index}: a window's index is a u32")
+    return H1R.salts(key, INDEX_NONCE + index, 1)
+
+
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "INDEX_NONCE", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served",
+           "Slot", "index_salt", "positions", "scan_slots", "standin_state", "state_value"]
