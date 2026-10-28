@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink
 /-!
 # flock-verify `--zk`'s headline at the compiled `--zk` table
 
-`Refines.lean`'s one-table refinement and headline at [wave2-zk-link]'s compiled `--zk` table. At each draw `S` and
+`Refines.lean`'s one-table refinement and headline at `Discharge/ZkLink`'s compiled `--zk` table. At each draw `S` and
 registration `R` the table is `T S R : TabZK 𝔽 mPts`, its reps `ZkLink.repZCAt A Hs (T S R)` (`repZ`), the level-0 cap
 first (`Fin 1 → Cap D`), the openings `ZkLink.OpensZ 𝔽 D Sl` last, and the verdict `ZkLink.acceptedZC` (`outZ`, `accZ`).
 That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`sessionZC_repZ`, by
@@ -19,9 +19,9 @@ applies:
 
 The wrong units are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
 named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, R11b at `--zk`), `hj : JointZC …`
-(`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at [wave2-zk-link]; `δ_link` is `⊤` at a
+(`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `δ_link` is `⊤` at a
 prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit draws each round's coins
-fresh; [wave2-zk-coins]), and `J > 1` (the plan has one table).
+fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
 -/
 
 namespace FlockSoundness.Discharge.ZkExec

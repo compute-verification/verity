@@ -1,4 +1,4 @@
-"""The ingress tie through the proof service (`tie_service`): each bucket row of an ingress link-window of the warden's
+"""The ingress tie through the proof system (`tie_service`): each bucket row of an ingress link-window of the warden's
 cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
 the verifier of record on its own lanes), and `tie_service.IoTieVerdict` built from the stream's outcomes of record
 alone. An honest link is tied, and `Ties`, the tie, its stream and the release, gives the verdict only on its own link

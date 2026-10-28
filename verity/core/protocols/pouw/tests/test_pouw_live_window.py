@@ -1,4 +1,4 @@
-"""PoUW's live window, the proof service's challenger's first client (`window.live_challenger`, `rounds_reason`,
+"""PoUW's live window, the proof system's challenger's first client (`window.live_challenger`, `rounds_reason`,
 `round_key`, `mode`): the epoch's coins are committed before it and each round's coin opens once, after the verifier
 recorded that round's root; the verifier refuses a round coin opened twice, one opened before its round's root was
 recorded and a foreign epoch's; each round's noise key is its own coin's and root's; the check item's ``coins`` names

@@ -4,12 +4,16 @@
 # (certifier_serve.py rehearse, honest and the tampers), the rehearsal kept as the gate keeps a certifier run
 # (request.json, out/, end.json with each file's SHA-512, as auditor.certifier_run writes them), then chain_record.sh on
 # it with the endpoint's records and CR_PATH=certifier-only. Varied traffic is the advice profile, whose egress counts
-# no N2 unit holds, so chain_record.sh runs no N2 and its report isn't accepted. Off-host, in one of the network slots:
-#   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m -- \
-#     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
+# no N2 unit holds, so chain_record.sh runs no N2 and its report isn't accepted. Off-host, from a clone, in one of the
+# network slots, as a job of at most 240 minutes on a CPU node:
+#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 bash benchmarks/network_traces/demo_chain.sh
 # With DC_UPSTREAM the endpoint is that one (the H200's) and none is started here; CR_ENDPOINT then names its records.
+# The endpoint's records hold request values (requests.jsonl's prompt and streamed ids, advice_trace.jsonl's arrivals and
+# rows, windows.jsonl's users, served_rows/'s salts), so the endpoint writes them in DC_KEEP/endpoint, 0700 and outside
+# the run dir and the tree, which chain_record.sh reads; $OUT/endpoint-records gets only serve.json and summary.json.
 # env: CR_MEM_GB and chain_record.sh's own (CR_DEPLOYED, ...)
+#      DC_KEEP (the private dir, /workspace/research/lanes/network-accounting/demo-chain/RUN by default)
 #      DC_ENGINE (demo_endpoint's --engine, seeded:phase1)  DC_SEED (its --seed, 0)  DC_EOS (its --eos and the plan's
 #      --eos-ids, 0)  DC_UPSTREAM (an endpoint already serving)  DC_REQUESTS (24)  DC_TOKENS (16)  DC_PROMPTS (1:16, the
 #      prompt lengths: the demo's context is 32)  DC_RATE (2)  DC_TRAFFIC_SEED (0)  DC_HEIGHT (the LMS keys' height, 20)
@@ -35,8 +39,11 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/e
 EOS=${DC_EOS:-0}
 RUN=certifier-$(date -u +%Y%m%dT%H%M%SZ)-offhost
 G=$D/gates/$RUN
-EP=$D/endpoint
-mkdir -p "$G/out" "$EP"
+KEEP=$(realpath -m "${DC_KEEP:-/workspace/research/lanes/network-accounting/demo-chain/$(basename "$RESEARCH_RUN_DIR")}")
+case "$KEEP/" in "$(realpath -m "$RESEARCH_RUN_DIR")/"*|"$(realpath -m "$SRC")/"*)
+  log "demo-chain: DC_KEEP $KEEP is inside the run dir or the tree: give a directory outside both"; exit 2;; esac
+EP=$KEEP/endpoint
+mkdir -p "$G/out" "$EP" && chmod 700 "$KEEP" "$EP" || { log "demo-chain: no private dir at $KEEP (DC_KEEP)"; exit 2; }
 if [ -n "${DC_UPSTREAM:-}" ]; then URL=$DC_UPSTREAM
 else
   "$PY" benchmarks/network_traces/demo_endpoint.py --out "$EP" --engine "${DC_ENGINE:-seeded:phase1}" \
@@ -67,8 +74,11 @@ if [ -n "$EP_PID" ]; then
   kill -TERM "$EP_PID"; wait "$EP_PID"; EP_PID=
   tail -n 1 "$D/endpoint.out" | cut -c1-600 | tee -a "$OUT/job.log"
   mkdir -p "$OUT/endpoint-records"
-  cp "$EP"/advice_trace.jsonl "$EP"/requests.jsonl "$EP"/windows.jsonl "$EP"/serve.json "$EP"/summary.json \
-    "$OUT/endpoint-records/" 2>/dev/null
+  cp "$EP"/serve.json "$EP"/summary.json "$OUT/endpoint-records/" 2>/dev/null
+  log "demo-chain: the endpoint's other records stay in $EP: $(ls "$EP" | tr '\n' ' ')"
+  "$PY" -m research keep "$KEEP" --owner @network-accounting --expires 7d --priority low \
+    --why "demo_chain.sh's endpoint records, which hold request values" >> "$OUT/job.log" 2>&1 \
+    || log "demo-chain: research keep $KEEP failed"
 fi
 "$PY" - "$G" "$RC" <<'EOF'
 import hashlib, json, sys, time
