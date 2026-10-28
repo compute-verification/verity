@@ -144,8 +144,10 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_and_c_flock_refuses_its_slot_io_alone
     projection (`AttnBlockPv_v1{VS}`), and the norm after down_proj, whose x down_proj's slices write as 512 rows where
     o_proj's write 128, is cut at its residual add (8 parts of 256 and the tail). C-Flock's composer then refuses its slot
     I/O alone (`interface.check_proof_block`): at 4 outputs each `OutCollect_v1`'s and the `SlotEntry_v1`'s rows are under
-    112 bytes. Its heads are `Attention_v22`'s Calls (no whole `AttentionHead_v4`, no guarded full block). Its numbers (units,
-    templates, registered reads, the heads' census, the refused templates, peak RSS) are printed as a JSON line."""
+    112 bytes. Every other unit passes, each head's softmax steps and P·V groups among them. Its heads are
+    `Attention_v22`'s Calls (no whole `AttentionHead_v4`, no guarded full block). Its numbers (units, templates, registered
+    reads, the heads' census, each head family's most rows and rows' k_log, the refused templates, peak RSS) are printed as a
+    JSON line."""
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
     circuit = class_circuit(reg, cls, provable=False)
@@ -153,17 +155,26 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_and_c_flock_refuses_its_slot_io_alone
         class_circuit(reg, cls)
     why = str(refused.value)
     named = sorted(_label(fn) for fn, _ in circuit.templates if re.search(re.escape(IF.descriptor_id(fn)) + "(: | cut )", why))
-    heads, n = Counter(), {_label(fn): k for fn, k in circuit.templates}
+    heads, n, most = Counter(), {_label(fn): k for fn, k in circuit.templates}, {}
+    proved = {}
     for fn, k in circuit.templates:
+        cuts = circuit.cuts.get(IF.descriptor_id(fn))
+        if _label(fn) not in named:
+            proved[_label(fn)] = IF.check_proof_block(fn, cuts)
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):
-            heads[fn.id.split("{")[0] + ("" if fn.base_id != "AttnBlockSoftmax_v2"
-                                         else f"{{CHECK={str(fn.bindings['CHECK']).lower()}}}")] += k
+            fam = fn.id.split("{")[0] + ("" if fn.base_id != "AttnBlockSoftmax_v2"
+                                         else f"{{CHECK={str(fn.bindings['CHECK']).lower()}}}")
+            heads[fam] += k
+            rows = sum(map(len, IF.unit_rows(fn, cuts)))
+            most[fam] = max(most.get(fam, (0, 0)), (rows, proved.get(_label(fn), -1)))
     print(json.dumps({"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "positions": cls.positions,
                       "units": sum(n.values()), "templates": len(n), "reads": len(circuit.registered.reads),
-                      "heads": dict(heads), "unprovable": named,
+                      "heads": dict(heads), "heads_most_rows_k_log": most, "unprovable": named,
                       "max_rss_gb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, 1)}, sort_keys=True), flush=True)
     assert why.startswith(f"{len(named)} templates C-Flock's composer wouldn't prove: ")
     assert {lab.split("{")[0] for lab in named} == {"OutCollect_v1", "SlotEntry_v1"}
+    assert len(proved) + len(named) == len(n) and all(k <= IF.K_MAX for k in proved.values())
     assert set(heads) <= {"AttnBlockSoftmax_v1", "AttnBlockSoftmax_v2{CHECK=false}", "AttnBlockPv_v1", "AttnHeadEnd_v1"}
+    assert {"AttnBlockSoftmax_v1", "AttnBlockPv_v1", "AttnHeadEnd_v1"} <= set(most)
     tail = n["RMSNormFusedCudaTail_v1{N=2048}"]
     assert tail and [n[f"RMSNormFusedCudaAdd_v1{{N=2048,C=256,AT={at}}}"] for at in range(8)] == [tail] * 8
