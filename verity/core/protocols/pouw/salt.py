@@ -2,7 +2,7 @@
 
 PoUW window p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier draws p's 512-bit
 salt at p's first ingress tick, releases it into the block only, and gives it to the verifier by `reveal(p,
-registration)` once the proof service registered p (the receipt the registration's) and p's last ingress record is
+registration)` once the proof system registered p (the receipt the registration's) and p's last ingress record is
 published, once, and only until its reveal deadline on its own clock after p's end. PoUW doesn't import the certifier:
 `revealed` reads any object with that `reveal`.
 
@@ -43,7 +43,7 @@ from verity.ml.circuits import ports as _ports
 from .protocol import U64, DomainError
 
 if TYPE_CHECKING:
-    from verity.core.protocols.sampled_proofs.service import Registration
+    from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 #: the certifier's salt, and the salt PoUW applies: SHA-512 digests
 SALT_BYTES = 64
@@ -254,7 +254,7 @@ def window_of(ctx: Any) -> int | None:
     return p if p < U64 else None
 
 
-def registered(registration: Registration) -> int | None:
+def registered(registration: WindowCommitmentRecord) -> int | None:
     """The PoUW window `registration` is for: its record's window is PoUW's served one, ``{"kind": "served", "context",
     "public"}``, whose context names it (`window_of`); else None."""
     rec = getattr(registration, "record", None)
@@ -265,9 +265,9 @@ def registered(registration: Registration) -> int | None:
     return window_of(w["context"])
 
 
-def revealed(certifier: Any, window: int, registration: Registration | None) -> bytes:
+def revealed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """PoUW window `window`'s certifier salt, `certifier.reveal(window, registration)`, given the window's registration
-    as the proof service returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
+    as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
     off the registration), refused by the certifier (its receipt isn't the registration's; early, before the window's
     last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never drawn or
     the salt off), or missing (what the certifier gave isn't a 64-byte salt)."""
@@ -282,7 +282,7 @@ def revealed(certifier: Any, window: int, registration: Registration | None) -> 
     return salt
 
 
-def committed(certifier: Any, window: int, registration: Registration | None) -> bytes:
+def committed(certifier: Any, window: int, registration: WindowCommitmentRecord | None) -> bytes:
     """What PoUW recorded with the certifier for PoUW window `window` before it drew the window's salt, the 64-byte
     `pouw_record` of the weights' root, the stream and the prover: `certifier.committed(window, registration)`
     (`Proxy.commit_weights` records it, signed by the registered prover), given the window's registration. It fails

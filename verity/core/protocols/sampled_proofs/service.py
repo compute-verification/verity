@@ -1,4 +1,4 @@
-"""The proof service, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
+"""The proof system, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
 registrations, draws and outcomes over the one-stage audit (`one_stage`).
 
 A protocol states what it commits (`Spec.values`), which proof blocks need proofs (`Spec.selection`, its selection rule),
@@ -55,7 +55,8 @@ later than the deadline, or before any salt, as `late-registration`, whatever it
 never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
 the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
-epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
+epoch log (`Stream.epoch_log`) and each `WindowCommitmentRecord` carry them, and neither the receipt nor an outcome's
+record does.
 `salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
 first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
 finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
@@ -393,9 +394,10 @@ _O = TypeVar("_O", Outcome, tuple[Outcome, ...])
 
 
 @dataclass(frozen=True)
-class Registration:
-    """A registration the challenger accepted: one-stage's `record`, its `receipt` and `digest`, and `order`, its audit's
-    index in the stream. The receipt's `received` is the record's position in
+class WindowCommitmentRecord:
+    """A window's commitment record the challenger admitted: one-stage's `record`, its `receipt` and `digest`, and
+    `order`, its audit's index in the stream. It is Verification's, not an entry of the registration log, which registers
+    only the site, θ and the builder. The receipt's `received` is the record's position in
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
     `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
 
@@ -412,7 +414,7 @@ class Draw:
     """The challenger's one draw for a registration: `law` (its sampling design, expanded over the challenger's own program) and
     `draw`, one-stage's draw object (with a work draw's `closure`), which goes to the firewall."""
 
-    registration: Registration
+    registration: WindowCommitmentRecord
     law: Mapping[str, Any]
     draw: Mapping[str, Any]
 
@@ -620,7 +622,7 @@ def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable
 
 @dataclass
 class _Entry:
-    registration: Registration
+    registration: WindowCommitmentRecord
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
@@ -660,11 +662,11 @@ def _token(x: Any, k: str) -> str:
     return x
 
 
-def _order(r: Registration) -> int | None:
+def _order(r: WindowCommitmentRecord) -> int | None:
     return r.order if _nat(r.order) else None
 
 
-def _registration_token(r: Registration) -> str:
+def _registration_token(r: WindowCommitmentRecord) -> str:
     """The token `_Control` and `SampledProofs.Stream` know a registration by: equal exactly when the registrations are."""
     return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
                     "salted_at": r.salted_at, "received_at": r.received_at})
@@ -1329,7 +1331,7 @@ class Stream:
                  work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
                  pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                  window_root: str | None = None, held: Sequence[str] | None = None,
-                 counts: Mapping[str, int] | None = None) -> Registration:
+                 counts: Mapping[str, int] | None = None) -> WindowCommitmentRecord:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by its verifier of record (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1341,7 +1343,7 @@ class Stream:
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
-        (`Registration.salted_at`, `received_at`) and is logged with them. Raises
+        (`WindowCommitmentRecord.salted_at`, `received_at`) and is logged with them. Raises
         `Refused`: when the stream has stopped or halted (`halted`) or its epoch ended (`epoch-ended`), while it holds as
         many registrations without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
@@ -1429,11 +1431,11 @@ class Stream:
                               [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
-                      received_at: float | None = None) -> Registration:
-        return Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
-                            order, salted_at, received_at)
+                      received_at: float | None = None) -> WindowCommitmentRecord:
+        return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
+                                      R.digest(record), order, salted_at, received_at)
 
-    def _append(self, reg: Registration) -> None:
+    def _append(self, reg: WindowCommitmentRecord) -> None:
         at = len(self._log)
         self._log.append(logged := dict(reg.record))
         key = _window_key(logged.get("window"))
@@ -1459,7 +1461,7 @@ class Stream:
             at.add(len(self._log) - 1)
         return [self._log[i] for i in sorted(at)]
 
-    def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
+    def select(self, registration: WindowCommitmentRecord, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
         the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
@@ -1681,6 +1683,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
-           "Session", "Spec", "Stream", "Terms", "Value", "check_public", "check_verdicts",
+           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES", "Selection",
+           "Session", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
            "select_draw", "selection_law"]
