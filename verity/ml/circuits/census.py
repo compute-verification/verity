@@ -1008,7 +1008,7 @@ def census(program: Any, ends: list[int] | None = None, digest: str | None = Non
     nodes = root.body.nodes
     I = sum(1 for nd in nodes if is_input(nd.fn))
     if any(not is_input(nd.fn) for nd in nodes[:I]):
-        raise ValueError("a root's input nodes come first (PROTOCOL.md §5.2)")
+        raise ValueError("a root's input nodes come first (PROTOCOL.md section 5.2)")
     ends = list(ends) if ends is not None else ([len(nodes)] if len(nodes) > I else [])
     if any(b <= a for a, b in zip([I] + ends, ends)) or (ends and ends[-1] != len(nodes)) or (not ends and len(nodes) > I):
         raise ValueError(f"step ends {ends[:8]} are not increasing root-node indices past the {I} input nodes ending at {len(nodes)}")

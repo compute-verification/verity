@@ -17,8 +17,8 @@ M32 = (1 << 32) - 1
 
 @primitive("PouwF32SqrtRn", 1, [("a", F32)], F32, conformance="protocol-defined")
 def PouwF32SqrtRn(a: int) -> int:
-    """sqrt.rn.f32 (`verity.ml.circuits.silicon.fp32.sqrt`, ρ's root in Pearl's statistics): nearest even, √−0 = −0, √+inf = +inf; a NaN
-    or a negative nonzero operand gives the GPU's NaN word 0x7FFFFFFF."""
+    """sqrt.rn.f32 (`verity.ml.circuits.silicon.fp32.sqrt`, rho's root in Pearl's statistics): nearest even, sqrt(-0) = -0,
+    sqrt(+inf) = +inf; a NaN or a negative nonzero operand gives the GPU's NaN word 0x7FFFFFFF."""
     a &= M32
     if (a >> 23) & 0xFF == 0xFF:
         return a if a == 0x7F800000 else 0x7FFFFFFF

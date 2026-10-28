@@ -211,7 +211,7 @@ def _refuse_u16_t(base: Callable[[dict], str | None]) -> Callable[[dict], str | 
            conformance="exact-model-tested", refuse=_refuse_u16_t(_refuse_d(_refuse_t(_K16))), ports=KEY_COUNT)
 def PvRowPad(B, S, p, *rest):
     """`PvRow_v1{T, K, D, DOT}` on the first n of T keys: key t's p word and V row are kept when t < n, n unsigned, and are
-    +0 words otherwise (`SelectBf16_v1`). t < n is (t + 1)·2^16 <= n·2^16 with each side's sign bit flipped, as signed
+    +0 words otherwise (`SelectBf16_v1`). t < n is (t + 1)*2^16 <= n*2^16 with each side's sign bit flipped, as signed
     i32 words (`I32Le_v1`; `Bf16ToF32_v1` is the shift by 16, and `I32Add_v1` of 2^31 flips the sign bit, which turns
     the unsigned order into the signed one). For
     1 <= n <= T, dim d is then `GemmCoordinate_v2{K, DOT}` on p[:n] and v0[d]..v{n-1}[d] padded with +0 words to K, which is

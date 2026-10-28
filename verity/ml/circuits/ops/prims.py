@@ -193,7 +193,7 @@ def BlackwellNvf4OmmaDot64(acc: int, *ab: int) -> int:
     byte per block.  Total on every encoding, as measured:
 
     1. a scale byte whose low seven bits are 0x7F (the UE4M3 NaN, 0xFF included) -> 0x7FFFFFFF, whatever the accumulator;
-    2. else a NaN accumulator -> 0x7FFFFFFF, and ±inf -> itself;
+    2. else a NaN accumulator -> 0x7FFFFFFF, and +/-inf -> itself;
     3. else bit 7 of every scale byte is ignored, and the word is `models.BLACKWELL_SM120_NVF4.step_scaled` (`BlockScaledAlignAdd`:
        exact group dots, lossless block scales, the five-way align-add, truncation, every zero +0).  From a finite accumulator
        the sum cannot leave binary32 (the accumulator's window puts its grid far above every group dot).
@@ -226,16 +226,16 @@ def _block_scaled_sum_negative(model, acc: int, a: list[int], b: list[int], sa: 
                        "0 mismatches); on the RTX PRO 6000 Blackwell Server Edition (driver 580.173.02, CUDA 13.0, SASS-checked) "
                        "run `run`, 1,089,536 gated words against the model, 0 mismatches, and its record-only edge "
                        "families (fixtures tc-sm120-mxf4-2026-10-01: 73,728 words, 9,216 under a 0xFF scale byte, overflowing and "
-                       "cancelling blocks, ±inf and NaN accumulators) every rule below exact")
+                       "cancelling blocks, +/-inf and NaN accumulators) every rule below exact")
 def BlackwellMxf4OmmaDot64(acc: int, *ab: int) -> int:
     """One accumulator coordinate of `mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64 ... e2m1.e2m1.f32.ue8m0`
     on sm_120a (SASS `OMMA.SF.16864.F32.E2M1.E2M1.E8`): 64 E2M1 codes per operand in two blocks of 32, one UE8M0 scale byte
     (2^(code-127)) per block.  Total on every encoding:
 
     1. a scale byte 0xFF (the UE8M0 NaN) -> 0x7FFFFFFF, whatever the accumulator;
-    2. else a NaN accumulator -> 0x7FFFFFFF, and ±inf -> itself;
+    2. else a NaN accumulator -> 0x7FFFFFFF, and +/-inf -> itself;
     3. else `models.BLACKWELL_SM120_MXF4.step_scaled` (`BlockScaledAlignAdd`, as for `BlackwellNvf4OmmaDot64_v1`), and a sum
-       that leaves binary32 (UE8M0 scales reach it; UE4M3 scales cannot) -> ±inf of the sum's sign."""
+       that leaves binary32 (UE8M0 scales reach it; UE4M3 scales cannot) -> +/-inf of the sum's sign."""
     a, b, sa, sb = list(ab[:64]), list(ab[64:128]), list(ab[128:130]), list(ab[130:132])
     if 0xFF in sa or 0xFF in sb:
         return 0x7FFFFFFF

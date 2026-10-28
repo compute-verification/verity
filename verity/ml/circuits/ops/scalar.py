@@ -130,7 +130,7 @@ def F32BitsShl23(a: int) -> int:
 
 @primitive("F32IsFinite", 1, [("a", F32)], BIT, conformance="model-untested")
 def F32IsFinite(a: int) -> int:
-    """1 iff the f32 value is neither NaN nor ±inf."""
+    """1 iff the f32 value is neither NaN nor +/-inf."""
     return 0 if (a & 0x7F800000) == 0x7F800000 else 1
 
 

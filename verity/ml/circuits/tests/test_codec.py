@@ -323,3 +323,43 @@ def test_a_list_of_integers_is_checked_whole_as_item_by_item(v):
         return {k: itemwise(y) for k, y in v.items()} if isinstance(v, dict) else v
 
     assert codec.jcs_domain_error(v) == codec.jcs_domain_error(itemwise(v))
+
+
+def test_every_definition_of_the_package_spells_its_text_in_the_canonical_json_domain():
+    """Every Definition a module of `verity.ml.circuits` holds, registered or not, keeps its id, signature, doc and conformance
+    in canonical JSON's domain (ASCII without DEL): a statement or a registry digest that carries one is printed by a canonical
+    JSON writer (Lean's `Flock.canon`, `codec.canonical_json`), which refuses any other string."""
+    import importlib
+    import pkgutil
+
+    import verity.ml.circuits as package
+    from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+
+    held: dict[int, FunctionDefinition] = {}
+
+    def hold(v):
+        if isinstance(v, SpecializedDefinition):
+            hold(v.defn)
+        elif isinstance(v, FunctionDefinition):
+            held[id(v)] = v
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                hold(x)
+        elif isinstance(v, dict):
+            for x in v.values():
+                hold(x)
+
+    for m in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
+        if ".tests" not in m.name:
+            for v in vars(importlib.import_module(m.name)).values():
+                hold(v)
+    assert len(held) > 200
+    bad = []
+    for d in held.values():
+        text = {"id": d.id, "doc": d.doc, "conformance": d.conformance}
+        text |= ({"params": [[n, t.to_json()] for n, t in d.params], "ret": d.ret.to_json()} if isinstance(d, PrimitiveDefinition)
+                 else {"statics": list(d.statics)})
+        if (err := codec.jcs_domain_error(text)) is not None:
+            bad.append(f"{d.id}: {err}")
+    assert not bad, ("spell these Definitions' text in ASCII without DEL (`*` for a product's dot, `->` for an arrow, `+/-` "
+                     "for plus-minus), since a canonical JSON writer refuses any other string:\n" + "\n".join(sorted(bad)))

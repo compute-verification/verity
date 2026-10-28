@@ -134,7 +134,7 @@ def _check_signature(S: Any):
 SharedRowCheck = specialized(
     "SharedRowCheck", 1, ("W", "ROW", "OFF", "G"),
     lambda S: lambda C, *e: window_check(C, e[:S.W], e[S.W:-1], e[-1], S.G, S.OFF), _check_signature,
-    doc="a shared row's segment check on bits: d[w] = row[OFF + W·j + w] XOR y[w] for w < W, every bit set when j >= G "
+    doc="a shared row's segment check on bits: d[w] = row[OFF + W*j + w] XOR y[w] for w < W, every bit set when j >= G "
         "(j unsigned), so d = 0 exactly when j < G and segment j is y; a row of ROW words, G segments of W words from word OFF")
 
 
@@ -146,7 +146,7 @@ def _select_signature(S: Any):
 SharedRowSelect = specialized(
     "SharedRowSelect", 1, ("W", "ROW", "OFF", "G"),
     lambda S: lambda C, *e: window_select(C, e[:-1], e[-1], S.G, S.OFF, S.W), _select_signature,
-    doc="a shared row's segment read on bits: words [OFF + W·j, OFF + W·j + W) of a row of ROW words when j < G (j unsigned), "
+    doc="a shared row's segment read on bits: words [OFF + W*j, OFF + W*j + W) of a row of ROW words when j < G (j unsigned), "
         "every bit 0 when j >= G; G segments of W words from word OFF")
 
 
