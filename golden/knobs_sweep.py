@@ -35,6 +35,8 @@ KNOBS = [
     ("steps a window", "point", "steps_per_window", [1, 4, 16, 256]),
     ("k_log cap (prover.k_max)", "prover", "k_max", [27, 28, 30]),
     ("C-Flock range padding (prover.k_pad, bits past ceil(log2 ANDs))", "prover", "k_pad", [0, 1, 2]),
+    ("delta a window (Daniel's parameter: priced, not searched)", "sampling", "delta", [2.0 ** -20, 2.0 ** -30, 2.0 ** -40, 2.0 ** -60]),
+    ("eps (Daniel's parameter: priced, not searched)", "sampling", "eps", [0.005, 0.01, 0.02, 0.05]),
 ]
 
 #: INPUTS overrides: (knob, input, values)
