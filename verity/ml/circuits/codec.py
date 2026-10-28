@@ -412,7 +412,7 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
     """The bytes `program_digest` hashes, `canonical_json` of `encode_program(program, schema)` without ``annotations``, in pieces,
     without the descriptor's dict: one walk of the specializations (`_walk`), interning v1's tables in `encode_program`'s order,
     then each definition in key order, its body a batch of nodes at a time. Raises what `encode_program` raises, `_check_domain`'s
-    ValueError once the last piece is out."""
+    ValueError before the first piece: a piece's `canonical_json` would refuse the same string by its path in the piece."""
     if schema not in SCHEMAS:
         raise ValueError(f"unknown descriptor schema {schema!r}")
     tables = None if schema == SCHEMA_V0 else _Tables()
@@ -432,6 +432,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
                 "definitions": {fid: heads[fid] for fid in seen}}
     if tables is not None:
         skeleton.update(tables.to_json())
+    _check_domain(skeleton)
+    if tables is not None:
         interned = (len(tables.callees), len(tables.type_json))
         yield b'{"callees":' + canonical_json(skeleton["callees"]) + b',"definitions":{'
     else:
@@ -450,7 +452,6 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
             raise AssertionError("descriptor_chunks: encoding a body interned an entry the tables were written without")
         yield b',"types":' + canonical_json(skeleton["types"])
     yield b"}"
-    _check_domain(skeleton)
 
 
 def canonical_json(obj: Any) -> bytes:
