@@ -404,8 +404,12 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
 
 
 def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negative(tmp_path):
-    rnd = lambda accepted: {"audit": {"window_accepted": accepted}}
-    scan = lambda block: {"ok": True, "T": 1, "rounds": {"block": rnd(block), "honest": rnd(True), "chain": rnd(False)}}
+    def rnd(accepted):
+        return {"audit": {"window_accepted": accepted}}
+
+    def scan(block):
+        return {"ok": True, "T": 1, "rounds": {"block": rnd(block), "honest": rnd(True), "chain": rnd(False)}}
+
     got = cr.scan_step(scan(True), "g1/warden")
     assert got["verdict"] == "accepted" and got["negatives"] == {"chain": True}, got
     got = cr.scan_step(scan(False), "g1/warden")
