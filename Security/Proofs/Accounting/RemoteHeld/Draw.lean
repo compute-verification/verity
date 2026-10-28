@@ -1,6 +1,6 @@
 import Definitions.Accounting.Guarantees.RemoteDraw
 import Proofs.Accounting.RemoteHeld.OverTime
-import Proofs.Accounting.RateAudit.Horizon
+import Proofs.Accounting.RateAudit.Pooled
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Actual.Sampler
 import Proofs.Hash.RowBinding
@@ -8,9 +8,11 @@ import Proofs.Hash.RowBinding
 /-!
 # The openings' pooled bound: the proof
 
-Once the coin commitment the prover holds is fixed, window `t`'s size `U_t` and correct receipts `C_t` are fixed before
-its openings coin (`Live` of `Committed.view c`), so given the other coins and the earlier windows' coins the window's
-draw is `Key.subset` on the first blocks `prf t` gives a uniform coin.
+Window `t`'s size `U_t` and correct receipts `C_t` are fixed before its openings coin (`Live`), so given the other coins
+and the earlier windows' coins the window's draw is `Key.subset` on the first blocks `prf t` gives a uniform coin. The
+hybrid is proved for a session read through a commitment (`Committed`, `Live` of `Committed.view c`), as the memory line
+over the prover's records (`RemoteHeld.Line`) states it; the guarantees take the session the prover plays, which holds
+no commitment while the session runs, as the committed session whose view reads none (`Draw.pooledDrawLive`).
 
 * **On uniform first blocks** (`Draw.pr_test_le`). Step `i` of the partial Fisher–Yates reads its first word, uniform
   (`Draw.pr_word_le`: a first word is the top bits of a uniform block). The sampler rejects it with probability at
@@ -27,31 +29,32 @@ draw is `Key.subset` on the first blocks `prf t` gives a uniform coin.
 * **The hybrid over windows** (`Draw.pr_potential_le`). The potential after `t` windows (`Session.potential`) is the
   event that windows `j < t` land on `prf j` and a uniform 512-bit threshold coin `u` falls below `P = ∏_{j<t} bound j`
   (`below`, of probability `Draw.coinWeight δ P`, `min(1, δ/P)` rounded down to a multiple of `2^-512`,
-  `Draw.pr_below`). After no window it has probability at most `δ`. Window `t`'s step (`Draw.pr_potential_succ_le`,
-  the arithmetic `Draw.hybrid_step`) first trades the deployed commitment for `Committed.junk com t`, whose leaf `t`
-  commits zeros, at the potentials after `t + 1` and after `t` windows: that is `Committed.hide com prf δ t`. In
-  the junk session windows `j ≤ t` read nothing of coin `t` (`Draw.SwapFree`, from `Live` at each fixed commitment,
-  `Draw.swapFree_junk`). There window `t`'s distinguisher on `prf t` under a uniform key is the potential after
-  `t + 1` windows, its key read as window `t`'s coin (`Draw.pr_potential_succ`, by `Draw.swapCoin`), so it is at most
-  its probability on uniform blocks plus its advantage. On uniform
-  blocks it is at most the potential after `t` windows plus `s_t/2^64` (`Draw.pr_distinguisher_le`): given the
-  earlier coins, window `t` lands with probability at most `s'_t·(2^-64 − 2^-512) + bound t`, independently of `u`
-  falling below `P·bound t`, and `coinWeight δ (P·bound t)·(s'_t·(2^-64 − 2^-512) + bound t)` is at most
-  `coinWeight δ P + s_t/2^64` (`Draw.window_step_le`: rounding costs at most `2^-512`, which the sharper rejection
-  bound pays when `s'_t ≥ 1`; a window of no draws has bound `1`).
-* **On the coin** (`Draw.pooledDraw`). Off the binding event, where no opened receipt was presented with an accepted
-  row other than the one its root holds, a receipt `Refused` lets through is correct (`Draw.opened_sub`); the binding
-  event costs its probability, `Receipts.binding`. An accepted draw ignores the fallbacks (`Draw.openings_congr`), so on an accepting outcome past
-  the pooled bound and off the binding event every window lands on `prf t` while `∏_t bound t ≤ δ`, where `u` always
-  falls below: the potential after `n` windows (`Draw.pr_landed_le`). `PooledDraw` is that bound, `δ` plus each
+  `Draw.pr_below`). After no window it has probability at most `δ`. Window `t`'s step (`Draw.pr_potential_succ_le`, the
+  arithmetic `Draw.hybrid_step`) first trades the commitment for `Committed.junk com t`, whose leaf `t` commits zeros,
+  at the potentials after `t + 1` and after `t` windows: that is `Committed.hide com prf δ t`, `0` at a view that reads
+  no commitment (`Draw.hide_const`). In the junk session windows `j ≤ t` read nothing of coin `t` (`Draw.SwapFree`, from
+  `Live` at each fixed commitment, `Draw.swapFree_junk`). There window `t`'s distinguisher on `prf t` under a uniform
+  key is the potential after `t + 1` windows, its key read as window `t`'s coin (`Draw.pr_potential_succ`, by
+  `Draw.swapCoin`), so it is at most its probability on uniform blocks plus its advantage. On uniform blocks it is at
+  most the potential after `t` windows plus `s_t/2^64` (`Draw.pr_distinguisher_le`): given the earlier coins, window `t`
+  lands with probability at most `s'_t·(2^-64 − 2^-512) + bound t`, independently of `u` falling below `P·bound t`, and
+  `coinWeight δ (P·bound t)·(s'_t·(2^-64 − 2^-512) + bound t)` is at most `coinWeight δ P + s_t/2^64`
+  (`Draw.window_step_le`: rounding costs at most `2^-512`, which the sharper rejection bound pays when `s'_t ≥ 1`; a
+  window of no draws has bound `1`).
+* **On the coin** (`Draw.pooledDraw`). Off the binding event, where no opened receipt was presented with an accepted row
+  other than the one its root holds, a receipt `Refused` lets through is correct (`Draw.opened_sub`); the binding event
+  costs its probability, `Receipts.binding`. An accepted draw ignores the fallbacks (`Draw.openings_congr`), so on an
+  accepting outcome past the pooled bound and off the binding event every window lands on `prf t` while
+  `∏_t bound t ≤ δ`, where `u` always falls below: the potential after `n` windows (`Draw.pr_landed_le`). That bound is `δ` plus each
   window's `s_t/2^64`, its distinguisher's advantage at the junk commitment and its hiding term, plus the binding term
-  (`Draw.pooledDraw`, `Draw.error_toReal`); `LiveCoinsDrawn` and the memory line at the record's pooled bound
-  (`HeldDrawn` and its time-held forms) follow from it as `Held` does from `LiveCoins`.
+  (`Draw.pooledDraw`, `Draw.error_toReal`). `PooledDraw` is it at the session the prover plays, with no hiding term
+  (`Draw.pooledDrawLive`); `LiveCoinsDrawn` and the memory line at the record's pooled bound (`HeldDrawn` and its
+  time-held forms) follow from it as `Held` does from `LiveCoins`.
 
-**What the term is.** Window `t`'s term, `prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)`,
-is one distinguisher's advantage, fixed by the session: it reads at most `s_t` first blocks of window `t`'s stream
-(`Draw.distinguisher_congr`) and otherwise runs the session's own windows at a commitment that reads no bit of coin
-`t`, so efficient provers and verifiers give an efficient distinguisher with `s_t` queries, C3's form. An honest
+**What the term is.** Window `t`'s term, `prfAdvantage (prf t) (D.distinguisher prf δ t)`, is one distinguisher's
+advantage, fixed by the session: it reads at most `s_t` first blocks of window `t`'s stream
+(`Draw.distinguisher_congr`) and otherwise runs the session's own windows, which read no bit of coin `t` before it is
+released, so efficient provers and verifiers give an efficient distinguisher with `s_t` queries, C3's form. An honest
 session, every receipt correct, gains nothing (`Draw.prfAdvantage_honest`). The
 term it replaces, the supremum of the advantage over every window test `test U k C`, was at least `1 − 2^-43` whatever
 the session (at `U = 2^300`, `k = 1`, `C` the first opening under each of the `2^256` keys, which the
@@ -62,7 +65,7 @@ passes, and C3 bounds no such distinguisher.
 
 namespace Accounting.SecurityProofs.Remote
 
-open Finset Accounting.Rate Accounting.Rate.Horizon
+open Finset Accounting.Rate Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
@@ -1192,38 +1195,61 @@ theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
     (fun t => F.hide com prf δ t) (fun t => tsub_le_self.trans (pr_le_one _)) (fun t => hide_le F com prf δ t)
     (R.binding (F.play com) prf rest) (pr_le_one _) (hsplit.trans (add_le_add hall le_rfl))
 
+/-- A session that reads no commitment has no hiding term. -/
+theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X] (D : Session n m s κ X)
+    (com : Coins n κ X → Cm) (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
+    (⟨fun _ => D⟩ : Committed n m s κ X Cm).hide com prf δ t = 0 := by
+  change (pr (D.potential prf δ ((t : ℕ) + 1)) - pr (D.potential prf δ ((t : ℕ) + 1))) +
+      (pr (D.potential prf δ t) - pr (D.potential prf δ t)) = 0
+  rw [tsub_self, tsub_self, add_zero]
+
+/-- `PooledDraw` at one session: the committed bound at a view that reads no commitment, whose hiding terms vanish
+(`hide_const`). -/
+theorem pooledDrawLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
+    (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
+    (hR : Refused D prf rest T R) (hC : Counted D T) :
+    T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
+        (R.binding D prf rest).toReal)
+      (fun ω => (T.wrong ω : ℝ) ≤ D.pooled δ ω) := by
+  have h0 : (∑ t, (⟨fun _ => D⟩ : Committed n m s κ X Unit).hide (fun _ => ()) prf δ t) = 0 :=
+    sum_eq_zero fun t _ => hide_const D _ prf δ t
+  have h := pooledDraw prf rest (⟨fun _ => D⟩ : Committed n m s κ X Unit) (fun _ => ()) T R hδ hm (fun _ => hL) hR hC
+  rw [h0, ENNReal.toReal_zero, add_zero] at h
+  exact h
+
 end Draw
 
 /-- **The openings' pooled bound** (`Accounting.Guarantees.Remote.PooledDraw`). -/
 theorem PooledDraw : Accounting.Guarantees.Remote.PooledDraw := by
-  intro n m k κ X Cm _ prf rest F com T R δ hδ hm hL hR hC
-  exact Draw.pooledDraw prf rest F com T R hδ hm hL hR hC
+  intro n m k κ X _ prf rest D T R δ hδ hm hL hR hC
+  exact Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC
 
 /-- **Live coins, derived** (`Accounting.Guarantees.Remote.LiveCoinsDrawn`). -/
 theorem LiveCoinsDrawn : Accounting.Guarantees.Remote.LiveCoinsDrawn := by
-  intro n m k κ X Cm _ prf rest F com T R W δ hδ hm hL hR hC hW
-  exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Draw.pooledDraw prf rest F com T R hδ hm hL hR hC)
+  intro n m k κ X _ prf rest D T R W δ hδ hm hL hR hC hW
+  exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC)
 
 /-- **The snapshot held at the record's pooled bound** (`Accounting.Guarantees.Remote.HeldDrawn`). -/
 theorem HeldDrawn : Accounting.Guarantees.Remote.HeldDrawn := by
-  intro n m k κ X Cm _ prf rest F com T R S s₀ e s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hc hk hL hR hC
-  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledDraw prf rest F com T R hδ hm hL hR hC))
+  intro n m k κ X _ prf rest D T R S s₀ e s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hc hk hL hR hC
+  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC))
   obtain ⟨hm', h0, hP⟩ := hc ω ha
   exact held_of ω hE hs hβ hI hsq hd hS hr hm' h0 hP h.1 h.2
 
 /-- **Held over time with the links charged, at the record's pooled bound**
 (`Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`). -/
 theorem HeldOverTimeLinksDrawn : Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn := by
-  intro n m k κ X Cm _ prf rest F com T R K S s E β βl Br Bd Bl δs δc hE hs hβ hβl hδ hm hl hsq hd hS hr hp hcov hk
-    hL hR hC
-  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledDraw prf rest F com T R hδ hm hL hR hC))
+  intro n m k κ X _ prf rest D T R K S s E β βl Br Bd Bl δs δc hE hs hβ hβl hδ hm hl hsq hd hS hr hp hcov hk hL hR hC
+  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC))
   exact heldOverLinks_of K ω hE hs hβ hβl hl hsq hd hS hr hp hcov ha h.1 h.2
 
 /-- **Held over time at the record's pooled bound, under Identity** (`Accounting.Guarantees.Remote.HeldOverTimeDrawn`):
 the link-charged form at links of rate 0 and burst 0. -/
 theorem HeldOverTimeDrawn : Accounting.Guarantees.Remote.HeldOverTimeDrawn := by
-  intro n m k κ X Cm _ prf rest F com T R K S s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hp hcov hk hL hR hC
-  simpa only [add_zero] using HeldOverTimeLinksDrawn n m k κ X Cm prf rest F com T R K S s E β 0 Br Bd 0 δs δc hE hs hβ
+  intro n m k κ X _ prf rest D T R K S s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hp hcov hk hL hR hC
+  simpa only [add_zero] using HeldOverTimeLinksDrawn n m k κ X prf rest D T R K S s E β 0 Br Bd 0 δs δc hE hs hβ
     le_rfl hδ hm (links_of_identity hI) hsq hd hS hr hp hcov hk hL hR hC
 
 end Accounting.SecurityProofs.Remote
