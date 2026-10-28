@@ -5,7 +5,8 @@ registration record's digest.
 
 On a toy window (two templates of four slots each, as a served window's population program holds its class's
 templates) the registration case is accepted by the policy's Lean check (`inference-only check`) at Γ its gates and α
-its input bits a gate, and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`) names the
+its input bits a gate (which ``--from-division`` reads off the check's profile at no budget), and refused one gate or
+one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`) names the
 record's digest as its commitment (it rejects the toy's proofs, which are no proofs). A tampered field is refused: by the
 Lean check (the record naming another Program, an input node in a block, θ on an unregistered input, an evidence key,
 the record repeated in the log) or by the producer before any Lean runs (a record that isn't v1's Program's, a previous
@@ -19,6 +20,7 @@ import json
 import shutil
 import stat
 import sys
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -133,7 +135,7 @@ def run(capsys, *argv) -> tuple[int, list[dict], list[dict], str]:
 
 def budgets(v1: dict, exe: Path, scratch: Path) -> tuple[int, int]:
     """The one inference block's gates and fresh-input bits: the Lean check's profile on the case at no budget."""
-    got, _ = SC.lean_answer(exe, SC.registration_case(v1, 10**9, 10**12), scratch)
+    got, _ = SC.lean_answer(exe, SC.registration_case(v1, *SC.UNBOUNDED), scratch)
     assert got["verdict"] == "accept" and len(got["profile"]["blocks"]) == 1, got
     return tuple(got["profile"]["blocks"][0])
 
@@ -344,6 +346,49 @@ def test_the_producer_refuses_a_registration_case_that_would_not_be_the_windows(
     assert not (tmp_path / "private" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
 
 
+@pytest.mark.parametrize("profile, verdict, reason", [
+    ({"blocks": [[10, 3], [6, 4]], "gates": 16}, "accept", None),
+    (None, "reject", "the case's own division doesn't pass the check at no budget: stand-in"),
+    (None, "accept", "the check's profile isn't a nonempty list"),
+    ({"blocks": [[0, 1]], "gates": 0}, "accept", "the check's profile isn't a nonempty list"),
+])
+def test_from_division_reads_alpha_and_gamma_off_the_checks_profile(tmp_path, capsys, profile, verdict, reason):
+    """With ``--from-division``, Γ is the largest block's gates and α the most fresh-input bits a gate of any block, from
+    the check's profile at no budget, and the CASE line says so; a rejection there, or a profile with no blocks or a
+    block of no gates, is refused before the case is checked."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    d = digest_of(v1)
+    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
+                                  "--from-division", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, d)),
+                                  "--registration-exe", stand_in(tmp_path, "reg", answer(REG, d, verdict)
+                                                                 | {"profile": profile}))
+    if reason is None:
+        assert rc == 0 and refused == [], out
+        assert [c.get("alpha_gamma") for c in cases] == [None, SC.FROM_DIVISION]
+        params = json.loads((tmp_path / "private" / "inference-only" / "case.json").read_text())["params"]
+        assert (params["alpha"], params["gamma"]) == ([2, 3], 10)
+    else:
+        assert rc == 1 and [r["protocol"] for r in refused] == [REG] and reason in refused[0]["reason"], refused
+        assert not (tmp_path / "private" / "inference-only").exists()
+
+
+@lean
+def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys, registration_exe, toy_v1):
+    """The real check at no budget, then at what it read off: Γ the one block's gates and α its input bits a gate, at
+    which the case is accepted."""
+    gates, bits = budgets(toy_v1, registration_exe, tmp_path / "s")
+    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, toy_v1), "--private", tmp_path / "private",
+                                  "--from-division", "--registration-exe", registration_exe,
+                                  "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(toy_v1))))
+    assert rc == 0 and refused == [], out
+    assert [(c["verdict"], c.get("alpha_gamma")) for c in cases if c["protocol"] == REG] == [
+        ("accept", SC.FROM_DIVISION)]
+    params = json.loads((tmp_path / "private" / "inference-only" / "case.json").read_text())["params"]
+    f = Fraction(bits, gates)
+    assert (params["alpha"], params["gamma"]) == ([f.numerator, f.denominator], gates)
+
+
 def test_the_parameters_are_the_population_programs_and_no_other_programs():
     """The program function's parameters come from the population program rebuilt over the root's templates, one
     template's included; a Program that isn't one (here a template on its own) is refused, its parameters unknown."""
@@ -438,9 +483,14 @@ def test_the_serve_dir_names_its_one_audited_window(tmp_path, capsys):
     assert "holds 2 audited windows" in refused[0]["reason"]
 
 
-def test_a_usage_error_exits_64(capsys):
+@pytest.mark.parametrize("argv", [
+    ["--private", "p"],
+    ["--audit", "a", "--private", "p", "--from-division", "--alpha", "1"],
+    ["--audit", "a", "--private", "p", "--from-division", "--gamma", "1"],
+])
+def test_a_usage_error_exits_64(capsys, argv):
     with pytest.raises(SystemExit) as e:
-        SC.main(["--private", "p"])
+        SC.main(argv)
     assert e.value.code == SC.USAGE
 
 
@@ -457,8 +507,9 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 def test_the_registration_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tmp_path, registration_exe):
     """The 4,32,4 class's window circuit (TINY on the H200: about 85 s and 3 GB to build) as the served window's audit
     holds it, its population program over the class's templates: the registration case `registration_case` makes from
-    it decodes in the policy's Lean check, which accepts it at Γ its one block's gates and α its input bits a gate and
-    rejects it a gate under. The toy tests can't catch what only the served shapes have: the class's own Definitions
+    it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
+    (`division_policy`: Γ its one block's gates, α its input bits a gate) and rejects it a gate under. The toy tests
+    can't catch what only the served shapes have: the class's own Definitions
     (heads cut by key block, scans, registered reads) through `nci_reference.root_nodes` and the Lean decoder, the
     description's walk bound, and the size of a served Program's text through the CLI's files."""
     from verity_vllm.program.predict.phi import Phi
@@ -470,9 +521,12 @@ def test_the_registration_case_on_the_4_32_4_class_is_accepted_at_its_budgets(tm
                             provable=False)
     program, query = circuit.program()
     v1 = v1_case(program, query)
-    gates, bits = budgets(v1, registration_exe, tmp_path / "s")
+    alpha, gates = SC.division_policy(v1, [], registration_exe, tmp_path / "s")
+    bits = alpha * gates
+    assert bits.denominator == 1, (alpha, gates)
+    bits = bits.numerator
     for gamma, verdict in ((gates, "accept"), (gates - 1, "reject")):
-        got, _ = SC.lean_answer(registration_exe, SC.registration_case(v1, f"{bits}/{gates}", gamma), tmp_path / "s")
+        got, _ = SC.lean_answer(registration_exe, SC.registration_case(v1, alpha, gamma), tmp_path / "s")
         assert (got["protocol"], got["commitment"], got["verdict"]) == (REG, digest_of(v1), verdict), got
     print(json.dumps({"class": "4,32,4", "templates": len(circuit.templates), "gates": gates, "input_bits": bits,
                       "program_bytes": len(codec.canonical_json(v1["params"]["program"]))}, sort_keys=True))
