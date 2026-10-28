@@ -63,8 +63,8 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
 
 
 def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path, monkeypatch):
-    """Train 21b3d26fe1a6 (14 Oct): a suite imported an undeclared helper through its warm `__pycache__`, and the failure named
-    only `...cpython-*.pyc`, which no PR's diff touches, so drive found no culprit. The read is named as the `.py` source,
+    """A suite that imports an undeclared helper through its warm `__pycache__` must not fail naming only `...cpython-*.pyc`,
+    which no PR's diff touches, so drive could find no culprit. The read is named as the `.py` source,
     attributed to the test module that imported it, warm or cold cache alike."""
     import py_compile
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
@@ -81,7 +81,7 @@ def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path
 
 
 def test_a_suites_tmp_paths_are_under_its_own_basetemp_and_gone_when_it_ends(tmp_path, tmp_path_factory, monkeypatch):
-    """pytest keeps its last three base temps (a flock suite's is ~45 GB: vy-cpu-1 and vy-cpu-2 filled on 11 Oct); each suite gets
+    """pytest keeps its last three base temps (a flock suite's is ~45 GB, three of which fill a node's disk); each suite gets
     its own `--basetemp`, removed when it ends, unless the caller passed one. While it runs, its owner marker names this process
     and pytest's session (which the sweep of a later suites.py checks: the sweep tests below)."""
     import tempfile
@@ -177,8 +177,8 @@ def test_a_basetemp_whose_owner_died_here_is_swept_and_a_reused_pid_does_not_kee
 
 
 def test_a_basetemp_stays_while_its_pytest_session_runs_after_its_suites_py_is_killed(tmp_path, monkeypatch):
-    """vy-nebius-1, 18 Oct: two suites.py were killed (SIGKILL) while their pytest, in a session of its own, ran on for 8 and 37
-    minutes; the next suites.py's sweep took their basetemps from under them. A process left in pytest's session (pytest itself,
+    """A suites.py killed (SIGKILL) while its pytest, in a session of its own, runs on must not have the next suites.py's
+    sweep take its basetemp from under it. A process left in pytest's session (pytest itself,
     or an xdist worker it left) keeps the basetemp; once the session is empty it is swept."""
     S = _load(monkeypatch, "suites_under_test", HERE / "suites.py")
     (tmp := tmp_path / "tmp").mkdir()
@@ -284,8 +284,8 @@ def test_every_test_starts_without_the_machines_markers_caches_and_slot(tmp_path
 @pytest.mark.parametrize("workers", [1, 2])
 @pytest.mark.parametrize("required", [False, True])
 def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, monkeypatch, workers, required):
-    """A recorded check's Lean tests passed without running: their fixture skipped because the store was out of reach (#757's
-    red team). Under VERITY_STORE_REQUIRED=1 that skip, from a fixture or a test, fails; any other skip stays a skip."""
+    """A recorded check's Lean tests must not pass without running because their fixture skipped with the store out of reach.
+    Under VERITY_STORE_REQUIRED=1 that skip, from a fixture or a test, fails; any other skip stays a skip."""
     if workers > 1:
         pytest.importorskip("xdist")
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
