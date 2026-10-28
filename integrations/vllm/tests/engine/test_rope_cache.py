@@ -17,7 +17,8 @@ import torch
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 
-H, KVH, D = 32, 8, 64
+#: (query heads, KV heads, head dimension): Llama-3.2-1B's, Llama-3.1-8B's, and one whose heads and halves the kernel pads.
+L1B, L8B, ODD = (32, 8, 64), (32, 8, 128), (24, 6, 96)
 
 
 def _bits(t: torch.Tensor) -> torch.Tensor:
@@ -32,19 +33,20 @@ def _random_bits(shape, g) -> torch.Tensor:
     return torch.randint(-32768, 32768, shape, generator=g, device="cuda", dtype=torch.int32).to(torch.int16).view(torch.bfloat16)
 
 
-def _table(max_pos: int, base: float = 500000.0) -> torch.Tensor:
+def _table(max_pos: int, d: int, base: float = 500000.0) -> torch.Tensor:
     """vLLM's `RotaryEmbedding._compute_cos_sin_cache` (fp32, then bf16) on the GPU."""
-    inv = 1.0 / (base ** (torch.arange(0, D, 2, dtype=torch.float, device="cuda") / D))
+    inv = 1.0 / (base ** (torch.arange(0, d, 2, dtype=torch.float, device="cuda") / d))
     f = torch.einsum("i,j -> ij", torch.arange(max_pos, dtype=torch.float, device="cuda"), inv)
     return torch.cat((f.cos(), f.sin()), dim=-1).bfloat16()
 
 
-def _cache(blocks: int, block_size: int, layout: str, g) -> torch.Tensor:
+def _cache(blocks: int, block_size: int, layout: str, g, dims) -> torch.Tensor:
     """FA's cache [blocks, KVH, block_size, 2D] (`FlashAttentionImpl.forward`), its bytes random: HND is that shape
     contiguous, NHD the same view of [blocks, block_size, KVH, 2D]."""
+    _, kvh, d = dims
     if layout == "HND":
-        return _random_bits((blocks, KVH, block_size, 2 * D), g)
-    return _random_bits((blocks, block_size, KVH, 2 * D), g).permute(0, 2, 1, 3)
+        return _random_bits((blocks, kvh, block_size, 2 * d), g)
+    return _random_bits((blocks, block_size, kvh, 2 * d), g).permute(0, 2, 1, 3)
 
 
 def _slots(t: int, n: int, blocks: int, block_size: int, start: int, holes: int, g) -> torch.Tensor:
@@ -58,24 +60,27 @@ def _slots(t: int, n: int, blocks: int, block_size: int, start: int, holes: int,
     return s.to(torch.int64).contiguous()
 
 
-def _vllm(positions, qkv, table, kv_cache, slots):
+def _vllm(positions, qkv, table, kv_cache, slots, dims):
     import vllm._custom_ops as ops
-    q, k, v = qkv.split([H * D, KVH * D, KVH * D], dim=-1)
-    ops.rotary_embedding(positions, q, k, D, table, True)
-    kc, vc = kv_cache.transpose(1, 2).split(D, dim=-1)
+    h, kvh, d = dims
+    q, k, v = qkv.split([h * d, kvh * d, kvh * d], dim=-1)
+    ops.rotary_embedding(positions, q, k, d, table, True)
+    kc, vc = kv_cache.transpose(1, 2).split(d, dim=-1)
     one = torch.ones(1, dtype=torch.float32, device="cuda")
     if slots.numel():  # its grid is one block a slot
-        ops.reshape_and_cache_flash(k.view(-1, KVH, D), v.view(-1, KVH, D), kc, vc, slots, "auto", one, one)
+        ops.reshape_and_cache_flash(k.view(-1, kvh, d), v.view(-1, kvh, d), kc, vc, slots, "auto", one, one)
 
 
-def _fused(positions, qkv, table, kv_cache, slots, **kw):
+def _fused(positions, qkv, table, kv_cache, slots, dims, **kw):
     from verity_vllm.engine import rope_cache as R
-    q, k, v = qkv.split([H * D, KVH * D, KVH * D], dim=-1)
-    kc, vc = kv_cache.transpose(1, 2).split(D, dim=-1)
+    h, kvh, d = dims
+    q, k, v = qkv.split([h * d, kvh * d, kvh * d], dim=-1)
+    kc, vc = kv_cache.transpose(1, 2).split(d, dim=-1)
     return R.rope_cache(positions, q, k, v, table, kc, vc, slots, **kw)
 
 
-def _case(t, n, block_size, layout, rows, table, seed, holes=0, start=5):
+def _case(t, n, block_size, layout, rows, table, seed, dims, holes=0, start=5):
+    h, kvh, d = dims
     g = torch.Generator(device="cuda").manual_seed(seed)
     max_pos = table.shape[0]
     positions = torch.randint(0, max_pos, (t,), generator=g, device="cuda", dtype=torch.int64)
@@ -83,38 +88,45 @@ def _case(t, n, block_size, layout, rows, table, seed, holes=0, start=5):
     if t > 1:
         positions[-1] = max_pos - 1
     if rows == "bits":
-        qkv = _random_bits((t, (H + 2 * KVH) * D), g)
+        qkv = _random_bits((t, (h + 2 * kvh) * d), g)
     else:
-        qkv = (torch.randn(t, (H + 2 * KVH) * D, generator=g, device="cuda") * 2.0).bfloat16()
+        qkv = (torch.randn(t, (h + 2 * kvh) * d, generator=g, device="cuda") * 2.0).bfloat16()
     blocks = (start + n) // block_size + 3
-    return positions, qkv, _cache(blocks, block_size, layout, g), _slots(t, n, blocks, block_size, start, holes, g)
+    return positions, qkv, _cache(blocks, block_size, layout, g, dims), _slots(t, n, blocks, block_size, start, holes, g)
 
 
 @cuda
-@pytest.mark.parametrize("t,n,block_size,layout,rows,holes,block_t,warps", [
-    (1, 1, 16, "NHD", "bits", 0, None, None),
-    (37, 37, 16, "NHD", "bits", 0, None, None),
-    (37, 37, 16, "HND", "served", 0, None, None),
-    (300, 291, 16, "NHD", "bits", 7, None, None),
-    (300, 0, 16, "HND", "bits", 0, None, None),
-    (513, 500, 32, "HND", "bits", 3, 4, 2),
-    (1088, 1088, 16, "NHD", "served", 0, 1, 1),
-    (1088, 1088, 16, "NHD", "bits", 0, 8, 8),
-    (4099, 4096, 16, "NHD", "served", 0, 16, 4),
+@pytest.mark.parametrize("t,n,block_size,layout,rows,holes,block_t,warps,dims", [
+    (1, 1, 16, "NHD", "bits", 0, None, None, L1B),
+    (37, 37, 16, "NHD", "bits", 0, None, None, L1B),
+    (37, 37, 16, "HND", "served", 0, None, None, L1B),
+    (300, 291, 16, "NHD", "bits", 7, None, None, L1B),
+    (300, 0, 16, "HND", "bits", 0, None, None, L1B),
+    (513, 500, 32, "HND", "bits", 3, 4, 2, L1B),
+    (1088, 1088, 16, "NHD", "served", 0, 1, 1, L1B),
+    (1088, 1088, 16, "NHD", "bits", 0, 8, 8, L1B),
+    (4099, 4096, 16, "NHD", "served", 0, 16, 4, L1B),
+    (37, 37, 16, "NHD", "bits", 0, None, None, L8B),
+    (1088, 1000, 16, "NHD", "served", 5, None, None, L8B),
+    (300, 291, 16, "HND", "bits", 7, 2, 4, L8B),
+    (37, 37, 16, "NHD", "bits", 0, None, None, ODD),
+    (300, 291, 32, "HND", "served", 7, 4, 1, ODD),
 ])
-def test_rope_cache_is_rotary_embedding_then_reshape_and_cache_flash(t, n, block_size, layout, rows, holes, block_t, warps):
+def test_rope_cache_is_rotary_embedding_then_reshape_and_cache_flash(t, n, block_size, layout, rows, holes, block_t, warps, dims):
     """Every byte of the qkv buffer and the cache is what vLLM's two ops leave: random bf16 bit patterns (rows and table)
     and served-like rows on vLLM's table at base 500,000, position 0 and the table's last row, first and last blocks
-    partial, padded tokens past the slot mapping and -1 slots; the launch's PTX passes `ptx_check`."""
+    partial, padded tokens past the slot mapping and -1 slots, at Llama-3.2-1B's and Llama-3.1-8B's heads and at a head
+    count and width the kernel pads; the launch's PTX passes `ptx_check`."""
     pytest.importorskip("vllm")
     from verity_vllm.engine import rope_cache as R
     g = torch.Generator(device="cuda").manual_seed(t + n)
-    table = _random_bits((2048, D), g) if rows == "bits" else _table(131072)
-    positions, qkv, kv_cache, slots = _case(t, n, block_size, layout, rows, table, seed=t + 1, holes=holes)
+    d = dims[2]
+    table = _random_bits((2048, d), g) if rows == "bits" else _table(131072, d)
+    positions, qkv, kv_cache, slots = _case(t, n, block_size, layout, rows, table, seed=t + 1, dims=dims, holes=holes)
     want_qkv, want_cache = qkv.clone(), kv_cache.clone()
-    _vllm(positions, want_qkv, table, want_cache, slots)
+    _vllm(positions, want_qkv, table, want_cache, slots, dims)
     kw = {k: v for k, v in (("block_t", block_t), ("num_warps", warps)) if v is not None}
-    launch = _fused(positions, qkv, table, kv_cache, slots, **kw)
+    launch = _fused(positions, qkv, table, kv_cache, slots, dims, **kw)
     torch.cuda.synchronize()
     assert _same(qkv, want_qkv)
     assert _same(kv_cache, want_cache)
@@ -131,14 +143,15 @@ def test_rope_cache_on_bf16_extremes():
                          3.3895e38, -3.3895e38, 1e-20, -1e-20, 1e-19, 1.0, -1.0, 0.5, 0.70703125, -0.70703125, 1e-30,
                          2.0 ** -70, 3.0], device="cuda")
     g = torch.Generator(device="cuda").manual_seed(3)
-    for seed in range(4):
+    for seed, dims in enumerate((L1B, L1B, L8B, ODD)):
+        h, kvh, d = dims
         t = 64
-        table = edge[torch.randint(0, len(edge), (256, D), generator=g, device="cuda")].bfloat16()
-        positions, _, kv_cache, slots = _case(t, t, 16, "NHD", "bits", table, seed=seed)
-        qkv = edge[torch.randint(0, len(edge), (t, (H + 2 * KVH) * D), generator=g, device="cuda")].bfloat16()
+        table = edge[torch.randint(0, len(edge), (256, d), generator=g, device="cuda")].bfloat16()
+        positions, _, kv_cache, slots = _case(t, t, 16, "NHD", "bits", table, seed=seed, dims=dims)
+        qkv = edge[torch.randint(0, len(edge), (t, (h + 2 * kvh) * d), generator=g, device="cuda")].bfloat16()
         want_qkv, want_cache = qkv.clone(), kv_cache.clone()
-        _vllm(positions, want_qkv, table, want_cache, slots)
-        _fused(positions, qkv, table, kv_cache, slots)
+        _vllm(positions, want_qkv, table, want_cache, slots, dims)
+        _fused(positions, qkv, table, kv_cache, slots, dims)
         torch.cuda.synchronize()
         assert _same(qkv, want_qkv) and _same(kv_cache, want_cache), seed
 
