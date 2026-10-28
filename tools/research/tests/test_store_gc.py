@@ -127,7 +127,7 @@ def test_untimed_kinds_stay_and_only_a_cited_artifact_meta_keeps_a_run(env):
 
 
 def test_a_published_slim_keep_expires_unless_its_replay_run_is_cited(env):
-    """A slim keep holds clear values (VLLM-148): past its TTL it goes, unless a cited run's attempt names it."""
+    """A slim keep holds clear values: past its TTL it goes, unless a cited run's attempt names it."""
     b, notes, cache, _ = env
     gone = artifact(b, "vllm-replay-slim/v1", blob(b, b"keep a"), age_days=8)
     kept = artifact(b, "vllm-replay-slim/v1", blob(b, b"keep b"), age_days=8)
