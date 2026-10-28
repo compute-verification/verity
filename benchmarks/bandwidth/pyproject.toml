@@ -5,9 +5,10 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# tests/ reads tagger.cu's text (the twins' constants) and imports gpu.py and reference.py, which import the bandwidth audit
-# and PoUS's verifier and geometry; reference.py reads the bandwidth audit's pinned vectors.
+# tests/ reads the text of tagger.cu and of the SHA-512 header it includes (the twins' constants) and imports gpu.py and
+# reference.py, which import the bandwidth audit and PoUS's verifier and geometry; reference.py reads the bandwidth audit's
+# pinned vectors.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
           "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/randomness", "verity/core/protocols/record.py"]
+          "verity/ml/randomness", "verity/ml/kernels/sha512.cuh", "verity/core/protocols/record.py"]
