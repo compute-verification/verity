@@ -26,8 +26,8 @@ TABLE = (Path(__file__).parent, "step0")
 REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
-ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth")
-REMOTE = ("sampled-proofs", "pouw")
+ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
+REMOTE = ("sampled-proofs", "pouw", "inference-only")
 
 
 def config(protocols=ONSITE, **machines) -> dict:
@@ -49,7 +49,7 @@ def test_the_example_is_config_new_byte_for_byte():
     text = EXAMPLE.read_text()
     commit = K.parse(text)["program"]["commit"]
     cfg = K.new("toy", list(REMOTE), REG.components, REG.workloads, commit)
-    header = [h.format(protocols="sampled-proofs and pouw", workload="toy", machine="local") for h in R.HEADER]
+    header = [h.format(protocols=" and ".join(REMOTE), workload="toy", machine="local") for h in R.HEADER]
     assert K.render(cfg, header) == text
     assert K.parse(text) == cfg
 
@@ -79,7 +79,7 @@ REFUSALS = {
     "requires": lambda c: c.update(protocols=["certifier"]),
     "composite": lambda c: c.update(protocols=["sampled-proofs", "certifier"]),
     "unknown-workload": lambda c: c["workload"].update(name="mainframe"),
-    "unknown-params": lambda c: c.update(params={"verity/wipe/v0": {}}),
+    "unknown-params": lambda c: c.update(protocols=list(REMOTE), params={SP.IDS["pous"]: {}}),
     "tie": lambda c: c.update(params={"verity/certifier/v0": {"tie": False}}),
     "law": lambda c: c["service"].update(law="subset:8"),
     "commit": lambda c: c["program"].update(commit="main"),
@@ -107,7 +107,8 @@ def test_a_configuration_is_refused_by_name(name):
 
 
 @pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "certifier"), ("pouw",), ONSITE[:-1],
-                                       ("sampled-proofs", "certifier", "pouw"), ("sampled-proofs", "wipe")])
+                                       ("sampled-proofs", "certifier", "pouw"), ("sampled-proofs", "wipe"),
+                                       ("sampled-proofs", "pouw"), ONSITE[:-2]])
 def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert refused(edit(lambda c: c.update(protocols=list(protocols)))) == "composite"
     with pytest.raises(K.Refused) as e:
@@ -116,13 +117,14 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
 
 
 def test_the_composites_are_remote_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE, (*REMOTE, "wipe"))} == {
-        "verity/onsite/v0", "verity/remote/v0"}
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v0"}
     assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
-    assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"pouw": "verity/pouw/v1", "sampled-proofs": SP.ID}
+    assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/v1",
+                                                   "sampled-proofs": "verity/sampled-proofs/one-stage/v2"}
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
+    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
 
 
 def test_a_workload_that_lacks_a_need_is_refused_by_name():
@@ -345,7 +347,7 @@ def test_a_check_that_faults_fails_the_run_with_no_verdict(tmp_path, capsys):
 
 def test_remotes_verdict_covers_exactly_its_subprotocols(tmp_path, capsys):
     rc, lines = run(tmp_path, registry(), cfg=config(REMOTE))
-    assert rc == 0 and lines[0]["components"] == {"sampled-proofs": "accept", "pouw": "accept"}
+    assert rc == 0 and lines[0]["components"] == {c: "accept" for c in REMOTE}
     assert lines[0]["product"] == "verity/remote/v0"
     assert "network-certifier" not in capsys.readouterr().out
 
@@ -400,7 +402,9 @@ def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
 
 
 def test_a_subprotocol_with_no_parties_yet_is_refused(tmp_path, capsys):
-    rc, _ = run(tmp_path, registry(), cfg=config([*REMOTE, "wipe"]))
+    reg = registry()
+    reg = dataclasses.replace(reg, parties={c: ps for c, ps in reg.parties.items() if c != "wipe"})
+    rc, _ = run(tmp_path, reg)
     assert rc == 2 and "refused no-party: wipe" in capsys.readouterr().err
 
 

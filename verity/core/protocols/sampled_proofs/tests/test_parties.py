@@ -1,7 +1,7 @@
 """Sampled proofs' parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest
 run's verifier audits each block once its registration, the firewall's pin and the challenger's address are in, in
-order, and its composite (remote, over sampled proofs and PoUW) accepts; a listed subprotocol with no answer is absent
-and the composite never accepts over it; an accepting audit of another registration rejects; an audit that is
+order, and its composite (remote, over sampled proofs, PoUW and the inference-only policy) accepts; a listed
+subprotocol with no answer is absent and the composite never accepts over it; an accepting audit of another registration rejects; an audit that is
 `Unavailable` is its block's error, and one that raises anything else fails the run (``party-died``, its error
 recorded); workers that can't serve leave the verifier refused ``closed`` with nothing audited; parameters out of their
 range, a list of subprotocols that is no composite's among them, are refused by every party; the challenger's host
@@ -20,8 +20,9 @@ from verity.core.protocols.sampled_proofs import parties as P
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.wire import Refused
 
-SP, CERT, POUW = P.ID, P.IDS["certifier"], P.IDS["pouw"]
-REMOTE = ("sampled-proofs", "pouw")
+SP, CERT, POUW = P.SUBPROTOCOLS["verity/remote/v0"]["sampled-proofs"], P.IDS["certifier"], P.IDS["pouw"]
+NCI = P.IDS["inference-only"]
+REMOTE = ("sampled-proofs", "pouw", "inference-only")
 ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
 SHA = "5a" * 64
 CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}
@@ -80,7 +81,7 @@ class Machine:
         empty = [i for i in ids if cases[i] == P.NO_CASE]
         rejected = [i for i in ids if i == SP and not self.accept]
         bad = empty + rejected
-        return {"product": "verity/remote/v0" if len(ids) == 2 else "verity/onsite/v0",
+        return {"product": "verity/remote/v0" if len(ids) == 3 else "verity/onsite/v0",
                 "verdict": "reject" if bad else "accept",
                 "reason": "; ".join(f"{i} reject" for i in bad) or None}
 
@@ -102,13 +103,14 @@ def test_an_honest_run_audits_each_block_in_order_and_accepts():
     assert r.status == "completed", r.outcomes
     lines = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert [x["block"] for x in lines] == [0, 1]
-    assert lines[0] == {"block": 0, "coins": "simulated", "components": {"sampled-proofs": "accept", "pouw": "accept"},
+    assert lines[0] == {"block": 0, "coins": "simulated", "components": dict.fromkeys(REMOTE, "accept"),
                         "product": "verity/remote/v0", "reason": None,
                         "registration": R.digest(json.loads(registration(0))), "verdict": "accept"}
     audits = [c for c in m.calls if c[0] == "audit"]
     assert audits == [("audit", i, registration(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "product"][0][1:] == (
-        [SP, POUW], {SP: CASE, POUW: OTHER[1]}, {SP: lines[0]["registration"], POUW: OTHER[0]["commitment"]})
+        [SP, POUW, NCI], {SP: CASE, POUW: OTHER[1], NCI: OTHER[1]},
+        {SP: lines[0]["registration"], POUW: OTHER[0]["commitment"], NCI: OTHER[0]["commitment"]})
     assert m.host.events == ["start", "stop"]
     outputs = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "output"]
     assert outputs == lines
@@ -118,14 +120,14 @@ def test_a_listed_subprotocol_with_no_answer_is_absent_and_the_composite_rejects
     m = Machine(other=None)
     r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "accept", "pouw": P.ABSENT}
-    assert line["verdict"] == "reject" and line["reason"] == f"{POUW} reject"
+    assert line["components"] == {"sampled-proofs": "accept", "pouw": P.ABSENT, "inference-only": P.ABSENT}
+    assert line["verdict"] == "reject" and line["reason"] == f"{POUW} reject; {NCI} reject"
     _, ids, cases, digests = next(c for c in m.calls if c[0] == "product")
-    assert ids == [SP, POUW] and cases[POUW] == P.NO_CASE and digests[POUW] == ""
+    assert ids == [SP, POUW, NCI] and cases[POUW] == P.NO_CASE and digests[POUW] == ""
 
 
 def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
-    onsite = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth")
+    onsite = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
     m = Machine()
     (line,) = go(m, components=onsite).outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert line["components"] == dict.fromkeys(onsite, "accept") and line["verdict"] == "accept"
@@ -138,7 +140,8 @@ def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
 def test_an_accepting_audit_of_another_registration_rejects():
     m = Machine(commitment="00" * 64)
     (line,) = go(m).outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "reject", "pouw": "accept"} and line["verdict"] == "reject"
+    assert line["components"] == {**dict.fromkeys(REMOTE, "accept"), "sampled-proofs": "reject"}
+    assert line["verdict"] == "reject"
     assert next(c for c in m.calls if c[0] == "product")[2][SP] == P.NO_CASE
 
 
@@ -146,7 +149,8 @@ def test_an_unavailable_audit_is_its_blocks_error():
     m = Machine(audit_raises=P.Unavailable("the records audit left no summary"))
     r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "error", "pouw": "accept"} and line["verdict"] == "reject"
+    assert line["components"] == {**dict.fromkeys(REMOTE, "accept"), "sampled-proofs": "error"}
+    assert line["verdict"] == "reject"
     assert next(c for c in m.calls if c[0] == "product")[2][SP] == P.NO_CASE
     assert r.status == "completed"
     (why,) = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "private"]

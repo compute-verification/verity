@@ -1,4 +1,4 @@
-"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the six
+"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the seven
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
 `verity.core.protocols.sampled_proofs.parties`) on a machine (`Machine`).
@@ -97,6 +97,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
               needs=frozenset({"windows"}), law=_law, default_law="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
+    Component("inference-only", SP.IDS["inference-only"], parties=_VERIFIER, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
     Component("certifier", SP.IDS["certifier"], parties=(Role("network-certifier", "auditor"), *_VERIFIER),
@@ -105,7 +106,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
               default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
-    Component("wipe", "verity/wipe/v0", parties=_VERIFIER, product=False),
+    Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),
                _toy, {"requests": [3, 7], "steps": 2, "cap": 8})
@@ -137,7 +138,9 @@ def unserved(what: str) -> Check:
 
 #: each listed subprotocol's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
 CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
-                            "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session")}
+                            "inference-only": unserved("inference-only policy check"),
+                            "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session"),
+                            "wipe": unserved("memory challenger's wipe check")}
 
 
 class Machine:
@@ -260,7 +263,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
 PARTIES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
     "certifier": {"network-certifier": network_certifier, "verifier": LIVE},
-    **{c: {"verifier": LIVE} for c in ("pouw", "pous", "bandwidth")},
+    **{c: {"verifier": LIVE} for c in ("pouw", "inference-only", "pous", "bandwidth", "wipe")},
 }
 WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}
 #: the order a machine's entries run in, all before the live run: a party's sends come before the parties that read them

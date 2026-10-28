@@ -17,7 +17,7 @@ namespace Core.Composites
 open Composition
 
 /-- The composites, each with its subprotocols' ids. -/
-def composites : List (Protocol × List String) :=
+def composites : List (BlobProtocol × List String) :=
   [(Core.Onsite.protocol, Core.Onsite.components.map (·.id)),
     (Core.Remote.protocol, Core.Remote.components.map (·.id))]
 
@@ -25,7 +25,7 @@ def composites : List (Protocol × List String) :=
 def known : List String := (composites.flatMap (·.2)).eraseDups
 
 /-- The composite over exactly the subprotocols `ids` names, in any order, or why the list is refused. -/
-def ofIds (ids : List String) : Except String Protocol :=
+def ofIds (ids : List String) : Except String BlobProtocol :=
   match ids.find? (fun i => !known.contains i) with
   | some i => .error s!"{i} is no composite's subprotocol ({", ".intercalate known})"
   | none =>
@@ -66,13 +66,16 @@ private def remoteIds : List String := Core.Remote.components.map (·.id)
 #guard idOf remoteIds.reverse == some "verity/remote/v0"
 #guard idOf [] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v1"] == none
-#guard idOf ["verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"] == none
+#guard idOf ["verity/sampled-proofs/one-stage/v2"] == none
+#guard idOf ["verity/sampled-proofs/one-stage/v2", "verity/certifier/v0"] == none
 #guard idOf (onsiteIds.drop 1) == none
 #guard idOf ["verity/wipe/v0"] == none
-#guard idOf ["verity/pouw/v1", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"] == none
+#guard idOf ["verity/pouw/v1", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"] == none
 #guard idOf (remoteIds ++ ["verity/pouw/period/v1"]) == none
 #guard idOf (onsiteIds ++ ["verity/pouw/v1"]) == none
-#guard contains (match ofIds ["verity/sampled-proofs/one-stage/v1"] with | .error e => e | .ok _ => "")
+#guard contains (match ofIds ["verity/sampled-proofs/one-stage/v2"] with | .error e => e | .ok _ => "")
   "protocol soundness covers only those composites"
+#guard contains (match ofIds ["verity/sampled-proofs/one-stage/v1"] with | .error e => e | .ok _ => "")
+  "is no composite's subprotocol"
 
 end Core.Composites

@@ -1,7 +1,7 @@
-# The deployment configuration of sampled-proofs and pouw on the toy workload (`verity config new`), every party
+# The deployment configuration of sampled-proofs and pouw and inference-only on the toy workload (`verity config new`), every party
 # on local: `verity run` this file. Parameters it doesn't state are their declarations' defaults.
 format = "verity/config/v0"
-protocols = ["sampled-proofs", "pouw"]
+protocols = ["sampled-proofs", "pouw", "inference-only"]
 
 [workload]
 name = "toy"

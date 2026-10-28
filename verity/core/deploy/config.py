@@ -2,7 +2,7 @@
 `verity config new | check | hash` writes, checks and hashes.
 
     format = "verity/config/v0"
-    protocols = ["sampled-proofs", "pouw"]           the subprotocols, by the six subprotocols' names
+    protocols = ["sampled-proofs", "pouw", "inference-only"]    the subprotocols, by their names
     [workload]  name, params                         the computation audited, and its public shape
     [service]   law                                  the proof system's selection law (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
@@ -15,8 +15,8 @@ workload declares (``default_params``), and `check` returns the configuration wi
 covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
-composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs and PoUW). Protocol soundness covers those two
-composites and no other, so `check` refuses any other set (``composite``).
+composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs, PoUW and the inference-only policy). Protocol
+soundness covers those two composites and no other, so `check` refuses any other set (``composite``).
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
@@ -54,8 +54,9 @@ PARTY = ("machine", "name", "principal", *TRANSPORT["party"])
 CHANNEL = ("after", "from", "messages", "to", *TRANSPORT["channel"])
 LOCAL = "local"
 #: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`)
-COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "pous", "pouw", "sampled-proofs"),
-              "verity/remote/v0": ("pouw", "sampled-proofs")}
+COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
+                                    "wipe"),
+              "verity/remote/v0": ("inference-only", "pouw", "sampled-proofs")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 
