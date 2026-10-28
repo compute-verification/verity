@@ -2016,7 +2016,7 @@ def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: d
 def no_fixed_length(name: str) -> str:
     return (f"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, {{max_tokens, stop}}), so "
             "its windows are not of record: a row of record serves each request's public max_tokens whatever it "
-            f"samples (ignore_eos). Open the period with the row's max_tokens and stop "
+            f"samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop "
             f"{Wd.STOP_FIXED}")
 
 
