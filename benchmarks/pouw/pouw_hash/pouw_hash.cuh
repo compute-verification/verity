@@ -1,5 +1,5 @@
 // PoUW's device hashing on sm_120, one header for the FP8 and FP4 streams: TurboSHAKE128 (RFC 9861, the binding), SHA-256
-// (FIPS 180-4, the comparison) and BLAKE3 (Pearl-C's seeds, noise lines and keyed tickets), with the pieces a GEMM
+// (FIPS 180-4: NCP's, and the comparison) and BLAKE3 (Pearl-C's seeds, noise lines and keyed tickets), with the pieces a GEMM
 // epilogue calls to hash FP32 accumulator words where they sit. Built from #449's `pearl_c.cu` (TurboSHAKE128, the keyed BLAKE3
 // block), #468's `ncp2_tiles.cuh` (the SHA-256 compression) and the H100 `hash90` (Keccak's LOP3 form).
 //

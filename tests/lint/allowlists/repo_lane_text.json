@@ -576,6 +576,7 @@
     {"file": "benchmarks/pouw/tests/test_dither_zy_h1zy.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_eps_budget.py", "count": 5},
     {"file": "benchmarks/pouw/tests/test_facet_break.py", "count": 1},
+    {"file": "benchmarks/pouw/tests/test_gamma.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_h1_prove.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_ledger.py", "count": 3},
     {"file": "benchmarks/pouw/tests/test_pearl_c_sm120.py", "count": 1},

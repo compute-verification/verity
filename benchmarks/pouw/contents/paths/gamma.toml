@@ -1,4 +1,4 @@
 order = 280
 path = "`gamma.py`"
 runs_on = "CPU"
-what = "γ accounting: Pearl's FP8 honest reference priced term by term under W1, split into checked and unchecked work"
+what = "γ accounting: each scheme's honest reference priced term by term under W1, split into checked and unchecked work"
