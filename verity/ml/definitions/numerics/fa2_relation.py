@@ -30,6 +30,7 @@ import numpy as np
 
 from verity.ml.circuits.ops import mufu
 from verity.ml.definitions.numerics import fa2_model as FA
+<<<<<<< HEAD
 
 try:  # share W4b's node adaptation + error base when its module imports (it needs veritor.core.silicon, Python >= 3.12)
     from verity.ml.definitions.numerics import gemm_relation as _R4
@@ -92,6 +93,9 @@ except Exception:  # noqa: BLE001  -- e.g. the pod's Python 3.11: the same helpe
         cols = (_extra(node).get("arg_cols") or {}).get(name)
         return (int(cols[0]), int(cols[1])) if cols else None
 
+=======
+from verity.ml.definitions.numerics.gemm_relation import GemmRelationError, _arg_cols, _const, _extra, _node_of, _words
+>>>>>>> a91f24f221 (numerics: the package names its relation modules, fa2_relation imports gemm_relation's helpers instead of a fallback copy, and two probes nothing builds go)
 
 MODEL_VERSION = "fa2-sm8x-hdim128-bf16.v1"
 TABLE_SHA256 = {  # what the MUFU Definitions evaluate through: another table is another Definition version, not a new pin
