@@ -14,8 +14,9 @@
 // length) or read at run time (`_rt`, one body for every length).
 // A kernel with no such plan takes the forms at the end: a leaf from its head (any rank, position and schema, the prefix
 // built once per row), a node from its chaining value alone and a pad from its domain id, for any value below 2^64.
-// Any message can also be built byte by byte into a sink of the kernel's own (put_tag, put_head, put_part, put_words,
-// put_uint), then padded (put_padding) or hashed from it (digest).
+// Any message can also be built byte by byte into a sink of the kernel's own, whole (put_leaf, put_pad, put_node) or a part
+// at a time (put_tag, put_head, put_part, put_part64, put_words, put_uint), then padded (put_padding) or hashed from it
+// (digest), or hashed as it is built by a sink that streams.
 //
 // The hm96-sha512 leaf of a row digest x under the salt y: c = SHA-512(salt_prefix || y), b = x ^ M_key y and the value
 // h = SHA-512(leaf_prefix(key) || b || c) the frame leaf binds (Hm96K). M_key y comes from a table of T_v, the XOR of
@@ -459,17 +460,21 @@ struct ByteTab {
 };
 // The position table: entry (p, v) at 64 (256 p + v) is hm96's byte_tables(key)[p][v] as 64 little-endian bytes, the XOR of
 // columns 8 p + s over the set bits s of v (3 MB), through L1 (LDG) or an ordinary load: a lookup a salt byte and no shift.
-template <bool LDG>
+// WORDS: each entry as its 8 big-endian words instead (64-bit words in memory), so M_key y XORs into a digest's words as
+// read. xor64 accumulates into 16 u32 m either way, and words(m, my) gives M_key y's 8 big-endian words.
+template <bool LDG, bool WORDS = false>
 struct PosTab {
   const uint8_t* R;
+  RC_HD const uint8_t* at(int p, u32 v) const { return R + 64 * (256 * (size_t)p + v); }
   RC_HD void xor64(u32* m, int p, u32 v) const {
-    const uint8_t* e = R + 64 * (256 * (size_t)p + v);
+    const uint8_t* e = at(p, v);
     RC_UNROLL
     for (int k = 0; k < 4; ++k) {
       const q4 u = LDG ? ldg16(e + 16 * k) : ld16(e + 16 * k);
       m[4 * k] ^= u.x; m[4 * k + 1] ^= u.y; m[4 * k + 2] ^= u.z; m[4 * k + 3] ^= u.w;
     }
   }
+  RC_HD void words(const u32* m, u64* my) const;
 };
 
 // M_key y as 16 little-endian u32 (mask byte 4 w + k is byte k of m[w]) from the table T (NibTab, ByteTab): for salt byte
@@ -558,6 +563,15 @@ RC_HD void mask_words(const u32* m, u64* my) {
   RC_UNROLL
   for (int i = 0; i < 8; ++i) my[i] = (u64)sx::bswap32(m[2 * i]) << 32 | sx::bswap32(m[2 * i + 1]);
 }
+template <bool LDG, bool WORDS>
+RC_HD void PosTab<LDG, WORDS>::words(const u32* m, u64* my) const {
+  if constexpr (WORDS) {
+    RC_UNROLL
+    for (int i = 0; i < 8; ++i) my[i] = (u64)m[2 * i + 1] << 32 | m[2 * i];
+  } else {
+    mask_words(m, my);
+  }
+}
 
 // --- the constants, on the host or the device ----------------------------------------------------------------------------
 
@@ -572,7 +586,8 @@ RC_HD void be_put(uint8_t* p, u64 v, int n) {
 
 // A message as a sink: s.put(b) appends the byte b and s.n counts them; s.word(i) reads bytes [8 i, 8 i + 8) back as a
 // big-endian word (digest). Bytes is a contiguous buffer; a kernel that keeps its messages elsewhere (a strided slice of
-// shared memory, say, so that no thread's message is a local array) passes its own.
+// shared memory, say, so that no thread's message is a local array) or hashes them as they are built passes its own, which
+// may also take a whole big-endian word at once (s.put8(v)).
 struct Bytes {
   uint8_t* m;
   int n;
@@ -584,12 +599,26 @@ template <class S>
 RC_HD void put_be(S& s, u64 v, int k) {
   for (int i = k - 1; i >= 0; --i) s.put((u32)(v >> (8 * i)) & 0xFFu);
 }
+template <class S>
+RC_HD auto put_word_(S& s, u64 v, int) -> decltype(s.put8(v), void()) {
+  s.put8(v);
+}
+template <class S>
+RC_HD void put_word_(S& s, u64 v, long) {
+  put_be(s, v, 8);
+}
+// v's 8 bytes, big-endian: through s.put8 where the sink has it
+template <class S>
+RC_HD void put_word(S& s, u64 v) {
+  put_word_(s, v, 0);
+}
+constexpr int FRAME_LEN = 33;   // merkle._FRAME, with its NUL
 // frame-v3's message (merkle._message) up to its parts: FRAME || u32be(len tag) || tag
 template <class S>
 RC_HD void put_tag(S& s, const char* tag) {
   const char* frame = "veritor/protocol/merkle/frame/v3";
   RC_UNROLL
-  for (int i = 0; i < 33; ++i) s.put((uint8_t)frame[i]);   // with its NUL
+  for (int i = 0; i < FRAME_LEN; ++i) s.put((uint8_t)frame[i]);
   int tl = 0;
   while (tag[tl]) ++tl;
   put_be(s, (u64)tl, 4);
@@ -601,11 +630,23 @@ RC_HD void put_part(S& s, const uint8_t* b, int len) {
   put_be(s, (u64)len, 8);
   for (int i = 0; i < len; ++i) s.put(b ? b[i] : 0);
 }
-// every frame message's head: the tag, then the domain id's part
+// a 64-byte part (a domain id, a value, a child): its bytes, or its 8 big-endian words (a digest's) of any 64-bit type
 template <class S>
-RC_HD void put_head(S& s, const char* tag, const uint8_t* did) {
+RC_HD void put_part64(S& s, const uint8_t* b) {
+  put_part(s, b, 64);
+}
+template <class S, class W>
+RC_HD void put_part64(S& s, const W* d) {
+  static_assert(sizeof(W) == 8, "a 64-byte part's words are 64-bit (put_words takes little-endian u32)");
+  put_be(s, 64, 8);
+  RC_UNROLL
+  for (int k = 0; k < 8; ++k) put_word(s, (u64)d[k]);
+}
+// every frame message's head: the tag, then the domain id's part
+template <class S, class D>
+RC_HD void put_head(S& s, const char* tag, const D* did) {
   put_tag(s, tag);
-  put_part(s, did, 64);
+  put_part64(s, did);
 }
 // a part of the 4 nw bytes the little-endian u32 words q hold (a part in device memory, read a word at a time)
 template <class S>
@@ -623,6 +664,32 @@ RC_HD void put_uint(S& s, u64 v) {
   const int k = nbytes(v);
   put_be(s, (u64)k, 8);
   put_be(s, v, k);
+}
+// The tree's messages whole, the domain id and the 64-byte parts as put_part64 takes them. A kernel that resumes a message
+// from a snapshot of its first parts puts the rest of them, in this order.
+//   leaf: the head, uint(rank), uint(position), the schema's part, the value's part
+template <class S, class D, class V>
+RC_HD void put_leaf(S& s, const D* did, u64 rank, u64 position, const uint8_t* schema, int sl, const V* v) {
+  put_head(s, "leaf", did);
+  put_uint(s, rank);
+  put_uint(s, position);
+  put_part(s, schema, sl);
+  put_part64(s, v);
+}
+//   pad: the head, uint(rank)
+template <class S, class D>
+RC_HD void put_pad(S& s, const D* did, u64 rank) {
+  put_head(s, "pad", did);
+  put_uint(s, rank);
+}
+//   node: the head, uint(level), uint(index), L's part, R's part
+template <class S, class D, class W>
+RC_HD void put_node(S& s, const D* did, u64 level, u64 index, const W* L, const W* R) {
+  put_head(s, "node", did);
+  put_uint(s, level);
+  put_uint(s, index);
+  put_part64(s, L);
+  put_part64(s, R);
 }
 // SHA-512's padding of the message in s, appended through s: its blocks
 template <class S>
@@ -925,7 +992,9 @@ RC_HD void node_at(const u64* mid, u64 index, const u64* L, const u64* R, u64* o
 template <class C = Sha>
 RC_HD void pad_of(const uint8_t* did, u64 rank, u64* out) {
   uint8_t m[256] = {};
-  digest_padded<C>(m, frame_uint(m, frame_head(m, "pad", did), rank), out);
+  Bytes s{m, 0};
+  put_pad(s, did, rank);
+  digest_padded<C>(m, s.n, out);
 }
 
 }  // namespace rc
