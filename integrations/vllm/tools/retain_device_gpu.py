@@ -149,10 +149,13 @@ def window(dev: Path, host: Path, k: int, pk: dict[str, Any]) -> dict[str, Any]:
             bad.append(f"the undrawn read {list(u)} is not in the host bundle")
     if [s["levels"] for s in ddoc["steps"]] != [s["levels"] for s in hdoc["steps"]]:
         bad.append("the device bundle's tree levels are not whole")
-    raw = lambda doc: sum(hi - lo for st in doc["steps"] for lo, hi in st["ranges"])  # noqa: E731
     return {"window": k, "steps": len(ddoc["steps"]), "reads": len(rd), "drawn_leaves": leaves,
-            "kept_raw_bytes": raw(ddoc), "host_raw_bytes": raw(hdoc), "chunk": int(ddoc["chunk"]),
+            "kept_raw_bytes": _raw(ddoc), "host_raw_bytes": _raw(hdoc), "chunk": int(ddoc["chunk"]),
             "run_root": ddoc["run_root"][:16], "undrawn_refused": refusal, "ok": not bad, "bad": bad[:8]}
+
+
+def _raw(doc: dict[str, Any]) -> int:
+    return sum(hi - lo for st in doc["steps"] for lo, hi in st["ranges"])
 
 
 def compare(a: argparse.Namespace) -> int:
@@ -169,7 +172,7 @@ def compare(a: argparse.Namespace) -> int:
             continue
         try:
             got = window(store_dir(dev, k), store_dir(host, k), k, json.loads(f.read_text()))
-        except Exception as e:  # noqa: BLE001  (the comparison's own failure is a FAIL, by name)
+        except (OSError, ValueError, KeyError, IndexError, TypeError, RuntimeError, AssertionError) as e:
             got = {"window": k, "ok": False, "bad": [f"{type(e).__name__}: {e}"[:400]]}
         got["release"] = {x: (s.get("release") or {}).get(x) for x in
                           ("union_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "draw_wait_s", "discarded")}
