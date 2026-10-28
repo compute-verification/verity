@@ -6,8 +6,9 @@ Each arm is one item of about --seconds: back-to-back calls on one stream betwee
   wgmma         s8_linear's wgmma.scaled_mm at its default config, bf16 out (the exact linear), when its cubin is given
   orbit<BN>     the orbit kernel, int32 out (`orbit_gpu.Lib.mm(y32=)`), and orbit<BN>.bf16 with the bf16 epilogue
   bfix          s8orbit_bfix, B's carries' corrections after the orbit, and orbit<best>+bfix the two together
+  bfix.empty    the same pass over empty lists: its staging of X and its pass over y32, without a correction
 κ, a correction MAC's time in tensor MACs (one MAC a B carry and a row of A, M/2 a carry), is bfix's time over those MACs
-against PEAK and against int_mm's time a MAC.
+against PEAK and against int_mm's time a MAC; the marginal κ is bfix's time less bfix.empty's over those MACs.
 X is int8 uniform on ±127; W is the checkpoint's [N, K] int8 (q, k, v and gate, up concatenated as served). An arm records
 ms a call, θ = MACs / s / PEAK (PEAK MACs a second at F_MAX), its SM clock from NVML samples every 100 ms past the item's
 first second, and θ at that clock (θ · F_MAX / MHz). An orbit arm also records the clock its CTAs saw (clock64 over
@@ -233,6 +234,10 @@ def main() -> int:
             r.update(smi.window(r["t0"], r["t1"]))
             arms["bfix"] = r
             arms[f"orbit{best}+bfix"] = {"ms": arms[f"orbit{best}"]["ms"] + r["ms"]}
+            empty = (torch.zeros_like(prep.fix[0]), torch.zeros(1, dtype=torch.int32, device="cuda"))
+            r = timed(lambda: lib.bfix(x, y32, *empty), a.seconds)
+            r.update(smi.window(r["t0"], r["t1"]))
+            arms["bfix.empty"] = r
         base = arms["int_mm"]["ms"]
         for key, r in arms.items():
             r["vs_int_mm"] = r["ms"] / base
@@ -248,6 +253,7 @@ def main() -> int:
             rec["kappa_vs_peak"] = per_mac * PEAK
             rec["kappa_vs_int_mm"] = per_mac / (base / 1e3 / macs)
             rec["kappa_g_vs_peak"] = arms["bfix"]["ms"] / 1e3 / (prep.g_entries * (a.m // 2)) * PEAK
+            rec["kappa_marginal_vs_peak"] = (arms["bfix"]["ms"] - arms["bfix.empty"]["ms"]) / 1e3 / (sum(bc) * (a.m // 2)) * PEAK
         if sha:
             alone = timed(sha, a.seconds)
             alone["comps_per_s"] = sha.comps / (alone["ms"] / 1e3)
@@ -259,6 +265,7 @@ def main() -> int:
                 r["vs_int_mm"] = r["ms"] / base
         doc["linears"][name] = rec
         print(json.dumps({"linear": name, "kappa_vs_peak": rec.get("kappa_vs_peak"), "kappa_vs_int_mm": rec.get("kappa_vs_int_mm"),
+                          "kappa_marginal_vs_peak": rec.get("kappa_marginal_vs_peak"),
                           **{key: {f: r.get(f) for f in ("ms", "theta", "theta_clk", "vs_int_mm", "vs_wgmma", "sm_mhz", "cta_mhz")}
                              for key, r in arms.items()},
                           "beside": [{f: r.get(f) for f in ("ctas", "ms", "vs_int_mm", "sha_frac_bar")} for r in rec.get("beside", [])]}),
