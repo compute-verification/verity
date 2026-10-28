@@ -6,6 +6,8 @@
     circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
+    circuit-check --all --shard 2/4 --shard-dir s2                  only the targets whose id hashes to shard 2 of 4 (`shard`)
+    circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
     circuit-check --batch                                           batch invariance of the v0 registration's templates
@@ -15,7 +17,9 @@ A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and 
 
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
 on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
-warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).
+warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).  A shard fails on its own targets'
+failures alone (whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and
+``--combine`` exits 2 when it refuses the shards it was given (`shard.read`).
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
@@ -36,6 +40,7 @@ from . import ambient as AM
 from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
+from . import shard as SH
 from . import sidecars as SC
 from . import structural as ST
 from . import targets as TG
@@ -187,10 +192,11 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     return tasks
 
 
-def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
+def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, keep: Callable[[str, str], bool] | None = None
+             ) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
     """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused: a target that
     misses is made from a binding that reaches it (`units._materialize`), and `units.Stale` when its descriptor is not its
-    record's."""
+    record's.  A target ``keep`` (its kind and label) refuses, another shard's, is neither looked up nor made."""
     d = plan.derived
     memo = lambda: {}  # noqa: E731
     pins = CC.recorded_pins(CK.load_pins())
@@ -202,7 +208,9 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple],
         call = node["f"] in plan.calls
         k = target_key("definition", fid, opts, call, desc=node["d"])
         fn = None
-        if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+        if keep is not None and not keep("definition", fid):
+            pass
+        elif (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
         else:
             fn = UN._materialize(plan.entries, plan.objects, fid, via=d.via.get(fid))
@@ -215,7 +223,7 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple],
         keys.append(k)
     for label, sub, sts in TG.templates():
         k = target_key("template", label, opts, None)
-        if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
+        if (keep is None or keep("template", label)) and (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
         tasks.append(("template", label, lambda sub=sub, sts=sts: CK.check_subcircuit(sub, opts, instance_statics=sts, memo=memo(), pins=pins),
                       {"units": sorted(TG.BINDINGS.get(label, ()))}))
@@ -487,7 +495,7 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
 
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
         cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None,
-        fork: bool = False, mem_file: Path | None = None, units: bool = False) -> dict:
+        fork: bool = False, mem_file: Path | None = None, units: bool = False, shard: tuple[int, int] | None = None) -> dict:
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own, up to ``jobs`` at once (`parallel`): forked from one process that holds the task list, each check with
     its own memo, so a target's check never reuses what another's computed: the results are the same as checking them here, in
@@ -521,27 +529,39 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
     could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
     Definition. Any other run builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`),
-    building only the bindings whose record misses, and a full build stores them."""
+    building only the bindings whose record misses, and a full build stores them.
+
+    With ``shard`` (K, N) the whole task list is built (and stored) as above, but only shard K's targets are looked up and
+    checked (`shard.shard_of`, by each target's id), the heavy ones first; the report is of those alone, unjoined
+    (`shard.unjoined`), with the shard's manifest (`shard.manifest`) as ``shard``."""
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
+    request = {"specs": list(specs), "all": everything, "as_call": as_call,
+               "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}}
     listed = None
     if tracing and everything and not specs:
         TG.load_registries()
         listed = CC.key({"target": ["task-list", "--all"], "as_call": as_call,
                          "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}})
         if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
-            got = [CC.lookup(cache, k, REPO, moved=False) for k in hit[0]["keys"]]
+            ids = [tuple(t) for t in hit[0]["targets"]]
+            idx = list(range(len(ids))) if shard is None else SH.mine(ids, shard)
+            got = [CC.lookup(cache, hit[0]["keys"][i], REPO, moved=False) for i in idx]
             if all(g is not None and not _errored(g[0]) for g in got):
-                rep = CK.report([{**g[0], "cache": {"hit": g[1]}} for g in got], opts)
+                records = [{**g[0], "cache": {"hit": g[1]}} for g in got]
+                rep = CK.report(records, opts) if shard is None else SH.unjoined(records, opts)
                 rep["peaks"] = []
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
+                if shard is not None:
+                    rep["shard"] = SH.manifest(shard, ids, idx, request)
                 return rep
+    keep = None if shard is None else (lambda kind, label: SH.shard_of(kind, label, shard[1]) == shard[0])
     units = units and listed is not None and (fork or not isolated)
     plan, planned, why = None, None, None
     if units:
         try:
             plan = UN.plan(cache, REPO, log)
-            planned = _planned(plan, opts, cache) if plan is not None else None
+            planned = _planned(plan, opts, cache, keep) if plan is not None else None
         except UN.Stale as e:
             why = str(e)
             plan, planned = None, None
@@ -551,6 +571,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         listed = None                                     # its reads are every binding's: a full build stores it
     else:
         tasks, keys, hits = _tasks(specs, opts, everything, as_call), None, None
+    ids = [(t[0], t[1]) for t in tasks]
+    only = None if shard is None else SH.mine(ids, shard)
     zygote = None
     if isolated and fork:
         _TASKS[:] = tasks
@@ -561,7 +583,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         if keys is None and tracing:
             keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks]
         rep = _checked_all(tasks, specs, opts, everything, as_call, log, jobs, cache, mem_gb, progress, isolated, tracing,
-                           listed, zygote, mem_file, keys, hits)
+                           listed, zygote, mem_file, keys, hits, only)
     finally:
         if zygote is not None:
             zygote.close()
@@ -570,14 +592,17 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             rep["cache"]["units"] = {**plan.stats(), "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
         else:
             rep["cache"]["units"] = {**_record_units(cache, opts, tasks, keys), **({"stale": why} if why else {})}
+    if shard is not None:
+        rep["shard"] = SH.manifest(shard, ids, only, request)
     return rep
 
 
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
                  cache: Path | None, mem_gb: int | None, progress: Path | None, isolated: bool, tracing: bool,
                  listed: dict | None, zygote: Zygote | None, mem_file: Path | None = None, keys: list[dict] | None = None,
-                 hits: dict[int, tuple[dict, str]] | None = None) -> dict:
-    """`run`'s report over the task list it built (with ``keys`` and ``hits``, the keys and the entries reused already)."""
+                 hits: dict[int, tuple[dict, str]] | None = None, only: list[int] | None = None) -> dict:
+    """`run`'s report over the task list it built (with ``keys`` and ``hits``, the keys and the entries reused already), or over
+    the places ``only`` names in it, a shard's, unjoined (`shard.unjoined`)."""
     out: list[dict | None] = [None] * len(tasks)
     keys = keys if keys is not None else []
     if listed is not None and not CC.untraced():
@@ -611,10 +636,11 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
             log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
                 f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
 
-    todo = list(range(len(tasks)))
+    todo = list(range(len(tasks))) if only is None else list(only)
     if tracing:
-        todo = []
-        for i, k in enumerate(keys):
+        asked, todo = todo, []
+        for i in asked:
+            k = keys[i]
             if (hit := hits.get(i) if hits is not None else CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
@@ -651,13 +677,38 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         for i in todo:
             r, got = _checked(tasks[i]) if tracing else (_one(*tasks[i][:3]), None)
             done(i, r, *(_observe(r, got) if tracing else (None, None, None)))
-    rep = CK.report([r for r in out if r is not None], opts)
-    ran = [r for r in rep["targets"] if r.get("peak_gb") is not None and "cache" not in r]
-    rep["peaks"] = [{"target": r["target"], "peak_gb": r["peak_gb"], "rss_start_gb": r.get("rss_start_gb"), **({"killed": True} if r.get("killed") else {})}
-                    for r in sorted(ran, key=lambda r: -r["peak_gb"])[:PEAKS_REPORTED]]
+    records = [r for r in out if r is not None]
+    rep = CK.report(records, opts) if only is None else SH.unjoined(records, opts)
+    rep["peaks"] = heaviest(rep["targets"])
     if tracing:
         rep["cache"] = stats
     return rep
+
+
+def heaviest(targets: list[dict]) -> list[dict]:
+    """The report's ``peaks``: the `PEAKS_REPORTED` heaviest of the targets checked now (not reused), by ``peak_gb``."""
+    ran = [r for r in targets if r.get("peak_gb") is not None and "cache" not in r]
+    return [{"target": r["target"], "peak_gb": r["peak_gb"], "rss_start_gb": r.get("rss_start_gb"), **({"killed": True} if r.get("killed") else {})}
+            for r in sorted(ran, key=lambda r: -r["peak_gb"])[:PEAKS_REPORTED]]
+
+
+def combined(dirs: list[Path]) -> tuple[dict, dict]:
+    """``--combine``'s report and the request the shards ran: their records (`shard.read`, which refuses a set that is not
+    every shard of one list exactly) in the list's order, made into the report the unsharded run makes of them
+    (`checks.report`), with its ``peaks``, the shards' cache counts summed (each shard's under ``shards``) and ``combined``:
+    N, the list's digest and each shard's wall time and jobs."""
+    request, records, manifests = SH.read(dirs)
+    rep = CK.report(records, CK.Options(**request["options"]))
+    rep["peaks"] = heaviest(rep["targets"])
+    if caches := [m["cache"] for m in manifests if m.get("cache") is not None]:
+        rep["cache"] = {"hits": sum(c["hits"] for c in caches), "stored": sum(c["stored"] for c in caches),
+                        **{k: [x for c in caches for x in c[k]] for k in ("untraced", "errors", "changed")},
+                        "task_list": [c.get("task_list") for c in caches] if all(c.get("task_list") for c in caches) else None,
+                        "shards": caches}
+    rep["combined"] = {"shards": len(manifests), "list": manifests[0]["list"],
+                       "walls": [{"shard": m["shard"], "targets": len(m["ran"]), "wall_s": m.get("wall_s"), "jobs": m.get("jobs")}
+                                 for m in manifests]}
+    return rep, request
 
 
 def update_pins(rep: dict) -> dict:
@@ -909,6 +960,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-cache", action="store_true", help="check every target now, and record nothing")
     ap.add_argument("--catalog-units", action="store_true",
                     help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
+    ap.add_argument("--shard", metavar="K/N",
+                    help="build the whole task list, but check only the targets whose id hashes to shard K of N (circuit_check.shard), "
+                         "and write their records and a manifest to --shard-dir; exit 1 on their own new failures")
+    ap.add_argument("--shard-dir", type=Path, metavar="DIR", help="with --shard: where its records and manifest go")
+    ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
+                    help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
+                         "of one run; refused (exit 2) unless they ran exactly the whole list's targets, each once")
     ap.add_argument("-q", "--quiet", action="store_true")
     ap.add_argument("--structural", type=Path, metavar="UNIT.tmpl",
                     help="hold this flock-ir-tmpl template to the one target's flat lowering instead of running the property "
@@ -924,16 +982,35 @@ def main(argv: list[str] | None = None) -> int:
                     help="check batch invariance of every template the request-major compiler emits for the frozen v0 registration "
                          "instead of running the property checks (cli.batch): each verdict held to the declared one")
     a = ap.parse_args(argv)
-    if sum(map(bool, (a.structural, a.ambient, a.batch))) > 1:
-        ap.error("--structural, --ambient and --batch are three modes: give one")
+    if sum(map(bool, (a.structural, a.ambient, a.batch, a.combine))) > 1:
+        ap.error("--structural, --ambient, --batch and --combine are four modes: give one")
     if a.structural:
         return _structural_main(a, ap)
     if a.ambient:
         return _ambient_main(a, ap)
     if a.batch:
         return _batch_main(a, ap)
+    if a.combine:
+        return _combine_main(a, ap)
     if not a.targets and not a.all:
         ap.error("give a target or --all")
+    shard = None
+    if a.shard:
+        try:
+            shard = SH.parse(a.shard)
+        except ValueError as e:
+            ap.error(str(e))
+        if a.shard_dir is None:
+            ap.error("--shard writes its records and manifest to --shard-dir DIR: give it")
+        if a.update_pins:
+            ap.error("--update-pins pins what one whole run measured: give no --shard")
+    elif a.shard_dir:
+        ap.error("--shard-dir is where a --shard writes: give --shard K/N")
+    progress = a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None
+    if shard is not None and progress is None:
+        a.shard_dir.mkdir(parents=True, exist_ok=True)
+        progress = a.shard_dir / "progress.jsonl"
+        progress.unlink(missing_ok=True)
     cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
     if cache:
         # the registries build their C++ twins on first use (g++, untraceable): once, in a process of its own, before tracing
@@ -947,10 +1024,41 @@ def main(argv: list[str] | None = None) -> int:
     t0 = time.time()
     rep = run(a.targets, opts, everything=a.all, as_call=True if a.as_call else None,
               log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
-              mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=a.out.with_name(a.out.name + ".progress.jsonl") if a.out else None,
-              units=a.catalog_units)
+              mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=progress,
+              units=a.catalog_units, shard=shard)
+    wall = time.time() - t0
     if not a.quiet:
-        print(time_summary(rep, time.time() - t0, jobs))
+        print(time_summary(rep, wall, jobs))
+    _cache_lines(rep)
+    if a.update_pins:
+        update_pins(rep)
+    if shard is None:
+        return verdict(rep, everything=a.all, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings)
+    SH.write(a.shard_dir, rep, wall_s=round(wall, 1), jobs=jobs)
+    m = rep["shard"]
+    print(f"circuit-check: shard {m['shard']}/{m['shards']}'s records and manifest are in {a.shard_dir}")
+    return verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
+                   what=f"shard {m['shard']}/{m['shards']}: {len(rep['targets'])} of the list's {m['list']['targets']} target(s)")
+
+
+def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
+    if a.targets or a.all or a.shard or a.shard_dir or a.update_pins:
+        ap.error("--combine joins the shards' records: give no target, --all, --shard, --shard-dir or --update-pins")
+    try:
+        rep, request = combined(a.combine)
+    except SH.Refused as e:
+        print(f"circuit-check --combine: refused: {e}", file=sys.stderr)
+        return 2
+    if not a.quiet:
+        walls = rep["combined"]["walls"]
+        print(f"circuit-check: {len(walls)} shards of {rep['combined']['list']['targets']} target(s): "
+              + ", ".join(f"{w['shard']}: {w['targets']} in {w['wall_s']}s at -j {w['jobs']}" for w in walls))
+    _cache_lines(rep)
+    return verdict(rep, everything=request["all"], out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings)
+
+
+def _cache_lines(rep: dict) -> None:
+    """What the run reused: its catalog bindings' records, and its targets' cache entries."""
     if u := (rep.get("cache") or {}).get("units"):
         print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"
               f"{', ...' if len(u['rebuilt']) > 8 else ''}), " if "reused" in u else "whole catalog built, ")
@@ -961,11 +1069,16 @@ def main(argv: list[str] | None = None) -> int:
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
               f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran"
               + ("; the task list reused, so no Definition was built" if c.get("task_list") else ""))
-    if a.update_pins:
-        update_pins(rep)
+
+
+def verdict(rep: dict, *, everything: bool, out: Path | None, strict: bool = False, fail_on_warnings: bool = False,
+            what: str | None = None) -> int:
+    """Print the report's verdict, each new and known failure, with ``everything`` each `circuit_check.known` entry no failure
+    matches any more, each warning and a last line counting ``what`` (default: its targets); write the report to ``out``; and
+    return the exit status."""
     s = rep["summary"]
     stale = []
-    if a.all:
+    if everything:
         from .known import stale as stale_known
 
         stale = stale_known(f for t in rep["targets"] if t["kind"] == "definition" for f in t.get("failures", []))
@@ -978,15 +1091,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL circuit_check.known lists {k}, which no longer fails: drop it")
     for k, w in s["warnings"].items():
         print(f"warn {k}: {w['total']} over {w['definitions']} target(s)")
-    if a.out:
-        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
+    if out:
+        out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     across = s.get("recomputed_across") or {}
     refused = s.get("q_call_refused") or {}
-    print(f"circuit-check: {len(rep['targets'])} target(s), {len(s['new_failures'])} new failure(s), {len(s['known_failures'])} known"
+    what = what or f"{len(rep['targets'])} target(s)"
+    print(f"circuit-check: {what}, {len(s['new_failures'])} new failure(s), {len(s['known_failures'])} known"
           + (f", {len(across)} Boolean Call(s) recomputing {sum(across.values())} gate(s) across units (Q_word v2)" if across else "")
           + (f", {len(refused)} Definition(s) Q_call v1 refuses" if refused else "")
-          + (f", report {a.out}" if a.out else ""))
-    failed = bool(s["new_failures"] or stale or (a.strict and s["known_failures"]) or (a.fail_on_warnings and s["warnings"]))
+          + (f", report {out}" if out else ""))
+    failed = bool(s["new_failures"] or stale or (strict and s["known_failures"]) or (fail_on_warnings and s["warnings"]))
     return 1 if failed else 0
 
 
