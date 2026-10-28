@@ -196,20 +196,20 @@ class UnifiedAttentionWithOutputRule(StateRule):
         outs = []
         obs_sel = (_OBSERVED["attention_impls"] or {}).get(layer_name, {})
         role, extra, window = attn_kind_for(obs_sel)
-        # [R15 dense] both registered chains fold `softmax_scale = float(D ** -0.5)` into their constants (`b1.scale_log2_bits`,
+        # both registered chains fold `softmax_scale = float(D ** -0.5)` into their constants (`b1.scale_log2_bits`,
         # `dense.softcap_mul_bits`); a layer whose selector scale differs (Gemma-2-9B/27B: `query_pre_attn_scalar != head_dim`) has no kind.
         obs_scale = obs_sel.get("scale")
         if obs_scale is not None and (not isinstance(obs_scale, (int, float)) or float(obs_scale) != float(D ** -0.5)):
             refuse("numerics_unregistered", node, mp, f"layer {layer_name!r} has an OBSERVED attention scale {obs_scale!r} != D^-0.5 = {D ** -0.5!r} "
                    f"(D={D}); the registered attention kinds fold softmax_scale = D^-0.5 and no kind takes another scale")
-        # [R13 hopper] target-keyed chain: on the accepted target (Ampere step, FA2) the role stays `attention` / `attention_softcap`
+        # target-keyed chain: on the accepted target (Ampere step, FA2) the role stays `attention` / `attention_softcap`
         # (digests unchanged); otherwise `attention_dot` = Attention_v2{BN, DOT, INV} with the block size of the launch the target's FA
         # version issues (FA3's tile rule reads the launch's query rows: this call's T on the prefill, 1 per request on decode).
         from verity_vllm.program.frontend import targets as TG
         tp = active_target_profile()
         accepted = TG.uses_accepted_kinds(tp)
         geom = None
-        # [R15 hopper HOP-03, M-0225] the tile rule reads the LAUNCH's max_seqlen_q, not this request's rows: under varlen every sequence of
+        # the tile rule reads the LAUNCH's max_seqlen_q, not this request's rows: under varlen every sequence of
         # the launch runs the tile of the longest one.  The request's step index: 0 on the prefill (the call that opens the layer's
         # history, after any cached prefix; own rows = T), else P0 - LP + 1 (decode, own rows = 1; LP = the history's rows after the
         # prefill).  The declared launch context (`observe_launch_context`, build --launch-context, from the workload's co-scheduled
@@ -227,7 +227,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
                        launch_context="conflict", request_step=req_step)
             launch_sq, launch_src = own_rows, "own rows (context conflict ignored: the FA2 tile does not read seqlen_q)"
         except TG.LaunchContextInvalid as e:
-            # [HOP-03b, rev-pm M-0326 T1/T2] a declared context that omits this step or contradicts the request's own rows is a wrong
+            # a declared context that omits this step or contradicts the request's own rows is a wrong
             # structural input: refused on EVERY target (FA2's tile does not read it, but the Program would still carry a false declaration).
             refuse("numerics_unregistered", node, mp, f"layer {layer_name!r} request step {req_step}: invalid declared launch context -- {e}",
                    launch_context="invalid", request_step=req_step, own_rows=own_rows)
@@ -271,7 +271,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
                                 "attention_kind_selected": {"role": role if geom is None else "attention_dot", **extra, "inert_window": window,
                                                             **({} if geom is None else {"BN": geom["BN"], "DOT": geom["DOT"].name, "INV": geom["INV"].name,
                                                                                         "fa_version": geom["fa_version"], "tensor_core_family": tp.tensor_core_family,
-                                                                                        # [R15 hopper HOP-03] what the tile rule read and where it came from
+                                                                                        # what the tile rule read and where it came from
                                                                                         "launch_seqlen_q": launch_sq, "launch_seqlen_q_source": launch_src,
                                                                                         "request_step": req_step, "own_rows": own_rows,
                                                                                         **({"fa3_construction": tp.effective_fa3_construction()} if check_inf else {})})}},

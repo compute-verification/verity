@@ -36,10 +36,10 @@ step (`encode_lag_ms`: from written to encoded; `encode_records`: each decode en
 the GPU's clock, and its tokens). `--encode-grid 0` encodes decode tokens in their own step too, as prompts are. The
 codec passes its gate against `kv.encode_word` first.
 
-Each policy runs in each receipt mode of `--modes` (read, b3, sk16: `topup.cu`'s). A window's registered bytes are
-the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM head, and each
-scheduled request's context of KV, 128 KiB a token: its pages, a lower bound on attention's reads) plus the filler
-bytes the top-up read inside it, its chunks on the GPU's clock placed on the host's by one sync; R comes from
+Each policy runs in each mode of `--modes` (read, or a fill mode of `bench.FILL_WARPS`: `topup.cu`'s). A window's
+registered bytes are the steps' reads of registered data inside it (the weights' bytes a step, every linear and the LM
+head, and each scheduled request's context of KV, 128 KiB a token: its pages, a lower bound on attention's reads) plus
+the filler bytes the top-up read inside it, its chunks on the GPU's clock placed on the host's by one sync; R comes from
 `bench.py`'s read (`--R`). The trace is generated from `--seed` (bursts of requests at exponential gaps, each burst's
 requests at once), the same for every policy; a step's time is the host's between consecutive scheduler updates, and
 each model step's interval on the GPU is recorded beside it (`gpu_steps`: events before its forward and after its
@@ -65,7 +65,6 @@ same token ids as the first policy's (`token_gate` in each run; a mismatch refus
 from __future__ import annotations
 
 import argparse
-import ctypes
 import json
 import os
 import random
@@ -219,7 +218,7 @@ def main() -> int:
     ap.add_argument("--kv-gib", type=float, default=12.0)
     ap.add_argument("--headroom-gib", type=float, default=6.0)
     ap.add_argument("--policies", type=lambda s: s.split(","), default=["none", "idle", "throttle", "full", "gemm"])
-    ap.add_argument("--modes", type=lambda s: s.split(","), default=["sk16"])
+    ap.add_argument("--modes", type=lambda s: s.split(","), default=["fill"])
     ap.add_argument("--throttle-ctas", type=int, default=32)
     ap.add_argument("--R", type=float, default=1540.0)
     ap.add_argument("--seconds", type=float, default=40.0)
@@ -383,8 +382,6 @@ def main() -> int:
             save()
             return 7
     sq = Seq(tu)
-    tu.so.tu_pause.argtypes = [ctypes.c_int]
-    tu.so.tu_throttle.argtypes = [ctypes.c_int]
     least, greatest = torch.cuda.Stream.priority_range()
     least, greatest = max(least, greatest), min(least, greatest)
     eside = torch.cuda.Stream(priority=least)

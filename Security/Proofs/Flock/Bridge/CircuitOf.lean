@@ -13,7 +13,7 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
 `partsOfFile` (the same at the committed circuit and public files, through `parsedOf`). Here are their lemmas:
 
 * `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
-  (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
+  (`FlockSoundness.Audit.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
   `Verity.Partition.wrong_ofAudit` says the wrong units are the game's, so every statement about the game's wrong units
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
@@ -39,7 +39,7 @@ theorem apply_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) (v : Fin N → Bo
   cases o <;> rfl
 
 /-- A game circuit as a Boolean circuit: the same gates and outputs. -/
-def coreBool (C : FlockSoundness.Audit.Circuit) : Verity.Boolean.Circuit where
+def coreBool (C : FlockSoundness.Audit.Circuit) : FlockSoundness.Audit.Circuit where
   N := C.N
   op g := coreOp (C.op g)
   topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)

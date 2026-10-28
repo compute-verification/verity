@@ -26,21 +26,20 @@ class's whatever the prompt's length. It carries the slot from position to posit
 (lp − p, ids[p], …, ids[NP − 1], 0, …), NP + 1 i32s, lp the prompt's length. The first position's (FIRST) takes the prompt's
 first id (a prompt has at least one); every other takes ``slot[1]`` while ``slot[0] − 1`` (mod 2^32) is non-negative, which is
 ``slot[0]`` positive on every slot but ``slot[0]`` = −2^31, else ``sel``: the sign of the count it carries on, so the count's one
-carry chain is the test. Each outputs its token and the next position's slot.
+carry chain is the test. Each outputs its token and the next position's slot. A window's slots take their first position's
+from the scan state row (`boolean_io_shell.ScanSlots_v2`), so a window places only the later positions'.
 
 A window has a fixed number of slots, each a class Program whether or not it carries a request, so whether a slot
-is occupied is a private word of its ingress row. `SlotRow_v1{NP}` opens that row, (occupancy, lp, ids[0], …, ids[NP − 1]),
-NP + 2 i32s, into its occupancy word and the first position's `TokenFeed_v1` slot (a copy, no gates). `SlotMask_v1` is a
-slot's output at a position: the token selected there while the slot is occupied (its occupancy word's low bit is 1), else
-`EMPTY`, which is no token id, so an empty slot's outputs are masked by its occupancy word wherever they are read.
+is occupied is a private word of its ingress row, which its entry reads (`SlotEntry_v1`, all zero for an empty slot).
 
 The network certifier's scan carries the slots: the Programs at a boundary read their slots from the scan's
 state row before it (a registered row of NS u16 words, its fields bit-packed least significant bit first), and hand their
-outputs to the scan's Programs' row at that boundary. `ScanSlots_v1{NS, NP, IDB, K0, K, OCC, LP, MAX, IDS}` is the read,
-wires and no gate: for each of the row's lanes j (``OCC[j]``, ``LP[j]``, ``MAX[j]`` and ``IDS[j]`` the bit offsets of its
-occupancy word, its prompt's length, its ``max_tokens`` and its ids), its `SlotRow_v1` row (occupancy, lp, ids[0], …,
-ids[NP − 1]), prompt position p's id the IDB bits at ``IDS[j] + IDB·position(p)`` zero-extended (`position`: K0 ids in a
-request's first cell, K in each later one), and its head (lp, max_tokens). `OutCollect_v1{KO, FIRST}` carries a slot's
+outputs to the scan's Programs' row at that boundary. `boolean_io_shell.ScanSlots_v2{NS, NP, IDB, K0, K, OCC, LP, MAX,
+IDS}` is the read: for each of the row's lanes j (``OCC[j]``, ``LP[j]``, ``MAX[j]`` and ``IDS[j]`` the bit offsets of its
+occupancy word, its prompt's length, its ``max_tokens`` and its ids; prompt position p's id the IDB bits at
+``IDS[j] + IDB·position(p)`` zero-extended, `position`: K0 ids in a request's first cell, K in each later one), its first
+position's token and the slot it carries (`TokenFeed_v1{NP, FIRST}`'s on (lp, ids[0], …, ids[NP − 1])), its occupancy word
+and its head (lp, max_tokens). `slots_reference` is each lane's fields and `scan_reference` the Definition's function. `OutCollect_v1{KO, FIRST}` carries a slot's
 outputs from position to position, (w, m, ids[0], …, ids[KO − 1]): w counts down from lp − 1, one a position, and while
 1 − KO ≤ w ≤ 0 (the KO positions from the prompt's last on) the position's output is shifted in at the end, so after the
 last position ids[i] is output i; m is ``max_tokens``. The first position's starts from the head. `SlotEntry_v1{KO, IDB,
@@ -55,9 +54,8 @@ renders no output past KO − 1 (`egress.computed`), so such a record fails visi
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
   TokenFeed{NP,FIRST}        (slot: NP + 1 i32[, sel: i32]) -> (tok: i32, slot: NP + 1 i32)
-  SlotRow{NP}                (row: NP + 2 i32) -> (occ: i32, slot: NP + 1 i32)
-  SlotMask                   (occ: i32, tok: i32) -> i32
-  ScanSlots{NS,NP,...}       (state: NS u16 bits) -> (row: NP + 2 i32 bits, head: 2 i32 bits) a lane
+  ScanSlots{NS,NP,...}       (state: NS u16 bits) -> (tok: i32 bits, slot: NP + 1 i32 bits, occ: i32 bits, head: 2 i32 bits)
+                             a lane (`boolean_io_shell`)
   OutCollect{KO,FIRST}       (head: 2 i32 | state: KO + 2 i32, tok: i32) -> KO + 2 i32
   SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(32 + KO·IDB) / 16⌉ u16 bits
 """
@@ -77,7 +75,6 @@ from verity.ml.circuits.ops.scalar import (
 )
 from verity.ml.circuits.refs import Coll, broadcast, concat
 from verity.ml.circuits.types import Array, Tuple, Value
-from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import dsa as D
 from verity.ml.definitions.registry.prims import BIT, I32
 from verity.ml.definitions.registry.sampling import bit_at
@@ -273,45 +270,6 @@ def TokenFeed(B, S, slot, sel=None):
     return Coll(ret, concat([tok.refs, left.refs, *[x.refs for x in ids[1:]], o.word(0).refs]))
 
 
-#: an empty slot's output at every position: no token id, every id being below V ≤ 2^31
-EMPTY = 0xFFFFFFFF
-
-
-def row_refuse(S: dict) -> str | None:
-    n = S.get("NP", 1)
-    return None if type(n) is int and n >= 1 else f"NP must be at least 1 (got NP={n!r})"
-
-
-def row_sig(S):
-    return ((("row", Array(S.NP + 2, WORDS.I32)),), Tuple(WORDS.I32, Array(S.NP + 1, WORDS.I32)))
-
-
-def mask_sig(S):
-    return (("occ", WORDS.I32), ("tok", WORDS.I32)), WORDS.I32
-
-
-def mask_reference(occ: int, tok: int) -> int:
-    """`SlotMask_v1`'s function on i32 encodings."""
-    return tok if occ & 1 else EMPTY
-
-
-@composite("SlotRow", 1, ["NP"], row_sig, refuse=row_refuse,
-           conformance=f"a window slot's ingress row as {EVIDENCE['window_fixed_slots']['ask']}'s fixed slots carry it: occupancy, "
-                       "prompt length, ids")
-def SlotRow(B, S, row):
-    """A slot's ingress row opened into its occupancy word and its first position's slot (the module docstring)."""
-    _, ret = row_sig(S)
-    return Coll(ret, concat([row[i].refs for i in range(S.NP + 2)]))
-
-
-@composite("SlotMask", 1, [], mask_sig,
-           conformance="a slot's egress at a position: the token served there, none for an empty slot")
-def SlotMask(B, S, occ, tok):
-    """A slot's output at a position: ``tok`` while ``occ``'s low bit is 1, else `EMPTY` (the module docstring)."""
-    o = word_ops(B)
-    return o.isel(B.call(bit_at(32), occ, o.word(0)), tok, o.word(EMPTY))
-
-
 M32 = 0xFFFFFFFF
 #: a 32-bit word as its bits, least significant first (the Boolean form of an i32)
 BITS32 = Array(32, BIT)
@@ -343,12 +301,13 @@ def slots_refuse(S: dict) -> str | None:
 
 
 def slots_sig(S):
-    row, head = Array(S.NP + 2, BITS32), Array(2, BITS32)
-    return (("state", Array(S.NS, Array(16, BIT))),), Tuple(*[t for _ in S.OCC for t in (row, head)])
+    lane = (BITS32, Array(S.NP + 1, BITS32), BITS32, Array(2, BITS32))
+    return (("state", Array(S.NS, Array(16, BIT))),), Tuple(*[t for _ in S.OCC for t in lane])
 
 
 def slots_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC, LP, MAX, IDS) -> list[tuple[list[int], list[int]]]:
-    """`ScanSlots_v1`'s function on the row's u16 words: each lane's (row, head) as i32 encodings."""
+    """Each lane's fields of the scan state row's u16 words as i32 encodings: its row (occupancy, prompt length, ids[0], …,
+    ids[NP − 1]) and its head (prompt length, ``max_tokens``)."""
     x = sum(w << 16 * i for i, w in enumerate(state))
 
     def at(lo: int, w: int) -> int:
@@ -358,21 +317,15 @@ def slots_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC, L
             for o, lp, m, ids in zip(OCC, LP, MAX, IDS)]
 
 
-@composite("ScanSlots", 1, ["NS", "NP", "IDB", "K0", "K", "OCC", "LP", "MAX", "IDS"], slots_sig, refuse=slots_refuse,
-           conformance="the network certifier's scan state row as its Programs read their slots")
-def ScanSlots(B, S, state):
-    """Each lane's `SlotRow_v1` row and head from the scan's state row, its bits as they are (the module docstring)."""
-    _, ret = slots_sig(S)
-    zero = B.call(const(1, 0)).refs[0]
-
-    def word(lo: int, w: int):
-        return concat([state.refs.slice(lo, lo + w), broadcast(*zero, 32 - w)]) if w < 32 else state.refs.slice(lo, lo + 32)
-
-    parts = []
-    for o, lp, m, ids in zip(S.OCC, S.LP, S.MAX, S.IDS):
-        parts += [word(o, 32), word(lp, 32), *[word(ids + S.IDB * position(S.K0, S.K, p), S.IDB) for p in range(S.NP)],
-                  word(lp, 32), word(m, 32)]
-    return Coll(ret, concat(parts))
+def scan_reference(state: list[int], NP: int, IDB: int, K0: int, K: int, OCC, LP, MAX,
+                   IDS) -> list[tuple[int, list[int], int, list[int]]]:
+    """`boolean_io_shell.ScanSlots_v2`'s function on the row's u16 words: each lane's (token, slot, occupancy word, head),
+    its first position's `TokenFeed_v1` on its row (`slots_reference`), as i32 encodings."""
+    out = []
+    for row, head in slots_reference(state, NP, IDB, K0, K, OCC, LP, MAX, IDS):
+        tok, slot = feed_reference(row[1:], None, NP)
+        out.append((tok, slot, row[0], head))
+    return out
 
 
 def collect_refuse(S: dict) -> str | None:
@@ -484,4 +437,4 @@ def SlotEntry(B, S, occ, state):
     return Coll(ret, concat([b.refs for b in bits] + ([broadcast(*B.call(const(1, 0)).refs[0], pad)] if pad else [])))
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, SlotRow, SlotMask, ScanSlots, OutCollect, SlotEntry]
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry]

@@ -21,7 +21,8 @@ lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`
   decoders read one witness alike.
 * `layZH`, `rsZH`, `rsZH_computes`: the public layout and rows moved to the `--zk` tables (`LayoutZ.ofShadow`,
   `HmRowsZX.ofShadow`).
-* `zk_flock_countC_execOS_atH`: #874's count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with those.
+* `zk_flock_countC_execOS_atH`: the compiled `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with
+  those.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -78,6 +79,9 @@ variable (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTa
 
 /-- **The public plan's sites** (`sitesAtH`'s, at `tableShH`). -/
 noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S _ _ _ := (tableShH dj y₀ S).twinA
+  B S _ _ _ := (tableShH dj y₀ S).twinB
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht)
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h

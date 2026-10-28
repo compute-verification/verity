@@ -87,7 +87,7 @@ def test_the_broker_wrapper_is_preferred_when_the_checkout_has_one(checkout):
 
 
 def test_open_with_dry_run_sends_nothing(tmp_path, monkeypatch, capsys):
-    """17 Oct (CI-52): `research queue open --dry-run` opened #2276 for real."""
+    """`research queue open --dry-run` opens no PR for real."""
     import subprocess
 
     from research import queue as Q
@@ -107,7 +107,7 @@ AGENT = "bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3"
 FOOTER = (f'<div><a href="https://cursor.com/agents/{AGENT}?cursor_ref=pr_footer&cursor_cta=open_in_web"><picture>'
           '<img alt="Open in Web" width="114" height="28"></picture></a></div>')
 BEGIN, END = "<!-- CURSOR_AGENT_PR_BODY_BEGIN -->", "<!-- CURSOR_AGENT_PR_BODY_END -->"
-#: #4622's body as it was: the one `open` gave it, then the PR tool's marked section below it, and the footer
+#: a stacked PR's body: the one `open` gave it, then the PR tool's marked section below it, and the footer
 STACKED = f"Lane memory-accounting\n\nthin lanes and a MAC cap\n\n{BEGIN}\nLane memory-accounting\n\nthe rule\n{END}\n\n{FOOTER}\n"
 
 
@@ -124,7 +124,7 @@ class ViewGh:
 
 
 def test_edit_replaces_the_whole_body_keeping_only_the_pr_tools_markers_and_footer(tmp_path):
-    """TOP-90 row 5: #4491, #4622, #4514 and #4468 kept the body they were opened with above every later one."""
+    """An edited PR doesn't keep the body it was opened with above every later one."""
     from research.queue import PR, edit_pr
 
     gh = ViewGh(STACKED)

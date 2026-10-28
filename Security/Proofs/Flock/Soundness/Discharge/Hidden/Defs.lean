@@ -7,10 +7,11 @@ import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 With hidden outputs (`Tags.hiddenOutputs`, PROTOCOL.md §16.13) flock-verify sets a table up with `Stmt.setupHidden`,
 `Stmt.setupH`'s checks on `HmOut`'s rows: the input rows, then one output row per output port. The public file holds no
 output word; every row's `b ‖ c` is a region; Δ is `HmRow.delta`'s, then each output row's message bits copied from
-the output bits the circuit computes (`outPairs`), zero past the port's words.
+the output bits the circuit computes (`outPairs`), zero past the port's words, then each pinned output bit's copy of the
+forced-zero row (`pinList`; the pinned outputs, META `pinned_outputs`, have no row).
 
 The definitions here say what that statement is: `Spec` (what `setupHidden` checked and produced), `outPairs` (Δ's pairs
-past `HmRow.delta`'s), `outBytes` (an output row's message: the output words a template instance computes, zero-padded,
+past `HmRow.delta`'s), `pinList`, `outBytes` (an output row's message: the output words a template instance computes, zero-padded,
 u16 little-endian) and `commitPair` (the extractor for the row commitment `b ‖ c`). The `Prop`s below are the frozen
 statements `Theorems.lean` proves.
 -/
@@ -53,6 +54,14 @@ def outPairs (c : Circuit) : List (ℕ × ℕ) :=
         [(deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8),
             deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8)),
           (deltaMsgCol c g (HmOut.nIn c + j) (2 * k + t / 8) (t % 8), outSrc c g j k t)]
+
+/-- **Δ's pairs on the pinned outputs** (`HmOut.pinPairs`): per template instance `g`, pinned output word `o` (from
+`HmOut.pinnedFrom`) and bit `t < 16`, its column `i` gets `(i, i)` and `(i, Hm.zeroCol c)`. -/
+def pinList (c : Circuit) : List (ℕ × ℕ) :=
+  (List.range c.g).flatMap fun g => (List.range (HmOut.pinnedWords c)).flatMap fun o =>
+    (List.range 16).flatMap fun t =>
+      [(HmOut.outCol c g (HmOut.pinnedFrom c + o) + t, HmOut.outCol c g (HmOut.pinnedFrom c + o) + t),
+        (HmOut.outCol c g (HmOut.pinnedFrom c + o) + t, Hm.zeroCol c)]
 
 /-! ## An output row's message -/
 
@@ -111,17 +120,19 @@ def SetupHiddenSpec : Prop :=
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
     Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st → Spec tags cf pf coins tables draw st
 
-/-- **`HiddenDelta`**: `HmOut.delta` is `HmRow.delta`, then `outPairs`, in Δ_A and in Δ_B. -/
+/-- **`HiddenDelta`**: `HmOut.delta` is `HmRow.delta`, then `outPairs`, then `pinList`, in Δ_A and in Δ_B. -/
 def HiddenDelta : Prop :=
   ∀ (c : Circuit) (pin : ℕ),
-    HmOut.delta c pin = ((HmRow.delta c pin).1 ++ (outPairs c).toArray, (HmRow.delta c pin).2 ++ (outPairs c).toArray)
+    HmOut.delta c pin = ((HmRow.delta c pin).1 ++ (outPairs c).toArray ++ (pinList c).toArray,
+      (HmRow.delta c pin).2 ++ (outPairs c).toArray ++ (pinList c).toArray)
 
-/-- **`HiddenLayout`**: an untyped statement `Stmt.setupHidden` accepts has the layout the placement reads
-(`FlockSoundness.Layout`), so its block R1CS is `Layout.model`. -/
+/-- **`HiddenLayout`**: an untyped statement `Stmt.setupHidden` accepts that pins no output (META `pinned_outputs`) has
+the layout the placement reads (`FlockSoundness.Layout`), so its block R1CS is `Layout.model`. -/
 def HiddenLayout : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt},
-    tags.typed = false → Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st → Layout st
+    tags.typed = false → Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st →
+      HmRow.pinnedCount st.c.metaJ = 0 → Layout st
 
 /-- **`PublicExposes`**: what a statement `Stmt.setupHidden` accepts takes from the public file: no output word, and one
 region per row, region `p` ("digest p") every template instance's `b ‖ c` of row `p` (`Layout.hmBytes`: an instance's

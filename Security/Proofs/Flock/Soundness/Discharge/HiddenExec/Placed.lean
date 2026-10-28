@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 
 /-!
 # `ProgPlaces`, `hConst` and `hZero` from `Stmt.setupHidden`'s accept
@@ -7,9 +8,9 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 `Placed/Setup.lean`, `Placed/Keyed.lean`, `Const/Keyed.lean` and `Zero/Uniform.lean`'s circuit section, for untyped
 hidden-output statements:
 
-* `AcceptedH T`: a run of `Stmt.setupHidden` that accepted, with a layout `L` of its statement (`Layout`, which
-  `Hidden.hidden_layout` gives), whose unit slots' rows are its flat twin's (`UnitRowsFlat`, which `unitRowsFlat` gives),
-  and whose block R1CS `L.model regs` is `T`. Its template instance rows are the unit net's rows stacked `units_per_vu` times, placed at
+* `AcceptedH T`: a run of `Stmt.setupHidden` that accepted, with a layout `L` of its statement without Δ's pinned
+  copies (`Hidden.unpin`, whose layout `Hidden.unpin_layout` gives, pinned outputs or not), whose unit slots' rows are
+  its flat twin's (`UnitRowsFlat`, which `unitRowsFlat_unpin` gives), and whose block R1CS `L.model regs` is `T`. Its template instance rows are the unit net's rows stacked `units_per_vu` times, placed at
   every template instance (`AcceptedH.placement`); its aliasing comes from Δ's source keys (`AcceptedH.aliased_of_key`,
   through `aliased_of_copiesH`), and a stacked input that reads the zero carries 0 (`AcceptedH.zero_block`).
 * `SitesH plan tab`: each drawn unit's acceptance, template instance and block, as `Placed.Sites`.
@@ -28,8 +29,9 @@ open FlockSoundness.Discharge.Zero (ZeroIn)
 /-! ## An accepted hidden-output statement -/
 
 /-- **An accepted untyped hidden-output statement whose block R1CS is `T`**: `Stmt.setupHidden` accepted the circuit
-file `cf`, public file `pf`, coins, tables, draw, partition object and program, returning `st`; `L` is a layout of `st`,
-whose unit slots' rows are its flat twin's (`hR`), and `T` is `L.model` at regions `regs`. -/
+file `cf`, public file `pf`, coins, tables, draw, partition object and program, returning `st`; `L` is a layout of
+`Hidden.unpin st` (`st` without Δ's pinned copies), whose unit slots' rows are its flat twin's (`hR`), and `T` is
+`L.model` at regions `regs`. -/
 structure AcceptedH (T : Model.Statement) where
   tags : Tags
   cf : ByteArray
@@ -42,8 +44,8 @@ structure AcceptedH (T : Model.Statement) where
   st : Stmt
   ht : tags.typed = false
   h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st
-  L : Layout st
-  hR : UnitRowsFlat st
+  L : Layout (Hidden.unpin st)
+  hR : UnitRowsFlat (Hidden.unpin st)
   regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))
   hT : L.model regs = T
 
@@ -66,12 +68,10 @@ theorem kLog_eq : 2 ^ (a.L.model a.regs).kLog = 2 ^ T.kLog :=
 theorem nbl_eq : 2 ^ (a.L.model a.regs).nbl = 2 ^ T.nbl :=
   congrArg (fun S : Model.Statement => 2 ^ S.nbl) a.hT
 
-/-- **Template instance `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared
+/-- **Template instance `g`'s columns in the block** (`Layout.col`): the unit slots `ur.slot (g·upv + i)`, the shared
 constant at the pin. -/
 noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 ^ T.kLog) :=
-  Fin.cast a.kLog_eq
-    (stackPlace (a.L.model a.regs) (unitRows a.st a.L.unit_built) a.st.c.upv
-      (fun u => a.st.c.unitRange.slot (g * a.st.c.upv + u)) (a.L.hb hg) c)
+  Fin.cast a.kLog_eq (a.L.col a.regs hg c)
 
 /-- **The accepted statement places its template instance rows at every template instance** (`Layout.placement`), in
 every block. -/
@@ -89,7 +89,7 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
     a.rows = Placed.circuitRows c hU := by
   have hc := a.c_eq hp
   unfold rows Placed.circuitRows unitRows
-  rw [Placed.ofNet_eq hc a.L.unit_built hU, hc]
+  rw [Placed.ofNet_eq (Placed.lunit_of_parse hp hc) a.L.unit_built hU, hc]
 
 /-- **`Layout.Aliased` in `ProgPlaces`' form**, as `Placed.Accepted.aliased_of_layout`. -/
 theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
@@ -123,11 +123,33 @@ theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val 
     T.block z o (a.col hg x) = 0 := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
-  exact stack_zero_blockH L (flat_layout ht h) regs (flat_unitFacts ht h) hR hg x hx hz hsat o
+  have FL := flat_layout ht h
+  have FU := flat_unitFacts ht h
+  exact stack_zero_blockH L FL regs FU hR hg x hx hz hsat o
 
 end AcceptedH
 
 /-! ## Each drawn unit's place -/
+
+/-- **`T` with other matrices**: the same blocks, pin and regions, at `A` and `B`. -/
+abbrev twin (T : Model.Statement) (A B : Matrix (Fin (2 ^ T.kLog)) (Fin (2 ^ T.kLog)) (ZMod 2)) : Model.Statement :=
+  { T with A₀ := A, B₀ := B }
+
+/-- A matrix at `T`'s block, read at an equal statement's. -/
+def castM {T T' : Model.Statement} (e : T = T') (A : Matrix (Fin (2 ^ T.kLog)) (Fin (2 ^ T.kLog)) (ZMod 2)) :
+    Matrix (Fin (2 ^ T'.kLog)) (Fin (2 ^ T'.kLog)) (ZMod 2) :=
+  fun r j => A (Fin.cast (by rw [e]) r) (Fin.cast (by rw [e]) j)
+
+theorem twin_cast {T T' : Model.Statement} (e : T = T') (A B : Matrix (Fin (2 ^ T.kLog)) (Fin (2 ^ T.kLog)) (ZMod 2)) :
+    twin T A B = twin T' (castM e A) (castM e B) := by
+  subst e
+  rfl
+
+theorem twin_sat_cast {T T' : Model.Statement} (e : T = T') {A B : Matrix (Fin (2 ^ T.kLog)) (Fin (2 ^ T.kLog)) (ZMod 2)}
+    (h : ∀ z : Model.Witness T.m, T.Satisfies z → (twin T A B).Satisfies z) :
+    ∀ z : Model.Witness T'.m, T'.Satisfies z → (twin T' (castM e A) (castM e B)).Satisfies z := by
+  subst e
+  exact h
 
 section Sites
 
@@ -135,10 +157,19 @@ variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg �
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
 /-- **Each drawn unit's site**, as `Placed.Sites`: the hidden-output acceptance whose statement is the statement of the
-table unit `u` is drawn into (`acc`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`)
-there. -/
+table unit `u` is drawn into at other matrices `A`, `B` (`acc`), which every witness satisfying the table satisfies
+(`sat`), and the unit's template instance (`vu`, below `vus_per_block`) and block (`o`) there. A pinned output's Δ
+copies are the table's and not `A`'s or `B`'s. -/
 structure SitesH where
-  acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → AcceptedH (Partition.tabOf plan tab S R u).S
+  A : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S →
+    Matrix (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (ZMod 2)
+  B : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S →
+    Matrix (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)) (ZMod 2)
+  acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
+    AcceptedH (twin (Partition.tabOf plan tab S R u).S (A S R u h) (B S R u h))
+  sat : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (z : Model.Witness (Partition.tabOf plan tab S R u).S.m),
+    (Partition.tabOf plan tab S R u).S.Satisfies z →
+      (twin (Partition.tabOf plan tab S R u).S (A S R u h) (B S R u h)).Satisfies z
   vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
   hvu : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), vu S R u h < (acc S R u h).st.c.g
   o : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → Fin (2 ^ (Partition.tabOf plan tab S R u).S.nbl)
@@ -160,8 +191,9 @@ noncomputable def SitesH.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
 /-- **W6's placement**: the statement of the table each drawn unit is drawn into places the unit's rows at its template
 instance. -/
 theorem SitesH.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
-    Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
-  Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
+    PlacedSat (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
+  ⟨si.A S R u h, si.B S R u h, Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h)),
+    si.sat S R u h⟩
 
 /-- **`ProgPlaces` from setupHidden's accept**, its aliasing from `Layout.Aliased` at each drawn unit's template
 instance and block. -/
@@ -174,8 +206,9 @@ noncomputable def SitesH.progPlaces_of_layout (outs : Finset (Fin N))
   o := si.o
   col := si.col hrows
   placed := si.placed hrows
-  aliased S R u h :=
+  aliased S R u h c c' hw hc hc' z hz :=
     (si.acc S R u h).aliased_of_layout (hrows S R u h) (inst u) (si.o S R u h) (si.hvu S R u h) (hal S R u h)
+      c c' hw hc hc' z (si.sat S R u h z hz)
 
 end Sites
 
@@ -283,7 +316,8 @@ theorem zeroCols_uniformH (si : SitesH plan tab)
     have hza : ZeroIn (si.acc S R u h).st.c x.val := by
       rw [(si.acc S R u h).c_eq (hparse S R u h)]
       exact hzi
-    exact (si.acc S R u h).zero_block (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) x) hxa hza hsat _
+    exact (si.acc S R u h).zero_block (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) x) hxa hza
+      (si.sat S R u h z hsat) _
 
 /-- **`hZero` for the circuit's program on source-indexed input gates**, as `Zero.zeroCols_circuitProg`. -/
 theorem zeroCols_circuitProgH {B : ℕ} {src : Fin (Placed.circuitRows c hU).nIn → Option (Fin B)}

@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# The POUS benchmark on a GPU pod, as a research Attempt:
+# The POUS benchmark on a GPU pod (from the source tree's root; it writes to $RESEARCH_RUN_DIR):
 #
-#   git -C <tree> archive -o impl.tar <commit>        # the implementation's tree: #188's cursor/dense-decode-opt-6667
-#   research run --on <pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
-#     -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
-#   research run --on <pod> --project verity --source . --cwd source --campaign pous \
-#     -- bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
+#   git -C <tree> archive -o $RESEARCH_RUN_DIR/inputs/impl.tar <commit>   # the implementation's tree: cursor/dense-decode-opt-6667
+#   bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
+#   bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_v1/libp2v1.so with CGBN)
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
@@ -28,8 +26,8 @@
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
 # POUS_BUILD=<dir> is the pous_native JIT build directory (default $W/pous_build). A timed run needs a directory no other run
 # builds into: a rebuild inside a timed lease is a compile the node's ops daemon stops.
-# A timed run there goes inside the node's quiet slice, `gpu-lease 1 --on N --max-min M -- vy-pous-quiet CMD`, with VCPU and
-# RCPU among its cores: outside it, neighbours' load makes honest answers late (r20261005-231145-6d0f accepted 18 of 20).
+# A timed run there goes inside the node's quiet slice, `gpu-lease 1 --on N --max-min M -- QUIET CMD` (QUIET, the node's quiet-slice wrapper), with VCPU and
+# RCPU among its cores: outside it, neighbours' load makes honest answers late (a run there accepted 18 of 20).
 # AUDITS=0 is an untimed placement (a preemptible fill slot): the gates, encode, the synthetic loop and the step floor run, no
 # limit, audit or control does, and the result is labelled timed: false, audits: skipped (untimed placement).
 # LOAD_TOKENS=T (band-gpu and the P2 arms, bench.py --load-tokens) is T of the POUS forwards run during the honest audit (0: none,
@@ -40,18 +38,16 @@
 # P2_ENCODE_BLOCKS=N (the P2 arms) encodes the first N blocks of C on the device (0: all of C, so C is W's encoding; default
 # bench.py's 2048, the rest random canonical blocks); with P2_ENCODE_BLOCKS=0, P2_C_CACHE=1 keeps C under $W/p2-c-cache and
 # reuses it (an untimed run encodes, a timed one of the same setup loads it). P2_ARM picks side-by-side's P2 arm (default p2-v3-gpu).
-# BANDWIDTH_SALT=<gpu> (p2-v3-gpu, p2-v3-mc-gpu; joint runs only, benchmarks/resource_accounting's run.sh JOINT=) sets C up under
-# the bandwidth audit's device-bound salt for that GPU in place of PoUS's own (bench.py --bandwidth-salt).
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
-# GATE_ROLE=<role> runs the run as that party of the proof service (memory-challenger for the auditor's timed audit on a node):
+# GATE_ROLE=<role> runs the run as that party of the proof system (memory-challenger for the auditor's timed audit on a node):
 # before anything is built or timed, bench/placement.py's gate checks where it runs and records placement-gate.json, and a
-# refusal exits 4. GATE_CORES are the role's dedicated CPUs (vy-pous-quiet's 124-127 on node 2), GATE_PEERS its peers' probe
+# refusal exits 4. GATE_CORES are the role's dedicated CPUs (the quiet slice's 124-127 on an RTX PRO 6000 node), GATE_PEERS its peers' probe
 # records, space-separated ROLE[:NAME]=FILE (a relative FILE is one of the run's inputs, --send), and GATE_ABSENT the peer
 # roles not deployed yet:
-#   gpu-lease 1 --on 7 --max-min M --timed -- vy-pous-quiet bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
-#     GATE_CORES=124-127 GATE_PEERS=worker:vy-nebius-2=/etc/vy/placement/vy-nebius-2.json GATE_ABSENT='firewall challenger'
+#   gpu-lease 1 --on 7 --max-min M --timed -- QUIET bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
+#     GATE_CORES=124-127 GATE_PEERS=worker:NODE=PLACEMENT.json GATE_ABSENT='firewall challenger'
 #
 # GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
@@ -81,8 +77,8 @@ export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/pyth
 # p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:
-#   research run --on vy-nebius-2 --cwd clone ... -- bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
-#     gpu-lease 1 --on N --max-min M -- vy-pous-quiet env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
+#   bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
+#     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
   case $IMPL in
     p2-v3-mc-gpu) set -- verity/core/devices/memory_challenger/lean memory-challenger-verdict ;;
@@ -279,8 +275,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
       $([ "$1" != band-gpu ] && [ -n "${P2_ENCODE_BLOCKS:-}" ] && echo --p2-encode-blocks "$P2_ENCODE_BLOCKS") \
       $([ "$1" != band-gpu ] && [ -n "${P2_C_CACHE:-}" ] && echo --p2-c-cache "$W/p2-c-cache") \
       $([ "$1" = p2-v3-mc-gpu ] && [ "${MC_SIGNER:-lms}" = lms ] && echo --mc-lms-key "$W/pous-mc-lms-n64" \
-        --mc-session-log "$W/pous-mc-session-log") \
-      $(case $1 in (p2-v3-gpu|p2-v3-mc-gpu) [ -n "${BANDWIDTH_SALT:-}" ] && echo --bandwidth-salt "$BANDWIDTH_SALT" ;; esac)
+        --mc-session-log "$W/pous-mc-session-log")
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"

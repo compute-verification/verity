@@ -7,7 +7,7 @@ drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and
 What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
 `stale_days` and `stale_close_days`: `_stale`): a PR unmarked at its head and idle `stale_days` rings its owner once a day, and
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
-a landed PR's head hears once that its base landed and to merge `main` (`_stacked`; TOP-90 row 23).
+a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
 
 Review landing, the only landing: PRs land on an eyeball review, and the full check runs after landing.  A tick syncs
 `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `main`), then lands its longest prefix whose every member has a land verdict at its head and no hold
@@ -27,16 +27,19 @@ own.  While one runs, a Lean change above it, reviewed or not, gets a check stac
 its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
 change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
 holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
-`nonlean_first`, `queue.Queue._nonlean_order`: what a sync merges anyway), and while no Lean check of `next` runs or passed, the
-sync moves the reviewed members that change no Lean above its lowest Lean change to its bottom (`_lift`), where they land that
-tick, so a member that changes no Lean seldom waits above a Lean change for its check.  A Lean check lost or failed by its
+`nonlean_first`, `queue.Queue._nonlean_order`: what a sync adds), and while no Lean check of `next` runs or passed, the
+sync moves the members with a land verdict below those waiting for one (`reviewed_first`), those that change no Lean first
+(`_lift`; never past a held member), where they land that tick, so a reviewed member seldom waits above an unreviewed member,
+or above a Lean change for its check.  A Lean check lost or failed by its
 machine (killed, out of disk or memory: `_machine_fault`) runs again once on the other machines.  A failed Lean check is run
 again on the Lean change's own commit, and only a failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
 of a reviewed commit above it checked the tree that lands (`_past_failed`).  And every .py file the
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
 commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
 (`--first` goes above them), and so do they under a passed one of drive's whose every
-member up to it has its ready mark and a land verdict (`_landable`), until it lands.  ci's hand Lean check goes through drive
+member up to it has its ready mark and a land verdict (`_landable`), until it lands.  Up to the highest commit of any of drive's
+Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` above it too), though a member under a passed one
+alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
 time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
@@ -78,7 +81,7 @@ from pathlib import Path
 from typing import Callable
 
 from .queue import (IDENTITY, PR, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, hold, lean_change, unreviewed)
+                    _git, _out, built_on, changed, hold, lean_change, lean_hold, unreviewed)
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -1562,7 +1565,7 @@ class Driver:
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing: sync `next` (held on its base while a Lean check of it runs, drive's or a hand one:
-        `_running_lean`, and kept in place up to a passed one that lands: `_landable`), land its
+        `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one: `lean_hold`), land its
         reviewed prefix (`land_reviewed`) once `main` has a baseline (`_unbaselined`), stacking a Lean check above a running one
         (`_stack_lean`), and launch the after-landing run, or the next run of a bisection (`_bisect_step`)."""
         q = self.q
@@ -1586,8 +1589,11 @@ class Driver:
             what.append(f"`{q.branch}` waits for the Lean check of {waits[:12]} to end before an ejection rebuilds it")
         else:
             chain = q.chain()
-            q.hold = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
-            q.frozen = {m.pr for m in chain[:q.hold]}
+            frozen = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
+            # a passed check whose prefix doesn't land yet holds `next` too, or a `--first` fix goes below it and its pass is lost;
+            # a member under it that is pushed or loses its mark still leaves, or it would wait at its old head for a verdict
+            q.hold = max(frozen, lean_hold({"drive": drive}, chain))
+            q.frozen = {m.pr for m in chain[:frozen]}
             q.lift = [] if q.hold or running else self._lift(drive, chain)
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
@@ -1609,24 +1615,41 @@ class Driver:
         return "; ".join(what)
 
     def _lift(self, drive: dict, chain: list[Member]) -> list[int]:
-        """The members the sync moves to the bottom of `next` (`queue.Queue.lift`): each above its lowest Lean change, ``chain[i]``,
-        with its ready mark and a land verdict at its head (`_reviewed`'s rule) whose own change is no Lean change, so they land
-        this tick instead of waiting for that Lean change's check (one at the bottom would hold every
-        reviewed member above it).  Only while no Lean check of `next` runs (`_review` asks only then) or passed, nor a recorded run covers
-        ``chain[i]`` (`_cover`), since a rebuild would take its commit off `next`, and not past a Lean change whose own check
-        failed: that one waits for its owner's fix or hold, not a check again on every lift."""
-        i = next((j for j, m in enumerate(chain) if self._lean_change(m)), None)
-        if self.q.nonlean_first is False or i is None:
+        """The members the sync moves to the bottom of `next`, in this order (`queue.Queue.lift`, which keeps each after the PRs
+        it contains): those with their ready mark and a land verdict at their head (`_reviewed`'s rule), below the members
+        waiting for one (drive.toml's `reviewed_first`: one waiting for its review would hold every reviewed member above it),
+        and of those, the ones whose own change is no Lean change first (`nonlean_first`), so they land this tick instead of
+        waiting for a Lean change's check.  Nothing moves past a held member (a hold is a verdict, and keeps what is above it),
+        a member whose labels can't be read, nor a Lean change whose own check failed (it waits for its owner's fix or hold,
+        not a check again on every lift).  Only while no Lean check of `next` runs (`_review` asks only then) or passed, nor a
+        recorded run passed lean-audit on a commit the lift would move (`_cover`): a rebuild takes those commits off `next`."""
+        nonlean, reviewed = self.q.flag("nonlean_first"), self.q.flag("reviewed_first")
+        on, lean = {m.commit for m in chain}, drive["lean"]
+        if not (nonlean or reviewed) or any(rec.get("state") == "passed" for c, rec in lean.items() if c in on):
             return []
-        on = {m.commit for m in chain}
-        if any(rec.get("state") == "passed" for c, rec in drive["lean"].items() if c in on) \
-                or (drive["lean"].get(chain[i].commit) or {}).get("state") == "failed":
+        if self.q.prefetch is not None:
+            self.q.prefetch([(m.pr, m.head) for m in chain])   # one pull of every member's labels, not three per member
+        landing: list[tuple[Member, bool]] = []                 # each member below the first one nothing moves past
+        for m in chain:
+            try:
+                why = unreviewed(self.reviews(m.pr, m.head), self._owners(m)) if self.q.ready(m.pr, m.head) else "withdrawn"
+            except QueueError as e:                             # its verdict unknown, nothing moves past it
+                self.q.log(f"research queue drive: the lift stops below #{m.pr}: {e}")
+                break
+            if why and why.startswith("held") or (lean.get(m.commit) or {}).get("state") == "failed" and self._lean_change(m):
+                break
+            landing.append((m, why is None))
+        if reviewed:
+            lift = [m for m, ok in landing if ok]
+        else:
+            i = next((j for j, (m, _) in enumerate(landing) if self._lean_change(m)), len(landing))
+            lift = [m for m, ok in landing[i + 1:] if ok]
+        if nonlean:
+            lift = [m for m in lift if not self._lean_change(m)] + [m for m in lift if self._lean_change(m)]
+        p = next((j for j, m in enumerate(lift) if chain[j] != m), None)
+        if p is None or self._cover(drive, chain, p, len(chain)) is not None:
             return []
-        lift = [m.pr for m in chain[i + 1:] if self.q.ready(m.pr, m.head)
-                and unreviewed(self.reviews(m.pr, m.head), self._owners(m)) is None and not self._lean_change(m)]
-        if not lift or self._cover(drive, chain, i, len(chain)) is not None:
-            return []
-        return lift
+        return [m.pr for m in lift]
 
     def _running_lean(self, drive: dict) -> set[str]:
         """The commits of `next` a Lean check runs at, which the sync keeps in place with the members below them (`queue.hold`,

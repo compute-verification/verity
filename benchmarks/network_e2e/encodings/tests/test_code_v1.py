@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.certifier.window_charge import Window as W
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -29,7 +31,6 @@ def _load(name: str):
 
 V = _load("code_v1")
 C = V.C
-W = V.Window
 
 SMALL = V.Caps(arrived=40, hits=12, hit_units=300, resumes=10, order=4, order_len=6, gap=200, index=300, lag=8)
 
@@ -130,7 +131,7 @@ def _tiny_windows():
 def test_decode_accepts_exactly_the_encoders_strings(prior):
     """Exhaustive over a small alphabet: of every bit string up to the longest codeword, `decode` accepts exactly the
     encoder's codewords, each back to its residual. They are prefix-free with Kraft's sum at most 1, so v1's charge
-    meets `BitsCount`."""
+    meets the sampled leak bound's `hAs`."""
     book = V.Book(TINY, V.Book.uniform(TINY).models, prior)
     words = {}
     for win in _tiny_windows():
@@ -226,7 +227,7 @@ def test_one_codeword_per_residual_where_the_plain_decoder_takes_several():
 
 
 def test_a_reader_with_its_own_contexts_and_window_ends_round_trips():
-    """A reader like ENC-REPLAY's: each bit's context is a function of the bits decoded so far (here the last bit and a
+    """A reader like the replay's: each bit's context is a function of the bits decoded so far (here the last bit and a
     count), and a window ends when the reader says (here after its second arrival), with no count sent. Its string is
     canonical and self-delimiting the same way."""
     rng = random.Random(7)

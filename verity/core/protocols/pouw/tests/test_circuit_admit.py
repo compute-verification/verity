@@ -46,7 +46,7 @@ def test_bits_are_the_word():
     (5, 4, 9, 8, LIVE, 1),      # its last step
     (5, 4, 9, 9, LIVE, 0),      # past its stop
     (5, 4, 4, 4, LIVE, 0),      # an empty lifetime
-    (5, 4, 9, 6, 0, 0),         # selected, but the row is the canonical empty row's scale 0 (RT-ALGO-4)
+    (5, 4, 9, 6, 0, 0),         # selected, but the row is the canonical empty row's scale 0
     (5, 4, 9, 6, 1 << 31, 1),   # -0.0 is not the canonical empty row's scale
 ])
 def test_a_slot_is_admitted_iff_the_queue_assigns_it_a_live_request_and_its_row_a_scale(q, start, stop, t, scale, want):
@@ -57,7 +57,7 @@ def test_a_slot_is_admitted_iff_the_queue_assigns_it_a_live_request_and_its_row_
 
 
 def test_a_selected_block_of_canonical_empty_rows_admits_nothing():
-    """RT-ALGO-4's witness at the unit: all 16 slots selected and every row the canonical empty row (scale 0) admits no slot,
+    """At the unit: all 16 slots selected and every row the canonical empty row (scale 0) admits no slot,
     so the tally credits none of them; the same slots with their rows' scales admit all 16."""
     q, start, stop = [3] * A.SLOTS, [0] * A.SLOTS, [8] * A.SLOTS
     assert A.select_bit(2, 3, 0, 8) == 1
@@ -68,7 +68,7 @@ def test_a_selected_block_of_canonical_empty_rows_admits_nothing():
 
 def test_the_unit_reads_no_row_byte():
     """Its ports are the step, the queue's 16 entries and the rows' 16 scales: no slot's s8 bytes reach it, so a selected
-    `scale_only` row admits like a live one and an admit bit is not a live tile (RT4-LOGIC-4)."""
+    `scale_only` row admits like a live one and an admit bit is not a live tile."""
     params, ret = A.PouwQueueAdmit.signature(None)
     assert [n for n, _ in params] == ["t", "q", "start", "stop", "scale"] and ret == A.U16
     assert [t for n, t in params if n == "scale"] == [Array(A.SLOTS, A.U32)]

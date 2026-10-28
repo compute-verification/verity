@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # h1r.cu built for sm_120a (and served_h1's noise.cu, receipts.py's reference noise) on the CPU, then h1rgate.py on one leased GPU for
 # at most 30 minutes: the gate on a full served step, then the timing.  Extra arguments go to h1rgate.py.
-#   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
-#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/dither/h1r.sh
+# On an RTX PRO 6000 under a GPU lease:
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/h1r.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 mkdir -p /workspace/pouw
@@ -14,7 +14,7 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
   -o "$S/libh1r.so" benchmarks/hash/dither/h1r.cu > "$OUT/build.log" 2>&1 \
   || { echo "h1r: NVCC_FAIL"; grep -v "^ptxas info" "$OUT/build.log" | tail -30; exit 11; }
 grep -A2 "h1r_units_k\|h1r_seeds" "$OUT/build.log" | grep -i "registers\|spill" | head
-"$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -I benchmarks/codec_tensor -cubin \
+"$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin \
   -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/nvcc-noise.txt" 2>&1 \
   || { echo "h1r: NVCC_FAIL noise.cu"; tail -20 "$OUT/nvcc-noise.txt"; exit 11; }
 PY=${PY:-/workspace/jobs/venv312/bin/python3}

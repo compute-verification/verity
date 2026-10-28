@@ -36,8 +36,8 @@ bridges `Accounting.SecurityProofs.Bridge.*`) through a coupling (`Vocab.Couplin
 `Coupling.bound` gives `ComponentBound`'s event at most `a`'s error from the run at the verdict at the code
 (`Coupling.atCode`) meeting a guarantee within `a`'s published `δ`, and `componentBound_of_coupling` collects it over
 `θ F c σ`. The guarantee at `atCode` comes from the bridge and one refinement hypothesis, what the verdict at the code
-means for the bridge's verdict (`Subprotocol.pouw_atCode`, `pous_atCode`, `poub_atCode`, `network_atCode`). Until
-the refinements are proved they are hypotheses, each a named `Prop` in the shape it is to be proved in:
+means for the bridge's verdict (`Subprotocol.pouw_atCode`, `pous_atCode`, `poub_atCode`, `network_atCode`). Until the
+refinements are proved of the code they are hypotheses, each a named `Prop`:
 
 | subprotocol | bridge | refinement |
 | --- | --- | --- |
@@ -174,7 +174,7 @@ theorem sound_atCode_of_imp {r : PeriodRun d α C Ω} {A : Audit → ((i : I) �
 /-! ## Work -/
 
 /-- **PoUW's refinement: its compiled component accepts only where the source game does.** At every
-value `ξ` of the period's coins where PoUW's verdict `A .pouw` holds (at the code, `Vocab.Coupling.verdict`: `PouwCheck.protocol`
+value `ξ` of the period's coins where PoUW's verdict `A .pouw` holds (at the code, `Vocab.Coupling.verdict`: `PouwCheck.Period.protocol`
 accepts its case in what the prover sent, every release it read is logged, and the coupling's break is absent), the source game the
 realization names (`acc`; for H1's checked credit, the play's acceptance) accepts at PoUW's coins there. -/
 def PouwRefines {r : PeriodRun d α C Ω} {c : Certificates} {p : Price} {m u bUnit : ℕ} {X : Type}
@@ -296,7 +296,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
   {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ}
   {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ} {Dj n : ℕ}
 
-/-- **The network certifier's refinement: its per-window bound at its compiled component.** At every
+/-- **The network certifier's refinement: the network certifier's per-window bound at its compiled component.** At every
 window `i` and every value `ξ` of the other coins, the probability over the network audit's own coins that
 its verdict `A .network` holds (at the code, `Vocab.Coupling.verdict`: `NetworkCheck.Period.protocol` accepts its case
 in what the prover sent, its releases are logged, and the coupling's break is absent) while window `i` fails its good event
@@ -375,18 +375,20 @@ theorem target_eq (a : Audit) : V.Target a = V.TargetFor (V.Verdict a) a := rfl
 
 /-- **A subprotocol's target from its component-level bound.** -/
 theorem sound_of (a : Audit) (h : V.ComponentBound a) : V.Target a := fun θ F c σ =>
-  le_trans (Game.prob_mono (fun _ ⟨⟨_, _, hc⟩, hh⟩ => ⟨hc, hh⟩) _ σ) (h θ F c σ)
+  le_trans (Game.prob_mono (p := fun o => V.Verdict a o ∧ ¬ V.Holds θ F c σ a o)
+    (q := fun o => ComponentAccepts a o.sent ∧ ¬ V.Holds θ F c σ a o)
+    (fun _ ⟨⟨_, _, hc⟩, hh⟩ => ⟨hc, hh⟩) _ σ) (h θ F c σ)
 
-/-- **PoUW's target from its component-level bound**. -/
+/-- **PoUW's target from its component-level bound** -/
 theorem pouwSound_of (h : V.ComponentBound .pouw) : V.PouwSound := V.sound_of .pouw h
 
-/-- **PoUS's target from its component-level bound**. -/
+/-- **PoUS's target from its component-level bound** -/
 theorem pousSound_of (h : V.ComponentBound .pous) : V.PousSound := V.sound_of .pous h
 
-/-- **The bandwidth audit's target from its component-level bound**. -/
+/-- **The bandwidth audit's target from its component-level bound** -/
 theorem poubSound_of (h : V.ComponentBound .poub) : V.BandwidthAuditSound := V.sound_of .poub h
 
-/-- **The network certifier's target from its component-level bound**. -/
+/-- **The network certifier's target from its component-level bound** -/
 theorem networkSound_of (h : V.ComponentBound .network) : V.NetworkCertifierSound := V.sound_of .network h
 
 /-- **At the honest deployment**: at registered files, where subprotocol `a`'s honest lemma holds, the deployment's
@@ -532,7 +534,7 @@ rest of the event where it meets `FinderCR`, `ComponentBound`'s event at `σ` is
 theorem bound {δ : ℝ} (hs : k.atCode.Sound (V.certOf θ) k.price a δ)
     (hδ : ENNReal.ofReal δ ≤ V.delta θ a (V.cost θ F c σ)) (hb : V.FinderCR a θ F c σ → k.BreakBound) :
     Game.prob (fun o => ComponentAccepts a o.sent ∧ ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ := by
-  unfold Vocab.error condError
+  unfold Vocab.error Accounting.condError
   split_ifs with hcr
   · classical
     show _ ≤ V.delta θ a (V.cost θ F c σ) + V.loss a θ ((V.live θ F c).collides sha512Msg a σ)

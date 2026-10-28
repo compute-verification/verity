@@ -73,7 +73,7 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
 
 
 def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
-    """Red team #919 F1: on sm_120 at its cap the tickets are `pearlCTilesDevRev1K`'s weights at `Prices.sm120Loop` and
+    """On sm_120 at its cap the tickets are `pearlCTilesDevRev1K`'s weights at `Prices.sm120Loop` and
     c = 218/25 − 8953/1000, Lean's definitions restated here in exact fractions, on both served models' four linears at
     once.  By the scheme's own `wref` they are not proportional (down is under-drawn); off sm_120 the draw is unchanged."""
     add, bf16, fs, qa, g, r, c = Fraction(1047, 125), 2, 40, 2, 4, 32, Fraction(218, 25) - Fraction(8953, 1000)

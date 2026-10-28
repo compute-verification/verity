@@ -19,9 +19,10 @@ interval a network certifier counts the session's egress over.
 [--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"labels", "limit_ns",
 "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
-report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `session(party, request, prover)` is
-the leg's side: it starts the challenger's side with `party.command`, connects to `party.address` (by default the port
-it printed, on this machine), answers from `prover` (`answer`) and adds the connection's two addresses as it saw them.
+report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `side_of(period, node, device)` is
+where `period.json` puts that side (`stream.Side`), and `session(side, request, prover)` is the leg's: it starts the
+side, connects to it, answers from `prover` (`answer`) and adds the connection's two addresses as it saw them. The
+wipe's two parties as the deployment layer runs them are `wipe_parties`.
 """
 
 from __future__ import annotations
@@ -31,13 +32,13 @@ import json
 import os
 import secrets
 import socket
-import subprocess
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
+
+from verity.core.deploy.stream import Side
 
 from . import memory_challenger as mc
 from . import streamed_wipe as sw
@@ -106,10 +107,11 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
 
 def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int:
     """The prover's side over the connection `f`: each fill frame kept by `prover` (read straight into its store when
-    it has `receive_into`, as `wipe_store.StoreProver`), each batch answered from it until the challenger ends the
-    session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
+    it has `receive_into`, as `wipe_store.StoreProver`), the fill acknowledged once it is in the store (after the
+    prover's `sync`, when it has one: a disk's writes on the media), each batch answered from it until the challenger
+    ends the session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
     n = 0
-    into = getattr(prover, "receive_into", None)
+    into, sync = getattr(prover, "receive_into", None), getattr(prover, "sync", None)
     while (tag := _read(f, 1)) != END:
         if tag == FILL:
             first, count = int.from_bytes(_read(f, 8), "big"), int.from_bytes(_read(f, 4), "big")
@@ -118,6 +120,8 @@ def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int
             else:
                 prover.receive(first, _read(f, sw.LABEL_BYTES * count))
         elif tag == DONE:
+            if sync is not None:
+                sync()
             f.write(ACK)
             f.flush()
         elif tag == CHALLENGE:
@@ -163,36 +167,17 @@ def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
                          j["egress_bits"], j["scheme"], bytes.fromhex(j["public_key"]), bytes.fromhex(j["signature"]))
 
 
-@dataclass(frozen=True)
-class Party:
-    """Where the memory challenger runs: `host`, the machine's name; `command`, the argv that starts its side there and
-    speaks `main`'s stdin and stdout; `address`, where the prover connects, `None` for this machine at the port the side
-    prints."""
+def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
+    """The argv that starts the challenger's side as a process on this machine, its key and session log in `device`,
+    `extra` more of `main`'s arguments (`--streamer build`)."""
+    return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0", *extra)
 
-    host: str
-    command: tuple[str, ...]
-    address: tuple[str, int] | None = None
 
-    @classmethod
-    def local(cls, host: str, device: str | Path, extra: Sequence[str] = ()) -> Party:
-        """The challenger's side as a process on this machine (`host`), its key and session log in `device`, `extra`
-        more of `main`'s arguments (`--streamer build`)."""
-        return cls(host, (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0", *extra))
-
-    @classmethod
-    def of(cls, period: Mapping[str, Any], node: str, device: str | Path, extra: Sequence[str] = ()) -> Party:
-        """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-        node (with `extra`), else `challenger.wipe`'s `command` and `address` (`"HOST:PORT"`), which infra writes once
-        the host serves the challenger's side."""
-        host = period.get("challenger_host") or node
-        if host == node:
-            return cls.local(node, device, extra)
-        entry = (period.get("challenger") or {}).get("wipe") or {}
-        if not entry.get("command") or not entry.get("address"):
-            raise RuntimeError(f"the challenger host {host} isn't wired for the wipe: period.json's challenger.wipe.command "
-                               f"and .address start its side there and reach it from {node} (infra's)")
-        h, _, p = entry["address"].rpartition(":")
-        return cls(host, tuple(entry["command"]), (h, int(p)))
+def side_of(period: Mapping[str, Any], node: str, device: str | Path, extra: Sequence[str] = ()) -> Side:
+    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
+    node (with `extra`), else `challenger.wipe`'s `command` and `address`, which infra writes once the host serves the
+    challenger's side."""
+    return Side.of(period, node, "wipe", command(device, extra), "the wipe")
 
 
 def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
@@ -232,29 +217,19 @@ def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
             "tiers": [[t, b] for t, b in params.tiers]}
 
 
-def session(party: Party, request: Mapping[str, Any], prover: sw.Prover, *,
+def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
             stop_after: int | None = None) -> dict[str, Any]:
-    """One wipe with the challenger's side `party` starts: `request` sent, the fill kept and each batch answered by
+    """One wipe with the challenger's side `side` starts: `request` sent, the fill kept and each batch answered by
     `prover`, the side's report back, with `answered`, the batches the prover answered, and `connection`, the
     socket's `local` and `peer` addresses (`HOST:PORT`) on the prover's side."""
-    p = subprocess.Popen(list(party.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-    try:
-        p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
-        p.stdin.close()
-        line = p.stdout.readline()
-        if not line:
-            raise RuntimeError(f"the challenger's side on {party.host} exited {p.wait()} before it listened")
-        port = json.loads(line)["listening"]
-        with socket.create_connection(party.address or ("127.0.0.1", port)) as s:
-            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            connection = {k: "%s:%d" % a[:2] for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
-            with s.makefile("rwb") as f:
-                answered = answer(f, prover, stop_after)
-        out = json.loads(p.stdout.readline())
-    finally:
-        rc = p.wait()
-    if rc != 0:
-        raise RuntimeError(f"the challenger's side on {party.host} exited {rc}")
+
+    def drive(s: socket.socket) -> tuple[int, dict[str, str]]:
+        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        connection = {k: "%s:%d" % a[:2] for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
+        with s.makefile("rwb") as f:
+            return answer(f, prover, stop_after), connection
+
+    out, (answered, connection) = side.talk(request, drive)
     return out | {"answered": answered, "connection": connection}
 
 
@@ -303,8 +278,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "UNCOUNTED", "Party", "answer", "commitment_of", "link", "main",
-           "params_of", "placement", "report", "request_of", "serve", "session", "signed_of", "utc"]
+__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "UNCOUNTED", "answer", "command", "commitment_of", "link",
+           "main", "params_of", "placement", "report", "request_of", "serve", "session", "side_of", "signed_of", "utc"]
 
 if __name__ == "__main__":
     sys.exit(main())

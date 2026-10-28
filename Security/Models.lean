@@ -12,6 +12,8 @@ import Definitions.Nci.Guarantees.Dampener
 import Definitions.Nci.Guarantees.Remote
 import Definitions.Nci.Guarantees.RemotePeriod
 import Definitions.Nci.Guarantees.Info
+import Definitions.Nci.Guarantees.Capability
+import Definitions.Accounting.Guarantees.Coverage
 import Definitions.Nci.Guarantees.Fmt
 import Definitions.Nci.Guarantees.Fmt2
 import Definitions.Nci.Guarantees.Training
@@ -27,6 +29,8 @@ import Definitions.Nci.Guarantees.CoverFanOutValue
 import Definitions.Nci.Guarantees.CoverPartialSum
 import Definitions.Nci.Guarantees.CoverTraining
 import Definitions.Nci.Guarantees.CoverChained
+import Definitions.Nci.Guarantees.PartitionCovers
+import Definitions.Nci.Guarantees.CompliesCK
 import Definitions.Nci.Guarantees.Ldl
 import Definitions.Pous.Assumptions
 import Definitions.Pous.Guarantees
@@ -34,17 +38,13 @@ import Definitions.Pouw.Assumptions
 import Definitions.Pouw.Guarantees
 import Definitions.NetworkCertifier.Assumptions
 import Definitions.NetworkCertifier.Guarantees
-import Definitions.NetworkCertifier.Assumptions.AdviceString
-import Definitions.NetworkCertifier.Guarantees.AdviceString
-import Definitions.NetworkCertifier.Guarantees.AdviceV1
-import Definitions.NetworkCertifier.Guarantees.WindowCharge
-import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.Horizon
 import Definitions.Flock.Guarantees
 import Definitions.Accounting.Assumptions.Remote
 import Definitions.Accounting.Assumptions.RemoteOutside
 import Definitions.Accounting.Assumptions.CreditedWords
 import Definitions.Accounting.Assumptions.RemoteP2
+import Definitions.Accounting.Assumptions.Parties
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period

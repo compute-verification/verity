@@ -25,7 +25,7 @@ The lemmas about them are `Proofs.Flock.Bridge.CircuitOf`'s.
 namespace Flock.Bridge
 
 /-- A game gate as the Boolean profile's: the same gate. -/
-def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → Verity.Boolean.Op N
+def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → FlockSoundness.Audit.Op N
   | .input => .input
   | .and a b => .and a b
   | .xor a b => .xor a b
@@ -52,10 +52,10 @@ abbrev Circuit.ofAudit (C : FlockSoundness.Audit.Circuit) : Circuit where
   isInput g := (coreOp (C.op g)).isInput
   reads g := (coreOp (C.op g)).args.toFinset
   reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
-  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
+  input_reads g h := by simp [FlockSoundness.Audit.Op.args_of_isInput h]
   op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
   op_congr g v v' h := by
-    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
+    rw [FlockSoundness.Audit.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
   outputs := C.outputs
 
 theorem Circuit.ofAudit_isInput {C : FlockSoundness.Audit.Circuit} (g : Fin C.N) :

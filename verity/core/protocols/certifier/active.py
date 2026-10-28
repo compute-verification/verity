@@ -88,7 +88,7 @@ certifier (`prover_key`, over `weights_message`), while p's first ingress tick, 
 `committed(p, registration)` opens it on `reveal`'s conditions. So the certifier's word orders the prover's weights
 before the salt, and no one else can fix them. The record's open cells (`Accounting.Attribution.openCells`) are the
 grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
-`reveal(p, registration)` takes the PoUW window's registration as the proof service returned it
+`reveal(p, registration)` takes the PoUW window's registration as the proof system returned it
 (`sampled_proofs.service.Registration`) and fails closed without it: it refuses unless the receipt is that
 registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
 ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
@@ -195,6 +195,7 @@ from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 
 from verity.ml.commitments.identity import tagged_sha512
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import aead
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
@@ -232,7 +233,7 @@ SALT_BITS = 512
 SALT_BYTES = SALT_BITS // 8
 PLACEHOLDER = bytes(64)
 SALT_FRAME_BYTES = HEADER.size + 8 + len(PLACEHOLDER)
-WEIGHTS_ROOT_BYTES = 64  # a frame-v3-sha512 root
+WEIGHTS_ROOT_BYTES = DIGEST_BYTES["sha512"]  # a frame-v3-sha512 root
 WEIGHTS_TAG = "verity-network-certifier/weights/v1"
 
 
@@ -1488,7 +1489,7 @@ class Proxy:
 
     def reveal(self, window: int, registration: Registration | None,
                request: bytes | None = None) -> bytes | Revealed:
-        """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof service returned
+        """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof system returned
         it, once. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which
         `registered` reads `window`, while the window's last ingress record is unpublished (t_d), once the certifier's
         clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't drawn (one this proxy

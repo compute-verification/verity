@@ -118,7 +118,8 @@ Proved: the extra calls (`moreSlotsTrue_deployed`), the reader's bound (`plainRd
 owners (`piecesOwned_D`), the latter two from V*'s list and the parts' sessions' checks as `readX` holds them, the copies' openings (`copyOpensR_layR`) and their directions (`copyDirsTieR_layR` from
 `dirsSideR_of`, check 5's `m` from `staged_innerAt` and its coin tie from `posTieR_dense`) and the level parts' `out`
 rows bound to RecCap's `top` rows (`outBindRP_deployed`), and the reader's side of the cap tie from `hRd`
-(`sideCapR_leaf`), the base checks (`basesHold_spec`) and row E's chain (`Top.rowEJoint_holds`). Open, each a named leaf: each algebra part's share of the pieces (`hres`, LOWRES'
+(`sideCapR_leaf`), the base checks (`basesHold_spec`) and row E's chain (`Top.rowEJoint_holds`). Open, each a named
+leaf: each algebra part's share of the pieces (`hres`,
 `ResLoweredPD`, each part at its own witness and decision, which gives `ResLowJPD` by `resLowJPD_of_resLoweredPD`),
 the last message's reading (`hF`, `hRd`), and the setup's listing
 (`hset`). -/

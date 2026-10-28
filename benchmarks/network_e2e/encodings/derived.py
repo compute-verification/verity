@@ -1,12 +1,12 @@
-"""ENC-DERIVED: the fields of advice v0 (I1, `verity.core.protocols.certifier.advice`) that cost zero bits, because the
-certified I/O, the committed values, the registered config or the advice's own history already fix them, and the advice
-that remains.
+"""The derived rules: the fields of advice v0 (I1, `verity.core.protocols.certifier.advice`) that cost zero bits,
+because the certified I/O, the committed values, the registered config or the advice's own history already fix them, and
+the advice that remains.
 
-The advice is public and its length is the leak (`A_c`): LEAK-LEAN's `BitsCount` needs at most 2^c accepted advice
-strings charged ≤ c bits, so the encoding must be injective on everything the audit accepts. A field leaves the string
-only when it is *canonical and checked*: a function of the config, the rest of the string and the certified I/O that the
-unit holding that I/O recomputes and holds the advice to, so for a given I/O no choice hides in it. Any other field is
-sent and charged, a *forced* one (fixed by witness, but by a rule no unit checks yet) included.
+The advice is public and its length is the leak (`A_c`): the sampled leak bound (`hAs`) needs at most 2^c accepted
+advice strings charged ≤ c bits, so the encoding must be injective on everything the audit accepts. A field leaves the
+string only when it is *canonical and checked*: a function of the config, the rest of the string and the certified I/O
+that the unit holding that I/O recomputes and holds the advice to, so for a given I/O no choice hides in it. Any other
+field is sent and charged, a *forced* one (fixed by witness, but by a rule no unit checks yet) included.
 
 **What each checker holds.** In the clear: the residual below and the registered config (`Config`: block size, the KV
 pool's size, the token budget, the stop ids, the scheduler mode). As witness, inside proofs only: the certified ingress
@@ -31,7 +31,7 @@ exactly when n = 1 at or past the prompt. Two fields come from the tokens (`Pref
   is scheduled, and stays cached until evicted). A shorter or longer hit is refused. Past the bound, hits are sent.
 `FIELDS` is the table of every I1 field: its verdict, derivation, checker and cost.
 
-**The residual** (`Residual`): each step's requests in I1's row order (the scheduler's choice, ENC-REPLAY's), and
+**The residual** (`Residual`): each step's requests in I1's row order (the scheduler's choice, the replay's), and
 - `prompt_len`, one a request, sent, forced by the certified id count (the tie checks it);
 - `hits`: each admitting row's prefix-cache hit, in hit units (`Config.unit`: the block, finer only in a hybrid model,
   whose hit may end inside a block), only from the step where the no-eviction bound fails (or in async or explicit
@@ -54,8 +54,8 @@ widths and charged by I1's rule (`charge`), after checking that `rebuild(residua
 
     python derived.py table --trace TRACE.json[.gz] ... --out TABLE.json [--T 600 --bucket-ms 100]
 
-A `--trace` that is a directory is one of TRACE-CORPUS's (`load_corpus_trace`; `--block-size`, `--eos`, `--stop-ids`,
-`--row-order`).
+A `--trace` that is a directory is one of the trace corpus's (`load_corpus_trace`; `--block-size`, `--eos`,
+`--stop-ids`, `--row-order`).
 """
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ def _flag(argv: Sequence[str], name: str, default: int | None = None) -> int | N
 def load_corpus_trace(d: str | Path, *, block_size: int = 16, eos_token_id: int = 128001,
                       stop_token_ids: Sequence[int] = (), num_gpu_blocks: int | None = None,
                       row_order: str = "batch") -> dict:
-    """One trace of TRACE-CORPUS's corpus (`benchmarks/network_e2e/traces`, `vllm-trace-corpus/v1`: a directory with the
+    """One trace of the trace corpus (`benchmarks/network_e2e/traces`, `vllm-trace-corpus/v1`: a directory with the
     joined `steps.jsonl` and `requests.jsonl`, `meta.json` and, when kept, `server.log`) in `load_trace`'s format.
 
     The registered config is the server's argv; the block size and the stop ids are the model's, which the corpus doesn't
@@ -719,7 +719,7 @@ def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int
 
 def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
     """I1's steps from the residual, the config and the tokens: the compile unit's derivation, which the compiler and
-    N2-ADVICE then read."""
+    N2's advised counts then read."""
     values = {"hit": iter(res.hits), "n": iter(res.ns), "lag": iter(res.lag or ())}
     resumes = iter(res.resumes or ())
     later, resume = [0], [next(resumes, None)]
@@ -790,7 +790,7 @@ def tie_fields(walk: Walk, res: Residual, held: Holdings, cfg: Config) -> list[R
 
 def rebuild(res: Residual, cfg: Config, held: Holdings, release: Sequence[int]) -> Advice:
     """The whole of v0 from the residual, the config and the tie's witness: `rebuild(residual(a), …) == a`. `release` is
-    read only on a shaped egress, where N2-ADVICE derives it."""
+    read only on a shaped egress, where N2's advised counts derive it."""
     walk = reconstruct(res, cfg, held)
     requests = tie_fields(walk, res, held, cfg)
     for i, lag in zip(walk.lag_requests, res.lag or (), strict=True):
@@ -997,7 +997,8 @@ FIELDS = [
      "chunk is P - start), so it is public", "checker": "tie",
      "cost": "a 16-bit equality of the certified count with a public value: 15 ANDs a request"},
     {"field": "output_len", "verdict": "derived", "bits": "0", "from": "rows (public); forced by the committed sampled ids",
-     "derivation": "the request's sampling rows (async: less the lag bit)", "checker": "compiler, N2-ADVICE; tie",
+     "derivation": "the request's sampling rows (async: less the lag bit)",
+     "checker": "compiler, N2's advised counts; tie",
      "cost": "0 in the clear; the tie's stop rule: is_stop on each committed id (3 stop ids of 17 bits: 3*16 + 2 = 50 ANDs), "
              "L <= max_tokens and L == max_tokens (16 + 15): 50 L + 31 ANDs a request"},
     {"field": "finish", "verdict": "derived", "bits": "0", "from": "committed sampled ids, certified max_tokens",
@@ -1008,8 +1009,8 @@ FIELDS = [
      "checker": "tie (a lag follows a stop id)", "cost": "0 beyond the stop rule"},
     {"field": "rows[k].request", "verdict": "stays", "bits": "w_req a row, and w_req a step for its row count",
      "from": "the scheduler's choices", "derivation": "none here: which requests each step runs, in scheduling order, "
-     "depends on the arrival times, the timing channel (ENC-REPLAY's piece)", "checker": "compiler (the Programs' shapes)",
-     "cost": "0"},
+     "depends on the arrival times, the timing channel (the replay's piece)",
+     "checker": "compiler (the Programs' shapes)", "cost": "0"},
     {"field": "start", "verdict": "derived", "bits": "0", "from": "rows' history, cache_hit",
      "derivation": "the request's previous row's end; an admitting row's (its first, or a resumed one) is its hit",
      "checker": "compile unit (a derived hit makes it witness-dependent)", "cost": "0"},
@@ -1047,7 +1048,8 @@ FIELDS = [
     {"field": "release", "verdict": "stays (unshaped); derived (shaped)", "bits": "w_rel a kept output / 0",
      "from": "unshaped: the egress head (witness), whose choices are the timing channel; shaped: the ingress anchors, the "
              "output lengths and the declared sync", "derivation": "shaped: served.derive with per-request output lengths",
-     "checker": "N2-ADVICE", "cost": "shaped: N2-ADVICE's derive circuit (served.size: 678,795 ANDs at T = 600, FIXLEN)"},
+     "checker": "N2's advised counts",
+     "cost": "shaped: N2's advised counts' derive circuit (served.size: 678,795 ANDs at T = 600, FIXLEN)"},
 ]
 
 
@@ -1069,7 +1071,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     t.add_argument("--out", required=True, type=Path)
     t.add_argument("--T", type=int, default=600, help="buckets a certifier window")
     t.add_argument("--bucket-ms", type=float, default=100.0)
-    c = t.add_argument_group("a TRACE-CORPUS trace directory (`load_corpus_trace`)")
+    c = t.add_argument_group("a trace-corpus trace directory (`load_corpus_trace`)")
     c.add_argument("--block-size", type=int, default=16)
     c.add_argument("--eos", type=int, default=128001)
     c.add_argument("--stop-ids", type=int, nargs="*", default=())

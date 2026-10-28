@@ -124,7 +124,8 @@ class Pouw:
     window_delta_crypto: float = 0.0
     #: the GPUs' capacity above the clock PoUW credits, as a share
     clock_share: float = 0.0
-    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 1 until something credits or bounds them
+    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 0 under hosts carry no compute
+    #: (`GLOSSARY.md`), 1 without that assumption
     host: float = 0.0
 
     CITES = ("Nci.Assumptions.PouwSound", "Nci.Guarantees.CertificateSlack")
@@ -228,8 +229,7 @@ class Wipe:
 
     #: the per-server bound against `M_s` is a draft; per device, the streamed wipe
     SERVER = ("draft:wipe-per-server",)
-    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB", "Accounting.Guarantees.Actual.WipeReadHeld",
-              "Accounting.Guarantees.Actual.WipeLag")
+    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB",)
 
     def __post_init__(self) -> None:
         if self.per not in PER:
@@ -476,7 +476,7 @@ class Remote:
 
     #: the inference cut: the remote composition, `Nci.Guarantees.DampenerRemote`, term for term, its envelopes'
     #: premises, and the registration
-    CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.BaselineRegistered",)
+    CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.ThetaRegistered",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 

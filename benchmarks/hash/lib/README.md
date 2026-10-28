@@ -106,7 +106,7 @@ parsed on the host (`vclib.parse_openings`).
 
 ## Where the code comes from
 
-SHA-512's compression is commit_gpu's (`benchmarks/pouw/commit_gpu/sha512.cuh`), included by path. The rest is vendored
+SHA-512's compression is the GPU's one SHA-512 header (`verity/ml/kernels/sha512.cuh`), included by path. The rest is vendored
 into `vc.cu`, each piece taking its parameters as `__grid_constant__` kernel parameters rather than `__constant__` memory;
 the head of `vc.cu` names where each piece came from. Row-seg's segments run a thread each from their header's state,
 then a fold a unit, as `benchmarks/pouw/pearl_c_sm120/hash_fast.cuh` does; rows (up to 768 segments) take one launch with
@@ -139,8 +139,7 @@ past 768 segments, keep the two launches.
   checks on reference-built records).
 
 ~~~text
-research run --on vy-dc-h200 --project verity --campaign hash-loop --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  [--env BENCH=1] [--env QUICK=1] [--env LEASE_ARGS=--preemptible] -- bash benchmarks/hash/lib/gpu.sh
+OUT=DIR GPU_LEASE_WHO=WHO [BENCH=1] [QUICK=1] [LEASE_ARGS=--preemptible] bash benchmarks/hash/lib/gpu.sh   # each GPU
 uv run tools/verity/check/suites.py benchmarks/hash/lib      # the CPU suite
 ~~~
 

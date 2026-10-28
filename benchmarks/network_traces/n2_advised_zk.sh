@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # N2's advised unit in zero knowledge (n2_advised_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
 # C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, N2's network-records and the
-# sampled-proofs verifier built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in a slot of network-accounting's
-# pool on vy-nebius-cpu-1:
-#   research run --on vy-nebius-cpu-1 --source . --project verity --as LANE --cwd clone --timeout 180m \
-#     --env N2_MEM_GB=56 -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+# sampled-proofs verifier built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots, as a
+# job of at most 180 minutes:
+#   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/n2_advised_zk.sh
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_SEED (the advised tests' session, 7 by default)
 #      N2_E2E (--e2e: network-e2e's output directory, or a .tgz of it, unpacked into the work directory, e.g. one sent

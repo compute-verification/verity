@@ -7,8 +7,9 @@ A device engine for the commitment's hashes, bit for bit the CPU reference's (`v
 - that leaf's frame-v3-sha512 leaf, and frame-v3-sha512 nodes and pads a level at a time, `merkle.CommitmentDomain`.
 
 commit_slots (the commit path beside this directory) runs on it: the calls below
-are its inner "hash these rows" and "hash this level" steps. The compression is `sha512x.cuh`'s `compress<V, ROLL>`, with
-`sha::compress`'s contract (`benchmarks/pouw/commit_gpu/sha512.cuh`), so a kernel can also swap just the compression in.
+are its inner "hash these rows" and "hash this level" steps. The compression is `sx::compress<V, ROLL>` from the GPU's one
+SHA-512 header (`verity/ml/kernels/sha512.cuh`), with `sha::compress`'s contract, so a kernel can also swap just the
+compression in.
 
 ## The call
 
@@ -63,7 +64,7 @@ What each hash costs, and what is shared (a row's leaf is five compressions and 
 
 ## Compression variants
 
-`V` picks the pipe of each sigma function's shifts (S0, S1, s0, s1; `sha512x.cuh`):
+`V` picks the pipe of each sigma function's shifts (S0, S1, s0, s1; `verity/ml/kernels/sha512.cuh`):
 
 - 0: funnel shifts on the integer ALU;
 - 1: the high half of each rotation as mul.hi/mad.lo on the FMA pipe;
@@ -76,7 +77,7 @@ A trailing `s` runs the rounds straight-line (`engine.variant_flags`).
 On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split can issue more than the ALU alone.
 The default is `0000`, plain funnel shifts; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
 
-Mode 3 is the balanced schedule: `0033` takes S0 and S1 off the ALU. Two of the schedule's forms don't survive ptxas: a
+Mode 3 is the balanced schedule: `0033` takes s0 and s1 off the ALU. Two of the schedule's forms don't survive ptxas: a
 mad.wide with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's
 addend costs two moves. `rotr3` uses neither.
 
@@ -92,7 +93,6 @@ n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on
 
 ## Files
 
-- `sha512x.cuh`: the compression. Its rounds are p2keys4.cuh's (`benchmarks/pous/p2_v1/`, copied, not included).
 - `rows.cuh`: the formats as host+device functions.
 - `rows.cu`: the kernels.
 - `rows_host.cpp`: the host twin.
@@ -102,16 +102,28 @@ n mod 128 >= 112 ends with such a chunk, as 21,022 of a slot's 21,857 rows do on
 - `sass.py`: opcode counts per variant.
 - `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`ruler.sh`'s pipe mix).
 - `gpu.sh`: one leased GPU run.
-- `ruler.sh`, `as_commit_gpu.cuh`: the variants on commit_gpu's ruler (`commit_gpu sha`, gated by `reference.py check`)
+- `ruler.sh`: the variants on commit_gpu's ruler (`commit_gpu sha` built with `-DSHA_SX`, gated by `reference.py check`)
   against its default build, with each build's SASS pipe mix, SM clock and ncu's pipe utilization.
 - `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels (`-m 1700`, `-m 1710`, optimized and
   pure, built from source in scratch) against the default compression in one lease at one locked SM clock, in
   compressions a second, with both sides' SASS pipe mix; `hashcat_forms` times our compression in hashcat's shapes
   (constant IV, zero words, only two digest words read) to attribute the difference, and at each CTA size in whole
   waves.
-- `tests/`: the host twin always, every variant on a CUDA device.
+- `lowreg.cuh`, `lowreg.cu`, `lowreg_check.py`: the compression's rounds split so that the chaining value or the schedule
+  can live in shared memory (`rounds`, and `rounds2`, two chains interleaved), for a hash warpgroup that shares its SM's
+  registers with MMA warpgroups; `lowreg rates` is SHA-512's rate against the register cap at 1, 2 and 4 warpgroups an
+  SM, gated by `lowreg_check.py` against hashlib.
+- `beside.cu`, `beside.sh`, `beside_check.py`, `beside_summary.py`: hash warpgroups beside the exact s8 linear's MMA
+  warpgroups in one CTA, rebalanced by setmaxnreg, hashing the finished O tiles from shared memory: the GEMM's span beside
+  a busy hash against alone, the hash's rate beside the GEMM against alone, the pipelined handoff against wgmma.linear's
+  shape, each role's registers, Nsight Compute's per-pipe shares and warp stalls, and the served commit's call modelled
+  from them. One lease, gates before timing.
+- `beside_probe.cu`, `beside_probe.sh`: which CTA shapes and register splits ptxas builds (C7602: m64n256k32 needs a
+  154-register launch).
+- `tests/`: the host twin always, every variant on a CUDA device; beside's gate and summary on synthetic outputs.
+
+From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:
 
 ```bash
-research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-  --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/gpu.sh
+OUT=DIR bash benchmarks/torch_gpu/sha512_rows/gpu.sh
 ```

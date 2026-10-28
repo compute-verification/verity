@@ -3,7 +3,7 @@ import Definitions.Pouw.TileBound.Defs
 /-!
 # The FP4-tile model: the block-support count and what it bounds (proofs)
 
-`docs/pouw/fp4-tile-model.md` §2 (bc-d9842080).
+`docs/pouw/fp4-tile-model.md` §2.
 
 * `crossX_count`: for every quadratic program correct on the live entries, the live count is at most the number of
   (product, side, X-block) incidences, `Σ_t (touches (a t) + touches (a' t))`. Per X-block the matrix-product tensor
@@ -23,7 +23,7 @@ import Definitions.Pouw.TileBound.Defs
   kernel-checked firing that realizes a program with a nonzero output.
 * `crossOn_of_eval`: correct outputs at three unit and zero inputs give `CrossOn`. `tile_cost_ge_of_gates` chains them:
   realizing firings with correct outputs there give the cost bound.
-* The shared cost lemma `cost_ge_supportAt` and `support_admits_openAt` are bc-b58c6093's, moved here; `cost_ge_support`
+* The shared cost lemma `cost_ge_supportAt` and `support_admits_openAt` are here; `cost_ge_support`
   and `support_admits_open` are their instances at FP4's price.
 * `support_admits_open`: why wider pre-adds aren't closed. From 9 TF32 blocks, 5 FP16, 3 int8, 9 `dp4a` or 17 FFMA blocks
   per input (the `*_open_at` pins), the support count can't rule out a cost profile below FP4's. The pin exhibits
@@ -217,7 +217,7 @@ theorem bilin_support (P : BilinProg K m k n τ) {liveX : Fin m × Fin k → Pro
 
 /-! ## Cost under per-slot pricing -/
 
-/-- **The shared cost lemma** (bc-b58c6093's, moved here from its FP8-tile files). A quadratic program correct on the live
+/-- **The shared cost lemma** (moved here from its FP8-tile files). A quadratic program correct on the live
 entries, whose product `t` has both inputs reading at most `s t` blocks, costs at least `p₀` per live product under
 any per-product prices `c` with `s t · p₀ ≤ c t`. -/
 theorem cost_ge_supportAt (P : QuadProg K m k n τ) {liveX : Fin m × Fin k → Prop} {liveY : Fin k × Fin n → Prop}
@@ -317,7 +317,7 @@ theorem open_int8 : price .int8 < capacity .int8 * price .fp4 := by norm_num [ca
 theorem open_dp4a : price .dp4a < capacity .dp4a * price .fp4 := by norm_num [capacity, price]
 
 omit [Fintype τ] [Fintype β] [Fintype γ] in
-/-- **The support count can't rule out cheaper cost profiles, at any base price** (bc-b58c6093's generalization). Wherever
+/-- **The support count can't rule out cheaper cost profiles, at any base price**. Wherever
 `c < s · p₀`, `M` products whose inputs each read `s` blocks meet the support count with equality for `s·M` live
 products, at a total price below `p₀` per live product. These are numbers that pass the count, not an exhibited
 program. -/
