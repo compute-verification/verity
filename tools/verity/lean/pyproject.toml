@@ -20,7 +20,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The tests read this directory's README, so its Markdown is keyed (`suites.markdown`). They load `lean_audit.py`, which
 # loads `tools/verity/check/common.py`, `lean_changed.py`, which loads the check tool's `lean_slot.py` and `slot.py`, and
 # the check tool's `check.py` (its Lean steps), which loads its siblings: the check tool's directory, since loading
-# `check.py` reads and writes its `__pycache__`. `test_lean_audit.py` reads the security proofs' manifest and lock, the
-# real package it computes the inputs of.
+# `check.py` reads and writes its `__pycache__`. Loading `check.py` reads the Slack registry (the owners `ci.toml` names),
+# the C-Flock Lean verifier's lakefile and manifest (its build step) and the upstream verifier's pin (the agreement step).
+# `test_lean_audit.py` reads the security proofs' manifest and lock, the real package it computes the inputs of.
 inputs = ["tools/verity/lean/README.md", "tools/verity/check", "Security/Proofs/lake-manifest.json",
-          "Security/Proofs/lean-audit.json"]
+          "Security/Proofs/lean-audit.json", ".agents/skills/using-slack/registry.json",
+          "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
+          "verity/ml/flock/verifier/upstream.json"]
