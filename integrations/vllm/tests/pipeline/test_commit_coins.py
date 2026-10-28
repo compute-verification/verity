@@ -119,7 +119,8 @@ def _commit(auditor: _Auditor, names: list[str]) -> tuple[list[dict], list[bytes
     for name in names:
         rc = SimpleNamespace(run_root=_root(name), extra={})
         kw = CC.positions(rc, coins)
-        assert kw["legacy"] is False and len(challenge_positions(rc.run_root, [8, 8], 4, b"0", **kw)) == 4
+        assert kw == {"source": bytes.fromhex(rc.extra["coins"]["keys"][CC.POSITIONS])}
+        assert len(challenge_positions(rc.run_root, [8, 8], 4, b"0", **kw)) == 4
         assert CC.identities(rc)["source"] == bytes.fromhex(rc.extra["coins"]["keys"][CC.IDENTITIES])
         chal, rec = CC.replay_challenge(rc, None)
         assert rec == {"source": CC.CHALLENGER, "family": CC.REPLAY, "index": len(records)}
