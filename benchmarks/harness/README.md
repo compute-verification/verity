@@ -3,7 +3,9 @@
 `verity-bench` measures what an arm (a protocol option or an experimental install) adds to served inference, against
 stock vLLM, through the vLLM integration (`integrations/vllm`). It owns specs, runs, sweeps, results and tables. The
 integration owns the engine pin, the hooks and the add-on interface (its README's "Hook interface"), and the harness uses
-those like any other caller. This file is the harness's contract: how a point is timed and what a result says.
+those like any other caller. This file is the harness's contract: how a point is timed and what a result says. In order:
+the commands, specs, arms, how a point is timed, metrics, results, dispatch and resume, settings, and the two tables
+`served-table` and `breakdown` render.
 `benchmarks/harness/tests/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
 
 ## Commands
@@ -20,6 +22,8 @@ verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by 
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 ~~~
 
+## Specs
+
 A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms and the modules of its experimental arms, its sweep (another file in
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
@@ -27,6 +31,18 @@ which never enter identity). Loading is strict: an unknown key (an engine settin
 included), a wrong type or an unknown GPU id is an error before anything runs. A preset's model is a Hugging Face id at a pinned `revision`, or a node-local directory with its
 `model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
 reads), which a dispatched point recomputes and refuses to run on when it differs.
+
+A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
+(temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
+engine's numerics like a greedy one's.
+
+The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
+capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
+cache directory for all arms' processes, so they run the kernel configurations the first one autotuned. Without it a
+graph engine replays decode-only CUDA graphs at `capture_sizes`, and `verity_vllm.LLM` builds every engine batch
+invariant (`bi-eager`, `bi-compiled`).
+
+## Arms
 
 A protocol arm (`pouw:SCHEME`, `pous:SCHEME`, `sampled-proofs:SCHEME`) runs the preset's precision with stock FP8 as its
 control, unless the spec's `[arm_settings."ARM"]` table says otherwise: its `precision` (PoUW's Pearl-C loads the BF16
@@ -50,16 +66,6 @@ before the clock starts and closes after it stops; each timed rep's `extras.h1_w
 arm's own gate is every window static, every served call passing the credit gate and every request entered
 (`llama31-8b-1gpu-pouw-h1`).
 
-A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
-(temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
-engine's numerics like a greedy one's.
-
-The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
-capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
-cache directory for all arms' processes, so they run the kernel configurations the first one autotuned. Without it a
-graph engine replays decode-only CUDA graphs at `capture_sizes`, and `verity_vllm.LLM` builds every engine batch
-invariant (`bi-eager`, `bi-compiled`).
-
 A served variant `BUILTIN@eager` or `BUILTIN@compiled` (`stock-fp8@compiled`) is a built-in arm's engine at vLLM's
 serving defaults in that execution, whatever the spec's `eager` and the preset's `serving_defaults` say for the other
 arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compiled-full`). Its control is the built-in
@@ -71,15 +77,15 @@ the bandwidth audit's spans arms (`benchmarks/vllm_encoded/README.md`) and the s
 (`verity_bench.vllm.bandwidth_ablation`, `BandwidthArm(..., spans=True, topup=False)`), each token-controlled by
 `bandwidth-plain`; `verity-bench breakdown` renders it.
 
+A served variant's `[arm_settings."ARM"]` may also name its own checkpoint, `model` at `revision`, when its precision
+can't load the preset's: in `llama31-8b-1gpu-pouw-h1-served`, H1's served ratio, `stock-fp8@compiled` loads the int8
+pin's BF16 base.
+
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
 that `run_point.sh` sources before the point's Python starts (to build the arm's libraries from the dispatched commit and
 export their paths, say), are part of the resolved spec and so of every point's identity. The dispatcher forwards both
 (`--env`, the setup as `VERITY_BENCH_SETUP`), and a point refuses to run under any other.
-
-A served variant's `[arm_settings."ARM"]` may also name its own checkpoint, `model` at `revision`, when its precision
-can't load the preset's: in `llama31-8b-1gpu-pouw-h1-served`, H1's served ratio, `stock-fp8@compiled` loads the int8
-pin's BF16 base.
 
 ## How a point is timed
 
