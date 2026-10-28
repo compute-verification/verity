@@ -112,8 +112,8 @@ def tile() -> str:
     return t
 
 
-#: the structural statement's layout mode under ``H1_TMPL=structural`` (#3226's struct_lower costs and #3249's structural
-#: verdicts are at it)
+#: the structural statement's layout mode under ``H1_TMPL=structural`` (struct_lower's costs and the structural verdicts
+#: are measured at it)
 LAYOUT = "iv/hybrid/4"
 #: ``H1_TMPL``'s values for the flat statement (also unset or empty) and for the structural one at `LAYOUT`
 FLAT, STRUCTURAL = "flat", "structural"

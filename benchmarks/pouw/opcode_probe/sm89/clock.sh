@@ -3,7 +3,7 @@
 # the GPU's clocks reset to the defaults (sudo nvidia-smi -rgc) and every kernel sustained at the power limit as found,
 # then at the board's default power limit (sudo nvidia-smi -pl, the found limit restored on exit). From a pushed commit:
 #
-#   research run --on vy-dc-l40s --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
+#   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --timeout 40m --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/sm89/clock.sh
 #
 # $OUT gets sustain.jsonl (a line a launch, `phase` found or default-pl), smi_trace.csv (nvidia-smi every 100 ms),

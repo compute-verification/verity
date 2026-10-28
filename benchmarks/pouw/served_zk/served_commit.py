@@ -62,7 +62,7 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
-  and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
   before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
@@ -298,7 +298,7 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
-#: the published challenger key, vy-challenger-1's: a challenger-key/v1 record
+#: the challenger's published key: a challenger-key/v1 record
 CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
 #: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
 CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
@@ -702,7 +702,7 @@ def lean_verdict(path_: Path) -> dict:
 
 
 def rust_verdict(path_: Path | None) -> dict | None:
-    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the verifier of record."""
+    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the Lean verifier."""
     if path_ is None:
         return None
     try:
@@ -1431,7 +1431,7 @@ def answer(ch: Challenger, line: str) -> str | None:
 
 
 def cmd_challenger(a) -> int:
-    """The challenger's process: the epoch's coins, drawn now from the Lean verifier of record (`pouw.verifier.coins`) or
+    """The challenger's process: the epoch's coins, drawn now from the Lean verifier (`pouw.verifier.coins`) or
     read from ``--state``, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
