@@ -81,6 +81,10 @@ def test_the_vectors_cover_every_named_scheme():
     assert {c["scheme"] for c in PINNED["cases"]} == set(SCHEMES)
 
 
+def test_the_identifier_names_exactly_the_registered_schemes():
+    assert I.SCHEMES == tuple(SCHEMES)
+
+
 def test_the_64_bit_fields_are_exact_decimal_strings():
     """As JSON numbers they would be IEEE 754 doubles, and 2^53 + 1 would read back as 2^53."""
     got = [(u["index"], u["weight"]) for u in BY_CASE["pearl-c-nvfp4-v0-u64"]["workload"]["matmuls"]]
