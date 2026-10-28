@@ -1,11 +1,11 @@
 """A stateful hash-based signature: LMS with LM-OTS (RFC 8554) over SHA-512, in plain Python, the scheme of the network
-certifier's certificates and the memory challenger's records, and the reference of their in-proof verifier
+and power certifiers' certificates and the memory challenger's records, and the reference of their in-proof verifier
 (`verity.ml.commitments.gates.lms`). Its security is the claim ``euf-cma/lms-sha512-n64`` (`verity.core.claims`).
 
 **Use.** One key per device per role. ``keygen(DEPLOYED, seed)`` (seed: N = 64 secret bytes the device keeps), then once
 ``LeafState.create(path, public_key(key), DEPLOYED.H)``; to sign, ``sign(key, state, message)`` with ``state = LeafState(path,
 public_key(key), DEPLOYED.H)``; to check, ``verify(DEPLOYED, public, message, sig)``. The message is a role's digest
-(`certificate_message`, `memory_challenger_message`), never hand-rolled. A network certifier first starts its session on
+(`certificate_message`, `power_certificate_message`, `memory_challenger_message`), never hand-rolled. A network certifier first starts its session on
 the state (``state.start(session)``), which refuses a session id the key has already started.
 
 **The hash.** ``H(x) = SHA-512(x)``, the whole output: N = 64, nothing truncated. The one other N, `TOY_N` = 8 (the
@@ -43,7 +43,7 @@ from pathlib import Path
 
 __all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DIRECTIONS", "LeafState", "Params", "PrivateKey", "ROLES",
            "SESSION_BYTES", "Signature", "StateError", "certificate_message", "digits", "key", "keygen", "memory_challenger_message",
-           "public_key", "root_of", "sign", "sign_at", "verify", "TOY_N"]
+           "power_certificate_message", "public_key", "root_of", "sign", "sign_at", "verify", "TOY_N"]
 
 D_PBLC, D_MESG, D_LEAF, D_INTR = 0x8080, 0x8181, 0x8282, 0x8383
 
@@ -136,6 +136,7 @@ class Signature:
 #: role -> its tag, which every digest of the role begins with. The network certificate's is the message's own,
 #: distinct from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`).
 ROLES = {"network-certificate": "verity/network-certificate-message/v2",
+         "power-certificate": "verity/power-certificate-message/v1",
          "memory-challenger-record": "verity/memory-challenger-record/v1"}
 DIRECTIONS = ("egress", "ingress")
 #: the length of a certifier session id, which the challenger draws for each session of the certifier
@@ -163,6 +164,17 @@ def certificate_message(I: bytes, session: bytes, link: str, direction: str, win
         raise ValueError(f"a certifier session id is {SESSION_BYTES} bytes, not {len(session)}")
     context = _field(bytes(session)) + _field(link.encode()) + _field(direction.encode()) + window.to_bytes(8, "big")
     return _digest("network-certificate", I, context, record)
+
+
+def power_certificate_message(I: bytes, session: bytes, outlet: str, span: int, record: bytes) -> bytes:
+    """The message a power certificate signs: as `certificate_message`, the tag ``verity/power-certificate-message/v1``
+    and the context the certifier session's id, the outlet's name and the span's index (u64)."""
+    if isinstance(span, bool) or not isinstance(span, int) or not 0 <= span < 2 ** 64:
+        raise ValueError(f"a power certificate's span is a u64, not {span!r}")
+    if len(session) != SESSION_BYTES:
+        raise ValueError(f"a certifier session id is {SESSION_BYTES} bytes, not {len(session)}")
+    context = _field(bytes(session)) + _field(outlet.encode()) + span.to_bytes(8, "big")
+    return _digest("power-certificate", I, context, record)
 
 
 def memory_challenger_message(I: bytes, session: str | bytes, record: bytes) -> bytes:

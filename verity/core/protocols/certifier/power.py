@@ -17,9 +17,18 @@ over the hiding digest of the span's record. The record and the salt are witness
 
 `channel` names the metered outlet, `interval` the span's index and Δ_ms its length, `status` is `PowerStatus`'s code,
 `parameters` is the meter's manifest digest (`Meter.digest`: its source, sampling rate and accuracy class, and whether it
-is a stand-in), `E_µJ` the energy the meter integrated over the span and `samples` the readings it integrated. A
-record signs a record digest and a clock certificate a clock digest, each under its own tag, so one opens as another
-only on a SHA-512 collision.
+is a stand-in), `E_µJ` the energy the meter integrated over the span and `samples` the readings it integrated.
+
+**The certificate** is the device's (`certificate.Issuer.sign_on`) on a channel of kind ``power``, the outlet
+(`Outlet`). Its message is LMS's power-certificate role digest (`verity.ml.crypto.lms.power_certificate_message`):
+
+    message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [outlet] ‖ u64be span ] ‖ [signed digest] ),
+              tag = "verity/power-certificate-message/v1", [x] = u64be len(x) ‖ x
+
+so a power certificate binds its key, certifier session, outlet and span, and never verifies as a link's, whose tag
+differs. **The issuer** (`PowerIssuer`) integrates the meter's samples over the span (`integrate`), builds the head
+under the meter's manifest, draws the salt from the device's coins and signs; a refused signature leaves the span
+without a certificate (fail-closed). The prover gets the head and the salt as witness (`CertifiedPower`).
 
 **The threshold.** Span i passes when the certified energy, less the public floors of the work it accounts and a
 public tolerance, leaves at most the bar's share of hidden capacity:
@@ -39,11 +48,15 @@ from __future__ import annotations
 
 import enum
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
+from typing import ClassVar
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.core.protocols.certifier.certificate import DIGEST_BYTES, SALT_BYTES, certificate_digest
+from verity.ml.crypto import lms
+from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, SALT_BYTES, ChannelCertificate, Issuer,
+                                                         PublicKey, certificate_digest)
 
 RECORD_TAG = "verity-power-certifier/record/v1"
 METER_TAG = "verity-power-certifier/meter/v1"
@@ -86,6 +99,8 @@ class Meter:
     def __post_init__(self) -> None:
         if self.stand_in != self.source.startswith("stand-in/"):
             raise ValueError(f"a stand-in meter's source starts with 'stand-in/', and only a stand-in's: {self.source!r}")
+        if type(self.rate_hz) is not int or self.rate_hz <= 0:
+            raise ValueError(f"a meter samples at a positive integer rate, not {self.rate_hz!r} Hz")
 
     def digest(self) -> bytes:
         return tagged_sha512(METER_TAG, canonical_json_bytes({
@@ -125,6 +140,94 @@ class PowerHead:
         if type(salt_c) is not bytes or len(salt_c) != SALT_BYTES:
             raise ValueError(f"a power certificate's salt is {SALT_BYTES} bytes")
         return certificate_digest(salt_c, self.digest())
+
+
+@dataclass(frozen=True, slots=True)
+class Outlet:
+    """The power certifier's channel (`certificate.Channel`): one metered outlet, kind ``power``. Its message is
+    `lms.power_certificate_message`, and the device's `window` argument is the span's index."""
+
+    name: str
+
+    kind: ClassVar[str] = "power"
+
+    @property
+    def id(self) -> tuple[str]:
+        return (self.name,)
+
+    def message(self, key_id: bytes, session: bytes, window: int, digest: bytes) -> bytes:
+        return lms.power_certificate_message(key_id, session, self.name, window, digest)
+
+
+def integrate(samples: Sequence[tuple[int, int]], span_ms: int, meter: Meter) -> tuple[PowerStatus, int, int]:
+    """(status, E_µJ, readings) of one span from the meter's readings, each (t_ms, mW) with t_ms strictly increasing
+    in 0 … `span_ms`, the span's start at 0. E is the upper sum: each stretch between two readings, and from the start
+    to the first and the last to the end, at the larger reading at its ends, exact in mW·ms = µJ and so never below
+    the energy of any power curve through the readings. No reading: `METER_UNAVAILABLE`. A stretch longer than
+    2000/`rate_hz` ms, two of the meter's sampling steps: `SAMPLE_GAP`."""
+    times = [t for t, _ in samples]
+    if any(type(v) is not int or v < 0 for s in samples for v in s) or times != sorted(set(times)) or (
+            times and times[-1] > span_ms):
+        raise ValueError(f"readings are (t_ms, mW) of non-negative integers, t_ms increasing in 0 … {span_ms}")
+    if not samples:
+        return PowerStatus.METER_UNAVAILABLE, 0, 0
+    max_gap = math.ceil(2 * MS / meter.rate_hz)
+    edges = [(0, samples[0][1]), *samples, (span_ms, samples[-1][1])]
+    energy = sum(max(pa, pb) * (tb - ta) for (ta, pa), (tb, pb) in zip(edges, edges[1:]))
+    gap = any(tb - ta > max_gap for (ta, _), (tb, _) in zip(edges, edges[1:]))
+    return (PowerStatus.SAMPLE_GAP if gap else PowerStatus.COMPLETE), energy, len(samples)
+
+
+@dataclass(frozen=True, slots=True)
+class CertifiedPower:
+    """What the power certifier hands over per span: the head and the salt it drew for it (`salt_c`), both witness,
+    and the certificate, the one public part, which signs the head's salted digest (`PowerHead.signed_digest`)."""
+
+    head: PowerHead
+    salt: bytes
+    certificate: ChannelCertificate
+
+    def refusal(self, key: PublicKey, session: bytes) -> str | None:
+        """Why the host check fails under `key` in certifier session `session`, or None when it holds: the
+        certificate names the head's outlet and span, is `key`'s, signs the head's digest under the salt, and its
+        signature verifies (`ChannelCertificate.verify`)."""
+        c, h = self.certificate, self.head
+        if c.channel != Outlet(h.channel) or c.window != h.interval:
+            return "the certificate names another outlet or span than the head"
+        if c.key_id != key.key_id:
+            return f"another key's, not {key.key_id.hex()[:16]}…"
+        try:
+            opened = h.signed_digest(self.salt)
+        except ValueError:
+            opened = None
+        if c.digest != opened:
+            return "the head and salt don't open the salted digest it signs"
+        if not c.verify(key, session):
+            return "its signature doesn't verify under the key in its session for the outlet and span it names"
+        return None
+
+    def verify(self, key: PublicKey, session: bytes) -> bool:
+        return self.refusal(key, session) is None
+
+
+@dataclass
+class PowerIssuer:
+    """The power certifier's signing step on the device (`device`, the certifier's `certificate.Issuer`: its signer,
+    session and coins) under its meter's manifest (`meter`): one certificate per span."""
+
+    device: Issuer
+    meter: Meter
+
+    def certify(self, outlet: str, span: int, span_ms: int,
+                samples: Sequence[tuple[int, int]]) -> CertifiedPower | None:
+        """The span's certified head, its status and energy `integrate`'s over `samples`, or None when the signer
+        refuses (`(outlet, span)` is then in the device's `refused`). A span the meter didn't cover is signed with its
+        status, which `power_check` refuses."""
+        status, energy_uj, readings = integrate(samples, span_ms, self.meter)
+        head = PowerHead(outlet, span, span_ms, status, self.meter.digest(), energy_uj, readings)
+        salt = self.device.draw_salt()
+        certificate = self.device.sign_on(Outlet(outlet), span, head.signed_digest(salt))
+        return None if certificate is None else CertifiedPower(head, salt, certificate)
 
 
 def counts_row(counts: tuple[int, ...]) -> bytes:

@@ -110,6 +110,22 @@ def test_role_digests_separate_roles_and_contexts(small) -> None:
             R.certificate_message(I, bytes(n), "l", "egress", 1, b"r")
 
 
+def test_power_certificate_messages_separate_from_links_and_each_other(small) -> None:
+    I, S = small.I, SESSION
+    base = R.power_certificate_message(I, S, "l", 1, b"r")
+    others = [R.power_certificate_message(I, S, "l", 2, b"r"), R.power_certificate_message(I, S, "m", 1, b"r"),
+              R.power_certificate_message(bytes(16), S, "l", 1, b"r"), R.power_certificate_message(I, S, "l", 1, b"s"),
+              R.power_certificate_message(I, bytes(32), "l", 1, b"r"),
+              *(R.certificate_message(I, S, "l", d, 1, b"r") for d in R.DIRECTIONS)]
+    assert len(base) == 64 and len({base, *others}) == 1 + len(others)
+    assert R.ROLES["power-certificate"] == "verity/power-certificate-message/v1"
+    for span in (-1, 2 ** 64, True):
+        with pytest.raises(ValueError, match="u64"):
+            R.power_certificate_message(I, S, "l", span, b"r")
+    with pytest.raises(ValueError, match="session id is 32 bytes"):
+        R.power_certificate_message(I, bytes(31), "l", 1, b"r")
+
+
 def test_tampered_signatures_are_refused(small) -> None:
     pk, m = R.public_key(small), R.certificate_message(small.I, SESSION, "l", "egress", 3, b"r")
     s = R.sign_at(small, 5, m)
