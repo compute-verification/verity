@@ -35,7 +35,6 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity import hardware
 from verity_vllm import settings
 from verity_vllm.records import workload as workload_record
 
@@ -114,12 +113,11 @@ TARGETS: dict[str, tuple[int, int]] = {
     "rtxpro6000": (12, 0),
 }
 
-#: Row-id target token -> the card (`verity.hardware`) whose SM count is the whole class's: such a row declares its whole Build target
-#: (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM count varies
-#: by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.  The H200 NVL
-#: has the SXM's SM count, and every RTX PRO 6000 edition the Server Edition's.
-TARGET_CARDS: dict[str, str] = {"rtxpro6000": "rtx-pro-6000-server", "h200": "h200-sxm-141gb"}
-TARGET_NUM_SMS: dict[str, int] = {t: hardware.load(sku)["sm"]["count"]["value"] for t, sku in TARGET_CARDS.items()}
+#: Row-id target token -> the device class's SM count, for the classes where it is fixed by the class: such a row declares its whole
+#: Build target (capability + SM count) by its id, so its Build derives for it on any host, a GPU-free one included.  A class whose SM
+#: count varies by part (h100 SXM 132 / PCIe 114) is not listed: its Build target is the host GPU's unless the workload declares one.
+#: The H200 is 132 SMs as SXM and as NVL.
+TARGET_NUM_SMS: dict[str, int] = {"rtxpro6000": 188, "h200": 132}
 
 ROW_FIELDS = ("model", "dtype", "target", "world", "batch", "max_input", "max_output", "arrivals", "sampling", "execution")
 _ROW_INT_PREFIX = {"world": "tp", "batch": "b", "max_input": "i", "max_output": "o"}
