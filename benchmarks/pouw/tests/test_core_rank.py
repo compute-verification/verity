@@ -46,6 +46,8 @@ def test_a_complete_table_renders_and_pools_its_share(tmp_path):
     ({"lean": ["sorry"]}, "R1: Lean status ['sorry'] not in"),
     ({"pos": 2}, "ranked positions [2] must be 1..1"),
     ({"share": 0.01, "share_basis": ""}, "R1: 'share' must be a fraction in [0, 1] with a 'share_basis'"),
+    ({"t1_fails_at": ["T 512"]}, "R1: 't1_fails_at' ['T 512'] must list distinct points from"),
+    ({"t1_status": "fail", "t1_fails_at": ["T 1,024"]}, "R1: 't1_fails_at' ['T 1,024'] must list distinct points from"),
 ])
 def test_an_incomplete_row_is_refused_by_name(over, says):
     assert any(e.startswith(says) for e in R.check([row(**over)], PERIOD)), R.check([row(**over)], PERIOD)
@@ -57,8 +59,11 @@ def test_a_period_without_its_sources_is_refused():
 
 def test_holding_designs_by_rank_then_restatements_then_failures_is_in_order():
     rows = [row(id="A", pos=1, rank=3), row(id="B", pos=2, rank=5), row(id="C", pos=3, rank=3, restates="A"),
-            row(id="D", pos=4, rank=3, t1_status="fail"), row(id="E", pos=5, rank=4, t1_status="fail")]
+            row(id="G", pos=4, rank=5, t1_status="fail", t1_fails_at=["T 512"]),
+            row(id="D", pos=5, rank=3, t1_status="fail"), row(id="E", pos=6, rank=4, t1_status="fail",
+                                                              t1_fails_at=list(R.POINTS))]
     assert R.check(rows, PERIOD) == []
+    assert R.entry(rows[3], "t1") == "? [none; fail at T 512]"
 
 
 @pytest.mark.parametrize(("rows", "says"), [
@@ -66,6 +71,8 @@ def test_holding_designs_by_rank_then_restatements_then_failures_is_in_order():
      "S at #2 (T1 could hold, rank 4) belongs above P at #1 (T1 could hold, rank 5)"),
     ([row(id="F", pos=1, rank=3, t1_status="fail"), row(id="H", pos=2, rank=5)],
      "H at #2 (T1 could hold, rank 5) belongs above F at #1 (T1 fails, rank 3)"),
+    ([row(id="F", pos=1, rank=3, t1_status="fail"), row(id="O", pos=2, rank=5, t1_status="fail", t1_fails_at=["T 512"])],
+     "O at #2 (T1 fails at one point, rank 5) belongs above F at #1 (T1 fails, rank 3)"),
     ([row(id="A", pos=1, rank=3), row(id="C", pos=2, rank=3, restates="Z")],
      "C: restates 'Z', which is not a ranked design whose T1 could still hold"),
 ])

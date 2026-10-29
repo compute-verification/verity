@@ -5,7 +5,9 @@ A rows file is TOML: one ``[[row]]`` per design or argument, each target a cited
 uses a provenance mark or Lean status outside the lists below, or ranks a design without a position or out of order,
 and writes ``ranking.md``, ``ranking.csv`` and ``ranking.json`` into ``--out``. The order is ``GROUPS``, each by rank:
 first the designs whose T1 could still hold, then those that only restate one of them (``restates = "ID"``), then those
-whose own numbers fail T1. Within a group and a rank the order is by H200 evidence, which is judgment and not checked.
+whose own numbers fail T1 at one served point (``t1_fails_at``, from ``POINTS``), then those that fail it at every point
+(a failing row without ``t1_fails_at`` fails at every point). Within a group and a rank the order is by H200 evidence,
+which is judgment and not checked.
 
 The rows hold measured numbers and the ids of the runs behind them, so they live with the evidence, not in this tree:
 ``uv run python benchmarks/pouw/core_rank/rank.py --rows ROWS.toml --out DIR``.
@@ -29,12 +31,16 @@ STATUS = ("met", "open", "fail", "n/a")
 VERDICTS = ("ranked", "argument", "out", "not core")
 TARGETS = ("t1", "t2", "t3")
 REQUIRED = ("id", "design", "catalogs", "assumption", "rank", "lean", "lean_ids", "vllm", "verdict", "why", "cites")
-GROUPS = ("T1 could hold", "restates one", "T1 fails")
+#: The served steps T1 is judged at (CORE.md: Llama-3.2-1B int8 at T 512 and T 8,192).
+POINTS = ("T 512", "T 8,192")
+GROUPS = ("T1 could hold", "restates one", "T1 fails at one point", "T1 fails")
 WEEK_S, MONTH_S, YEAR_S = 7 * 86400, 365 * 86400 / 12, 365 * 86400
 
 
 def group(r: dict) -> str:
-    return GROUPS[2] if r.get("t1_status") == "fail" else GROUPS[1] if r.get("restates") else GROUPS[0]
+    if r.get("t1_status") == "fail":
+        return GROUPS[2] if len(r.get("t1_fails_at", POINTS)) < len(POINTS) else GROUPS[3]
+    return GROUPS[1] if r.get("restates") else GROUPS[0]
 
 
 def order_key(r: dict) -> tuple[int, int]:
@@ -63,6 +69,11 @@ def check(rows: list[dict], period: dict) -> list[str]:
             bad = [c for c in r.get(f"{t}_card", []) if c not in CARDS]
             if bad or not r.get(f"{t}_card"):
                 errs.append(f"{rid}: '{t}_card' must be a non-empty list from {CARDS} (got {r.get(f'{t}_card')!r})")
+        fails_at = r.get("t1_fails_at")
+        if fails_at is not None and (r.get("t1_status") != "fail" or not fails_at
+                                     or len(set(fails_at)) != len(fails_at) or not set(fails_at) <= set(POINTS)):
+            errs.append(f"{rid}: 't1_fails_at' {fails_at!r} must list distinct points from {POINTS}, on a row whose "
+                        "'t1_status' is 'fail'")
         bad = [s for s in r.get("lean", []) if s not in LEAN]
         if bad:
             errs.append(f"{rid}: Lean status {bad} not in {LEAN}")
@@ -112,7 +123,10 @@ def period_rows(rows: list[dict], period: dict) -> list[dict]:
 
 
 def entry(r: dict, t: str) -> str:
-    return f"{r[t]} [{', '.join(r[f'{t}_card'])}; {r[f'{t}_status']}]"
+    status = r[f"{t}_status"]
+    if t == "t1" and r.get("t1_fails_at"):
+        status = f"{status} at {', '.join(r['t1_fails_at'])}"
+    return f"{r[t]} [{', '.join(r[f'{t}_card'])}; {status}]"
 
 
 def md_table(header: list[str], body: list[list[str]]) -> list[str]:
@@ -122,7 +136,7 @@ def md_table(header: list[str], body: list[list[str]]) -> list[str]:
 
 def render_md(rows: list[dict], period: dict, prows: list[dict], meta: dict) -> str:
     ranked = sorted((r for r in rows if r["verdict"] == "ranked"), key=lambda r: r["pos"])
-    head = ["#", "id", "design", "rank", "T1 gap, H200 time", "T2 t_H/t_S", "T3 perplexity", "Lean", "vLLM"]
+    head = ["#", "id", "design", "rank", "T1 gap", "T2 t_H/t_S", "T3 perplexity", "Lean", "vLLM"]
 
     def line(r: dict, pos: int | str) -> list:
         return [pos, r["id"], r["design"], f"{r['rank']}: {r['assumption']}", entry(r, "t1"), entry(r, "t2"),
@@ -131,7 +145,8 @@ def render_md(rows: list[dict], period: dict, prows: list[dict], meta: dict) -> 
     out = [f"# {meta.get('title', 'H200 power ranking')}", ""]
     out += [meta.get("preamble", ""), ""]
     out += ["Each target reads `value [where it was obtained; status]`. Marks: " + ", ".join(f"`{c}`" for c in CARDS)
-            + ". Status: met, open or fail against CORE.md's targets (T1 ≤ 1% in H200 time, T2 ≤ 100, T3 ≤ 5%).", ""]
+            + ". Status: met, open or fail against CORE.md's targets (T1's gap ≤ 1%, T2 ≤ 100, T3 ≤ 5%), with the "
+            + "served points where T1 fails.", ""]
     out += ["## Ranked designs", ""] + md_table(head, [line(r, r["pos"]) for r in ranked]) + [""]
     for verdict, title in (("argument", "Arguments (no design of their own)"), ("not core", "Outside the core problem"),
                            ("out", "Out")):
@@ -177,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     (a.out / "ranking.md").write_text(render_md(rows, period, prows, meta))
     (a.out / "ranking.json").write_text(json.dumps({"meta": meta, "period": period, "rows": rows,
                                                     "per_period": prows}, indent=1, ensure_ascii=False))
-    keys = ["pos", "restates", *REQUIRED[:5], *(f"{t}{s}" for t in TARGETS for s in ("", "_card", "_status")), *REQUIRED[5:],
+    keys = ["pos", "restates", "t1_fails_at", *REQUIRED[:5], *(f"{t}{s}" for t in TARGETS for s in ("", "_card", "_status")), *REQUIRED[5:],
             "needs", "share", "share_basis"]
     with (a.out / "ranking.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=keys, extrasaction="ignore")
