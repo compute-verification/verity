@@ -107,30 +107,37 @@ def compress_ref(cv: list[int], block: list[int]) -> list[int]:
 # ---------------------------------------------------------------- the W1 model (numpy uint32 lanes, many instances)
 
 class Regs:
-    """Counts 32-bit register writes by opcode; every value is a uint32 array over the instances."""
+    """Counts 32-bit register writes by opcode; every value is a uint32 array over the instances. With fold_consts, an
+    op whose inputs are equal across the instances (a value of the public start state alone) is free: the count of a
+    straight-line program for that start state, which takes such values as immediates."""
 
-    def __init__(self):
+    def __init__(self, fold_consts: bool = False):
         self.n = {"SHF": 0, "LOP3": 0, "IADD3": 0}
+        self.fold_consts = fold_consts
 
     def total(self) -> int:
         return sum(self.n.values())
 
+    def _count(self, op: str, k: int, *xs):
+        if not (self.fold_consts and all(bool(np.all(x == x[0])) for x in xs)):
+            self.n[op] += k
+
     def shf(self, lo, hi, m: int):
-        self.n["SHF"] += 1
+        self._count("SHF", 1, lo, hi)
         return ((hi.astype(np.uint64) << np.uint64(32) | lo.astype(np.uint64)) >> np.uint64(m)).astype(np.uint32)
 
     def shr(self, x, m: int):
-        self.n["SHF"] += 1
+        self._count("SHF", 1, x)
         return x >> np.uint32(m)
 
     def lop3(self, f, *xs):
-        self.n["LOP3"] += 1
+        self._count("LOP3", 1, *xs)
         return f(*xs).astype(np.uint32)
 
     def add(self, *terms):
         """A 64-bit add of at most three terms, each a (lo, hi) pair or an int immediate: an IADD3 pair."""
         assert 2 <= len(terms) <= 3 and sum(isinstance(t, int) for t in terms) <= 1
-        self.n["IADD3"] += 2
+        self._count("IADD3", 2, *[x for t in terms if not isinstance(t, int) for x in t])
         lo = np.zeros_like(next(t for t in terms if not isinstance(t, int))[0], dtype=np.uint64)
         hi = np.zeros_like(lo)
         for t in terms:
@@ -378,6 +385,20 @@ def fold_exact(d: dict, ref_d: dict, rng: np.random.Generator) -> bool:
     return fold_run(d, ref_d, rng)[0]
 
 
+def head_saving(d: dict, rng: np.random.Generator, n: int = 8) -> int:
+    """Writes a chain from a public start state saves over the chained count: the program for that start state takes
+    every value of the state alone as an immediate (ShaWrites' R_CHAIN - R_FIRST for SHA-512 itself)."""
+    nw = 160 if d["kind"] in ("R80", "RD") else 64
+    ws = [to_pair(x) for x in rng.integers(0, 2**64, size=(nw, n), dtype=np.uint64)]
+    vs = [to_pair(x) for x in rng.integers(0, 2**64, size=(nw, n), dtype=np.uint64)] if d["kind"] == "RD" else None
+    st0 = [to_pair(np.full(n, int(x), dtype=np.uint64)) for x in rng.integers(0, 2**64, size=8, dtype=np.uint64)]
+    full, folded = Regs(), Regs(fold_consts=True)
+    a = fold_w1(full, d, st0, ws, vs)
+    b = fold_w1(folded, d, st0, ws, vs)
+    assert all((x[0] == y[0]).all() and (x[1] == y[1]).all() for x, y in zip(a, b))
+    return full.total() - folded.total()
+
+
 def part_f(checks: Checks, rng: np.random.Generator) -> dict:
     out = {}
     for name, d in DESIGNS.items():
@@ -413,6 +434,21 @@ def part_f(checks: Checks, rng: np.random.Generator) -> dict:
                  "schedule, from R16's chunk state); and RD with V = 0 is SHA-512's rounds",
                  [(x + y) & M64 for x, y in zip(IV, st)] == blk
                  and fold_ref(DESIGNS["RD"], IV, ws, [0] * 16) == fold_ref(dict(DESIGNS["R16"]), IV, ws))
+    for name, d in DESIGNS.items():
+        out[name]["head_saving"] = head_saving(d, rng)
+    r0, r1 = Regs(), Regs(fold_consts=True)
+    blk = [to_pair(x) for x in rng.integers(0, 2**64, size=(16, 8), dtype=np.uint64)]
+    iv = [to_pair(np.full(8, x, dtype=np.uint64)) for x in IV]
+    compress_w1(r0, iv, blk)
+    compress_w1(r1, iv, blk)
+    sha_head = r0.total() - r1.total()
+    checks.check("F: a chain from a public start state saves 20 writes on R80, R16 and RD, as SHA-512's own first block "
+                 "does in this model (ShaWrites' card: 22), and 140 on SCH, whose first 15 steps' s0 and first two "
+                 "steps' s1 read the start window alone",
+                 all(out[n]["head_saving"] == sha_head == 20 for n in ("R80", "R16", "RD"))
+                 and out["SCH"]["head_saving"] == 140,
+                 f"SHA-512 {r0.total()} -> {r1.total()}; " + ", ".join(f"{n} {out[n]['head_saving']}"
+                                                                       for n in ("R80", "R16", "RD", "SCH")))
     return out
 
 
@@ -660,14 +696,16 @@ def part_p(checks: Checks, lead: dict, f: dict, a: dict) -> dict:
             r = p["r"]
             h_words = r * r_row(256 * 1024) / 32
             h_rest = p["h"] - h_words
-            seal = {}
+            seal, head = {}, {}
             for case, (cells, kk) in seal_cases.items():
                 words_per_state = cells * kk / 32 * r
                 seal_w = fd["state_bits"] / 8 * r_row(256 * 1024) / BLOCK / words_per_state
                 seal[case] = r * seal_w
+                head[case] = r / 32 / words_per_state * fd["head_saving"] * W1_PER_REG
             h_fold = r * fd["writes_per_word"]
             h = {case: h_rest + h_fold + s for case, s in seal.items()}
             base = p["t1"] - p["terms"].get("chunk_head", 0.0)
+            t1 = {case: base + head[case] for case in seal_cases}
             words = p["stock_macs"] * r / 32
             fold_ms = p["hash_ms"] * h_fold / p["h"]
             rest_ms = p["hash_ms"] * h_rest / p["h"]
@@ -677,7 +715,8 @@ def part_p(checks: Checks, lead: dict, f: dict, a: dict) -> dict:
             t2 = {case: {e: (s + extra + fold_ms + rest_ms + seal_ms[case]) / s for e, s in p["stock_ms"].items()}
                   for case in seal_cases}
             rows[pt] = {"h": h, "cut": {c: p["h"] / v for c, v in h.items()}, "h_fold": h_fold, "h_rest": h_rest,
-                        "seal": seal, "t1_premise_holds": base, "t2": t2, "words": words, "fold_ms": fold_ms}
+                        "seal": seal, "t1_premise_holds": t1, "t1_chain_head": head, "t1_cross_call": base,
+                        "t2": t2, "words": words, "fold_ms": fold_ms}
         out["designs"][name] = {"what": fd["what"], "writes_per_word": fd["writes_per_word"], "points": rows}
     lead_h = lead["points"]["t8192"]["h"]
     r80 = out["designs"]["R80"]["points"]["t8192"]
@@ -687,6 +726,14 @@ def part_p(checks: Checks, lead: dict, f: dict, a: dict) -> dict:
                  and all(max(t.values()) < 17 for pt in POINTS
                          for t in out["designs"]["R80"]["points"][pt]["t2"].values()),
                  ", ".join(f"{c}: h {v:.2f} ({lead_h / v:.2f}x)" for c, v in r80["h"].items()))
+    heads = {n: out["designs"][n]["points"]["t8192"]["t1_chain_head"] for n in ("R80", "RD", "SCH")}
+    c64, c128 = seal_cases
+    checks.check("P: a chain begun afresh each call adds its head to T1: R80 and RD 0.49% at 64 cells and K 2,048, "
+                 "0.06% at 128 and 8,192; SCH 3.4%, past the 1% bar, and 0.43%. A thread's chain carried across calls "
+                 "(each call starting from the state the last one sealed) pays the head once a window instead",
+                 all(abs(heads[n][c64] - 20 / 4096) < 1e-12 and abs(heads[n][c128] - 20 / 32768) < 1e-12
+                     for n in ("R80", "RD")) and heads["SCH"][c64] > T1_BAR > heads["SCH"][c128],
+                 ", ".join(f"{n} {v[c64]:.3%} / {v[c128]:.3%}" for n, v in heads.items()))
     rd = out["designs"]["RD"]["points"]["t8192"]
     checks.check("P: only RD (a modified round) and SCH (the schedule alone) reach 10x among the round folds",
                  sorted(n for n, d in out["designs"].items()
@@ -759,6 +806,17 @@ def main() -> int:
             checks.mutation("the bit-sliced round with bit 63's carry-in dropped", not bs_round_exact(mrng, 1)[0])
         finally:
             Planes.ripple = good_ripple
+        good_count = Regs._count
+
+        def bad_count(self, op, k, *xs):
+            if not (self.fold_consts and any(bool(np.all(x == x[0])) for x in xs)):
+                self.n[op] += k
+        Regs._count = bad_count
+        try:
+            checks.mutation("an op freed when any one input is a start-state value",
+                            head_saving(DESIGNS["R80"], mrng) != 20)
+        finally:
+            Regs._count = good_count
         checks.mutation("a skipped round taken for the full state",
                         fold_ref(DESIGNS["R16"], IV, list(range(1, 17)))
                         != fold_ref(DESIGNS["R16"], IV, list(range(1, 16))))
