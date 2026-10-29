@@ -116,30 +116,31 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
+    monkeypatch.setattr(auto, "LEAN_SLOTS", str(tmp_path / "no-lean-slots"))  # a node without Lean build slots
     src = tmp_path / "src"
     (src / auto.DESCRIPTION).parent.mkdir(parents=True)
     (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
     (src / auto.SLOT_PY).parent.mkdir(parents=True)
     (src / auto.SLOT_PY).write_text("import os\ndef status_doc(now):\n    return {'file': os.environ['CHECK_SLOTS'], 'slots': [], 'waiters': []}\n")
     try:
-        docs = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])
+        docs = auto.read(src, 4, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)
     finally:
         for fd in held:
             os.close(fd)
     assert docs[N2] == {"share": {"share": 48, "claims": 1, "waiters": 1, "free": 4, "fits": True}}
     assert docs[CPU1] == {"lean": None, "research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}}
     assert (claims / "gone.cpus").exists(), "the probe only reads: a leftover is the next taker's to remove"
-    assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"])[N2]["share"]["fits"] is True, "nothing holds them now"
+    assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)[N2]["share"]["fits"] is True, "nothing holds them now"
     (marker := tmp_path / "runs-via-slot").write_text("")
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
-    assert auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[N2]["slot_only"] == str(marker)
+    assert auto.read(src, 4, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)[N2]["slot_only"] == str(marker)
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
     monkeypatch.setattr(auto, "MIN_FREE_INODES", 2**62)
-    short = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+    short = auto.read(src, 4, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)[CPU1]["research"]
     assert short["error"].startswith(f"disk: {tmp_path} has ") and "inodes free" in short["error"], "27 Oct: cpu-5 out of inodes"
     target, why = auto.choose({N2: share(free=8), CPU1: {"research": short}}, 4, 16)
     assert target is None and "disk:" in why, "a pool on a full disk is skipped like one that can't be read"
-    failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"])
+    failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"], alive=lambda m: True)
     assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
 
 
@@ -249,6 +250,13 @@ def test_every_cpu_node_is_a_spill_target_and_one_past_its_registry_deadline_is_
     docs = auto.read(src, 4, reach=lambda name: [name], run=run, alive=lambda m: m != "vy-nebius-cpu-11")
     assert docs["vy-nebius-cpu-11"] == "past its registry deadline" and "vy-nebius-cpu-11" not in asked
     assert "vy-nebius-cpu-10" in asked
+
+    def bad(m):
+        if m == "vy-nebius-cpu-12":
+            raise ValueError("Invalid isoformat string: 'soon'")
+        return True
+    docs = auto.read(src, 4, reach=lambda name: [name], run=run, alive=bad)
+    assert docs["vy-nebius-cpu-12"] == "Invalid isoformat string: 'soon'", "an unreadable deadline is recorded, not taken as up"
 
 
 def test_a_records_run_goes_where_a_lean_build_slot_is_free_not_just_a_pool_slot():

@@ -174,21 +174,16 @@ def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
 
 
 def up(machine: str, now: float | None = None) -> bool:
-    """Whether the registry gives ``machine`` no deadline or one still ahead (a node past it is stopped or about to be)."""
+    """Whether the registry gives ``machine`` no deadline or one still ahead (a node past it is stopped or about to be). An
+    unlisted machine (remote.Refused) or an unreadable deadline (ValueError) raises, and `read` records it as the machine's."""
     import datetime as dt
 
     from . import remote
 
-    try:
-        dl = remote.resolve_machine(machine, AUTO_PROJECT).get("deadline")
-    except Exception:  # noqa: BLE001  (not listed: read() says why)
-        return True
+    dl = remote.resolve_machine(machine, AUTO_PROJECT).get("deadline")
     if not dl:
         return True
-    try:
-        end = dt.datetime.fromisoformat(str(dl).replace("Z", "+00:00")).timestamp()
-    except ValueError:
-        return True
+    end = dt.datetime.fromisoformat(str(dl).replace("Z", "+00:00")).timestamp()
     return end > (dt.datetime.now(dt.UTC).timestamp() if now is None else now)
 
 
@@ -199,20 +194,18 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     reach, run, alive = reach or _reach, run or _ssh, alive or up
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
-    skipped: dict[str, str] = {}
     for machine, pool in SPILL:
-        if machine in skipped or (machine not in asks and not alive(machine)):
-            skipped[machine] = "past its registry deadline"
-            continue
         asks.setdefault(machine, []).append(pool)
 
     def one(item: tuple[str, list[str]]) -> dict | str:
         name, pools = item
         try:
+            if name != AUTO_NODE and not alive(name):
+                return "past its registry deadline"
             r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools))
         except subprocess.TimeoutExpired:
             return f"no answer in {READ_TIMEOUT_S} s"
-        except Exception as e:                                       # not listed, not this project's, no source: never chosen
+        except Exception as e:                    # not listed, not this project's, no source, bad deadline: never chosen
             return str(e) or type(e).__name__
         if r.returncode:
             err = r.stderr.decode(errors="replace").strip().splitlines()
@@ -224,7 +217,7 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
         return doc if isinstance(doc, dict) else f"its answer is not a JSON object: {r.stdout[:120]!r}"
 
     with ThreadPoolExecutor(max_workers=len(asks)) as ex:
-        return {**skipped, **dict(zip(asks, ex.map(one, asks.items())))}
+        return dict(zip(asks, ex.map(one, asks.items())))
 
 
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
