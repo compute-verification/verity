@@ -21,8 +21,8 @@ from verity_vllm.engine import int8_experts as X  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw import lead as PL  # noqa: E402
-from verity_vllm.protocols.pouw.lead import commit as C  # noqa: E402
 from verity_vllm.protocols.pouw.lead import feed as F  # noqa: E402
+from verity_vllm.protocols.pouw.lead import record as R  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import passes as PP  # noqa: E402
 
 K = 64
@@ -56,9 +56,13 @@ def _plain(layer, xq, s_a):
     return E.dequantize(E.int_mm(xq, layer.weight), s_a, layer.weight_scale)
 
 
+def a_root(call, xq, key):
+    return hashlib.sha512(R.header(call) + xq.numpy().tobytes() + key).digest()
+
+
 class Backend:
-    """The lead's kernel and committer, standing in: the plain product as y, and a words root over the call's rows and
-    coins."""
+    """The lead's kernel and committer, standing in: the plain product as y, root(A_j) a hash of the call, its rows and
+    the pass's key, and a words root over the call's rows and coins."""
 
     variant = "stand-in"
 
@@ -67,6 +71,10 @@ class Backend:
 
     def load(self, w, layer):
         self.loaded.append(w)
+
+    def a_root(self, w, call, xq, key):
+        self.log.append(("a_root", w, call, key))
+        return a_root(call, xq, key)
 
     def call(self, w, layer, xq, s_a, feed):
         self.log.append(("backend", w, feed.call))
@@ -145,14 +153,16 @@ def test_a_call_commits_its_rows_before_its_coins_and_its_words_after():
     log = []
     backend, layer = Backend(log), Linear(24, 1)
     run = PL.LeadRun(ENTRY, backend, Link(log), b"\x07" * 64, key=_keys())
-    key = run.record.key
+    key = run.pass_key
+    assert len(key) == PL.KEY_BYTES
     x = _x(5, 2)
     xq, s_a = E.quantize_rows(x)
     y = run.call(3, layer, xq, s_a)
     assert torch.equal(y.view(torch.int16), _plain(layer, xq, s_a).view(torch.int16))
     call = F.Call(0, 0, 3, 5, K, 24)
-    assert log[0] == ("release", call, C.a_root(xq.numpy(), call, key)) and log[1] == ("backend", 3, call)
-    assert run.record.a_roots == [log[0][2]] and len(run.record.words_roots) == 1
+    root = a_root(call, xq, key)
+    assert log == [("a_root", 3, call, key), ("release", call, root), ("backend", 3, call)]
+    assert run.record.a_roots == [root] and len(run.record.words_roots) == 1
     run.call(0, Linear(16, 4), *E.quantize_rows(_x(1, 5)))
     assert [c.index for c in run.record.calls] == [0, 1] and run.details["calls"] == 2
 
@@ -169,13 +179,14 @@ def test_a_step_is_a_pass_published_at_its_end():
     assert isinstance(out, PassCommitment) and out is record.published and run.passes == [out]
     sha = lambda parts: hashlib.sha512(b"".join(parts)).digest()  # noqa: E731
     assert (out.scheme, out.rank, out.world, out.pass_index, out.salt, out.kernel) == (PL.SCHEME, 1, 2, 0, b"", "stand-in")
-    assert out.units == 2 and out.tiles == sum(C.tiles(c.shape) for c in record.calls)
+    assert out.units == 2 and out.tiles == sum(R.tiles(c.shape) for c in record.calls)
     assert out.activation_roots == sha(record.a_roots) and out.transcript_root == sha(record.words_roots)
     assert run.commits["passes"] == [out.to_json()] and run.details["passes"] == 1
     assert run.end_pass() is out
     run.call(0, layers[0], *E.quantize_rows(_x(2, 9)))
-    assert run.record.pass_index == 1 and run.record.key != record.key
-    with pytest.raises(C.RecordError, match="no sample before"):
+    keys = [e[3] for e in log if e[0] == "a_root"]
+    assert run.record.pass_index == 1 and keys[0] == keys[1] != keys[2] == run.pass_key
+    with pytest.raises(R.RecordError, match="no sample before"):
         run.record.commitment()
     run.finish()
     assert [p.pass_index for p in run.passes] == [0, 1]
@@ -189,7 +200,7 @@ def test_a_failed_call_leaves_its_pass_unpublishable():
     run = PL.LeadRun(ENTRY, Broken(), Link([]), b"\x07" * 64, key=_keys())
     with pytest.raises(RuntimeError, match="kernel fault"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
-    with pytest.raises(C.RecordError, match="has its A root and no words"):
+    with pytest.raises(R.RecordError, match="has its A root and no words"):
         run.end_pass()
 
 
@@ -202,8 +213,8 @@ def test_a_call_the_link_refuses_gets_no_kernel():
     run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), b"\x07" * 64, key=_keys())
     with pytest.raises(F.FeedError, match="refused"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
-    assert [e[0] for e in log] == ["release"]
-    with pytest.raises(C.RecordError, match="has its A root and no words"):
+    assert [e[0] for e in log] == ["a_root", "release"]
+    with pytest.raises(R.RecordError, match="has its A root and no words"):
         run.end_pass()
 
 
@@ -233,7 +244,7 @@ def test_install_serves_each_call_through_the_lead_and_uninstalls_to_the_plain_a
     runner = Runner(model)
     served = runner.execute_model(x)
     assert torch.equal(served.view(torch.int16), plain.view(torch.int16))
-    assert [e[0] for e in log] == ["release", "backend"] * 3
+    assert [e[0] for e in log] == ["a_root", "release", "backend"] * 3
     assert [e[2].linear for e in log if e[0] == "backend"] == [0, 1, 2]
     assert len(option.commits["passes"]) == 1 and option.commits["passes"][0]["units"] == 3
     runner.execute_model(_x(2, 8))

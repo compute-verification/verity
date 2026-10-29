@@ -196,7 +196,7 @@ class Settings:
     graphs: tuple[int, ...] = ()
     #: Pearl-C's: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
     period: Mapping[str, Any] | None = None
-    #: the lead's kernel and committer (`lead.LeadBackend`: ``load``, ``call``)
+    #: the lead's kernel and committer (`lead.LeadBackend`: ``load``, ``a_root``, ``call``)
     backend: Any = None
 
     @classmethod
@@ -235,9 +235,9 @@ class Settings:
         if not isinstance(start, int) or isinstance(start, bool) or start < 0:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
         backend = raw.get("backend")
-        if backend is not None and not (callable(getattr(backend, "load", None)) and callable(getattr(backend, "call", None))):
-            raise ValueError("pouw setting 'backend' is the lead's kernel and committer: load(w, layer) and "
-                             "call(w, layer, xq, s_a, feed)")
+        if backend is not None and not all(callable(getattr(backend, f, None)) for f in ("load", "a_root", "call")):
+            raise ValueError("pouw setting 'backend' is the lead's kernel and committer: load(w, layer), "
+                             "a_root(w, call, xq, key) and call(w, layer, xq, s_a, feed)")
         return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *PHS.of(raw), backend)
 
 
