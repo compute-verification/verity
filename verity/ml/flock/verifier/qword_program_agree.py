@@ -12,7 +12,7 @@
   refused by the query instead).
 - `--qword-vectors` (#111): every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
   every descriptor's cuts at several (X, W) against core's `verify`.
-- `--widths` (PRF-155, PROTOCOL.md §17.1 D22): descriptors whose references name leaves of other widths than their types
+- `--widths` (PROTOCOL.md §17.1 D22): descriptors whose references name leaves of other widths than their types
   give them, and their neighbours, each with the codec's refusal: the Lean decoder refuses each `E_REINTERPRET` the codec
   does, word for word, and no other.
 - `--program` (a real descriptor, e.g. a #101 Build's): per Call its units; per Definition a Call names, its units, the
