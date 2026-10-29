@@ -1,7 +1,7 @@
 # commit_slots: the serve-time commit call, one subtree per sequence slot
 
 The call that commits a serving step's proof-block outputs: every proof block's outputs as
-`hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a drawn
+`hm96-sha512/row/v2` rows under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a sampled
 proof block opens by replaying its own request. `slots.py` is the CPU reference and this file's executable form;
 `slots_gpu.py` runs the same call on the GPU (or on its host twin) on the SHA-512 engine
 (`benchmarks/torch_gpu/sha512_rows/`): the engine hashes rows into hm96 leaves and builds frame-v3 levels, and
@@ -96,7 +96,7 @@ and slot pad tails are computed once.
 
 The salt key is the prover's private randomness, from the operating system's generator, never derived from anything
 public or from the transcript: no Fiat–Shamir. The verifier's only coins are live: the step's root goes to the challenger
-before the step's live coin is drawn, and the coin picks which (slot, proof block) pairs open. A slot's salts are a function of
+before the step's live coin is flipped, and the coin picks which (slot, proof block) pairs open. A slot's salts are a function of
 the key and the slot index alone, so replaying a slot's request regenerates its rows and their salts.
 
 ## Opening a proof block

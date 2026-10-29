@@ -1,5 +1,5 @@
 """The honest plain session: the compiled Lean verifier accepts a plain (non-zk) session that the unmodified prover made
-in full against the rec proxy's coin server (`--coins os`), with the draw held to its own law (`--stratified 16`), and
+in full against the rec proxy's coin server (`--coins os`), with the sample held to its own law (`--stratified 16`), and
 refuses the same session with one coin changed.
 
 It checks the compiled `flock-verify` only, on one record. It makes no Lean premise hold and proves nothing about the

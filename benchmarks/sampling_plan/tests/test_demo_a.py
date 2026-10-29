@@ -1,7 +1,7 @@
 """Demo A's frontier (`demo_a.py`): the Definition map's subcircuits at their per-token counts and staged k_log, each unit's work
 its own ANDs and every unit its output bits, statements shared, core's risk wherever core computes it, the certificate
 `certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under the
-exchange rate no worse than either half's best alone, within the budget, the least sampling block the first whose share of its
+exchange rate no worse than either half's best alone, within the budget, the least execution phase the first whose share of its
 GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform draw and the
 tile strata's epsilon as core and PoUW state them."""
 

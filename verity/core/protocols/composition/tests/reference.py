@@ -97,7 +97,7 @@ class Ported:
 @dataclass(frozen=True)
 class Recorded:
     """A component on the cases recorded for it: `cases` holds each kind's case and the answer its Python verifier gave
-    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was drawn,
+    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was sampled,
     or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both recorded components refuse with no
     digest, as they do params that don't decode; any other case is a difference."""
 
