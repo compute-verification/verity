@@ -288,3 +288,37 @@ def EncardProgramRunsLeWindows : Prop :=
         D ^ (m * cfg.egress.buckets) : ℕ) : ℕ∞)
 
 end Properties.NetworkCertifier
+
+/-! ## A one-window instance
+
+The configuration the completeness statements' honest cases run (`Proofs.Properties.CertifierNetwork.Instance`), and
+the honest network certifier's record that `EncardProgramRunsLeWindows`'s honest lemma counts at it. -/
+
+namespace Properties.CertifierNetwork.Instance
+
+def grid : _root_.CertifierDevice.Params := ⟨1, 1, 9, 1, 1⟩
+
+def syncSet : _root_.NetworkCertifier.SyncSet := ⟨[0], [1], by simp, by simp, by simp, by simp, by simp⟩
+
+def sync : _root_.NetworkCertifier.ClockSync := ⟨0, 1, by decide⟩
+
+/-- One window of one bucket on each grid, its sync declared. -/
+def config : _root_.CertifierDevice.Config :=
+  { egress := grid, ingress := grid, syncSet, syncs := #[sync], windows := 1, origin := 0, slack := 0 }
+
+/-- One frame of content `[true]`, anchored at bucket 0. -/
+def oneFrame : List Unit → Unit → Fin 1 → List _root_.NetworkCertifier.LogicalFrame := fun _ _ _ => [⟨[true], 0, 0⟩]
+
+/-- The advice of `config`'s one window: the content `()` and Σ_sync's one value, δ = 0 and ρ = 1. -/
+def oneAdvice : Fin 1 → Unit × (Fin config.windows → Properties.NetworkCertifier.SyncValue config.syncSet) :=
+  fun _ => ((), fun _ => (⟨0, List.mem_toFinset.mpr (List.mem_singleton_self 0)⟩,
+    ⟨1, List.mem_toFinset.mpr (List.mem_singleton_self 1)⟩))
+
+/-- The honest network certifier's record of `config`'s one bucket: the Program's row of `oneFrame` under `oneAdvice`,
+jitter class 0, its boundary link complete. -/
+def honestObs : List (NetTiming.Obs 1 1 config.egress.allocation) :=
+  [⟨(NetTiming.constantRate (S := config.egress.allocation) config.egress.buckets
+      config.windows 1 (Properties.NetworkCertifier.programFrames config oneFrame)).rows 0 [()] oneAdvice, 0,
+    fun _ => .complete⟩]
+
+end Properties.CertifierNetwork.Instance

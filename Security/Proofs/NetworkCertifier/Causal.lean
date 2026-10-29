@@ -33,7 +33,7 @@ payload of its one slot, against the bound's one at `Instance.config`'s paramete
 open NetworkCheck.Check (expectedGrid noSync)
 open NetworkCertifier (ClockSync LogicalFrame expectedRow)
 open Properties.NetworkCertifier
-open Properties.CertifierNetwork.Instance (config)
+open Properties.CertifierNetwork.Instance (config oneFrame oneAdvice honestObs)
 
 namespace Proofs.NetworkCertifier
 
@@ -310,21 +310,6 @@ theorem encard_acceptedObservations_take_le (device : DeviceInput → DeviceOutp
 end Check
 
 /-! ## Its honest and nontrivial lemmas -/
-
-/-- One frame of content `[true]`, anchored at bucket 0. -/
-def oneFrame : List Unit → Unit → Fin 1 → List LogicalFrame := fun _ _ _ => [⟨[true], 0, 0⟩]
-
-/-- The advice of `Instance.config`'s one window: the content `()` and Σ_sync's one value, δ = 0 and ρ = 1. -/
-def oneAdvice : Fin 1 → Unit × (Fin config.windows → SyncValue config.syncSet) :=
-  fun _ => ((), fun _ => (⟨0, List.mem_toFinset.mpr (List.mem_singleton_self 0)⟩,
-    ⟨1, List.mem_toFinset.mpr (List.mem_singleton_self 1)⟩))
-
-/-- The honest network certifier's record of `Instance.config`'s one bucket: the Program's row of `oneFrame` under
-`oneAdvice`, jitter class 0, its boundary link complete. -/
-def honestObs : List (NetTiming.Obs 1 1 config.egress.allocation) :=
-  [⟨(NetTiming.constantRate (S := config.egress.allocation) config.egress.buckets
-      config.windows 1 (programFrames config oneFrame)).rows 0 [()] oneAdvice, 0,
-    fun _ => .complete⟩]
 
 /-- **The program's honest run is counted**: at `Instance.config` (one window of one bucket, allocation 1, Σ_sync of
 one value), the honest record of one frame anchored at bucket 0 is among the sequences `EncardProgramRunsLeWindows`
