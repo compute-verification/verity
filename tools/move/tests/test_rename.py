@@ -361,7 +361,7 @@ def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy):
     (toy / "fix/vec.json").write_text(json.dumps(pin, indent=2) + "\n")
     git(toy, "add", "-A")
     git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "a pin")
-    assert M.main(["--root", str(toy)]) == 0
+    assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
     moved = (toy / "Sec/Proofs/lake-manifest.json").read_text()
     assert moved == manifest.replace("w/warden", "w/certifier")
     assert json.loads((toy / "fix/vec.json").read_text()) == {
