@@ -268,7 +268,7 @@ weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the tabl
 when `N_p` is at most the deployed pads' domain; level 0's `2·2^{d₀}·Q₀ ≥ 2` is the `2`, and `4·2^{d₀}/e` the
 share of `k` (`kFits_all`). -/
 theorem cZ_sum_le_tableWeight {st : Stmt} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
-    {sch : Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m) (Np : ℕ)
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m) (Np : ℕ)
     (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)) :
     4 * tableLen true st / Real.exp 1 + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i + 2 ≤
       tableWeight true st := by
@@ -319,7 +319,7 @@ theorem joinEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω :
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (h25 : ∀ j < (tables true x).length, 25 ≤ (st j).m) (h35 : ∀ j < (tables true x).length, (st j).m ≤ 35)
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
         (Claims.Flock.zkSched (st j).m).1.k0))
