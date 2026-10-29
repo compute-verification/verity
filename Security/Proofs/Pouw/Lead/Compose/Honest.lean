@@ -9,11 +9,12 @@ The honest strategy writes each committed tile once with one `other` instruction
 messages with one `other` instruction a credited register, registers the commitment's root and exchanges nothing. For
 every coin stream and every commitment format it meets every premise of `G` but `CommitL1w` and is accepted at every
 coin value (`honestAt`): the stream enters only the memory the run starts from, and the honest run writes every
-committed tile. So at a deployed instance the honest lemma is `CommitL1w` at the deployed commitment, which holds where the
-commitment's messages include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the lead's chunks and
-over A's rows (`commitL1w_of_leaves`): a frame leaf carries its rank (`leafMsg_rank_inj`), so leaves at distinct ranks
-are distinct messages however their values repeat, and its header puts one more compression on its value's
-(`blocks_leafMsg`). `honest` instantiates `honestAt` at a one-message commitment and the empty stream.
+committed tile. So the honest lemma holds at every stream and every commitment meeting `CommitL1w` (`honestOfCommit`),
+and at a deployed instance it is `CommitL1w` at the deployed commitment. That holds where the commitment's messages
+include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the lead's chunks and over A's rows
+(`commitL1w_of_leaves`): a frame leaf carries its domain's id and its rank (`leafMsg_id_inj`, `leafMsg_rank_inj`), so
+leaves at distinct ranks are distinct messages however their values repeat, and its header puts one more compression on
+its value's (`blocks_leafMsg`). `honest` is `honestOfCommit` at a one-message commitment and the empty stream.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -151,6 +152,14 @@ theorem leafMsg_rank_inj {D : Hash.Tree.Domain} {r r' : ℕ} {s s' : String} {v 
     ((uint_length_le hr').trans_lt (by norm_num)) hlen
   exact uint_inj (List.append_inj h hlen).1
 
+/-- **A frame leaf carries its domain's id**: two equal frame leaves are of domains with one id, whatever their ranks,
+schemas and values. -/
+theorem leafMsg_id_inj {D D' : Hash.Tree.Domain} {r r' : ℕ} {s s' : String} {v v' : Hash.Msg}
+    (h : Hash.Tree.leafMsg D r s v = Hash.Tree.leafMsg D' r' s' v') : D.id = D'.id := by
+  have h := Hash.BindingProofs.frame_parts h
+  simp only [List.flatMap_cons, List.append_assoc, Hash.BindingProofs.bytes_length] at h
+  exact Hash.BindingProofs.bytes_injective (List.append_inj (List.append_cancel_left h) rfl).1
+
 /-- Frame leaves of one domain at distinct ranks below `2^64` are distinct messages. -/
 theorem nodup_leaves (D : Hash.Tree.Domain) (s : String) (v : ℕ → Hash.Msg) {rs : List ℕ} (hrs : rs.Nodup)
     (hr : ∀ r ∈ rs, r < 2 ^ 64) : (rs.map fun r => Hash.Tree.leafMsg D r s (v r)).Nodup :=
@@ -272,6 +281,21 @@ theorem commitL1w_of_leaves {L : Pouw.Lead.Layout} (H : Hash.Msg → Hash.Digest
     have : (0 : ℚ) ≤ ka := Nat.cast_nonneg _
     linarith
 
+/-- **The honest lemma at every coin stream and every commitment meeting `CommitL1w`**: at every call, for every coin
+stream, commitment format and form classifier meeting `CommitL1w`, some set of strategies meets every premise of `G`
+and holds an honest strategy accepted at every coin value. At the protocol's stream and commitment it is the honest
+lemma at the deployed instance, given `CommitL1w` there. -/
+theorem honestOfCommit (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
+    (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
+    (hC : CommitL1w H C isA κ) :
+    ∃ (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
+      CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain H C κ stream Real ∧
+      OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧ HonestHashRuled H C κ Real ∧
+      OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) C) H C κ Real ∧ Real σ ∧
+      ∀ ω, Accepted (lead T m n K) H C κ σ ω :=
+  ⟨_, _, hC, honestAt (lead T m n K) H κ stream C isA⟩
+
 /-! ## At a stand-in commitment -/
 
 /-- The empty coin stream: no coin streamed. -/
@@ -314,7 +338,7 @@ theorem commitL1w_oneMsg (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (
 /-- **The honest lemma** (`Pouw.Guarantees.Lead.Honest`): `honestAt` at the one-message commitment, which meets
 `CommitL1w` (`commitL1w_oneMsg`), and the empty stream. -/
 theorem honest : Pouw.Guarantees.Lead.Honest := fun T m n K H κ =>
-  ⟨noStream _, oneMsgCommit _, fun _ => false, _, _, commitL1w_oneMsg _ H κ,
-    honestAt (lead T m n K) H κ (noStream _) (oneMsgCommit _) fun _ => false⟩
+  ⟨noStream _, oneMsgCommit _, fun _ => false,
+    honestOfCommit T m n K H κ (noStream _) (oneMsgCommit _) (fun _ => false) (commitL1w_oneMsg _ H κ)⟩
 
 end Pouw.SecurityProofs.Lead.Compose
