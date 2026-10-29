@@ -40,7 +40,9 @@ reduction's target (`AlgSuffL`, rank 3, the analogue of `A2_algebraicSufficiency
 * on cell-pure programs (`CellPure`, rank 4, Theorem K's purity) the count is the full `L` a word, `L/32` registers of
   32 (`PureCount`, a sketch of a short proof from `innerProductRank`);
 * on pure lanes (`PureLanes`: no tensor-core lane sums two noise variables) it is the full `L` a word whatever the
-  program shares (`CoverCount`, a covering count, sketched);
+  program shares (`CoverCount`, proved from the covering count `CoverAll`);
+* on noise in `[−64, 64]` every s8 lane is pure, so s8 programs pay the full `L` with no purity hypothesis
+  (`CoverCountS8`, proved); the wide lanes there are `WideNoGain`, open;
 * without purity the full `L` is `NoSharingGain`, a lower bound on matrix multiplication's cost with merges priced and
   operand ranges enforced: open at `L` 64 and 128, likely false from 256 (small data lets summed lanes fit s8).
 -/
@@ -488,19 +490,51 @@ def PureLanes {α β : Type} (P : List (BamOp α β)) : Prop :=
     | .tc _ _ u v => (∀ t, (u t).Pure) ∧ ∀ t, (v t).Pure
     | _ => True
 
-/-- **The count on pure lanes** (sketch of a theorem; rank 0 once proved): every well-formed program at the H200's
-types with pure lanes whose registers include every running word's form costs at least `N·L`, whatever it shares
-across cells, for every data.
+/-- The noise pairs a form holds: its nonzero noise-by-noise entries. -/
+def noiseSupp {α β : Type} [Fintype α] [Fintype β] (f : BForm α β) : Finset (α × β) :=
+  univ.filter fun p => f (some p.1) (some p.2) ≠ 0
 
-The proof is a covering count. On pure lanes a product's noise part is one monomial `e_α f_β`, a merge or copy adds
-no monomial, and a constant has none, so every monomial of every register is a product of some tensor-core register.
-The cells' last words hold all `m·n·K` monomials `e_(r,i) f_(i,c)`. A noise-carrying type has `k ≤ 32` (a lane with a
-noise variable spans at least 64 values, so `e4m3`, `e5m2`, int4 and `b1` lanes carry none), so it takes `m·n·K/32`
-registers of 32. It is KSW-K's one fresh monomial per honest MAC turned into a bound: summed lanes are what break it. -/
+/-- **The covering count** (rank 0, proved: `coverAll`): on noise in `[nlo, nhi]` spanning more than 15, a
+well-formed program at the H200's types with pure lanes costs at least the number of distinct noise pairs that the
+forms it writes hold, whatever those forms are.
+
+On pure lanes a product's noise part is one monomial `e_α f_β`, a merge or copy adds no monomial, and a constant has
+none, so every noise pair of every register is a product of some tensor-core register. A type with `k > 32` (int4,
+`b1`) is narrower than the noise, so its lanes carry no noise variable (`Lane.noiseFree_of_fitsOn`), and every other
+type writes at most its price in products. -/
+def CoverAll : Prop :=
+  ∀ (α β : Type) [Fintype α] [Fintype β] [DecidableEq α] [DecidableEq β] (nlo nhi : ℤ) (P : List (BamOp α β))
+    (S : Finset (BForm α β)), nlo ≤ nhi → 15 < nhi - nlo → (∀ o ∈ P, o.WFOn nlo nhi h200Types) → PureLanes P →
+      (∀ f ∈ S, f ∈ bamRegs P) → (S.biUnion noiseSupp).card ≤ bamCost P
+
+/-- **The count on pure lanes** (rank 0, proved: `coverCount`): every well-formed program at the H200's types with
+pure lanes whose registers include every running word's form costs at least `N·L`, whatever it shares across cells,
+for every data. The cells' last words hold all `m·n·K` noise pairs `e_(r,i) f_(i,c)`, so `CoverAll` gives it. It is
+KSW-K's one fresh monomial per honest MAC turned into a bound: summed lanes are what break it. -/
 def CoverCount (L : ℕ) : Prop :=
   ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
     (P : List (BamOp (Fin m × Fin K) (Fin K × Fin n))),
     L ∣ K → (∀ o ∈ P, o.WF h200Types) → PureLanes P → (∀ f ∈ runForms a b L, f ∈ bamRegs P) →
+      (m * n * (K / L) : ℚ) * L ≤ bamCost P
+
+/-- **The count on s8 programs at full-range noise** (rank 0, proved: `coverCountS8`): on noise in `[−64, 64]`,
+every program of s8 tensor-core registers, merges, copies and constants whose registers include every running word's
+form costs at least `N·L`, with no purity hypothesis. An s8 lane is pure on that noise (`pureLanes_s8_rfp`), so
+`CoverAll` applies; int7 data plus such noise is an s8 value, so the honest program is one of these. -/
+def CoverCountS8 (L : ℕ) : Prop :=
+  ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
+    (P : List (BamOp (Fin m × Fin K) (Fin K × Fin n))),
+    L ∣ K → (∀ o ∈ P, o.WFOn (-64) 64 [⟨32, -128, 127, 32⟩]) → (∀ f ∈ runForms a b L, f ∈ bamRegs P) →
+      (m * n * (K / L) : ℚ) * L ≤ bamCost P
+
+/-- **`WideNoGain L`** (open): on noise in `[−64, 64]`, every well-formed program at all the H200's types whose
+registers include every running word's form costs at least `N·L`. Its s8 programs are `CoverCountS8`; the open part
+is the `f16`, `bf16` and `tf32` lanes, which that noise does not force pure (an `f16` or `tf32` lane holds up to 16
+noise variables beside int7 data, a `bf16` lane up to 2), each product priced at two s8 products (`tf32`'s at four). -/
+def WideNoGain (L : ℕ) : Prop :=
+  ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ)
+    (P : List (BamOp (Fin m × Fin K) (Fin K × Fin n))),
+    L ∣ K → Int7 a → Int7 b → (∀ o ∈ P, o.WFOn (-64) 64 h200Types) → (∀ f ∈ runForms a b L, f ∈ bamRegs P) →
       (m * n * (K / L) : ℚ) * L ≤ bamCost P
 
 /-- **`NoSharingGain L`** (open at `L` 64 and 128; rank 4 to 5): the same programs cost at least `N·L`, the honest
@@ -536,7 +570,8 @@ def AlgSuffL (L : ℕ) : Prop :=
 /-- **The work bound at commit interval `L`** (sketch): under the semantic premises, every `MH100w` program at
 `h100Floor` that outputs the running words on fresh noise costs at least `c` a word. `AlgSuffL L ∧ BamFloor L` gives
 it at `c = bamFloorRate L`, and `AlgSuffL L ∧ NoSharingGain L` at `c = L` (on cell-pure programs `PureCount L`, and
-on pure lanes `CoverCount L`, in place of `NoSharingGain L`). -/
+on pure lanes `CoverCount L`, in place of `NoSharingGain L`). On noise in `[−64, 64]` the `c = L` route is
+`AlgSuffL`'s reduction at that noise with `WideNoGain L`. -/
 def LCommitBound (L : ℕ) (c : ℚ) : Prop :=
   ∀ (I : Sm90Isa), DecOK I.dec →
     ∀ (m K n : ℕ) (a : Fin m → Fin K → ℤ) (b : Fin K → Fin n → ℤ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ)
