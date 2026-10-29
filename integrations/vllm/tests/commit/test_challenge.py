@@ -1,5 +1,5 @@
-"""The one challenge module: legacy derivations stay byte-identical to the outputs recorded before they moved onto it, and
-the non-legacy forms draw through `verity.ml.randomness.derive` from an auditor key (decision 42)."""
+"""The one challenge module: every sample derives through `verity.ml.randomness.derive` from the run's live coin and is
+refused without one, and the legacy replay seeds stay byte-identical to the outputs recorded before they moved onto it."""
 from __future__ import annotations
 
 import hashlib
@@ -26,20 +26,6 @@ def _vus() -> list[dict]:
             for i in range(83)]
 
 
-def _ident(x):
-    return tuple(tuple(y) if isinstance(y, list) else y for y in x)
-
-
-def test_legacy_is_the_default_until_the_re_baseline_epoch():
-    assert CH.LEGACY is True
-
-
-@pytest.mark.parametrize("case", V["positions"], ids=lambda c: f"k{c['k']}")
-def test_legacy_positions_are_byte_identical(case):
-    got = CH.challenge_positions(ROOT, case["leaves_per_step"], case["k"], salt=bytes.fromhex(case["salt"]))
-    assert [list(p) for p in got] == case["positions"]
-
-
 @pytest.mark.parametrize("case", V["seeds"], ids=lambda c: c["challenge"])
 def test_legacy_replay_seed_is_byte_identical(case):
     assert SR.challenge_seed(case["challenge"], ROOT) == (case["seed"], case["source"])
@@ -49,15 +35,6 @@ def test_legacy_replay_seed_is_byte_identical(case):
 def test_legacy_stratified_sample_is_byte_identical(case):
     picked, strata, tgt = SR.sample(_vus(), case["per_stratum"], case["seed"], targets=case["targets"])
     assert [v["i"] for v in picked] == case["picked"] and strata == case["strata"] and tgt == case["targets_out"]
-
-
-def test_legacy_identities_are_byte_identical():
-    c, run, bmap = T.commit(T.produce())
-    pop = list(B.expected_population(T.structure(), T.workload()))
-    for case in V["identities"]:
-        assert (run.run_root.hex(), bmap["digest"]) == (case["run_root"], case["map_digest"]), "the fixture commit changed, not the challenge"
-        picks = B.challenge_identities(pop, bmap, run.run_root, case["k"], salt=bytes.fromhex(case["salt"]))
-        assert [[ident, leaf] for ident, _e, leaf in picks] == [[_ident(i), leaf] for i, leaf in case["picks"]]
 
 
 def _run(roots: list[bytes], errors: tuple[str, ...] = ()) -> RunCommitment:
@@ -83,52 +60,56 @@ def test_a_run_with_an_uncommitted_step_has_no_root_to_draw_from():
     with pytest.raises(CH.NoRunRoot, match="first error: none recorded"):
         CH.run_root_of(_run([b""]))
     with pytest.raises(ValueError, match=r"a run root is 32 bytes \(vllm-v1\) or 64 \(SHA-512\), not 0"):
-        CH.challenge_positions(b"", [4], 1)
+        CH.challenge_positions(b"", [4], 1, source=AUDITOR_KEY)
 
 
-def test_non_legacy_needs_a_source_and_legacy_refuses_one():
-    with pytest.raises(ValueError, match="needs a source"):
-        CH.challenge_positions(ROOT, [10], 3, legacy=False)
-    with pytest.raises(ValueError, match="legacy"):
-        CH.challenge_positions(ROOT, [10], 3, source=AUDITOR_KEY)
-    with pytest.raises(ValueError, match="needs a source"):
-        CH.identity_picker(ROOT, "00" * 32, legacy=False)
-    with pytest.raises(ValueError, match="needs a source"):
+def test_a_sample_without_its_coin_is_refused():
+    """No sample has a default: a caller names its coin, and a missing one (None or empty) is refused by name."""
+    with pytest.raises(TypeError, match="source"):
+        CH.challenge_positions(ROOT, [10], 3)
+    with pytest.raises(TypeError, match="source"):
+        CH.identity_picker(ROOT, "00" * 32)
+    for missing in (None, b""):
+        with pytest.raises(ValueError, match="needs a source: the run's live coin"):
+            CH.challenge_positions(ROOT, [10], 3, source=missing)
+        with pytest.raises(ValueError, match="needs a source: the run's live coin"):
+            CH.identity_picker(ROOT, "00" * 32, source=missing)
+    with pytest.raises(ValueError, match="needs a source: the run's live coin"):
         CH.replay_key(b"", ROOT)
 
 
-def test_non_legacy_positions_follow_the_source_root_and_layout():
+def test_positions_follow_the_source_root_and_layout():
     lps = [10, 0, 20, 5]
-    a = CH.challenge_positions(ROOT, lps, 64, legacy=False, source=AUDITOR_KEY)
-    assert len(a) == 64 and all(0 <= off < lps[s] for s, off in a)
-    assert a == CH.challenge_positions(ROOT, lps, 64, legacy=False, source=AUDITOR_KEY)
-    assert a != CH.challenge_positions(ROOT, lps, 64)
-    assert a != CH.challenge_positions(ROOT, lps, 64, legacy=False, source=b"another key")
-    assert a != CH.challenge_positions(hashlib.sha256(b"x").digest(), lps, 64, legacy=False, source=AUDITOR_KEY)
-    assert a != CH.challenge_positions(ROOT, lps, 64, b"salt", legacy=False, source=AUDITOR_KEY)
-    assert a != CH.challenge_positions(ROOT, [10, 0, 20, 6], 64, legacy=False, source=AUDITOR_KEY)
+    a = CH.challenge_positions(ROOT, lps, 64, source=AUDITOR_KEY)
+    assert len(a) == 64 and all(0 <= off < lps[s] for s, off in a) and {s for s, _ in a} == {0, 2, 3}
+    assert a == CH.challenge_positions(ROOT, lps, 64, source=AUDITOR_KEY)
+    assert a != CH.challenge_positions(ROOT, lps, 64, source=b"another key")
+    assert a != CH.challenge_positions(hashlib.sha256(b"x").digest(), lps, 64, source=AUDITOR_KEY)
+    assert a != CH.challenge_positions(ROOT, lps, 64, b"salt", source=AUDITOR_KEY)
+    assert a != CH.challenge_positions(ROOT, [10, 0, 20, 6], 64, source=AUDITOR_KEY)
 
 
 def test_positions_draw_over_a_sha512_root_and_refuse_other_sizes():
     root = hashlib.sha512(b"tp run root").digest()
     lps = [10, 0, 20, 5]
-    for legacy, src in ((True, None), (False, AUDITOR_KEY)):
-        a = CH.challenge_positions(root, lps, 64, legacy=legacy, source=src)
-        assert len(a) == 64 and all(0 <= off < lps[s] for s, off in a)
-        assert a != CH.challenge_positions(root[:32], lps, 64, legacy=legacy, source=src)
+    a = CH.challenge_positions(root, lps, 64, source=AUDITOR_KEY)
+    assert len(a) == 64 and all(0 <= off < lps[s] for s, off in a)
+    assert a != CH.challenge_positions(root[:32], lps, 64, source=AUDITOR_KEY)
     for n in (0, 31, 48, 65):
         with pytest.raises(ValueError, match=f"32 bytes .* or 64 .*not {n}"):
-            CH.challenge_positions(bytes(n), lps, 4)
+            CH.challenge_positions(bytes(n), lps, 4, source=AUDITOR_KEY)
 
 
-def test_non_legacy_identities_draw_through_the_picker():
+def test_identities_sample_through_the_picker():
     c, run, bmap = T.commit(T.produce())
     pop = list(B.expected_population(T.structure(), T.workload()))
-    fresh = B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", legacy=False, source=AUDITOR_KEY)
+    fresh = B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=AUDITOR_KEY)
     assert fresh and all(e is not None for _, e, _ in fresh)
-    assert fresh == B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", legacy=False, source=AUDITOR_KEY)
-    assert fresh != B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t")
-    pick = CH.identity_picker(ROOT, "ab" * 32, legacy=False, source=AUDITOR_KEY)
+    assert fresh == B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=AUDITOR_KEY)
+    assert fresh != B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=b"another key")
+    with pytest.raises(ValueError, match="needs a source: the run's live coin"):
+        B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=None)
+    pick = CH.identity_picker(ROOT, "ab" * 32, source=AUDITOR_KEY)
     assert all(0 <= pick(i, 7) < 7 for i in range(100))
 
 
