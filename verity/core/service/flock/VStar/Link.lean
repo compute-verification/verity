@@ -15,8 +15,7 @@ instance's `rin` and `rout` against the two roots the verifier registers.
 Ports, u16 words: `trow` 64, `xr` 32, `yr` 96, `raux` `A(D)`, `xw` 32, `yw` 96, `waux` `A(D)` (`D = UB + PB`, `A` as
 `RecOpen`'s `auxWords`); `rin` 64 and `rout` 64.
 
-`LinkStmt` is V*'s statement of the table, over its `grid(L)` rows. No verifier reads it yet: a statement carrying a link
-table is refused (`Flock.RecLinks.refuseLinks`) until a guarantee covers it.
+V*'s statement of the table is `Stmt.link UB PB N` (`VStar/Stage.lean`), over its `N = grid(L)` rows.
 -/
 
 namespace VStar
@@ -129,17 +128,13 @@ def linkUnit (UB PB : Nat) : Except String UnitC := do
   pure { name := linkName UB PB, inPorts := pw, outPorts := [LINK_OUT_WORDS, LINK_OUT_WORDS], st := r.2,
          outs := (r.1.1 ++ r.1.2).toArray }
 
-/-- V*'s statement of a link table of `grid(L)` rows over an inner population of units of `UB` bits and rows of `PB`:
-`RecLink{UB, PB}` over one instance a row, instance `i` checking row `i`. -/
-structure LinkStmt where
-  UB : Nat
-  PB : Nat
-  L : Nat
-
-def LinkStmt.name (s : LinkStmt) : String := linkName s.UB s.PB
-def LinkStmt.dir (_ : LinkStmt) : String := "links"
-def LinkStmt.instances (s : LinkStmt) : Nat := Flock.RecLinks.grid s.L
-def LinkStmt.sub (s : LinkStmt) : Sub := linkSub s.UB s.PB
-def LinkStmt.unit (s : LinkStmt) : Except String UnitC := linkUnit s.UB s.PB
+/-- `rec-link/u<UB>-p<PB>`'s `(UB, PB)`, the name exactly as `linkName` writes it. -/
+def linkParams (name : String) : Option (Nat × Nat) :=
+  if !name.startsWith "rec-link/u" then none else
+  match (name.drop 10).toString.splitOn "-p" with
+  | [u, p] => match u.toNat?, p.toNat? with
+    | some UB, some PB => if linkName UB PB == name then some (UB, PB) else none
+    | _, _ => none
+  | _ => none
 
 end VStar

@@ -866,6 +866,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
   if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
+  let recLinks ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let recInner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
@@ -923,6 +926,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     match (do
         Registered.checkProgram program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
+        RecLinkPart.checkShape recInner recLinks
         RecBudget.regs recInner registered
         RecBudget.statements recInner
         let r ← buildSessionOf parsed tags circuitB pubB compB coins tables count draw partition program work stratified closure
@@ -941,6 +945,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         if let (some i, some lk) := (recInner, recLink) then RecVStar.checkLinkRounds i lk
         r.2.forM (RecVStar.checkTopRows · registered recLink)
         r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink)
+        r.2.forM (RecLinkPart.check · registered recCoins recLinks)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
@@ -1089,6 +1094,9 @@ def statementCmd (args : List String) : IO UInt32 := do
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
   if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
+  let recLinks ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
+    | .error e => IO.eprintln e; return 2
   let recInner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
@@ -1116,6 +1124,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   let c3 := RecSetup.c3 recInner recCommits
   match (do
       RecSetup.checkInner recInner recCoins recBound
+      RecLinkPart.checkShape recInner recLinks
       RecBudget.regs recInner registered
       RecBudget.statements recInner
       let st ← (if templated then buildStmtTmpl tags circuitB pubB compB coins tables partition program registered
@@ -1137,6 +1146,7 @@ def statementCmd (args : List String) : IO UInt32 := do
         RecCoins.check st registered (RecCoins.Source.atC3 recCoins recInner recCommits) c3
       if recCoins.isSome || cap then
         RecCoins.checkLink st registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink
+      RecLinkPart.check st registered recCoins recLinks
       pure st) with
   | .ok st =>
     let dk := if tags.hm96Rows then "sha512" else "sha256"
