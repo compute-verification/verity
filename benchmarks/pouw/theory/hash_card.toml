@@ -167,6 +167,8 @@ stands_if = "a predicate write is priced as a register write (B1): part Z then p
 [family.thin-fold]
 what = "main's thinFold (Accounting.TS.thinFold): sigma folds two words a three-input instruction, XOR3 and IADD3 steps alternating, sealed with the cell's final word O'; FoldMaterial (a write count) and ThinFoldOpt"
 stated = [{ lane = "ASSUME", name = "FoldMaterial + ThinFoldOpt", rank = 5 }]
+status = "refuted"
+refuted_by = "under credit = cost(H), the card's, at zero data: NOISE's mma_pairsum (note compute-research/20261029T2159Z-report-hash-noise, run r20261029-214618-cec9, bit-exact on all 15 layouts) computes an IADD3 pair step as one IMMA over its steps' coin lanes from sigma + 2w, writing neither word, 5 writes every 4 steps against honest's 6: 25.2-32.6% of stock (28.9% on the lead's layout); ASSUME's decomposition (note compute-research/20261029T2210Z-report-hash-assume, run r20261029-221241-d89f, bit-exact) splits each IADD3 step exactly into row and column terms, 6.8-17.9% MAC-weighted; ThinFoldOpt's windows held only over an ISA with no IMMA and per-cell increments; under credit = stock alone it survives (C0 >= 1.59x stock, gap_stock 0 on all 15 layouts), carded as assume-thin-stock-row8"
 
 [family.pair-writes]
 what = "a program that outputs NH over a cell's running words, S = sum w(j)·w(j+1), writes one IMAD a pair"
@@ -399,13 +401,13 @@ status = "proposed"
 fold = { seal_bytes_per_cell = 8, writes_per_word = 2.0 }
 form = "mulxor-fold"
 stated = { h = 2.94, excludes_writes = true }
-t1_add = { by_k = { "2048" = 0.0177, "8192" = 0.0045 }, why = "COUNTER's start edge (run r20261029-210708-2fb9, checked): from N0 = 0 the first step N1 = D1·k1 is one IADD3 of free terms, 1-2 writes under honest's 3, 1.65-1.77% of stock at K 2,048 and 0.42-0.45% at K 8,192; a live nonzero N0 closes it, not yet in SPARSE's design" }
+t1_add = { by_k = { "2048" = 0.0328, "8192" = 0.0079 }, why = "the call's start edge from N0 = 0 (SPARSE interim 3, note compute-research/20261029T2220Z-report-hash-sparse-window, routes bit for bit, run r20261029-213047-75c0): N1 = R1·k1 + C1·k1 is one IADD3 of a row and a column product, and rows sharing R1 share N1, 2.971 / 2.993 a step against honest's 3 at K 2,048 / 8,192, 2.59% MAC-weighted over Llama's linears (COUNTER's 1.65-1.77% / 0.42-0.45%, run r20261029-210708-2fb9, left out the row sharing; NOISE's edge_any 1.1-2.5%); a live N0 = a_i xor b_j closes it (sparse-c4-n0live)" }
 rules = ["one-hash-fold", "duo-moot"]
 t2 = { value = 9.7, label = "estimate" }
 adds = [{ id = "FOLD-OPT (mul-xor)", family = "fold-opt", rank = "4b", rank_stated = "4", part = "hashing", status = "open", owner = "SPARSE", falsification = "two- and three-step windows (<= 5 or <= 8 instructions) and transformed-state loops (fold_search.py; one- and two-instruction programs, bit-slicing at 13.53 LOP3s and tables checked none cheaper, run r20261029-200526-98a7)" }]
 caveats = [
   "SPARSE states h 2.94 from hashing alone; the card adds the fold's LOP3 and IMUL, 2 writes a word",
-  "T1 is the card's under the lead's tile grain (SPARSE: 0.026% / 0.0044% / 0.0014%); with an 8-bit row coin instead, 0.45% / 0.42% / 0.42% (rows sharing fold states)",
+  "T1 is the card's under the lead's tile grain (SPARSE: 0.026% / 0.0044% / 0.0014%); with an 8-bit row coin instead, 0.45% / 0.42% / 0.42% (rows sharing fold states); SPARSE interim 3: interims 1 and 2's T1 left out the call's start, which fails T1 from N0 = 0",
   "T2 is SPARSE's estimate on a fold rate measured on vy-dc-h200-5 (runs r20261029-201359-18a8, r20261029-201628-f2a5), not a served T2",
   "FOLD-OPT's every-certificate form is false for this fold (SPARSE interim 2); only the at-pi* form is a candidate",
   "COUNTER: decomp reaches only the first step; past it, XOR with a row-plus-column sum doesn't split, and N-FLOOR's SAT windows cover 1-3 steps; the family harness reduces every surviving drawn-op kind to this shape",
@@ -419,7 +421,7 @@ status = "proposed"
 fold = { seal_bytes_per_cell = 0, writes_per_word = 2.0 }
 form = "mulxor-fold+R1"
 stated = { h = 0.0, excludes_writes = true }
-t1_add = { by_k = { "2048" = 0.0177, "8192" = 0.0045 }, why = "COUNTER's start edge (run r20261029-210708-2fb9, checked): from N0 = 0 the first step N1 = D1·k1 is one IADD3 of free terms, 1-2 writes under honest's 3, 1.65-1.77% of stock at K 2,048 and 0.42-0.45% at K 8,192; a live nonzero N0 closes it, not yet in SPARSE's design" }
+t1_add = { by_k = { "2048" = 0.0328, "8192" = 0.0079 }, why = "the call's start edge from N0 = 0, as (c4)'s (SPARSE interim 3, run r20261029-213047-75c0): 2.59% MAC-weighted" }
 moved_from = "sparse-c4"
 rules = ["one-hash-fold", "duo-moot"]
 t2 = { value = 14.9, label = "estimate" }
@@ -434,6 +436,7 @@ status = "proposed"
 h = { ratio = 0.0198, baseline = 120.0, label = "estimate" }
 t1 = { value = 0.00101, label = "checked" }
 t2 = { value = 2.6, label = "estimate" }
+word_form = "v3"
 adds = [{ id = "SketchWrites2", rank = "4b", part = "hashing", status = "open", owner = "NOISE", falsification = "a program at small m, n and S on CPU that computes sigma for every output below 2(S - 1) - Pi/|O| eq an output word by 1% of stock, or a rank term below 2 byte products (commit_space.py: sketch_pools, edge_attack, partition_search)" }]
 caveats = [
   "another noise (mirror-pi), not the lead's; its T3 is unmeasured",
@@ -442,6 +445,7 @@ caveats = [
   "SketchWrites2 splits: (a) the bound inside the separable class, a matrix-rank statement and a Lean property candidate (0 eq saved at l 4, w4, checked, run r20261029-201436-35f5), and (b) the class's completeness, assumed",
   "decode is open: at one row the coin stream is 72.7 MB a token, 5.5x the lead's 13.2 MB",
   "COUNTER (argued): decomp doesn't reach mirror-pi, since every term of its words has a row and a column factor except the salts, which split off exactly; NOISE's class (b) is not searched",
+  "NOISE interim 3 (run r20261029-214618-cec9, checked): sq1 loses 0 under every feature model at l 4 with the wide block (w4 and w8), the formula ranks equal the measured ones on all 64 rows; l 3 gives up 7.0% and l 2 79%; on row-plus-column words decomp_sq breaks it by 50% of stock even under credit = stock",
 ]
 
 [proposal.noise-rfp4]
@@ -497,6 +501,7 @@ status = "proposed"
 h = { value = 1.41, price = "floor", label = "estimate", point = "any", model = "llama-3.2-1b", words_chunk = 262144, baseline = 118.5 }
 t1 = { value = 0.0074, label = "estimate" }
 t2 = { value = 2.0, label = "estimate" }
+credits_macs = true
 adds = [{ id = "SAK-UF(B)", rank = "4bU", rank_stated = "4", part = "matmul", status = "open", owner = "ALT", falsification = "a MAC-weighted gap above 1% - 0.22% at 1-bit R on the registered weights (hash_alt_weights.py, per model): 0.516% on Llama-3.2-1B's int8 weights after ALT interim 2's routes (run r20261029-203003-9868), 16% on Student-t(3) synthetic weights; or any exact program for R·B^T below (1 - eps)·m·n·K" }]
 rule_change = "public weights: the weights are values a program brings under 'everything zero-knowledge' (the model-public ruling)"
 caveats = [
@@ -524,6 +529,7 @@ caveats = [
   "ROUNDS states h 18.10 / 17.72 with a 64-byte seal a state over 64 / 128 cells a thread; the card seals 1 B a cell",
   "T1 is the card's with each thread's chain carried across calls (ROUNDS: 0.0002% beyond the lead's terms); chains begun afresh each call add 0.49% (64 cells, K 2,048) / 0.06% (128 cells, K 8,192)",
   "decomp can't absorb a word XORed with a per-position constant (checked that decomp's program is then wrong); that nothing cheaper exists is AddXor, an argument, so the zero-data credit is argued",
+  "COUNTER's constant rule (note compute-research/20261029T2145Z-report-hash-counter-checkpoint, proved by algebra; sweep r20261029-220256-36ba partial): a constant 0x7FFF_FFFF in a half splits the XORed word into row and column terms and decomp breaks it, as 0, ~0 and 2^31 do; AddXor at zero data is proved for constants with low nibble 0x1 (and by probe 0xA), open for the others; R80X takes only low-nibble-0x1 constants until the sweep settles (HASH.md 22:10Z)",
   "ShaWrites-R80 isn't implied by ShaWrites for programs right on most inputs: it is ShaWrites' statement carried from schedule words to raw words, the ask Daniel would get",
   "T2 is ROUNDS' additive estimate (the lead's hashing time scaled by h, no overlap); the fold runs between in-place IGMMAs, a wgmma wait a step and 16 state registers beside the accumulators, unmeasured",
   "the seal packs states into the leaf stream, with a per-thread tag in the initial state",
@@ -545,6 +551,7 @@ adds = [
 rules = ["one-hash-fold", "duo-moot"]
 caveats = [
   "RDWrites is our construction from SHA-512's parts (ROUNDS: rank 4); its risk over R80 is V's entry into e' alone, a round nobody has studied, so the card ranks it at SAK's rung, 4b, not ShaWrites' 4a",
+  "COUNTER's constant rule holds for RDX's XOR as for R80X's: low-nibble-0x1 constants only until the sweep settles (HASH.md 22:10Z)",
   "ROUNDS states h 9.35 / 8.97 with a 64-byte seal a state over 64 / 128 cells a thread; the card seals 1 B a cell",
   "T1 as R80X's: cross-call chains; per-call chains add 0.49% / 0.06%; V's tie at zero data is an operand-counting argument",
   "T2 is ROUNDS' additive estimate, unmeasured inside the IGMMA mainloop",
@@ -638,6 +645,7 @@ status = "proposed"
 h = { ratio = 0.01525, baseline = 120.0, label = "estimate" }
 t1 = { value = 0.00101, label = "estimate" }
 t2 = { value = 2.6, label = "estimate" }
+word_form = "v3"
 adds = [{ id = "NHWrites", rank = 5, part = "hashing", status = "open", owner = "LIT", falsification = "nh_attack's mirror ranks (done: edges and middle blocks save nothing at l 4, or l 3 with r0 4); the pools under NOISE's salts and the whole-output decomposition (not run)" }]
 rules = ["one-hash-fold", "duo-moot"]
 caveats = [
@@ -645,6 +653,7 @@ caveats = [
   "LIT states h 1.83-3.51 on NOISE's basis (65x under its lead), 23% under NOISE's quadratic sketch, about 1.94 on the card's",
   "T1 is NOISE's sketched-word base (about 0.07%) and network term (<= 0.03% at cap 320) with the sketch adding 0 (checked ranks); the pools are not rechecked for nh",
   "nh2 on mirror-pi fails at every setting (a middle block saves 70-83% of stock)",
+  "NOISE interim 3 (checked ranks, r20261029-214618-cec9): nh:1 loses 0 under every feature model at l 4 with the wide block; multi-entry NH (nh:16, nh2:8) fails on every layout, >= 101% at B 2; the pools are not run",
 ]
 
 [proposal.lit-pow4]
@@ -664,4 +673,173 @@ rules = ["one-hash-fold", "duo-moot"]
 caveats = [
   "a map entry, not yet a proposal: it survives COUNTER's expand at 1.10x stock (checked, r20261029-191928-6b4f), without IMMA pricing; degree 2 and 3 fail",
   "LIT states no T2 for it",
+]
+
+[proposal.assume-fix-k4-row8]
+lane = "ASSUME"
+note = "compute-research/20261029T2210Z-report-hash-assume"
+title = "the one-chain fix at k 4: sigma <- sigma xor w_a xor w_b on every pair, and sigma <- sigma + w_a + w_b on every 4th pair, on the same sigma; one sigma a row of 8 cells, O' a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 4.5, writes_per_word = 0.625 }
+form = "fix4-fold"
+t1_label = "checked"
+stated = { h = 2.45 }
+t2 = { value = 7.0, label = "estimate" }
+adds = [{ id = "FoldMaterial (one chain, k 4)", rank = 5, part = "hashing", status = "open", owner = "ASSUME", falsification = "a zero-data program for fix_fold's sealed state and O' below honest's writes, bit-exact (assume.py fix_pack_attack, fold_decomp); COUNTER's pack and decomp against fix_fold at k 4 and 8 with its prices (ASSUME Ask 1)" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = [
+  "ASSUME states h 2.45 (a row of 8) / 3.64 (a cell), the thin fold's plus an IADD3 every 4th pair (+0.578/k at interim 2's half-instruction price), an estimate on interim 2's checked basis",
+  "T1 is 0 at zero data (checked, run r20261029-221241-d89f): decomposition skips no word, since every word enters an XOR3 and an XOR3 word's carries above bit 0 are per cell, so the decomposing prover is honest's; packing (fix_pack_attack, bit-exact at both K) costs 1.06-1.30x honest under four readings of the unpack and the column sharing",
+  "the margin: k 8 fails one reading by 11.6% and k 16 by 1-23%, so at k 4 the packed prover would need to save about 6% of honest under the worst reading; a second accumulator for the IADD3s is no fix (30.5-37.3%)",
+  "NOISE's mma_pairsum skips the words only in pair steps linear in them; here every word enters an XOR3, as in the pure XOR fold, for which NOISE checked it doesn't apply; not run against fix_fold",
+  "d0 is a stand-in, i.i.d. per cell; if the lead's real offset is separable, decomposition saves the XOR3 words' offset too (ASSUME smell 3); every non-MMA price is a hand count, not SASS",
+  "T2 is the thin fold's estimate (3-7x) plus an IADD3 every 4th pair, unmeasured (ASSUME Ask 3, N-KERNEL)",
+  "recorded, not re-targeted (HASH.md 22:25Z): the coordinator puts it at about 71% of capacity",
+]
+
+[proposal.assume-fix-k4-cell]
+lane = "ASSUME"
+note = "compute-research/20261029T2210Z-report-hash-assume"
+title = "the one-chain fix at k 4, (sigma, O') sealed a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 8, writes_per_word = 0.625 }
+form = "fix4-fold"
+t1_label = "checked"
+stated = { h = 3.64 }
+t2 = { value = 7.0, label = "estimate" }
+adds = [{ id = "FoldMaterial (one chain, k 4)", rank = 5, part = "hashing", status = "open", owner = "ASSUME", falsification = "a zero-data program for fix_fold's sealed state and O' below honest's writes, bit-exact (assume.py fix_pack_attack, fold_decomp); COUNTER's pack and decomp against fix_fold at k 4 and 8 (ASSUME Ask 1)" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = ["as assume-fix-k4-row8's, with one seal a cell"]
+
+[proposal.assume-fix-k2-row8]
+lane = "ASSUME"
+note = "compute-research/20261029T2210Z-report-hash-assume"
+title = "the one-chain fix at k 2: an IADD3 every 2nd pair; one sigma a row of 8 cells, O' a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 4.5, writes_per_word = 0.75 }
+form = "fix2-fold"
+t1_label = "checked"
+stated = { h = 2.60 }
+t2 = { value = 7.0, label = "estimate" }
+adds = [{ id = "FoldMaterial (one chain, k 2)", rank = 5, part = "hashing", status = "open", owner = "ASSUME", falsification = "a zero-data program for fix_fold at k 2 below honest's writes, bit-exact (fix_pack_attack: the packed prover costs 1.29-1.63x honest)" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = ["as assume-fix-k4-row8's, with a wider margin: the packed prover costs at least 1.29x honest"]
+
+[proposal.assume-thin-stock-row8]
+lane = "ASSUME"
+note = "compute-research/20261029T2210Z-report-hash-assume"
+title = "the alternating thin fold credited as stock alone (FoldMaterial restated to credit stock), one sigma a row of 8 cells, O' a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 4.5, writes_per_word = 0.5 }
+form = "thin-fold"
+credit = "stock"
+t1_label = "checked"
+stated = { h = 2.31 }
+t2 = { value = 7.0, label = "estimate" }
+adds = [{ id = "FoldMaterial (stock)", rank = 5, part = "hashing", status = "open", owner = "ASSUME", falsification = "a zero-data program for the thin fold's sealed state and O' below stock's writes, bit-exact (assume.py fold_decomp: C0 1.59-1.64x stock; NOISE's mma_pairsum: 5 writes every 4 steps, above stock)" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = [
+  "its lanes' T1 column is the over-credit, 0: ASSUME's zero-data provers pay C0 1.60-1.64x stock at K 2,048 and 1.59-1.63x at K 8,192 (run r20261029-221241-d89f), NOISE's gap_stock is 0 on all 15 layouts (run r20261029-214618-cec9)",
+  "T2 is interim 1's estimate (3-7x), unmeasured",
+]
+
+[proposal.noise-xor-salted-row8]
+lane = "NOISE"
+note = "compute-research/20261029T2159Z-report-hash-noise"
+title = "b': the pure XOR fold, sigma <- sigma xor w_a xor w_b on every pair, over the lead's words with full-width row and column salts at step 0 (lead-salt); one sigma a row of 8 cells, O' a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 4.5, writes_per_word = 0.5 }
+form = "xor-fold-salted"
+word_form = "v3"
+t1_label = "checked"
+stated = { h = 2.39 }
+t2 = { value = 7.0, label = "estimate" }
+t3 = { value = -0.00021, label = "estimate" }
+adds = [{ id = "XorWrites (salted)", rank = 5, part = "hashing", status = "open", owner = "NOISE", falsification = "COUNTER's routes outside NOISE's grid against the pure XOR fold on lead-salt: bit-slicing, carry-save splitting, per-bit decomposition (NOISE Ask 2); b''s pools (equal words cancel in an XOR) and its 32-bit fibres (NOISE Ask 1 to ASSUME)" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = [
+  "NOISE states h at the thin fold's instruction count, 2.31-3.50 on ASSUME's basis (the card's 2.39 at a row seal); the salts add under 1% (estimate)",
+  "T1 is 0 in NOISE's grid (checked, run r20261029-214618-cec9): COUNTER's pack finds no lane width, since salted words need all 32 bits (33 unwrapped); mma_pairsum and pairsum don't apply, since every word enters an XOR3; decomposition doesn't reach an XOR3 word above bit 0 (ASSUME, checked); the pools are not run (equal words cancel in an XOR)",
+  "the salts change the lead's word form, so under freeze 1 (HASH.md 22:05Z) it is a v3 candidate; NOISE: exact, the salts fold in the epilogue's two sources, so T3 is the lead's (carried, not measured); the network term is 0.0014-0.0028% / 0.014-0.028% of stock at cap 32 / 320",
+  "on unsalted words the same fold breaks by packing (ASSUME 18.3-35.0%, NOISE 17.0-31.1%): the salts carry the whole credit",
+  "T2 is the thin fold's estimate (3-7x), unmeasured",
+]
+
+[proposal.noise-xor-salted-cell]
+lane = "NOISE"
+note = "compute-research/20261029T2159Z-report-hash-noise"
+title = "b' with (sigma, O') sealed a cell"
+status = "proposed"
+fold = { seal_bytes_per_cell = 8, writes_per_word = 0.5 }
+form = "xor-fold-salted"
+word_form = "v3"
+t1_label = "checked"
+stated = { h = 3.50 }
+t2 = { value = 7.0, label = "estimate" }
+t3 = { value = -0.00021, label = "estimate" }
+adds = [{ id = "XorWrites (salted)", rank = 5, part = "hashing", status = "open", owner = "NOISE", falsification = "COUNTER's bit-slicing, carry-save and per-bit routes against the pure XOR fold on lead-salt (NOISE Ask 2); b''s pools and fibres" }]
+rules = ["one-hash-fold", "duo-moot"]
+caveats = ["as noise-xor-salted-row8's, with one seal a cell"]
+
+[proposal.sparse-c4-n0live]
+lane = "SPARSE"
+note = "compute-research/20261029T2220Z-report-hash-sparse-window"
+title = "(c4) from a live start: N0 = a_i xor b_j, live words a row and a column drawn with the keys after the call's operands are committed"
+status = "proposed"
+fold = { seal_bytes_per_cell = 8, writes_per_word = 2.0 }
+form = "mulxor-fold-n0"
+stated = { h = 2.94, excludes_writes = true }
+rules = ["one-hash-fold", "duo-moot"]
+t2 = { value = 9.7, label = "estimate" }
+adds = [{ id = "FOLD-OPT (mul-xor)", family = "fold-opt", rank = "4b", rank_stated = "4", part = "hashing", status = "open", owner = "SPARSE", falsification = "two- and three-step windows at zero and chosen data (fold_window.py: L 5 against 6 and L 8 against 9, running), the start a_i xor b_j at two steps in 5, more free terms of a kind, non-T instructions across steps (SPARSE interim 3 §1-2)" }]
+caveats = [
+  "the start: no 2-instruction program for step 1 (SAT unsat at width 8 on 128 cases, run r20261029-211016-62bd), no table (a_i xor b_j is 32 bits wide), no row shares a state; honest's step-1 LOP3 takes a_i, b_j and D1, so it costs nothing, and the words are M + N a call (at most 98 KB, +0.02% of the coin stream)",
+  "NOISE (checked, run r20261029-214618-cec9): from a live N0 nothing beats honest on any of the 15 layouts",
+  "windows: one step unsat in every mode, two steps at random data unsat at 3 against 4; two steps at zero and chosen data and three steps not settled, so SPARSE asks that it not be relayed as 'FOLD-OPT checked over windows'",
+  "designed, not served: no kernel folds a_i xor b_j; T2 is SPARSE's estimate on a measured fold rate",
+  "SPARSE states h 2.94 from hashing alone; the card adds the fold's LOP3 and IMUL, 2 writes a word",
+]
+
+[proposal.tensor-fold]
+lane = "TENSOR"
+note = "compute-research/20261029T2155Z-report-hash-fold-tensor"
+title = "the tensor-core fold: a 64-row tile's Y_t = bytes(W_t)·R + Z_{t-1}·Q exact in s32 each k32 step (R, Q live uniform s8), Z_t = Y_t's two low bytes, the final Z sealed by SHA-512; honest feeds the in-place IGMMA accumulators as A; credited as stock alone"
+status = "proposed"
+fold = { seal_bytes_per_cell = 0.0625, writes_per_word = 1.047 }
+form = "tensor-fold"
+credit = "stock"
+t1_label = "checked"
+stated = { h = 1.51 }
+t2 = { value = 10.6, label = "estimate" }
+c0 = { value = 1.07, label = "checked", what = "TENSOR's counting floor for the fold at the lead's tag data, 0.77x stock (0.665 registers a word, a count in a model), plus the hashing outside it (A's rows and the seal, 0.30); the cheapest prover built, class-sharing, pays 1.34x stock for the fold" }
+adds = [{ id = "TensorMaterial", rank = 5, part = "hashing", status = "open", owner = "TENSOR", falsification = "a program whose sealed state equals honest's bit for bit over live draws at the lead's zero data (tag), layout (rot), BN 256, K 2,048 and 8,192, with modelled W1 below 0.867 registers a word (best built 1.162, class-sharing; the counting floor 0.665); COUNTER's target (HASH.md 22:05Z)" }]
+caveats = [
+  "credit = cost(H) is false at the lead's layout (rot): the class-sharing prover pays 1.162 registers a word against honest's 2.047 and matches the sealed state bit for bit, T1 102% (checked, run r20261029-215515-e364, 26/26); under credit = stock it holds against every prover built (1.34x stock at rot, 1.24x at e7), and TENSOR's T1 column is the lead's hiding term (0.025% / 0.0002%), the over-credit",
+  "the counting floor at the lead's tag data is 0.77x stock, below stock: credit = stock rests on TensorMaterial (rank 5), with a 1.34x margin over the provers built",
+  "honest's fold is modelled from the PTX layouts, not compiled: a loop-carried copy, as ptxas put in the XOR probe, makes honest 3.047 registers a word and h 2.66 (cut 48x)",
+  "T2 is TENSOR's serial estimate at two rates, unmeasured: 2.2-3.2x at T 8,192 and 10.4-10.6x async at T 512 (the card takes the worst point); reading the accumulators every k32 step may need a wgmma wait a step",
+  "TENSOR seals one Z a 67-step tile-chunk (0.030 W1 a MAC); the card seals one a cell a call",
+  "the drawn unit grows to a tile-chunk (64 rows x 256 words x 67 steps), which changes the sampling grain against the lead's; the opening is an AND count from shift-and-add, not a C-Flock circuit",
+]
+
+[proposal.tensor-fold-wide]
+lane = "TENSOR"
+note = "compute-research/20261029T2155Z-report-hash-fold-tensor"
+title = "the tensor-core fold over a v3 word form: a wide rank-2 live coin term U(i)·V(j) in each word's step-0 value, removed exactly mod 2^32 in the epilogue; credited as stock alone"
+status = "proposed"
+fold = { seal_bytes_per_cell = 0.0625, writes_per_word = 1.107 }
+form = "tensor-fold-wide"
+credit = "stock"
+word_form = "v3"
+t1_label = "checked"
+stated = { h = 1.58 }
+t2 = { value = 10.6, label = "estimate" }
+c0 = { value = 2.24, label = "estimate", what = "TENSOR's counting floor with the wide term, 1.94x stock (1.681 registers a word, a count in a model; checked), plus the hashing outside it (A's rows and the seal, 0.30); class-sharing then pays 17.5 registers a word" }
+adds = [{ id = "TensorMaterial (wide)", rank = 5, part = "hashing", status = "open", owner = "TENSOR", falsification = "a program below 0.867 registers a word at lead_words(..., 'wide'), bit for bit against honest's sealed state (TENSOR Ask 2, COUNTER's target)" }]
+caveats = [
+  "the frozen lead's word form doesn't change (freeze 1, HASH.md 22:05Z): a v3 candidate, with T3 (exact removal needs the served IGMMA to wrap mod 2^32, no .satfinite), the network term (NOISE prices the lever's wire) and honest's cost to price",
+  "honest's extra cost is about 4 IMADs a word a chunk, at most 0.06 registers a word (estimate), so h <= 1.58",
+  "the floor is a count in a model, not a bound on every program; TensorMaterial stays the premise, and the offset packers and the M0 stream were not rerun on wide data; TENSOR makes the count rigorous next, in Lean if it can",
+  "the coordinator's 77% of capacity divides the floor alone by 1 + h; the card adds the hashing outside the fold",
+  "T2 as tensor-fold's, unmeasured",
 ]
