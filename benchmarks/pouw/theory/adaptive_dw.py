@@ -30,8 +30,8 @@ fewer. `patch` is a constructive tile prover (copy the nearest earlier tile at o
 saving is open to a design whose words carry few coin bits each. `ball` is `adaptive_ball_table_le`'s lower bound at
 tile grain (free copies, free decisions), which the free-copy patch cost must exceed; `rows_sweep` follows it as rows
 grow. `entry_credit` sets a check that credits each entry's distinct values beside what two write models pay: P (a
-word write costs one, moves free) and W (a whole register of consecutive columns costs its lanes). `at_scale` runs the
-walk at Llama's S.
+word write costs one, moves free) and W (a whole register of consecutive columns costs its lanes). `masked_rows` is a
+cross-row prover under free predicates, which that check doesn't see. `at_scale` runs the walk at Llama's S.
 """
 
 from __future__ import annotations
@@ -313,18 +313,23 @@ def masked_rows(words: np.ndarray, sources: int, levels: np.ndarray | None = Non
     to `sources` earlier row-steps (greedy), at one word a source for its address, and writes the rest. Masks and
     predicates are free, as when predicate-only writes are free; a share of the honest words saved.
 
-    With `levels` (m × S, the row's coin level), sources are earlier rows at the same step and level, whose shared
-    columns are where two per-row vectors the prover holds compare equal: a mask from predicates alone."""
+    With `levels` (m × S, the row's coin level and tile), sources are earlier rows at the same step and key, and the
+    mask is where the two rows' step-1 words, which the prover holds, compare equal: predicates alone. The words it
+    copies equal the honest ones when that mask is the words' own (`mask_mismatch` counts where it isn't)."""
     m, s, n = words.shape
     vecs = words.transpose(1, 0, 2).reshape(s * m, n)
     flat = None if levels is None else levels.T.reshape(s * m)
-    paid = n
+    paid, mismatch = n, 0
     for r in range(1, s * m):
         cand = np.arange(r) if flat is None else np.arange(r - r % m, r)[flat[r - r % m:r] == flat[r]]
         if cand.size == 0:
             paid += n
             continue
         hit = vecs[cand] == vecs[r]
+        if flat is not None:
+            held = words[cand % m, 0] == words[r % m, 0]
+            mismatch += int((held != hit).sum())
+            hit = held
         left = np.ones(n, dtype=bool)
         cost = 0
         for _ in range(sources):
@@ -335,17 +340,37 @@ def masked_rows(words: np.ndarray, sources: int, levels: np.ndarray | None = Non
             left &= ~hit[best]
             cost += 1
         paid += int(left.sum()) + cost
-    return {f"masked_saving_{sources}{'' if levels is None else '_level'}": 1 - paid / words.size}
+    if flat is None:
+        return {f"masked_saving_{sources}": 1 - paid / words.size}
+    return {f"masked_saving_{sources}_level": 1 - paid / words.size, "mask_mismatch": mismatch}
 
 
 def row_levels(design: str, a, co: dict, s: int) -> np.ndarray:
-    """Each row's coin level W_t: the cumulative row-lane term and chosen lane, which every column shares."""
+    """Each row's key: its coin level W_t (the cumulative row-lane term and chosen lane, which every column shares) and,
+    for `blc`, its tile, whose coin lanes it shares."""
+    m = a.shape[0]
     d1, dl = first_data(design), later_data(design)
     lanes = step_lanes(design, co)
-    inc = np.zeros((a.shape[0], s), dtype=np.int64)
+    inc = np.zeros((m, s), dtype=np.int64)
     for t in range(1, s):
         inc[:, t] = a[:, d1 + dl * (t - 1)] + lanes[:, t]
-    return np.cumsum(inc, axis=1)
+    tiles = -(-m // BLC_TILE) if design == "blc" else 1
+    return np.cumsum(inc, axis=1) * tiles + (np.arange(m) // BLC_TILE % tiles)[:, None]
+
+
+def level_sweep(seed: int = 21, n: int = 64) -> list[dict]:
+    """`blc` with identical rows: the same-level masked copies at a whole tile and two, at both of Llama's S."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for s in STEPS.values():
+        for m in (BLC_TILE, 2 * BLC_TILE):
+            pub = public("blc", n, s, rng)
+            a, b = data("same", "blc", m, n, s, pub, rng)
+            co = coins("blc", m, n, s, rng)
+            words = honest("blc", a, b, pub, co, s)
+            out.append({"design": "blc", "case": "same", "m": m, "n": n, "S": s,
+                        **masked_rows(words, 16, row_levels("blc", a, co, s)), **entry_credit(words)})
+    return out
 
 
 def rows_sweep(seed: int = 13, ms: tuple[int, ...] = (48, 512, 4096), n: int = 64, s: int = 67) -> list[dict]:
@@ -384,8 +409,10 @@ def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[di
                 for k in (1, 4, 16):
                     row |= masked_rows(words, k)
                 row |= masked_rows(words, 16, row_levels(design, a, co, s))
-                checks.append({"name": f"{design}/{case} masked copies pay at least the pooled values (run_values_le)",
-                               "ok": 1 - row["masked_saving_16"] >= row["model_p_pays"] - 1e-12})
+                checks += [{"name": f"{design}/{case} masked copies pay at least the pooled values (run_values_le)",
+                            "ok": 1 - row["masked_saving_16"] >= row["model_p_pays"] - 1e-12},
+                           {"name": f"{design}/{case} same-level masks from held step-1 words copy honest words",
+                            "ok": row["mask_mismatch"] == 0}]
             if design in ("tag", "hw") and case in ("cancel", "walk"):
                 adv, writes, pointers = adversary(design, case, a, b, pub, co, s)
                 ok = bool(np.array_equal(adv, words))
@@ -428,8 +455,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", help="write the results here")
     args = p.parse_args(argv)
     rows, checks = small()
-    res = {"small": rows, "checks": checks, "at_scale": at_scale(), "rows_sweep": rows_sweep()}
-    for r in rows + res["rows_sweep"]:
+    res = {"small": rows, "checks": checks, "at_scale": at_scale(), "rows_sweep": rows_sweep(),
+           "level_sweep": level_sweep()}
+    checks += [{"name": f"blc/same m {r['m']} S {r['S']} same-level masks from held step-1 words copy honest words",
+                "ok": r["mask_mismatch"] == 0} for r in res["level_sweep"]]
+    for r in rows + res["rows_sweep"] + res["level_sweep"]:
         print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()})
     print(json.dumps(res["at_scale"], indent=1))
     passed = sum(c["ok"] for c in checks)
