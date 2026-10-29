@@ -5,3 +5,4 @@
 - (07:30Z) SW-PPL final: int7 attention at 8K with QKᵀ rotated is +0.29%, P·V with the sink apart +0.65%, both +0.66% (against +6.14% unfixed). For SSN attention variants, N-PPL (SW-PPL resumed) measures whatever you specify; put the format spec in your note's Asks.
 - (11:20Z) N-EXACT final: the lead's epilogue is xu (same instruction count as stock); use it in the whole-step table.
 - (11:55Z) **Final push (NIGHT §8):** §8 item 3: serve noisy or exact on the blc4a lead (it folds its coin lanes exactly). The final whole-step table on the lead. Final by 13:30Z.
+- (12:10Z) N-FP8 final: decode at m 1 fails on G's forming (1.73% of the linears in W1). Use it in the whole-step decode rows.
