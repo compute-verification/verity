@@ -193,6 +193,41 @@ def check_pad(seed: int) -> dict:
             and len(set(bs)) == len(bs)}
 
 
+def sha512_blocks(m: bytes) -> list[bytes]:
+    padded = m + b"\x80" + b"\0" * ((111 - len(m)) % 128) + (8 * len(m)).to_bytes(16, "big")
+    return [padded[i:i + 128] for i in range(0, len(padded), 128)]
+
+
+def check_kleaf(seed: int) -> dict:
+    """The keyed leaf: the digest is SHA-512(ks ‖ salt_w ‖ head ‖ row), head a 128-byte block carrying (forward, position,
+    length) as row-bound's does, so it is the cascade from S with exactly one compression more than SHA-512(head ‖ row) from
+    the IV, and that one is S, shared a window; equal rows at distinct positions give distinct digests; and head fixes the
+    length, so the padded block sequences after S are prefix-free (Salt.lean's prefix_free_of_head)."""
+    rng = random.Random(seed)
+    ks, salt_w = rng.randbytes(64), rng.randbytes(64)
+
+    def head(forward: int, position: int, n: int, length: bool = True) -> bytes:
+        return (forward.to_bytes(8, "big") + position.to_bytes(8, "big")
+                + (n.to_bytes(8, "big") if length else b"")).ljust(128, b"\0")
+
+    def prefix_free(length: bool) -> bool:
+        seqs = [tuple(sha512_blocks(ks + salt_w + head(f, p, len(r), length) + r)[1:])
+                for f in range(2) for p in range(3) for r in rows]
+        return all(a == b or a[:len(b)] != b for a in seqs for b in seqs)
+
+    rows = [rng.randbytes(n) for n in (0, 1, 100, 111, 112, 127, 128, 239, 240, 1000, 16384)]
+    r0 = rows[2]
+    rows.append(r0 + sha512_blocks(ks + salt_w + head(0, 0, 0, False) + r0)[-1][len(r0) % 128:] + rng.randbytes(40))
+    msgs = [head(f, p, len(r)) + r for f in range(2) for p in range(3) for r in rows]
+    extra = {len(sha512_blocks(ks + salt_w + m)) - len(sha512_blocks(m)) for m in msgs}
+    same_row = [hashlib.sha512(ks + salt_w + head(f, p, len(r0)) + r0).digest() for f in range(2) for p in range(3)]
+    pf, pf_mutant = prefix_free(True), prefix_free(False)
+    ok = len(ks + salt_w) == 128 and extra == {1} and pf and not pf_mutant and len(set(same_row)) == len(same_row)
+    return {"key_block_bytes": len(ks + salt_w), "extra_compressions": sorted(extra), "messages": len(msgs),
+            "prefix_free_after_s": pf, "length_free_head_extension_caught": not pf_mutant,
+            "equal_rows_distinct_digests": len(set(same_row)) == len(same_row), "ok": ok}
+
+
 def digests_per_forward(layout: str, rows: int) -> float:
     if layout == "L1":
         return CALLS + 1
@@ -274,6 +309,7 @@ def main() -> None:
     out_path = Path(args[0])
     fm = check_fm(n_salts, 4, 20261029)
     pad = check_pad(20261029)
+    kleaf = check_kleaf(20261029)
     ds = designs()
     table = shares(ds)
     pooled = {k: {pt: {b: per_period(table[k][pt][b]["floor"]) for b in ("premise_free", "credited")}
@@ -281,13 +317,13 @@ def main() -> None:
               for k in ("hm96 + (a) (N-HIDE), L1", "hm96 + (a) + FM, interface uncommitted, L1", "pad (P1), L1",
                         "pad (P1), L0, 16 KiB rows", "keyed leaf (P3), L0, 16 KiB rows")}
     passes = {k: {pt: {b: all(v <= TARGET for v in r[b].values()) for b in r} for pt, r in t.items()} for k, t in table.items()}
-    res = {"schema": "np-salt/result/v1", "checks": {"fm": fm, "pad": pad}, "designs": ds, "shares": table, "passes": passes,
+    res = {"schema": "np-salt/result/v1", "checks": {"fm": fm, "pad": pad, "kleaf": kleaf}, "designs": ds, "shares": table, "passes": passes,
            "window_extra": window_extra(), "in_circuit_ands": in_circuit(), "pooled_and_gates": pooled,
            "bases": {"macs_token": MACS_TOKEN, "word_bytes_token": WORD_BYTES_TOKEN, "a_bytes_token": A_BYTES_TOKEN,
                      "bytes_a_mac": (WORD_BYTES_TOKEN + A_BYTES_TOKEN) / MACS_TOKEN,
                      "fm_tensor_macs_a_salt": N_OUT * L_SALT, "fm_committed_bytes_a_salt": 4 * N_OUT * WORDS,
                      "fm_interface_registers": {"form": FORM, "gather": GATHER, "xor": DIGEST_REGS}}}
-    res["ok"] = fm["ok"] and pad["ok"]
+    res["ok"] = fm["ok"] and pad["ok"] and kleaf["ok"]
     out_path.write_text(json.dumps(res, indent=1))
     print(f"FM: literal {fm['literal']['match']}/{fm['literal']['salts']}, closed form {fm['closed_form']['match']}/"
           f"{fm['closed_form']['salts']} against hm96-sha512/v1's mask; bits 0..6 zero {fm['closed_form']['low_zero']}; "
@@ -296,6 +332,7 @@ def main() -> None:
     print(f"FM distinct: {d['distinct']}/{d['partials']} prefixes, nonzero {d['nonzero']}, min block bits {d['min_block_bits']}, "
           f"row weight {d['min_row_weight']}..{d['max_row_weight']}, mutation caught {d['mutation_caught']}")
     print(f"pad: {pad}")
+    print(f"keyed leaf: {kleaf}")
     for k, t in table.items():
         print(f"{k}: " + "; ".join(f"{pt} {r['premise_free']['floor']:.4%}/{r['premise_free']['alone']:.4%} free, "
                                    f"{r['credited']['floor']:.4%}/{r['credited']['alone']:.4%} cr" for pt, r in t.items()))
