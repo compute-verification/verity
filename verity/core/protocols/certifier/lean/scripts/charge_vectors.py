@@ -13,7 +13,7 @@ writes them.
 
 Half the instances start from a random carry (counts small, at and just below the `2^KW` the book holds, where a
 decision halves them, or past it, and runs up to 3, which `reference_charge` refuses), and half from the book's priors
-and run 0, a session of up to six windows. Books are drawn
+and run 0, a session of up to six windows. Books are sampled
 with n_arrived's bins from 1 to 3,000 or 0, totals at the bins' sum, above it, below it (a symbol past its total) or past
 `MAX_TOTAL`, and zero counts at their total, below it or 0; and steep books, frequency-1 symbols at totals near
 `MAX_TOTAL`, whose symbols take 17 scalings (a symbol's interval is at least `2^14` wide, so none takes more than

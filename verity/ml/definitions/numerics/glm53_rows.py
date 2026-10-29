@@ -289,7 +289,7 @@ ROWS: dict[str, tuple[Callable[..., dict[str, np.ndarray]], tuple[str, ...]]] = 
     "MoeRouterSigmoidBias_v1": (moe_router_sigmoid_bias, ("router_w", "router_ids")),
 }
 
-#: the parameter position of each MoE row's expert id, which the self-check samples in range but for one draw in sixteen
+#: the parameter position of each MoE row's expert id, which the self-check samples in range but for one sample in sixteen
 _EXPERT_ARG = {"MoeExpertFp8Gemm_v1": 2, "MoeExpertFp8GemmW_v1": 2}
 
 

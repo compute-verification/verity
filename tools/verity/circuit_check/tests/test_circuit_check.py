@@ -789,6 +789,31 @@ def test_a_kernel_wrong_only_on_edge_words_is_caught():
     assert f["name"].startswith("correspondence/kernel-mismatch CircuitCheckKernel_v1 [numpy]")
 
 
+def test_a_kernel_that_compared_nothing_or_declined_inside_the_domain_is_not_reported_checked():
+    """A kernel that declines every vector, and one not registered partial that declines vectors the reference accepts,
+    each fail `correspondence` under their `SelfCheck.fault`; the partial one that computes some vectors passes."""
+    from verity.ml.circuits.evaluation import register_kernel
+    from verity.ml.circuits.evaluation.batch import _KERNELS
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.types import Value
+
+    prim = PrimitiveDefinition("CircuitCheckDeclines", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
+    odd = lambda a: (a ^ 1, a % 2 == 1)  # noqa: E731
+    register_kernel(prim, lambda a: (a ^ 1, np.ones(a.shape, dtype=bool)), kernel="every")
+    register_kernel(prim, odd, kernel="odd")
+    register_kernel(prim, odd, kernel="odd-partial", partial=True)
+    try:
+        e = CK.check_definition(prim, OPTS)
+    finally:
+        del _KERNELS[prim.id]
+    assert sorted(f["name"].split(":")[0] for f in e["failures"]) == [
+        "correspondence/kernel-compared-nothing CircuitCheckDeclines_v1 [every]",
+        "correspondence/kernel-declined-in-domain CircuitCheckDeclines_v1 [odd]"]
+    via = {r["via"]: r for r in e["correspondence"]["realizations"] if r["via"].startswith("kernel:")}
+    assert (via["kernel:every"]["compared"], via["kernel:every"]["fault"]) == (0, "compared-nothing")
+    assert via["kernel:odd-partial"]["compared"] > 0 and "fault" not in via["kernel:odd-partial"]
+
+
 def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
     """The Boolean Definition is the definition: the word Definition it names must equal its gates through the word view."""
     from verity.ml.circuits import boolean as BL
@@ -850,6 +875,21 @@ def test_a_lowering_count_off_its_pin_is_named():
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
     assert any(f["name"].startswith("lowering/pin-mismatch F32Mul_v1 [F32Mul_v1]: and 1 -> ") for f in e["failures"])
+
+
+def test_a_proof_blocks_export_counts_its_circuit_types():
+    """`checks._export_counts`, which every lowered template's check reads, exports one proof block's circuit through
+    `boolean_export` and counts it: four ANDs of 4-bit inputs are one circuit type of 4 ANDs, none shared."""
+    from verity_flock import gf2
+
+    def build():
+        C = gf2.Circuit(cse=True)
+        a, b = C.input("a", 4), C.input("b", 4)
+        C.output("out0", [C.AND(x, y) for x, y in zip(a, b)])
+        return C
+
+    assert CK._export_counts(build, "test unit") == {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4,
+                                                      "shared_across_types": 0}
 
 
 def _lowering_pin(e: dict) -> dict:

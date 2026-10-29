@@ -1,7 +1,7 @@
 [project]
 name = "verity-check"
 version = "0.0.0"
-description = "`check`, the one check, run on `main` after each landing, and `suites`, the test runner it uses."
+description = "`check`, the one check, run by drive on each landing's tip before `main` moves, and `suites`, the test runner it uses."
 requires-python = ">=3.12"
 dependencies = ["research"]
 

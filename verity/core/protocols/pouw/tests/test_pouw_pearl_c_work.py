@@ -1,6 +1,6 @@
 """Pearl-C's work law (`pearl_c_work`): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
-excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's draw coin
+excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's sampling coin
 after the commitment, and the audit."""
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ def test_credit_is_per_row_on_kept_cells_at_leans_accounting():
 def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
     """Red team #919 F1: on sm_120 at its cap the tickets are `pearlCTilesDevRev1K`'s weights at `Prices.sm120Loop` and
     c = 218/25 − 8953/1000, Lean's definitions restated here in exact fractions, on both served models' four linears at
-    once.  By the scheme's own `wref` they are not proportional (down is under-drawn); off sm_120 the draw is unchanged."""
+    once.  By the scheme's own `wref` they are not proportional (down is under-drawn); off sm_120 the sample is unchanged."""
     add, bf16, fs, qa, g, r, c = Fraction(1047, 125), 2, 40, 2, 4, 32, Fraction(218, 25) - Fraction(8953, 1000)
 
     def lean(m: int, n: int, k: int) -> Fraction:
@@ -241,7 +241,7 @@ def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     """GLM-5.3's lm_head is 19360 rows a TP8 rank, not whole 64-column tiles; padded with zero rows to 19392 it is in
     Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
     check may see it (L3's `TileCheck.Accepts` asks `weightOK` of every column): the padded tile's rows are voluntary,
-    which leaves it no credited cell, so no draw lands on it and it opens no exclusion tile.  Here 500 rows padded to
+    which leaves it no credited cell, so no sample lands on it and it opens no exclusion tile.  Here 500 rows padded to
     504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): the credit is the 496 real columns of full tiles,
     under the real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their
     exclusion tile is the padded one."""
@@ -480,10 +480,10 @@ def test_census_row_cap_leaves_k_from_k_min_unchanged():
 
 
 def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():
-    """The draw coin is the epoch's, asked of the challenger once the verifier recorded the transcript and records roots
+    """The sampling coin is the epoch's, asked of the challenger once the verifier recorded the transcript and records roots
     (`draw_after`): a foreign challenger's coin, a coin not under the commitment, the epoch's salt coin, a coin opened
     before the commitment, another epoch's coin and an epoch with no coin commitment are each refused before any tile
-    is opened; the honest challenger's coin draws the tiles `draw_key` gives."""
+    is opened; the honest challenger's coin selects the tiles `draw_key` gives."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})
     digest = W.records_root(epoch.salt, epoch.weights_root, SPLITS, records)
@@ -509,7 +509,7 @@ def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitm
 
 
 def test_a_challenger_opens_each_coin_once():
-    """No retry redraws: the second request for the draw coin is refused, whatever it follows."""
+    """No retry resamples: the second request for the sampling coin is refused, whatever it follows."""
     ch = E.challenger()
     ch.open("draw", b"a commitment")
     with pytest.raises(DomainError, match="already open"):

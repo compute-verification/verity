@@ -38,7 +38,7 @@ the other's argument. Fold semantics belong to FILL-SEC's receipt-fold module. M
   - `meet(left, right)`: sort-merge matching of signatures.
   - `meet_kernel(g, h, xs, A, B)`: every (a, b) with g(x, a) = h(x, b) on all of xs, found by meeting in the middle.
   - `lift(ok, bits)`: 2-adic lifting, one bit at a time.
-- `exact_kit.sat.Cnf`: a CNF builder over named variables, solved by pysat (CaDiCaL).
+- `exact_kit.sat.Cnf`: a CNF over named variables, solved by pysat (CaDiCaL).
   - Gates: `and_`, `or_`, `xor`, `xor_all`, `parity` and `maj`.
   - Words: `word`, `const`, `add_words`, `xor_words`, `mul_const`, `equal`, `differ` and `value`.
   - Cardinality: `at_most`, `at_least` and `exactly`.

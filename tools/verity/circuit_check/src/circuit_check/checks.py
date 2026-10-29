@@ -4,7 +4,9 @@
                      `circuit_check.bodies`; a vLLM Definition's is its registered evaluator) on the edge and random vectors
                      of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
-                     kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
+                     kernel (`verity.ml.circuits.evaluation.self_check`, which must be `SelfCheck.ok`: some vector compared, and
+                     none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
+                     template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
@@ -42,6 +44,10 @@
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin
+    block            the witness bits a whole Definition needs as one C-Flock unit, read off it (its ANDs and port bits,
+                     `verity_flock.circuit.unit_witness`), within C-Flock's proved range of 2^``K_MAX`` (`block_range`): past
+                     it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
+                     for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
@@ -242,11 +248,14 @@ def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.nd
         except ValueError as e:
             rec["realizations"].append({"via": f"kernel:{name}", "declines": str(e)[:200]})
             continue
-        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.n - sc.declined, "declined": sc.declined,
-                                    "mismatches": len(sc.mismatches)})
-        if sc.mismatches:
+        rec["realizations"].append({"via": f"kernel:{name}", "compared": sc.compared, "declined": sc.declined,
+                                    "mismatches": len(sc.mismatches), **({"fault": sc.fault} if sc.fault else {})})
+        if sc.fault == "mismatch":
             F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of {sc.n} vectors", via=f"kernel:{name}",
                    examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)} for i, a, k, r in sc.mismatches[:_EXAMPLES]])
+        elif sc.fault:
+            F.fail("correspondence", f"kernel-{sc.fault}", t.id, f"[{name}]: declined {sc.declined} of {sc.n} vectors, "
+                   f"{sc.outside} outside the reference's domain", via=f"kernel:{name}")
     return rec, arrays, ref
 
 
@@ -954,9 +963,31 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     if getattr(getattr(t, "defn", t), "gated", False):
         with spent("digest"):
             entry["digest"] = circuit_digest_pin(t, pins, F)
+    if kind != "reference":
+        with spent("block"):
+            entry["block"] = block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
+
+
+#: the packages whose Definitions are each staged whole as one C-Flock unit (`verity_flock.class_statement.UnitStager`), so
+#: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
+#: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
+UNIT_OWNERS = ("verity.core.protocols.pouw.",)
+
+
+def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
+    """The witness bits ``t`` needs as one C-Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
+    C-Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
+    subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
+    before lowering."""
+    from verity_flock import circuit as FC
+
+    w = FC.unit_witness(t)
+    if applies and (why := FC.past_range(w)) is not None:
+        F.fail("block", "past-range", t.id, why, **w)
+    return {**w, "applies": applies}
 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
@@ -986,12 +1017,12 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
 
 
 def _export_counts(build: Callable[[], Any], name: str) -> dict:
-    """The Boolean export of one proof block's circuit (`boolean_export.Registry.type_of`): its circuit types' AND/XOR/NOT counts, each
+    """The Boolean export of one proof block's circuit (`boolean_export.CircuitTypeTable.type_of`): its circuit types' AND/XOR/NOT counts, each
     distinct sub-circuit once, every type validated and the root evaluated against the circuit on random inputs (raises on a
     disagreement); ``flat_ands`` the circuit's own, fewer by the ANDs it shares across a call (``shared_across_types``)."""
     from verity_flock import boolean_export as BE
 
-    reg = BE.Registry()
+    reg = BE.CircuitTypeTable()
     rid = reg.type_of(build, name, "proof-unit")
     node = reg.nodes[rid]
     _, flat, typed = reg.shared[-1]
@@ -1221,6 +1252,7 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "check_definition", "check_row", "check_subcircuit", "correspondence", "dead_gates",
-           "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering",
+__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit",
+           "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report",
+           "summarize", "target_equivalence", "template_lowering",
            "whole_lowering"]
