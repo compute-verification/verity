@@ -104,10 +104,10 @@ def _live(d: Path, name: str, stopped: str | None) -> None:
 
 
 def test_a_forgery_the_firewall_held_back_is_not_exercised(tmp_path, capsys):
-    """MODES=firewall: the firewall may hold a forgery's proofs back, so no session reaches Lean. The firewall is the
+    """MODES=ZK server: the ZK server may hold a forgery's proofs back, so no session reaches Lean. The ZK server is the
     prover's own check, which a dishonest prover doesn't run, so its FIREWALL-REFUSED stop leaves the verifier unexercised:
     the forgery fails the step as not exercised, never counts as refused. Any other stop, or none, leaves the part without
-    a verdict, and a firewall refusal never passes an honest part."""
+    a verdict, and a ZK server refusal never passes an honest part."""
     for p in ("L0", "alg-p0"):
         _part(tmp_path, p, 0, True)
     _live(tmp_path, "forged-comb-alg-p0", "FIREWALL-REFUSED: alg-p0: the constraints [3] fail on a rep's pads")
@@ -137,7 +137,7 @@ def test_a_forgery_the_firewall_held_back_is_not_exercised(tmp_path, capsys):
 
 
 def test_a_forgery_with_no_proof_is_not_exercised_not_refused(tmp_path, capsys):
-    """ecd2's forged-coef-L0: the firewall's prover produced no proof (R7, a lone rep), so Lean refused the session for a
+    """ecd2's forged-coef-L0: the ZK server's prover produced no proof (R7, a lone rep), so Lean refused the session for a
     missing file before any check. That is "no proof produced (not exercised)": it fails the step, never counts as refused,
     and a forgery another part of it refused is still refused."""
     missing = "session files: no such file or directory (error code: 2)\n  file: /v-sess/forged-coef-L0/circuit.rep0.bin"

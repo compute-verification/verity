@@ -196,7 +196,7 @@ struct Collector {
 
   // ------------------------------------------------------------------ WINDOWED staging ring
   // The packed step stream (same logical offsets as the single-block layout -- the plan is unchanged) is laid over fixed windows of W bytes
-  // (W a multiple of 256, the L1 chunk) drawn from a ring of K device slots.  A tensor may straddle windows (its copy is split at the
+  // (W a multiple of 256, the L1 chunk) sampled from a ring of K device slots.  A tensor may straddle windows (its copy is split at the
   // boundary; logical bytes stay contiguous).  When the serving thread finishes writing a window (its bytes are all in flushed copies) it
   // records a CUDA event on the compute stream; the worker waits on that event, absorbs the window (D2H to host / leaves) and hands the
   // slot back with its own event; the next taker of the slot makes the compute stream wait on it.  When no slot is free the serving thread

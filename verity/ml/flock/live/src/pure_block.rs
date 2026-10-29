@@ -14,7 +14,7 @@
 //!   are `A = B = [i]`), and its accumulator input a copy of unit u − 1's `c_out` (u ≥ 1);
 //! - every sub-circuit's constant a copy of the one pinned column (slot 0's).
 //!
-//! Public regions, each opened at two verifier points drawn after the commitment (both reps):
+//! Public regions, each opened at two verifier points sampled after the commitment (both reps):
 //! the key (slot 0 and 16 chaining inputs), the counter (all 32 compressions: `c`), the chunk chaining values (slot 15
 //! and 31 `out_lo`, sent in `Commit` and checked natively against the leaf digests), unit 0's accumulator input and
 //! unit 31's `c_out` (a prover-committed public word per block: block (v, c)'s AccOut and block (v, c + 1)'s AccIn open

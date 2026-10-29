@@ -51,7 +51,7 @@ def _rows(rng, n: int, N: int) -> np.ndarray:
 
 
 def _ties(rng, n: int, N: int) -> np.ndarray:
-    """Rows drawn from a few words, so equal values recur and +0 meets -0."""
+    """Rows sampled from a few words, so equal values recur and +0 meets -0."""
     return rng.choice(np.array([0x0000, 0x8000, 0x3F80, 0xBF80, 0x4000, 0x0001], np.uint16), (n, N))
 
 

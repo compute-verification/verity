@@ -55,7 +55,7 @@
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
-# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the firewall one at a time
+# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the ZK server one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's

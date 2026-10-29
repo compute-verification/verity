@@ -82,7 +82,7 @@ __device__ const uint8_t E4M3I[17] = {0x00, 0x38, 0x40, 0x44, 0x48, 0x4A, 0x4C, 
 __device__ const uint8_t UE8M0MIX[7] = {124, 125, 126, 127, 128, 129, 130};            // 2^-3 .. 2^3
 __device__ const uint8_t UE4M3MIX[8] = {0x38, 0x44, 0x4A, 0x4E, 0x51, 0x53, 0x55, 0x57};  // 1, 3, 5, ..., 15
 
-// The draws run once before the timed loop, so their loops roll (#pragma unroll 1) to keep live registers low.
+// The samples run once before the timed loop, so their loops roll (#pragma unroll 1) to keep live registers low.
 __device__ __forceinline__ uint32_t draw_e4m3(unsigned long long& s) {  // four E4M3 bytes of integers in [-16, 16]
   uint32_t w = 0;
 #pragma unroll 1
