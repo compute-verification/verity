@@ -14,8 +14,9 @@ meeting `CommitL1w` (`honestOfCommit`), and at a deployed instance it is `Commit
 holds where the commitment's messages include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the
 lead's chunks and over A's rows (`commitL1w_of_leaves`): a frame leaf carries its domain's id and its rank
 (`leafMsg_id_inj`, `leafMsg_rank_inj`), so leaves at distinct ranks are distinct messages however their values repeat,
-and its header puts one more compression on its value's (`blocks_leafMsg`). `honest` is `honestOfCommit` at a
-one-message commitment and the empty stream; `Compose/Deployed.lean` has it at the deployed instance (`honestL1w`).
+and its header puts one more compression on its value's (`blocks_leafMsg`). `honest` is `honestOfCommit`, with a
+one-message commitment meeting `CommitL1w` at every call; `Compose/Deployed.lean` has it at the deployed instance
+(`honestL1w`).
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -288,11 +289,7 @@ theorem honestOfCommit (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
       ∀ ω, Accepted (lead T m n K) H C κ σ ω :=
   ⟨_, _, hC, honestAt (lead T m n K) H κ stream C isA hadm⟩
 
-/-! ## At a stand-in commitment -/
-
-/-- The empty coin stream: no coin streamed. -/
-def noStream (L : Pouw.Lead.Layout) : CoinStream L :=
-  ⟨fun _ _ => none, fun _ _ _ => rfl, fun _ _ _ _ _ h => by cases h⟩
+/-! ## A commitment meeting `CommitL1w` -/
 
 /-- The words' and A's compressions `CommitL1w` credits, each rounded up. -/
 noncomputable def oneMsgBlocks (L : Pouw.Lead.Layout) : ℕ :=
@@ -327,10 +324,9 @@ theorem commitL1w_oneMsg (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (
   norm_num only [shaWordsRegs, shaARegs]
   linarith
 
-/-- **The honest lemma** (`Pouw.Guarantees.Lead.Honest`): `honestAt` at the one-message commitment, which meets
-`CommitL1w` (`commitL1w_oneMsg`), and the empty stream, at every admitted call. -/
-theorem honest : Pouw.Guarantees.Lead.Honest := fun T m n K H κ hadm =>
-  ⟨noStream _, oneMsgCommit _, fun _ => false,
-    honestOfCommit T m n K H κ (noStream _) (oneMsgCommit _) (fun _ => false) (commitL1w_oneMsg _ H κ) hadm⟩
+/-- **The honest lemma** (`Pouw.Guarantees.Lead.Honest`): `honestOfCommit`, and the one-message commitment meets
+`CommitL1w` at every call (`commitL1w_oneMsg`). -/
+theorem honest : Pouw.Guarantees.Lead.Honest :=
+  ⟨honestOfCommit, fun _ _ _ _ H κ => ⟨oneMsgCommit _, fun _ => false, commitL1w_oneMsg _ H κ⟩⟩
 
 end Pouw.SecurityProofs.Lead.Compose

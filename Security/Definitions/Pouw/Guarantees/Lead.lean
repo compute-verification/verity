@@ -135,19 +135,24 @@ def TailAt : Prop :=
     ∀ L ∈ [pt512x64 n K, pt512x512 n K, pt8192 n K, lead T 1 n K],
       L.rowBlocks * L.colBlocks * L.S ≤ 2 ^ 30 → etaLead L ≤ 1 / 2 ^ 40
 
-/-- **The honest lemma**: at every call of the lead the verifier admits (`Layout.Admits`), the hypotheses are jointly
-satisfiable: the nominal W1 table meets `H32`, and for some coin stream, commitment format and set of strategies every
-premise of `G` holds, with an honest strategy accepted at every coin value. The stream and the format are existential,
-not the protocol's. -/
+/-- **The honest lemma**: at every call of the lead the verifier admits (`Layout.Admits`), for every coin stream and
+every commitment format and form classifier meeting `CommitL1w`, the hypotheses are jointly satisfiable: the nominal
+W1 table meets `H32`, and some set of strategies meets every premise of `G`, with an honest strategy accepted at every
+coin value. The protocol's stream and format are among those it covers. And at every call some format and classifier
+meet `CommitL1w`, so the first part is not vacuous. -/
 def Honest : Prop :=
-  ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
-    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ), (lead T m n K).Admits →
-    ∃ (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
-      (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
+  (∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
+    (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool),
+    CommitL1w H C isA κ → (lead T m n K).Admits →
+    ∃ (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
       CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain H C κ stream Real ∧
       OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧ HonestHashRuled H C κ Real ∧
       OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) C) H C κ Real ∧ Real σ ∧
-      ∀ ω, Accepted (lead T m n K) H C κ σ ω
+      ∀ ω, Accepted (lead T m n K) H C κ σ ω) ∧
+  ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
+    ∃ (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool), CommitL1w H C isA κ
 
 /-- **The nontrivial lemma**: `G`'s conclusion fails for a verifier that accepts everything. At the three points the
 honest work exceeds the gap, and a strategy that does nothing does no priced work and hashes nothing, so with every
