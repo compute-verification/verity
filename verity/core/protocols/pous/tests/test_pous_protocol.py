@@ -636,8 +636,8 @@ def test_p2_square_is_exact_for_every_accepted_c0(w, c0):
 def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_under_it():
     """Spec v1.1 (§12): `ROOT_CALL_NS` is half the cooperating root in ns, rounded down,
     from the sources' own numbers: the red team's floor of 2,060.845 cycles at 5.7 GHz per squaring (`regate.py` at
-    w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5 (run
-    r20260929-060834-0ec4).  The RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
+    w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5.  The
+    RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
     admits the cap and refuses every whole µs past it; what it admits past the cap is under 1 µs."""
     from fractions import Fraction
 
