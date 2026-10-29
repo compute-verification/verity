@@ -6,7 +6,8 @@ its epilogue models and of `operands`:
 
 - a fold vector for each `magic_epilogue` call: its inputs (the final word D, ρ_i, the column term, s_j, s_i) and its
   bf16 outputs, which ssn's fold (layout.h's `xu_fold`) must reproduce bit for bit from D, 0x4B400000 − ρ_i and minus the
-  column term; one more for `fold_extreme`'s mutation (D + 2 at an output of 2²² − 1), with stock's outputs on A·Bᵀ + 2;
+  column term, with A·Bᵀ and stock's outputs on it where the call has them; one more for `fold_extreme`'s mutation
+  (D + 2 at an output of 2²² − 1, so A·Bᵀ + 2 is 2²² + 1), with A·Bᵀ + 2 and stock's outputs on it;
 - a layout vector for each `operands` call: N-EXACT's data, coins and private values (A, B, a₁, a_t, u, G, the lane
   coins), its scales and stock's bf16 outputs on A·Bᵀ, which ssn's lanes (layout.h's `lane_a`, `lane_b`) must serve
   through the fold bit for bit.
@@ -77,13 +78,14 @@ def main(argv: list[str] | None = None) -> int:
     es.magic_epilogue, es.stock_epilogue, eb.operands = magic, stock, operands
     index, reports = [], {}
 
-    def fold(label: str, rec, expect: int = 0, stock_out=None):
+    def fold(label: str, rec, expect: int = 0, stock=None):
         acc, r, c, s_col, s_row = rec[1]
         arrays = {"acc": acc.astype(np.int64), "rho": r.astype(np.int64), "col": c.astype(np.int64),
                   "s_col": np.asarray(s_col, np.float32), "s_row": np.asarray(s_row, np.float32),
                   "magic": np.asarray(rec[2], np.uint16)}
-        if stock_out is not None:
-            arrays["stock"] = np.asarray(stock_out, np.uint16)
+        if stock is not None:
+            arrays["p"] = np.asarray(stock[1][0], np.int64)
+            arrays["stock"] = np.asarray(stock[2], np.uint16)
         write(os.path.join(args.out, f"fold_{label}.bin"), arrays)
         index.append(("fold", label, f"fold_{label}.bin", "none", expect))
 
@@ -109,13 +111,13 @@ def main(argv: list[str] | None = None) -> int:
         reports[f"fold_extreme_{wname}"] = rep
         (op,), (st,), (mg,) = take("operands"), take("stock"), take("magic")
         layout(f"extreme_{wname}", op, st, wname)
-        fold(f"extreme_{wname}", mg, 1, st[2])
+        fold(f"extreme_{wname}", mg, 1, st)
         acc, r, c, s_col, s_row = mg[1]
         mut, pm = acc.copy(), st[1][0].copy()
         mut[0, 0] += 2
         pm[0, 0] += 2
         fold(f"extreme_{wname}_mutation", ("magic", (mut, r, c, s_col, s_row), magic0(mut, r, c, s_col, s_row)), -1,
-             stock0(pm, s_col, s_row))
+             ("stock", (pm, s_col, s_row), stock0(pm, s_col, s_row)))
         for k in eb.KS:
             calls.clear()
             rep = eb.exact_full(k, weights=weights)
@@ -124,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
             assert len(ops) == len(sts) == len(mgs)
             for q, (op, st, mg) in enumerate(zip(ops, sts, mgs)):
                 layout(f"full_{wname}_{k}_salt{q}", op, st, wname)
-                fold(f"full_{wname}_{k}_salt{q}", mg, 1, st[2])
+                fold(f"full_{wname}_{k}_salt{q}", mg, 1, st)
     calls.clear()
     reports["check_epilogue"] = es.check_epilogue(np.random.default_rng(7))
     names = ["rounded_scales", "raw_scales", "out_of_range", "tile_sum"]

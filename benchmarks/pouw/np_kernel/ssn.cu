@@ -32,8 +32,8 @@
 //   ROT); the GEMM's epilogue serves bf16(fl(fl(v s_j - 1.5 2^23 s_j) s_i)), v the float whose bits are the word
 //   + (0x4B400000 - rho_i) + (beta_j - sigma_{tile, class, j}) (one IADD3 of the forming's row source and the certifier's
 //   column source), which is stock's epilogue on A_i . B_j bit for bit while |A_i . B_j| <= 2^22 and s_j has a 22-bit
-//   significand. Past 2^22 it serves a wrong output and nothing flags it. EPI=1 runs stock's epilogue on the final word
-//   instead. The lanes, the sources and the fold are layout.h's, which the CPU check (cpu_check.cc) also reads.
+//   significand. Past 2^22 the IADD3 reads back a wrong integer (2^22 + 1 as 2^22 + 2) and nothing flags it; the served
+//   output is wrong once that error passes bf16's rounding. EPI=1 runs stock's epilogue on the final word instead. The lanes, the sources and the fold are layout.h's, which the CPU check (cpu_check.cc) also reads.
 // Coins: a row's S + 3 bits are bits 0..S+2 of its H = ceil((S + 3) / 32) coin words (a1[i, e] bit e, a_t[i] bit t + 2);
 // row i's words are coin words i H .. i H + H - 1 of the call's stream, whose 16-word block c is SHA-512(seed || be64 c),
 // seed = SHA-512 of the call's 224-byte seed message (tag, salt, forward, position, root(A_j), root(B_j)). Under TAG=1,

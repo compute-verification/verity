@@ -2,8 +2,8 @@
 // vectors (fold_vectors.py records them). Two levels:
 //   fold    each recorded magic_epilogue call (the final word D, rho_i, the column term c, s_j, s_i): bf16(xu_fold(D,
 //           0x4B400000 - rho_i, -c, s_j, -1.5 2^23 s_j, s_i)) equals its outputs bit for bit, out-of-range words included;
-//           where stock's outputs are recorded the fold equals them (expect 1) or differs from them somewhere (expect -1:
-//           fold_extreme's mutation, an output of 2^22 + 1).
+//           where A.B^T is recorded the IADD3 reads it back and the fold serves stock's outputs (expect 1), or, for
+//           fold_extreme's mutation (an output of 2^22 + 1, expect -1), doesn't read it back.
 //   layout  each recorded operands call (A, B, a1, a_t, u, G and the lane coins, odd in [-127, 127] a (step, tile,
 //           column)) on blc4a-t64-e7-s1 with XU=1 under the call's lane-coin weights (ROT=1, or BLC_W=1:127:1): ssn's
 //           final word from lane_a and lane_b, plus its row source and its column source for (tile, row class i mod 2,
@@ -16,6 +16,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -86,25 +87,36 @@ static uint16_t serve(uint32_t d, uint32_t r, uint32_t c, float sj, float si) {
   return bf16_rn(xu_fold(d, r, c, sj, -12582912.0f * sj, si));
 }
 
-// fold level; expect: 1 stock's outputs equal, -1 some differ, 0 none recorded
+// fold level. With A.B^T recorded, the IADD3's word read as fp32 less 1.5 2^23 is the integer the fold serves: expect 1
+// (every output in the window) it is A.B^T everywhere and the outputs are stock's; expect -1 (the mutation) it isn't
+// somewhere, and the served outputs' differences from stock's are reported (an integer off by one at 2^22 is below bf16's
+// precision, so they can be stock's)
 static bool fold_check(const std::string& label, const Vec& v, int expect) {
   const Arr &acc = v.at("acc"), &rho = v.at("rho"), &col = v.at("col"), &sc = v.at("s_col"), &sr = v.at("s_row"),
             &mg = v.at("magic");
   const Arr* st = v.count("stock") ? &v.at("stock") : nullptr;
+  const Arr* p = v.count("p") ? &v.at("p") : nullptr;
   const size_t m = acc.dims[0], n = acc.dims[1];
-  size_t bad = 0, vs_stock = 0, past_int32 = 0;
+  size_t bad = 0, vs_stock = 0, past_int32 = 0, misread = 0;
   for (size_t i = 0; i < m; i++)
     for (size_t j = 0; j < n; j++) {
       const int64_t d = acc.i(i * n + j);
       past_int32 += d < INT32_MIN || d > INT32_MAX;
-      const uint16_t y = serve((uint32_t)d, XU_MAGIC_BITS - (uint32_t)rho.i(i), (uint32_t)-col.i(i * n + j), sc.f(j), sr.f(i));
+      const uint32_t r = XU_MAGIC_BITS - (uint32_t)rho.i(i), c = (uint32_t)-col.i(i * n + j), b = (uint32_t)d + r + c;
+      const uint16_t y = serve((uint32_t)d, r, c, sc.f(j), sr.f(i));
       bad += y != (uint16_t)mg.i(i * n + j);
       if (st) vs_stock += y != (uint16_t)st->i(i * n + j);
+      if (p) {
+        float f;
+        memcpy(&f, &b, 4);
+        misread += (double)f - 12582912.0 != (double)p->i(i * n + j);
+      }
     }
-  const bool ok = !bad && !past_int32 && (expect != 1 || !vs_stock) && (expect != -1 || vs_stock);
+  const bool ok = !bad && !past_int32 && (expect != 1 || (p && st && !misread && !vs_stock)) && (expect != -1 || (p && misread));
   printf("{\"level\": \"fold\", \"vector\": \"%s\", \"outputs\": %zu, \"mismatches_vs_python_magic\": %zu, "
-         "\"words_past_int32\": %zu, \"stock_recorded\": %s, \"expect_stock\": %d, \"differ_from_stock\": %zu, \"pass\": %s}\n",
-         label.c_str(), m * n, bad, past_int32, st ? "true" : "false", expect, vs_stock, ok ? "true" : "false");
+         "\"words_past_int32\": %zu, \"ab_recorded\": %s, \"expect\": %d, \"read_back_not_ab\": %zu, "
+         "\"served_differ_from_stock\": %zu, \"pass\": %s}\n",
+         label.c_str(), m * n, bad, past_int32, p ? "true" : "false", expect, misread, vs_stock, ok ? "true" : "false");
   return ok;
 }
 
