@@ -7,7 +7,8 @@ step of depth d: 3K/d words of 4 bytes a dot product, so 12/d bytes a useful MAC
 ncp-v1 and ncp-v2 today: 0.75). The words go into hm96 SHA-512 rows of 16 KiB. A forward's hashing takes
 (B h_x − h_leaf min(B, G)) / (540,672 f) seconds for B bytes (GD-HASH's model, its inputs measured on vy-dc-h200-5), and
 NCP's GEMMs cost what GD-DENOISE measured for a 3K-wide cuBLASLt call and fresh noise on both operands. t_H / t_S is the
-stock step plus both, over the stock step. Every input is a measurement (its art and run) or an estimate (its source),
+stock step plus both, over the stock step; "matmuls alone" reads t_S as the plain GEMMs only, without the rest of the
+step. Every input is a measurement (its art and run) or an estimate (its source),
 and the output says which. Coverage: each matmul's final-word gap d/(3K), against 1%, and its share of the MACs.
 """
 from __future__ import annotations
@@ -93,8 +94,10 @@ def main() -> None:
             B, g = t["bytes"] * real, GEMM[min(GEMM, key=lambda x: abs(x - m))]
             gemm_ms = g["plain_us"] * (g["a_side"] + g["noised"] + g["wide"] + g["w_side"]) * 1e-3
             excl, _ = hash_ms(B, 16384, 0.0)
+            plain_ms = g["plain_us"] * 1e-3
             row = {"bytes_token": t["bytes"], "GB_forward": B / 1e9, "rows_16k": B / 16384, "exclusive_ms": excl,
-                   "hbm_write_ms_unfused": B / HBM * 1e3, "gemm_extra_ms": gemm_ms, "engines": {}}
+                   "hbm_write_ms_unfused": B / HBM * 1e3, "gemm_extra_ms": gemm_ms, "plain_gemm_ms": plain_ms,
+                   "tH_tS_matmuls": None if head else (plain_ms + gemm_ms + excl) / plain_ms, "engines": {}}
             for e, (stock, gap, src) in ENGINES[T].items():
                 _, gapfirst = hash_ms(B, 16384, gap)
                 row["engines"][e] = {"stock_ms": stock, "hash_ms_gap_first": gapfirst, "src": src,
@@ -111,6 +114,8 @@ def main() -> None:
             if not isinstance(r, dict):
                 continue
             eng = "  ".join(f"{e} {x['tH_tS']:.1f}x (no gap {x['tH_tS_no_gap']:.1f}x)" for e, x in r["engines"].items())
+            if r["tH_tS_matmuls"] is not None:
+                eng += f"  matmuls alone {r['tH_tS_matmuls']:.0f}x"
             print(f"  {pname:<20} {r['bytes_token'] / 1e6:6.1f} MB/token {r['GB_forward']:8.1f} GB/fwd "
                   f"{r['rows_16k'] / 1e6:7.2f} M rows  hash {r['exclusive_ms']:8.1f} ms  HBM write {r['hbm_write_ms_unfused']:6.1f} ms  "
                   f"GEMM +{r['gemm_extra_ms']:5.1f} ms  t_H/t_S {eng}")
