@@ -36,7 +36,7 @@ names it loads under ``--precision pin`` too.
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
 thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
-request's connection as it comes. The HTTP side is an asyncio server on its own thread (`serve_http`), one request per connection.
+request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
@@ -67,7 +67,7 @@ and taps (the acquisition plan under ``acquisition/``): the manifest of the row'
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_retention.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
@@ -95,7 +95,7 @@ record is ``remote_session.json``, and a rejected session fails the exit.
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
 ``--switch-interval-ms`` (0.1 ms; Python's is 5 ms) and seals in a spawned process (``--seal-process``, `seal_process.sealer_of`),
-the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_seal.Watchdog`) records each stall of 0.2 s or more.
+the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_guard.Watchdog`) records each stall of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -115,14 +115,11 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import (seal_process as SP, serve_h1 as SH, serve_release as RL, serve_remote as SR, serve_row as RW,
-                                   serve_seal as SS)
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
+                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
-from verity_vllm.pipeline import serve_learn as SL
-from verity_vllm.pipeline.serve_http import HttpThread
-from verity_vllm.pipeline.serve_retention import RetentionOptions, retention_record
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -237,7 +234,7 @@ class Options:
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
-    retention: RetentionOptions = group(RetentionOptions)
+    retention: SS.RetentionOptions = group(SS.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
 
 
@@ -563,6 +560,40 @@ class Server:
                 self.abort(adm.engine_id)
 
 
+class HttpThread(threading.Thread):
+    """``server`` on ``host:port`` in this thread's own event loop: ``ready`` is set once it listens (``address``), and
+    `shutdown` stops it from any thread."""
+
+    def __init__(self, server: Server, host: str, port: int) -> None:
+        super().__init__(name="http", daemon=True)
+        self.server, self.host, self.port = server, host, port
+        self.ready = threading.Event()
+        self.address: tuple[str, int] | None = None
+        self.error: BaseException | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._done: asyncio.Event | None = None
+
+    def run(self) -> None:
+        async def main() -> None:
+            self._loop, self._done = asyncio.get_running_loop(), asyncio.Event()
+            srv = await asyncio.start_server(self.server.handle, self.host, self.port, limit=1 << 22, backlog=256)
+            self.address = tuple(srv.sockets[0].getsockname()[:2])
+            self.ready.set()
+            async with srv:
+                await self._done.wait()
+
+        try:
+            asyncio.run(main())
+        except BaseException as e:
+            self.error = e
+            self.ready.set()
+
+    def shutdown(self) -> None:
+        if self._loop is not None and self._done is not None:
+            self._loop.call_soon_threadsafe(self._done.set)
+        self.join()
+
+
 # ---------------------------------------------------------------------------------------------------------------- main
 
 def engine_options(opts: Options) -> dict[str, Any]:
@@ -596,17 +627,6 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
-def disk_floor_of(opts: Options, usage: Callable[[Any], Any] = shutil.disk_usage) -> SS.DiskFloor | None:
-    """``--seal``'s `serve_seal.DiskFloor` over the filesystem ``--out`` is on (its nearest existing directory), None without
-    a floor."""
-    if not (opts.seal and opts.disk_floor_gb > 0):
-        return None
-    p = Path(opts.out).resolve()
-    while not p.exists() and p != p.parent:
-        p = p.parent
-    return SS.DiskFloor(p, int(opts.disk_floor_gb * SS.GB), usage)
-
-
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
               usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
@@ -620,7 +640,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
@@ -678,7 +698,7 @@ def main(opts: Options) -> int:
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
-                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm, release=draws)
         if arm is not None:
             arm.drawing(draws)
@@ -709,7 +729,7 @@ def main(opts: Options) -> int:
     bound = [http.address]
     if opts.switch_interval_ms:
         sys.setswitchinterval(opts.switch_interval_ms / 1000)
-    watchdog = SS.Watchdog(out / "pauses.jsonl")
+    watchdog = SG.Watchdog(out / "pauses.jsonl")
     watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),
@@ -732,7 +752,7 @@ def main(opts: Options) -> int:
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), **retention_record(opts, com),
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
