@@ -81,7 +81,7 @@ Each scheme module's docstring states its steps and roundings, with pinned vecto
 
 ## The bar and the next scheme
 
-PoUW's bar (Daniel, 28 Oct, CMP-294), on the H200, under an assumption milder than SAK. It supersedes Dither and SAK
+PoUW's bar holds on the H200, under an assumption milder than SAK. It supersedes Dither and SAK
 (`SAKMatmul`, `SAKHigh`) as the bar.
 
 - **T1**: the gap between honest and adversary is at most 1% of stock, additive, in priced work. The honest program is
@@ -89,19 +89,18 @@ PoUW's bar (Daniel, 28 Oct, CMP-294), on the H200, under an assumption milder th
 - **T2**: honest overhead is at most 100×.
 - **T3**: perplexity rises at most 5%.
 
-The next scheme is **the lead** (Daniel, 29 Oct, ASK-189 A′; CMP-295), protocol id `verity/pouw/v2`: NCP-family served
+The next scheme is **the lead**, protocol id `verity/pouw/v2`: NCP-family served
 sparse noise with row tags and three certifier-streamed coin lanes, every k32 word committed. Its defaults:
 
 - ShaWrites (rank 4a) counts as milder than SAK, with "honest is best" for hashing's credit;
 - the copy model is tile grain;
-- hiding is the keyed leaf (ASK-192, d = SHA-512(ks_w ‖ salt_w ‖ M_top));
+- hiding is the keyed leaf, d = SHA-512(ks_w ‖ salt_w ‖ M_top);
 - the certifier is the coin source, on a trusted host;
 - the network term and whole-step coverage are reported beside T1;
 - the fold is exact on |A·Bᵀ| ≤ 2^22;
 - stock's decode price is reported both ways.
 
-v1 (H1, `verity/pouw/v1`) stays until v2 credits a served window. The lead's figures so far are
-note:compute-research/20261029T0745Z-report-pouw-sweep's.
+v1 (H1, `verity/pouw/v1`) stays until v2 credits a served window.
 
 ## Security assumptions and guarantees
 
