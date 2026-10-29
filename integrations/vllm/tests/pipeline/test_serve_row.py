@@ -16,6 +16,8 @@ from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.predict.phi import Phi
 
+from tests.pipeline import predicted
+
 
 def engine(resolved: bool | None) -> SimpleNamespace:
     """A stand-in ``vllm.LLM`` whose scheduler resolved ``async_scheduling`` to ``resolved``."""
@@ -77,7 +79,7 @@ def test_async_scheduling_serves_with_the_commit_on_or_off(tmp_path):
     """``--async-scheduling`` passes the preflight with the Commit on (and so with H1, which serves on it) as without it: the
     learn-only warm-up learns the async steps' plans as it does the synchronous ones' (``serve_async_commit_gpu.py`` holds
     the two schedulers' roots equal on an H200)."""
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     base = ["--model", "m", "--revision", "r", "--required-manifest", str(man)]
     on, bare, off = (cli.parse("serve-openai", base + more, environ={})
                      for more in (["--async-scheduling"], ["--async-scheduling", "--no-commit"], []))
