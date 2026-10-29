@@ -175,3 +175,12 @@ Queue:
 - COUNTER attacks R80X and RDX after its `decomp` round.
 - FOLD-ROUNDS enumerates AddXor (making it checked), states ShaWrites-R80 exactly with its falsification test, and
   searches for a fold past 10× that stays inside SHA-512's round function.
+
+**21:40Z, LIT (note 20261029T2131Z-report-hash-fold-lit, checked):**
+- NH is refuted independently, with matching numbers: nh2 is credited correctly only up to G = 16 words a value (h ≈ 8.3, and even there PairWrites is false).
+- **The survey's structural point:** at zero data the only input is the coins, so every cost lower bound stated in input length credits coins, not words. Only query bounds against an ideal oracle or permutation survive. A fold's premise has to be about a standard permutation or round, which is R80X's direction.
+- Dominated: proofs of sequential work, memory-hard functions, VDFs, BLAKE3 (h 44.7) and SipHash (15–28).
+- Rank-5 survivors: an ARX round a word (2.5–10.9), a degree-4 power (2.53, thin against COUNTER's expansion attack), a known-order squaring chain (7.75–21.3), and a BRW tree hash (1.5–3.1, unattacked).
+- Six shortcuts every fold must avoid: linear folds, additive fusion, long sums of products, packed narrow words, rotation-free programs, and step-invariant terms.
+
+LIT becomes SI-RED, a general attack harness. BRW goes first. COUNTER keeps R80X and RDX.
