@@ -2882,6 +2882,8 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                     dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
         if not (m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and is_ask(m)):   # older clients tagged an fyi without (quiet)
             continue
+        if poster(m, reg) not in handles | {p.lower() for p in reg.get("external_posters", [])}:
+            continue                                                 # a machine's alert (`vy-monitors`) isn't an ask
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
         if link := LINEAR_LINK_RE.search(m.get("text") or ""):
             answered, state = issue_state(link[1], x["by"], taken)
