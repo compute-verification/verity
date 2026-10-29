@@ -10,11 +10,13 @@ the leaves the drawn blocks open.
   refused by name.
 * **When.** `Draws.release` runs on the sealer's thread before the window's seal: it waits, on a condition and never a clock,
   until every protocol of ``--release-after`` has drawn window k, then hands the union to the device pool's `release` (the
-  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. A
-  release can't come before the last draw, and a window is released once: a second draw of a window by the same protocol is
-  refused (a draw is never redrawn), as is any draw once the window was released. The sealed bundle then holds the kept set,
-  and the commitment over every leaf with every step's levels and salt key, so each kept leaf's opening path stays whole until
-  the last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
+  window's `release_drawn`), which copies those leaves to host and frees the window's pool pieces. The step-input port's
+  committed positions, which the seal holds to the rows the window ran (`serve_seal.positions_off_of`), are read just before
+  (`served_record.committed_raw`'s ``read_before_release``); no bundle holds them. A release can't come before the last draw,
+  and a window is released once: a second draw of a window by the same protocol is refused (a draw is never redrawn), as is
+  any draw once the window was released. The sealed bundle then holds the kept set with its leaves' salts, every step's root
+  and the tree nodes an opening inside it reads (`store_dump.drawn`), so each kept leaf's opening path stays whole until the
+  last proof that reads it ends; a read of a dropped leaf is refused by name (`refused`, and the committer's own `open`).
 * **Where draws come in.** `Draws.put` in process (PoUW H1's under ``pouw``, from its arm once the window's draw coin is
   open: `serve_h1.H1Windows.drawn`), or `DrawDir`: ``--draws-dir`` (default ``OUT/draws``) holds one file a draw,
   ``w<k>.<protocol>.json`` = ``{"window": k, "protocol": P, "reads": [[step, name, lo, hi], ...]}``, written whole (to a temporary
@@ -22,6 +24,10 @@ the leaves the drawn blocks open.
   another window or protocol, fails that window's release by name; the server serves on.
 * **At the stop** the pending seals wait for their windows' draws as they wait for their sealer: a drawer must draw every window
   whose line was written before it stops the server, or the stop waits on it.
+* **Failures.** A window that reaches no release (its draws fail, or its close or seal job does) is discarded (`Draws.discard`):
+  its device-held values dropped and its pool pieces freed, so later windows' steps don't wait on it; any later draw or read of it
+  is refused by name. A failed run (`Draws.fail`, serve-openai's engine loop failing) ends every waiting release and every step
+  waiting on the device pool by name.
 """
 from __future__ import annotations
 
@@ -30,11 +36,15 @@ import re
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.commit.native_ranges import DROPPED
 from verity_vllm.commit.opened import meta_by_name
+from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
+from verity_vllm.config import option
 from verity_vllm.errors import Refused
 
 Read = tuple[int, str, int, int]
@@ -82,13 +92,15 @@ def leaves_of(com: Any, reads: Iterable[Read]) -> dict[int, set[int]]:
 class Draws:
     """Each window's draws by protocol, as they come in, and each window's release once all of ``protocols`` have drawn it."""
 
-    def __init__(self, protocols: Sequence[str]) -> None:
+    def __init__(self, protocols: Sequence[str], pool: Any = None) -> None:
         if not protocols:
             raise ValueError("a draw-gated release needs at least one protocol whose draw it waits for")
         self.protocols = tuple(protocols)
         self._got: dict[int, dict[str, list[Read]]] = {}
         self._kept: dict[int, dict[int, frozenset[int]]] = {}
         self._refused: dict[int, str] = {}
+        self.discarded: dict[int, str] = {}
+        self.pool = pool                                 # the committer's `device_pool.DevicePool`, whose waiting steps `fail` ends
         self._cv = threading.Condition()
         self.failure: str | None = None
         self.releases: list[dict[str, Any]] = []
@@ -101,6 +113,8 @@ class Draws:
         with self._cv:
             if window in self._kept:
                 raise Refused(f"window {window} was released: a draw after its release can't be kept ({protocol})")
+            if window in self.discarded:
+                raise Refused(f"window {window} reached no release ({self.discarded[window]}): its values were dropped ({protocol})")
             got = self._got.setdefault(window, {})
             if protocol in got:
                 raise Refused(f"window {window} was drawn by {protocol} already: a draw is never redrawn")
@@ -114,10 +128,25 @@ class Draws:
             self._cv.notify_all()
 
     def fail(self, why: str) -> None:
-        """Every waiting release fails with ``why``: no draw is coming."""
+        """Every waiting release fails with ``why``: no draw is coming. So does every step waiting on the device pool for an earlier
+        window's release (`DevicePool.fail`): it ends by name, uncommitted, rather than waiting on a release that won't come."""
         with self._cv:
             self.failure = why
             self._cv.notify_all()
+        if self.pool is not None:
+            self.pool.fail(f"no release is coming: {why}")
+
+    def discard(self, window: int, com: Any, why: str) -> dict[str, Any] | None:
+        """Window ``window`` reaches no release (``why``): its device-held values dropped and its pool pieces freed
+        (`device_pool.discard`), so later windows' steps don't wait on it; any read of it is refused by name."""
+        from verity_vllm.commit.committer import device_pool as DP
+
+        if not com._gpu_blocks or (rec := DP.discard(com, why)) is None:
+            return None
+        with self._cv:
+            self.discarded[window] = why
+            self._got.pop(window, None)
+        return rec
 
     def wait(self, window: int) -> dict[str, list[Read]]:
         """Every protocol's draw of ``window``, once all are in."""
@@ -135,19 +164,24 @@ class Draws:
     def release(self, window: int, com: Any, clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
         """Window ``window``'s release over its committer ``com``, after every protocol's draw: the union of the leaves the draws
         open kept on host, the rest dropped and the window's pool pieces freed (`release_drawn`); the record of it."""
-        t0 = clock()
-        got = self.wait(window)
-        waited = clock() - t0
-        union: dict[int, set[int]] = {}
-        by: dict[str, int] = {}
-        for p in self.protocols:
-            leaves = leaves_of(com, got[p])
-            by[p] = sum(len(v) for v in leaves.values())
-            for s, v in leaves.items():
-                union.setdefault(s, set()).update(v)
         from verity_vllm.commit.committer import device_pool as DP
 
-        rec = DP.release(com, {s: sorted(v) for s, v in union.items()})
+        t0 = clock()
+        try:
+            got = self.wait(window)
+            waited = clock() - t0
+            union: dict[int, set[int]] = {}
+            by: dict[str, int] = {}
+            for p in self.protocols:
+                leaves = leaves_of(com, got[p])
+                by[p] = sum(len(v) for v in leaves.values())
+                for s, v in leaves.items():
+                    union.setdefault(s, set()).update(v)
+            com.read_before_release = {(s, PORT_NAMES[1]): committed_raw(com, s, PORT_NAMES[1]) for s in sorted(com._layouts)}
+            rec = DP.release(com, {s: sorted(v) for s, v in union.items()})
+        except Exception as e:
+            self.discard(window, com, f"{type(e).__name__}: {e}"[:500])
+            raise
         with self._cv:
             self._kept[window] = {s: frozenset(v) for s, v in union.items()}
             self._got.pop(window, None)
@@ -157,9 +191,10 @@ class Draws:
         return line
 
     def refused(self, window: int, reads: Iterable[Read], com: Any) -> list[str]:
-        """The reads of released window ``window`` that name a dropped leaf, each by name (none: every leaf they open was kept)."""
+        """The reads of released window ``window`` that name a dropped leaf, each by name (none: every leaf they open was kept); of
+        a discarded window (`discard`), every read."""
         with self._cv:
-            kept = self._kept.get(window)
+            kept = {} if window in self.discarded else self._kept.get(window)
         if kept is None:
             raise KeyError(f"window {window} has not been released")
         out = []
@@ -176,16 +211,18 @@ class Draws:
         return {"protocols": list(self.protocols), "released": len(self.releases),
                 "kept_bytes": sum(r.get("kept_bytes", 0) for r in self.releases),
                 "dropped_bytes": sum(r.get("dropped_bytes", 0) for r in self.releases),
-                "drawn_not_released": pending, "refused": refused, "failure": self.failure}
+                "drawn_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure,
+                "device_pool": self.pool.record() if self.pool is not None else None}
 
 
 class DrawDir:
     """``--draws-dir``: each ``w<k>.<protocol>.json`` put into `Draws` once; `scan` reads what's new, `start` scans every
-    ``period_s`` on a thread of its own until `stop`."""
+    ``period_s`` (default `VERITY_DRAWS_POLL_S`) on a thread of its own until `stop`."""
 
-    def __init__(self, path: str | Path, draws: Draws, *, period_s: float = 0.2,
+    def __init__(self, path: str | Path, draws: Draws, *, period_s: float | None = None,
                  sleep: Callable[[float], None] = time.sleep) -> None:
-        self.path, self.draws, self.period_s, self.sleep = Path(path), draws, float(period_s), sleep
+        self.path, self.draws, self.sleep = Path(path), draws, sleep
+        self.period_s = settings.VERITY_DRAWS_POLL_S if period_s is None else float(period_s)
         self.path.mkdir(parents=True, exist_ok=True)
         self.seen: set[str] = set()
         self._stop = threading.Event()
@@ -228,10 +265,81 @@ class DrawDir:
             self.sleep(self.period_s)
 
 
-def release_of(opts: Any, out: Path) -> tuple[Draws | None, DrawDir | None]:
-    """serve-openai's `Draws` and its `DrawDir` under ``--release-after`` (None, None without it)."""
+@dataclass(frozen=True, kw_only=True)
+class RetentionOptions:
+    """serve-openai's ``--retain-exclude`` and ``--retain`` (its ``retention`` group, `retention_refusal`, `retention_record`)."""
+    retain_exclude: str = option("--retain-exclude", env="VERITY_RETAIN_EXCLUDE", default="", metavar="FAMILIES",
+                                 help="rows-sha512: commit these value families without retaining them (sets VERITY_RETAIN_EXCLUDE, as "
+                                      "the Commit's --retain-exclude does): the attention interiors only, hidden_m1 (fa2_hidden_m1, "
+                                      "fa3_hidden_m1), which no reader of a sealed window opens. Their leaves and roots are the "
+                                      "same; each seal's manifest names them committed_not_retained (store_dump.not_retained)")
+    retain: str = option("--retain", default="host", choices=("host", "device"),
+                         help="rows-sha512: where a window's committed values wait for its draws. host (the default): the pinned host "
+                              "pool. device: a device pool of --retain-device-gb (committer.device_pool), which the window's draw-gated "
+                              "release empties, keeping on host only the leaves some subprotocol drew; a full pool makes the step wait")
+    retain_device_gb: float = option("--retain-device-gb", type=float, default=32.0, metavar="GB",
+                                     help="--retain device: the device pool's size, beside the engine and the window ring; it must hold "
+                                          "every window awaiting its release and the open one, so at least --window-gb")
+    release_after: str = option("--release-after", default="", metavar="PROTOCOLS",
+                                help="--retain device --seal: the subprotocols (comma-separated, e.g. pouw) whose draw of each "
+                                     "window its release waits for; the union of the leaves their drawn blocks open is kept "
+                                     "(serve_release); pouw is PoUW H1's, put by its arm (--protocols), the rest come in "
+                                     "through --draws-dir")
+    draws_dir: str = option("--draws-dir", default="", metavar="DIR",
+                            help="--release-after: where each draw comes in, w<k>.<protocol>.json (default OUT/draws)")
+
+
+def retention_record(opts: Any, com: Any) -> dict[str, Any]:
+    """serve.json's record of ``opts.retention``: the families left unretained, where values wait for their draws, and the pool."""
+    r = opts.retention
+    return {"retain_exclude": r.retain_exclude or None, "retain": r.retain, "device_pool": getattr(com, "device_pool_record", None),
+            "release_after": r.release_after or None, "draws_dir": (r.draws_dir or "OUT/draws") if r.release_after else None}
+
+
+def retention_refusal(opts: Any) -> str | None:
+    """Why ``opts.retention`` can't hold (None: it can): ``--retain-exclude`` names attention interiors only, and the Commit under
+    rows-sha512, whose committer leaves them on the device; ``--retain device`` the Commit under rows-sha512 too, with a pool of at
+    least ``--window-gb``, ``--seal`` and ``--release-after``."""
+    r = opts.retention
+    if r.retain == "device":
+        if not opts.commit:
+            return "--retain device holds the windowed collector's committed values on the device: it needs the Commit (drop --no-commit)"
+        if r.retain_device_gb < float(getattr(opts, "window_gb", 0) or 0):
+            return (f"--retain-device-gb {r.retain_device_gb:g} is under --window-gb {opts.window_gb:g}: the pool must hold the open window "
+                    "beside those awaiting their release")
+        if not (getattr(opts, "seal", False) and getattr(r, "release_after", "")):
+            return ("--retain device: only a window's draw-gated release before its seal frees its device-held values, so it needs "
+                    "--seal and the subprotocols whose draws the release waits for (--release-after)")
+    if getattr(r, "release_after", ""):
+        if r.retain != "device" or not getattr(opts, "seal", False):
+            return "--release-after gates the release of device-held values before each seal: it needs --retain device and --seal"
+        try:
+            protocols_of(r.release_after)
+        except ValueError as e:
+            return str(e)
+    spec = r.retain_exclude
+    if not spec:
+        return None
+    from verity_vllm.commit.committer.host_retention import HIDDEN_M1_FAMILIES, retain_exclude_families
+
+    if other := sorted(retain_exclude_families(spec) - HIDDEN_M1_FAMILIES):
+        return (f"--retain-exclude {spec}: {other} aren't attention interiors; serve-openai commits without retaining only "
+                f"{sorted(HIDDEN_M1_FAMILIES)} (hidden_m1), which no reader of a sealed window opens")
+    if not opts.commit:
+        return f"--retain-exclude {spec} commits values without retaining them: it needs the Commit (drop --no-commit)"
+    return None
+
+
+def release_of(opts: Any, out: Path, com: Any = None) -> tuple[Draws | None, DrawDir | None]:
+    """serve-openai's `Draws` over ``com``'s device pool and its `DrawDir` under ``--release-after`` (None, None without it)."""
     r = opts.retention
     if not r.release_after:
         return None, None
-    draws = Draws(protocols_of(r.release_after))
+    draws = Draws(protocols_of(r.release_after), getattr(com, "device_pool", None))
     return draws, DrawDir(Path(r.draws_dir) if r.draws_dir else Path(out) / "draws", draws)
+
+
+def fail(draws: Draws | None, error: BaseException | None) -> None:
+    """A failed engine loop's end for ``draws``: no draw is coming, so every waiting release and pool take ends by name."""
+    if draws is not None and error is not None:
+        draws.fail(f"the server failed: {error}")
