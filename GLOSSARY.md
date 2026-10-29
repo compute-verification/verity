@@ -191,16 +191,15 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
 | `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
-| ρ and "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `benchmarks/rho` (its `Overhead.rho`, the `rho` command), until renamed | the slowdown lower bound; slowdown(𝒢, 𝒜, η). ρ is 𝓜's resource rate |
-| "overhead", "rho" and ρ for the training-cost ratio: overhead(𝒢, 𝒜, η), "the overhead lower bound"; `benchmarks/rho`'s `Overhead` and `theorem.overhead`, until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (prover overhead γ stays) |
+| "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `benchmarks/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`, the `rho` command), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (prover overhead γ, and ρ as 𝓜's resource rate, stay) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕), which the reference training algorithm bounds; the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |
 | A_phys, A_i(S), δ_i(S), A′ in roman letters; "layer 1", "layer 2", "layer 3"; "the one theorem", "soundness one theorem" | 𝓕, 𝒜_p, δ_p, 𝒜; the feasible set, protocol soundness, the slowdown lower bound |
 | ε_gap, and its `gap.*` routes in `benchmarks/rho` (`gap.floor`, `gap.clock`) until renamed | ε_undecl (`undecl.gpu`, `undecl.clock`) |
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
-| 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Slowdown.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p; set; the initial state a, which Λ bounds |
-| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Slowdown.threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
-| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until renamed | server block; the slowdown lower bound's sum over server blocks |
+| 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p; set; the initial state a, which Λ bounds |
+| "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until they are renamed | GPU-hours; the training cost T_𝒢(η; S) |
+| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; the network certifier's `blocks.Server`, `Blocks.window` and `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
@@ -265,8 +264,8 @@ Some words keep a different, narrower sense:
 
 - A protocol's **ε_skip**, in Dither's `PROTOCOL.md` and the Credit statement, is that protocol's own skipped share of
   what it credits, the Notation's ε_W; the fleet's ε_skip is ε_W(1 − ε_undecl) plus the wrong certificates.
-- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout, a `GateSelection` a set of its gates, and its query `Family` an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. A `typed-obligation/v0` object's `subcircuits` (shared gate bodies) and a sampled-proofs obligation's `subcircuit` key (its gate selection) keep their serialized names. Its gates are word-level (`Value<w>`), as are the Lean's (`Verity.Circuit`), whose Boolean profile is width 1.
-- A **template instance** (`Q_template_instance`, `Q_template_instances`) is one occurrence of a subcircuit template in a program; in a claim id `property/instance` (`cr/sha-512`) it is the primitive an assumption is about. Neither is an input.
+- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout and a `GateSelection` is a selected set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both names are serialized and stay. `verity.ml.circuits`'s gates are word-level: each outputs one `Value<w>` of w bits, not one bit, and so are the gates of the Lean model in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
+- A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
 - A **universal unit** (`verity.ml.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
   runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value. Circuit hiding is
   recursion (Flock's `--hide`), not the universal unit.
@@ -325,28 +324,28 @@ Vocabulary that one area uses:
   library migrates to Boolean Definitions under new versions of the same names. The word view reads each element's bits as
   one integer (`boolean.word_type`): under it, `GemmCoordinate_v3` takes and returns what `GemmCoordinate_v2` does.
 - **Subcircuit template** and **subcircuit**: a template is named, with typed parameters for shape and numeric (silicon)
-  semantics, such as `gemm_coordinate(K, semantics)`, a semantics value being an instruction id of
+  semantics, such as `gemm_coordinate(K, semantics)`, a semantics value an instruction id of
   `verity.ml.circuits.silicon.instructions.INSTRUCTIONS`; a subcircuit binds every parameter, such as
   `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits.
-- **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the output the chip produced
-  beside it; an input set is a batch of them for one subcircuit, with their provenance (captured or synthetic).
-- **Cell**: one benchmark result: a proof system (an archived one's backend id included) × statement × input set × prover
+- **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the chip's output beside
+  it; an input set is a batch of them for one subcircuit, with provenance (captured or synthetic).
+- **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.ml.circuits.partition`): the part of a partition that holds every input gate
   (weights, request inputs, randomness). It is certified by checking each input's commitment root against its external
   anchor (the declared weights root, the client's request commitment, the randomness source), always, never sampled.
 - **Pinned**, as an instruction's status (`verity.ml.circuits.silicon.instructions`): its silicon model matched every
-  hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records; the other statuses are
-  hypothesis and unprobed. A pinned value or root is another sense: one fixed before the run, which a check compares to.
-- **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of the steps whose role is served
+  hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
+  unprobed). A pinned value or root is one fixed before the run, which a check compares to.
+- **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of its served steps
   (`Accounting.Gates.Census.servedMacs`, the census's `served_macs`). It is not size, which counts AND gates.
 - **Binding unit** (circuit-check's cache, `circuit_check.cache` and `targets.BINDINGS`): one unit of a binding file, a
   root function, a `_model_roots` entry or a `TEMPLATE_PARAMS` entry; a target's cached pass holds the digest of each
   binding unit whose roots reach it.
 - **Transformer sublayer**: one of a transformer layer's two halves, its attention or its FFN (MLP or MoE), each with its
-  residual add; in DeepSeek-V4, each is wrapped by the hyper-connections' pre and post mixes.
+  residual add; in DeepSeek-V4, each sits inside the hyper-connections' pre and post mixes.
 - **Value acquisition** and **native tap** (`integrations/vllm`'s `acquire/`): value acquisition takes a required value's
-  bytes where vLLM computes it, through a Python hook or a native tap, a capture compiled into a kernel. A tap is never
+  bytes where vLLM computes it, by a Python hook or a native tap (a capture compiled into a kernel). A tap is never
   the network certifier (Older names).
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
   clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`WardenParams.grid`), proved as its own proof
