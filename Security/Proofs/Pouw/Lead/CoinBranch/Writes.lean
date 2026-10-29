@@ -1,7 +1,7 @@
 import Definitions.Pouw.Lead.Model
 
 /-!
-# Coin branching at tile grain (COINBRANCH; owner N-ADAPT)
+# Coin branching at tile grain
 
 At each coin value the execution's run is its own path, so a prover that branches on the coins pays, on each path, a
 write for every distinct committed tile its memory didn't start with; revisits (a tile written twice) only add writes.
@@ -11,7 +11,7 @@ namespace Pouw.SecurityProofs.Lead.CoinBranch
 
 open Pouw.Lead Pouw.Dimension.Pointwise
 
-/-- Owner: N-ADAPT. **Per path, distinct tiles cost writes**: if every committed tile is held by the run at some
+/-- **Per path, distinct tiles cost writes**: if every committed tile is held by the run at some
 point (tile grain, `TileGrain` at a coin value with no egress, and `Accepted`'s holds), the committed tiles' distinct
 values number at most the run's whole-tile writes plus the committed tiles its memory starts with (`tableHits`).
 Reads `run`, `writes` and `Step.apply` (`Pouw.Dimension.Pointwise`), as `run_chunks_le` does at word grain. -/

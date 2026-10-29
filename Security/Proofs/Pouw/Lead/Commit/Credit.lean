@@ -1,7 +1,7 @@
 import Definitions.Pouw.Assumptions.Lead
 
 /-!
-# The commitment's hashing credit (COMMIT; owner N-HIDE)
+# The commitment's hashing credit
 
 Without a collision, an execution that reaches each of the honest commitment's digests hashed each of its messages,
 so its ShaWrites credit is at least the honest commitment's distinct messages'.
@@ -11,7 +11,7 @@ namespace Pouw.SecurityProofs.Lead.Commit
 
 open Pouw.Lead Pouw.Assumptions.Lead
 
-/-- Owner: N-HIDE. **Hashing credit**: if the execution at `ω` hashes, for each message of the honest commitment, a
+/-- **Hashing credit**: if the execution at `ω` hashes, for each message of the honest commitment, a
 message with its digest (`HonestHashRuled`'s conclusion) and hashed no collision with them (`¬ Break`), its messages'
 credit is at least the honest commitment's distinct messages'. Reads `Hash.CollisionIn`, `shaCredit` and `Break`. -/
 theorem hashed_credit_ge {L : Pouw.Lead.Layout} (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L)
