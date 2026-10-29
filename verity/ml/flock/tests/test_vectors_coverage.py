@@ -65,6 +65,9 @@ def statements() -> list[str]:
         assert m, f"Flock/Tags.lean has no `def {listed} : List Tags := [...]`: update statements() to read the versions"
         for d in re.findall(r"\w+", m.group(1)):
             name = re.search(r'name := "([^"]+)"', bodies.get(d, ""))
+            if not name:
+                const = re.search(r"name := (\w+)", bodies.get(d, ""))
+                name = const and re.search(rf'^def {const.group(1)} : String := "([^"]+)"', src, re.M)
             assert name, f"Tags.{d}: no `name := \"…\"` in its definition: update statements() to read its name"
             names.append(name.group(1))
     return names
