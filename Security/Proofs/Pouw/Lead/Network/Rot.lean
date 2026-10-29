@@ -11,7 +11,7 @@ import Mathlib.Tactic.NormNum
 
 The lead's coin lanes on a 64-row tile are three odd coins in `±127` a (tile, step, column), which a k32 word reads
 through the public weights `A' = (127, 1, 1)` on the tile's even rows and `(1, 127, 1)` on its odd rows (`foldEven`,
-`foldOdd`). A step has at most 28 data lanes (21 on step 1), and at a tile of 64 rows every step carries the three
+`foldOdd`). A step has at most 28 data lanes (21 on step 0), and at a tile of 64 rows every step carries the three
 lanes.
 
 * `rot_fold_injective`, `rotRead_injective`: the two folds determine the three coins, so a tile with rows of both
