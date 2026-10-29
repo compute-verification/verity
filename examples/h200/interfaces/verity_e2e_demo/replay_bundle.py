@@ -834,7 +834,7 @@ def _bits_of(row: bytes, n: int) -> np.ndarray:
     return np.unpackbits(np.frombuffer(row, np.uint8), bitorder="little")[:n].reshape(1, n)
 
 
-def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.Layout, rows: Mapping[str, bytes]) -> bool:
+def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.RowLayout, rows: Mapping[str, bytes]) -> bool:
     """`replay` of a Boolean-profile template: each row is its port's bits in order, packed little-endian into its u16
     words (`IF.layout`), and an output field of fewer than 16 bits is its bits low in one zero-padded word, which must be
     zero."""
