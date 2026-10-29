@@ -27,6 +27,11 @@
     "root_bits": 512,
     "source": "The outsourcing provers under R1b: the prover keeps A_j for the certifier, so it computes the served path itself and an outside machine computes the coin-dependent words and their hashing, returning one 512-bit root a call. With a coin-free served path (the de-noised lead, blc1a) the outside machine rebuilds the activations from the 32-bit token and takes any set of call types; with a noisy one it needs the coins of every earlier call (a prefix of the forward). The cap's slack is the cap less the honest's own traffic, one 17-bit Llama-3 token id a token (128,256 ids, in for prefill or out for decode; estimate)"
   },
+  "nred": {
+    "model_p_saving_at_pstar": [[0.5, 0.516], [0.25, 0.258], [0.125, 0.129]],
+    "public_lane_weight": 1,
+    "source": "N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red): A2c on ssn-1l-tag (the later steps' (1 + b_t) 1 cancelled by one chosen data lane, 51.6% at m 8,192), fix2 (25.8%) and fix2w13 (12.9%) under W1 as N-W1 states it (model P), whose p* = max_v Pr[a step's coin increment = v] are 1/2, 1/4 and 1/8; models W and C are lower for fix2"
+  },
   "certifier": {
     "sha512_bytes_per_s_core": [810e6, 857e6],
     "source": "SHA-512 counter-mode coins on one AMD EPYC Genoa core (runs r20261029-074951-e66c and r20261029-075358-9963)"

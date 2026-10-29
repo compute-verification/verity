@@ -134,6 +134,47 @@ def designs(lay: dict) -> list[dict]:
 SERVED = {"rows": "either", "blc1a": "exact", "blc4a": "exact"}
 
 
+def step_pstar(design: dict, lay: dict, w: int) -> float | None:
+    """N-RED's A2c / A8 against a layout: the adversary fixes, before the coins, a data lane d a step so that a word
+    repeats its previous step's whenever the step's coin increment equals -d. p* = max_d Pr[increment + d = 0] over the
+    row bit b (uniform) and the lane coins s (uniform odd in +-(2^e - 1)), with the row lane (1 + b) w public."""
+    kind = design["kind"]
+    odd = range(-(2 ** design.get("e", 1) - 1), 2 ** design.get("e", 1), 2)
+    if kind == "rows":
+        lanes, row_coin = 0, False
+    elif kind == "blc1":
+        lanes, row_coin = 0, True
+    elif kind == "blc1a":
+        lanes, row_coin = 1, False
+    elif kind == "blc4a":
+        lanes, row_coin = lay["lanes4"]["lanes"] - 1, False
+    else:
+        return None
+    dist = {0: 1.0}
+    for _ in range(lanes):
+        nxt: dict[int, float] = {}
+        for v, p in dist.items():
+            for s in odd:
+                nxt[v + s] = nxt.get(v + s, 0.0) + p / len(odd)
+        dist = nxt
+    inc: dict[int, float] = {}
+    for b in (0, 1):
+        for v, p in dist.items():
+            if row_coin:
+                for s in odd:
+                    x = (1 + b) * s + v
+                    inc[x] = inc.get(x, 0.0) + 0.5 * p / len(odd)
+            else:
+                x = (1 + b) * w + v
+                inc[x] = inc.get(x, 0.0) + 0.5 * p
+    return max(inc.values())
+
+
+def model_p_saving(pstar: float, nred: dict) -> float:
+    pts = nred["model_p_saving_at_pstar"]
+    return pstar * sum(s / p for p, s in pts) / len(pts)
+
+
 def outsource(calls: list, m: int, layers: int, served: str, wfun, alpha: float, out: dict) -> dict:
     """Priced work an outsourcing prover saves a bit it exchanges, under R1b (it keeps A_j for the certifier, so it
     computes the served path; the outside machine computes the coin-dependent words and hashes them, returning a root a
@@ -208,7 +249,9 @@ def price_design(design: dict, inp: dict, einp: dict, ll: dict) -> dict:
         if key in einp["nkernel_t2"]:
             row["t2_nkernel_scaled"] = [v * words for v in einp["nkernel_t2"][key]]
         pts[key] = row
-    return {"id": design["id"], "title": design["title"], "points": pts}
+    ps = step_pstar(design, lay, einp["nred"]["public_lane_weight"])
+    a2c = None if ps is None else {"pstar": ps, "model_p_saving_estimate": model_p_saving(ps, einp["nred"])}
+    return {"id": design["id"], "title": design["title"], "points": pts, "a2c": a2c}
 
 
 def t2_at(inp: dict, einp: dict, ll: dict, space_key: str, step_bytes: float, step_entries: float,
@@ -390,6 +433,16 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
              for c in p["caps"].values() for a in c["attack"].values() for v in a.values()), "ok"),
         ("The closing layout serves exactly (its served noise folds)",
          all(p["served"] == "exact" for p in best.values()), res["closing"]["id"]),
+        ("N-RED's three model-P points are linear in p* within 1% (the scaling the A2c column uses)",
+         all(abs(s / p / (model_p_saving(1.0, einp["nred"])) - 1) < 0.01
+             for p, s in einp["nred"]["model_p_saving_at_pstar"]), f"{model_p_saving(1.0, einp['nred']):.4f} a unit p*"),
+        ("The lead's public later lane gives p* = 1/2, so A2c's 51.6% reproduces",
+         d["rows"]["a2c"]["pstar"] == 0.5 and abs(d["rows"]["a2c"]["model_p_saving_estimate"] - 0.516) < 1e-9,
+         f"{d['rows']['a2c']['pstar']}, {d['rows']['a2c']['model_p_saving_estimate']:.4f}"),
+        ("Both closing layouts' A2c / A8 estimates are at most 1% of stock",
+         all(d[res[c]["id"]]["a2c"]["model_p_saving_estimate"] <= 0.01 for c in ("closing", "closing_320")),
+         ", ".join(f"{res[c]['id']} {d[res[c]['id']]['a2c']['model_p_saving_estimate']:.4f}"
+                   for c in ("closing", "closing_320"))),
         ("The cap-320 closing layout serves exactly, its stated term at most 1% at cap 320 at both prices, every point",
          all(p["served"] == "exact" and p["caps"]["320"]["stated"][q] <= 0.01
              for p in d[res["closing_320"]["id"]]["points"].values() for q in ("floor", "bar")),
@@ -412,9 +465,12 @@ def table(res: dict) -> str:
         f = lambda c: " / ".join(f"{c['stated'][q]:.4%}" for q in ("floor", "floor_chained", "bar"))
         att = "; ".join(f"{a} {v['whole_cap']:.4%} / {v['slack']:.4%} ({v['of_stated']:.3f})"
                         for a, v in c32["attack"]["floor"].items())
+        a2c = (f"A2c p* {x['a2c']['pstar']:.5f} ~{x['a2c']['model_p_saving_estimate']:.3%}" if x["a2c"]
+               else "A2c n/a")
         lines.append(f"  {x['id']:<16} {p['coin_bits_per_token']:>12,.0f} {p['n_max']:>12,.1f} "
                      f"{p['stream_bytes_per_token']:>11,.0f}  32: {f(c32)}  320: {f(c320)}  outsourcers {att}  "
-                     f"forming {p['forming_share_of_stock']:.4%}  words x{p['words_vs_lead']:.3f}  {p['served']}")
+                     f"forming {p['forming_share_of_stock']:.4%}  words x{p['words_vs_lead']:.3f}  {p['served']}  "
+                     f"{a2c}")
     for label, cl in (("Closing layout", res["closing"]), ("Closing layout at cap 320", res["closing_320"])):
         lines += closing_lines(res, label, cl)
     lines.append("Lower bound (any layout): coin bits a token >= 100 W_mac cap; n_max <= 0.01 MACs / (W_mac cap)")
@@ -473,14 +529,16 @@ def main() -> int:
     res["designs_by_id"] = {x["id"]: x for x in res["designs"]}
     closing = [x for x in res["designs"] if x["id"].startswith(("blc1-t", "blc1a-t"))
                and all(p["caps"]["32"]["stated"]["bar"] <= 0.01 for p in x["points"].values())]
-    best = min(closing, key=lambda x: (x["points"]["t8192"]["served"] != "exact",
+    a2c_open = lambda x: x["a2c"] is None or x["a2c"]["model_p_saving_estimate"] > 0.01
+    best = min(closing, key=lambda x: (x["points"]["t8192"]["served"] != "exact", a2c_open(x),
                                        x["points"]["t8192"]["stream_bytes_per_token"],
-                                       x["points"]["t8192"]["noise_rms_lsb_by_k"]["8192"]))
+                                       x["points"]["t8192"]["caps"]["32"]["stated"]["bar"]))
     res["closing"] = {"id": best["id"], "title": next(d["title"] for d in designs(einp["layouts"])
                                                       if d["id"] == best["id"])}
     exact320 = [x for x in res["designs"] if x["points"]["t8192"]["served"] == "exact"
                 and all(p["caps"]["320"]["stated"]["bar"] <= 0.01 for p in x["points"].values())]
-    best320 = min(exact320, key=lambda x: x["points"]["t8192"]["stream_bytes_per_token"])
+    best320 = min(exact320, key=lambda x: (a2c_open(x), x["points"]["t8192"]["stream_bytes_per_token"],
+                                           x["points"]["t8192"]["caps"]["320"]["stated"]["bar"]))
     res["closing_320"] = {"id": best320["id"], "title": next(d["title"] for d in designs(einp["layouts"])
                                                              if d["id"] == best320["id"])}
     res["lower_bound"] = lower_bound(inp, ll, res)
