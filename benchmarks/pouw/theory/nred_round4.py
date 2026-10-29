@@ -44,6 +44,8 @@ meet in a birthday pool of every row of the column. `salt` adds a per-row ρ_i (
 the stock epilogue's `IADD3` row source as N-EXACT's xu does; `salt_bigw` also draws the window weights with
 |W| ∈ [64, 127]. `reversed` replays the lanes out and back instead of in order.
 
+`mask_blocks` checks N-HIDE's remedy (b) mask on A's 1 KiB leaves against a V chosen before the salt.
+
 `a5_lead` is round 2's A5 search (`nred_round2.a5_step_greedy`) on the lead: with s drawn per call after A_j a row's
 step-t vector holds the call's coins for every t ≥ 2, so only step 1 (16 a₁ codes) can be tabled; with s drawn a
 window, a row's step-t vectors are ssn_1l's 16·t.
@@ -412,6 +414,33 @@ def mirror_runs(seed: int = 103, n: int = 64) -> dict:
     return out
 
 
+MASK_HEADER_BYTES = 173
+
+
+def mask_blocks(seed: int = 107, salts: int = 4) -> dict:
+    """N-HIDE's remedy (b) for A's 1 KiB pieces (note 20261029T1052Z-report-np-hide, 11:25Z): V' = V ⊕ Z, Z's u64
+    word t = h1[0] ⊕ t, framed after the leaf's 173 header bytes. Z_t ⊕ Z_{t+16Δ} = t ⊕ (t + 16Δ) reads no salt, so V
+    chosen before the salt as V_t = C_{t mod 16} ⊕ t gives V'_t = C_{t mod 16} ⊕ h1[0] for every salt: the leaf's
+    value-only SHA-512 blocks are one message and share one schedule. `per_block` mixes word ⌊t/16⌋ of h1 instead
+    (V has 8 blocks of 16 words, h1 has 8 words)."""
+    rng = np.random.default_rng(seed)
+    c = rng.integers(0, 1 << 63, 16, dtype=np.uint64)
+    t = np.arange(128, dtype=np.uint64)
+    v = c[t % 16] ^ t
+    out = {}
+    for form in ("counter", "per_block"):
+        distinct, full = set(), 0
+        for _ in range(salts):
+            h1 = rng.integers(0, 1 << 63, 8, dtype=np.uint64)
+            z = (h1[0] if form == "counter" else h1[t // 16]) ^ t
+            msg = rng.integers(0, 256, MASK_HEADER_BYTES, dtype=np.uint8).tobytes() + (v ^ z).astype(">u8").tobytes()
+            blocks = [msg[128 * b:128 * b + 128] for b in range(len(msg) // 128) if 128 * b >= MASK_HEADER_BYTES]
+            full = len(blocks)
+            distinct.add(len(set(blocks)))
+        out[form] = {"value_only_blocks_a_leaf": full, "distinct_messages_a_leaf": sorted(distinct)}
+    return out
+
+
 def a5_lead() -> dict:
     """Round 2's A5 search on the lead. `call`: s drawn per call after A_j, so a row's step-t vector holds the call's
     coins for t ≥ 2 and only step 1's 16 a₁ codes can be tabled. `window`: s drawn once a window, known to advice, so a
@@ -530,6 +559,12 @@ def check(rep: dict) -> list[dict]:
        "> 10%", mr["narrow/m64"]["shares"]["P/a2r_entry"] < 0.01
        and mr["reversed/m64"]["shares"]["P/a2r_entry"] > 0.1,
        [mr["narrow/m64"]["shares"]["P/a2r_entry"], mr["reversed/m64"]["shares"]["P/a2r_entry"]])
+    mk = rep["mask"]
+    ok("N-HIDE's counter mask (Z_t = h1[0] ⊕ t): V chosen before the salt makes a leaf's 7 value-only blocks one "
+       "SHA-512 message for every salt", mk["counter"]["value_only_blocks_a_leaf"] == 7
+       and mk["counter"]["distinct_messages_a_leaf"] == [1], mk["counter"])
+    ok("a per-block chaining word (Z_t = h1[⌊t/16⌋] ⊕ t) leaves the same V's 7 blocks 7 distinct messages",
+       mk["per_block"]["distinct_messages_a_leaf"] == [7], mk["per_block"])
     a5 = rep["a5"]
     ok("A5 on the lead: s drawn per call after A_j saves 0 at every m",
        max(v["gap_share_of_stock"] for v in a5["call"].values()) == 0)
@@ -544,7 +579,7 @@ def main() -> None:
     args = ap.parse_args()
     rep = {"runs": runs(), "scaling": scaling(), "ordering": ordering(),
            "identical_columns": {t: identical_columns(tag=t) for t in ("narrow", "wide")},
-           "mirror": mirror_runs(), "a5": a5_lead()}
+           "mirror": mirror_runs(), "a5": a5_lead(), "mask": mask_blocks()}
     lead = rep["runs"]["blc4a-t64-e7/a2r/llama"]["shares"]
     mir = rep["mirror"]["narrow/m8192"]["shares"]
     rep["periods"] = {"P/xrow": ne.periods(lead["P/xrow"]), "P'32/xrow": ne.periods(lead["P'32/xrow"]),
