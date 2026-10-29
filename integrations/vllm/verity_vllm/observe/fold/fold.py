@@ -139,7 +139,7 @@ from verity_vllm.observe.fold.resolver import (
     Transparent,
     Unsupported,
     WeightField,
-    Witness,
+    WitnessParam,
     external_buffers,
     operand_rows,
     operand_view,
@@ -776,7 +776,7 @@ class _Fold:
                     if k not in shared:
                         shared[k] = self._weight_field(op, ptype, f"{spec_label(c.spec)}.{pname}")
                     colls.append(shared[k])
-                elif isinstance(op, Witness):
+                elif isinstance(op, WitnessParam):
                     colls.append(self._witness(op, i, ptype, c, pname))
                 else:
                     colls.append(self._wrap(ptype, self._read_operand(op, i), op.view, f"{spec_label(c.spec)}.{pname}[row {i}]"))
@@ -860,7 +860,7 @@ class _Fold:
             raise FoldError(f"{what}: field {op.path!r} is {coll.type!r}, the parameter wants {ptype!r}")
         return Coll(ptype, coll.refs)
 
-    def _witness(self, op: Witness, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
+    def _witness(self, op: WitnessParam, i: int, ptype: Type, c: Compute, pname: str) -> Coll:
         """Row i's next leaves of its request's `op.name` witness parameter (`WitnessInputs.leaves`)."""
         read = {"step": self.cur_step, "event": min(c.consumed) if c.consumed else self.cur_event, "spec": spec_label(c.spec), "hint": c.hint}
         return Coll(ptype, self.witness_inputs.leaves(op, i, ptype, f"{spec_label(c.spec)}.{pname}[row {i}]", self.req_index, read, FoldError))
