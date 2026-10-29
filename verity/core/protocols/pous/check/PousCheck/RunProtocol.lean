@@ -44,7 +44,7 @@ namespace PousCheck.RunProtocol
 open Lean (Json JsonNumber)
 open Flock MemoryChallenger
 
-def ID : String := Domains.POUS_P2_RUN
+def ID : String := "verity/pous/p2/v4/run"
 
 structure Params where
   point : Run.Point
@@ -326,5 +326,9 @@ private def TIE_PUB : SetupProtocol.Public :=
 #guard (gaps { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 2 ^ 11 + 1⟩ }).2 ==
   [s!"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {2 ^ 27 + 2 ^ 16})"]
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
+
+/-! `ID` keeps its literal while a lock reads it, whose record hashes the value as written: tied here to its entry of
+the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : ID = Domains.POUS_P2_RUN := rfl
 
 end PousCheck.RunProtocol

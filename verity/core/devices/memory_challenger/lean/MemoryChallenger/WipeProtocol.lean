@@ -39,7 +39,7 @@ namespace MemoryChallenger.WipeProtocol
 open Lean (Json)
 open Flock
 
-def ID : String := Domains.WIPE_PROTOCOL
+def ID : String := "verity/wipe/v0"
 
 /-- The error the bound holds at, `2^-128`. -/
 def EPS : Core.Ratio := ⟨1, 2 ^ 128⟩
@@ -216,5 +216,9 @@ private def h200 : StreamedWipe.Params := ⟨2203125000, 5231, 1, 1000, #[("gpu-
   [s!"k = {MAX_READS + 1}: the certificate is computed for at most {MAX_READS} reads"]
 #guard (certify { segment with k := MAX_READS + 1 } 0).foreignBits == 2 ^ 28
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
+
+/-! `ID` keeps its literal while a lock reads it, whose record hashes the value as written: tied here to its entry of
+the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : ID = Domains.WIPE_PROTOCOL := rfl
 
 end MemoryChallenger.WipeProtocol
