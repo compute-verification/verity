@@ -7,3 +7,7 @@ Include the prologue in your measured plan (due 04:00Z; late is fine with this i
 - whether cache keys can come from cheaper inputs (source digests) before building a Definition, so a warm target is never built;
 - whether the catalog build can be cached across runs.
 Keep your verdict-identity gate.
+
+
+# 06:30Z: Nebius CPU nodes restarted
+Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on them. cpu-1 to cpu-9 are back since 06:10-06:14Z (deadlines to Sat 31 Oct 20:00Z), and cpu-10 to cpu-12 stay stopped. Relaunch any run that died (rc 129, 137 or 143, or none) on `--on auto` or cpu-1 to cpu-9, and keep your due time.
