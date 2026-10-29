@@ -65,25 +65,25 @@ theorem sum_prob_le {Y P : Type} [Fintype Y] (L : Finset P) (F : P → Y → Pro
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 
-theorem cont_left (t : Fin n) (ω ζ ζ' : Coins n κ X) : cont t (cont t ω ζ) ζ' = cont t ω ζ' := by
+theorem cont_left (t : Fin n) (ω ζ ζ' : DrawCoins n κ X) : cont t (cont t ω ζ) ζ' = cont t ω ζ' := by
   unfold cont
   refine Prod.ext rfl (funext fun j => ?_)
   by_cases h : j < t <;> simp [h]
 
-theorem cont_swap (t : Fin n) (ω ζ : Coins n κ X) : cont t (cont t ω ζ) (cont t ζ ω) = ω := by
+theorem cont_swap (t : Fin n) (ω ζ : DrawCoins n κ X) : cont t (cont t ω ζ) (cont t ζ ω) = ω := by
   unfold cont
   refine Prod.ext rfl (funext fun j => ?_)
   by_cases h : j < t <;> simp [h]
 
 /-- **The held row reads only the cut**: every continuation of `ω` from window `t`'s cut holds `ω`'s row. -/
 theorem held_cont [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω ζ : Coins n κ X) (p : ℕ) :
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω ζ : DrawCoins n κ X) (p : ℕ) :
     R.held D prf rest t (cont t ω ζ) p = R.held D prf rest t ω p :=
   Accounting.SecurityProofs.TS.Plurality.plural_sp (opens := R.Shows D prf rest t p) (cont_left t) ω ζ
 
 /-- **The held row is the likeliest**: no row is shown alone on more of window `t`'s continuations of `ω`. -/
 theorem tally_le_held [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X) (p : ℕ) (v : Hash.Row) :
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) (p : ℕ) (v : Hash.Row) :
     tally (cont t) (R.Shows D prf rest t p) ω v ≤
       tally (cont t) (R.Shows D prf rest t p) ω (R.held D prf rest t ω p) :=
   Accounting.SecurityProofs.TS.Plurality.tally_le_plural ω v
@@ -98,19 +98,19 @@ theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = pro
 
 /-- A window opens at most `s_t` receipts: its draws, `min(s_t, U_t)`. -/
 theorem card_opened_le (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
   unfold Session.opened openings
   exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Session.draws; exact min_le_left _ _))
 
 /-- **Window `t`'s share of the binding term** is at most `√(|L_t|·s_t·(fork_t + split_t))`. -/
 theorem window_le [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
     (t : Fin n) :
     prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤
       √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal)) := by
   set a : ℕ → ℝ := fun p => prob (Accounting.SecurityProofs.TS.Plurality.Mov (cont t) (R.Shows D prf rest t p))
     with ha
-  set Fk : ℕ → Coins n κ X × Coins n κ X → Prop := fun p y => Frk (cont t) (R.Shows D prf rest t p) y.1 y.2
+  set Fk : ℕ → DrawCoins n κ X × DrawCoins n κ X → Prop := fun p y => Frk (cont t) (R.Shows D prf rest t p) y.1 y.2
     with hFk
   have h1 : prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤ ∑ p ∈ L t, a p := by
     refine (prob_mono fun ω hω => ?_).trans
@@ -153,10 +153,10 @@ theorem window_le [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (pr
 
 /-- A fork break is a collision the window's fork finder outputs. -/
 theorem fork_le_finder [Fintype X] [Nonempty X] (D : Session n m s κ X) (R : Receipts n κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) :
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) :
     (R.fork D prf rest t).toReal ≤ (R.finder D prf rest t q).Pr (fun u => (R.hash u).bytes) := by
   rw [Receipts.fork, toReal_pr, Claims.Finder.Pr, claims_pr]
-  refine prob_mono (Ω := Coins n κ X × Coins n κ X) fun y hy => ?_
+  refine prob_mono (Ω := DrawCoins n κ X × DrawCoins n κ X) fun y hy => ?_
   have hex : ∃ uv, R.Finds D prf rest t y.1 y.2 uv := by
     obtain ⟨p, hp, hp', h | h⟩ := hy
     · obtain ⟨u, hu, v, hv, hc⟩ := h
@@ -192,7 +192,7 @@ variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type}
 /-- **Fixed roots**: where every window's cut fixes its receipts' verifiers, roots and ranks, the roots never split,
 and under `cr/sha-512` the binding term is at most `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, `ledger.binding`'s charge. -/
 theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Session n m s κ X) (R : Receipts n κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ)
     (q : Fin n → ℕ) (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t)
     (hq : ∀ t, Claims.StrictBirthday (fun u => (R.hash u).bytes) (R.finder D prf rest t (q t)))
     (hF : ∀ t ω ζ p, R.verifier t (cont t ω ζ) p = R.verifier t ω p ∧ R.root t (cont t ω ζ) p = R.root t ω p ∧
@@ -201,7 +201,7 @@ theorem binding_le_of_fixed [Fintype X] [Nonempty X] (D : Session n m s κ X) (R
   refine (ReceiptsBindingOfCR D R prf rest L q hL hq).trans (le_of_eq (Finset.sum_congr rfl fun t _ => ?_))
   have hs : (R.split D prf rest t).toReal = 0 := by
     rw [Receipts.split, toReal_pr]
-    have : (fun y : Coins n κ X × Coins n κ X => R.Split D prf rest t y.1 y.2) = fun _ => False := by
+    have : (fun y : DrawCoins n κ X × DrawCoins n κ X => R.Split D prf rest t y.1 y.2) = fun _ => False := by
       funext y
       exact propext ⟨fun ⟨p, _, _, h⟩ => h (hF t y.1 y.2 p), False.elim⟩
     rw [this]
