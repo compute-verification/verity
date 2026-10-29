@@ -230,6 +230,9 @@ def test_fused_projections_draw_one_calls_coins():
         apart = noise("self_attn.k_proj", 32, rule, False)
         assert not torch.equal(apart, kk), rule
     assert run.gates.log["accumulator"]["failed"] == 0
+    lead, pd = (noise("mlp.down_proj", 40, r, False) for r in ("ssn_1l", "ssn_pd"))
+    rows = (lead - pd) - (lead - pd)[:1]
+    assert torch.equal(rows, rows[:, :1].expand_as(rows)) and not bool((rows == 0).all())
 
 
 def test_u8pv_is_the_online_softmax_kernel():
