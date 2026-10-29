@@ -16,6 +16,10 @@ from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
+from test_cache import _bindings, _tree
+from test_units import BINDINGS as UNIT_BINDINGS
+from test_units import HARNESS as UNITS
+from test_units import _run as _run_units
 
 
 def test_a_target_s_shard_is_its_id_s_hash_and_never_its_place():
@@ -285,3 +289,47 @@ def test_three_shards_of_a_sidecar_set_combine_to_the_unsharded_run(tmp_path, ca
     assert json.dumps(got["summary"]) == json.dumps(rep["summary"])
     assert [(t["kind"], t["target"], t["failures"]) for t in got["targets"]] == [(t["kind"], t["target"], t["failures"])
                                                                                  for t in rep["targets"]]
+
+
+#: `test_units`' cached ``--all`` over the synthetic catalog as shard SHARD of 3 (None: unsharded), with each target
+#: `cache.descriptor` describes (``described``) and, as its checks start (`cli._checked_all`), the ones described before them
+#: (``before``) and the targets it checks (``checks``)
+PROLOGUE = """
+described, before, checks = [], [], []
+desc, checked = CC.descriptor, cli._checked_all
+CC.descriptor = lambda fn: described.append(fn.id) or desc(fn)
+def entered(*a):
+    before.extend(described)
+    checks.extend(a[0][i][1] for i in (range(len(a[0])) if a[17] is None else a[17]))
+    return checked(*a)
+cli._checked_all = entered
+"""
+SHARDED = (UNITS.replace("rep = cli.run(", PROLOGUE + "rep = cli.run(").replace("units=True)", "units=True, shard=SHARD)")
+           .replace('print(json.dumps({"stats"', 'print(json.dumps({"described": described, "before": before, "checks": checks, "stats"'))
+UNIT_IDS = ["SynAdd_v1", "SynK_v1{K=2}", "SynOther_v1", "SynSub_v1", "SynTop_v1", "SynX_v1", "SynXor_v1"]
+
+
+def test_a_shard_describes_only_its_own_targets_before_its_checks(tmp_path):
+    """A cold ``--all`` described every target (its key) before forking a worker, most of an hour on ci's ~8,600: a shard
+    describes only its own.  A full build builds the whole catalog, as the ids come from it, describes only shard 1's targets
+    before its checks and still stores every binding's record; shard 2, from those records, describes and makes only its own;
+    shard 1 again reuses its task list and every target it checked, describing nothing.  Unsharded, the full build describes
+    every target before its checks."""
+    assert SHARDED.count("shard=SHARD") == 1 and SHARDED.count('"described": described') == 1
+    own = {k: sorted(t for t in UNIT_IDS if SH.shard_of("definition", t, 3) == k) for k in (1, 2)}
+    assert all(0 < len(o) < len(UNIT_IDS) for o in own.values())
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    first = _run_units(root, SHARDED.replace("SHARD)", "(1, 3))"))
+    assert sorted(first["before"]) == sorted(first["checks"]) == sorted(first["values"]) == own[1]
+    assert first["hits"] == [] and first["stats"]["units"] == {"stored": 5}
+    second = _run_units(root, SHARDED.replace("SHARD)", "(2, 3))"))
+    assert sorted(second["described"]) == sorted(second["checks"]) == sorted(second["values"]) == own[2]
+    assert second["hits"] == [] and second["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0}
+    again = _run_units(root, SHARDED.replace("SHARD)", "(1, 3))"))
+    assert (again["described"], again["checks"], again["hits"]) == ([], [], own[1])
+
+    whole = _tree(tmp_path / "w")
+    _bindings(whole, *UNIT_BINDINGS)
+    out = _run_units(whole, SHARDED.replace("SHARD)", "None)"))
+    assert sorted(out["before"]) == sorted(out["checks"]) == UNIT_IDS and out["stats"]["units"] == {"stored": 5}

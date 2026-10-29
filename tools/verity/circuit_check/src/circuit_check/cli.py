@@ -244,7 +244,9 @@ def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[
     except UN.Stale as e:
         return {"stored": 0, "why": str(e)}
     want = [(t[1], _info(t)["as_call"], _info(t)["units"], k) for t, k in zip(tasks, keys) if t[0] == "definition"]
-    got = [(fid, c, sorted(d.units.get(fid, ())), target_key("definition", fid, opts, c, desc=d.nodes[fid]["d"]))
+    unkeyed = {t[1] for t, k in zip(tasks, keys) if k is None}
+    got = [(fid, c, sorted(d.units.get(fid, ())),
+            None if fid in unkeyed else target_key("definition", fid, opts, c, desc=d.nodes[fid]["d"]))
            for fid in d.ids for c in [d.nodes[fid]["f"] in calls]]
     if got != want:
         i = next(i for i in range(max(len(got), len(want))) if i >= min(len(got), len(want)) or got[i] != want[i])
@@ -532,9 +534,11 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`), building only the bindings
     whose record misses, and a full build stores them.
 
-    With ``shard`` (K, N) the whole task list is built (and stored) as above, but only shard K's targets are looked up and
-    checked (`shard.shard_of`, by each target's id), the heavy ones first; the report is of those alone, unjoined
-    (`shard.unjoined`), with the shard's manifest (`shard.manifest`) as ``shard``."""
+    With ``shard`` (K, N) only shard K's targets (`shard.shard_of`, by each target's id) are keyed, looked up and checked, the
+    heavy ones first; the report is of those alone, unjoined (`shard.unjoined`), with the shard's manifest (`shard.manifest`)
+    as ``shard``.  From the bindings' records, no other target is described or made (`_planned`); a full build still builds
+    the whole catalog, as the ids come from it (`targets.select`), but describes only shard K's targets before its checks,
+    and its task-list entry is the shard's, under a key that names it."""
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
     request = {"specs": list(specs), "all": everything, "as_call": as_call,
@@ -543,7 +547,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if tracing and everything and not specs:
         TG.load_registries()
         listed = CC.key({"target": ["task-list", "--all"], "as_call": as_call,
-                         "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "pinned": sorted(TG.pinned())})
+                         "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "pinned": sorted(TG.pinned()),
+                         **({"shard": list(shard)} if shard is not None else {})})
         if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
             ids = [tuple(t) for t in hit[0]["targets"]]
             idx = list(range(len(ids))) if shard is None else SH.mine(ids, shard)
@@ -582,7 +587,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         zygote = Zygote(_work, _forked, fork=True)          # before the keys: it holds what `_init` would have built
     try:
         if keys is None and tracing:
-            keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks]
+            mine = None if only is None else set(only)
+            keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ())))
+                    if mine is None or i in mine else None for i, t in enumerate(tasks)]
         rep = _checked_all(tasks, specs, opts, everything, as_call, log, jobs, cache, mem_gb, progress, isolated, tracing,
                            listed, zygote, mem_file, keys, hits, only)
     finally:
