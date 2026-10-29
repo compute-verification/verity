@@ -3,7 +3,10 @@
 `--head` picks the statement on `cursor/compute-research-lean-statement-4457`. ebe1fcd968 (the network restatement)
 differs from dd30c5c347 in step 0, which holds 21 data lanes and the three coin lanes (`stepsFor K = 1 + ⌈(K − 21)/28⌉`),
 in the network term (`betaLead · callBits / 32`, the call's MACs' share of Llama-3.2-1B's forward at the cap) and in
-`GapAtDecode` (0.232% and 3.72% at cap 32, 0.252% and 4.04% at cap 320, against 0.266% and 4.25%).
+`GapAtDecode` (0.232% and 3.72% at cap 32, 0.252% and 4.04% at cap 320, against 0.266% and 4.25%). d5263f864b puts
+`tableGap` at `(2 mem + 1) · 2^-100` a tile and step at every step (the coin lanes alone), `GapAt320` at 0.513%,
+0.491% and 0.488%, and `GapAtDecode` against served compute (`gapServed`, the unpadded `rows · cols · K / 32`) at
+3.71% and 4.03%, with the padded share at 0.231% and 0.252%.
 
 At dd30c5c347 the statement commits every call over whole MMA tiles: `lead T m n K` has
 `m := padRows m` (16 ⌈m/16⌉), `rows := m` and `n := padCols n` (8 ⌈n/8⌉). A padding row has zero data and its own tag,
@@ -51,6 +54,9 @@ HEADS = {
                    "decode": ((32, Q(266, 100000), Q(425, 10000)),)},
     "ebe1fcd968": {"step0_data": 21, "step0_lanes": True, "network": "bits", "sk_num": 34,
                    "decode": ((32, Q(232, 100000), Q(372, 10000)), (320, Q(252, 100000), Q(404, 10000)))},
+    "d5263f864b": {"step0_data": 21, "step0_lanes": True, "network": "bits", "sk_num": 34, "table": "lanes",
+                   "lim320": (Q(513, 100000), Q(491, 100000), Q(488, 100000)),
+                   "decode": ((32, Q(231, 100000), Q(371, 10000)), (320, Q(252, 100000), Q(403, 10000)))},
 }
 HEAD: dict = {}
 _CS_WORDS_AT, _CS_WORD_SCALAR = cs.words_at, cs.word_scalar
@@ -103,7 +109,10 @@ def layout(t: int, m: int, n: int, k: int, cap: int = 32) -> dict:
 
 
 def table_gap(lay: dict) -> Q:
+    """From d5263f864b every step, step 0 included, is at `(2 mem + 1) · 2^-100` from its coin lanes alone."""
     rb, cb = lay["m"] // 16, lay["n"] // 8
+    if HEAD.get("table") == "lanes":
+        return rb * cb * cs.TILE_WORDS * lay["S"] * Q(2 * MEM + 1, 2 ** 100)
     return rb * cb * cs.TILE_WORDS * (P0 + (lay["S"] - 1) * Q(2 * MEM + 1, 2 ** 100))
 
 
@@ -141,9 +150,10 @@ def closed_share(m: int, cap: int, rows: int | None = None) -> Q:
         honest = (32 * sk * (1 + Q(351538, 3200)) + Q(351538, 100) * 32 * (sk / 65536 + Q(1, m * 4096 * 4096))
                   + Q(344905, 100) * Q(rows, 4 * 4096 * m))
         network = N_MAX * Q(cap * rows, m * FWD_MACS) * honest
+    p0 = 0 if HEAD.get("table") == "lanes" else 32 * P0 / 4096
     return (Q(84, 100000) + Q(35, 1000000) + network + Q(16064, 1000000) / m
             + Q(23 * 32, 65536) * sk + Q(23 * 32, m * 4096 * 4096)
-            + 32 * P0 / 4096 + 32 * sk * Q(2 * MEM + 1, 2 ** 100))
+            + p0 + 32 * sk * Q(2 * MEM + 1, 2 ** 100))
 
 
 GAP_POINTS = {"pt512x64": (512, 64, Q(190, 100000), Q(514, 100000)),
@@ -153,7 +163,8 @@ GAP_POINTS = {"pt512x64": (512, 64, Q(190, 100000), Q(514, 100000)),
 
 def gap_at(ns: list[int], ks: list[int]) -> dict:
     out = {}
-    for name, (t, m, lim32, lim320) in GAP_POINTS.items():
+    for p, (name, (t, m, lim32, lim320)) in enumerate(GAP_POINTS.items()):
+        lim320 = HEAD.get("lim320", (None,) * 3)[p] or lim320
         for cap, lim in ((32, lim32), (320, lim320)):
             worst, arg = Q(0), None
             for n in ns:
