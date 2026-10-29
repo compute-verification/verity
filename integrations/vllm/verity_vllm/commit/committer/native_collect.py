@@ -873,7 +873,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 if self._nc.failure:                       # an earlier step was abandoned: this one fails by the run's name, uncommitted
                     raise RuntimeError(f"windowed staging: the collector failed earlier in this run ({self._nc.failure[:200]}) -- step {job.step} not committed")
                 return self._commit_step_windowed(job)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 self._nc.abandon_step(job.seq, f"worker failed on windowed step {job.step}: {e!r}"[:400], self._side.cuda_stream if self._side is not None else 0)
                 raise           # the run failed by its first such name, and the step's slots went back after the side stream's reads of them
             finally:
