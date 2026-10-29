@@ -56,6 +56,9 @@ designs then read `joint_saving`, tiles and A2r as one attack in which each word
 formed registers) is a multilinear polynomial in the coin bits with coefficients polynomial in the data, and a pair is
 distinct for every input only if their difference has a coin monomial whose coefficient no input can zero.
 `lower_bounds` states the bounds the frontier is measured against and checks them exhaustively at small sizes.
+`blc_scores` (`--lead`, outside the grammar) scores the lead's additive lanes, odd coins a (64-row tile, step, column)
+against a public column A′ and folded out exactly: their exact p*, §2b's floor at their variance, A2c, A2r with the
+small tiles' spread, and the joint attack on a tile whose rows share the lanes.
 Output: a JSON report (`--json`), the frontier as a text table (`--table`); `--data` reads noise_data.py's output.
 """
 
@@ -810,6 +813,188 @@ def entropy_revisits(steps: tuple = (67, 265), bits: tuple = tuple(range(1, 13))
                     a, b = lo * w, hi * w
                     row[f"{dn}_{wname}"] = _walk_share(lanes * w, np.minimum(a, b), np.maximum(a, b), mu * w, plan, 0, s)
             out.append(row)
+    return out
+
+
+# ---------------------------------------------------------------- the lead's additive lanes
+
+#: `ssn-1l-tag + blc4a-t64-e7` as N-EGRESS lays it out: three odd e-bit coins a (64-row tile, step, column) in B′ lanes
+#: 28-30 against a public constant column A′ in A, on every step, beside ssn_1l's row lane 31 (2 + x) on steps 2..S;
+#: step 1 holds 21 data lanes, the lanes, the tags and the code, later steps 28 data lanes. The lanes' sum is a
+#: per-(tile, column) offset the epilogue's IADD3s fold out exactly, so none of their variance is served.
+BLC_TILE = 64
+BLC_DATA_LANES = (21, 28)
+BLC_ROW = {"hi": (2, 3), "lo": (1, 3)}
+#: `blc_joint`'s tile positions: tile copies come in clumps (rows whose code and tag differences agree on a tile)
+BLC_POSITIONS = 512
+
+
+def blc_steps(k: int) -> int:
+    return 1 + math.ceil((k - BLC_DATA_LANES[0]) / BLC_DATA_LANES[1])
+
+
+def blc_pmf(weights: tuple, e: int = 7, row: str = "hi") -> tuple[int, np.ndarray]:
+    """A lane step's increment, exactly: (least value, counts) of ssn_1l's row bit (`row`; `none` on step 1) plus
+    Σ A′_l·s_l, with s_l odd and uniform in ±(2^e - 1)."""
+    vals = np.arange(-(2 ** e - 1), 2 ** e, 2)
+    d, lo = np.ones(1, dtype=np.int64), 0
+    for w in weights:
+        span = w * (2 ** e - 1)
+        ker = np.zeros(2 * span + 1, dtype=np.int64)
+        ker[w * vals + span] = 1
+        d, lo = np.convolve(d, ker), lo - span
+    if row != "none":
+        b0, b1 = BLC_ROW[row]
+        ker = np.zeros(b1 - b0 + 1, dtype=np.int64)
+        ker[[0, b1 - b0]] = 1
+        d, lo = np.convolve(d, ker), lo + b0
+    return lo, d
+
+
+def blc_mass(weights: tuple, e: int = 7, row: str = "hi") -> dict:
+    """The lane step's largest point mass p*, its variance and §2b's floor 1/sqrt(1 + 12·Var) at that variance."""
+    lo, d = blc_pmf(weights, e, row)
+    p = d / d.sum()
+    x = lo + np.arange(d.size)
+    var = float((p * x * x).sum() - (p * x).sum() ** 2)
+    return {"p_star": float(p.max()), "var": var, "floor": 1 / math.sqrt(1 + 12 * var),
+            "support": int((d > 0).sum())}
+
+
+def _blc_plan(weights: tuple, s: int, rows: int) -> list[list[int]]:
+    """Each step's lanes (indices into `weights`): all of them on every step from BLC_TILE rows; below it
+    len(weights)·ceil(S·rows/BLC_TILE) lane coins spread evenly from step 1, one or more a step."""
+    if rows >= BLC_TILE:
+        return [list(range(len(weights)))] * s
+    n = len(weights) * math.ceil(s * rows / BLC_TILE)
+    plan: list[list[int]] = [[] for _ in range(s)]
+    for q in range(n):
+        plan[q * s // n].append(q % len(weights))
+    return plan
+
+
+def _blc_lanes(weights: tuple, plan: list[list[int]], lanes: np.ndarray, e: int) -> tuple[np.ndarray, ...]:
+    """The lanes' part of each step's increment, (steps, …) from `lanes` (steps, lanes, …), with its least and largest
+    values (the mean is 0)."""
+    inc, lo, hi = (np.zeros(lanes.shape[:1] + lanes.shape[2:]) for _ in range(3))
+    for t, ls in enumerate(plan):
+        for li in ls:
+            inc[t] += weights[li] * lanes[t, li]
+            lo[t] -= weights[li] * (2 ** e - 1)
+            hi[t] += weights[li] * (2 ** e - 1)
+    return inc, lo, hi
+
+
+def _blc_increments(weights: tuple, s: int, rows: int, e: int, row: str, w31: np.ndarray, lanes: np.ndarray,
+                    bits: np.ndarray, coins: np.ndarray) -> tuple[np.ndarray, ...]:
+    """Steps × entries increments and their least, largest and mean values as the data knows them. `lanes` is
+    (steps, lanes, entries) of odd coins, `bits` the row lane's (steps, entries) bits, `coins` the steps without a lane's
+    8-bit row coins, and w31 lane 31's weight (steps, entries)."""
+    plan = _blc_plan(weights, s, rows)
+    b0, b1 = BLC_ROW[row]
+    inc, lo, hi = _blc_lanes(weights, plan, lanes, e)
+    mu = np.zeros(inc.shape)
+    for t, ls in enumerate(plan):
+        if ls and t == 0:
+            continue
+        if ls:
+            v, a, b, m = b0 + (b1 - b0) * bits[t], b0, b1, (b0 + b1) / 2
+        else:
+            v, a, b, m = coins[t], -128, 127, -0.5
+        inc[t] += v * w31[t]
+        ea, eb = a * w31[t], b * w31[t]
+        lo[t] += np.minimum(ea, eb)
+        hi[t] += np.maximum(ea, eb)
+        mu[t] += m * w31[t]
+    return inc, lo, hi, mu
+
+
+def _blc_draws(weights: tuple, s: int, e: int, shape: tuple, wide: bool, rng: np.random.Generator) -> tuple:
+    lanes = 2 * rng.integers(-(2 ** (e - 1)), 2 ** (e - 1), (s, len(weights)) + shape[1:]) + 1
+    w31 = rng.choice(WIDE, (s,) + shape[1:]) if wide else np.ones((s,) + shape[1:], dtype=np.int64)
+    return lanes, w31
+
+
+@lru_cache(maxsize=None)
+def blc_revisits(weights: tuple, s: int, rows: int = BLC_TILE, e: int = 7, row: str = "hi", wide: bool = False,
+                 entries: int = REVISIT_ENTRIES) -> float:
+    """A2r (`_walk_share`) on the lead's lane: each entry's increments as `_blc_plan` lays a `rows`-row tile out, the
+    steps without a lane holding an 8-bit row coin; lane 31's weight is 1, or with `wide` a nonzero int8 a column and
+    step drawn once a window, known to the data."""
+    rng = np.random.default_rng(zlib.crc32(repr(("blc_revisits", weights, s, rows, e, row, wide, entries)).encode()))
+    lanes, w31 = _blc_draws(weights, s, e, (s, entries), wide, rng)
+    bits = rng.integers(0, 2, (s, entries))
+    coins = rng.integers(-128, 128, (s, entries))
+    inc, lo, hi, mu = _blc_increments(weights, s, rows, e, row, w31, lanes, bits, coins)
+    return _walk_share(inc, lo, hi, mu, [[(t, 1)] for t in range(s)], 0, s)
+
+
+@lru_cache(maxsize=None)
+def blc_joint(weights: tuple, s: int, others: int, e: int = 7, row: str = "hi", code: str = "b13s4") -> float:
+    """`joint_saving` on one BLC_TILE-row tile of the lead: its rows hold equal data (set per column by `_strategies`),
+    ssn_1l's step-1 code and N-RED's tags against G, their own row bits, and the tile's lanes, which its rows share.
+    Each word is saved once: a TILE-word tile equal to an earlier one (any row and step), else each word that repeats
+    an earlier word of its entry or is zero."""
+    rng = np.random.default_rng(zlib.crc32(repr(("blc_joint", weights, s, others, e, row, code)).encode()))
+    owners = BLC_TILE
+    mult = rng.integers(1, 2 ** 63, TILE, dtype=np.uint64) | np.uint64(1)
+    saved, total = np.zeros(3), 0.0
+    for pos in rng.choice(others // TILE, size=min(BLC_POSITIONS, others // TILE), replace=False):
+        cols = np.arange(pos * TILE, (pos + 1) * TILE)
+        base = (_code_part(code, owners, cols, others, rng)
+                + owner_tags(owners).T @ rng.integers(-3, 4, (TAG_LANES, TILE))).astype(float)
+        lanes, _ = _blc_draws(weights, s, e, (s, TILE), False, rng)
+        col_inc, lo_s, hi_s = _blc_lanes(weights, _blc_plan(weights, s, owners), lanes, e)
+        (b0, b1), later = BLC_ROW[row], (np.arange(s) > 0)[:, None]
+        rowbit = np.where(later, b0 + (b1 - b0) * rng.integers(0, 2, (s, owners)), 0)
+        inc = col_inc[:, None, :] + rowbit[:, :, None]
+        lo_s, hi_s, mu_s = lo_s + later * b0, hi_s + later * b1, later * (b0 + b1) / 2 + 0 * col_inc
+        for i, d in enumerate(_strategies(inc, lo_s, hi_s, mu_s)):
+            words = base[None] + np.cumsum(inc + d[:, None, :], axis=0)
+            order = np.argsort(words, axis=0, kind="stable")
+            srt = np.take_along_axis(words, order, axis=0)
+            rep = np.zeros(words.shape, dtype=bool)
+            np.put_along_axis(rep, order[1:], srt[1:] == srt[:-1], axis=0)
+            free = (rep | (words == 0)).sum(2).ravel()
+            key = (words.astype(np.int64).astype(np.uint64) * mult).sum(2).ravel()
+            tile_rep = np.ones(key.size, dtype=bool)
+            tile_rep[np.unique(key, return_index=True)[1]] = False
+            saved[i] += np.where(tile_rep, np.maximum(free, TILE - 1), free).sum()
+        total += s * owners * TILE
+    return float(saved.max() / total) if total else 0.0
+
+
+#: A′ as the lead carries it, N-LIT's weighting, and N-LIT's two-lane fallback
+BLC_WEIGHTINGS = {"(1,1,1)": (1, 1, 1), "(1,127,1)": (1, 127, 1), "(1,127)": (1, 127)}
+#: tile rows the lane is scored at: decode with one row and with 16 (spread), and every full tile
+BLC_ROWS = (1, 16, BLC_TILE)
+
+
+def blc_scores(shapes: dict = ns.LLAMA, e: int = 7, row: str = "hi") -> dict:
+    """The lead's lane under each BLC_WEIGHTINGS A′, MAC-weighted over `shapes`: p* and §2b's floor at its variance;
+    A2c (the mean over steps of the largest mass); A2r at BLC_ROWS tile rows, with lane 31's weight 1 and drawn wide;
+    the joint attack on a full tile; each a share of stock (α·share, α = 32·S/K)."""
+    macs = {nm: n * k for nm, (n, k) in shapes.items()}
+    tot = sum(macs.values())
+    out = {}
+    for name, w in BLC_WEIGHTINGS.items():
+        m_later, m_first = blc_mass(w, e, row), blc_mass(w, e, "none")
+        r = {"p_star": m_later["p_star"], "p_star_step1": m_first["p_star"], "var": m_later["var"],
+             "floor": m_later["floor"], "support": m_later["support"]}
+        acc: dict = {}
+        for nm, (n, k) in shapes.items():
+            s = blc_steps(k)
+            alpha, wt = H32 * s / k, macs[nm] / tot
+            terms_ = {"alpha": alpha, "a2c": alpha * (m_first["p_star"] + (s - 1) * m_later["p_star"]) / s,
+                      "joint_tile": alpha * blc_joint(w, s, n, e, row)}
+            for rows in BLC_ROWS:
+                for wide in (False, True):
+                    terms_[f"a2r_rows{rows}{'_wide' if wide else ''}"] = alpha * blc_revisits(w, s, rows, e, row, wide)
+            for key, v in terms_.items():
+                acc[key] = acc.get(key, 0.0) + wt * v
+        r.update(acc)
+        r["chosen_tile"] = max(r["a2c"], r[f"a2r_rows{BLC_TILE}"], r["joint_tile"])
+        out[name] = r
     return out
 
 
@@ -1804,21 +1989,35 @@ def table(rep: dict, limit: int = 40) -> str:
     return "\n".join(lines)
 
 
+def lead_table(scores: dict) -> str:
+    """`blc_scores` per workload and A′: p*, the floor at its variance, then shares of stock."""
+    cols = ["a2c", "joint_tile", "chosen_tile"] + [f"a2r_rows{r}{w}" for r in BLC_ROWS for w in ("", "_wide")]
+    lines = ["## the lead's lane, `ssn-1l-tag + blc4a-t64-e7`, at each A′ (shares of stock, α·share)",
+             "workload | A′ | p* | floor at Var | alpha | " + " | ".join(cols)]
+    for wl, by in scores.items():
+        for name, r in by.items():
+            lines.append(f"{wl} | {name} | {r['p_star']:.3e} | {r['floor']:.3e} | {r['alpha']:.4f} | "
+                         + " | ".join(f"{100 * r[c]:.4f}%" for c in cols))
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json")
     ap.add_argument("--table", action="store_true")
     ap.add_argument("--data", help="noise_data.py's output, for the adaptive reading's shares")
     ap.add_argument("--jobs", type=int, default=1, help="worker processes")
+    ap.add_argument("--lead", action="store_true", help="score only the lead's lane (`blc_scores`) at each A′")
     args = ap.parse_args(argv)
     if args.data:
         load_shares(args.data)
-    rep = run(args.jobs)
+    rep = ({"lead_lanes": {"llama": blc_scores(ns.LLAMA), "v4dense": blc_scores(ns.V4_DENSE)}} if args.lead
+           else run(args.jobs))
     if args.json:
         with open(args.json, "w") as fh:
             json.dump(rep, fh, separators=(",", ":"), default=float)
     if args.table:
-        print(table(rep))
+        print(lead_table(rep["lead_lanes"]) if args.lead else table(rep))
     return 0
 
 
