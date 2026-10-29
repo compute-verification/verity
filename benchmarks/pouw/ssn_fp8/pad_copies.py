@@ -21,6 +21,10 @@ Two counts, over salts:
   P's copy, one word free. Zero padding's step-1 words are a1(i)·C_j + T(i)·G_j, small integers that repeat across
   rows, and its later words move by coins alone, so a prover knows them without a MAC. `word_real` is the real
   rows' in-column share: equal values it can't know before their MACs, so the scale of chance repeats.
+- `word_kept`: the share of the padding rows' later words equal to their own previous word, kept in place with no
+  move. The lift's increment 1 + a_t is never 0, but blc4a's three odd coins cancel it with probability about p*, and
+  a one-hot row's weight entry does where it is -1 or -2; with the padding rows' row lane held at 2 (`-even`), every
+  blc4a increment is odd and none is kept.
 
 Cases (`m` real rows of uniform int8 data, the rest padding, in a 64-row tile):
 
@@ -28,7 +32,8 @@ Cases (`m` real rows of uniform int8 data, the rest padding, in a 64-row tile):
 - `onehot`: padding row r's lane (r mod 31) of every later step is 1, of step 1 lane (r mod 24), under a_t; its
   later-step data is a weight column, nonzero.
 - `zero-lift`, `onehot-lift`: the same under the lift.
-- `zero-blc4a`, `onehot-blc4a`: under the lift and `blc4a`'s lanes.
+- `zero-blc4a`, `onehot-blc4a`: under the lift and `blc4a`'s lanes; `zero-blc4a-even`, with the padding rows' coin
+  bit fixed at 1, so their row lane holds 2.
 - `dense-lift`, `dense-blc4a`: padding rows hold a public uniform int8 pattern, fixed across calls, so a prover can
   keep their products and pays only the word writes, which the honest prover pays too.
 - `sparse` and `sparse-lift`: no padding (m = 64 real rows), each real row's later chunks zero with probability 0.98,
@@ -51,14 +56,18 @@ BLC_LANES = 3
 BLC_E = 7
 ROWS = 64
 SPARSE = 0.98
-#: case: (padding pattern or "sparse", lift, blc4a's coin lanes)
-CASES = {"zero": ("zero", 0, 0), "onehot": ("onehot", 0, 0), "zero-lift": ("zero", 1, 0),
-         "onehot-lift": ("onehot", 1, 0), "dense-lift": ("dense", 1, 0), "zero-blc4a": ("zero", 1, BLC_LANES),
-         "onehot-blc4a": ("onehot", 1, BLC_LANES), "dense-blc4a": ("dense", 1, BLC_LANES),
-         "sparse": ("sparse", 0, 0), "sparse-lift": ("sparse", 1, 0)}
+#: case: (padding pattern or "sparse", lift, blc4a's coin lanes, padding rows' coin bit fixed at 1)
+CASES = {"zero": ("zero", 0, 0, False), "onehot": ("onehot", 0, 0, False), "zero-lift": ("zero", 1, 0, False),
+         "onehot-lift": ("onehot", 1, 0, False), "dense-lift": ("dense", 1, 0, False),
+         "zero-blc4a": ("zero", 1, BLC_LANES, False), "zero-blc4a-even": ("zero", 1, BLC_LANES, True),
+         "onehot-blc4a": ("onehot", 1, BLC_LANES, False), "dense-blc4a": ("dense", 1, BLC_LANES, False),
+         "sparse": ("sparse", 0, 0, False), "sparse-lift": ("sparse", 1, 0, False)}
 #: the in-column word copies dense padding stays under, and zero and one-hot padding over
 WORD_DENSE = 0.01
 WORD_OVER = {"zero": 0.3, "onehot": 0.1}
+#: blc4a's p* is 0.00293, so zero padding keeps more than this share of its later words in place (one-hot about 2/255
+#: of its weight entries' halves)
+KEPT_BLC4A = 0.001
 
 
 def later(coins: int) -> int:
@@ -168,6 +177,8 @@ def word_share(w: np.ndarray, first: int) -> dict:
         repeated = np.ones(vals.size, dtype=bool)
         repeated[np.unique(vals, return_index=True)[1]] = False
         out[name] = float(repeated[mask].sum() / mask.sum()) if mask.any() else 0.0
+    kept = w[first:, :, 1:] == w[first:, :, :-1]
+    out["word_kept"] = float(kept.mean()) if kept.size else 0.0
     return out
 
 
@@ -186,14 +197,16 @@ def main(argv: list[str] | None = None) -> int:
     runs = [(m, c) for m in (int(x) for x in args.m.split(",")) for c in CASES if CASES[c][0] != "sparse"]
     runs += [(ROWS, "sparse"), (ROWS, "sparse-lift")]
     for m, case in runs:
-        pad, lift, coins = CASES[case]
+        pad, lift, coins, even = CASES[case]
         s = steps(args.k, coins)
         first = 0 if pad == "sparse" else m
         a = padded(np.random.default_rng(100 + m), m, args.k, case, coins)
-        tot = {"repeat": 0.0, "own_prev": 0.0, "word": 0.0, "word_tile": 0.0, "word_real": 0.0}
+        tot = {"repeat": 0.0, "own_prev": 0.0, "word": 0.0, "word_tile": 0.0, "word_real": 0.0, "word_kept": 0.0}
         for _ in range(args.salts):
             a1 = rng.integers(0, 2, size=(ROWS, CODE_LANES))
             at = rng.integers(0, 2, size=(ROWS, s - 1))
+            if even:
+                at[m:] = 1
             sc = None
             if coins:
                 odd = 2 * rng.integers(0, 2**BLC_E, size=(s - 1, coins, args.n)) - (2**BLC_E - 1)
@@ -205,7 +218,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"m {m:2d} {case:12s}: vectors equal to an earlier one {tot['repeat']:.4f}; "
               f"{'rows' if pad == 'sparse' else 'padding rows'}' later steps equal to their previous "
               f"{tot['own_prev']:.4f}; words held before, in the column {tot['word']:.5f}, in the tile "
-              f"{tot['word_tile']:.5f}; real rows' in the column {tot['word_real']:.5f}")
+              f"{tot['word_tile']:.5f}; real rows' in the column {tot['word_real']:.5f}; kept in place "
+              f"{tot['word_kept']:.5f}")
     want_copies = {"zero": 0.4, "sparse": 0.4 * SPARSE}
     ok = True
     for c in rep["cases"]:
@@ -218,10 +232,15 @@ def main(argv: list[str] | None = None) -> int:
             ok &= c["word"] > WORD_OVER[pad]
         if pad == "dense":
             ok &= c["word"] < WORD_DENSE
+        if c["case"] in ("zero-lift", "zero-blc4a-even"):
+            ok &= c["word_kept"] == 0.0
+        if c["case"] in ("zero-blc4a", "onehot-lift"):
+            ok &= c["word_kept"] > KEPT_BLC4A
     rep["ok"] = ok
     print("ok" if ok else "FAIL: zero chunks should copy about half their steps, one-hot padding and the lift no "
           f"vector, zero padding more than {WORD_OVER['zero']:.0%} of its words in the column, one-hot more than "
-          f"{WORD_OVER['onehot']:.0%}, and dense padding under {WORD_DENSE:.0%}")
+          f"{WORD_OVER['onehot']:.0%}, dense padding under {WORD_DENSE:.0%}, and zero padding keep none in place "
+          f"under the lift or an even row lane, but more than {KEPT_BLC4A:.1%} under blc4a, as one-hot padding does")
     if args.json:
         with open(args.json, "w") as f:
             json.dump(rep, f, indent=1)
