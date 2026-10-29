@@ -382,7 +382,7 @@ def gate_rows(mine: CS.Window, regs: dict[int, dict]) -> list[dict]:
 
 
 def composer(defn, hidden: int, cache: Path | None = None):
-    """``a5.audit``'s composer of the transfer-gate template's circuit: C-Flock's `UnitStager` over its ports ``part0`` and
+    """``a5.audit``'s composer of the transfer-gate template's circuit: Flock's `UnitStager` over its ports ``part0`` and
     ``part1`` (16·H bits each, the rows ``parts[0]`` and ``parts[1]`` of AllReduce2_v1's input) in and ``o0`` out, bound to
     the window's partition and program. ``cache``: a directory of the
     circuits composed so far, by template, partition and program, which both ranks' windows and every run share."""

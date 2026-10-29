@@ -7,7 +7,7 @@ forward waits for it), its calls' A rows and its tile rows as hm96-sha512 leaves
   weight's slot of its k's stage (`stage`).  After the replay (`after`), each k's stage is one commitment of role X rows
   (``hm96-sha512/row-seg/v1``), and the forward's tile leaves (the scheme's, `run.nb` bytes each, standing in for the statement's tile
   digest, TurboSHAKE128, which is not computed) one of ``row/v2`` rows.
-- **The salts:** read from the OS on the host for every forward's every tree, as C-Flock's are (`rows_bench.Commit.fresh_salts`:
+- **The salts:** read from the OS on the host for every forward's every tree, as Flock's are (`rows_bench.Commit.fresh_salts`:
   192 bytes a row, copied on the replay's stream before the tree's launch).  Each tree's domain names its k (or the tiles) and m₁₆, not the forward (v0).
 - **The roots:** each forward's, copied to a device ring (`ROOTS` forwards), whose SHA-512 over the forwards since the last
   `take` the e2e's decode response reports.
