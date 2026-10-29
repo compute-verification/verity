@@ -46,7 +46,7 @@ def WordsFloor : Prop :=
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (stream : Coins (lead T m n K) → ℕ → Fin tileWords → ℤ) (C : Pouw.Lead.Commit (lead T m n K))
     (Real : Strategy (lead T m n K) → Prop),
-    DataInRange (lead T m n K) κ → C.chunks = wordChunks (lead T m n K) →
+    DataInRange (lead T m n K) κ → RawStream (lead T m n K) stream → C.chunks = wordChunks (lead T m n K) →
     TileGrain stream Real → LaneSemantics fpSem Real →
     ∀ σ, Real σ → ∀ O : Finset (Coins (lead T m n K)),
       (∀ ω ∈ O, (σ.exec ω).egress = 0 ∧ Accepted (lead T m n K) H C κ σ ω) →
@@ -112,7 +112,7 @@ theorem networkGap_nonneg (L : Pouw.Lead.Layout) : 0 ≤ networkGap L := by
 
 /-- **The lead's work guarantee, from the words floor.** -/
 theorem G_of_wordsFloor (hW : WordsFloor) : Pouw.Guarantees.Lead.G := by
-  intro pr fpSem H T m n K κ stream C isA Device cert runC can Real hκ hC h32 hw1 htile hlane hone hcard hsha hhon
+  intro pr fpSem H T m n K κ stream C isA Device cert runC can Real hκ hraw hC h32 hw1 htile hlane hone hcard hsha hhon
     _hhost hout σ hcan O hacc
   by_cases hB : ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω
   · exact Or.inr hB
@@ -127,7 +127,7 @@ theorem G_of_wordsFloor (hW : WordsFloor) : Pouw.Guarantees.Lead.G := by
     unfold Break
     rw [(htwin ω).2.2.2.1]
     exact hB ω hω
-  have hfloor := hW fpSem H T m n K κ stream C Real hκ hC.1 htile hlane σ' hσ' O hacc'
+  have hfloor := hW fpSem H T m n K κ stream C Real hκ hraw hC.1 htile hlane σ' hσ' O hacc'
   have hstep : ∀ ω ∈ O,
       32 * (((tileWords * writes (σ'.exec ω).steps : ℕ) : ℚ) + hashRegs (lead T m n K) C) -
           32 * networkGap (lead T m n K) ≤
