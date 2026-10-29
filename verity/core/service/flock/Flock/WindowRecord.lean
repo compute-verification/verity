@@ -9,8 +9,8 @@ A one-stage window record (format `verity/registration/v1` or `verity/registrati
 verifier so that every reader reaches it without a new requirement: PoUW's check (`PouwCheck.Registration.digest`),
 the network check (`NetworkCheck.Period.registrationOf`), sampled proofs' registration and audit record
 (`SampledProofs.Registration`, `SampledProofs.Record`) and C-Flock's recursive setup (`RecVStar.registration`) read it
-here. Python's `registration.digest` is its mirror on records whose numbers are integers and whose characters are all
-below 0x7f: from DEL on, Python's `canonical_json` escapes a character that `canon` writes as it is.
+here. Python's `registration.digest` is its mirror on records whose numbers are integers, where `canon` writes
+Python's `canonical_json`.
 -/
 
 namespace Flock.WindowRecord
