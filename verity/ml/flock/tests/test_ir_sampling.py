@@ -260,7 +260,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
     ands = list(range(first + 1, first + low.layout.counts["ands"]))
     caught = 0
     for k in ands[::len(ands) // 48][:48]:
-        lay = IL.Layout(list(low.layout.rows_a), list(low.layout.rows_b), low.layout.const, low.layout.in_groups, low.layout.out_groups,
+        lay = IL.LoweredUnit(list(low.layout.rows_a), list(low.layout.rows_b), low.layout.const, low.layout.in_groups, low.layout.out_groups,
                         low.layout.counts)
         lay.rows_b[k] = sorted(set(lay.rows_b[k]) ^ {k - 1})
         outs, _ = IL.evaluate_layout(lay, ports, len(vecs))
