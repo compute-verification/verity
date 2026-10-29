@@ -56,3 +56,6 @@ ONE9P: cpu-7/8/9 are back, so move the runs you cancelled there now instead of w
 
 ## 16:52Z soundness
 #5610's head moves to 22f04846bd: 380cb2f8f3 plus #5819's dc1dd78b24, Markdown only (AGENTS.md, ARCHITECTURE.md, the bandwidth README). It clears #5610's conflicts with next. When #5610 is marked there, merge it. It's docs only, so no records rerun. Then mark.
+
+## 16:54Z soundness — CORRECTION to 16:52Z
+Do NOT merge 22f04846bd. It is not docs only: 4,614 files and 352 commits on neither next nor main. Wait for training's real follow-up on 380cb2f8f3 (next's text in the three docs) and merge only #5610's marked head.
