@@ -18,8 +18,9 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
 
 * **On the GPU**: where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
   (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
-  the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
-  NumPy path above is the reference the device is held to
+  the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. With
+  ``later`` it hands back the hash still running on the device's stream (`Later`), for a caller that reads the root
+  only when it needs it. The NumPy path above is the reference the device is held to
   (``tests/protocols/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
 
 `commit` returns a `registered.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
@@ -31,7 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import cache
 from typing import Any
@@ -212,15 +213,31 @@ def _host(words: Any) -> np.ndarray:
     return np.asarray(words)
 
 
+class Later:
+    """A `commit` whose hash runs on the GPU meanwhile (its ``later``): ``ready()`` without blocking, ``result()`` its
+    `registered.Registered`, waited for."""
+
+    def __init__(self, hashing: Any, made: Callable[..., G.Registered]) -> None:
+        self.hashing, self.made = hashing, made
+
+    def ready(self) -> bool:
+        return self.hashing.ready()
+
+    def result(self) -> G.Registered:
+        return self.made(*self.hashing.result())
+
+
 def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False,
-           row_salts: bytes | None = None, schema: str = G.SCHEMA_V2, **binding: Any) -> G.Registered:
+           row_salts: bytes | None = None, schema: str = G.SCHEMA_V2, later: bool = False,
+           **binding: Any) -> G.Registered | Later:
     """`registered.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
     concatenated, each used once) those, ``key`` and ``nonce`` unread. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
     embedding table's rows, hashed with NumPy wherever `path` says). ``binding``: the domain's other arguments
     (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none. Hashed where `path` says;
     ``words`` an array, or a u16 tensor, which the GPU path hashes where it is when that is a CUDA device and every
-    other path reads on the host."""
+    other path reads on the host. ``later``: on the GPU path, a `Later` of it, the hash left running on the device's
+    stream; elsewhere the `Registered` itself."""
     if schema not in (G.SCHEMA_V2, G.SCHEMA_SEG):
         raise ValueError(f"rows of {schema!r}: {G.SCHEMA_V2} or {G.SCHEMA_SEG}")
     gpu = schema == G.SCHEMA_V2 and path() == "gpu"
@@ -235,16 +252,18 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
     if fixed is not None and (len(given) != 192 * n or len(set(fixed)) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
+
+    def made(bcs: tuple[bytes, ...], levels: tuple[tuple[bytes, ...], ...]) -> G.Registered:
+        return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
+                            rows=Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n),
+                            salts=Salts(key, nonce, n) if fixed is None else fixed,
+                            bcs=bcs, levels=levels, schema=schema, **binding)
     if gpu:
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
-        bcs, levels = D.device_commit(words, key, nonce, given, dom.domain_id)
-    else:
-        bcs, levels = _numpy(words, key, nonce, given, dom.domain_id, schema)
-    return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
-                        rows=Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n),
-                        salts=Salts(key, nonce, n) if fixed is None else fixed,
-                        bcs=bcs, levels=levels, schema=schema, **binding)
+        hashing = D.device_hash(words, key, nonce, given, dom.domain_id)
+        return Later(hashing, made) if later else made(*hashing.result())
+    return made(*_numpy(words, key, nonce, given, dom.domain_id, schema))
 
 
 def public_salts(head: bytes, first: int, n: int) -> bytes:
@@ -283,4 +302,4 @@ def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domai
     return tuple(bcs), frame.levels(leaves)
 
 
-__all__ = ["MODE", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]
+__all__ = ["MODE", "Later", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]

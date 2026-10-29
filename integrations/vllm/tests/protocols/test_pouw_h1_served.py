@@ -232,6 +232,47 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
         assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
 
 
+class _Hashing:
+    """A z table's hash still running, as `pouw_h1_registered_device.Hashing` is: never ready, so only a wait reads it."""
+
+    def __init__(self, value: str, events: list[tuple[str, str]]) -> None:
+        self.value, self.events = value, events
+
+    def ready(self) -> bool:
+        return False
+
+    def result(self) -> tuple:
+        self.events.append(("read", self.value))
+        return ()
+
+
+def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_what_a_waited_one_does(monkeypatch):
+    """A z table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its place in the
+    registration order and is read only when its round closes, after its step's later calls were recorded: the window's
+    trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited for."""
+    torch.manual_seed(0)
+    waited, *_ = _window(W1)
+    events, commit = [], NR.commit
+
+    def later(*args, later=False, **kw):
+        reg = commit(*args, **kw)
+        if not later:
+            return reg
+        events.append(("hashing", reg.value))
+        return NR.Later(_Hashing(reg.value, events), lambda: reg)
+
+    monkeypatch.setattr(NR, "commit", later)
+    torch.manual_seed(0)
+    run, *_ = _window(W1)
+    zy = [SV.PREFIX + f"zy@{c}" for c in range(len(run.calls))]
+    assert events == [(e, zy[c]) for s in range(STEPS) for e in ("hashing", "read") for c in range(3 * s, 3 * s + 3)]
+    assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
+    assert list(run.served.registered) == list(waited.served.registered)
+    assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
+    assert (run.tables, run.round_log) == (waited.tables, waited.round_log)
+    assert (run.served.digest(), run.calls_root()) == (waited.served.digest(), waited.calls_root())
+
+
 @pytest.mark.parametrize("steps", [2, 3])
 def test_b_is_each_linears_weight_once_a_window(steps):
     """b/<K> is Σn rows of K's linears, codes then s_w, whatever the window's steps, registered at the call that completes
