@@ -31,7 +31,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw.audit import Epoch, Workload, commit_rows, weight_binding, weights_root
+from verity.core.protocols.pouw.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.core.protocols.pouw.coins import coin_reason
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
@@ -324,7 +324,7 @@ def setup():
     rng = random.Random(3)
     work = Workload((Matmul(0, Shape(32, 64, 64), 7),))
     rows = [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]
-    return work, {7: commit_rows(weight_binding(7), -2, rows).commitment.root}
+    return work, {7: commit_rows(weight_binding(7), -2, rows, salt_key=bytes(32), nonce=HM96_WEIGHTS + 7).commitment.root}
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():
