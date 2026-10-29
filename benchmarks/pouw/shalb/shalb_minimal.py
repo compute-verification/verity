@@ -1,7 +1,7 @@
 """Per-function minimality of SHA-512's Σ0, Σ1, σ0 and σ1 halves over sm_90 integer-lane instructions, by SMT.
 
-    uv run --no-project --with z3-solver python benchmarks/pouw/shalb/shalb_minimal.py [--max-k K] [--timeout S]
-        [--jobs N] [--only NAMES] [--json OUT]
+    uv run --no-project --with z3-solver --with bitwuzla python benchmarks/pouw/shalb/shalb_minimal.py [--max-k K]
+        [--timeout S] [--solver bitwuzla] [--extra OPS] [--redo QUERIES_JSONL] [--jobs N] [--only NAMES] [--json OUT]
 
 A target is one 32-bit half of a 64-bit function of x = hi:lo, given the registers lo and hi. A program is k
 straight-line instructions, each reading up to three sources (lo, hi, an earlier result, or an immediate of its own);
@@ -9,11 +9,13 @@ its last result must equal the target at every x. For each k and each tuple of k
 counterexample-guided: a finite set of x, a solver asked for the opcodes' modifiers, sources and immediates agreeing
 there, and each candidate it returns checked at every x by a second solver, its counterexample added. UNSAT at a finite
 set of x proves that no program with those opcodes exists, since a program that agrees everywhere agrees there; UNSAT
-at every tuple proves that no k-instruction program does. As a control, the search is asked for the honest
-4-instruction program's opcodes (three funnel or plain shifts and a LOP3) for every half, beside the sweep: a control
-not "found" says the solver's budget, not the target, decided it.
+at every tuple proves that no k-instruction program does. A program whose result goes unread computes the target in
+fewer instructions, so each k reads "none" at every smaller k over the same opcodes. z3 builds every query and checks
+every candidate; the synthesis query goes to z3 or to Bitwuzla (z3's assertions as SMT-LIB2). As a control, the search
+is asked for the honest 4-instruction program's opcodes (three funnel or plain shifts and a LOP3) for every half: a
+control not "found" says the solver's budget, not the target, decided it.
 
-The instructions, with every modifier as a free choice:
+The instructions (OPS), with every modifier as a free choice:
 - LOP3.LUT at every 8-bit LUT (bitwise: and, or, xor, not, select, three-way xor, Ch, Maj);
 - SHF.R.W / SHF.L.W (funnel shifts of two sources at a constant amount), SHF.R.U32 / SHF.R.S32 / SHF.L.U32 (plain);
 - PRMT at every selector (each result byte any byte of the two sources, or its sign replicated);
@@ -21,9 +23,13 @@ The instructions, with every modifier as a free choice:
   multiplier m; BREV;
 - IMNMX (signed and unsigned min and max) and SEL on a source's sign, for the select family.
 
-Outside the search: floating-point lane instructions (FFMA, HFMA2, DFMA, MUFU, conversions), IDP4A/IDP2A, VABSDIFF4,
-POPC/FLO/BMSK, IMAD of two registers, IMAD.HI (its 64-bit products time the solver out), shifts by a register amount, and carries or predicates read from another instruction (each instruction
-here reads only registers and immediates). Each half is searched alone: a program computing both halves together, sharing
+EXTRA, searched by `--extra` over the tuples holding at least one of them: funnel shifts by a register amount (wrap or
+clamp), IMAD of two registers, POPC, FLO (U32 or S32, plain or .SH), BMSK (wrap or clamp); and IMAD.HI and IDP4A,
+encoded but outside the sweeps, since their products leave both solvers undecided at every budget tried.
+
+Outside the search: floating-point lane instructions (FFMA, HFMA2, DFMA, MUFU, conversions), IDP2A, VABSDIFF4, warp-wide
+instructions (SHFL, REDUX, VOTE, MATCH), and carries or predicates read from another instruction (each instruction here
+reads only registers and immediates). Each half is searched alone: a program computing both halves together, sharing
 work between them, is outside it.
 """
 from __future__ import annotations
@@ -55,13 +61,15 @@ FUNCS = {
     "σ1": lambda x: rotr(x, 19) ^ rotr(x, 61) ^ x >> 6,
 }
 OPS = ("LOP3", "FSHR", "FSHL", "SHR", "SAR", "SHL", "PRMT", "IADD3", "LEA", "LEAHI", "IMAD", "BREV", "IMNMX", "SEL")
+EXTRA = ("FSHRV", "FSHLV", "IMADR", "IMADHI", "POPC", "FLO", "BMSK", "IDP4A")
 
 
 def zfunc(name, x):
     """The 64-bit target as a z3 term."""
     r = z3.RotateRight
     return {"Σ0": lambda: r(x, 28) ^ r(x, 34) ^ r(x, 39), "Σ1": lambda: r(x, 14) ^ r(x, 18) ^ r(x, 41),
-            "σ0": lambda: r(x, 1) ^ r(x, 8) ^ z3.LShR(x, 7), "σ1": lambda: r(x, 19) ^ r(x, 61) ^ z3.LShR(x, 6)}[name]()
+            "σ0": lambda: r(x, 1) ^ r(x, 8) ^ z3.LShR(x, 7),
+            "σ1": lambda: r(x, 19) ^ r(x, 61) ^ z3.LShR(x, 6)}[name]()
 
 
 class Program:
@@ -128,10 +136,36 @@ class Program:
             return (a << sh) + b
         if op == "LEAHI":
             return z3.Extract(31, 0, z3.LShR(z3.Concat(c, a), z3.ZeroExt(32, 32 - sh))) + b
-        if op == "IMAD":
+        if op in ("IMAD", "IMADR"):
             return a * b + c
         if op == "IMADHI":
-            return z3.Extract(63, 32, z3.ZeroExt(32, a) * z3.ZeroExt(32, b)) + c
+            signed = z3.Extract(0, 0, self.mode[i]) == 1
+            return z3.Extract(63, 32, z3.If(signed, z3.SignExt(32, a) * z3.SignExt(32, b),
+                                            z3.ZeroExt(32, a) * z3.ZeroExt(32, b))) + c
+        if op in ("FSHRV", "FSHLV"):
+            amt = z3.If(z3.Extract(0, 0, self.mode[i]) == 1, z3.If(z3.ULT(c, 32), c, z3.BitVecVal(32, 32)),
+                        c & 31)
+            if op == "FSHRV":
+                return z3.Extract(31, 0, z3.LShR(z3.Concat(b, a), z3.ZeroExt(32, amt)))
+            return z3.Extract(63, 32, z3.Concat(b, a) << z3.ZeroExt(32, amt))
+        if op == "POPC":
+            return sum((z3.ZeroExt(31, z3.Extract(q, q, a)) for q in range(32)), z3.BitVecVal(0, 32))
+        if op == "FLO":
+            x = z3.If(z3.And(z3.Extract(0, 0, self.mode[i]) == 1, a < 0), ~a, a)
+            pos = z3.BitVecVal(M32, 32)
+            for q in range(32):
+                pos = z3.If(z3.Extract(q, q, x) == 1, z3.BitVecVal(q, 32), pos)
+            return z3.If(z3.And(z3.Extract(1, 1, self.mode[i]) == 1, x != 0), 31 - pos, pos)
+        if op == "BMSK":
+            clamp = z3.Extract(0, 0, self.mode[i]) == 1
+            pos, width = (z3.If(clamp, z3.If(z3.ULT(v, 32), v, z3.BitVecVal(32, 32)), v & 31) for v in (a, b))
+            ones = (z3.BitVecVal(1, 64) << z3.ZeroExt(32, width)) - 1
+            return z3.Extract(31, 0, ones << z3.ZeroExt(32, pos))
+        if op == "IDP4A":
+            ext = lambda s, v: z3.If(s, z3.SignExt(24, v), z3.ZeroExt(24, v))
+            sa, sb = z3.Extract(0, 0, self.mode[i]) == 1, z3.Extract(1, 1, self.mode[i]) == 1
+            return sum((ext(sa, z3.Extract(8 * q + 7, 8 * q, a)) * ext(sb, z3.Extract(8 * q + 7, 8 * q, b))
+                        for q in range(4)), c)
         if op == "BREV":
             return z3.Concat(*[z3.Extract(q, q, a) for q in range(32)])
         if op == "IMNMX":
@@ -187,6 +221,8 @@ def bitwuzla_synth(syn, prog: Program, left_s: float):
     tm, opts = bz.TermManager(), bz.Options()
     opts.set(bz.Option.PRODUCE_MODELS, True)
     opts.set(bz.Option.TIME_LIMIT_PER, max(1, int(left_s * 1000)))
+    if os.environ.get("SHALB_ABSTRACTION"):
+        opts.set(bz.Option.ABSTRACTION, True)
     parser = bz.Parser(tm, opts)
     parser.parse("(set-logic QF_BV)\n" + syn.sexpr(), True, False)
     solver = parser.bitwuzla()
@@ -211,12 +247,12 @@ SOLVERS = {"z3": z3_synth, "bitwuzla": bitwuzla_synth}
 
 def search(task) -> dict:
     """Whether a program with opcodes `ops` computes half `half` (0 lo, 1 hi) of FUNCS[name]."""
-    name, half, ops, timeout_s, solver = task
+    name, half, ops, timeout_s, solver, init = task
     rng = random.Random(zlib.crc32(repr((name, half, ops)).encode()))
     prog = Program(ops)
     syn = z3.Tactic("qfbv").solver()
     syn.add(prog.wellformed())
-    xs = [1 << b for b in (0, 7, 31, 32, 45, 63)] + [rng.getrandbits(64) for _ in range(2)]
+    xs = [rng.getrandbits(64) if s == "r" else 1 << int(s) for s in init.split(",")]
     t0, rounds = time.monotonic(), 0
 
     def constrain(x):
@@ -278,8 +314,14 @@ def main() -> int:
     ap.add_argument("--solver", choices=sorted(SOLVERS), default="z3", help="the synthesis queries' solver")
     ap.add_argument("--redo", default="", help="a --jsonl stream: rerun only its unknown queries, by k")
     ap.add_argument("--no-controls", action="store_true")
+    ap.add_argument("--init", default="0,7,31,32,45,63,r,r",
+                    help="the first samples of x: bit positions set alone, or r for a random x")
+    ap.add_argument("--extra", default="",
+                    help="comma-separated EXTRA opcodes: search the tuples over OPS and them that hold at least one")
     args = ap.parse_args()
     names = [n for n in FUNCS if not args.only or n in args.only.split(",")]
+    extra = tuple(o for o in args.extra.split(",") if o)
+    assert set(extra) <= set(EXTRA), extra
     summary: list[dict] = []
     stream = open(args.jsonl, "a") if args.jsonl else None
     redo: dict[int, list] = {}
@@ -287,8 +329,8 @@ def main() -> int:
         for line in open(args.redo):
             r = json.loads(line)
             if r["verdict"] == "unknown" and r["function"] in names:
-                redo.setdefault(len(r["ops"]), []).append(
-                    (r["function"], 0 if r["half"] == "lo" else 1, tuple(r["ops"]), args.timeout, args.solver))
+                redo.setdefault(len(r["ops"]), []).append((r["function"], 0 if r["half"] == "lo" else 1,
+                                                           tuple(r["ops"]), args.timeout, args.solver, args.init))
 
     def dump():
         if args.json:
@@ -298,10 +340,12 @@ def main() -> int:
     with mp.Pool(args.jobs) as pool:
         controls = pool.map_async(search, [] if args.no_controls else [
             (n, h, ("FSHR", "FSHR", "SHR" if n.startswith("σ") and h else "FSHR", "LOP3"), args.control_timeout,
-             args.solver) for n in names for h in (0, 1)])
+             args.solver, args.init) for n in names for h in (0, 1)])
         for k in sorted(redo) if args.redo else range(args.min_k, args.max_k + 1):
-            tasks = redo[k] if args.redo else [(n, h, ops, args.timeout, args.solver) for n in names for h in (0, 1)
-                                               for ops in itertools.product(OPS, repeat=k)]
+            tuples = [ops for ops in itertools.product(OPS + extra, repeat=k) if set(ops) & set(extra)] \
+                if extra else list(itertools.product(OPS, repeat=k))
+            tasks = redo[k] if args.redo else [(n, h, ops, args.timeout, args.solver, args.init) for n in names
+                                               for h in (0, 1) for ops in tuples]
             t0, rs = time.monotonic(), []
             for r in pool.imap_unordered(search, tasks, chunksize=1):
                 rs.append(r)
