@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# PoUW's piece of a served H1 window with its drawn units proved (served_verdicts.sh's POUW_CMD): drawn.py stages each
+# PoUW's piece of a served H1 window with its drawn units proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
+# verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
 # drawn call's J10-R units on the window's own registered values, each staged call is proved by one loopback C-Flock --zk
 # session drawing all its instances (hidden_zk/job.sh's `session`), drawn.py writes the statements file and checks it as
 # credit does, and then `served_verdicts.py pouw` judges the window with it as --statements.
