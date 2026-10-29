@@ -14,18 +14,18 @@ tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member win
   written to ``summary.json``, and never redrawn. A norm's gain (one registered word a row) is a port of
   `RegisteredRead`\\ s, the embedding's token past the prompt the argmax its sequence committed a step before, and a PV
   block's V row past n a row of no reads (all zero).
-* **weights** (where the weights registration's witness is): every registered row a drawn block reads (`window.Window.locate`'s
+* **weights** (where the weights registration's witness is): every registered row a drawn block reads (`window.Locator.locate`'s
   `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes, salt, string and path,
   each checked against the registered root (``REG.verify_read``).
 * **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the drawn
   blocks' slots, every step root and slot root held to the registered ``roots.json`` (exit 5 otherwise), and the drawn
   slots' committed rows at every step written to ``--private`` (0600, the prover's).
-* **build** (CPU only): per block, its ports' bytes from the committed rows (`Window.inputs`, `Window.outputs`) and the
+* **build** (CPU only): per block, its ports' bytes from the committed rows (`Locator.inputs`, `Locator.outputs`) and the
   opened weights, as one unit of the Program's Definition of its family (`definition`); the window commits each whole
   committed row under its step commitment's salt and each registered row under its registered salt, so every window
   string is the one its opening reaches (a port made of reads is the window's own row, its reads opened in the bundle),
   and its registration names every step root (`replay_bundle.steps_provenance`). The bundle is `replay_bundle.build`'s
-  with circuits' `Window.bundle` pieces; then `replay_bundle.check` against the window's registration and `check_step`
+  with circuits' `Locator.bundle` pieces; then `replay_bundle.check` against the window's registration and `check_step`
   against the step registration at g must both be empty.
 
 Exit 0 when every drawn block is bundled and checks; 3 when one isn't (a visible failure); 5 when a root differs.
@@ -52,7 +52,7 @@ import m3draw as M3  # noqa: E402
 from e2e_h200.commit import _slots, layout as commit_layout  # noqa: E402
 from e2e_h200.plan import EPS_KEY  # noqa: E402
 from e2e_h200.shape import PV_K, SHAPES  # noqa: E402
-from e2e_h200.window import Registered, Run, Segment, Window  # noqa: E402
+from e2e_h200.window import Locator, Registered, Run, Segment  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops.boolean import gemm as BG  # noqa: E402
@@ -76,7 +76,7 @@ class Visible(Exception):
     """A drawn block with no bundle: reported, never redrawn."""
 
 
-def definition(win: Window, fam: str) -> Any:
+def definition(win: Locator, fam: str) -> Any:
     """Family ``fam``'s proof block as the served Program calls it (`program.program`'s binds at the window's shape)."""
     t = win.units[fam].template
     if t in UNBUNDLED:
@@ -118,7 +118,7 @@ def binding_of(template: str) -> str:
 
 
 class _At:
-    """A step of the schedule `Window` reads: batch row b is sequence b at ``positions[b]``."""
+    """A step of the schedule `Locator` reads: batch row b is sequence b at ``positions[b]``."""
 
     def __init__(self, positions: Any) -> None:
         self.slots, self.positions = None, np.asarray(positions, np.int64)
@@ -146,7 +146,7 @@ def _families(shape: Any) -> list:
     return M3.families(Committer("slots", ctx, key, shape, "cpu", lambda s: bytes(32)), shape)
 
 
-def registered_reads(win: Window, blk: dict, step: int) -> tuple[dict[str, tuple[str, int]], dict[str, list[RB.RegisteredRead]]]:
+def registered_reads(win: Locator, blk: dict, step: int) -> tuple[dict[str, tuple[str, int]], dict[str, list[RB.RegisteredRead]]]:
     """A block's registered reads: ``{port: (value, row)}`` of the ports that are one whole registered row, and
     ``{port: [RegisteredRead]}`` of those made of pieces of registered rows (a norm's gain, one word a row)."""
     whole, pieces = {}, {}
@@ -167,7 +167,7 @@ def registered_reads(win: Window, blk: dict, step: int) -> tuple[dict[str, tuple
     return whole, pieces
 
 
-def token_pieces(win: Window, step: int, slot: int, prompt: int) -> tuple[Segment, ...]:
+def token_pieces(win: Locator, step: int, slot: int, prompt: int) -> tuple[Segment, ...]:
     """The token a block at ``step`` and ``slot`` embeds, where a commitment holds it: past the prompt (``prompt`` bytes),
     position p's token is the argmax its sequence committed at position p - 1 (`driver.Driver.run`)."""
     p = win.position(step, slot)
@@ -187,7 +187,7 @@ def weights_phase(a: argparse.Namespace) -> int:
     if st.doc["program"] != reg["program"]:
         raise SystemExit("the weights' state registers another program than the step registration's")
     shape = SHAPES[st.doc["shape"]]
-    win = Window(shape, lockstep(reg["step"] + 1, reg["slots"]), commit_layout(shape))
+    win = Locator(shape, lockstep(reg["step"] + 1, reg["slots"]), commit_layout(shape))
     want: dict[str, set[int]] = {}
     for blk in blocks_of(reg, draw, _families(shape)):
         try:
@@ -306,7 +306,7 @@ def _words(b: bytes, words: int, what: str) -> np.ndarray:
     return np.frombuffer(b, "<u2").astype(np.uint16).reshape(1, words)
 
 
-def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: dict[str, Opened], reg: dict,
+def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Locator, weights: dict[str, Opened], reg: dict,
                  receipt: dict, out: Path, workers: int) -> dict:
     """One drawn block's window and bundle in ``out`` (module docstring) -> its record."""
     S, _ = _slots()
@@ -422,7 +422,7 @@ def build_phase(a: argparse.Namespace) -> int:
                                 read_steps=RB.STEPS_KEY in reg)
     if RB.step_digest(mine) != RB.step_digest(reg):
         raise SystemExit("the replay's commitments are not the step registration's")
-    win = Window(shape, [_At(p) for p in st["positions"]], lay)
+    win = Locator(shape, [_At(p) for p in st["positions"]], lay)
     tree = Path(a.out)
     (tree / "blocks").mkdir(parents=True, exist_ok=True)
     for name, doc in (("step-registration.json", reg), ("receipt.json", receipt), ("draw.json", draw)):
