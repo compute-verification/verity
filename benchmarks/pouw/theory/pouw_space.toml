@@ -113,6 +113,13 @@ unit = "W1 units an hm96 salt at the floor (the PRF, c and M_key·y)"
 kind = "checked"
 source = "N-HIDE interim 1 §2 (note compute-research/20261029T0715Z-report-np-hide; benchmarks/served_commit/np_hide_price.py on cursor/compute-research-np-hide-9090 at 4839409549, run r20261029-073640-fd4e, art:675eb0f6…, on SW-HASH's measured rows and SASS, art:c4b98cbf…): a salt's registers at the floor, 32 a register and 116,224 a compression; forced (a) leaves M_key·y alone (7,440 registers); c is two compressions, the PRF the rest (321,364). `alone` prices a register at one LOP3's measured 64.13; `time` is the salt kernel's GPU time in MAC-times, not W1. Replaces the card's leaf-time price (hash_rows' shares), which priced one salt 1.29x higher at 256 KiB (N-SMELL item 12); SW-HASH's claims are checked at their own (`salt_basis = \"leaf-time\"`)"
 
+[price.link]
+value = 50e9
+alt = 12.5e9
+unit = "B/s from the GPU to the network certifier's port (R1)"
+kind = "parameter (a 400 Gb/s port; alt the census's 100 Gb/s); the GPU's PCIe side measured"
+source = "N-ALT final, R1 (note compute-research/20261029T0903Z-report-np-alt; r20261029-085305-730e on vy-dc-h200-5): the GPU streams every k32 word and operand to the certifier by GPUDirect RDMA; 8 GiB device to host at 55.26 GB/s, so a 400 Gb/s port is 90.5% of the GPU's own link; the GEMM under the stream slows by 1.016-1.047x, which T2 here leaves out (under 0.05 of T2)"
+
 [price.egress_cap]
 value = 32
 alt = 320
@@ -483,6 +490,22 @@ requires = ["trusted-host"]
 closes = ["pre_noise_hashing", "coin_hashing"]
 source = "R1b: each call's A_j goes to the certifier, which commits it and releases the call's coins only on its arrival, and the prover hashes no XOF for them, so their bytes aren't credited (N-EGRESS interim 2 §2: the lead's 0.42% XOF term removed); so A_j is fixed before its noise without the prover hashing it first, and the per-matmul seed is a live coin (no Fiat-Shamir exception, no grinding term). pouw_space credits the closed pre_b under ShaSpeed and keeps A's root chain in T2 (a_ms); under R1b the prover hashes no A and T2 pays a round trip a call instead (64 calls at 2-10 us add 0.04-0.19 at T 512's 64 rows, -0.14 to +0.01 net of SW-NOISE's coin time): both inexact, neither moves T1"
 
+[premise.certifier-commit]
+rank = 3
+part = "hashing"
+status = "open"
+owner = "N-ALT (a protocol change: R1, the certifier commits every word; Daniel's ruling)"
+requires = ["trusted-host"]
+closes = ["pre_noise_hashing", "final_rows", "row_repeat", "hiding", "coin_hashing"]
+source = "R1 (N-ALT final): the GPU streams every k32 word and operand to the network certifier on its port, which commits them in hm96 rows with its own salts, signs each root, and releases each call's coins only after its A_j has arrived, so A is bound before its noise by arrival order and the prover hashes nothing (no ShaSpeed, hash-compose, carried-words, atomic call or row binding on the prover); the certifier sees every value in the clear (trusted-host). N-RED final §3: R1's port binding reduces to period-inventory and CertifierSeesImports; the host's compute stays counted by period-inventory at host-row"
+
+[premise.distinct-values]
+rank = 0
+status = "open"
+owner = "N-LEAN (N-RED final §1's proof obligation)"
+requires = ["certifier-commit"]
+source = "R1's certifier check (b), N-RED final (note compute-research/20261029T1039Z-report-np-red; nred_final.py run r20261029-102857-df17, art:d92b0e237658caae7f8187fa1adac491bcec4e1e3748635ec4dbf0bfc29d8d5f) §1: the certifier, holding every word in the clear, credits only an entry's distinct values; it over-credits none of A2c, A2r or A8 within an entry (checked), where check (a), crediting a word that differs from the entry's previous one, over-credits A2r by 39.6-47.6%. Obligation: the per-entry distinct count, times 32, lower-bounds the writes of any program whose words equal the committed ones, given ssn-tag-distinct and A5's timing rule. Copies across entries stay ssn-tag-distinct's. R1b's certifier sees only leaves and can't run it"
+
 [premise.route-u2]
 rank = 0
 status = "open"
@@ -736,7 +759,7 @@ source = "a noise whose words repeat on data (a zero k32 block dot product, iden
 slots = [["N", "noise"], ["D", "denoise"], ["F", "format"], ["C", "density"], ["C", "operands"], ["H", "rows"],
          ["H", "hiding"], ["P", "final"], ["P", "forming"], ["P", "derivation"]]
 base = ["H32", "card-within-accel-w1", "adaptive-dw", "atomic-call", "row-bound", "period-inventory", "host-row", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
-fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0, stream_bits = 0 }
+fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0, stream_bits = 0, branch_rows_c = "branch_rows", offload = 0, distinct_loss = 0 }
 probe = { m = 64, n = 2048, K = 2048 }
 source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1 (CardWithinAccelW1 at 32, N-W1), stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise and each row digest bound to (salt, forward, position) (N-COMPOSE), PeriodInventory with HostsCounted at θ's rows and its host row (N-FLOOR final), and the hashing credit (ShaWrites at ShaLB's count, ShaSpeed's form and the composition its theorems, with CarriedWords, NIGHT §1 default 1)"
 
@@ -834,7 +857,7 @@ source = "N-RED: served, the tags kept in the output; the extra width at the pla
 fields = { r = "32*(S + 1)/K", formed_x = "0", formed_y = "0", denoise = "m*reg", operand_max = 127, wide_measured = 0, derive_extra = "4*m*rot + 4*m", branch_rows = "rep_at(m, 0, S)" }
 premises = ["ssn-fold-distinct", "weights-distinct", "epilogue-fold"]
 t3 = { s8 = "int8-epi" }
-source = "N-CARD's composition (estimate; N-EXACT's interim 2 prices the served lead's own): N-EXACT's fold removes a separable noise r_i + c_j at no added instruction, but the tag lead's final word also carries a1[i]·C_j and T(i)·G_j, rank 4 each, which cost a write an output to remove in the epilogue (32/K, N-EXACT §2; N-NOISE's epi_full+tag+nz, two IDP4A an output, T1 2.53%). Cancelled instead in one more k32 step (-a1 derived, a LOP3 a row; -T loaded, as T is) against C and G, the final word is A·Bᵀ + r_i + c_j with r_i the sum of the S - 1 later lanes, which N-EXACT's IADD3 and FFMA remove for free (m registers a call for 0x4B400000 - r_i), so the output is stock's int8 product. The tags no longer separate that word: on chosen identical rows it is fixed by r_i alone, S classes with the sum binomial, so the coin branch copies the repeats at that step (rep_at, the same count rep_sum makes for ssn-1l; N-RED's A4 at the final word, unchecked)"
+source = "Superseded for the served lead by N-EXACT interim 2's ssn_1l_tag_xh and xh_mix (note compute-research/20261029T1031Z-report-np-exact; GPU epilogue r20261029-082654-6a49), increments over the lead it gives a point and not a call, so not composed here: xh +0.252 / +0.202 / +0.210 points under chosen requests at T 512 / 512 rows / T 8,192, xh_mix +0.067 / +0.023 / +0.017 on natural data (and 0.315-0.383% chosen), certified rows stock's output bit for bit. Kept as N-CARD's composition (estimate): N-EXACT's fold removes a separable noise r_i + c_j at no added instruction, but the tag lead's final word also carries a1[i]·C_j and T(i)·G_j, rank 4 each, which cost a write an output to remove in the epilogue (32/K, N-EXACT §2; N-NOISE's epi_full+tag+nz, two IDP4A an output, T1 2.53%). Cancelled instead in one more k32 step (-a1 derived, a LOP3 a row; -T loaded, as T is) against C and G, the final word is A·Bᵀ + r_i + c_j with r_i the sum of the S - 1 later lanes, which N-EXACT's IADD3 and FFMA remove for free (m registers a call for 0x4B400000 - r_i), so the output is stock's int8 product. The tags no longer separate that word: on chosen identical rows it is fixed by r_i alone, S classes with the sum binomial, so the coin branch copies the repeats at that step (rep_at, the same count rep_sum makes for ssn-1l; N-RED's A4 at the final word, unchecked)"
 
 # N-EGRESS interim 2's coin lanes (note compute-research/20261029T1002Z-report-np-egress; egress.py on
 # cursor/compute-research-np-alt-7c3e at f9dc82b936, run r20261029-101228-3741,
@@ -847,12 +870,12 @@ source = "N-CARD's composition (estimate; N-EXACT's interim 2 prices the served 
 # public lane (A2c), charged in T1 with or without model-public.
 [N.tag-blc1a-t128]
 title = "ssn-1l-tag with one certifier-streamed 7-bit odd coin lane a later step a 128-row tile and column, at 30 data lanes (blc1a-t128-e7)"
-fields = { c = 4, tag = 4, blc_lanes = 30, blc_tile = 128, blc_bits = 7, blc_p = 0.00390625, blc_loads = 1, S = "1 + ceil(max(0, K - (32 - c - tag))/blc_lanes)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", blc_steps = "ceil((S - 1)*min(m, blc_tile)/blc_tile)", blc_entries = "n*ceil(m/blc_tile)*blc_steps", stream_bits = "blc_bits*blc_entries", noise_x = "4*m*S", noise_y = "blc_loads*blc_entries", derive_extra = "4*m*rot", dup = 0, noise_max = 3, n_max = 28559, s8_ok = 1, branch_rows = "m*(blc_steps*blc_p + (S - 1 - blc_steps)/2)" }
+fields = { c = 4, tag = 4, blc_lanes = 30, blc_tile = 128, blc_bits = 7, blc_p = 0.00390625, blc_loads = 1, S = "1 + ceil(max(0, K - (32 - c - tag))/blc_lanes)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", blc_steps = "ceil((S - 1)*min(m, blc_tile)/blc_tile)", blc_entries = "n*ceil(m/blc_tile)*blc_steps", stream_bits = "blc_bits*blc_entries", noise_x = "4*m*S", noise_y = "blc_loads*blc_entries", derive_extra = "4*m*rot", dup = 0, noise_max = 3, n_max = 28559, s8_ok = 1, branch_rows = "m*(blc_steps*blc_p + (S - 1 - blc_steps)/2)", branch_rows_c = "m*(S - 1 - blc_steps)/2" }
 coins = { coins = ["4*m*ceil(bits/32)"] }
 premises = ["ssn-tag-distinct", "g-private", "copy-floor", "adaptive-pointwise", "trusted-host", "certifier-coins", "fold-range"]
 t3 = { s8 = "ssn-1l-tag-v1" }
 variant = "ssn-1l-tag-v1"
-branch_source = "N-EGRESS §2a (estimate): with the coin s odd in ±127, a chosen lane fixed before the draw repeats a word only where (1 + b_t) + s_t + d = 0, p* = ½·2^-7 = 1/256, against A2c's ½ on the lead; N-RED's model-P points are 1.032·p* of stock (checked to 1%), so about 0.40% here, scaled, not N-RED's check. The walk's returns over longer intervals need an interval's coins to sum to the walk's offset; model P counts one-step repeats only (N-CARD's reading: N-RED to check under W and C)"
+branch_source = "N-EGRESS §2a (estimate): with the coin s odd in ±127, a chosen lane fixed before the draw repeats a word only where (1 + b_t) + s_t + d = 0, p* = ½·2^-7 = 1/256, against A2c's ½ on the lead; N-RED's model-P points are 1.032·p* of stock (checked to 1%), so about 0.40% here, scaled, not N-RED's check. The walk's returns over longer intervals need an interval's coins to sum to the walk's offset; model P counts one-step repeats only. N-RED final §4 (checked, exact p*): blc1a-t128-e4 leaves 3.2% under model P and 0.00% under C and W; at e7 blc1a-t128 0.38% and blc4a-t64 0.28%, revisits not paying, so the card's (S - 1)·p*·32/K on each layout's own S (0.415%, 0.334%) is the larger. Under model C (CopyGrain(4)) a copy needs four entries' coins to agree, so the lane steps leave nothing (branch_rows_c); the public-lane steps of a short tile stay A2c's, which saves as much under C on the tag lead. N-RED's requirements: coins released after the certifier hashes A_j (both streams; 103.1% otherwise) and one draw a slot"
 source = "N-EGRESS interim 2 §2: each later k32 step gives up a data lane (30 left) for B' lane 30 = s_t[tile, j], odd uniform in ±127, against a constant 1 in A''s layout; lane 31 is the lead's 1 + b_t(i). The prover patches the streamed bytes into the B tile in shared memory, one 32-bit load a 4 entries (noise_y at reg/4 an entry; the four byte stores are unpriced in W1, and the load is credited only where one-instruction-minimal covers it, N-CARD's reading) plus the certifier's per-tile column sums, which N-EXACT's fold removes (fold-range), so the lane serves no noise past the lead's. Words ×1.031 by S (30 data lanes), and with it hashing and W_mac. The network term's cap is cap-served (N-PREM; outside T1)"
 
 [N.tag-blc1a-t128.D.served]
@@ -1136,6 +1159,22 @@ source = "the hiding ruling, ruled out by NIGHT.md §1 default 2"
 premises = ["trusted-host", "certifier-salt"]
 source = "R1b: the salt side from the certifier (premise certifier-salt)"
 
+# R1: the certifier commits every word (`offload`: the prover hashes nothing, T2 pays the link, and the network term is
+# the words' own way back through the port). The rows are the certifier's, so R1 is priced once, at r256k's fields.
+[H.hiding.r1]
+when = "row == 262144"
+premises = ["trusted-host", "certifier-commit"]
+drops = ["ShaSpeed", "sha-writes", "carried-words", "hash-compose", "row-bound"]
+fields = { offload = 1 }
+source = "R1 (N-ALT final): commit through the network certifier (premise certifier-commit)"
+
+[H.hiding.r1-db]
+when = "row == 262144"
+premises = ["trusted-host", "certifier-commit", "distinct-values"]
+drops = ["ShaSpeed", "sha-writes", "carried-words", "hash-compose", "row-bound"]
+fields = { offload = 1, distinct_loss = "0.00086*(K/2048)**0.594" }
+source = "R1 with the certifier's check (b) (N-RED final §1): only an entry's distinct values are credited, which costs the honest its chance revisits on int8 data, 0.086% of its credit at K 2,048 and 0.196% at K 8,192 (checked), Llama-3.2-1B's two Ks; the card's power law through the two points prices another K (an estimate)"
+
 # P, the premise sets that close a term: the final word (the final-word lemma, when the final word is free), forming
 # (the counting lemma, when the formed operands aren't committed) and the noise's derivation (OneInstructionMinimal).
 [P.final.none]
@@ -1192,6 +1231,7 @@ source = "N-RED interim 1 A5 (for a served output; an exact epilogue reopens it,
 
 [attack.fix2-quadrant]
 status = "open"
+closed_by = ["distinct-values"]
 targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2", "N.nn-prmt-sv4", "N.nn-prmt-sv4-aorb",
            "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb", "N.nn-rot2-sv28-aorb", "N.nn-rawS-sv4-aorb"]
 priced = "unpriced (estimate: the share p of a chosen step's words whose increment is the likeliest value, a quarter for fix2)"
@@ -1200,6 +1240,7 @@ needs = "chosen weights"
 
 [attack.a2c-cancel-lane]
 status = "open"
+closed_by = ["distinct-values"]
 targets = ["ssn-1l-tag", "ssn-1l-hw", "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb"]
 needs = "chosen weights"
 priced = "unpriced in T1 while M0's chosen weights are the open model-choice question: under chosen weights a row repeats its previous step's vector at every later step whose coin bit is 0, (S - 1)·16/K, 51.6% of stock at Llama's shapes (checked)"
@@ -1207,10 +1248,11 @@ source = "N-RED interim 2 (note compute-research/20261029T0940Z-report-np-red; n
 
 [attack.walk]
 status = "open"
-targets = ["ssn-1l", "ssn-1l5", "ssn-1l-tag", "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb"]
+closed_by = ["distinct-values"]
+targets = ["ssn-1l", "ssn-1l5", "ssn-1l-tag", "ssn-1l-hw", "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb"]
 needs = "chosen weights"
-priced = "unpriced in T1 while M0's chosen weights are the open model-choice question: about 91% of stock MAC-weighted on the tag lead (N-ADAPT), 94.97% on N-PREM's generator"
-source = "N-ADAPT interim 2 (note compute-research/20261029T1004Z-report-np-adapt; art:7dd007cd9cd9c78e5b93994ba8889bc0705f64023e042551a872e008c1c4404b) §2, built word for word at small shapes and a count at scale: A2c's chosen lane alternating -1 and -2 makes a row's later vectors its step-1 vector plus W_t·1, W a lazy ±1 walk, about 1 + √(2S/π) distinct vectors a row (7.0 of 67 at K 2,048, 13.5 of 265 at K 8,192), saving 89.5% / 94.9% of the committed words; N-PREM interim 2 (note compute-research/20261029T1027Z-report-np-prem, walk_words_check) reproduces it on ssn_1l, the tag lead and AorB's side A. N-ADAPT found no walk for hw (σ_t's signs). Each later step's public coin weight is what it cancels, so only a weight drawn after B closes it (N-RED's fix2 or uw, N-EGRESS's coin lanes)"
+priced = "unpriced in T1 while M0's chosen weights are the open model-choice question: 94.8% of stock on the tag lead and 94.6% on ssn-1l-hw under model P, as much under C and W on the tag lead (N-RED final's A2r, checked); about 91% (N-ADAPT), 94.97% (N-PREM)"
+source = "N-ADAPT interim 2 (note compute-research/20261029T1004Z-report-np-adapt; art:7dd007cd9cd9c78e5b93994ba8889bc0705f64023e042551a872e008c1c4404b) §2, built word for word at small shapes and a count at scale: A2c's chosen lane alternating -1 and -2 makes a row's later vectors its step-1 vector plus W_t·1, W a lazy ±1 walk, about 1 + √(2S/π) distinct vectors a row (7.0 of 67 at K 2,048, 13.5 of 265 at K 8,192), saving 89.5% / 94.9% of the committed words; N-PREM interim 2 (note compute-research/20261029T1027Z-report-np-prem, walk_words_check) reproduces it on ssn_1l, the tag lead and AorB's side A. N-ADAPT found no walk for hw (σ_t's signs); N-RED final (note compute-research/20261029T1039Z-report-np-red; nred_final.py run r20261029-102857-df17, art:d92b0e237658caae7f8187fa1adac491bcec4e1e3748635ec4dbf0bfc29d8d5f) §1-2 builds it as A2r, words equal: on hw a per-column cancel B_t[j] = -σ_t[j]·(1 + 2e_t[j]) gives every column a walk with a fixed sign, 7.0 of 67 words written (K 2,048), and by argument it reaches +tag+nz and AorB's side B. Each later step's public coin weight is what it cancels, so only a weight drawn after B closes it (N-RED's fix2 or uw, N-EGRESS's coin lanes), or R1's certifier check (b), crediting an entry's distinct values (N-RED, honest cost 0.09-0.20%)"
 
 [attack.replay-exact]
 status = "open"
@@ -1689,3 +1731,118 @@ premises = ["certifier-coins"]
 source = "alt_roads.py r1b_salt_and_arrival; the certifier's salt-side work at 16 KiB rows is 16x 256 KiB's (alt_roads' table)"
 claims.t512 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b: rows change hashing time, not T1, once hiding is closed" }
 claims.t8192 = { t1 = 0.000483, tol = 0.000002, kind = "checked", source = "as card np-alt-r1b" }
+
+# N-SALT's cards: N-LIT's counter-mode pad and its keyed forms, and hm96's mask computed as committed int8 partials
+# (FM), as hiding modules priced by their own `salt` (W1 at the floor a public digest: `unforced` all of it, `forced`
+# what stays charged once its checking premise credits the rest). They enter only through cards (`enumerate = false`).
+# N-SALT's salt.py prices and checks them, and its Salt.lean proves binding, the ideal-hybrid hiding and FM's bit 7.
+
+[premise.pad-checked]
+rank = 0
+part = "hashing"
+status = "open"
+owner = "N-SALT"
+closes = ["hiding_salt"]
+source = "N-SALT: a window key ks, 64 bytes from the OS generator, is committed under its own hm96 leaf before the window's coins; each drawn unit's proof opens it, computes S = f(IV, ks ‖ salt_w) and checks each opened public digest: b = x ⊕ f(S, pos ‖ padding) (pad) or d = f(S, pos ‖ x ‖ padding) (keyed digest), so the pad's or the key's compression is forced and ShaWrites credits it at its count; the pad's 16 XORs stay. Binding is Salt.lean's pad_binding and keyed_binding (proved, premise-free); a pad the proof doesn't check binds nothing (pad_unchecked_unbound). A protocol change, not built"
+
+[premise.pad-leaf-ruled]
+rank = 3
+part = "hashing"
+status = "open"
+owner = "the coordinator, for Daniel"
+source = "N-SALT: the pad family's public digest is not an hm96 leaf (AGENTS.md: commitments are hm96 rows), so it needs a ruling. Its hiding is computational at SHA-512's PRF property keyed by a secret 64-byte block, which is hm96 PROTOCOL §3's generator convention, the one (a)'s derived salts and today's served salts already read, and prefix-keyed SHA-512 as a PRF has precedent (AMAC, Bellare-Bernstein-Tessaro; Ed25519's nonce); every pad input is fixed at 144 bytes, so the whole 512-bit output is released without AMAC's truncation, and multi-user security at about 2^44 keys a year is a non-issue at 512 bits (N-LIT H23); HMAC, if a named standard is wanted, costs 2 compressions a pad (N-LIT H24): Salt.lean's pad_reduction and pad_ideal_hiding (keyed_ideal_hiding) prove the ideal hybrid exact, with every position used once (a repeated position leaks: pad_repeat_leaks, keyed_repeat_leaks). Whoever holds ks reads every x in its scope (pad_key_reveals), so ks is never published"
+
+[premise.fm-distinct]
+rank = 2
+part = "hashing"
+status = "open"
+owner = "N-SALT"
+requires = ["salt-forced", "adaptive-dw"]
+source = "N-SALT: FM's 48 k32 partials an output, P[i][w] = 128 · Σ ±M_key[i][j] · y_j over words <= w, are affine in y with pairwise distinct nonzero coefficient vectors on the pinned key (24,576 of 24,576 prefixes distinct, every 32-bit block at least 9 bits; salt.py check_fm, mutation caught), so they are pairwise distinct, non-constant functions of y (Salt.lean dot_distinct, dot_nonconstant, proved), and under DistinctWrites stated for programs that read the coins (adaptive-dw: y is PRF_ks(salt_w ‖ pos)) each committed partial is charged its k32 step's 32 MACs; with one fixed y they are constants, so it requires (a). Its bit 7 is hm96-sha512/v1's mask bit (Salt.lean fm_mask, proved; salt.py, checked on 4 literal and 4,096 closed-form salts). Like per2-distinct it reads DistinctOn's set semantics, not a span argument"
+
+[H.hiding.pad]
+name = "pad"
+enumerate = false
+premises = ["pad-checked", "pad-leaf-ruled"]
+salt = { unforced = 116736, forced = 512 }
+source = "N-LIT H20, N-SALT's construction: b = x ⊕ f(S, pos ‖ padding), one compression (116,224 at the floor, credited by pad-checked) and 16 XORs a public digest (512, charged); hm96's c and M_key·y gone; once a window ks's hm96 leaf and S (about 9.1e5 W1, outside the card)"
+
+[H.hiding.keyed]
+name = "keyed"
+enumerate = false
+premises = ["pad-checked", "pad-leaf-ruled"]
+salt = { unforced = 116224, forced = 0 }
+source = "N-SALT's keyed digest (N-HIDE's e3 shape): d = f(S, pos ‖ x ‖ padding), one compression a public digest (credited by pad-checked), no XOR"
+
+[H.hiding.kleaf]
+name = "kleaf"
+enumerate = false
+premises = ["pad-leaf-ruled", "row-bound"]
+salt = { unforced = 0, forced = 0 }
+source = "N-SALT's keyed leaf: the public digest's own hash started from S instead of the IV, its first block row-bound's (salt, forward, position) block with the length, which row-bound already spends a compression on (a frame-v3 node's message already carries (domain, level, index)); nothing is added a public digest. Its messages are prefix-free by that block (Salt.lean prefix_free_of_head, proved), so Bellare-Canetti-Krawczyk reduce its hiding to the compression function's PRF property, with no length extension; the drawn unit's proof opens ks and hashes from S"
+
+[H.hiding.fm]
+name = "fm"
+enumerate = false
+premises = ["salt-forced", "fm-distinct"]
+salt = { unforced = 791892, forced = 28672 }
+source = "N-SALT's forced mask: hm96-sha512/v1 kept bit for bit, M_key·y computed as an int8 tensor-core product whose 48 k32 partials an output are committed (786,432 MACs and 98,304 B hashed a salt, credited, outside the card's T2); the PRF and c credited by salt-forced; the interface, 384 formed registers, 496 gathered and 16 XORs (896 at 32, estimate), charged"
+
+[card.np-salt-tag-l1-pad]
+title = "the lead with L1 and N-LIT's pad"
+origin = "N-SALT"
+note = "compute-research/20261029T1016Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "pad", final = "none", forming = "none", derivation = "min" }
+source = "benchmarks/pouw/theory/salt.py on cursor/compute-research-np-salt-fb20: L1's salts at the pad's 16 XORs"
+claims.t512 = { gap = 5.344e-7, terms = ["hiding"], tol = 2e-9, kind = "estimate", source = "salt.py: 65 public digests a forward at 512 W1, 64 rows" }
+claims.t512r512 = { gap = 6.68e-8, terms = ["hiding"], tol = 2e-10, kind = "estimate", source = "salt.py, 512 rows" }
+
+[card.np-salt-tag-r256k-pad]
+title = "the lead with 256 KiB rows (L0) and the pad: every leaf's digest public, its XOR charged"
+origin = "N-SALT"
+note = "compute-research/20261029T1016Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "pad", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the pad's XOR at L0, one public digest a leaf"
+claims.t512 = { gap = 2.885e-4, terms = ["hiding"], tol = 3e-6, kind = "estimate", source = "salt.py: 0.0288% at 256 KiB rows (its count of leaves differs from the card's by under 1%)" }
+
+[card.np-salt-tag-r16k-pad]
+title = "the lead with 16 KiB rows (L0) and the pad: N-LIT's '0 at every layout' fails here, the XOR alone 0.41%"
+origin = "N-SALT"
+note = "compute-research/20261029T1016Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "pad", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the pad's XOR at L0 with 16 KiB rows"
+claims.t512 = { gap = 4.084e-3, terms = ["hiding"], tol = 4e-5, kind = "estimate", source = "salt.py: 0.411% at 16 KiB rows" }
+
+[card.np-salt-tag-l1-keyed]
+title = "the lead with L1 and the keyed digest"
+origin = "N-SALT"
+note = "compute-research/20261029T1016Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "keyed", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the keyed digest's compression, credited by pad-checked"
+claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+
+[card.np-salt-tag-r256k-kleaf]
+title = "the lead with 256 KiB rows (L0) and the keyed leaf: no salt work and no subtree layout"
+origin = "N-SALT"
+note = "compute-research/20261029T1016Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "kleaf", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the keyed leaf adds nothing a public digest at any layout"
+claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+claims.t8192 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+
+[card.np-salt-tag-l1-kleaf]
+title = "the lead with L1 and the keyed leaf"
+origin = "N-SALT"
+note = "compute-research/20261029T1016Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "kleaf", final = "none", forming = "none", derivation = "min" }
+source = "salt.py"
+claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+
+[card.np-salt-tag-l1-fm]
+title = "the lead with L1, (a) and the forced mask: hm96 kept, its mask committed int8 partials"
+origin = "N-SALT"
+note = "compute-research/20261029T1016Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "fm", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: FM's interface at 896 registers a salt (estimate) on L1's salts"
+claims.t512 = { gap = 2.9926e-5, terms = ["hiding"], tol = 3e-7, kind = "estimate", source = "salt.py: 0.0030% at 64 rows" }
+claims.t512r512 = { gap = 3.741e-6, terms = ["hiding"], tol = 4e-8, kind = "estimate", source = "salt.py: 0.0004% at 512 rows" }
