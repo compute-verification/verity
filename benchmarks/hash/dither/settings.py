@@ -142,7 +142,6 @@ REGISTRY = Registry(
     S("VLLM_USE_FLASHINFER_SAMPLER", str, None, VALUE, "vLLM's sampler choice, which the native baseline records"),
     S("VLLM_ENABLE_V1_MULTIPROCESSING", str, None, WHERE, "0: vLLM's engine core in the bench's process, where its patches "
                                                           "reach it"),
-    S("S8_WGMMA_CUBIN", str, None, VALUE, "the s8 WGMMA cubin j10r90's units load (default the one it builds)"),
     S("J10_CA_TREE", str, None, WHERE, f"J10-B's banded {TREE}"),
     S("BW_LIB", str, None, WHERE, "the remote bandwidth audit's prover library (dbw.py's side)"),
     S("BW_KV", str, None, WHERE, "the remote bandwidth audit's store (dbw.py's side)"),
