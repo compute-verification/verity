@@ -34,6 +34,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -95,14 +96,17 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
-def lean_check(exe: str, case: dict, d: Path) -> dict:
-    """``network-period check`` on the case's three files in ``d``: its answer (its last line)."""
+def lean_check(exe: str, case: dict, d: Path,
+               run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
+    """``network-period check`` on the case's three files in ``d``: its answer (its last line). ``run`` runs it with its
+    output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
     files[1].write_bytes(bytes.fromhex(case["commitment"]))
     files[2].write_bytes(bytes.fromhex(case["evidence"]))
-    p = subprocess.run([exe, "check", *map(str, files)], capture_output=True, text=True)
+    argv = [exe, "check", *map(str, files)]
+    p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
         raise SystemExit(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
