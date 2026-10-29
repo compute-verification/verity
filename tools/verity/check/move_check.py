@@ -8,7 +8,7 @@ Every path git sees changed must be one of:
 - an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
   after a variable such as `$REPO/`) is rewritten to where it is now or, in a line, left as it was (a top-level directory's
   name is also a word: `examples` in prose, a JSON key, a function's name), in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
-  the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
+  the file's own directory first (in a `*.md` file, one in backticks or a link's target), in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
   line left may only rewrite a moved path as written below a directory its old and new places share
   (`verity_vllm/program/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a
   renamed module was to where it is now; in any of them, the modules a run of import lines binds each name to
@@ -25,7 +25,8 @@ Every path git sees changed must be one of:
   files (its lakefile, manifest, lock or toolchain), as a suite's inputs list what Lake reads;
 - an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
   the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
-  proof modules a root of their own while their declarations keep their namespace;
+  proof modules a root of their own while their declarations keep their namespace, or a moved path from the root (a doc
+  comment's), as in a text file;
 - an edit to a `lean-audit.json` that keeps `pins` (the guarantees' records; `guarantees` too, if a lock has it) and
   `reads` byte for byte (a `reads` key, a module's name, may follow the module's move), may change the structural `roots`,
   `proved_in` (each entry a Lake package at HEAD) and `dependencies` (the fetched modules the package imports, which a
@@ -104,6 +105,7 @@ ROOT = Path(__file__).resolve().parents[3]
 IMPORT = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\b.*)$|^(\s*import\s+)([\w.]+)(.*)$")
 LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$")
 RELATIVE = re.compile(r"""(["'])(\.\.?(?:/[^"'\s]*)?)\1""")
+MD_RELATIVE = re.compile(r"(?:(?<=`)|(?<=\]\())\.\.?/[^`)\s]*(?=[`)])")
 #: the lines a destination package's lakefile may change from the source package's
 LAKE_LINE = re.compile(r"""^\s*(
     | \#.* | --.*
@@ -314,13 +316,16 @@ def module_sub(text: str, mods: dict[str, str]) -> str:
 
 
 def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
-    """Each quoted relative path, as `<root>/` and the repository path it names from `path`'s directory, mapped by `pmap`."""
+    """Each quoted relative path (in Markdown, in backticks or a link's target), as `<root>/` and the repository path it names
+    from `path`'s directory, mapped by `pmap`."""
     here = posixpath.dirname(path)
 
-    def repl(m: re.Match) -> str:
-        p = posixpath.normpath(posixpath.join(here, m.group(2)))
-        return m.group(0) if p.startswith("..") else f"{m.group(1)}<root>/{map_path(p, pmap)}{m.group(1)}"
-    return RELATIVE.sub(repl, text)
+    def rooted(rel: str) -> str | None:
+        p = posixpath.normpath(posixpath.join(here, rel))
+        return None if p.startswith("..") else f"<root>/{map_path(p, pmap)}"
+    if path.endswith(".md"):
+        return MD_RELATIVE.sub(lambda m: rooted(m.group(0)) or m.group(0), text)
+    return RELATIVE.sub(lambda m: (r := rooted(m.group(2))) and f"{m.group(1)}{r}{m.group(1)}" or m.group(0), text)
 
 
 def by_extra(a: str, b: str, extra: dict[str, str]) -> bool:
@@ -1123,10 +1128,11 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         elif k == "moves":
             why = None if same else moves_change(a, b, pmap, B)
         elif k == "lean":
-            h = first_unexplained(al, bl, al, bl, pair=lambda x, y: lean_import_rewrite(x, y, lmods, dotted))
-            why = h and ("edit beyond import lines that name a module renamed in the range", h)
+            h = first_unexplained(al, bl, substitute(a, pmap).splitlines(), bl,
+                                  pair=lambda x, y: lean_import_rewrite(x, y, lmods, dotted), left=lambda i, y: partly(al[i], y, pmap))
+            why = h and ("edit beyond import lines that name a module renamed in the range and moved paths", h)
         else:
-            rel, py = name in RELATIVE_NAMES, new.endswith(".py")
+            rel, py = name in RELATIVE_NAMES or new.endswith(".md"), new.endswith(".py")
             na_text = resolve_relative(a, old, pmap) if rel else join_chains(a) if py else a
             n0 = na_text.splitlines()
             na = n0 if same else substitute(na_text, pmap).splitlines()

@@ -651,6 +651,32 @@ def test_a_digest_in_json_that_is_no_pin_is_refused(tmp_path):
     assert f["path"] == "f/pin.json"
 
 
+def _doc_paths(tmp_path: Path, lean: str, md: str) -> dict:
+    """`P/x` moved to `P/y`; a Lean doc comment names it from the root, a Markdown file relative to itself."""
+    repo, base = _repo(tmp_path, {"P/x/A.lean": "def a := 1\n", "S/B.lean": "/-! `P/x/A.lean` states `a`. -/\ndef b := 1\n",
+                                  "docs/README.md": "`../P/x/A.lean` states it ([A](../P/x/A.lean)).\n"})
+    _move(repo, "P/x", "P/y")
+    _write(repo, {"S/B.lean": lean, "docs/README.md": md})
+    return _check(repo, base)
+
+
+def test_moved_paths_in_a_lean_comment_and_markdown_relative_paths_are_a_move(tmp_path):
+    r = _doc_paths(tmp_path, "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n", "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n")
+    assert r["certified"], r["refusals"]
+
+
+def test_a_lean_edit_beyond_a_moved_path_is_refused(tmp_path):
+    [f] = _doc_paths(tmp_path, "/-! `P/y/A.lean` states `a`. -/\ndef b := 2\n",
+                     "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n")["refusals"]
+    assert f["path"] == "S/B.lean"
+
+
+def test_a_markdown_relative_path_that_names_another_file_is_refused(tmp_path):
+    [f] = _doc_paths(tmp_path, "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n",
+                     "`../P/y/A.lean` states it ([A](../../P/y/A.lean)).\n")["refusals"]
+    assert f["path"] == "docs/README.md"
+
+
 def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
     moves = json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/": "T/"}}]}, indent=2) + "\n"
     [f] = _worded(tmp_path, **{"tools/research/src/research/store/moves.json": moves})["refusals"]
