@@ -1,7 +1,7 @@
 """N2's verdict of record from zero-knowledge proofs of N2's registered unit, on a certifier-serve run: each link-window
 committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's `Stream`), selected
 (Selection All: its one unit, no coins), its unit (`NetworkLinkWindow_v5`, both ends' head checks on their pinned gate
-ids) proved by C-Flock `prove --zk` behind the Lean firewall, delivered, and decided by `LinkWindows.outcome`: the
+ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and decided by `LinkWindows.outcome`: the
 verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the verifier's own copy and its output
 row read. No host check reads the opening; `--debug-clear` adds the in-the-clear comparison to each verdict, which
 decides nothing.
@@ -28,7 +28,7 @@ decides nothing.
 * **The period** (``--draw K``): each member's windows sampled rather than all proved, as `n2_advised_zk`'s: every
   window's salted root committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and
   only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
-  stream's δ, on the Lean verifier of record's draw. ``tampered`` then changes every window (`every_count`), which any
+  stream's δ, on the Lean verifier of record's sample. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
 * **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
@@ -37,17 +37,19 @@ decides nothing.
   the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at once, held to the prover's
   reference and to the IR reference; each statement's salts come from a key of its own, and the verifier's opening of its
   ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
-* **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the firewall on
-  the statement (the server serving the stream's draw), deliver, and the outcome of record. Per window: prove (the
+* **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the ZK server on
+  the statement (the server serving the stream's sample), deliver, and the outcome of record. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
   included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
-  another: outer proofs go through the firewall one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
+  another: outer proofs go through the ZK server one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
-  (the salted root, nothing of the certificates) and the draw; the two certificates' public fields, from the certifier,
+  (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the certifier,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
-  hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
-  outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
-  descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
+  hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; the
+  outcome record, and one-stage v2's evidence (`one_stage_evidence`). Its own: the circuit file (its lowering, which
+  prover and verifier share here) and one-stage v2's parameters for the link (`one_stage_params`, ``one-stage.json``,
+  with the Program's descriptor and the partition object), which certifier/v0's period check runs v2 under on each
+  link-window (the all-protocols certifier leg's case). Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
   certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
   (`public_pieces`), which the verifier has whatever the witness, and a member fails on a ``leaked`` piece under the
@@ -89,7 +91,7 @@ from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 ENDS = ("egress", "ingress")
-#: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the draw of record's
+#: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the sample of record's
 OTHER = "other_subset"
 ROUNDS = ("honest", "tampered", "extra", "late")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
@@ -98,7 +100,8 @@ ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'L
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
-            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
+            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record",
+            "one-stage.json": "one-stage v2's evidence (the audit record's inputs, the proof's files by SHA-512)"}
 
 
 def log(msg: str) -> None:
@@ -217,7 +220,7 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
 
 def every_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
     """Every window's egress head with one count more (`one_count`'s change, in each window): the tampered member of a
-    sampled period (``--draw``), which refuses it whichever windows it draws."""
+    sampled period (``--draw``), which refuses it whichever windows it samples."""
     return one_count(lw, 0, pair)
 
 
@@ -434,8 +437,31 @@ def firewall(M, sg: SimpleNamespace) -> dict:
                                                      "program_file": sg.program_file})}
 
 
+def one_stage_params(lw: LinkWindows, circuit_sha512: str, delta: float) -> dict:
+    """The auditor's one-stage v2 parameters for the link's link-windows (`OneStageZk.paramsOfJson`'s) as its stream
+    registers and decides them, without ``ports``, which are each link-window's (`LinkWindows.ports`), and with ``log``
+    empty, the stream's before its first: the registered Program's descriptor and partition object, the check's query,
+    Selection All's law over a link-window's one unit, the stream's δ, and the proofs' circuit file by its SHA-512."""
+    return {"anchors": [], "delta": str(Fraction(delta)), "law": SVC.S.selection_law(lw.spec.selection, 1),
+            "leaf_layer": None, "log": [], "partition": lw.partition, "program": json.loads(lw.program),
+            "proofs": {"circuit": circuit_sha512, "registered": None}, "query": lw.query, "registered": None,
+            "scheme": SVC.S.SCHEME, "work_table": None}
+
+
+def one_stage_evidence(PF, body: dict, proof, root: str) -> dict:
+    """One-stage v2's evidence for a link-window (`OneStageZk.evidenceOf`) from its outcome record ``body``: what its
+    audit record was handed (the receipt, the draw, the proved units, their count and the statement), the delivered
+    sessions, the session's root of the link-window's port (`LinkWindows.outcome`'s ``session_roots``), and in place of
+    the verdicts the proof's files by their SHA-512 (`proofs.evidence_v2`)."""
+    audit = body["audit"]
+    proofs, _ = PF.evidence_v2(proof, body["sessions"])
+    return {"draw": audit["draw"], "instances": len(audit["proved_units"]), "proofs": proofs,
+            "proved_units": audit["proved_units"], "receipt": audit["receipt"], "served": None,
+            "session_roots": {SVC.VALUE: root}, "sessions": list(body["sessions"]), "statement": audit["statement"]}
+
+
 def one_session(jobs: int) -> None:
-    """A driver's ``--jobs``: 1, its members proved one after another, each session behind the firewall alone
+    """A driver's ``--jobs``: 1, its members proved one after another, each session behind the ZK server alone
     (`ONE_SESSION`); any other count is refused before anything runs."""
     if jobs != 1:
         raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one firewalled session at a time: --jobs 1")
@@ -455,7 +481,7 @@ def _free_port() -> int:
 
 
 def other_subset(drawn: dict) -> list[int]:
-    """A K-subset of the period's windows that isn't the draw's: the first K the draw didn't hold, then drawn ones
+    """A K-subset of the period's windows that isn't the sample's: the first K the sample didn't hold, then sampled ones
     from the start where it left fewer than K (none other at K = n)."""
     held = set(drawn["units"])
     return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
@@ -464,29 +490,33 @@ def other_subset(drawn: dict) -> list[int]:
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
            coins=None, forge=None) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
-    firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
+    ZK server, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
     listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
 
     With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
     advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
-    decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
-    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the draw of
-    record: the Lean verifier of record's (``--lean``) draw on the coins the period draw read (`service.lean_draw`),
+    decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the sample of
+    record: the Lean verifier of record's (``--lean``) draw on the coins the period flip read (`service.lean_draw`),
     which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
-    on the session once the draw has read them, and the result's ``segment`` is what they released. ``forge``, a
-    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a draw object
+    on the session once the sample has read them, and the result's ``segment`` is what they released. ``forge``, a
+    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a sample object
     listing them (`other_subset`), which is what ``period.json`` then holds."""
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
                        coins=cs._no_coins, clock=time.monotonic)
     gpu = getattr(a, "gpu", False)
-    # the firewall rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
+    # the ZK server rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
     env = {**firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
+    (vdir / "one-stage.json").write_text(json.dumps(one_stage_params(lw, sg.circuit_sha512, stream.delta), indent=1,
+                                                    sort_keys=True))
+    if not (vdir / "circuit.txt").exists():
+        os.link(sg.circuit, vdir / "circuit.txt")
     drawn, windows, segment = None, rd.windows, None
     if k is not None:
         try:
@@ -538,6 +568,9 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                  "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
                  "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
                                     "output": x.statement.output}}
+        if body.get("audit") is not None:
+            files["one-stage.json"] = one_stage_evidence(M.PF, body, delivered.proof,
+                                                         reg.record["roots"][0]["root"])
         for f, v in files.items():
             (vdir / f"{pre}{f}").write_text(json.dumps(v, indent=1, sort_keys=True, default=str))
         os.link(x.statement.dir / "pub-1.bin", vdir / f"{pre}pub-1.bin")

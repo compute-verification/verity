@@ -9,6 +9,7 @@ in whole u16 words. The scan of what the verifier received leaves out exactly th
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -86,6 +87,59 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     tails = {f"{k} @{len(blobs[k]) - len(blobs[k]) % 16}" for k in held if len(blobs[k]) % 16}
     assert tails and tails <= set(kept)  # a zero-padded tail is scanned for, but no instance file holds it as it is
     assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
+
+
+def _zk():
+    """Sampled proofs' mirror of `OneStageZk`'s decoders (`one_stage_zk_case`), loaded by path."""
+    path = HERE.parents[1] / "verity/core/service/sampled_proofs/tests/one_stage_zk_case.py"
+    if "one_stage_zk_case" not in sys.modules:
+        sys.path.insert(0, str(path.parent))
+        spec = importlib.util.spec_from_file_location("one_stage_zk_case", path)
+        sys.modules["one_stage_zk_case"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules["one_stage_zk_case"])
+    return sys.modules["one_stage_zk_case"]
+
+
+def test_one_stage_v2_reads_each_link_window_as_its_stream_registers_it(runs, tmp_path):
+    """`one_stage_params` is one-stage v2's parameters (`OneStageZk.paramsOfJson`'s keys, without ports), and with each
+    link-window's port as certifier/v0's period check derives it (its served domain, from the partition object and
+    N2's run, `LinkWindow.domainId`) and the stream's earlier registrations as its log, each honest link-window's
+    registration passes one-stage's registration check (R1-R7); `one_stage_evidence` of an outcome record is v2's
+    evidence, its proof's files by SHA-512."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P, proofs as PF, registration as R
+    from verity.ml.commitments.window import window_domain
+
+    ZK, rd = _zk(), runs["honest"]
+    lw = rd.lw
+    template = n2.one_stage_params(lw, "ab" * 64, n2.cs.DELTA)
+    assert template["delta"] == "1/1099511627776" and template["log"] == [] and "ports" not in template
+    assert {*template, "ports"} == ZK.ONE_STAGE.PARAM_KEYS | {"proofs"} and sorted(template["proofs"]) == [
+        "circuit", "registered"]
+    assert template["program"] == json.loads(lw.program) and P.digest(template["partition"]) == P.digest(lw.partition)
+    log = []
+    for x in rd.windows:
+        domain = window_domain(lw.partition["program"], P.digest(lw.partition), n2.SVC.VALUE, n2.SVC.SCHEMA,
+                               n2.SVC.LEAVES, f"{lw.run}/{lw.link}/{x.window}")
+        ports = {n2.SVC.VALUE: {"domain": domain, "leaves": n2.SVC.LEAVES}}
+        assert ports == lw.ports(x.window)
+        rec = lw.registration(x.opening, R.digest(log[-1]) if log else None)
+        v = R.check(rec, lw._program, lw.query, template["law"], template["scheme"], ports, log=log,
+                    partition=lw.partition)
+        assert v.ok, (x.window, v.codes)
+        log.append(rec)
+    files = {n: tmp_path / n for n in ("circuit.txt", "pub-1.bin", "s/session.json", "s/0.bin")}
+    for n, f in files.items():
+        f.parent.mkdir(exist_ok=True)
+        f.write_bytes(n.encode())
+    proof = PF.Proof(files["circuit.txt"], files["pub-1.bin"], (tmp_path / "s",))
+    sessions = [PF.file_sha512(files["s/session.json"])]
+    audit = {"draw": {"k": 1, "law": "subset", "population": 1, "units": [0]}, "proved_units": [0],
+             "receipt": R.receipt(log[0], "v", received="2026-10-26T00:00:00Z"), "statement": {"x": 1}}
+    e = n2.one_stage_evidence(PF, {"audit": audit, "sessions": sessions}, proof, "cd" * 64)
+    ZK.evidence(json.dumps(e, sort_keys=True, separators=(",", ":")).encode())
+    assert e["session_roots"] == {n2.SVC.VALUE: "cd" * 64} and e["instances"] == 1
+    assert e["proofs"] == {"public": PF.file_sha512(files["pub-1.bin"]), "sessions": [
+        {"name": sessions[0], "record": sessions[0], "reps": {"0.bin": PF.file_sha512(files["s/0.bin"])}}]}
 
 
 def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):

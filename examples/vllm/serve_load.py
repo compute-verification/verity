@@ -20,7 +20,7 @@ endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-
 order, as the network certifier numbers its releases), and is sent up to ``--jitter-ms`` after its arrival, so the frontend may read
 the bodies out of release order.
 
-``--fixed N`` is one full window of fixed length: N requests whose prompts are drawn as ``--varied`` draws them
+``--fixed N`` is one full window of fixed length: N requests whose prompts are sampled as ``--varied`` draws them
 (``--prompt-range L:L`` fixes their length), each with ``ignore_eos`` and ``max_tokens`` S (``--window-steps``), all arriving
 at 0, streamed; ``user`` ``fixed.<j>``. With ``--release RUN`` request 0 goes out only once the endpoint has answered every
 other one's head: under ``--admit release-order`` serve-openai answers a streamed request's head once it holds it, and holds

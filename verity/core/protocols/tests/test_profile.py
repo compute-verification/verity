@@ -20,7 +20,8 @@ from verity.ml.circuits import Program, bind
 from verity.ml.circuits import query_ast as G
 from verity.ml.circuits.partition import Level, members_per_parent, validate_partition
 from verity.ml.circuits.ops import gemm
-from verity.core.protocols.profile import HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
+from verity.core.protocols.profile import (HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified, Stratum, Subset, Work,
+                                          WorkStratum, work_k)
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -203,7 +204,7 @@ def test_levels_keep_their_query_ids():
     (("a", "b"), (4, 2), {"b": Subset(1), "z": Bernoulli(1)}),                               # unknown level
     (("a", "a"), (4, 2), {"a": Subset(1)}),                                                  # duplicate names
     (("a", "b"), (4,), {"b": Subset(1)}),                                                    # a size missing
-    (("a", "b"), (4, 2), {"b": 1}),                                                          # not a draw
+    (("a", "b"), (4, 2), {"b": 1}),                                                          # not a sample
     (("a", "t", "b"), (4, 2, 2), {"a": Bernoulli(1), "b": Subset(5)}),                       # k above n = 4
     ((), (), {}),                                                                            # no levels
 ])
@@ -223,7 +224,7 @@ def test_counts_name_known_levels_coarse_to_fine():
 
 def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     """GEMM coordinates as the Bernoulli level, the two calls inside each as the checked level, both leaving out
-    the Inputs (checked outside the draws); the IR supplies the counts and the query ids."""
+    the Inputs (checked outside the samples); the IR supplies the counts and the query ids."""
     program = Program(bind(gemm.Gemm, K=32, N=4, **gemm.GEMM_AMPERE))
     coarse_q = G.instances("//GemmCoordinate")
     fine_q = G.each(coarse_q, G.default(32))
@@ -553,7 +554,7 @@ def test_stratified_queries_name_known_strata():
 
 
 def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
-    """A Stratified draw of the checked level: the profile's bound is the law's exact count bound, its stratum bounds each
+    """A Stratified sample of the checked level: the profile's bound is the law's exact count bound, its stratum bounds each
     stratum's own, and its weighted bound the law's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
     for law in SMALL:
         a = IntegrityProfile((Level("unit", "q"),), (law.population,), {"unit": law}, 0.1, drawn={"unit": law.k})
@@ -609,3 +610,36 @@ def test_stratified_json_is_the_profile_law():
     assert SMALL[0].to_json() == {"law": "stratified", "strata": [{"name": "a", "size": 4, "k": 2},
                                                                   {"name": "b", "size": 3, "k": 1},
                                                                   {"name": "c", "size": 3, "k": 0}]}
+
+
+#: `work:3` over a (4 units, work 3) and b (6 units, work 1): W = 18, so k_a = ⌈3·3·4/18⌉ = 2 and k_b = ⌈3·1·6/18⌉ = 1.
+WORK = Work(3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1)))
+
+
+def test_a_work_design_is_the_stratified_one_at_its_k():
+    """A `Work` draw of the checked level reads its bounds off the stratified design at its k_s, and writes the profile's
+    `work` case (Lean `Core.SamplingDesign.work`), its existing cases unchanged."""
+    a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": WORK}, 0.1, drawn={"unit": 3})
+    law = Stratified((Stratum("a", 4, 2), Stratum("b", 6, 1)))
+    assert WORK.stratified == law and a.strata() == law and a.bound() == law.count_bound(0.1)
+    assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
+    assert a.to_json()["levels"][0]["draw"] == {"law": "work", "k": 3, "strata": [
+        {"name": "a", "size": 4, "k": 2, "work": 3, "floor": 1}, {"name": "b", "size": 6, "k": 1, "work": 1, "floor": 1}]}
+    assert [work_k(3, w, n, 18, 1) for w, n in ((3, 4), (1, 6))] == [2, 1]
+    with pytest.raises(ValueError):
+        IntegrityProfile((Level("unit", "q"),), (9,), {"unit": WORK}, 0.1)
+
+
+@pytest.mark.parametrize("k, strata", [
+    (3, ()),                                                                             # no strata
+    (0, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1))),                   # k < 1
+    (11, (WorkStratum("a", 4, 4, 3, 1), WorkStratum("b", 6, 6, 1, 1))),                  # k > population
+    (3, (WorkStratum("a", 4, 1, 0, 1),)),                                                # no work
+    (3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("a", 6, 1, 1, 1))),                   # a name twice
+    (3, (WorkStratum("a", 4, 2, 3, 0), WorkStratum("b", 6, 1, 1, 1))),                   # a floor of 0
+    (3, (WorkStratum("a", 4, 1, 3, 1), WorkStratum("b", 6, 1, 1, 1))),                   # a k not the rule's
+    (3, (Stratum("a", 4, 2),)),                                                          # not a work stratum
+])
+def test_ill_formed_work_designs_are_refused(k, strata):
+    with pytest.raises(ValueError):
+        Work(k, strata)

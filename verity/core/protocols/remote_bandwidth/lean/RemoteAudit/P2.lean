@@ -131,10 +131,10 @@ structure Opening where
   receiptPath : Array ByteArray
 deriving Inhabited
 
-/-- `p2.check`: receipt (i, p)'s opening `o`, position p of pass i under `seed` and `plan`, whose receipt tree's root
-is `root`, for `p` a position of the plan: `none` if it checks, else its first failure. -/
-def checkOpening (reg : Registration) (seed : ByteArray) (plan : Plan) (root : ByteArray) (i p : Nat) (o : Opening) :
-    Option Failure := Id.run do
+/-- `checkOpening` with S_i given (`signs`, `unitSigns seed reg.rows`): a window's check derives each pass's rows once,
+as `p2.Session._check` keeps a pass's `Sketcher`. -/
+def checkOpeningWith (signs : Array ByteArray) (reg : Registration) (seed : ByteArray) (plan : Plan) (root : ByteArray)
+    (i p : Nat) (o : Opening) : Option Failure := Id.run do
   if o.pass ≠ i || o.position ≠ p || o.blocks.size ≠ UNIT_BLOCKS || o.blocks.any (·.size ≠ BLOCK_BYTES)
       || o.paths.size ≠ UNIT_BLOCKS || o.paths.any (·.any (·.size ≠ DIGEST_BYTES)) || o.leafSalt.size ≠ SALT_BYTES
       || o.receiptPath.any (·.size ≠ DIGEST_BYTES) then
@@ -145,7 +145,13 @@ def checkOpening (reg : Registration) (seed : ByteArray) (plan : Plan) (root : B
   for b in [0:UNIT_BLOCKS] do
     if !reg.checkPath (UNIT_BLOCKS * g + b) o.blocks[b]! o.paths[b]! then return some .payloadPath
   let unit := o.blocks.foldl (· ++ ·) ByteArray.empty
-  if unitReceipt seed g (int32s (unitSketch (unitSigns seed reg.rows) unit)) != y then return some .receipt
+  if unitReceipt seed g (int32s (unitSketch signs unit)) != y then return some .receipt
   return none
+
+/-- `p2.check`: receipt (i, p)'s opening `o`, position p of pass i under `seed` and `plan`, whose receipt tree's root
+is `root`, for `p` a position of the plan: `none` if it checks, else its first failure. -/
+def checkOpening (reg : Registration) (seed : ByteArray) (plan : Plan) (root : ByteArray) (i p : Nat) (o : Opening) :
+    Option Failure :=
+  checkOpeningWith (unitSigns seed reg.rows) reg seed plan root i p o
 
 end RemoteAudit.P2

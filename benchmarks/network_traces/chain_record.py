@@ -145,7 +145,8 @@ HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted is conditional: i
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
-                    "answer) beside each link-window's N2 registration, and this report has neither")
+                    "answer) beside each link-window's N2 registration and one-stage v2 proof, and this report has "
+                    "neither")
 #: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkCheck.Period`'s)
 PERIOD_TAG = "verity-network-certifier/period/v0"
 
@@ -657,11 +658,14 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
     the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
     (`scan_zk.CLASS`) and its draw of every unit. The per-period form is `NetTiming.Guarantees.PeriodLeakAccepted`'s
-    count, the pooled form `HorizonLeakAccepted`'s at q = 1 (Fmax = ⌈ln(1/δ)⌉), each term in the
-    generator reading of the scan's statement: log2 #Ss = 0, the fail cell's
-    position log2(egress_cells + 1) a connection, the scan's ``prog`` rows its free inputs (T·NP a link-window as
-    registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
-    every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
+    count, the pooled form `HorizonLeakAccepted`'s at q = 1 (Fmax = ⌈ln(1/δ)⌉), each term in the generator reading of
+    the scan's statement: log2 #Ss = 0, the fail cell's position log2(egress_cells + 1) a connection, the
+    link-window's free inputs, which the scan's slot entries carry (NR·T / EVERY entries of NE bits a link-window as
+    registered, `scan_zk.entries_of`; an entry's 33 + KO·IDB bits a request if ``prog`` were an input only at its
+    anchored entries, `ingress_scan.entry_layout`; tied, the entries are a compute audit's `SlotEntry_v1` outputs, so
+    their bits are the tied audit's free inputs, which the rows form's K charges to the link-window,
+    `NetworkCheck.Period.tiedAudits`), no faulty term with every unit drawn, b = NS + NV, and Dj = 1. The period's
+    link-windows and requests scale the run's own."""
     import scan_zk as SZ
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
@@ -675,12 +679,13 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     if drawn != units:
         raise SystemExit(f"leak: the scan drew {drawn} of {units} units; K's faulty terms are 0 only with every unit "
                          f"drawn (scan_zk --draw {units})")
-    NS, NP, NV = IS.state_bits(cls), IS.prog_bits(cls), IS.view_bits(cls)
+    NS, NE, NV, entries = IS.state_bits(cls), IS.entry_bits(cls), IS.view_bits(cls), SZ.entries_of(cls, 1, T)
     cap = math.log2(params.egress_cells + 1)
-    anchored = 32 + cls.KO * cls.IDB
+    anchored = sum(w for _, w in IS.entry_layout(cls))
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
-    free = {"registered": {"link_window": T * NP, "request": 0}, "anchors": {"link_window": 0, "request": anchored}}
+    free = {"registered": {"link_window": entries * NE, "request": 0},
+            "anchors": {"link_window": 0, "request": anchored}}
 
     def count(link_windows: float, delta: float | None, reading: str) -> float:
         requests = rate * link_windows
@@ -704,7 +709,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                              "per_link_window": count(1, None, reading)})
     return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
             "class": {k: getattr(cls, k) for k in IS.STATICS},
-            "widths": {"NS": NS, "NP": NP, "NV": NV, "egress_row": 8 * cls.egress.R * cls.B},
+            "widths": {"NS": NS, "NE": NE, "entries": entries, "NV": NV, "egress_row": 8 * cls.egress.R * cls.B},
             "draw": {"units": units, "drawn": drawn},
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
@@ -717,17 +722,22 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                                    "and P2"},
             "conditions": [
                 "the generator reading of the scan's statement (each unit's registered rows its boundary values): "
-                "a claim, with lean and Daniel",
+                "a claim, not yet a locked guarantee",
                 "log2 #Ss = 0 only once the schedule's digest binds each connection's admission bucket and lane, "
                 "and the server can't move an admission (not met)",
                 f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
                 "buckets tell a receiver no more than an idle one",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
+                "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
+                "sum",
+                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so its T·NP bits are "
+                "the tied audit's free inputs, which Lean's rows-form K charges to the link-window's term "
+                "(tiedAudits), as this K does"]}
 
 
-#: each reading of the scan's free inputs, as the report labels it
+#: each reading of the link-window's free inputs (the scan's `prog`, the tied audit's free inputs), as the report
+#: labels it
 READINGS = {"registered": "`prog` as registered today (the record's K)",
             "anchors": "`prog` only at its anchored entries (conditional on the generator-form lowering)"}
 
@@ -787,7 +797,8 @@ def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[
 def decide_period(case: dict) -> dict:
     """``network-period check`` on ``case``: certifier/v0's answer by its verifier (`NetworkCheck.Period`, the
     executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as `block_certifier.check` decides a
-    period."""
+    period: one-stage v2 run on each link-window's proof, the files it names the case's ``blobs`` (paths, read when this
+    runs)."""
     from block_certifier import check
 
     exe = os.environ.get("VERITY_NETWORK_PERIOD_EXE")
@@ -802,7 +813,8 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     link-window's naming its index), so each link-window it registers must be one the chain certified (``cert``'s
     rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by link-window), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
-    that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
+    that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case, one-stage
+    v2 on each link-window's proof under its registration (whose served domain names the run and the link). The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
     from verity.ml.commitments.identity import tagged_sha512

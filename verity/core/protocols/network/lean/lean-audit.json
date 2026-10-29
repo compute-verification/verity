@@ -3,7 +3,7 @@
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
-  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.PeriodMain": "the network-period executable's entry point: Core.BlobProtocol.main of NetworkCheck.Period.protocol, or each link-window's opening alone for the tests (opening, NetworkCheck.Period.openings), audited under NetworkCheck",
   "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) and of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), audited under NetworkCheck"
  },
  "runs": {
@@ -30,9 +30,20 @@
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Period": {
-   "imports": ["NetworkCheck.Check", "CoreProtocol.Profile", "Flock.Program", "Flock.Public"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "CoreProtocol.Blobs",
+    "CoreProtocol.Profile",
+    "SampledProofs.OneStageZk",
+    "SampledProofs.Partition",
+    "Flock.Program",
+    "Flock.Public",
+    "NciCheck.Desc",
+    "Flock.WindowRecord"
+   ],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms) and C-Flock's frame-v3 hash (the rows' domain), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, N2's link-window public row and opening, the core interface with its blobs and integrity profile (to read one-stage's answers), one-stage v2 (to run it on each link-window's proof), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
@@ -46,7 +57,7 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
+  "Flock": "C-Flock is excepted until its spec is extracted: the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
  },
  "guarantees": {
   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
@@ -219,6 +230,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+  "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
  }
 }

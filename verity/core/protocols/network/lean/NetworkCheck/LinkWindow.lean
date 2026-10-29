@@ -145,14 +145,14 @@ private def bytesOf (j : Json) (ctx : String) : V ByteArray := do Flock.unhex (�
 
 private def natsOf (j : Json) (ctx : String) : V (Array Nat) := do (← asArr j ctx).mapM (asNat · ctx)
 
-private def gridOf (j : Json) : V NetworkCheck.Params := do
+def gridOf (j : Json) : V NetworkCheck.Params := do
   let field (k : String) : V Nat := do
     let v ← nat j k "grid"
     unless 1 ≤ v ∧ v < 2 ^ 32 do throw s!"grid.{k} is a u32 of at least 1, not {v}"
     pure v
   pure ⟨← field "buckets", ← field "allocation", ← field "frame_bytes", ← field "bucket_ms", ← nat j "queue_capacity" "grid"⟩
 
-private def endOf (j : Json) (ctx : String) : V End := do
+def endOf (j : Json) (ctx : String) : V End := do
   let grid ← gridOf (← get j "grid" ctx)
   let profile ← (opt j "profile").mapM fun p => do (← asArr p s!"{ctx}.profile").mapM (natsOf · s!"{ctx}.profile")
   pure ⟨grid, profile⟩

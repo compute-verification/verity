@@ -111,7 +111,7 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
         assert composed["joint_horizon"]["at"]["1/1000000"]["not_established"] == ["certifier"]
 
 
-def test_check_hands_network_period_the_cases_three_files_and_reads_its_last_line(monkeypatch):
+def test_check_hands_network_period_the_cases_files_and_blobs_and_reads_its_last_line(monkeypatch, tmp_path):
     case = {"params": {"windows": 1, "first": 0, "key": "ab"}, "commitment": b'{"audits":[]}'.hex(),
             "evidence": b"\x00\x01".hex()}
     accept, reject = {"verdict": "accept", "public": {"K": 7}}, {"verdict": "reject", "reason": "a window"}
@@ -131,3 +131,8 @@ def test_check_hands_network_period_the_cases_three_files_and_reads_its_last_lin
         said.update(rc=rc, out=out)
         with pytest.raises(RuntimeError, match=f"network-period check exited {rc}: the check's stderr"):
             BC.check("network-period", case)
+    (blob := tmp_path / "w001-pub-1.bin").write_bytes(b"pub")
+    said.update(rc=0, out=json.dumps(accept))
+    assert BC.check("network-period", case | {"blobs": [blob]}) == accept
+    assert seen[-1][1:] == (["params.json", "commitment.bin", "evidence.json", "w001-pub-1.bin"],
+                            [canonical_json(case["params"]), b'{"audits":[]}', b"\x00\x01", b"pub"])

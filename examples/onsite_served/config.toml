@@ -1,0 +1,134 @@
+# The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each
+# machine with `verity run THIS --on MACHINE --bindings FILE` (examples/onsite_served/README.md); the deploy
+# bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.
+format = "verity/config/v0"
+protocols = ["sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe"]
+
+[workload]
+name = "served-window"
+
+[workload.params]
+model = "verity-int8/Llama-3.2-1B-INT8"
+revision = "15b0976d400d796ee589e7737d03a919526bf800"
+precision = "verity_int8"
+slots = 4
+window-steps = 16
+load = "varied"
+
+[service]
+law = "subset:1"
+
+[program]
+commit = "b041d20d6f80892ab43dc88994e41c9f4b3a4002"
+
+[params."verity/pous/p2/v4/run"]
+challenges = 320
+
+[[party]]
+name = "workers"
+machine = "prover-node"
+principal = "developer"
+
+[[party]]
+name = "challenger"
+machine = "gate-host"
+principal = "auditor"
+
+[[party]]
+name = "firewall"
+machine = "prover-node"
+principal = "developer"
+
+[[party]]
+name = "verifier"
+machine = "auditor-host"
+principal = "auditor"
+
+[[party]]
+name = "memory-challenger"
+machine = "auditor-host"
+principal = "auditor"
+
+[[party]]
+name = "prover"
+machine = "prover-node"
+principal = "developer"
+
+[[party]]
+name = "bandwidth-verifier"
+machine = "auditor-host"
+principal = "auditor"
+
+[[party]]
+name = "network-certifier"
+machine = "gate-host"
+principal = "auditor"
+
+[[channel]]
+from = "challenger"
+to = "verifier"
+messages = ["Challenger"]
+
+[[channel]]
+from = "verifier"
+to = "challenger"
+messages = ["Done"]
+
+[[channel]]
+from = "firewall"
+to = "verifier"
+messages = ["Firewall"]
+
+[[channel]]
+from = "workers"
+to = "verifier"
+messages = ["Registration", "H1Record"]
+after = ["H1Coins"]
+
+[[channel]]
+from = "challenger"
+to = "workers"
+messages = ["H1Coins"]
+
+[[channel]]
+from = "prover"
+to = "memory-challenger"
+messages = ["Setup", "Response", "FillAck", "Answer"]
+
+[[channel]]
+from = "memory-challenger"
+to = "prover"
+messages = ["Challenge", "Fill", "FillDone", "Read", "End"]
+
+[[channel]]
+from = "memory-challenger"
+to = "verifier"
+messages = ["SignedRun", "WipeReport"]
+after = ["Response", "End"]
+
+[[channel]]
+from = "prover"
+to = "bandwidth-verifier"
+messages = ["Register", "Root", "Openings"]
+
+[[channel]]
+from = "bandwidth-verifier"
+to = "prover"
+messages = ["Hold", "Run", "Open", "End"]
+after = ["Register"]
+
+[[channel]]
+from = "bandwidth-verifier"
+to = "verifier"
+messages = ["BandwidthAnswer"]
+after = ["Openings"]
+
+[[channel]]
+from = "network-certifier"
+to = "workers"
+messages = ["out-opening"]
+
+[[channel]]
+from = "network-certifier"
+to = "verifier"
+messages = ["out-record"]

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# The scan's per-sampling-block answers held by verity/certifier/v0's rows form on a CPU machine: two relay
+# The scan's per-sampling-block answers through verity/certifier/v0's rows form, which refuses each at the scan's
+# answer until one-stage v2 runs the scan (scan_period.py), on a CPU machine: two relay
 # rehearsals at the test class's schedule (scan_zk.sh's SC_REHEARSE), honest and void (the fake answering past the
 # relay's delay, SC_LATE_MS: every connection fails late), each's sampling block 0 proved (a group of 1: the rows
 # form reads a registration of one sampling block's 2T proof blocks), every proof block drawn; then scan_period.py's

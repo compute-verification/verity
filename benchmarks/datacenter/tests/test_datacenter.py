@@ -207,7 +207,7 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
 
 
 def test_work_is_credited_in_ands_and_takes_time_by_kind_at_its_rate():
-    """Compute credit is the declared circuit's AND count under one pinned lowering, with the
+    """Compute credit is the registered circuit's AND count under one pinned lowering, with the
     multiply-adds reported by format beside it. A device's rate depends on the operand format, so each primitive's
     gates are work of its kind, timed at the block's rate for it. Kinds on one facet (the tensor cores' `mac:*`) add
     up; the roundings on the CUDA cores run beside them, so the block's busy share is the busiest
@@ -273,7 +273,7 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
 
 def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_in_one():
     """Memory accounting, review 4: registration puts a copy of a registered value in every block that reads it, as
-    serving holds its weights and the remote audit registers each copy, so a weight both stages read never crosses. Held
+    serving holds its weights and PoUB registers each copy, so a weight both stages read never crosses. Held
     in one copy instead (named in `place`), it is moved to the other block before it is read, and that crossing is
     bandwidth like any other: 512 more frames on a's uplink, which the profile declares and the run shows."""
     def shared(B, x, w):

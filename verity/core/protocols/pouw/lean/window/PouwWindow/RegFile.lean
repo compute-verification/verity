@@ -18,7 +18,7 @@ accepted produced record alone:
 * `want?`: statement `k`'s data ports at those roots and the unit's placement `place` (`ownOf`: each value's table and
   base row), where the verifier holds every table they read.
 * `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each port
-  `readFull` names (A, B and partials rows, by layout value) marked `read_in_full`, then the known ports, and `complete`.
+  `readFull` names (A, B and partials rows, by layout value) marked `read_in_full`, then the known ports.
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
   as flock-verify parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
   ports (`checkOwn`). `leafOwnCmd` runs it on files with each value its own table (`selfPlace`), then holds each of the
@@ -60,7 +60,7 @@ partials first, so a registered value of that name is not read. -/
 def roots? (registration produced : Json) (lanes words : Nat) (schema : String) :
     Except String (List (String × Flock.Registered.Port)) := do
   let program ← Flock.J.str registration "program" "the registration"
-  let digest ← SampledProofs.Record.registrationDigest registration
+  let digest ← Flock.WindowRecord.digestHex registration
   let dom ← SampledProofs.Produced.domain program PARTIALS words lanes 16 digest
   let some p := (← Flock.J.arr produced "produced" "the produced record").find? fun e =>
       (e.getObjValAs? String "value").toOption == some PARTIALS
@@ -100,18 +100,17 @@ def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
 
 /-- **Statement `k`'s `--registered` file** (`leaf_lanes.registered_file` at `leaf_lanes.reads`): its data ports at the
 verifier's roots and the unit's placement (`want?`), each port `readFull` names (a read of a `fullValue`, by its
-layout value, whatever table it is placed in) marked `read_in_full`, then the known ports `known`, and `complete` where
-it is set. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
+layout value, whatever table it is placed in) marked `read_in_full`, then the known ports `known`: every port of the
+statement's circuit, as flock-verify's `Registered.checkComplete` holds it to. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
 `leaf_lanes.registered_file` writes it (`registered.READS`): every port reads from unit 0 (`readsFrom := 0`). -/
 def fileOf? (rs : List (String × Flock.Registered.Port)) (place : String → String × Nat) (T : Tile) (k : Option Nat)
-    (known : List (String × Json)) (complete : Bool) : Except String Json := do
+    (known : List (String × Json)) : Except String Json := do
   let ps ← want? rs place T k
   if let some (nm, _) := known.find? fun (nm, _) => ps.any (·.name == nm) then
     throw s!"port {nm} is both a read and known"
   let full := readFull T k
-  pure <| Json.mkObj ([("format", Json.str Flock.Registered.FORMAT_V0),
-    ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (full.contains p.name))) ++ known))] ++
-    (if complete then [(Flock.Registered.COMPLETE_KEY, Json.bool true)] else []))
+  pure <| Json.mkObj [("format", Json.str Flock.Registered.FORMAT_V0),
+    ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (full.contains p.name))) ++ known))]
 
 /-- **The leaf verifier's check of statement `k`'s file `file`** against the accepted registration and produced record:
 the tile's statement exists (`lane?`, `combine?`), and the file, parsed as flock-verify parses it, has one read at each
