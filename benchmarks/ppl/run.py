@@ -132,8 +132,8 @@ def cmd_eval(a) -> int:
     needs_cal = any(x.needs_calib for x in arms)
     ids, cal, wrec = build_windows(a.model, a.set, a.ctx, Path(a.data), needs_cal)
     snap = snapshot(a.model)
-    gpus = a.gpus or models.get(a.model)["gpus"]
-    devs = visible_gpus()
+    gpus = 1 if a.device == "cpu" else a.gpus or models.get(a.model)["gpus"]
+    devs = [""] if a.device == "cpu" else visible_gpus()
     if len(devs) < gpus:
         raise SystemExit(f"{gpus} GPUs asked, {len(devs)} visible")
     parts = __import__("engine").shards(len(ids), gpus)
@@ -147,7 +147,7 @@ def cmd_eval(a) -> int:
         for i, part in enumerate(parts):
             task = {"snapshot": str(snap), "ids": str(tmp / "ids.npy"), "cal": str(tmp / "cal.npy") if cal is not None else None,
                     "windows": part, "arms": a.spec, "plugins": a.plugin or [], "seeds": list(seeds),
-                    "out": str(tmp / f"shard{i}"), "device": "cuda"}
+                    "out": str(tmp / f"shard{i}"), "device": a.device}
             (tmp / f"task{i}.json").write_text(json.dumps(task))
             env = {**os.environ, "CUDA_VISIBLE_DEVICES": devs[i]}
             log = open(out / f"shard{i}.log", "w")
@@ -370,6 +370,8 @@ def main(argv: list[str]) -> int:
         if out:
             q.add_argument("--out", required=True)
             q.add_argument("--data", default=str(DATA))
+            q.add_argument("--device", choices=("cuda", "cpu"), default="cuda",
+                           help="cpu: one shard on the host's cores, for a model small enough (Llama-3.2-1B)")
 
     run_flags(sub.add_parser("eval"), True)
     q = sub.add_parser("submit")

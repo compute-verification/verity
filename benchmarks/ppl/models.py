@@ -14,6 +14,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 MODELS = {
+    "llama-3.2-1b": {"repo": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da",
+                     "tokenizer": "llama3", "gpus": 1},
     "llama-3.1-8b": {"repo": "unsloth/Llama-3.1-8B", "revision": "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814",
                      "tokenizer": "llama3", "gpus": 1},
     "qwen2.5-7b": {"repo": "Qwen/Qwen2.5-7B", "revision": "d149729398750b98c0af14eb82c78cfe92750796",

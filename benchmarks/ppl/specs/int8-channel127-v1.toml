@@ -1,0 +1,4 @@
+description = "the int8 W8A8 linears vLLM serves under recipe verity-int8-channel127/v1 (Llama-3.2-1B's stock int8): weights one scale per output row, activations one per token, rounded to ±127, no rotation; lm_head and attention bf16"
+
+[[linear]]
+step = "int8"
