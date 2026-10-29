@@ -98,6 +98,7 @@ EXPORT_WORD = {"fold": 189, "stg": 848}             # extra units a word out of 
 COIN_CALL_US = 9.3                                  # a call's coin expansion at its latency floor
 CALLS = 4 * N.LAYERS
 UNIT_OUT_BYTES = 262_144 // 8                       # a proof block's outputs at the largest public size class
+LEVELS_A_LAUNCH = 10                                # native_rows' rows_levels_kernel folds up to ten levels a launch
 BUDGET = 0.01
 TARGET = 0.001
 T2_BAR = 100
@@ -145,6 +146,9 @@ def instance_prices(sass: dict, rows: S.Rows, mask_sass: dict | None = None) -> 
         "unforced, b1 mask (estimate)": {p: prf[p] + c[p] + b1[p] for p in w1c},
         "forced (a), b1 mask (estimate)": dict(b1),
         "forced (a), SHA-512 mask (e2)": {"floor": 0.0, "alone": 0.0, "time": 0.0},
+        # b = x ⊕ SHA-512(ks ‖ salt_w ‖ pos) in place of b ‖ c: one compression a public digest past the window's midstate
+        "pad, uncredited": {**w1c, "time": r["c_ns"] * mt},
+        "pad, credited": {"floor": 0.0, "alone": 0.0, "time": 0.0},
         **by_best,
         "compression": {**w1c, "time": r["c_ns"] * mt},
     }
@@ -172,20 +176,32 @@ def salts_per_mac(layout: str, rows: int, b: dict, R: int) -> dict:
     return {"forward": 1 / fwd}
 
 
-def opening_ands(layout: str, b: dict, rows: int, R: int, forced: bool) -> dict:
-    """In-circuit ANDs to open what a drawn unit reads of one instance, beyond the bytes it reads itself."""
-    # c, and when forced the PRF and ks's own opening (its inner digest and c; the verifier computes its leaf)
-    extra = 2 * S.ANDS_COMPRESSION + (3 * S.ANDS_FROM_8 + 3 * S.ANDS_COMPRESSION if forced else 0)
+OPENINGS = ("unforced", "forced (a)", "pad")
+
+
+def opening_ands(layout: str, b: dict, rows: int, R: int, mode: str) -> dict:
+    """In-circuit ANDs for a drawn unit to open its words and its A rows against their instances, beyond the bytes it
+    reads itself. Each instance costs c (unforced), c and the PRF (forced (a)) or one pad compression (pad); (a) and the
+    pad also open ks once (its inner digest and c; the verifier computes its leaf), and the pad computes the window's
+    midstate once. Under L1 a call's A rows are one instance and a forward's words another; under L2 both sit in the
+    forward's (or the window's) one tree."""
+    gadget = {"unforced": 2 * S.ANDS_COMPRESSION, "forced (a)": 2 * S.ANDS_COMPRESSION + 3 * S.ANDS_FROM_8,
+              "pad": S.ANDS_COMPRESSION}[mode]
+    once = {"unforced": 0, "forced (a)": 3 * S.ANDS_COMPRESSION, "pad": 4 * S.ANDS_COMPRESSION}[mode]
     if layout == "L0":
-        return {"words row, whole": S.blocks(R) * S.ANDS_COMPRESSION + extra,
-                "words row over the unit's own outputs": max(0, S.blocks(R) - S.blocks(UNIT_OUT_BYTES)) * S.ANDS_COMPRESSION + extra}
-    big = max(rows * c["words_row"] for c in b["calls"].values())
-    depth = math.ceil(math.log2(max(2, big / UNIT_OUT_BYTES)))
-    if layout.startswith("L2"):
-        # up from the call's subtree to the instance: the forward's calls, and for a window its forwards
-        span = CALLS + 1 if layout == "L2" else (CALLS + 1) * S.CENSUS["window s"] / WINDOW_STEP_S
-        depth += math.ceil(math.log2(span))
-    return {"path depth": depth, "path and gadget": 2 * depth * S.ANDS_COMPRESSION + extra}
+        return {"words row, whole": S.blocks(R) * S.ANDS_COMPRESSION + gadget + once,
+                "words row over the unit's own outputs":
+                    max(0, S.blocks(R) - S.blocks(UNIT_OUT_BYTES)) * S.ANDS_COMPRESSION + gadget + once}
+    fwd_words = rows * N.LAYERS * sum(c["words_row"] for c in b["calls"].values())
+    words = math.ceil(math.log2(max(2, fwd_words / UNIT_OUT_BYTES)))
+    a = math.ceil(math.log2(max(2, rows)))
+    if layout == "L1":
+        return {"words path depth": words, "A path depth": a,
+                "paths and gadgets": 2 * (words + a) * S.ANDS_COMPRESSION + 2 * gadget + once}
+    up = math.ceil(math.log2((CALLS + 1) * (1 if layout == "L2" else S.CENSUS["window s"] / WINDOW_STEP_S)))
+    words, a = words + up, a + up
+    return {"words path depth": words, "A path depth": a,
+            "paths and gadget": 2 * (words + a) * S.ANDS_COMPRESSION + gadget + once}
 
 
 def frame_leaf(n: int) -> int:
@@ -200,18 +216,29 @@ def levels(leaves: int, arity: int) -> int:
     return d
 
 
-def seed_path(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> int:
-    """Compressions one after another from a call's A (rows of k bytes) to its first noise block under L1: A's leaf digests
-    (a row-seg row: its segments side by side, then their outer hash, then the subtree's leaf; a flat SHA-512 row and its
-    leaf; or, for an int `row`, segments of that many bytes as the subtree's leaves), the subtree (NODE[arity] a level),
-    the instance's leaf (its salt, c and M_key·y precomputed), the seed past its fixed prefix, and one noise block."""
+def a_leaves(rows: int, k: int, row: str | int) -> tuple[int, int]:
+    """A call's subtree under L1 (rows of k bytes): one leaf's compressions one after another (a row-seg row: its segments
+    side by side, then their outer hash, then the subtree's leaf; a flat SHA-512 row and its leaf; or, for an int `row`,
+    segments of that many bytes as the subtree's leaves) and the leaves."""
     if row == "row-seg":
-        leaf, leaves = 9 + -(-(64 * -(-k // 1024) + 17) // 128) + frame_leaf(64), rows
-    elif row == "flat":
-        leaf, leaves = S.blocks(k) + frame_leaf(64), rows
-    else:
-        leaf, leaves = frame_leaf(row), rows * -(-k // row)
+        return 9 + -(-(64 * -(-k // 1024) + 17) // 128) + frame_leaf(64), rows
+    if row == "flat":
+        return S.blocks(k) + frame_leaf(64), rows
+    return frame_leaf(row), rows * -(-k // row)
+
+
+def seed_path(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> int:
+    """Compressions one after another from a call's A to its first noise block under L1: A's leaf digests, the subtree
+    (NODE[arity] a level), the instance's leaf (its salt, c and M_key·y precomputed), the seed past its fixed prefix, and
+    one noise block."""
+    leaf, leaves = a_leaves(rows, k, row)
     return leaf + NODE[arity] * levels(leaves, arity) + HM96_LEAF + 2 + 1
+
+
+def seed_launches(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> int:
+    """Launches one after another on a call's seed path: A's leaf digests, then the subtree LEVELS_A_LAUNCH levels a launch
+    (the instance's leaf and the seed ride on the last)."""
+    return 1 + -(-levels(a_leaves(rows, k, row)[1], arity) // LEVELS_A_LAUNCH)
 
 
 def v4(price: dict, lat: dict | None, sizes: list[int]) -> dict:
@@ -242,7 +269,8 @@ def v4(price: dict, lat: dict | None, sizes: list[int]) -> dict:
                     span = rows_l if "over" in g or case == "V4 dense" else m_e
                     tot = gemm = 0.0
                     for n, k in lins.values():
-                        chain = seed_path(math.ceil(span), k) * lat["tree_ns"] * 1e-9 + lat["launch_us"] * 1e-6
+                        chain = (seed_path(math.ceil(span), k) * lat["tree_ns"] * 1e-9
+                                 + seed_launches(math.ceil(span), k) * lat["launch_us"] * 1e-6)
                         g_s = max(rows_l * n * k / SHEET_MAC_S, n_exp * n * k / HBM_B_S)
                         tot, gemm = tot + g_s + chain, gemm + g_s
                     e["seed_path"][g] = {"us": (tot - gemm) * 1e6, "gemm_us": gemm * 1e6, "t2_floor_over_gemm": tot / gemm}
@@ -340,7 +368,7 @@ def main() -> None:
                         **{f: {p: n * v for p, v in pr.items()} for f, pr in price.items() if f not in ("parts", "compression")},
                         "by part, unforced floor": {k: v * price["unforced"]["floor"] for k, v in sp.items()},
                         "ands_of_stock": n * HIDING_ANDS / S.ANDS_MAC}
-                    pt["opening_ands"][key] = {f: opening_ands(layout, b, real, R, f) for f in (False, True)}
+                    pt["opening_ands"][key] = {f: opening_ands(layout, b, real, R, f) for f in OPENINGS}
             need = {p: b["words_bpm"] * v / TARGET for p, v in price["unforced"].items()}
             need_a = {p: b["words_bpm"] * v / TARGET for p, v in price["forced (a)"].items()}
             pt["flat rows for words at the target"] = {
@@ -350,21 +378,25 @@ def main() -> None:
             chain = None
             if lat:
                 pt["seed_path"] = {}
-                launches = CALLS * lat["launch_us"] * 1e-3
                 for lay, (row, arity) in CHAINS.items():
                     comps = N.LAYERS * sum(seed_path(real, k, row, arity) for _, k in N.LINEARS.values())
-                    v: dict = {"compressions_a_forward": comps, "compressions_a_call": comps / CALLS, "by_latency": {}}
+                    n_launch = N.LAYERS * sum(seed_launches(real, k, row, arity) for _, k in N.LINEARS.values())
+                    launches = n_launch * lat["launch_us"] * 1e-3
+                    v: dict = {"compressions_a_forward": comps, "compressions_a_call": comps / CALLS,
+                               "launches_a_forward": n_launch, "by_latency": {}}
                     for ln, ns in lat["per_compression_ns"].items():
                         ms = comps * ns * 1e-6
-                        v["by_latency"][ln] = {"ms": ms, "ms_with_a_launch_a_call": ms + launches, "t2_floor": {
+                        v["by_latency"][ln] = {"ms": ms, "ms_with_launches": ms + launches, "t2_floor": {
                             eng: (st + ms + launches) / st for eng, (st, _g, _s) in N.ENGINES.get(pname, {}).items()}}
                     pt["seed_path"][lay] = v
-                chain = pt["seed_path"]["row-seg rows, binary (L1)"]["by_latency"]["measured"]["ms_with_a_launch_a_call"]
+                l1 = pt["seed_path"]["row-seg rows, binary (L1)"]
+                chain = l1["by_latency"]["measured"]["ms_with_launches"]
             pt["t2"] = t2(design, b, pname, real, m, rates, chain)
             if lat:
+                per_call = l1["launches_a_forward"] / CALLS * lat["launch_us"]
                 for e in pt["t2"]["engines"].values():
                     e["compressions a call for the seed path's T2 floor"] = {
-                        f"≤ {x}, {ln}": max(0.0, ((x - 1) * e["stock_ms"] * 1e3 / CALLS - lat["launch_us"]) / (ns * 1e-3))
+                        f"≤ {x}, {ln}": max(0.0, ((x - 1) * e["stock_ms"] * 1e3 / CALLS - per_call) / (ns * 1e-3))
                         for x in (2, 1.1) for ln, ns in lat["per_compression_ns"].items()}
             hash_w1 = {k: {p: b["bpm"] * cb * w for p, w in (("floor", sass["w1_floor"]), ("alone", sass["w1_alone"]))}
                        for k, cb in comps_byte.items()}
@@ -380,9 +412,12 @@ def main() -> None:
             # each layout's compressions an activation row a layer, and whether its bulk hashing reads a per-call value: a row
             # digest reads only the row, so a repeated A_j (or row) reuses it whatever wraps it; a frame-v3 leaf reads its
             # domain id, rank and position, so leaves of the call's own domain (bound to pouw.salt, the forward and the call)
-            # differ in every call and every row
+            # differ in every call and every row. Binding (pouw.salt, forward, call, row) into each row-seg segment's prefix
+            # block, which the committer compresses for every segment anyway, does the same at no compression
             a_comps = {"L0 (row-seg, a leaf a row)": (sum(segs(k) + HM96_LEAF + TREE_LEAF for _, k in N.LINEARS.values()), False),
                        "L1 (row-seg rows in the call's subtree)": (sum(segs(k) + TREE_LEAF for _, k in N.LINEARS.values()), False),
+                       "L1 (row-seg rows, the call and row bound in each segment's prefix block)":
+                           (sum(segs(k) + TREE_LEAF for _, k in N.LINEARS.values()), True),
                        "L1 (flat SHA-512 rows in the call's subtree)": (sum(S.blocks(k) + TREE_LEAF for _, k in N.LINEARS.values()), False),
                        **{f"L1 ({seg} B frame-v3 segment leaves of the call's domain)":
                           (sum(-(-k // seg) * (frame_leaf(seg) + NODE[2]) for _, k in N.LINEARS.values()), True)
@@ -414,7 +449,8 @@ def main() -> None:
                 f: {sc: {p: {"share_floor": h[f]["floor"], "ands_floor": mac * S.ANDS_MAC * h[f]["floor"],
                              "ands_alone": mac * S.ANDS_MAC * h[f]["alone"]}
                          for p, mac in ps.items()} for sc, ps in scopes.items()}
-                for f in ("unforced", "forced (a)", "unforced, unrolled mask", "forced (a), unrolled mask") if f in h}
+                for f in ("unforced", "forced (a)", "unforced, unrolled mask", "forced (a), unrolled mask", "pad, uncredited")
+                if f in h}
     pt = out["designs"]["ssn_1l"]["points"]["T 8,192"]
     for name, share in (("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"]),
                         ("hashing before the noise, L1 1 KiB segment leaves of the call's domain",
@@ -431,7 +467,7 @@ def main() -> None:
           f"L1 time a byte {l1_ratio:.4f} of 16 KiB rows'; committer's build over the best {excess['registers']} registers, "
           f"{excess['floor']:,.0f} / {excess['alone']:,.0f} W1 a compression")
     shown = [f for f in ("unforced", "unforced, unrolled mask", "unforced, b1 mask (estimate)", "forced (a)",
-                         "forced (a), unrolled mask") if f in p]
+                         "forced (a), unrolled mask", "pad, uncredited") if f in p]
     for design, d in out["designs"].items():
         bb = d["bytes"]
         print(f"\n{design}: α {bb['alpha']:.4f}, words {bb['words_bpm']:.5f} + A {bb['a_bpm']:.6f} = {bb['bpm']:.5f} B a useful MAC")
@@ -441,6 +477,10 @@ def main() -> None:
                 print(f"    hiding {key:<16} " + "; ".join(
                     f"{f} {h[f]['floor']:.4%} / {h[f]['alone']:.4%}" + (f" / {h[f]['time']:.4%}" if "time" in h[f] else "")
                     for f in shown) + f"; ANDs {h['ands_of_stock']:.5%}")
+            for key in ("L0 16 KiB rows", "L1", "L2", "L2, a window"):
+                o = pt["opening_ands"][key]
+                print(f"    opening ANDs {key:<15} " + "; ".join(
+                    f"{mode} " + ", ".join(f"{k} {v:,.0f}" for k, v in o[mode].items()) for mode in OPENINGS))
             t = pt["t2"]
             for eng, e in t["engines"].items():
                 cells = "; ".join(f"{rn} {x['serial']:.1f}/{x['fused']:.1f}/{x['overlap']:.1f}" for rn, x in e.items()
@@ -463,8 +503,8 @@ def main() -> None:
                       + (f", {v['ms']:.2f} ms ({v['of_stock_step']:.1%} of the stock step)" if v["of_stock_step"] else ""))
             for k, v in pt.get("seed_path", {}).items():
                 print(f"    seed path, {k}: {v['compressions_a_forward']} compressions a forward one after another "
-                      f"({v['compressions_a_call']:.2f} a call); " + "; ".join(
-                          f"{ln} {x['ms']:.2f} ms ({x['ms_with_a_launch_a_call']:.2f} with a launch a call)"
+                      f"({v['compressions_a_call']:.2f} a call) and {v['launches_a_forward']} launches; " + "; ".join(
+                          f"{ln} {x['ms']:.2f} ms ({x['ms_with_launches']:.2f} with its launches)"
                           + "".join(f", T2 floor {eng} {f:.2f}" for eng, f in x["t2_floor"].items())
                           for ln, x in v["by_latency"].items()))
             for eng, e in pt["t2"]["engines"].items():
