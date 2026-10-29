@@ -1,4 +1,4 @@
-// ssn_1l's lane layout (ssn.cu's header states it), xu's row and column sources, and the fold: the one definition that
+// ssn_1l's lane layout (ssn.cu's header states it), the fold's row and column sources, and the fold: the one definition that
 // ssn.cu's operands, forming check and epilogue (xu_fold) and the CPU check (cpu_check.cc) read. Plain C++; under nvcc
 // the fold is also a device function.
 #pragma once
@@ -19,6 +19,7 @@ static int g_lw[3] = {1, 1, 1};  // BLC_W: A' in the three lane-coin lanes
 static bool g_rot = false;  // ROT=1: blc4a-t64-e7-rot, A' in the lane-coin lanes by row parity (ROT_W), in place of BLC_W
 constexpr int ROT_W[2][3] = {{127, 1, 1}, {1, 127, 1}};
 static bool g_xu = false;  // XU=1: ssn_1l_tag_xu's last step and epilogue, on a tag layout
+static bool g_fold = false;  // FOLD=1 (with BLC, not XU): served noisy, xu's epilogue folding out the lane coins alone
 // A' in lane-coin lane e (0..2) for row i
 static inline int coin_w(int i, int e) { return g_rot ? ROT_W[i & 1][e] : g_lw[e]; }
 static inline int lanes1() { return g_blc == 2 ? 20 : g_tag ? 24 : 28; }  // step 1's data lanes
@@ -35,9 +36,11 @@ static inline int steps_of(int k) {
 }
 static inline int lc_steps(int S) { return g_blc == 2 ? S : S - 1; }  // the steps with lane coins, the last lc_steps(S) of S
 static inline const char* layout_name() {
-  if (g_rot && g_blc == 2) return g_xu ? "blc4a_t64_e7_s1_rot_xu" : "blc4a_t64_e7_s1_rot";
-  if (g_rot) return g_xu ? "blc4a_t64_e7_rot_xu" : "blc4a_t64_e7_rot";
+  if (g_rot && g_blc == 2)
+    return g_xu ? "blc4a_t64_e7_s1_rot_xu" : g_fold ? "blc4a_t64_e7_s1_rot_fold" : "blc4a_t64_e7_s1_rot";
+  if (g_rot) return g_xu ? "blc4a_t64_e7_rot_xu" : g_fold ? "blc4a_t64_e7_rot_fold" : "blc4a_t64_e7_rot";
   if (g_xu) return g_blc == 2 ? "blc4a_t64_e7_s1_xu" : g_blc ? "blc4a_t64_e7_xu" : "ssn_1l_tag_xu";
+  if (g_fold) return g_blc == 2 ? "blc4a_t64_e7_s1_fold" : "blc4a_t64_e7_fold";
   return g_blc == 2 ? "blc4a_t64_e7_s1" : g_blc ? "blc4a_t64_e7" : g_tag ? "ssn_1l_tag" : "ssn_1l";
 }
 SSN_HD inline int coin_words(int s) { return (s + 3 + 31) / 32; }
@@ -133,7 +136,7 @@ static inline int xu_rho(const RowCoins& c, int K, int S) {
 constexpr uint32_t XU_MAGIC_BITS = 0x4B400000u;  // 1.5 2^23
 static inline uint32_t xu_row_source(const RowCoins& c, int K, int S) { return XU_MAGIC_BITS - (uint32_t)xu_rho(c, K, S); }
 // sigma for a (64-row tile, row class, column): the lane coins' sum weighted by the class's A' (class i mod 2 under ROT=1;
-// both classes alike otherwise), lw(t) the column's lane-coin word at step t; the column source is beta_j - sigma
+// both classes alike otherwise), lw(t) the column's lane-coin word at step t
 template <class LW>
 static inline int xu_sigma(int cls, int S, LW lw) {
   int s = 0;
@@ -143,10 +146,15 @@ static inline int xu_sigma(int cls, int S, LW lw) {
   }
   return s;
 }
+// the column source for a (tile, row class, column) from beta_j and its sigma: XU=1 beta_j - sigma (the row source is
+// 0x4B400000 - rho_i), so the fold serves A_i . B_j; FOLD=1 0x4B400000 - sigma (the row source is 0), so it serves the final
+// word less sigma, A_i . B_j - beta_j + sum_e a1[i, e] C[e, j] + sum_e T(i)[e] G[e, j] + sum_{t >= 2} (1 + a_t[i])
+static inline int col_source(int beta, int sigma) { return (g_xu ? beta : (int)XU_MAGIC_BITS) - sigma; }
 
 // xu's epilogue on a final word d: IADD3(d, row source r, column source c) mod 2^32 read as fp32, FFMA(v, s_j, m_j) with
-// m_j = -1.5 2^23 s_j, then FMUL s_i. While |A_i . B_j| <= 2^22 and s_j has a 22-bit significand it is stock_fold on
-// A_i . B_j, bit for bit.
+// m_j = -1.5 2^23 s_j, then FMUL s_i. With p the integer the sources leave (d + r + c = 0x4B400000 + p mod 2^32: A_i . B_j
+// under XU=1, the noisy word under FOLD=1), it is stock_fold on p bit for bit while |p| <= 2^22 and s_j has a 22-bit
+// significand.
 SSN_HD inline float xu_fold(uint32_t d, uint32_t r, uint32_t c, float sj, float mj, float si) {
 #if defined(__CUDA_ARCH__)
   return __fmul_rn(__fmaf_rn(__uint_as_float(d + r + c), sj, mj), si);

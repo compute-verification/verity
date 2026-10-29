@@ -20,9 +20,10 @@
 #   2 blc4a-t64-e7-s1, the same with lane coins on step 1 too; the check runs all four layouts), BLC_W (1:1:1: A' in the
 #   three lane-coin lanes, e.g. 1:127:1; the check runs under it too), ROT (0; 1 with BLC times blc4a-t64-e7-rot, A' in
 #   the lane-coin lanes (127, 1, 1) on even rows and (1, 127, 1) on odd ones in place of BLC_W; the check runs it on
-#   blc4a-t64-e7-s1 with and without XU), XU (0; 1 times ssn_1l_tag_xu on the tag layout:
+#   blc4a-t64-e7-s1 without XU, with XU and with FOLD), XU (0; 1 times ssn_1l_tag_xu on the tag layout:
 #   its last step and the GEMMs' xu epilogue serving bf16; the check runs it on the three tag layouts against stock's
-#   epilogue), EPI (0; 1 the GEMMs run stock's epilogue on the final words),
+#   epilogue), FOLD (0; 1 with BLC, not XU, times the lead served noisy: the GEMMs' xu epilogue folding out the lane
+#   coins alone), EPI (0; 1 the GEMMs run stock's epilogue on the final words),
 #   SPLIT (0; R runs beside's GEMM stream in a green context of R SMs and its hash streams in one of the rest; no serial),
 #   BARE (0; 1 also times beside with nothing ahead of each call's GEMM, the schedule's floor, and beside's GEMM stream
 #   alone, no hash), NBUF (8: the most buffers beside's hash streams take, each its own stream), VARIANTS (unset; else
