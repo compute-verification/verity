@@ -144,7 +144,7 @@ theorem build_congr (h : algFields sh = algFields sh') (lins : Array RecAlgebra.
   unfold RecAlgebra.build
   simp only [hc, hs, buildAll_congr h, RecAlgebra.wNames, rounds_congr h]
 
-theorem residualLins_congr (h : algFields sh = algFields sh') (coins : RecAlgebra.Coins) (extras : Array Claim) :
+theorem residualLins_congr (h : algFields sh = algFields sh') (coins : RecAlgebra.CoinSource) (extras : Array Claim) :
     RecAlgebra.residualLins sh coins extras = RecAlgebra.residualLins sh' coins extras := by
   obtain ⟨hm, hk, hc, hs, -⟩ := algFields_eq h
   unfold RecAlgebra.residualLins RecAlgebra.run
@@ -168,13 +168,13 @@ end Congr
 
 /-! ## The verifier rows read only the rounds that hold coins -/
 
-/-- **`verifierRows` skips rounds of no coins** (`Coins.ofRounds`): at recorded rounds equal but for them, it computes
+/-- **`verifierRows` skips rounds of no coins** (`CoinSource.ofRounds`): at recorded rounds equal but for them, it computes
 the same rows. -/
 theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     (h : a.filter (·.size ≠ 0) = b.filter (·.size ≠ 0)) :
     RecAlgebra.verifierRows sh a extras comb = RecAlgebra.verifierRows sh b extras comb := by
-  have e : RecAlgebra.Coins.ofRounds a = RecAlgebra.Coins.ofRounds b := by
-    unfold RecAlgebra.Coins.ofRounds
+  have e : RecAlgebra.CoinSource.ofRounds a = RecAlgebra.CoinSource.ofRounds b := by
+    unfold RecAlgebra.CoinSource.ofRounds
     rw [h]
   unfold RecAlgebra.verifierRows
   rw [e]
@@ -195,7 +195,7 @@ theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Ar
     rcases RecAlgebra.coinVec_ok hv with ⟨h6, -⟩ | ⟨-, hr6, -⟩
     · exact absurd h6 (by decide)
     · rw [Array.eq_empty_of_size_eq_zero h0] at hr6
-      simp [RecAlgebra.Coins.ofRounds] at hr6
+      simp [RecAlgebra.CoinSource.ofRounds] at hr6
   · exact h0
 
 /-! ## Check 5's `dirs` rows -/
