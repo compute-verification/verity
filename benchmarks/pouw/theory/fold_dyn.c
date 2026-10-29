@@ -17,9 +17,10 @@
    A value is the vector of a word at NP test points; a found program is then checked on the whole input domain (every
    input tuple when it has at most 2^24, else 2^22 random ones), and printed only if it holds there.
 
-   usage: fold_dyn W NP family S D members seed [-z] [-a]
+   usage: fold_dyn W NP family S D members seed [-z] [-a] [-x FORM]
      family: rotadd rotxoradd rotmuladd mulrotadd xormul xorrot rand
      -a: every member (S = 1 only), else `members` random ones
+     -x FORM: leave one form (as printed, e.g. LEA.HI) out of the ISA
    stdout: "N1 <distinct first instructions>" and, a member a line,
      "M <theta> honest <h> found <d|-> [<program>]"   with found the least depth <= D that computes the target
    build: gcc -O2 -fopenmp -o fold_dyn fold_dyn.c */
@@ -90,9 +91,10 @@ static inline uint32_t ev(int f, int q, uint32_t x, uint32_t y, uint32_t z) {
 
 /* ---- families: one step, s' = step(theta, s, w) ------------------------------------------------------------------ */
 
-typedef struct { int kind, op1, op2, ab; uint32_t k1, k2; int r1, r2; } Theta;
-enum { ROTADD, ROTXORADD, ROTMULADD, MULROTADD, XORMUL, XORROT, RAND, NFAM };
-static const char *FAM[NFAM] = {"rotadd", "rotxoradd", "rotmuladd", "mulrotadd", "xormul", "xorrot", "rand"};
+typedef struct { int kind, op1, op2, ab; uint32_t k1, k2, x, y; int r1, r2; } Theta;
+enum { ROTADD, ROTXORADD, ROTMULADD, MULROTADD, XORMUL, XORROT, RAND, LIK, ARXM, NFAM };
+static const char *FAM[NFAM] = {"rotadd", "rotxoradd", "rotmuladd", "mulrotadd", "xormul", "xorrot", "rand", "lik",
+                                "arxm"};
 /* rand: s' = g2(g1(s) (+|^) w), g1 in {rot, mul, xor, add} by a key, g2 in {rot, mul} */
 enum { G_ROT, G_MUL, G_XOR, G_ADD };
 
@@ -113,6 +115,8 @@ static inline uint32_t step(const Theta *t, uint32_t s, uint32_t w) {
     case MULROTADD: return (rotl((s * t->k1) & MK, t->r1) + w) & MK;
     case XORMUL: return ((s ^ w) * t->k1) & MK;
     case XORROT: return rotl(s ^ w, t->r1);
+    case LIK: return ((s ^ w ^ t->x) * t->k1 + t->y) & MK;
+    case ARXM: return ((rotl(s ^ t->x, t->r1) + w) * t->k1 + t->y) & MK;
     default: {
         uint32_t u = g(t->op1, s, t->k1, t->r1);
         u = t->ab ? (u ^ w) : ((u + w) & MK);
@@ -126,6 +130,7 @@ static inline uint32_t step(const Theta *t, uint32_t s, uint32_t w) {
 static int honest(const Theta *t) {
     switch (t->kind) {
     case ROTADD: return 1;
+    case ARXM: return 3;
     case RAND: {
         int fused = (t->op1 == G_XOR && t->ab) || (t->op1 == G_ADD && !t->ab) || (t->op1 == G_MUL && !t->ab) ||
                     (t->op1 == G_ROT && !t->ab);
@@ -139,9 +144,10 @@ static uint32_t odd(void) { return ((uint32_t)rnd() | 1u) & MK; }
 static int rot1(void) { return 1 + (int)(rnd() % (uint64_t)(W - 1)); }
 
 static Theta draw(int kind) {
-    Theta t = {kind, 0, 0, 0, 0, 0, 0, 0};
+    Theta t = {kind, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     t.r1 = rot1(); t.r2 = rot1();
     t.k1 = odd(); t.k2 = odd();
+    t.x = (uint32_t)rnd() & MK; t.y = (uint32_t)rnd() & MK;
     if (kind == ROTXORADD) t.k1 = (uint32_t)rnd() & MK;
     if (kind == RAND) {
         t.op1 = (int)(rnd() % 4); t.op2 = (rnd() & 1) ? G_ROT : G_MUL; t.ab = (int)(rnd() & 1);
@@ -155,6 +161,8 @@ static void show(const Theta *t, char *b) {
     switch (t->kind) {
     case ROTADD: case XORROT: sprintf(b, "r%d", t->r1); break;
     case XORMUL: sprintf(b, "k%u", t->k1); break;
+    case LIK: sprintf(b, "x%u.k%u.y%u", t->x, t->k1, t->y); break;
+    case ARXM: sprintf(b, "x%u.r%d.k%u.y%u", t->x, t->r1, t->k1, t->y); break;
     case RAND: sprintf(b, "%s:%u:%d/%s/%s:%u:%d", GN[t->op1], t->k1, t->r1, t->ab ? "xor" : "add", GN[t->op2], t->k2,
                        t->r2); break;
     default: sprintf(b, "k%u.r%d", t->k1, t->r1);
@@ -182,9 +190,12 @@ static Val pool[MAXPOOL];
 static inline uint32_t src(const Val *P, int s, uint32_t c, int i) { return s == CONST ? c : P[s].p[i]; }
 
 /* does `t` equal one instruction over P[0..np) and free constants, reading P[must] if must >= 0? */
+static int EXCL = -1;   /* -x FORM: a form left out of the ISA (the mutation check) */
+
 static int find1(const Val *t, const Val *P, int np, int must, Ins *out) {
     int ns = np + 1;
     for (int f = 0; f < NFORM; f++) {
+        if (f == EXCL) continue;
         int ar = AR[f];
         int npat = ar == 3 ? ns * ns * ns : ns * ns;
         for (int pat = 0; pat < npat; pat++) {
@@ -359,6 +370,7 @@ static void gen_level1(void) {
     L1 = malloc(capL1 * sizeof(Val)); L1i = malloc(capL1 * sizeof(Ins));
     int ns = NIN + 1;
     for (int f = 0; f < NFORM; f++) {
+        if (f == EXCL) continue;
         int ar = AR[f], npat = ar == 3 ? ns * ns * ns : ns * ns;
         for (int pat = 0; pat < npat; pat++) {
             int s[3] = {pat % ns, (pat / ns) % ns, ar == 3 ? pat / (ns * ns) : 0}, nc = 0, nv = 0, cs[3];
@@ -459,7 +471,12 @@ int main(int argc, char **argv) {
     W = atoi(argv[1]); NP = atoi(argv[2]); S = atoi(argv[4]);
     int D = atoi(argv[5]), members = atoi(argv[6]), all = 0;
     rs ^= (uint64_t)strtoull(argv[7], 0, 0) * 0x2545F4914F6CDD1Dull;
-    for (int a = 8; a < argc; a++) { if (!strcmp(argv[a], "-z")) ZD = 1; if (!strcmp(argv[a], "-a")) all = 1; }
+    for (int a = 8; a < argc; a++) {
+        if (!strcmp(argv[a], "-z")) ZD = 1;
+        if (!strcmp(argv[a], "-a")) all = 1;
+        if (!strcmp(argv[a], "-x") && a + 1 < argc)
+            for (int f = 0; f < NFORM; f++) if (!strcmp(argv[a + 1], FN[f])) EXCL = f;
+    }
     int fam = -1;
     for (int k = 0; k < NFAM; k++) if (!strcmp(argv[3], FAM[k])) fam = k;
     if (W < 3 || W > 8 || NP < 8 || NP > NPMAX || S < 1 || S > MAXIN - 1 || fam < 0 || D < 1 || D > 2) {
@@ -478,15 +495,25 @@ int main(int argc, char **argv) {
         if (S != 1) { fprintf(stderr, "fold_dyn: -a needs S = 1\n"); return 2; }
         for (uint32_t k = 0; k <= MK; k++)
             for (int r = 1; r < W; r++) {
-                Theta t = {fam, 0, 0, 0, k, 0, r, 0};
+                Theta t = {fam, 0, 0, 0, k, 0, 0, 0, r, 0};
                 int needk = fam == ROTXORADD || fam == ROTMULADD || fam == MULROTADD || fam == XORMUL;
                 int needr = fam != XORMUL;
                 if (!needk && k) continue;
                 if (!needr && r != 1) continue;
                 if ((fam == ROTMULADD || fam == MULROTADD || fam == XORMUL) && !(k & 1)) continue;
-                if (fam == RAND) continue;
+                if (fam == RAND || fam == LIK || fam == ARXM) continue;
                 th[nm++ * MAXIN] = t;
             }
+        if (fam == LIK || fam == ARXM) {
+            /* every (k, r) with the keys x, y drawn: the members a (k, r) class is over */
+            for (uint32_t k = 1; k <= MK; k += 2)
+                for (int r = 1; r < W; r++) {
+                    if (fam == LIK && r != 1) continue;
+                    Theta t = draw(fam);
+                    t.k1 = k; t.r1 = r;
+                    th[nm++ * MAXIN] = t;
+                }
+        }
         if (fam == RAND) {
             for (int o1 = 0; o1 < 4; o1++) for (int ab = 0; ab < 2; ab++) for (int o2 = 0; o2 < 2; o2++)
                 for (int x = 0; x < 3; x++) {
