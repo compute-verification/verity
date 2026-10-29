@@ -194,6 +194,14 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
         if "bytes_per_mac" in spec:
             e["h"] = spec["bytes_per_mac"] * word_price(card, hc["basis"]["words_chunk"]) + e["extra_w1_per_mac"]
             e["h_label"] = spec.get("label", "estimate")
+        elif "h" in spec and "ratio" in spec["h"]:
+            base = spec["h"].get("baseline")
+            e["h"] = spec["h"]["ratio"] * (lead["h"] if convert else float(base)) + e["extra_w1_per_mac"]
+            e["h_label"] = spec["h"].get("label", "estimate")
+            flags.append(f"stated as h / h_lead = {spec['h']['ratio']:.4g} against its own lead (h = {base:g}); applied "
+                         f"to the basis lead's {lead['h']:.2f}, which holds only while the words are its h")
+            if spec["h"].get("label", "estimate") == "estimate":
+                flags.append("h is an estimate")
         elif "h" in spec:
             v, f = stated_h(hc, card, spec["h"], convert)
             if spec.get("per_byte"):
@@ -220,6 +228,9 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
             flags.append(f"{t.upper()} unpriced")
         elif e[t][0] is not None and e[t][1] == "estimate" and t == "t2" and kind == "proposal":
             flags.append("T2 an estimate; the lead's is measured")
+    mpw = spec.get("layout", {}).get("macs_per_word")
+    if mpw and abs(mpw / lead["macs_per_word"] - 1) > 0.02:
+        flags.append(f"its lead's layout is {mpw:g} useful MACs a word, the basis lead's {lead['macs_per_word']:.2f}")
     if e["rule_change"]:
         flags.append(f"needs a rule change: {e['rule_change']}")
     for a in adds:
@@ -253,6 +264,7 @@ def lead_block(card: dict, hc: dict) -> dict:
     out = {"name": pr["name"], "premises": pr["design"]["premises"], "design": pr["design"],
            "h": max(r["hash_units_per_mac"] for r in rows.values()), "rows": rows, "parts": parts,
            "bytes_per_mac": max(q["bytes_per_mac"] for q in parts.values()),
+           "macs_per_word": 4 * word_price(card, hc["basis"]["words_chunk"]) / parts["t8192"]["words"],
            "t1": max(r["t1"] for r in rows.values()),
            "t2_measured": max(max(t2m[p]) for p in hc["basis"]["points"]),
            "t2_card": max(r["t2"]["judged"] for r in rows.values()),
@@ -290,6 +302,8 @@ def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: 
     rk = lead["ranks"]
     L += ["", f"- T3 measured: {hc['lead']['t3_measured']['ctx2k']:+.3%} / {hc['lead']['t3_measured']['ctx8k']:+.3%} "
           f"(2K / 8K). T2 measured at most {lead['t2_measured']:.2f}×.",
+          f"- Layout: {lead['macs_per_word']:.2f} useful MACs a committed 4-byte word "
+          f"({4 / lead['macs_per_word']:.5f} words bytes a MAC).",
           f"- Ranks (nominal / effective): hashing part {rank_label(rk['hashing'])} / {rank_label(rk['hashing_effective'])}, "
           f"matmul part {rank_label(rk['matmul'])} / {rank_label(rk['matmul_effective'])}, overall "
           f"{rank_label(rk['overall'])} / {rank_label(rk['overall_effective'])}. **The axis is the hashing part's "
@@ -340,6 +354,18 @@ def reading(card: dict, hc: dict, key: str, rd: dict) -> dict:
             "bytes": b, "bytes_now": bytes_now, "at_price": at_price, "on_basis": pr["worst"]["h"],
             "ok": abs(at_price / rd["value"] - 1) <= rd.get("tolerance", 0.002),
             "words_chunk": rd["words_chunk"]}
+
+
+def ratio_check(card: dict, hc: dict, lead: dict, checks: Checks, prefix: str = "", convert: bool = True) -> None:
+    seed = {"lane": "TEST", "note": "none", "title": "seeded", "status": "proposed",
+            "h": {"ratio": 0.5, "baseline": 233.0, "label": "estimate"}, "layout": {"macs_per_word": 31}}
+    e = design_entry(card, hc, "seeded", seed, lead, "proposal", convert=convert)
+    fl = "; ".join(e["flags"])
+    checks.check(f"{prefix}an h stated as a ratio to a lane's own lead (233) lands on the basis lead "
+                 f"({lead['h']:.2f}), flagged with that baseline, and a 31-MAC layout is flagged against the basis "
+                 f"lead's {lead['macs_per_word']:.2f}",
+                 abs(e["h"] / (0.5 * lead["h"]) - 1) < 1e-12 and "h = 233" in fl and "31 useful MACs a word" in fl,
+                 f"h {e['h']:.2f}; {fl[:160]}")
 
 
 def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
@@ -415,6 +441,7 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
     below = [e["id"] for e in entries if e.get("ranks") and any(
         ps.rank_value(a["rank"]) > e["ranks"]["axis"] for a in (hc.get("proposal", {}).get(e["id"], {}).get("adds", [])))]
     checks.check(f"{prefix}no design's axis rank is below a premise it adds", not below, ", ".join(below) or "none")
+    ratio_check(card, hc, lead, checks, prefix)
     fr = frontier(entries)
     mono = all(a["h"] >= b["h"] for a, b in zip(fr, fr[1:]))
     ok = all(by[f["best"]]["meets"] and by[f["best"]]["status"] not in GONE for f in fr)
@@ -481,6 +508,8 @@ def mutations(card: dict, hc: dict, checks: Checks) -> None:
         checks.check("[mutant] the 08:32Z lead's 233 at the bar lands within 1% of its h on the basis",
                      abs(e["h"] / 115.73 - 1) < 0.01, f"{e['h']:.2f}")
     caught("an h stated at the bar taken unconverted", card, hc, unconverted)
+    caught("a ratio applied to the lane's own lead's h, not the basis lead's", card, hc,
+           lambda c2, h2: ratio_check(c2, h2, lead_block(c2, h2), checks, "[mutant] ", convert=False))
 
 
 def main() -> int:

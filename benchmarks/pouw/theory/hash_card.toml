@@ -109,7 +109,9 @@ what = "inbox/HASH.md: it equals Σ_τ κ_τ Σ_{t≥τ} r_t, computable without
 #   lane, agent, note, title, status (proposed | checked | measured | proved | refuted | closed)
 #   compose / swap: a pouw_space composition the card prices itself (checked), or
 #   bytes_per_mac: credited SHA-512 bytes a useful MAC at the basis's per-form price, or
-#   h = { value, price, label, point, model, words_chunk, baseline }: h as the lane states it, converted by price
+#   h = { value, price, label, point, model, words_chunk, baseline }: h as the lane states it, converted by price, or
+#   h = { ratio, baseline, label }: h over the lane's own lead's h (`baseline`), applied to the basis lead's
+#   layout = { macs_per_word }: the useful MACs a word of the lead the lane priced against, flagged if not the basis's
 #   extra_w1_per_mac: honest non-hash commitment work a useful MAC (W1)
 #   t1, t2, t3 = { value, label }: worst over the basis's points (t2 the larger of sync and async)
 #   drops: the lead's premises the design no longer takes; adds: [{ id, rank, part, status, falsification, owner }]
