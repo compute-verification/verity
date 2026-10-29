@@ -1,5 +1,5 @@
-"""A statement's proof files, verified by C-Flock's Lean verifier of record (`flock-verify verify --zk`, the Lake package
-`verity/core/service/flock`, built with `lake` on first use): the proof service's own run of the verifier, so a protocol
+"""A statement's proof files, verified by C-Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
+`verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
 `verify` takes a statement's files as the prover delivered them (`Proof`: the circuit file, the public file and the
@@ -39,8 +39,6 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
-
-from verity.ml.circuits.codec import canonical_json
 
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
@@ -131,7 +129,7 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
+    """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
@@ -206,6 +204,12 @@ def v2_executable() -> Path:
     return V2_PACKAGE / ".lake" / "build" / "bin" / V2_EXE
 
 
+def _canonical(x: Any) -> bytes:
+    """`x` in the canonical JSON `Core.canonicalJson` reads, for the integers, strings, lists and objects of ASCII keys
+    these inputs hold."""
+    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
+
+
 def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict, list[Path]]:
     """The v2 evidence's ``proofs`` for `proof`'s files, and the blobs that hold them: the public file's SHA-512 and, per
     session (named `names`, the v1 evidence's ``sessions``; by default its directory's name), its ``session.json``'s and
@@ -233,8 +237,8 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
            "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = (Path(d, "own.json"), Path(d, "proofs.json"))
-        paths[0].write_bytes(canonical_json(own))
-        paths[1].write_bytes(canonical_json(pr))
+        paths[0].write_bytes(_canonical(own))
+        paths[1].write_bytes(_canonical(pr))
         p = subprocess.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], capture_output=True,
                            text=True)
     try:
@@ -259,7 +263,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = [Path(d, n) for n in ("params.json", "record.json", "evidence.json")]
         for path, x in zip(paths, (p2, record, e2)):
-            path.write_bytes(canonical_json(x))
+            path.write_bytes(_canonical(x))
         p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
                            text=True)
     try:

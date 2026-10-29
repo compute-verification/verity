@@ -2,7 +2,7 @@
 reference beside the Lean `pouw_check` (`verity/core/protocols/pouw/lean/check`), the served window's verifier of record
 (`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
-The proof service registers the window, draws, proves and verifies; PoUW states what it registers and what the outcome
+The proof system registers the window, draws, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
 `benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
@@ -59,7 +59,7 @@ opened once, after R.  `live_salt` is its Pearl-C form (LIVESALT2, `Properties.P
 epoch's root, `salt.epoch_open_root` of its weights' root W and its ``pass_index`` k, the session is reserved for the salt
 coin alone (`window.SALT_FAMILIES`) and counts only when the ledger ends it complete, and the pass's coins, salt coin,
 salt and session are held to what the ledger and the session's files show.
-`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof service's challenger
+`rounds` is the rule on a live window's round coins (`window.rounds_reason`, over the proof system's challenger
 `sampled_proofs.challenger`): it reads the challenger's coins only through the session the auditor's signed ledger
 opens and ends for the window, under the window's pinned key, run from a commit the host's pins log records on main's
 first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover
@@ -179,17 +179,19 @@ class Refused(ValueError):
 # ---- canonical JSON and exact ratios, as `Core.canonicalJson` and `Core.Ratio` read them ---------------------------------
 
 def _canon(x: Any) -> str:
-    """`Flock.canon`: compact, keys sorted, serde's escaping (non-ASCII as itself), integers only."""
+    """`Flock.canon`: compact, keys sorted, every character outside printable ASCII escaped, integers only."""
     if isinstance(x, float):
         raise Refused("canonical JSON: a non-integer number")
     if isinstance(x, dict):
-        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + _canon(v) for k, v in sorted(x.items())) + "}"
+        return "{" + ",".join(json.dumps(k) + ":" + _canon(v) for k, v in sorted(x.items())) + "}"
     if isinstance(x, list):
         return "[" + ",".join(_canon(v) for v in x) + "]"
-    return json.dumps(x, ensure_ascii=False)
+    return json.dumps(x)
 
 
 def canonical(b: bytes) -> Any:
+    if any(c >= 0x7f for c in b):
+        raise Refused("not ASCII without DEL (a byte at or above 0x7f)")
     try:
         s = b.decode()
     except UnicodeDecodeError:
