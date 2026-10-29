@@ -92,12 +92,12 @@ OP_KERNEL(larm, TPB) { body<LARM>(a); }
 #define P(NM, EXP, NOTE) \
   {.name = #NM, .kernel = (const void*)NM, .tpb = TPB, .expect = EXP, .iters = 4096, .note = NOTE}
 static const OpProbe PROBES[] = {
-    P(x2u, "BRX=8", "2-entry brx.idx.uni, coin ptxas sees uniform"),
-    P(x2w, "BRX=8", "2-entry brx.idx on a vector coin, uniform at run time"),
-    P(x2d, "BRX=8", "2-entry brx.idx on each lane's bit: divergent"),
-    P(lu, "BRA=9", "bra.uni between 8-instruction arms, coin ptxas sees uniform"),
-    P(lw, "BRA=9", "bra between 8-instruction arms, vector coin uniform at run time"),
-    P(ld, "BRA=9", "bra between 8-instruction arms, each lane's bit: divergent"),
-    P(larm, "BRA=1", "the long arms alone"),
+    P(x2u, "BRX=8,IMAD.IADD=8,LOP3*=17", "2-entry brx.idx.uni, coin ptxas sees uniform"),
+    P(x2w, "BRX=8,IMAD.IADD=8,LOP3*=17", "2-entry brx.idx on a vector coin, uniform at run time"),
+    P(x2d, "BRX=8,IMAD.IADD=8,LOP3*=17", "2-entry brx.idx on each lane's bit: divergent"),
+    P(lu, "BRA=9,IMAD.IADD=32,LOP3*=37", "bra.uni between 8-instruction arms, coin ptxas sees uniform"),
+    P(lw, "BRA=9,IMAD.IADD=32,LOP3*=37", "bra between 8-instruction arms, vector coin uniform at run time"),
+    P(ld, "BRA=9,IMAD.IADD=32,LOP3*=37", "bra between 8-instruction arms, each lane's bit: divergent"),
+    P(larm, "IMAD.IADD=16,LOP3*=17", "the long arms alone"),
 };
 int main(int argc, char** argv) { return op_main(argc, argv, PROBES); }
