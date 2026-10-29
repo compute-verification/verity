@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Audit.StratifiedProj
 /-!
 # The tile coordinate is the sampling block's stratified draw at the tile stratum
 
-`TileStratumEscape`, proved, and its join to the law's side:
+`TileStratumAcceptProb`, proved, and its join to the law's side:
 
 * `miss_eq`: a uniform permutation's `K`-prefix (`Pouw.Window.subsetDraw`) misses `B` with probability exactly
   `C(N − |B|, K)/C(N, K)`, by `Properties.Served.SecurityProofs.miss_ge`'s induction through
@@ -14,7 +14,7 @@ import Proofs.Flock.Soundness.Audit.StratifiedProj
   given it misses, the rest is a uniform permutation of `N − 1` places that must miss a set of exactly `|B|` of them.
 * `tileStratumEscape`: the tile coordinate (`tileDraw`) misses `B` exactly when the permutation's `k s_T`-prefix misses
   the stratum's places whose proof blocks are in `B` (`disjoint_tileDraw_iff`), `|B.filter (σ · = s_T)|` of them
-  (`card_tilesIn`), so `miss_eq` is `TileStratumEscape`.
+  (`card_tilesIn`), so `miss_eq` is `TileStratumAcceptProb`.
 * `tileStratumEscape_eq_proj`: that is `FlockSoundness.Audit.Law.stratified_proj_escape`'s factor, so the tile
   coordinate at a uniform permutation misses every `B` exactly as `Law.stratified σ k hk`'s coordinate `s_T` does, and
   `tileStratumEscape_eq_exp`: with `m_s + k_s ≤ n_s`, it misses `B` with `exp(−stratumRisk σ k s_T m_s)`, stratum
@@ -149,9 +149,9 @@ theorem card_tilesIn {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (B : F
     rw [ht]
     exact hB
 
-/-- **`TileStratumEscape`**: the tile coordinate at a uniform permutation of the stratum misses `B` with the stratum's
+/-- **`TileStratumAcceptProb`**: the tile coordinate at a uniform permutation of the stratum misses `B` with the stratum's
 hypergeometric factor. -/
-theorem tileStratumEscape : TileStratumEscape := by
+theorem tileStratumEscape : TileStratumAcceptProb := by
   intro nB mB σ k hk sT B
   have h : (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
       fun π => ∀ v ∈ Pouw.Window.subsetDraw (k sT) π, v ∉ tilesIn σ sT B :=

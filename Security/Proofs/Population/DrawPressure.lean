@@ -66,7 +66,7 @@ theorem choose_ratio_le_pow {K : ℕ} (hK : K ≤ n) (hk : k ≤ n) :
 
 /-- `K` independent draws at rate `k/n` all miss with probability `(1 - k/n)^K ≤ exp (-k K / n)`. -/
 theorem one_sub_div_pow_le_exp (hk : k ≤ n) (K : ℕ) : (1 - k / n : ℝ) ^ K ≤ Real.exp (-(k * K / n)) := by
-  have := pow_escape_le_exp (cast_div_le_one hk) K
+  have := pow_acceptProb_le_exp (cast_div_le_one hk) K
   rwa [show (K : ℝ) * (k / n) = k * K / n by ring] at this
 
 /-- **The deployed draw's escape bound**: for `K ≤ n` and `k ≤ n`, `C(n - K, k) / C(n, k) ≤ exp (-k K / n)`. -/

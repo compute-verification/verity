@@ -18,7 +18,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   the law is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
   order; and the tile stratum's coordinate of the block's draw at a permutation of the stratum, the units of its first
   `k s_T` images.
-* `TileStratumEscape`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
+* `TileStratumAcceptProb`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
   a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
   which is how `Law.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.Law.stratified_proj_escape`,
   the per-stratum projection of the joint draw; `tileStratumEscape_eq_proj` joins the two). So the period's tile coin
@@ -135,7 +135,7 @@ block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n
 `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
 `SecurityProofs.tileStratumEscape_eq_proj` equates the two, so the period's tile coin is the block's draw at the tile
 stratum. -/
-def TileStratumEscape : Prop :=
+def TileStratumAcceptProb : Prop :=
   ∀ {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (B : Finset (Fin nB)),
     prob (fun π : Equiv.Perm (Fin (tileCount σ sT)) => Disjoint (tileDraw σ k hk sT π) B) =
