@@ -350,7 +350,8 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
    W1 (fails; pad64's shape 0.60% + N-NOISE's term 0.60%) and 0.65% against stock's instruction (passes). From m 2 it
    passes in W1 (~0.93%); m 16 0.67%, m 64 0.19%.
 10. **Serving: noisy (coordinator, 12:25Z, settles §8 item 3).** N-COVER: exact serving (xu) adds +2.0 to +9.2 points of
-    coverage on Llama, and noisy serving's T3 measures no loss (N-PPL). The lead serves noisy, with its coin lanes
+    coverage on Llama, and noisy serving's T3 shows no detectable loss: at most +0.14% (2K) and +0.09% (8K) at 95%
+    against vLLM's int8 (N-PPL final, 20261029T1259Z-report-np-ppl; the lead as served is −0.048% / +0.026% there). The lead serves noisy, with its coin lanes
     folded exactly; xu stays the option for exactness.
 
 ### Final push (12:00–13:30Z)
