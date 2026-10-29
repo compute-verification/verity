@@ -35,7 +35,7 @@ The attacks each axis meets, all at zero data (M0 frees salt-independent functio
   squares from the first half's sums (`mirror_fold`); `mirror-pi` and the served bilinear family have no such identity.
   The edges still decompose: the first and last few words see few coin vectors (`edge_attack`), unless step 0 adds
   r0 more coin lanes, removed at the last step (`quad-lℓ-wr0`); and a middle block decomposes from the honest word
-  before it (`edge_saves`), which ℓ lanes a step price against the byte products a rank term.
+  before it (`edge_saves`). Both are priced against the byte products a rank term, and ℓ sets the margin.
 
 `checks` runs the CPU checks and `score` the joint table; `--json` writes both.
 """
@@ -299,15 +299,20 @@ def edge_attack(lanes: int, r0: int, t0_max: int = 12, size: int = 400, seed: in
 
 
 def edge_saves(edge: dict, block: dict, sketch_bytes: int = SKETCH_BYTES) -> dict:
-    """The edge and middle-block attacks' savings at `sketch_bytes` byte products a rank term. An edge saves
-    2·t0 − rank·bytes/32 eq an output a side. A middle block of L words, from the honest word N before it, writes
-    Σ (N + Δ_t)² = N·(L·N + 2·ΣΔ) + ΣΔ²: the words ΣΔ, L·N + 2·ΣΔ, the product and the next block's first word, 4 eq,
-    and ΣΔ²'s decomposition, whose rank is the r0 = 0 prefix's (`block`), against honest's 2L: it saves the best
-    (2L − 4 − rank·bytes/32)/L eq a word."""
-    out = {side: max(0.0, *(2 * t0 - r * sketch_bytes / 32 for t0, r in edge[side].items() if r < edge["size"]))
-           for side in ("prefix", "suffix")}
-    out["block_a_word"] = max(0.0, *((2 * n - 4 - r * sketch_bytes / 32) / n
-                                     for n, r in block["prefix"].items() if r < block["size"]))
+    """The edge and middle-block attacks' savings at `sketch_bytes` byte products a rank term. A middle block of L
+    words, from the honest word N before it, writes Σ (N + Δ_t)² = N·(L·N + 2·ΣΔ) + ΣΔ²: the words ΣΔ and
+    L·N + 2·ΣΔ and the product, 3 eq, and ΣΔ²'s decomposition, whose rank is the r0 = 0 prefix's (`block`), against
+    honest's 2L (the next word is one MMA for both): it saves the best (2L − 3 − rank·bytes/32)/L eq a word. An edge
+    saves 2·t0 − rank·bytes/32 eq an output a side; with r0 > 0 the wide block R is constant until the last step, so
+    it also separates like a block's N, at one more word (R): 2·t0 − 4 − rank₀·bytes/32."""
+    def best(ranks: dict, size: int, fixed: float, per_word: bool) -> float:
+        vals = [(2 * n - fixed - r * sketch_bytes / 32) / (n if per_word else 1) for n, r in ranks.items() if r < size]
+        return max([0.0, *vals])
+    out = {}
+    for side in ("prefix", "suffix"):
+        out[side] = max(best(edge[side], edge["size"], 0, False),
+                        best(block[side], block["size"], 4, False) if edge["r0"] else 0.0)
+    out["block_a_word"] = best(block["prefix"], block["size"], 3, True)
     return out
 
 
@@ -363,7 +368,7 @@ def checks(m: int = 128, n: int = 128, s: int = 74, seed: int = 0) -> dict:
     out["lead_rank_within_bound"] = all(
         v["lead"] <= lead_rank_bound(int(key[1:].split("_")[0]), tiles=v["lead_tiles"]) for key, v in out["sketch"].items())
     out["rfp4"] = rfp4_check()
-    out["edge"] = {f"l{ln}_r{r0}": edge_attack(ln, r0) for ln in (1, 2, 3) for r0 in (0, 4, 8)}
+    out["edge"] = {f"l{ln}_r{r0}": edge_attack(ln, r0) for ln in (1, 2, 3, 4) for r0 in (0, 4, 8)}
     return out
 
 
@@ -422,7 +427,7 @@ def score(chk: dict, predicates: str = "dataflow", sketch_bytes: int = SKETCH_BY
     add("lead", "every", 32, "linear", hr, {"fold": sum(sh * (1 - 1 / steps[k]) for k, sh in shares.items()) / se},
         ["none: folds (H12)"], 0, {"fold": "Σ r_t w_t = Σ_τ κ_τ Σ_{t≥τ} r_t"}, hr)
     quads = [("lead", 3, 0), ("mirror", 1, 0), ("mirror", 2, 0), ("bilinear", 1, 0)]
-    quads += [("mirror-pi", ln, r0) for ln in (1, 2, 3) for r0 in (0, 4, 8)]
+    quads += [("mirror-pi", ln, r0) for ln in (1, 2, 3, 4) for r0 in (0, 4, 8)]
     for fam, lanes, r0 in quads:
         gap, detail = 0.0, {}
         hr = 0.0
