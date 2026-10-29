@@ -67,7 +67,8 @@ def digits(v, n=4):
 
 def imma(left, right):
     """Σ_k left[r, k]·right[c, k] mod 2³² from s8 digit products, one IMMA chain (depth 32) a digit weight ≤ 3. Returns
-    the (rows, cols) result and its price an output entry: Σ_w ⌈n_w·K/32⌉ chains and a shift-add a weight past the first."""
+    the (rows, cols) result and its price an output entry: Σ_w ⌈n_w·K/32⌉ chains and a shift-add a weight past the first,
+    or K IMADs when that is cheaper (a short K)."""
     K = left.shape[1]
     dl, dr = digits(left), digits(right)
     used_l = [x for x in range(4) if np.any(dl[x])]
@@ -80,7 +81,7 @@ def imma(left, right):
                 weights[x + y] = weights.get(x + y, 0) + 1
                 out += (dl[x] @ dr[y].T) << (8 * (x + y))
     cost = sum(math.ceil(n * K / 32) for n in weights.values()) + max(0, len(weights) - 1)
-    return u32(out), cost
+    return u32(out), min(cost, K)
 
 
 def honest_nh2(W, P, T):
