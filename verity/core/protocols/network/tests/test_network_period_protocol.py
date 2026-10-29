@@ -585,8 +585,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
         assert all(x["schedules"] == x["cells"] and len(x["scans"]) == x["windows"]
                    and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
     assert PC.cases(3, form) == {k: (drawn[k, 3], answers[k, 3]) for k in kinds}
-    D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
-          server=server)
+    for c in drawn.values():
+        D.replay(PORT, c, server)
 
 
 def test_the_bound_counts_what_it_says():
