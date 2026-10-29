@@ -1,3 +1,4 @@
+import Proofs.Pouw.Lead.Tags.Distinct
 import Proofs.Pouw.Lead.Tags.Fold
 import Proofs.Pouw.Lead.Tags.SsnProofs
 import Proofs.Pouw.Lead.Tags.TagProofs

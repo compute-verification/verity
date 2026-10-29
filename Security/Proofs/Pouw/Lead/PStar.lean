@@ -3,6 +3,7 @@ import Proofs.Pouw.Lead.PStar.ExpansionProofs
 import Proofs.Pouw.Lead.PStar.Lanes
 import Proofs.Pouw.Lead.PStar.Marginal
 import Proofs.Pouw.Lead.PStar.MassFloorProofs
+import Proofs.Pouw.Lead.PStar.Table
 import Proofs.Pouw.Lead.PStar.Tile
 import Proofs.Pouw.Lead.PStar.Walks
 

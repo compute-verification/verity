@@ -1,3 +1,5 @@
+import Proofs.Pouw.Lead.Statement.Gap
+
 /-!
 # The lead's open pieces, stated
 

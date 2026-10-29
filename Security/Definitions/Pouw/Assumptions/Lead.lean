@@ -127,8 +127,8 @@ def TrustedNebiusHost {Device : Type} (cert : Device)
 
 /-- `pouw-outsource-egress` (proposed; the lead's instance at its cap). **Outsourcing within the egress cap costs at
 most the network term**: every realizable strategy has a realizable twin that exchanges nothing, with the same
-pre-coin tables, and at every coin value holding what it holds, with the same registered root and hashing, at priced W1 work at most its own
-plus `32 · networkGap L`.
+pre-coin tables, and at every coin value holding what it holds, with the same registered root and hashing, at priced W1
+work at most its own plus `32 · networkGap L`.
 
 Rationale: the network certifier caps the bits a call's node exchanges, and an exchanged bit replaces a bounded amount
 of priced work. -/

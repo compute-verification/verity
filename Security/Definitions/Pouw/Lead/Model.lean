@@ -80,9 +80,10 @@ def coinAt {L : Layout} (ω : Coins L) : CoinIdx L → ℤ
   | .inr (.inr (.inr (t, k, ℓ, j))) => ω.s t k ℓ j
 
 /-- **The coin stream is raw coins in a fixed arrangement**: each word the certifier streams is zero or one coin, at a
-position fixed before the coins (`ι`), in at most the node's memory of tiles. -/
+position fixed before the coins (`ι`), each coin at one position at most, in at most the node's memory of tiles. -/
 def RawStream (L : Layout) (stream : Coins L → ℕ → Fin tileWords → ℤ) : Prop :=
   ∃ ι : ℕ → Fin tileWords → Option (CoinIdx L), (∀ c p, L.mem ≤ c → ι c p = none) ∧
+    (∀ c p c' p' x, ι c p = some x → ι c' p' = some x → c = c' ∧ p = p') ∧
     ∀ ω c p, stream ω c p = (ι c p).elim 0 (coinAt ω)
 
 /-- **The priced W1 work** of a strategy at a coin value: its trace at the W1 table `pr`. -/
@@ -133,6 +134,22 @@ def tileOf (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coi
   if h : 16 * rb + (p : ℕ) / 8 < L.m ∧ 8 * cb + (p : ℕ) % 8 < L.n then
     word L κ ω ⟨16 * rb + (p : ℕ) / 8, h.1⟩ t ⟨8 * cb + (p : ℕ) % 8, h.2⟩
   else 0
+
+/-- The call's committed MMA tiles: row block, column block and step. -/
+def tileIdx (L : Layout) : Finset (ℕ × ℕ × Fin L.S) :=
+  Finset.range L.rowBlocks ×ˢ Finset.range L.colBlocks ×ˢ Finset.univ
+
+/-- **Repeated tiles** at `ω`: the committed tiles less their distinct values, what copying whole tiles saves. -/
+def repeats (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) : ℕ :=
+  (tileIdx L).card - ((tileIdx L).image fun x => tileOf L κ ω x.1 x.2.1 x.2.2).card
+
+open Classical in
+/-- **Table hits** at `ω`: the committed tiles whose value a strategy's memory starts with, a pre-coin table's tile or
+a coin stream's. -/
+noncomputable def tableHits (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (σ : Strategy L)
+    (stream : Coins L → ℕ → Fin tileWords → ℤ) (ω : Coins L) : ℕ :=
+  ((tileIdx L).filter fun x =>
+    (∃ a, σ.pre a = tileOf L κ ω x.1 x.2.1 x.2.2) ∨ ∃ c, stream ω c = tileOf L κ ω x.1 x.2.1 x.2.2).card
 
 /-- **The execution at `ω` is accepted**: it holds every MMA tile of committed words whole at some point, and
 registers the honest root. -/
