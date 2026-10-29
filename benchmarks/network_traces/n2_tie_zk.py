@@ -27,20 +27,23 @@ and the stream's registrations built from the stream's outcomes of record alone 
   ``forged``: the honest advice on rows of which one has a prompt digit changed, a row IoTieRequest accepts but the
   warden never signed, so Lean's registered reads refuse it ("does not open").
 * **Members.** One stream each, over the link's two windows: ``honest``, tied in both; ``carried``, bucket 4 proved on
-  its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but which
-  opens to no public row of the verifier's, so window 1 is refused; ``forged``, an advice whose request 1 is 45 prompt
-  tokens in the same cells, which IoTieRequest refuses in both sampling blocks; ``split``,
-  prompts of 40 and 5 tokens in cells the advice swaps, proved on the cells' own lanes, which
-  the verifier refuses in every window, the release not being the swapped advice's schedule (`EXPECT`).
+  its lane's carry-in fields + 5 with its carry-out's + 5, which IoTieRequest accepts but whose
+  ``pub`` row is no public row of the verifier's, so Lean's registered read of it refuses window 1; ``forged``, an
+  advice whose request 1 is 45 prompt tokens in the same cells, which IoTieRequest refuses in both sampling blocks, so
+  its output word 0 fails the registered read of ``o0``; ``split``, prompts of 40 and 5 tokens in cells the advice
+  swaps, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
+  swapped advice's schedule, so it has no lanes to register (`EXPECT`).
 * **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_unit` lowered once (the gate
   the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
-  ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file whose ``wit``
-  table is the window's bucket rows under the warden's salts and paths, its registered port. A round registers,
-  selects, proves live behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its
-  own registered reads at the warden's root (`IngressTie.registered`), each ``pub`` row opened only to its own copy
-  (its lanes from the advice and the release) and each ``o0`` row read. Per window: prove (the session's wall time,
-  the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean included). The members
-  run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is 1).
+  ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
+  of which is a registered read, ``wit`` the window's bucket rows under the warden's salts and paths, and ``pub`` and
+  ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
+  behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
+  (`IngressTie.registered`: the warden's root, and at known content its own lanes from the advice and the release
+  and the output word 1), each ``pub`` row opened to its own copy and each ``o0`` row read. Per window: prove (the
+  session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
+  included). The members run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
+  1).
 * **What the verifier receives** is `RECEIVED` per window and the advice (``advice.json``), scanned for every piece of
   the windows' held cells and their salts but those the public circuit or an empty slot holds, and a member fails on a
   piece `leak_scan.scan` reads as ``leaked``, not on a find it reads as structured (across the format's fields, or
@@ -95,7 +98,8 @@ EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, Fa
 #: what the verifier receives per link-window, by file (`member`)
 def _received(T: int) -> dict[str, str]:
     return {"registration.json": "the registration record (the warden's salted root)", "draw.json": "the stream's draw",
-            f"pub-{T}.bin": "the statement's public file", "registered.json": "the verifier's own registered reads",
+            f"pub-{T}.bin": "the statement's public file",
+            "registered.json": "the verifier's own registered reads, null where it has no lanes",
             "session-*": "the session's files",
             "delivered.json": "each unit's pub and o0 rows' salts and its output word",
             "outcome.json": "the outcome record", "advice.json": "the link's advice and the warden's release"}
@@ -384,12 +388,22 @@ def stager(M, tie: TS.IngressTie, out: Path) -> SimpleNamespace:
                            circuit_sha512=M.PF.file_sha512(out / "circuit.txt"))
 
 
+def known(tie: TS.IngressTie, x: SimpleNamespace) -> dict:
+    """The prover's ``pub`` and ``o0`` rows of window `x`, its lanes' public rows and its output words, committed as the
+    verifier registers its own at known content (`IngressTie.known_tree`): each root is the verifier's exactly where
+    the rows are, and a row that isn't fails its port's registered read."""
+    return {"pub": tie.known_tree(x.head, "pub", [tie.row(a, "pub") for a in x.args]),
+            "o0": tie.known_tree(x.head, "o0", [SVC.output_row(w) for w in x.words])}
+
+
 def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNamespace], out: Path) -> dict:
     """Every link-window's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
-    outputs the lowering's, held to the IR reference): a shared-row file whose ``wit`` table is the window's bucket rows
-    under the warden's salts and paths (`warden_rows.Cells.statement`, its header's registered ``wit``), the ``pub``
-    and ``o0`` rows under fresh salts. Each staged ``o0`` row must open to its output word, and each ``pub`` row to the
-    verifier's own copy exactly where the prover's lanes are the verifier's."""
+    outputs the lowering's, held to the IR reference): a shared-row file every port of which is a registered read, its
+    ``wit`` table the window's bucket rows under the warden's salts and paths (`warden_rows.Cells.statement`), and its
+    ``pub`` and ``o0`` rows under the prover's known values' public salts and paths (`known`). Each staged ``o0`` row
+    must open to its output word, and each ``pub`` row to the verifier's own copy exactly where the prover's lanes are
+    the verifier's. Beside it, the verifier's own registered reads (`IngressTie.registered`, null where it has no
+    lanes)."""
     np, st, t = M.np, sg.st, time.time()
     ands = None
     for name, rd in rounds.items():
@@ -397,10 +411,12 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
             d = out / name / f"w{x.window:03d}" / "statement"
             rows = {r: np.stack([np.frombuffer(tie.row(a, r), "<u2") for a in x.args]) for r in TS.ROWS}
             _words, salts, entry = x.cells.statement(range(T))
-            fresh = {r: [os.urandom(WR.SALT_BYTES) for _ in range(T)] for r in ("pub", "o0")}
-            got = st.stage(rows, d, os.urandom(32), salts={"wit": salts, **fresh}, indices=range(T),
+            trees = known(tie, x)
+            public = {p: list(v.salts) for p, v in trees.items()}
+            got = st.stage(rows, d, os.urandom(32), salts={"wit": salts, **public}, indices=range(T),
                            set_name=f"{st.iset.name}-{name}-w{x.window}", tables=rows,
-                           refs={r: list(range(T)) for r in TS.ROWS}, registered={TS.REGISTERED: entry})
+                           refs={r: list(range(T)) for r in TS.ROWS},
+                           registered={TS.REGISTERED: entry, **{p: v.statement(range(T))[2] for p, v in trees.items()}})
             ands = got["ands"]
             words = [int(v) for v in np.asarray(got["outs"]["o0"])[:, 0]]
             if words != x.words:
@@ -410,16 +426,16 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
             (d / "pub.bin").rename(d / f"pub-{T}.bin")
             (d / "tables").mkdir(exist_ok=True)
             os.link(sg.circuit, d / "circuit.txt")
-            (d / "registered.json").write_text(json.dumps(tie.registered(x.head), sort_keys=True))
+            (d / "registered.json").write_text(json.dumps(tie.registered(x.head, x.own), sort_keys=True))
             for u in range(T):
                 bcs = SVC._commitments(d / f"pub-{T}.bin", u)
                 mine = None if x.mine[u] is None else tie.row(x.mine[u], "pub")
-                pub = bool(bcs) and mine is not None and SVC._opens(mine, tie.bits("pub"), fresh["pub"][u], bcs["pub"])
+                pub = bool(bcs) and mine is not None and SVC._opens(mine, tie.bits("pub"), public["pub"][u], bcs["pub"])
                 if not (bcs and pub == x.opens[u]
-                        and SVC._opens(SVC.output_row(words[u]), SVC.OUT_BITS, fresh["o0"][u], bcs["o0"])):
+                        and SVC._opens(SVC.output_row(words[u]), SVC.OUT_BITS, public["o0"][u], bcs["o0"])):
                     raise SystemExit(f"{name} window {x.window} unit {u}: the staged rows don't open as the prover's "
                                      "lanes say")
-            x.statement = SimpleNamespace(dir=d, salts={u: {r: fresh[r][u] for r in fresh} for u in range(T)},
+            x.statement = SimpleNamespace(dir=d, salts={u: {r: public[r][u] for r in public} for u in range(T)},
                                           outputs=dict(enumerate(words)), private=salts)
     return {"statements": sum(len(rd.windows) for rd in rounds.values()), "instances": T, "ands": ands,
             "stage_s": round(time.time() - t, 1)}
@@ -497,9 +513,9 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
                          "max_child_rss_gb": proc["max_child_rss_gb"], "cpu_s": proc["cpu_s"]},
                "verify_s": verify_s, "server_verdict": ((record or {}).get("verdict") or {}).get("accepted"),
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
-        # a row the warden never signed is Lean's registered reads' to refuse, whatever the unit says of it
-        held = (proof["proved"] and opened == [w if o else None for w, o in zip(x.words, x.opens)]) \
-            if x.held is None else not proof["lean_accepted"]
+        # every row is a registered read (the warden's root, the verifier's lanes, the output word 1), so a window the
+        # reference refuses is Lean's to refuse, whatever the unit says of it
+        held = (proof["proved"] and opened == x.words) if x.expect else not proof["lean_accepted"]
         row["registered_read"] = x.held
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
                               and held and row["public"] == {"verdict": x.expect, "advice": digest})

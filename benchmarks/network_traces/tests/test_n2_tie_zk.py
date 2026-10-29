@@ -1,7 +1,8 @@
 """n2_tie_zk's members at the pinned size class: each bucket's output word by IoTieRequest's reference, and whether the
 prover's ``pub`` row is the verifier's own, give the member's verdicts (`EXPECT`): honest tied; carried, IoTieRequest
-accepting bucket 4 on an added carried field count whose row isn't the verifier's; forged and split, refused. Each
-witness row is whole u16 words, and the scan's blobs are the warden's held cells and the rows' salts, never an empty
+accepting bucket 4 on an added carried field count whose row isn't the verifier's; forged and split, refused. The
+verifier's registered reads name every port, and the prover's ``pub`` and ``o0`` rows have its known roots exactly
+where the reference accepts. Each witness row is whole u16 words, and the scan's blobs are the warden's held cells and the rows' salts, never an empty
 slot. ``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or
 proves (`n2_tie_zk.prove` does, on a node)."""
 
@@ -47,6 +48,26 @@ def test_each_members_references_give_its_verdicts():
     assert [x.opens for x in carried.windows] == [[True] * tz.T, [False] + [True] * (tz.T - 1)]
     forged = tz.link_windows(tie, *tz.members()["forged"][:3])
     assert all(x.own is not None and 0 in x.words for x in forged.windows)
+
+
+def test_the_provers_known_rows_are_the_verifiers_exactly_where_the_reference_accepts():
+    """Every port of the statement is one of the verifier's registered reads (C-Flock's `Registered.checkComplete`): its
+    file names ``wit`` at the warden's root and ``pub`` and ``o0`` at known content, and the prover's rows of those
+    (`n2_tie_zk.known`) have the verifier's roots exactly where its ``pub`` rows are the verifier's and every output
+    word is 1, so Lean's registered reads refuse each window the reference refuses: carried's window 1 at ``pub``,
+    forged's at ``o0``. The split's verifier has no lanes, so no file, and refuses without a Lean run."""
+    tie = _tie()
+    for name, (link, adv, edit, _) in tz.members().items():
+        for x in tz.link_windows(tie, link, adv, edit).windows:
+            reads, mine = tie.registered(x.head, x.own), tie.known(x.head, x.own)
+            if x.own is None:
+                assert name == "split" and reads is None and mine is None and not x.expect
+                continue
+            assert sorted(reads["ports"]) == sorted(tz.TS.PORTS), name
+            got = {p: v.root for p, v in tz.known(tie, x).items()}
+            same = {p: got[p] == v.root for p, v in mine.items()}
+            assert same == {"pub": all(x.opens), "o0": all(w == 1 for w in x.words)}, (name, x.window)
+            assert all(same.values()) == bool(x.expect), (name, x.window)
 
 
 def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_honest_tied_and_forged_refused():
