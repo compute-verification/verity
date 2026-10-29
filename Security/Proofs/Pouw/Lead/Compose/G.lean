@@ -63,7 +63,7 @@ theorem perCoin (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     ring
   have hhash : shaWordsRegs * wordsBlocks (lead T m n K) C + shaARegs * aBlocks (lead T m n K) ≤
       (σ.exec ω).shaRegs :=
-    (hcommit.2 ω).trans ((Commit.hashed_credit_ge H C κ isA σ ω (hhash σ hσ ω hacc) hnb).trans (hsha σ hσ ω))
+    (hcommit.2 ω).trans ((Commit.hashed_credit_ge H C κ isA σ ω (hhash σ hσ ω he hacc) hnb).trans (hsha σ hσ ω))
   have htw : (tileWords : ℚ) = 128 := by norm_num [tileWords]
   unfold honestRegs
   push_cast at hmin' hwords ⊢
@@ -80,22 +80,41 @@ theorem G : Pouw.Guarantees.Lead.G := by
   push Not at hB
   obtain ⟨σ', hσ', -, htwin⟩ := hout σ (hcard σ hcan)
   have hacc' : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ' ω := fun ω hω => by
-    obtain ⟨-, hh, hr, -, -⟩ := htwin ω
-    obtain ⟨hhold, hroot⟩ := hacc ω hω
-    exact ⟨fun rb hrb cb hcb t => hh _ (hhold rb hrb cb hcb t), hr.trans hroot⟩
-  have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω => by
-    unfold Break
-    rw [(htwin ω).2.2.2.1]
-    exact hB ω hω
+    obtain ⟨he, hh, hr, -, -⟩ := htwin ω
+    obtain ⟨hhold, hroot, hbits⟩ := hacc ω hω
+    refine ⟨fun rb hrb cb hcb t => hh _ (hhold rb hrb cb hcb t), hr.trans hroot, ?_⟩
+    rw [he]
+    exact (Nat.cast_nonneg _).trans hbits
+  have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω hb => by
+    unfold Break Hash.CollisionIn at hb
+    obtain ⟨x, hx, y, hy, hxy⟩ := hb
+    have hsub : ∀ z ∈ (σ'.exec ω).hashed ++ (C.msgs H (word (lead T m n K) κ ω) ++ C.aMsgs),
+        z ∈ (σ.exec ω).hashed ++ (C.msgs H (word (lead T m n K) κ ω) ++ C.aMsgs) := fun z hz => by
+      rcases List.mem_append.1 hz with hz | hz
+      · rcases (htwin ω).2.2.2.1 z hz with h | h
+        · exact List.mem_append_left _ h
+        · exact List.mem_append_right _ h
+      · exact List.mem_append_right _ hz
+    apply hB ω hω
+    unfold Break Hash.CollisionIn
+    exact ⟨x, hsub x hx, y, hsub y hy, hxy⟩
   have htw : (tileWords : ℚ) = 128 := by norm_num [tileWords]
+  have hβ : 0 ≤ betaLead (lead T m n K) C := by
+    unfold betaLead nMax wMac honestRegs wordsBlocks wordsRegs aBlocks shaWordsRegs shaARegs
+    positivity
+  have hbits0 : 0 ≤ (lead T m n K).callBits := by unfold Layout.callBits; positivity
+  have hnet : 32 * networkGap (lead T m n K) C = betaLead (lead T m n K) C * (lead T m n K).callBits := by
+    unfold networkGap
+    ring
   have hstep : ∀ ω ∈ O,
       32 * honestRegs (lead T m n K) C - 32 * (tileWords * repeats (lead T m n K) κ ω : ℚ) -
-          32 * (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) - 32 * networkGap (lead T m n K) ≤
+          32 * (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) - 32 * networkGap (lead T m n K) C ≤
         (σ.work pr ω : ℚ) := by
     intro ω hω
     have h1 := perCoin pr H T m n K κ stream C isA Real hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
       (hacc' ω hω) (hnb' ω hω)
     have h2 := (htwin ω).2.2.2.2
+    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2.2 hβ
     rw [htw] at h1 ⊢
     linarith
   have hsum := Finset.sum_le_sum hstep
@@ -111,7 +130,9 @@ theorem G : Pouw.Guarantees.Lead.G := by
   rw [← Finset.mul_sum] at hrep htab
   have hO : (O.card : ℚ) ≤ Fintype.card (Coins (lead T m n K)) := by exact_mod_cast Finset.card_le_univ O
   have hN : (0 : ℚ) ≤ Fintype.card (Coins (lead T m n K)) := Nat.cast_nonneg _
-  have hng : 0 ≤ networkGap (lead T m n K) := by unfold networkGap stockRegs; positivity
+  have hng : 0 ≤ networkGap (lead T m n K) C := by
+    unfold networkGap
+    exact div_nonneg (mul_nonneg hβ hbits0) (by norm_num)
   have hng' := mul_le_mul_of_nonneg_right hO hng
   have hhead := mul_nonneg hN (show 0 ≤ headGap (lead T m n K) C by unfold headGap; positivity)
   have hhid := mul_nonneg hN (show 0 ≤ hidingGap (lead T m n K) by unfold hidingGap; positivity)
@@ -216,15 +237,19 @@ theorem honest : Pouw.Guarantees.Lead.Honest := by
     simp only [honestStrategy, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, shaCredit,
       Bool.false_eq_true, ↓reduceIte, honestShaRegs]
     exact Nat.le_ceil _
-  · rintro σ rfl ω - y hy
+  · rintro σ rfl ω - - y hy
     simp only [honestCommit, List.append_nil, List.mem_singleton] at hy
     exact ⟨honestMsg _, List.mem_singleton_self _, by rw [hy]⟩
   · rintro σ rfl
-    refine ⟨_, rfl, rfl, fun ω => ⟨rfl, fun _ h => h, rfl, rfl, ?_⟩⟩
-    have : 0 ≤ networkGap (lead T m n K) := by unfold networkGap stockRegs; positivity
-    linarith
+    refine ⟨_, rfl, rfl, fun ω => ⟨rfl, fun _ h => h, rfl, fun _ h => Or.inl h, ?_⟩⟩
+    have : ((honestStrategy (lead T m n K) κ).exec ω).egress = 0 := rfl
+    rw [this, Nat.cast_zero, mul_zero, add_zero]
   · intro ω
-    refine ⟨fun rb hrb cb hcb t => List.mem_map.2 ⟨(rb, cb, t), ?_, rfl⟩, rfl⟩
-    simp [tileIdx, hrb, hcb]
+    refine ⟨fun rb hrb cb hcb t => List.mem_map.2 ⟨(rb, cb, t), ?_, rfl⟩, rfl, ?_⟩
+    · simp [tileIdx, hrb, hcb]
+    · show ((0 : ℕ) : ℚ) ≤ _
+      unfold Layout.callBits
+      push_cast
+      positivity
 
 end Pouw.SecurityProofs.Lead.Compose
