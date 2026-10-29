@@ -104,7 +104,14 @@ files = ["integrations/vllm/**", "benchmarks/remote_session/**", "benchmarks/one
 [keep_in]
 # A sampled-proofs test program's root, not PoUB's.
 "verity/core/service/sampled_proofs/tests/test_challenger_difftest.py" = ["RemoteWindow"]
+# The retired-terms gate names v0's ids as written.
+"tests/test_retired_terms.py" = ["remote-bandwidth", "remote_bandwidth"]
 
 [keep]
-# How the recorded P2 fixture's W was drawn, which its commitment and C* hash.
-strings = ["verity/remote-bandwidth/tests/p2-store/w"]
+# How the recorded P2 fixture's W was drawn, which its commitment and C* hash; v0's id, which the replay of recorded
+# sessions reads; and the verifier's tree at a commit before the move, which auditor_line reads.
+strings = [
+    "verity/remote-bandwidth/tests/p2-store/w",
+    'RETIRED = "verity/remote-bandwidth"',
+    'RETIRED_TREE = "verity/core/protocols/remote_bandwidth"',
+]
