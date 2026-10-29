@@ -192,6 +192,50 @@ __global__ void clock_k(Clk* clk, long long cycles) {
 }
 
 // ---- host ------------------------------------------------------------------------------------------------------------------
+namespace hsha {
+static const u64 K[80] = {
+    0x428a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull, 0x3956c25bf348b538ull,
+    0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull, 0xd807aa98a3030242ull, 0x12835b0145706fbeull,
+    0x243185be4ee4b28cull, 0x550c7dc3d5ffb4e2ull, 0x72be5d74f27b896full, 0x80deb1fe3b1696b1ull, 0x9bdc06a725c71235ull,
+    0xc19bf174cf692694ull, 0xe49b69c19ef14ad2ull, 0xefbe4786384f25e3ull, 0x0fc19dc68b8cd5b5ull, 0x240ca1cc77ac9c65ull,
+    0x2de92c6f592b0275ull, 0x4a7484aa6ea6e483ull, 0x5cb0a9dcbd41fbd4ull, 0x76f988da831153b5ull, 0x983e5152ee66dfabull,
+    0xa831c66d2db43210ull, 0xb00327c898fb213full, 0xbf597fc7beef0ee4ull, 0xc6e00bf33da88fc2ull, 0xd5a79147930aa725ull,
+    0x06ca6351e003826full, 0x142929670a0e6e70ull, 0x27b70a8546d22ffcull, 0x2e1b21385c26c926ull, 0x4d2c6dfc5ac42aedull,
+    0x53380d139d95b3dfull, 0x650a73548baf63deull, 0x766a0abb3c77b2a8ull, 0x81c2c92e47edaee6ull, 0x92722c851482353bull,
+    0xa2bfe8a14cf10364ull, 0xa81a664bbc423001ull, 0xc24b8b70d0f89791ull, 0xc76c51a30654be30ull, 0xd192e819d6ef5218ull,
+    0xd69906245565a910ull, 0xf40e35855771202aull, 0x106aa07032bbd1b8ull, 0x19a4c116b8d2d0c8ull, 0x1e376c085141ab53ull,
+    0x2748774cdf8eeb99ull, 0x34b0bcb5e19b48a8ull, 0x391c0cb3c5c95a63ull, 0x4ed8aa4ae3418acbull, 0x5b9cca4f7763e373ull,
+    0x682e6ff3d6b2b8a3ull, 0x748f82ee5defb2fcull, 0x78a5636f43172f60ull, 0x84c87814a1f0ab72ull, 0x8cc702081a6439ecull,
+    0x90befffa23631e28ull, 0xa4506cebde82bde9ull, 0xbef9a3f7b2c67915ull, 0xc67178f2e372532bull, 0xca273eceea26619cull,
+    0xd186b8c721c0c207ull, 0xeada7dd6cde0eb1eull, 0xf57d4f7fee6ed178ull, 0x06f067aa72176fbaull, 0x0a637dc5a2c898a6ull,
+    0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,
+    0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull};
+static u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
+static void iv(u64 h[8]) {
+  const u64 v[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
+                    0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
+  for (int i = 0; i < 8; i++) h[i] = v[i];
+}
+static void compress(u64 h[8], const u64 m[16]) {
+  u64 w[80], a[8];
+  for (int i = 0; i < 16; i++) w[i] = m[i];
+  for (int i = 16; i < 80; i++) {
+    const u64 s0 = rotr(w[i - 15], 1) ^ rotr(w[i - 15], 8) ^ (w[i - 15] >> 7);
+    const u64 s1 = rotr(w[i - 2], 19) ^ rotr(w[i - 2], 61) ^ (w[i - 2] >> 6);
+    w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+  }
+  for (int i = 0; i < 8; i++) a[i] = h[i];
+  for (int i = 0; i < 80; i++) {
+    const u64 t1 = a[7] + (rotr(a[4], 14) ^ rotr(a[4], 18) ^ rotr(a[4], 41)) + ((a[4] & a[5]) ^ (~a[4] & a[6])) + K[i] + w[i];
+    const u64 t2 = (rotr(a[0], 28) ^ rotr(a[0], 34) ^ rotr(a[0], 39)) + ((a[0] & a[1]) ^ (a[0] & a[2]) ^ (a[1] & a[2]));
+    for (int j = 7; j > 0; j--) a[j] = a[j - 1];
+    a[4] += t1;
+    a[0] = t1 + t2;
+  }
+  for (int i = 0; i < 8; i++) h[i] += a[i];
+}
+}  // namespace hsha
+
 static u64 mix64(u64 x) {
   x += 0x9E3779B97F4A7C15ull;
   x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -407,7 +451,8 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   uint8_t* dA = up(ta);
   uint8_t* dB = up(tile_b(L));
   int* dbeta = up(beta);
-  u64* dmsg = up(seed_msg(seed));
+  const std::vector<u64> msg = seed_msg(seed);
+  u64* dmsg = up(msg);
   u32* dcoins;
   const long long nb = coin_blocks(m, S);
   CK(cudaMalloc(&dcoins, nb * 64));
@@ -429,6 +474,25 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   CK(cudaMemcpy(out.data(), dout, (size_t)m * n * 4, cudaMemcpyDeviceToHost));
   CK(cudaMemcpy(fa.data(), dA, ta.size(), cudaMemcpyDeviceToHost));
   auto bit = [&](int i, int p) { return (int)((coins[(size_t)i * H + (p >> 5)] >> (p & 31)) & 1u); };
+  // every coin block against a host SHA-512: seed = SHA-512(seed message), block b = SHA-512(seed || be64 b)
+  size_t bad_coin = 0;
+  {
+    u64 sd[8], st[8], w[16];
+    hsha::iv(sd);
+    hsha::compress(sd, &msg[0]);
+    hsha::compress(sd, &msg[16]);
+    for (long long b = 0; b < nb; b++) {
+      for (int j = 0; j < 8; j++) w[j] = sd[j];
+      w[8] = (u64)b;
+      w[9] = 0x8000000000000000ull;
+      for (int j = 10; j < 15; j++) w[j] = 0;
+      w[15] = 72 * 8;
+      hsha::iv(st);
+      hsha::compress(st, w);
+      for (int j = 0; j < 8; j++)
+        bad_coin += (coins[16 * b + 2 * j] != (u32)(st[j] >> 32)) + (coins[16 * b + 2 * j + 1] != (u32)st[j]);
+    }
+  }
   // the formed A' against the spec: data lanes unchanged, noise lanes the row's bits
   size_t bad_form = 0;
   for (int i = 0; i < m; i++)
@@ -465,16 +529,25 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   }
   printf("{\"check\": \"ssn_1l\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"data\": \"%s\", \"words\": %zu, "
          "\"word_mismatches\": %zu, \"final_mismatches\": %zu, \"formed_mismatches\": %zu, \"max_abs_word\": %lld, "
-         "\"step_bits_set\": %zu, \"step_bits\": %zu}\n",
+         "\"step_bits_set\": %zu, \"step_bits\": %zu, \"coin_blocks\": %lld, \"coin_word_mismatches\": %zu}\n",
          m, n, K, S, BN, kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : "zero", words, bad_w, bad_o, bad_form,
-         maxabs, ones, (size_t)m * (S - 1));
+         maxabs, ones, (size_t)m * (S - 1), nb, bad_coin);
   fflush(stdout);
   CK(cudaFree(dA)); CK(cudaFree(dB)); CK(cudaFree(dbeta)); CK(cudaFree(dmsg)); CK(cudaFree(dcoins));
   CK(cudaFree(dW)); CK(cudaFree(dout));
-  return bad_w || bad_o || bad_form;
+  return bad_w || bad_o || bad_form || bad_coin;
 }
 
 static int check() {
+  {
+    u64 h[8], m[16] = {0x6162638000000000ull, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24};
+    hsha::iv(h);
+    hsha::compress(h, m);
+    if (h[0] != 0xddaf35a193617abaull || h[7] != 0x2a9ac94fa54ca49full) {
+      fprintf(stderr, "ERR host SHA-512 of \"abc\"\n");
+      return 1;
+    }
+  }
   struct C { int m, n, K, BN, kind; };
   const C cs[] = {{128, 512, 2048, 256, 0}, {128, 512, 2048, 128, 0}, {64, 256, 8192, 256, 0}, {64, 512, 100, 256, 0},
                   {64, 256, 28, 256, 0},    {64, 256, 59, 128, 0},    {64, 16384, 90, 256, 0}, {64, 256, 8192, 256, 1},

@@ -4,7 +4,8 @@
 # Measurement only. cwd: the source tree's root.
 #   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192), REPS (5), BUDGET_GB (16: the exported words a
 #   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg), CUDA_HOME (/usr/local/cuda-13.0),
-#   LEASE_MIN (25), CHECK (1; 0 skips the exact check), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
+#   LEASE_MIN (25), CHECK (1; 0 skips the exact check), TIME (1; 0 skips the timings), NOT_AFTER (a UTC time past which
+#   the leased part does no GPU work), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
 #   over MS; time_m<M>_cap<C>.jsonl)
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -44,6 +45,9 @@ EOF
 fi
 
 say "leased CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
+if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
+  say "past NOT_AFTER $NOT_AFTER: no GPU work"; exit 5
+fi
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv | tee -a "$OUT/steps.txt"
 nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,utilization.gpu,temperature.gpu,memory.used --format=csv -lms 200 \
   -i "${CUDA_VISIBLE_DEVICES:-0}" > "$OUT/smi.csv" 2>&1 &
@@ -54,6 +58,7 @@ if [ "${CHECK:-1}" = 1 ]; then
   "$BUILD_DIR/ssn" check > "$OUT/check.jsonl" 2> "$OUT/check.err"
   worst=$?; say "check rc $worst"; cat "$OUT/check.jsonl"
 fi
+[ "${TIME:-1}" = 1 ] || exit "$worst"
 for cap in ${CAPS:-0}; do
   for m in ${MS:-64 512 8192}; do
     f=time_m$m; [ "$cap" = 0 ] || f=time_m${m}_cap$cap
