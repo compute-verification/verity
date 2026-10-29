@@ -555,6 +555,32 @@ theorem credit_le_cost_separated [DecidableEq E] [DecidableEq V] {cw cc cs : ℕ
   have h := credit_le_cost_floor hcc hcs C m₀ L hc ω hω
   rwa [shared_eq_zero C L _ _ hsep (fun a v e h _ => hinit a v e h), mul_zero, add_zero] at h
 
+omit [DecidableEq A] in
+/-- **A register's lanes hold at most its values, per entry**: with a slot a register of lanes `Λ`, the lanes'
+(entry, value) pairs number at most `|Λ|` times the register pairs. -/
+theorem lanes_le_pairs {Λ W : Type} [Fintype Λ] [DecidableEq E] [DecidableEq W] (ω : Ω)
+    (L : List (Ev Ω A (Λ → W) E)) :
+    ∑ ℓ : Λ, ((pairsAt ω L).image fun p => (p.1, p.2 ℓ)).card ≤ Fintype.card Λ * (pairsAt ω L).card :=
+  (sum_le_sum fun _ _ => card_image_le).trans_eq (by rw [sum_const, card_univ, smul_eq_mul])
+
+open Classical in
+/-- **At register grain the channel closes for any class**: price whole-register instructions (every instruction
+issues for all its lanes, predicated or not, so a predicated write or a move costs at least a register write) and
+read check (b)'s per-lane credit. When the class separates the groups' register values (two groups' registers at one
+slot differ somewhere in it, and none is its slot's prior content everywhere), the lanes' credit in register writes is
+at most `|Λ|` times the cost. Separation at register grain holds for every class that contains an outcome at which
+no two groups share a whole register value, the outcome itself included. -/
+theorem lanes_le_cost_separated {Λ W : Type} [Fintype Λ] [DecidableEq E] [DecidableEq W] {cw cc cs : ℕ}
+    (hcc : cw ≤ cc) (hcs : cw ≤ cs) (C : Set Ω) (m₀ : Ω → A → Λ → W) (L : List (Ev Ω A (Λ → W) E))
+    (hc : ∀ ω ∈ C, Correct ω (m₀ ω) L)
+    (hsep : ∀ a v e, Ev.hash a v e ∈ L → ∀ v' e', Ev.hash a v' e' ∈ L → e ≠ e' → ∃ ω ∈ C, v ω ≠ v' ω)
+    (hinit : ∀ a v e, Ev.hash a v e ∈ L → ∃ ω ∈ C, v ω ≠ m₀ ω a) (ω : Ω) (hω : ω ∈ C) :
+    cw * ∑ ℓ : Λ, ((pairsAt ω L).image fun p => (p.1, p.2 ℓ)).card ≤ Fintype.card Λ * cost cw cc cs ω L :=
+  calc cw * ∑ ℓ : Λ, ((pairsAt ω L).image fun p => (p.1, p.2 ℓ)).card
+      ≤ cw * (Fintype.card Λ * (pairsAt ω L).card) := Nat.mul_le_mul_left cw (lanes_le_pairs ω L)
+    _ = Fintype.card Λ * (cw * (pairsAt ω L).card) := by ring
+    _ ≤ _ := Nat.mul_le_mul_left _ (credit_le_cost_separated hcc hcs C m₀ L hc hsep hinit ω hω)
+
 /-- A program: uniform branches, each priced `cb`, down to static streams. -/
 inductive Prog (Ω A V E : Type)
   | leaf (L : List (Ev Ω A V E))
