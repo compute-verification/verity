@@ -6,9 +6,9 @@
 # gpu-lease, probe.py times every probe whose verdict is the declared one, with the SM clock sampled.
 #   research run --on vy-dc-h200-5 --project verity --campaign pouw-night --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=n-floor -- bash benchmarks/pouw/np_floor/probes.sh [SOURCE.cu...]
-# SOURCE.cu... replaces the list (every probe of each is timed): race.cu, the honest wgmma against the word programs.
-# Writes $OUT/build.log, gate-build.{txt,json}, sass/, smi.csv and one probe.py run directory a binary. GATE_ONLY=1
-# stops after the gate, with no lease.
+# SOURCE.cu... replaces the list (every probe of each is timed, or those PROBES_ONLY, a probe.py --only regex, names):
+# race.cu, the honest wgmma against the word programs. Writes $OUT/build.log, gate-build.{txt,json}, sass/, smi.csv and
+# one probe.py run directory a binary. GATE_ONLY=1 stops after the gate, with no lease.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -33,7 +33,11 @@ srcs=("$HERE/tld4.cu" "$OP/probes/lm.cu" "$OP/probes/side.cu" "$OP/probes/collec
   "$OP/probes/pipes.cu")
 if [ $# -gt 0 ]; then
   srcs=()
-  for s in "$@"; do s=$(cd "$(dirname "$s")" && pwd)/$(basename "$s"); srcs+=("$s"); ONLY[$s]=${ONLY[$s]:-.}; done
+  for s in "$@"; do
+    s=$(cd "$(dirname "$s")" && pwd)/$(basename "$s")
+    srcs+=("$s")
+    ONLY[$s]=${PROBES_ONLY:-${ONLY[$s]:-.}}
+  done
 fi
 : >"$WORK/built"
 for s in "${srcs[@]}"; do
