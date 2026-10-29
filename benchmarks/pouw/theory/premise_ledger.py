@@ -1423,7 +1423,10 @@ def periods(data: dict, cb: dict) -> dict:
                 cb_terms("A/rgap1/sv4+tag+nz", *req[:2]),
             "coin branch, ssn_1l_hw, zero rows (G1)": cb_terms("ssn_1l_hw", *zero),
             "coin branch, ssn_1l_tele4m (candidate), zero rows (G1)": cb_terms("ssn_1l_tele4m", *zero),
-            "coin branch, crafted increments with the prover's own weights (any ssn design)": t["coin_branch_crafted"]}
+            "coin branch, ssn_1l_tag, crafted weights without model-public (the walk)":
+                cb_terms("ssn_1l_tag", "coin_branch_crafted"),
+            "coin branch, ssn_1l_hw, crafted weights without model-public (the cancel)":
+                cb_terms("ssn_1l_hw", "coin_branch_crafted")}
     stock = INT8_MAC_S * MFU_SERVE
     mac_s = {"one H200": stock, "datacenter": stock * NS.DATACENTER}
     out = {}
