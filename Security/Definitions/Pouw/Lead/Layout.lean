@@ -9,10 +9,11 @@ three coin lanes a later step in 64-row tiles with 7-bit odd coins (`blc4a-t64-e
 row parity (`-rot`), served noisy with the coin lanes folded exactly, k32 steps, words chunks of 256 KiB (`l1w`) and
 hiding L1 + (a).
 
-* **The layout** (`Layout`) is the call's shape (`m` rows, `n` columns, `S` k32 steps a word) and the design's
-  constants: the coin tile's rows, the coin lanes' bits, the words chunk's size, the egress cap the network term reads
-  and the node's memory.
-  `lead` fixes the design's constants; `pt512x64`, `pt512x512` and `pt8192` are the three evaluated points.
+* **The layout** (`Layout`) is the call's shape (`m` rows and `n` columns of committed words, `rows` of A, `S` k32
+  steps a word) and the design's constants: the coin tile's rows, the coin lanes' bits, the words chunk's size, the
+  egress cap the network term reads and the node's memory.
+  `lead` commits every call over whole MMA tiles (`padRows`, `padCols`), decode (`m = 1`) included, and fixes the
+  design's constants; `pt512x64`, `pt512x512` and `pt8192` are the three evaluated points.
 * **The coins** (`Coins`) are what the certifier draws after it holds the call's `A`: the tag bits `b`, the step-1
   bits `a₁`, the tag weights `G ∈ [−3, 3]^{4×n}` and the coin lanes `s ∈ {±1, ±3, …, ±(2^e − 1)}`, one a step, tile,
   lane and column. They are a finite type, and every bound averages over them uniformly.
@@ -31,9 +32,11 @@ namespace Pouw.Lead
 structure Layout where
   /-- Tokens a step (the evaluated points' `T`). -/
   T : ℕ
-  /-- Rows of the call. -/
+  /-- Rows the call's words commit: its rows padded to whole MMA tiles (`padRows`). -/
   m : ℕ
-  /-- Columns of the call. -/
+  /-- The call's rows before padding: A's committed rows. -/
+  rows : ℕ
+  /-- Columns the call's words commit: its columns padded to whole MMA tiles (`padCols`). -/
   n : ℕ
   /-- Inner dimension of the call. -/
   K : ℕ
@@ -107,12 +110,21 @@ def DataInRange (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) : Pr
 /-- k32 steps for inner dimension `K`: step 0 holds 24 data lanes and each later step 28, `1 + ⌈(K − 24)/28⌉`. -/
 def stepsFor (K : ℕ) : ℕ := 1 + (K - 24 + 27) / 28
 
-/-- **The lead** at `T` tokens and a call of `m × K × n`: 64-row coin tiles, 7-bit coins, 256 KiB words chunks, the
-network term at cap 32, and 8 TiB of node memory (`2^34` tiles). -/
+/-- A call's rows padded to whole MMA tiles: `16 ⌈m / 16⌉`. -/
+def padRows (m : ℕ) : ℕ := 16 * ((m + 15) / 16)
+
+/-- A call's columns padded to whole MMA tiles: `8 ⌈n / 8⌉`. -/
+def padCols (n : ℕ) : ℕ := 8 * ((n + 7) / 8)
+
+/-- **The lead** at `T` tokens and a call of `m × K × n`: its words committed over whole MMA tiles (`padRows m` rows
+and `padCols n` columns: a padding row has zero data and its coin lanes, tag and coins like any row, a padding
+column its coins), 64-row coin tiles, 7-bit coins, 256 KiB words chunks, the network term at cap 32, and 8 TiB of
+node memory (`2^34` tiles). -/
 def lead (T m n K : ℕ) : Layout where
   T := T
-  m := m
-  n := n
+  m := padRows m
+  rows := m
+  n := padCols n
   K := K
   S := stepsFor K
   tile := 64

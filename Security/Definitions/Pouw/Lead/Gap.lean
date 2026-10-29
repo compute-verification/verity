@@ -5,8 +5,8 @@ import Definitions.Pouw.Lead.Model
 
 Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
 
-* **Stock** (`stockRegs`): the call's unmodified FP8 matmul, `m · n · K / 32` k32 `wgmma` registers. Every share is
-  of stock.
+* **Stock** (`stockRegs`): the call's unmodified FP8 matmul over whole MMA tiles, `m · n · K / 32` k32 `wgmma`
+  registers with `m` and `n` padded. Every share is of stock, and the honest work and the gap are the padded call's.
 * **The honest work** (`honestRegs`): the committed words, one register each (`m · n · S`), and the SHA-512
   compressions of the commitment at ShaWrites' registers per form: `3,515.38` a words compression and `3,449.05` an A
   compression (`shaWordsRegs`, `shaARegs`).
@@ -38,8 +38,8 @@ def shaARegs : ℚ := 344905 / 100
 /-- The words' bytes in 128-byte compressions, with one padding block a chunk: `4 m n S / 128 + chunks`. -/
 def wordsBlocks (L : Layout) (C : Commit L) : ℚ := 4 * wordsRegs L / 128 + C.chunks
 
-/-- A's FP8 rows in 128-byte compressions: `m · K / 128`. -/
-def aBlocks (L : Layout) : ℚ := (L.m * L.K : ℚ) / 128
+/-- A's rows, unpadded, in 128-byte compressions: `rows · K / 128`. -/
+def aBlocks (L : Layout) : ℚ := (L.rows * L.K : ℚ) / 128
 
 /-- **The honest work** in registers: the words, and the commitment's compressions at ShaWrites' registers. -/
 def honestRegs (L : Layout) (C : Commit L) : ℚ :=

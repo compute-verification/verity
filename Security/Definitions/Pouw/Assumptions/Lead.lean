@@ -46,7 +46,7 @@ whole MMA tile's copy (`tileWords` words); writing any word of a tile writes the
 
 Rationale: on the measured kernels a reuse saves time only where a whole MMA tile (16 rows × 8 columns) repeats;
 this is the copy model, one line to change. -/
-def TileGrain (stream : Coins L → ℕ → Fin tileWords → ℤ) (Real : Strategy L → Prop) : Prop :=
+def TileGrain (stream : CoinStream L) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, (σ.exec ω).egress = 0 → ∀ y, (σ.exec ω).holds y →
     ∃ k a, run (σ.init stream ω) ((σ.exec ω).steps.take k) a 0 = y
 
