@@ -45,7 +45,7 @@ def unitEvent {L : Pouw.Lead.Layout} {N₀ : ℕ} (prc : Prices100) (sha : Hash.
     ¬ Break L sha C (κ U u) (p.play s ⟨u, h⟩) (s ⟨u, h⟩) ∧
     ((p.play s ⟨u, h⟩).work prc (s ⟨u, h⟩) : ℚ) < 32 * (honestRegs L C - gapFixed L C)
 
-theorem pr_unitEvent_le {Q R : Type} [Fintype Q] [Fintype R] {L : Pouw.Lead.Layout} {N₀ : ℕ} (prc : Prices100)
+theorem pr_unitEvent_le {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] {L : Pouw.Lead.Layout} {N₀ : ℕ} (prc : Prices100)
     (sha : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ : Pouw.Workload → ℕ → Fin L.m → Fin L.S → Fin L.n → ℤ)
     {can : Strategy L → Prop} (p : LeadProg L N₀ can) (U : Pouw.Workload) (u : ℕ)
     (htail : ∀ σ : Strategy L, can σ →
@@ -62,17 +62,17 @@ theorem pr_unitEvent_le {Q R : Type} [Fintype Q] [Fintype R] {L : Pouw.Lead.Layo
             Accepted L sha C (κ U u) (p.play s ⟨u, h⟩) (s ⟨u, h⟩) ∧
               ¬ Break L sha C (κ U u) (p.play s ⟨u, h⟩) (s ⟨u, h⟩) ∧
               ((p.play s ⟨u, h⟩).work prc (s ⟨u, h⟩) : ℚ) < 32 * (honestRegs L C - gapFixed L C)) :=
-            Pouw.pr_mono fun _ hs => hs.2
+            Pouw.pr_mono fun _ ⟨_, hs⟩ => hs
       _ ≤ etaLead L := pr_unit_le p ⟨u, h⟩
             (fun σ ω => Accepted L sha C (κ U u) σ ω ∧ ¬ Break L sha C (κ U u) σ ω ∧
               (σ.work prc ω : ℚ) < 32 * (honestRegs L C - gapFixed L C)) hη htail
-  · exact (Pouw.pr_eq_zero fun _ hx => h hx.1).le.trans hη
+  · exact (Pouw.pr_eq_zero fun _ ⟨hu, _⟩ => h hu).le.trans hη
 
 /-- **A winning run without a break has a unit's event**: some accepted call worked below
 `32 · (honestRegs − gapFixed)` and hashed no collision. -/
 theorem exists_unit_of_wins {Q R : Type} {L : Pouw.Lead.Layout} {N₀ : ℕ} (prc : Prices100)
     (sha : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ : Pouw.Workload → ℕ → Fin L.m → Fin L.S → Fin L.n → ℤ)
-    {can : Strategy L → Prop} (p : LeadProg L N₀ can) (U : Pouw.Workload) (B : ℝ) (hB : 0 ≤ B) (H : Q → R)
+    {can : Strategy L → Prop} (p : LeadProg L N₀ can) (U : Pouw.Workload) (B : ℝ) (H : Q → R)
     (s : Salt L N₀) (hgap : gapFixed L C < honestRegs L C)
     (hcost : ∑ u ∈ range U.layout.N, (unitWork prc p s u : ℝ) ≤ B)
     (hwin : Wins (protocol L N₀ Q R C) U (gamma L C) B (unitCommit sha C κ p U s) H s)
@@ -92,9 +92,9 @@ theorem exists_unit_of_wins {Q R : Type} {L : Pouw.Lead.Layout} {N₀ : ℕ} (pr
     · by_cases h2 : Accepted L sha C (κ U u) (p.play s ⟨u, h1⟩) (s ⟨u, h1⟩)
       · exact ⟨h1, h2⟩
       · rw [unitCommit, dif_pos h1, if_neg h2] at hc
-        exact Option.noConfusion hc
+        simp at hc
     · rw [unitCommit, dif_neg h1] at hc
-      exact Option.noConfusion hc
+      simp at hc
   have hγ : 1 - gamma L C =
       ((32 * (honestRegs L C - gapFixed L C) : ℚ) : ℝ) / ((⌊32 * honestRegs L C⌋₊ : ℕ) : ℝ) := by
     unfold gamma; ring
@@ -109,9 +109,8 @@ theorem exists_unit_of_wins {Q R : Type} {L : Pouw.Lead.Layout} {N₀ : ℕ} (pr
     · rw [← h0] at hwin
       simp at hwin
     · rw [div_div_eq_mul_div, div_lt_iff₀ hw₀] at hwin
-      refine lt_of_mul_lt_mul_right ?_ hpos.le
-      calc B * ((⌊32 * honestRegs L C⌋₊ : ℕ) : ℝ) < _ := hwin
-        _ = _ := by ring
+      by_contra hc
+      nlinarith [mul_le_mul_of_nonneg_right (not_lt.1 hc) hpos.le]
   have hsub : ∑ u ∈ correctSet (protocol L N₀ Q R C) U H s (unitCommit sha C κ p U s), (unitWork prc p s u : ℝ) ≤
       ∑ u ∈ range U.layout.N, (unitWork prc p s u : ℝ) :=
     sum_le_sum_of_subset_of_nonneg (fun u hu => (hmem u hu).1) fun _ _ _ => Nat.cast_nonneg _
@@ -142,7 +141,7 @@ theorem gamma_of_tail (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] (L : 
   calc _ ≤ Pouw.pr (fun x : (Q → R) × Salt L N₀ =>
           ∃ u ∈ range U.layout.N, unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2) :=
         Pouw.pr_mono fun x hx =>
-          exists_unit_of_wins prc sha C κ (N₀ := N₀) (can := can) A.online U B hB x.1 x.2 hgap (hA x.1 x.2).1 hx.1 hx.2
+          exists_unit_of_wins prc sha C κ (N₀ := N₀) (can := can) A.online U B x.1 x.2 hgap (hA x.1 x.2).1 hx.1 hx.2
     _ ≤ ∑ u ∈ range U.layout.N, Pouw.pr (fun x : (Q → R) × Salt L N₀ =>
           unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2) :=
         Pouw.Proofs.pr_exists_le_sum _ (fun u x => unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2)
