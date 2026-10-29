@@ -1606,6 +1606,33 @@ source = "N-NOISE: noise_space.py AorB/rot2/sv28/served/s8/noc1/M0+nz: the code'
 fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
 source = "served"
 
+# N-NOISE interim 2's frontier design, mirror (noise_space.py A/byte1/b13s4/mirror/s8/noc1/M0+tag+wv).
+[premise.mirror-window]
+rank = 2
+status = "open"
+owner = "N-KERNEL"
+source = "mirror's B-side lane: B' carries one int8 weight W_t[j] in [-127, 127] \\ {0} a column a step in its padded lane 31, drawn once a window after B's commitment, with -W_u in the replay step of lane u, formed at load as ssn-1l-hw's public signs are; the A-side lane is one PRMT a step merging a coin byte from the row's coin words into the step's last data register. A layout fact about the operand load, unchecked in SASS"
+
+[t3.nn-mirror-tag]
+models = ["llama-3.2-1b"]
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "mirror's lanes sum to 0 in the final word, so only step 1's b13s4 code and the four row tags against G are served: std 13.9 units at K 8,192 (noise_space.py), inside SW-PPL's measured width-1 runs (6-9) to b4 runs (38-75) bracket, at the tag lead's level; unmeasured"
+
+[N.nn-mirror-tag]
+title = "mirror: a coin byte a row a step (PRMT) against wide window weights in B, the first half's lanes replayed against the negated weights in the second half so their sum is 0; step 1 holds the b13s4 code, four row tags against G and the first lane"
+fields = { c = 4, tag = 4, S = "1 + ceil(max(0, K - (32 - c - tag - 1))/31)", noise_x = "4*m*(S + 1 + (S - 2*floor(S/2)))", noise_y = "0", derive_extra = "0", dup = 0.0051, noise_max = 128, n_max = 28559, s8_ok = 1, branch_rows = "0" }
+coins = { coins = ["4*m*(1 + ceil(ceil(S/2)/4))"] }
+premises = ["noise-space-distinct", "ssn-tag-distinct", "g-private", "adaptive-pointwise", "mirror-window"]
+t3 = { s8 = "nn-mirror-tag" }
+branch_source = "noise_space.py tile_saving (N-RED's tile copies by Monte Carlo, zero data, every owner at 8 tile positions): 0.36% / 0.34% of stock at llama_T512_64tok / llama_T8192, below dup; the tags separate the code-only first and last steps across rows (0 at the vector level), and wide weights make the lanes' increments per entry, so no row-level return"
+source = "noise_space.py A/byte1/b13s4/mirror/s8/noc1/M0+tag+wv (N-NOISE interim 2): S lane steps, lane u in [-128, 127] read from coin word floor(u/4) by one PRMT, +L_u W_u[j] in the first ceil(S/2) steps and -L_u W_u[j] in the rest (the odd middle lane in the last step, one more PRMT), so the final word is A·Bᵀ + code + tags; writes a row: S PRMTs, the code's LOP3 and the odd step's extra (noise_x); coin words a row: one for the code and ceil(ceil(S/2)/4) for the lanes (10 / 35 at K 2,048 / 8,192). dup is A2r's word share, 0.0051 (N-NOISE interim 2, note compute-research/20261029T1106Z-report-np-noise, art:7882ee98e8d4633d522a078470b9d1fab7455e10b7bacfd6e8a22c7aa4a0fc99: the chosen reading's 0.56% with A2r binding), above N-LEAN §2b's largest point mass of a step increment over the call's coins for any known nonzero weight, 1/256 at every step: a data dot fixed before the coins repeats an entry's word only when L_u = its target, so A2c and A8 save 1/256 (0.41% of stock at α 1.044) under chosen weights and model P alike. The symbolic check (2 x 3 x 5) finds every word and formed register distinct for every input"
+
+[N.nn-mirror-tag.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "served: the lanes cancel inside the accumulator, so no epilogue; code and tags stay in the output"
+
 [N.nn-rawS-sv4-aorb]
 title = "the step's whole lane register is one raw coin word for the call (four bytes, each reused every fourth step), the sv4 code served; its row-common sum folded into the epilogue"
 fields = { S = "1 + ceil(max(0, K - 28)/28)", nn_b = "1*(m > n)", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m", noise_y = "nn_b*4*n", derive_extra = "0", dup = 0, noise_max = 8448, n_max = 1e9, s8_ok = 1 }
