@@ -68,6 +68,14 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
   N-LEAN merges, all on `G`'s side, with the stubs unchanged unless it lists a change: whole tiles and the single-use
   coin stream become verifier refusals rather than hypotheses; unused premises go; the gap is itemized against the card.
   Lanes start proving their stubs once N-LEAN merges.
+- **17:14Z, network (N-EGRESS, note 20261029T1711Z-report-lean-network):**
+  - `OutsourceWithinEgressLead` is false as stated, because nothing bounds `egress` by the cap (F1). It is restated with
+    egress bounded by the cap the certifier enforces, accounted per forward (F2).
+  - Step 1's coin lanes raise n_max to 157, so the network term is about 0.066% / 0.66% at caps 32 / 320 (F4).
+  - certifier-coins is a named assumption under `trusted-host` (the tests refuse provider names), and the old
+    `TrustedNebiusHost` goes (F6).
+  - N-PREM applies these after its current fix and adds a NETWORK stub. N-EGRESS proves against its own restatement
+    meanwhile.
 - **COUNTER, search first:** the coin-branch figure (0.084%) and the per-tile table constants (49⁻⁸ at step 0, 7⁻⁸ for at
   most 32 stream tiles, 2⁻¹⁰⁰ after). Both are analysis, not proved.
 
