@@ -41,8 +41,10 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   A self-dealer's chosen data is three terms, each closed by its own premise: requests (identical rows and
   massive-activation rows, reachable through any model; a massive row's data part is a per-column constant, which
   cancels in a column's returns), zero rows (rows-reachable: unreachable through a public model, padding uncredited)
-  and crafted increments (model-public: with its own weights a self-dealer sets each block's dot to minus the
-  likelier one-bit noise increment, so a one-bit branch skips at least half the words). Requests and zero rows each
+  and crafted increments (model-public: with its own weights a self-dealer sets each block's dot to minus one of the
+  later lane's two products, so a one-bit branch skips half the row-steps; where the later weight is one public
+  constant, alternating the two makes a row's later vectors a lazy walk that repeats most of them (`walk_saved`);
+  where it is private (fix2), a word is skipped with p*, the likeliest product's probability). Requests and zero rows each
   split into row vectors (whole-row copies), aligned 4-word tiles within a row (a TMA or LDGSTS.128 copy, which
   CopyGrain(4) leaves free) and single words (which CopyGrain(4) prices; CopyGrain(row) prices the tiles too).
 
@@ -54,6 +56,7 @@ checks must catch.
 from __future__ import annotations
 
 import argparse
+import collections
 import dataclasses
 import functools
 import itertools
@@ -171,8 +174,10 @@ LEDGER = [
      "SW-LEAN / N-LEAN", "ssn_1l's and ssn_a's word credit"),
     ("ssn-hw-distinct", "ssn_1l_hw's words (a₁ ∈ {0..15}⁴ from the nibble mask on coin word 0; step lanes 1 + 2b_t "
      "against public column signs s_t[j]) are pairwise distinct and non-free as functions of the coin bits",
-     "0", "open", "5", "CPU-checked on 7 data cases (this file); a proof extends ssnTargetG to nibble lanes on a "
-     "shared coin word and to affine step lanes", "N-LEAN", "ssn_1l_hw's word credit"),
+     "0", "open", "5", "CPU-checked on 7 data cases (this file), none of which cancels a later lane: a weight row "
+     "−s_t repeats half the row-steps (N-RED's A2c), the crafted term, which only model-public closes; a proof extends "
+     "ssnTargetG to nibble lanes on a shared coin word and to affine step lanes", "N-LEAN",
+     "ssn_1l_hw's word credit, on data a public model reaches"),
     ("ssn-tele-distinct", "The candidates' words (coin word 0's 4 signed bytes a₁ against an injective public code in "
      "[−127, 127]⁴ in step 1, cancelled by −C in the last step; middle lanes 1 + 2b_t against balanced public signs "
      "(ssn_1l_tele4) or 1 + b_t against public weights in {1, 2} (ssn_1l_tele4m), each column's vector distinct) are "
@@ -183,8 +188,9 @@ LEDGER = [
      "drawn after the model's root, later lanes 1 + a_t against weight 1) has every row vector distinct and every word "
      "non-free as a function of the coins and G", "0", "open", "5",
      "CPU-checked on identical rows, prefix rows and zero tails (a row vector each); within a row its columns share "
-     "every later increment (coin-branch)", "N-LEAN", "ssn_1l_tag's word credit; identical and zero rows' "
-     "row-level collapse"),
+     "every later increment (coin-branch); a weight row alternating −1 and −2 makes a row's later vectors a walk "
+     "(N-ADAPT; `walk_words_check`), the crafted term, which G doesn't touch and only model-public closes", "N-LEAN",
+     "ssn_1l_tag's word credit on data a public model reaches; identical and zero rows' row-level collapse"),
     ("ssn-success-set", "Fixing g coin bits succeeds with probability 2^−g a try and merges ≤ g·n words", "0", "open",
      "5", "a proof; it bounds a program fixed in advance, not one that branches on the bits (coin-branch)", "N-LEAN",
      "grinding for a fixed program"),
@@ -289,18 +295,28 @@ LEDGER = [
      "the host term in T1 (the host's SHA-512 and AMX take credited hashing: N-FLOOR's 4.83× stock), with "
      "HostsCounted and host-rate; devices off the node stay the egress layer's (OutsourceWithinEgress)"),
     ("OutsourceWithinEgress", "Off-card compute is bounded by the egress the certifiers see", "3",
-     "locked; false for every seeded design at DitherInstance's β", "3", "certifiers", "lock",
+     "locked; false for every seeded design at DitherInstance's β; R1b's A_j to the certifier counts against E "
+     "until the statements exclude bits sent to the auditor's own devices", "3", "certifiers", "lock / N-EGRESS",
      "the network term n_max·W_mac·E (outside T1), only with streamed-coins and coin-density, or "
      "commit-through-certifier"),
     ("streamed-coins", "Each call's coins arrive in the challenger's signed stream, excluded from E, not derived from "
-     "a window salt the prover holds", "3", "design (the lead seeds its noise from a 512-bit window salt)", "3",
-     "— (protocol structure)", "N-ALT",
+     "a window salt the prover holds", "3", "design (the lead seeds its noise from a 512-bit window salt); the locked "
+     "statements name the stream's source two ways (the challenger, the certifier)", "3",
+     "— (protocol structure)", "N-EGRESS",
      "the network term's seeded case: without it one counted message outsources the window and the bound is empty"),
     ("coin-density", "A design's coins carry at most n_max MACs a coin bit with n_max·W_mac·E ≤ 1% of stock (1,305 to "
-     "2,540 MACs a bit at a 32-bit-a-token cap)", "5", "open", "5",
-     "per-row coins carry about 31·N MACs a bit (138–268% of stock); per-output-element coins would meet it at "
-     "475k–918k bits a token, if they force distinct writes", "N-ALT / N-NOISE",
+     "2,540 MACs a bit at a 32-bit-a-token cap)", "2", "met by a lane layout, not the seeded lead: one 4-bit odd coin "
+     "a 128-row tile, step and column against a constant A′ lane, certifier-streamed (blc1a-t128-e4) at a 32-bit cap; "
+     "three lanes (blc4a-t64-e7) at 320 bits (N-EGRESS, checked arithmetic)", "2",
+     "per-row coins carry about 31·N MACs a bit (138–268% of stock); the layout's forced distinct writes are the "
+     "lead's premises plus its lane", "N-EGRESS / N-NOISE",
      "the network term with streamed coins"),
+    ("cap-served", "The network certifier caps the bits a token exchanges at E (32 or 320)", "3",
+     "open (the cap's rule)", "5", "— (a protocol rule the certifier enforces)", "N-EGRESS / Daniel",
+     "the network term's E"),
+    ("fold-range", "The free epilogue fold's range condition |D − r − c| < 2²² holds on served data", "1",
+     "measured (N-EXACT)", "1", "the served accumulators' range per linear", "N-EXACT",
+     "the de-noise's exactness (the served output exact) with a coin lane folded in"),
     ("commit-through-certifier", "R1: the committed words leave the GPU through a network certifier's port and are "
      "hashed there (trusted-host)", "3", "design", "3",
      "the GEMM slowdown under a port-rate stream, and whether the port carries the words (T2)", "N-ALT",
@@ -313,9 +329,9 @@ LEDGER = [
      "so a self-dealer chooses its requests (tokens) but neither a linear's weights nor, through them, its rows",
      "3", "open (a ruling: credit only public checkpoints)", "5",
      "— (a protocol rule and an equality proof of the committed weights; false for a private model)", "Daniel / N-CARD",
-     "crafted increments: with its own weights a self-dealer sets each block's dot to minus the likelier noise "
-     "increment, skipping ≥ α/2 of every ssn design's words (α/8 for per2 and os2 with one-hot weight blocks, "
-     "estimate)"),
+     "crafted increments: with its own weights a self-dealer cancels a later lane's public weight (N-RED's A2c, "
+     "α(S − 1)/(2S)) or walks it (N-ADAPT, ssn_1l, the tag and AorB's side A: 89–95% of α), or rewrites fix2's "
+     "likeliest entries (N-RED's A8, p*·α); α/8 for per2 and os2 with one-hot weight blocks (estimate)"),
     ("rows-reachable", "Through a public model no request makes a linear's input row zero or crafted, and padding "
      "rows (a size class's, a CUDA graph's) are not credited; identical rows and massive-activation rows (one-hot "
      "after per-token int8) stay reachable, in any share a self-dealer's short requests choose",
@@ -333,9 +349,11 @@ LEDGER = [
      "open (likely false: TMA moves 16 B boxes)", "5", "a 16 B TMA box or LDGSTS.128 copy of a tile within a row",
      "N-PREM", "every within-row coin-branch term, tiles included"),
     ("adaptive-dw", "The lifted DistinctWrites bound holds pointwise in the coins for a prover that reads them as "
-     "they arrive (Provenance, no premise, plus CopyGrain)", "0", "open", "5",
-     "a Lean proof; a copy-and-patch prover on fix2 (sub-row zero increments) refutes it at CopyGrain(4)",
-     "N-ADAPT / N-LEAN",
+     "they arrive (the lift needs no premise; a design supplies the pointwise count, here on data a public model "
+     "reaches)", "0", "open", "5",
+     "refuted under chosen weights wherever the later weight is public (one cancelling weight row, 49–52%; the "
+     "walk, 89–95% of the words: the crafted term, closed only by model-public); a copy-and-patch prover on fix2 "
+     "saves 15–35% at CopyGrain(4) (N-ADAPT)", "N-ADAPT / N-LEAN",
      "makes coin-branch's per-path count a theorem for every design"),
     ("g-private", "ssn_1l_tag's G is a live coin of the call: drawn after its operands are committed, unknown to the "
      "prover before it", "3", "open", "5", "— (protocol structure, as live-coins)", "N-RED",
@@ -345,7 +363,9 @@ LEDGER = [
      "included)", "0", "proof written (scratch)", "5", "a Lean proof and its axioms", "N-W1",
      "replaces DistinctOn's location functions, which a free move makes unsound under scatter"),
     ("HostsCounted", "The hosts' AMX and SHA-512 are resources of their own in the period's inventory, at θ's host "
-     "rows", "3", "stated (Pouw/DitherInstance.lean)", "3", "inventory per node type", "N-COMPOSE / N-FLOOR",
+     "rows", "3", "stated (Pouw/DitherInstance.lean); given it and PeriodInventory, that the hosts' hashing closes "
+     "is proved (N-COMPOSE's hostsCounted_closes, scratch, no lock)", "3", "inventory per node type",
+     "N-COMPOSE / N-FLOOR",
      "the host term in T1, with PeriodInventory and host-rate"),
     ("host-rate", "θ's host row is at least the host's best rate on each class (SHA-512 by AVX-512, AMX)", "4a",
      "stated", "4a", "a host SHA-512 faster than sha512x8 (8 messages in AVX-512's lanes) on the H200's host",
@@ -364,7 +384,10 @@ FIELDS = ["id", "statement", "rank", "status", "rank_today", "falsify", "owner",
 ALIASES = {"forced-PRF": ("salt-forced",), "CopyGrain": ("copy-floor", "CopyGrain(w₀) at w₀ = 4"),
            "CopyGrain-row": ("copy-priced",),
            "LaneSemantics": ("lane-semantics",), "OneInstructionMinimal": ("one-instruction-minimal",),
-           "PeriodInventory": ("period-inventory",), "CarriedWords": ("carried-words",),
+           "PeriodInventory": ("period-inventory", "PeriodInventoryT1"), "CarriedWords": ("carried-words",),
+           "HostsCounted": ("HostsWithinRow (cores a card, all-core clock)",),
+           "host-rate": ("HostsWithinRow (SHA-512's rate a core)",),
+           "streamed-coins": ("certifier-coins",), "OutsourceWithinEgress": ("outsource-egress",),
            "ShaWrites": ("ShaSpeed + hash-compose",), "ShaLB": ("ShaLB(3,534)",)}
 
 
@@ -554,7 +577,7 @@ def coin_branch_terms(data: dict) -> dict:
         e.update(col_collapse_terms(shapes, rows))
         for x, name, steps in COL_VARIANTS:
             e[f"natural_{x}"] = e.get(f"natural_{x}", 0.0) + summ["massive_row_share"] * e[f"massive_table_{x}"]
-            e[f"crafted_{x}"] = sum(n_ * k * design(name).alpha(k) * (steps(k) - 1) / (2 * steps(k))
+            e[f"crafted_{x}"] = sum(n_ * k * design(name).alpha(k) * crafted_saved(x, steps(k))
                                     for n_, k in shapes.values()) / w
         for suffix in ("aorb", "aorbA"):
             e.update(aorb_terms(shapes, rows, summ["massive_row_share"], suffix))
@@ -960,8 +983,8 @@ def aorb_terms(shapes: dict, rows: int, massive_share: float, suffix: str = "aor
     rows > n), or every linear on side A (suffix `aorbA`, A/rgap1/sv4+tag+nz). Side A is `aorb_a` in `col_collapse`.
     Side B: a call's identical or zero rows equal in a chunk stay equal (`side_b_collapse`, the requests' and zero
     rows' tiles and words); within a row every column's later increment is its own coin, so a row's equal columns split
-    after step 1 and, the lanes being ≥ 1, no column returns. Row vectors stay distinct on both sides (tags), and
-    crafted increments are every design's α(S − 1)/(2S)."""
+    after step 1 and, the lanes being ≥ 1, no column returns. Row vectors stay distinct on both sides (tags). Crafted
+    increments are side A's walk and side B's cancel (`crafted_saved`)."""
     d = design("ssn_1l")
     w = sum(n * k for n, k in shapes.values())
     t0, lag = table_depth("aorb_a", shapes), return_window("aorb_a", shapes, steps_aorb)
@@ -971,8 +994,9 @@ def aorb_terms(shapes: dict, rows: int, massive_share: float, suffix: str = "aor
     for n, k in shapes.values():
         s = steps_aorb(k)
         wt = n * k * d.alpha(k) / w
-        out[f"crafted_{suffix}"] += wt * (s - 1) / (2 * s)
-        if rows > n and suffix == "aorb":
+        side_b = rows > n and suffix == "aorb"
+        out[f"crafted_{suffix}"] += wt * crafted_saved("aorb_b" if side_b else "aorb_a", s)
+        if side_b:
             words, tiles = ((s - 1) / s * side_b_collapse(n, rows, g) for g in (1, COPY_GRAIN))
             got = {"static": words, "table": words, "tiles": tiles}
             vals = {**{f"col_{r}": v for r, v in got.items()}, **{f"massive_{r}": v for r, v in got.items()},
@@ -990,6 +1014,60 @@ def aorb_terms(shapes: dict, rows: int, massive_share: float, suffix: str = "aor
 
 #: side B's G range against its tiles: N-NOISE's [−3, 3], and wider draws from the same coin word
 SIDE_B_G = (3, 15, 127)
+
+
+#: later lanes a coin scalar against one public weight in every column and step (ssn_1l's a_t·1, the tag's
+#: (1 + a_t)·1, AorB side A's (1 + 2a_t)·1): chosen weights whose block dot alternates between the coin's two
+#: products make a row's later vectors its step-1 vector plus a lazy ±1 walk times the weight
+WALK_VARIANTS = ("ssn_1l", "ssn_1l_tag", "aorb_a")
+
+
+@functools.cache
+def walk_saved(s: int, trials: int = 4000, seed: int = 21) -> float:
+    """The share of a row's S row-steps the walk repeats (copies): 1 − E[distinct walk values]/S, the walk's steps
+    alternating b ∈ {0, 1} and b − 1."""
+    b = np.random.default_rng(seed).integers(0, 2, (trials, s - 1))
+    walk = np.concatenate([np.zeros((trials, 1), np.int64), (b - (np.arange(1, s) % 2 == 0)).cumsum(axis=1)], axis=1)
+    return 1 - float((walk.max(axis=1) - walk.min(axis=1) + 1).mean()) / s
+
+
+def walk_words_check(variant: str = "ssn_1l_tag", n: int = 64, s: int = 67, salts: int = 400, seed: int = 4) -> dict:
+    """The walk on the variant's own zero-tail words (`_zero_row_noise`): the chosen dot −c_t·1, c_t the coin's two
+    products in turn, added to every later step; distinct row vectors counted on the words themselves."""
+    rng = np.random.default_rng(seed)
+    lo = {"ssn_1l": 0, "ssn_1l_tag": 1, "aorb_a": 1}[variant]
+    hi = {"ssn_1l": 1, "ssn_1l_tag": 2, "aorb_a": 3}[variant]
+    dot = np.where(np.arange(s) % 2 == 1, lo, hi)
+    dot[0] = 0
+    distinct = []
+    for _ in range(salts):
+        words, _ = _zero_row_noise(variant, n, s, rng, rows=64)
+        words = words - dot.cumsum()[:, None]
+        distinct.append(len({w.tobytes() for w in words}))
+    return {"distinct": float(np.mean(distinct)), "saved_words": 1 - float(np.mean(distinct)) / s,
+            "saved_walk": walk_saved(s)}
+
+
+#: fix2's later lane (1 + a_t)·w_t with w_t drawn after B: the alphabets of the coin factor and of w
+PRIVATE_LATER = {"ssn_1l_fix2": ((1, 2), (-1, 1)), "ssn_1l_fix2m": ((1, 2), (1, 2))}
+
+
+def p_star(variant: str) -> float:
+    """max_v Pr[X·w = v] over the later lane's coin factor X and private weight w, both uniform."""
+    xs, ws = PRIVATE_LATER[variant]
+    return max(collections.Counter(x * w for x in xs for w in ws).values()) / (len(xs) * len(ws))
+
+
+def crafted_saved(variant: str, s: int) -> float:
+    """The share of a design's words chosen weights skip. Where the later weight is one public constant, the walk;
+    where it is public, a block dot of minus one of the coin's two products repeats a row-step with probability 1/2,
+    (S − 1)/(2S); where it is private (fix2), a block dot of −v* leaves each later word equal with probability p*, which
+    W1 alone lets a program skip word by word, p*·(S − 1)/S."""
+    if variant in WALK_VARIANTS:
+        return walk_saved(s)
+    if variant in PRIVATE_LATER:
+        return p_star(variant) * (s - 1) / s
+    return (s - 1) / (2 * s)
 
 
 def side_b_repair() -> dict:
@@ -1493,8 +1571,16 @@ def checks(rep: dict) -> list[dict]:
     ok("no ssn design and neither per2 nor os2 passes without model-public or inputs-natural (crafted increments)",
        all(every(lab, "model-public", "inputs-natural") for lab in rep["hitting"] if lab.split()[0] in
            ("ssn_1l", "ssn_1l+C1", "ssn_1l_hw", "ssn_1l_tele4", "ssn_1l_tele4m", "ssn_1l_tag", "ssn_1l_fix2",
-            "ssn_1l_fix2m", "ssn_a", "per2",
-            "os2")))
+            "ssn_1l_fix2m", "ssn_a", "per2", "os2", "AorB/rgap1/sv4+tag+nz", "A/rgap1/sv4+tag+nz")))
+    ww = rep["walk_words"]
+    ok("the walk on each walk design's own zero-tail words repeats as the walk does, and saves ≥ 85% at S 67",
+       all(abs(v["saved_words"] - v["saved_walk"]) < 0.02 and v["saved_words"] > 0.85 for v in ww.values()),
+       str({k: round(v["saved_words"], 4) for k, v in ww.items()}))
+    ok("the walk saves ≥ 93% of a row's steps at S 265 (K 8,192)", rep["walk"]["265"] > 0.93, str(rep["walk"]))
+    ok("p* is 1/4 for fix2 and 1/2 for fix2m", rep["p_star"] == {"ssn_1l_fix2": 0.25, "ssn_1l_fix2m": 0.5},
+       str(rep["p_star"]))
+    ok("the tag's crafted term (the walk) exceeds hw's (the cancel) at every point",
+       all(cb[p]["crafted_ssn_1l_tag"] > cb[p]["crafted_ssn_1l_hw"] for p in cb), "")
     ok("ssn_1l passes only with inputs-natural (false): identical rows", all("inputs-natural" in s["premises"]
                                                                               for s in lead))
     ok("nsf passes only with inputs-natural (false)",
@@ -1564,6 +1650,9 @@ def report(data_path: str | None) -> dict:
     rep["hitting"] = {lab: minimal_sets(lab, data, cb) for lab, *_ in DESIGNS}
     rep["verdict"] = rank_verdict(rep["hitting"])
     rep["side_b_repair"] = side_b_repair()
+    rep["walk"] = {str(s): walk_saved(s) for s in (67, 265)}
+    rep["walk_words"] = {v: walk_words_check(v) for v in WALK_VARIANTS}
+    rep["p_star"] = {v: p_star(v) for v in PRIVATE_LATER}
     rep["shaspeed"] = shaspeed_precision(data, cb)
     rep["rank3"] = rank3_routes()
     rep["g1"] = g1_advice()
@@ -1662,6 +1751,10 @@ def table(rep: dict) -> str:
             lines.append(f"{lab}: passes only with {', '.join(v['otherwise_needs'])}")
     lines.append("# side B's aligned tiles on 8,192 repeated rows by G's range: " + "; ".join(
         f"[−{g}, {g}] " + ", ".join(f"{k} {x:.3%}" for k, x in v.items()) for g, v in rep["side_b_repair"].items()))
+    lines.append("# crafted weights: the walk repeats " + ", ".join(f"{x:.1%} at S {s}" for s, x in rep["walk"].items())
+                 + "; on the words at S 67 " + ", ".join(f"{k} {v['saved_words']:.1%}" for k, v in
+                                                         rep["walk_words"].items())
+                 + "; fix2's p* " + ", ".join(f"{k} {x:g}" for k, x in rep["p_star"].items()))
     r3 = rep["rank3"]
     lines.append(f"# rank ≤ 3 overall: SHA-512 bound {r3['rank3_sha_lb_share']:.2%}; bytes a MAC ≤ "
                  f"{r3['max_bytes_mac_rank3']:.2e} (one 4 B word a {r3['min_macs_per_4B_word_rank3']:,.0f} MACs)")
