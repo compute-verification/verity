@@ -1272,7 +1272,7 @@ def ssnfp_product(fmt: str, xv: torch.Tensor, wv: torch.Tensor, dmax: torch.Tens
     s, _ = ssnfp_layout(fmt, k)
     x32, w32 = xv.float(), wv.float()
     y = torch.zeros(m, n, dtype=torch.float64, device=xv.device)
-    rows = 32 if xv.is_cuda else 8
+    rows = 128 if xv.is_cuda else 8
     if fmt == "e4m3":
         # 256 truncated products of |x w / u| < 2^12 sum exactly in FP32
         kc = 256
