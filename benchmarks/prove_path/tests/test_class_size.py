@@ -3,12 +3,12 @@
 * the lowering projected from a probe of 3 positions is, template for template, TINY's exact lowering at a class of 7
   positions (`window_circuit.class_circuit`) and at a class of two lanes (its scan state row another): every template but
   the heads is a fixed count a position, `TokenFeed_v1` one a prompt position past the first, `ScanSlots_v2` and
-  `SlotEntry_v1` one a Program and `OutCollect_v1` one a position;
+  `SelectEntry_v1` one a Program and `SelectCollect_v1` one at every other position;
 * so it is for int8 Llama-3.2-1B on the H200, whose first blocks read a key's value as slices (`AttnBlockFirst_v2`);
 * v19's heads, at a block of 3 keys: a head over T keys is its first block, ceil(T / 3) - 1 full ones (none
   guarded: a one-row decode's FA2 guards its first visited block only) and its end;
 * a probe that doesn't divide evenly is refused, and so is a template `size` has no measurement for; m is the log of the
-  cells;
+  cells; a select with its collector (and the entry) is its Calls' ANDs at the combine's k_log;
 * a unit of few ANDs takes its rows' k_log (an hm96 slot each), as composed at every W + 1 rows measured, and a unit of
   257 rows needs a block of 2^28 bits, which `size` refuses as C-Flock does;
 * with no ``--class``, ``prove_path.py`` takes the class of record.
@@ -105,6 +105,10 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured(monkeypatch):
                                              "OutCollect_v1{KO=64,FIRST=true}", "OutCollect_v1{KO=64,FIRST=false}",
                                              "SlotEntry_v1{KO=64,IDB=17,NP=1024}")] == [
         (120, 24), (155, 22), (2_141, 22), (5_676, 22)]
+    assert [CZ.measured(lab)[:2] for lab in ("SelectCollect_v1{V=128256,C=16,KO=64,FIRST=true}",
+                                             "SelectCollect_v1{V=128256,C=16,KO=64,FIRST=false}",
+                                             "SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024}")] == [
+        (1_346_657 + 155, 26), (1_346_657 + 2_141, 26), (1_346_657 + 2_141 + 5_676, 26)]
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
