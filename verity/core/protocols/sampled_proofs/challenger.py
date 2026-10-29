@@ -18,8 +18,8 @@ a client derives what it draws from the opened coin (`verity.ml.randomness.deriv
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
 **Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
-`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier of
-record's `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
+`verity.core.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+`coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
 `os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
 
@@ -248,7 +248,7 @@ NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only a
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
             "assumption of verity.core.claims), so no assumption covers its coins: a served challenger draws from a named "
-            "source, the Lean verifier of record's `coins` (uniform/io-getrandombytes)")
+            "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
 class CoinError(ValueError):
@@ -1301,7 +1301,7 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
     session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
     older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
     that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
-    remote bandwidth audit (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
+    PoUB (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
     nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
     is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)
@@ -1316,7 +1316,7 @@ class LiveChallenger:
     """The challenger's side of one epoch's coins.  It draws every coin and hm96 salt of the layout from `entropy` and
     commits to them at construction, before the epoch; `open` releases coin (`label`, `index`) once, after the verifier
     recorded `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the
-    Lean verifier of record's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
+    Lean verifier's read of it (`IO.getRandomBytes`, A3).  `claim` is the claim instance naming `entropy`
     (`coin_claim`), None for an unnamed source, which a served challenger refuses (`served_claim`)."""
 
     def __init__(self, scheme: str, epoch: int, families: Sequence[tuple[str, int]],
