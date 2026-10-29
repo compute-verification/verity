@@ -60,7 +60,8 @@
 //                             are served over whole tiles with zero data past the call, and the rows to pad_rows(m)
 //                             must carry their tags, lane-coin A' and coins
 //   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
-//                             Llama-3.2-1B's fused linears at M rows (whole 64-row tiles), one JSON line a timing (see
+//                             Llama-3.2-1B's fused linears at M rows (whole 64-row tiles, or one decode call under 64
+//                             rows over its padded tile), one JSON line a timing (see
 //                             time_all), the hash pass
 //                             by each ROW_BYTES (0: row-seg; default 0 65536 16384)
 // L1=1 replaces root(A_j) and the seed message's coins with L1 + (a)'s seed path (l1.h), checked by `ssn check`; L1=2 runs
@@ -1384,7 +1385,12 @@ struct LinDev {
 // the hash pass over the exported words, coins, forming and coins + forming as one call's latency; then the forward's
 // 16 layers end to end, serial (each chunk's GEMM with export, then its hash, one stream) and beside (chunk c's hash on
 // buffer c mod B's stream while the GEMM stream runs on), with coins and forming before each linear's GEMM.
-static int time_all(int reps, int M, double budget_gb, const std::vector<int>& rbs) {
+// A call of Mc rows is whole 64-row tiles, or one call under 64 rows (decode): it computes its one 64-row tile (zero data
+// past the call; coins, forming and the GEMMs over the tile), hashes the words of its pad_rows(Mc) committed rows (that
+// many bytes of each exported block, read as the block's prefix: the timing reads no value), and charges root(A_j), A_j's
+// link and stock's MACs for its Mc rows. L1's seed path takes at least 128 KiB of A_j, so it hashes the tile's 64 rows.
+static int time_all(int reps, int Mc, double budget_gb, const std::vector<int>& rbs) {
+  const int M = (Mc + 63) / 64 * 64, Mw = Mc < 64 ? pad_rows(Mc) : M, cr = Mc < 64 ? Mw : 64;
   struct Spec { const char* name; int n, K; };
   const Spec specs[] = {{"qkv", 3072, 2048}, {"o", 2048, 2048}, {"gate_up", 16384, 2048}, {"down", 2048, 8192}};
   Clk* dclk;
@@ -1395,6 +1401,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   for (const Spec& s : specs) {
     Lin L{M, s.n, s.K, steps_of(s.K), ((M / 64) * (s.n / 256) < g_sms) ? 128 : 256, {}, {}};
     fill(L, 0, 11 + s.n + s.K);
+    std::fill(L.A.begin() + (size_t)Mc * s.K, L.A.end(), (int8_t)0);
     LinDev d{s.name, s.n, s.K, L.S, L.BN, 0};
     d.A = up(tile_a(L));
     d.B = up(tile_b(L));
@@ -1530,7 +1537,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   }
 #endif
   auto fwd_root_a = [&](const LinDev& d, cudaStream_t st) {
-    if (root_a) hra[root_a_rows >= 0 ? root_a_rows : rbs[hi]].root(d.A0, (u64)M, (u64)d.K, st);
+    if (root_a) hra[root_a_rows >= 0 ? root_a_rows : rbs[hi]].root(d.A0, (u64)Mc, (u64)d.K, st);
   };
   // WORDS_TREE=1: each chunk's hash in the forwards builds the frame tree above its leaves (the levels above the chunks'
   // subtrees, a few nodes a linear, aren't run)
@@ -1608,14 +1615,14 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
            "\"mhz\": %.1f, \"units\": %.6e, \"stock_macs\": %.6e, \"units_per_stock_mac\": %.6f, \"words\": %.6e, "
            "\"units_per_word\": %.3f, \"units_per_byte\": %.3f, \"extra\": %.6g}\n",
            what, hn.c_str(),
-           d ? d->name : "all", M, d ? d->n : 0, d ? d->K : 0, d ? d->S : 0, d ? d->BN : 0, ms, f0, u, macs,
+           d ? d->name : "all", Mc, d ? d->n : 0, d ? d->K : 0, d ? d->S : 0, d ? d->BN : 0, ms, f0, u, macs,
            macs > 0 ? u / macs : 0, words, words > 0 ? u / words : 0, words > 0 ? u / (4 * words) : 0, extra);
     fflush(stdout);
   };
   double fwd_macs = 0;
-  for (const LinDev& d : lins) fwd_macs += 16.0 * M * d.n * (double)d.K;
+  for (const LinDev& d : lins) fwd_macs += 16.0 * Mc * d.n * (double)d.K;
   for (const LinDev& d : lins) {
-    const double macs = (double)M * d.n * d.K, words = (double)M * d.n * d.S;
+    const double macs = (double)Mc * d.n * d.K, words = (double)Mw * d.n * d.S;
     line("plain_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A0, d.B0, nullptr, M, d.n, d.K / KB, nullptr, nullptr, nullptr, 0); }),
          macs, 0, 0);
     line("ssn_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A, d.B, d.beta, M, d.n, d.S, nullptr, nullptr, nullptr, 0, lane_at(d, 0, 0), xu_of(d, 0)); }),
@@ -1630,7 +1637,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       for (size_t h = 0; h < rbs.size(); h++) {
         Hasher& hs = hsv[nbuf * h];
         u64 n = 0;
-        hsh[h] += T.ms(reps, [&] { n = hs.leaves_of((const uint8_t*)Wb[0], (u64)blocks, 64ull * d.BN * 4, 0); });
+        hsh[h] += T.ms(reps, [&] { n = hs.leaves_of((const uint8_t*)Wb[0], (u64)blocks, (u64)cr * d.BN * 4, 0); });
         tre[h] += T.ms(reps, [&] { hs.tree_of(n, 0); });
       }
     }
@@ -1638,7 +1645,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     if (g_blc) {
       const size_t lb = (size_t)(M / 64) * lc_steps(d.S) * d.n * 4;
       line("lane_link", &d, T.ms(reps, [&] {
-             CK(cudaMemcpyAsync(hA, d.A0, (size_t)M * d.K, cudaMemcpyDeviceToHost, 0));
+             CK(cudaMemcpyAsync(hA, d.A0, (size_t)Mc * d.K, cudaMemcpyDeviceToHost, 0));
              CK(cudaMemcpyAsync(dlc[1], hlc, lb, cudaMemcpyHostToDevice, 0));
            }), macs, words, (double)lb);
     }
@@ -1650,7 +1657,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     line("forming", &d, T.ms(std::max(reps, 51), [&] { cf(FORM); }), macs, words, (double)M * d.S);
     if (g_tag) line("g_draw", &d, T.ms(std::max(reps, 51), [&] { cf(GDRAW); }), macs, words, (double)d.n);
     line("coins_forming", &d, T.ms(std::max(reps, 51), [&] { cf(COINS | FORM | GDRAW); }), macs, words, (double)M * d.S);
-    const u64 abytes = (u64)M * d.K;
+    const u64 abytes = (u64)Mc * d.K;
     if (use_l1) {
       const long long nbk = coin_blocks(M, d.S, d.n);
       line("l1_root", &d, T.ms(std::max(reps, 51), [&] { l1_path(d.l1[0], d.A0, d.coins, nbk, 0, 0); }), macs, abytes / 4.0,
@@ -1666,9 +1673,9 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     }
     for (int r : ras) {
       Hasher& h = hra[r];
-      line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { h.leaves_of(d.A0, (u64)M, (u64)d.K, 0); }), macs, abytes / 4.0,
+      line("root_a_hash", &d, T.ms(std::max(reps, 51), [&] { h.leaves_of(d.A0, (u64)Mc, (u64)d.K, 0); }), macs, abytes / 4.0,
            (double)abytes, rname(r));
-      line("root_a_root", &d, T.ms(std::max(reps, 51), [&] { h.root(d.A0, (u64)M, (u64)d.K, 0); }), macs, abytes / 4.0,
+      line("root_a_root", &d, T.ms(std::max(reps, 51), [&] { h.root(d.A0, (u64)Mc, (u64)d.K, 0); }), macs, abytes / 4.0,
            (double)abytes, rname(r));
     }
   }
@@ -1697,7 +1704,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     if (!g_blc) return;
     CK(cudaEventRecord(ev_a, st));
     CK(cudaStreamWaitEvent(sc, ev_a));
-    CK(cudaMemcpyAsync(hA, d.A0, (size_t)M * d.K, cudaMemcpyDeviceToHost, sc));
+    CK(cudaMemcpyAsync(hA, d.A0, (size_t)Mc * d.K, cudaMemcpyDeviceToHost, sc));
   };
   auto link_c = [&](const LinDev& d, int par, int r0, int mc, bool copy, cudaStream_t st) -> const u32* {
     const u32* p = lane_at(d, par, r0);
@@ -1723,7 +1730,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
           const int mc = std::min(d.chunk, M - r0);
           const u32* cv = link_c(d, call & 1, r0, mc, true, s1);
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1, cv, xu_of(d, r0));
-          hsv[nbuf * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1, 0, words_tree);
+          hsv[nbuf * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, cr * d.BN * 4, s1, 0, words_tree);
         }
         call++;
       }
@@ -1754,7 +1761,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
           if (!with_hash) continue;
           CK(cudaEventRecord(full[b], sb));
           CK(cudaStreamWaitEvent(s2[b], full[b]));
-          hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b], hash_cap, words_tree);
+          hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, cr * d.BN * 4, s2[b], hash_cap, words_tree);
           CK(cudaEventRecord(done[b], s2[b]));
         }
         call++;
@@ -1772,10 +1779,11 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
          "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "
          "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"blc_w\": [%d, %d, %d], \"l1\": %d, \"l1_cta\": %d, "
-         "\"split_sms\": [%u, %u], \"epilogue\": \"%s\", \"small_threads\": %d, \"small_rows_max\": %llu}\n",
+         "\"split_sms\": [%u, %u], \"epilogue\": \"%s\", \"computed_m\": %d, \"committed_m\": %d, \"small_threads\": %d, "
+         "\"small_rows_max\": %llu}\n",
          f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree, (int)prio,
          layout_name(), g_lw[0], g_lw[1], g_lw[2], l1_mode, g_l1_cta, split_sms[0], split_sms[1],
-         epi == 2 ? (g_xu ? "xu" : "fold") : epi == 1 ? "stock" : "none",
+         epi == 2 ? (g_xu ? "xu" : "fold") : epi == 1 ? "stock" : "none", M, Mw,
 #ifdef SSN_SMALL_ROWS
          SSN_SMALL_ROWS, (unsigned long long)small_rows_max()
 #else
@@ -1819,8 +1827,9 @@ int main(int argc, char** argv) {
       return 2;
     }
     const int M = atoi(argv[3]);
-    if (M <= 0 || M % 64) {
-      fprintf(stderr, "ERR time M=%d: whole 64-row tiles only; `ssn check` serves ragged calls over padded rows\n", M);
+    if (M <= 0 || (M > 64 && M % 64)) {
+      fprintf(stderr, "ERR time M=%d: whole 64-row tiles, or one call under 64 rows (decode); `ssn check` serves every "
+              "ragged call over padded rows\n", M);
       return 2;
     }
     std::vector<int> rbs;

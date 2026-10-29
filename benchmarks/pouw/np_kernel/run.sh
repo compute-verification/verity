@@ -2,7 +2,8 @@
 # ssn_1l's kernel on one H200 in one gpu-lease: built and SASS-gated (IGMMA in every ssn_k, no local memory) before the
 # lease; under it the exact check of every word, then the timings at each M, the SM clock sampled beside it all.
 # Measurement only. cwd: the source tree's root.
-#   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192), REPS (5), BUDGET_GB (16: the exported words a
+#   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192; an M under 64 is one decode call over its
+#   padded tile, e.g. "1 16"), REPS (5), BUDGET_GB (16: the exported words a
 #   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg, -B for L1's plain leaves of B-byte
 #   rows), CUDA_HOME (/usr/local/cuda-13.0),
 #   BUILD_ONLY (0; 1 stops after the build and the SASS gate, on any machine with a CUDA toolkit: no lease, no GPU),
