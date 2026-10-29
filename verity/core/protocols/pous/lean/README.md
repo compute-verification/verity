@@ -59,7 +59,8 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
                                     blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
-                                    proved in `Proofs/Pous/Obligation.lean`
+                                    and a 320-read window at `2^-20` from `2^19` to `2^27` blocks
+                                    (`ObligationWide320`), proved in `Proofs/Pous/Obligation.lean`
 Definitions/Pous/Guarantees/SecureErasure.lean
                                     two frozen statements, which grade.sh grades against: secure erasure on the
                                     band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,

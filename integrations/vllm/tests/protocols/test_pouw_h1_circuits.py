@@ -141,6 +141,9 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
     assert sorted(doc["files"]) == ["k128", "k64", CR.LIVE]
     assert PC.build(d, out, lower=lambda *_a: pytest.fail("relowered"), live=(ROWS, STEPS),
                     lower_live=stand_in_live) == doc and lived == [ROWS]
+    only = PC.build(d, tmp_path / "live-only", lower=lambda *_a: pytest.fail("lowered a stratum"), live=(ROWS, STEPS),
+                    lower_live=stand_in_live, only=())
+    assert only["files"] == {CR.LIVE: doc["files"][CR.LIVE]} and only["bind"] == doc["bind"]
 
     layout = json.loads((d / RH.PROGRAM_META).read_text())["layout"]
     decl = SimpleNamespace(rows=ROWS, steps=STEPS)
