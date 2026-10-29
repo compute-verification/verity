@@ -1,4 +1,4 @@
-"""N-RED round 3: N-LEAN's per-entry cancellation (A8) on `fix2`-type designs, under W1 as stated and at warp grain.
+"""N-RED round 3: N-LEAN's per-entry cancellation (A8) on `fix2`-type designs, per fresh word, at warp and chunk grain.
 
 Every design here keeps `fix2`'s step 1 (row tags against G, a₁·C) and adds, at each later step t, X_t(i)·w_t[j]:
 X_t(i) from the call's coins, w_t[j] from coins drawn after B is committed (once a window).
@@ -17,6 +17,9 @@ probability p* = max_v Pr[X·w = v]. B is committed before w, so v* is a constan
   warp-register is skipped only when all 32 entries are unchanged. The adversary groups columns once a window knowing
   w (`group_columns`, greedy), so that each group is uniform on as many steps as it can; rows whose X then gives v*
   skip that group's write. This is a lower bound on what model W leaves: other layouts could only add.
+- **Model C** (N-LEAN's CopyGrain(4): aligned 4-word chunks copy free, anything finer costs a write a word): model W's
+  adversary with groups of 4 columns, regrouped once a window, stores to the canonical order taken as free scatter.
+  It supersedes round 2's A2c-tile, which kept the natural column order.
 
 Each constructive adversary computes every changed word as its previous word plus X·w + the known data dot, keeps the
 unchanged ones, and its words must equal the honest words (`np.array_equal`).
@@ -114,9 +117,10 @@ def build_entries(design: str, inst: dict) -> tuple[np.ndarray, int, int]:
     return out, writes, m * (s - 1)
 
 
-def group_columns(design: str, w: np.ndarray, rng: np.random.Generator) -> tuple[list[np.ndarray], np.ndarray]:
-    """Greedy groups of WARP columns, chosen once a window knowing w: seed a group, then add the column that keeps the
-    most weighted steps uniform. A uniform step's weight is the share of X values that make X·w_t = v* there.
+def group_columns(design: str, w: np.ndarray, rng: np.random.Generator,
+                  width: int = WARP) -> tuple[list[np.ndarray], np.ndarray]:
+    """Greedy groups of `width` columns, chosen once a window knowing w: seed a group, then add the column that keeps
+    the most weighted steps uniform. A uniform step's weight is the share of X values that make X·w_t = v* there.
     Returns the groups and, per group and step, the X value that skips it (0 when none does)."""
     xs, _ = DESIGNS[design]
     v, _ = point_mass(design)
@@ -130,12 +134,12 @@ def group_columns(design: str, w: np.ndarray, rng: np.random.Generator) -> tuple
     for seed in order:
         if not free[seed]:
             continue
-        if free.sum() < WARP:
+        if free.sum() < width:
             break
         free[seed] = False
         members = [seed]
         alive = need[:, seed] != 0
-        for _ in range(WARP - 1):
+        for _ in range(width - 1):
             cand = np.flatnonzero(free)
             eq = w[alive][:, cand] == w[alive, seed][:, None]
             score = (eq * weight[alive, seed][:, None]).sum(0)
@@ -148,11 +152,12 @@ def group_columns(design: str, w: np.ndarray, rng: np.random.Generator) -> tuple
     return groups, np.array(skip)
 
 
-def build_warps(design: str, inst: dict, rng: np.random.Generator) -> tuple[np.ndarray, int, int]:
-    """Model W: a 1 × WARP warp-register (row, group) is rewritten whole unless every entry is unchanged."""
+def build_warps(design: str, inst: dict, rng: np.random.Generator, width: int = WARP) -> tuple[np.ndarray, int, int]:
+    """Model W (width 32) or C (width 4): a 1 × width unit (row, group) is rewritten whole unless every entry is
+    unchanged."""
     h = inst["honest"]
     m, n, s = h.shape
-    groups, skip = group_columns(design, inst["w"], rng)
+    groups, skip = group_columns(design, inst["w"], rng, width)
     cols = np.concatenate(groups)
     out = np.empty_like(h)
     out[:, :, 0] = h[:, :, 0]
@@ -162,11 +167,11 @@ def build_warps(design: str, inst: dict, rng: np.random.Generator) -> tuple[np.n
         out[:, :, t] = out[:, :, t - 1] + step_increment(inst, t)
         for g, members in enumerate(groups):
             if not skip[g, t - 1]:
-                writes += WARP * m
+                writes += width * m
                 continue
             kept = inst["x"][:, t - 1] == skip[g, t - 1]
             out[np.ix_(kept, members, [t])] = out[np.ix_(kept, members, [t - 1])]
-            writes += WARP * int((~kept).sum())
+            writes += width * int((~kept).sum())
         writes += m * len(rest)
     return out, writes, 0
 
@@ -181,12 +186,14 @@ def small(seed: int = 53) -> tuple[list[dict], dict]:
         unchanged = float(np.mean(h[:, :, 1:] == h[:, :, :-1]))
         pe, wr, pt = build_entries(design, inst)
         pw, ww, _ = build_warps(design, inst, rng)
+        pc, wc, _ = build_warps(design, inst, np.random.default_rng(seed + 1000), 4)
         rows_rep = int(sum((h[:, :, t] == h[:, :, t - 1]).all(axis=1).sum() for t in range(1, s)))
         plain = instance(design, m, n, s, rng, cancel=False)["honest"]
         det[design] = {"p_star": point_mass(design)[1], "v_star": point_mass(design)[0],
                        "unchanged_entry_steps": unchanged,
                        "model_P_equal": bool(np.array_equal(pe, h)), "model_P_saving": na.saving(h.size, wr, pt),
                        "model_W_equal": bool(np.array_equal(pw, h)), "model_W_saving": na.saving(h.size, ww, 0),
+                       "model_C_equal": bool(np.array_equal(pc, h)), "model_C_saving": na.saving(h.size, wc, 0),
                        "row_repeats": rows_rep,
                        "plain_zero_tail_unchanged": float(np.mean(plain[:, :, 1:] == plain[:, :, :-1])),
                        "m": m, "n": n, "S": s}
@@ -201,8 +208,9 @@ def small(seed: int = 53) -> tuple[list[dict], dict]:
            and d["model_P_saving"] > 0.15, d)
     ok("A8 model P fix2w13: ~1/8 unchanged, words equal, > 7% saved",
        det["fix2w13"]["model_P_equal"] and det["fix2w13"]["model_P_saving"] > 0.07, det["fix2w13"])
-    ok("A8 model W: every design's warp-grain adversary reproduces the honest words",
-       all(det[d]["model_W_equal"] for d in DESIGNS), {d: det[d]["model_W_saving"] for d in DESIGNS})
+    ok("A8 models W and C: every design's grouped adversary (32 and 4 columns) reproduces the honest words",
+       all(det[d]["model_W_equal"] and det[d]["model_C_equal"] for d in DESIGNS),
+       {d: (det[d]["model_W_saving"], det[d]["model_C_saving"]) for d in DESIGNS})
     ok("A8 model W fix2: column groups fixed once a window still skip > 1% of the words",
        det["fix2"]["model_W_saving"] > 0.01, det["fix2"])
     ok("uw6 and uw8: < 1% of entry-steps unchanged under A8, and no row vector repeats",
@@ -221,9 +229,10 @@ def small(seed: int = 53) -> tuple[list[dict], dict]:
 
 
 def at_scale(seed: int = 59) -> dict:
-    """A8's saving as a share of stock over Llama's linears (16 layers alike), models P and W, m 64 / 512 / 8,192.
-    Model W groups each linear's columns once (its w drawn once a window)."""
+    """A8's saving as a share of stock over Llama's linears (16 layers alike), models P, W and C, m 64 / 512 / 8,192.
+    Models W and C group each linear's columns once (its w drawn once a window)."""
     rng = np.random.default_rng(seed)
+    rc = np.random.default_rng(seed + 1000)
     out = {}
     grouped = {}
     for design in DESIGNS:
@@ -233,11 +242,13 @@ def at_scale(seed: int = 59) -> dict:
             _, w = draw(design, 1, n, s, rng)
             groups, skip = group_columns(design, w, rng)
             grouped[(design, lin)] = (w, skip, len(groups))
+            grouped[(design, lin, 4)] = group_columns(design, w, rc, 4)[1]
         for m in na.MS:
-            sp = sw = st = 0.0
+            sp = sw = sc = st = 0.0
             for lin, (n, k) in ns.LLAMA.items():
                 s = ns.steps1l(k)
                 w, skip, ng = grouped[(design, lin)]
+                skip4 = grouped[(design, lin, 4)]
                 x, _ = draw(design, m, 1, s, rng)
                 zeros = 0
                 for t in range(s - 1):
@@ -248,10 +259,13 @@ def at_scale(seed: int = 59) -> dict:
                 sp += ns.H32 * (zeros - m * (s - 1))
                 kept = sum(int((x[:, t][:, None] == skip[None, :, t]).sum()) for t in range(s - 1))
                 sw += ns.H32 * WARP * kept
+                sc += ns.H32 * 4 * sum(int((x[:, t][:, None] == skip4[None, :, t]).sum()) for t in range(s - 1))
                 st += m * n * k
-            out[f"{design}/m{m}"] = {"model_P": sp / st, "model_W": sw / st}
+            out[f"{design}/m{m}"] = {"model_P": sp / st, "model_W": sw / st, "model_C": sc / st}
     out["groups_uniform_steps"] = {f"{d}/{lin}": float((grouped[(d, lin)][1] != 0).sum(1).mean())
                                    for d in DESIGNS for lin in ns.LLAMA}
+    out["groups4_uniform_steps"] = {f"{d}/{lin}": float((grouped[(d, lin, 4)] != 0).sum(1).mean())
+                                    for d in DESIGNS for lin in ns.LLAMA}
     return out
 
 
@@ -306,6 +320,10 @@ def main(argv: list[str] | None = None) -> int:
                    "detail": {k: v for k, v in sc.items() if "/m" in k}})
     checks.append({"check": "A8 at scale, model W: fix2 > 1% of stock at every m",
                    "pass": min(sc[f"fix2/m{m}"]["model_W"] for m in na.MS) > 0.01, "detail": ""})
+    checks.append({"check": "A8 at scale, model C (4-column groups, regrouped once a window): fix2w2 > 1% at every m, "
+                   "above round 2's natural-order A2c-tile (0.15%); uw6 < 0.1%",
+                   "pass": min(sc[f"fix2w2/m{m}"]["model_C"] for m in na.MS) > 0.01
+                   and max(sc[f"uw6/m{m}"]["model_C"] for m in na.MS) < 0.001, "detail": ""})
     a5 = a5_exact()
     checks.append({"check": "A5 on uw6 through an exact epilogue: > 1% of stock at m 64 with w per window; step 2's w "
                    "per call takes it to 0 at every m",
@@ -314,7 +332,9 @@ def main(argv: list[str] | None = None) -> int:
                    "detail": {k: v["gap_share_of_stock"] for k, v in a5.items()}})
     rep = {"checks": checks, "small": det, "at_scale": sc, "costs": cs, "a5_exact_epilogue": a5,
            "periods": {f"A8_P_{d}_m8192": ns.periods(sc[f"{d}/m8192"]["model_P"], 1.044) for d in ("fix2", "fix2w2")}
-           | {f"A8_W_{d}_m8192": ns.periods(sc[f"{d}/m8192"]["model_W"], 1.044) for d in ("fix2", "fix2w2")}}
+           | {f"A8_W_{d}_m8192": ns.periods(sc[f"{d}/m8192"]["model_W"], 1.044) for d in ("fix2", "fix2w2")}
+           | {f"A8_C_{d}_m8192": ns.periods(sc[f"{d}/m8192"]["model_C"], 1.044) for d in ("fix2", "fix2w2")}
+           | {"A5_uw6_exact_m64": ns.periods(a5["uw6/m64"]["gap_share_of_stock"], 1.044)}}
     text = json.dumps(rep, indent=1, default=float)
     if args.json:
         with open(args.json, "w") as f:
