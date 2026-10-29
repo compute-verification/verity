@@ -8,3 +8,4 @@
 - (11:35Z) N-HIDE final: the kernel's hiding layout is L1 (A_j's 1 KiB pieces as frame-v3 leaves under one hm96 instance a call; the words under one instance a forward; y = SHA-512(k_w ‖ pos ‖ r)). Spec in its final §1.
 - (11:55Z) **Final push (NIGHT §8):** land 0b45 (blc4a-t64-e7 check and T2). A′ = (1, 127, 1) is a constant column: time it too if it fits. Final by 13:30Z with measured T2 at all three points.
 - (12:12Z) A′ = (1, 127, 1) is now the headline variant (N-NOISE and N-LIT): time it if 0b45 has landed; it is a constant-column change.
+- (12:20Z) Last task (GPU shared with N-FLOOR and N-SHALB; short runs, all GPU done by 13:20Z): build N-EXACT's xu epilogue for the lead (σ under A′ = (1, 127, 1) needs 24 bits in IADD3's column source). Check its served output bit for bit against stock's epilogue on 22-bit scales, and time it. If time is left, the CUDA graph for 64 rows. Short final 2 by 13:30Z.

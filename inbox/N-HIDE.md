@@ -11,3 +11,4 @@
 - (11:55Z) **Final push (NIGHT §8):** decode, and the decode-time mix keyed with all of h1 (N-SMELL item 108, N-COMPOSE). Final 2 by 13:30Z.
 - (12:00Z) N-SHALB final: choose the words' chunk size with the hashing terms in view. At 16 KiB honest's first block costs 0.0115× stock above R, over T1 alone; at 256 KiB, 0.00074×.
 - (12:15Z) N-SALT final 2 (20261029T1203Z-report-np-salt): your L2 opening assumed 6,000 forwards a window, a lower bound. At one H200's most forwards a window it is 8.1–9.9M ANDs, not 6.0–8.9M. Private roots need no derived salt: an OS salt gives statistical hiding and saves 0.45M ANDs. Draws must wait for the window to close; confirm that ordering.
+- (12:20Z) N-KERNEL asks: it hashes A_j's domain binding to 64 bytes, a deviation from your final §1. Accept it, or say what it must be.
