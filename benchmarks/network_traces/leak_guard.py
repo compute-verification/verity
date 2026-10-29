@@ -3,7 +3,7 @@ out of it, so no run record takes one; and a job's outputs, held outside the run
 passed them. Every job that publishes after a gate runs it on its way out, whatever the exit.
 
     python3 leak_guard.py RUN_DIR QUARANTINE [--gates DIR|TARBALL]... [--hold DIR [--release-to OUT]] [--budget-s S]
-        [--declared FILE] [--report FILE] [--dry]
+        [--public GLOB]... [--declared FILE] [--report FILE] [--dry]
 
 A gate run is a directory holding witness/ under a --gates directory (a tarball, a gate's fetch, is unpacked under
 QUARANTINE for the guard alone and removed after), and its public files are the rest of it. Its pieces are each witness
@@ -16,8 +16,11 @@ Every regular file under RUN_DIR and HOLD (symlinks not followed, as custody's `
 members (tar, zip, and gzip, bzip2 or xz streams), except a file or member equal to one of the gate runs' public files
 (their sha256s, the bundle a gate publishes to any key), which is public as it is and isn't scanned. It is a find when
 * its path, or an archive member's, is a witness's: under a ``witness`` directory, or a name the declared data lists;
-* it holds a piece at any offset that no entry of the allowlist excuses; or
-* it is a file the guard can't read through (`UNREAD`, a damaged archive, an archive inside another).
+* it holds a piece at any offset that no entry of the allowlist excuses;
+* it is a file the guard can't read through (`UNREAD`, a damaged archive, an archive inside another); or
+* with ``--public``, its record path matches no ``--public`` glob (fnmatch): a record that declares what is public holds
+  nothing else, whatever it holds, so the counts and lengths no witness piece shows (a window's requests, steps and
+  outputs, its advice's bits) stay out by being undeclared.
 The declared data (`DECLARED`, leak_guard.json beside this file) holds the witness file names (``names``: the gates'
 witness files whose names no other file has) and the allowlist (``allow``): each entry a piece's sha256, the name of the
 witness file it is cut from, the record paths it may lie in (fnmatch globs on the run-dir-relative path, an archive
@@ -572,10 +575,12 @@ def record_path(dest: Path, run: Path, hold: Path, p: Path) -> str:
 
 
 def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow: list[dict], dry: bool = False,
-          hold: Path | None = None, release: Path | None = None, budget: Budget | None = None) -> tuple[dict, dict]:
+          hold: Path | None = None, release: Path | None = None, budget: Budget | None = None,
+          declared: list[str] | None = None) -> tuple[dict, dict]:
     """The guard on `run` (and `hold`, its files bound for `release`), its finds moved under `quarantine` and the rest of
     `hold` released only after every file was read (unless `dry`): (the report, counts and paths only; the quarantine's,
-    with each find's pieces)."""
+    with each find's pieces). With `declared` (``--public``), a file whose record path matches none of its globs is a
+    find."""
     budget = budget or Budget()
     runs = gate_runs(gates)
     got, public, pub_files = pieces(runs, budget)
@@ -608,8 +613,10 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
             else:
                 bad.append((got.needle(i), piece, member, origin))
         n = len({x for _, x, _, _ in bad})
+        undeclared = declared is not None and not any(fnmatch.fnmatchcase(rel, g) for g in declared)
         why = (["a witness path"] * bool(r.get("path")) + [f"a witness-named member, {r['named']}"] * bool(r["named"])
-               + [r["unread"]] * bool(r["unread"]) + [f"{n} witness pieces"] * bool(n))
+               + [r["unread"]] * bool(r["unread"]) + [f"{n} witness pieces"] * bool(n)
+               + ["not declared public (--public)"] * undeclared)
         if not why:
             continue
         doc = {"path": rel, "bytes": size[p], "why": why, "pieces": n, **({"held": True} if is_held else {})}
@@ -670,6 +677,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--hold", type=Path)
     ap.add_argument("--release-to", type=Path)
     ap.add_argument("--budget-s", type=float, default=BUDGET_S)
+    ap.add_argument("--public", action="append", metavar="GLOB")
     ap.add_argument("--declared", type=Path, default=DECLARED)
     ap.add_argument("--report", type=Path)
     ap.add_argument("--dry", action="store_true")
@@ -708,7 +716,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 unpacked.append(unpack(g, q / f"gates-{os.getpid()}-{i}"))
                 gates.append(unpacked[-1])
-        report, held = guard(run, q, gates, names, allow, a.dry, hold, release, budget)
+        report, held = guard(run, q, gates, names, allow, a.dry, hold, release, budget, a.public)
     except Ended as e:
         print(f"leak_guard: {e} ended the guard: nothing more released"
               + (f", what is left in {hold} stays out of the record" if hold else ""), file=sys.stderr, flush=True)
