@@ -40,9 +40,8 @@ WINDOW = {"root": "11" * 64}
 #: 1018753ee5, whose second parent is 882770e600
 MAIN = R.main_lines(Path(__file__).parent / "fixtures" / "main-first-parent.txt")
 PIN = "c81c31e6d51f9c481cdead96221d65ad6d7afd2c"
-#: the host's pins log as its operator published it when it repinned vy-challenger-1 to `PIN`; every open seals it
-#: unless a
-#: test says otherwise
+#: the host's pins log as its operator published it when it repinned the challenger host to `PIN`; every open seals it
+#: unless a test says otherwise
 HOST_PINS = ['{"commit":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c","main":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c",'
              '"pinned_utc":"2026-10-22T11:07:28Z"}']
 #: the challenger key the window's deployment pins: sixteen leaves, four a session (the ledger's open, the record, the
@@ -864,7 +863,7 @@ def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, sign
 
 
 def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
-    """RT4-INT-24: a v1 open names its window by Commit and a period label; a v2 open of the same root later would give
+    """A v1 open names its window by Commit and a period label; a v2 open of the same root later would give
     it a second draw of coins, so the ledger is refused for both. A v1 open alone is refused too: it names no prover and
     seals no refused hellos. And no v1 entry follows a v2 one."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer, schema=C.LEDGER_SCHEMA_V1)
@@ -889,7 +888,7 @@ def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
 
 @pytest.mark.parametrize("leaves", [[3, 3], [5, 2], [4, 6, 6, 7]])
 def test_a_ledger_that_reuses_or_goes_back_on_a_leaf_is_refused(leaves):
-    """RT4-INT-27: a host whose key state and ledger are restored signs its next entry at a leaf it has signed at
+    """A host whose key state and ledger are restored signs its next entry at a leaf it has signed at
     already; the key signs at increasing leaves, so a ledger whose leaves don't increase was forked."""
     key_sha512 = hashlib.sha512(lms.public_key(PINNED)).hexdigest()
 
@@ -1037,7 +1036,7 @@ def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-
 def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is_refused(tmp_path, signer):
     """The operator's signed `period-open` and `period-close` entries pass through the ledger's check
     (`verify_periods`): a
-    period's windows are the opens of its lane between them, and a close that lists other windows or outcomes is
+    period's windows are the opens of its prover between them, and a close that lists other windows or outcomes is
     refused, as is a period entry under another key or under v1."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     _period_open(ledger)
@@ -1242,7 +1241,7 @@ def _pinned_host(tmp_path, pinned: str, **seal) -> Host:
 
 
 def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(tmp_path):
-    """RT4-INT-40: the open names the commit its host ran and seals the host's pins log as it stood, and
+    """The open names the commit its host ran and seals the host's pins log as it stood, and
     `pinned_session` takes the session only when one of the sealed lines pins that commit. An honest session at a main
     commit is read under any later extension of the log; a commit pinned off main, or only after the open, is refused
     naming the fix; so are a missing, malformed, cut or edited pins log and an open that seals none."""
@@ -1298,7 +1297,7 @@ MERGE = "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
 
 def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_line(tmp_path, signer):
     """`credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
-    A session whose open names `PIN`, main's tip when vy-challenger-1 was repinned and the one line of the pins log it
+    A session whose open names `PIN`, main's tip when the challenger host was repinned and the one line of the pins log it
     published, sealed in the open, is credited against the auditor's own first-parent list of main. Refused, each with
     its reason and no fallback to `audited_session`: a pin on main's first-parent line the log doesn't record, an absent
     log, an open that seals none, no copy of main or a malformed one, and a logged pin that is in main's history but not
@@ -1407,7 +1406,7 @@ def test_the_pin_is_read_from_the_operators_key_record():
 
 
 def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
-    """RT4-INT-26: the round roots in the release log rewritten after the session's end, to roots chosen after every
+    """The round roots in the release log rewritten after the session's end, to roots chosen after every
     coin: the log is no longer the one the ledger's end sealed (nor the one the close signs)."""
     host = Host(tmp_path, signer)
     honest(host)
