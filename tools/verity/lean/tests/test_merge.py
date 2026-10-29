@@ -398,6 +398,54 @@ def test_shape_entries_and_frozen_names_merge_one_by_one():
     assert why == ["shape[frozen][P.a]: changed on both sides, differently"]
 
 
+def test_two_sides_restating_one_guarantee_s_inline_premises_merge_premise_by_premise():
+    """`Security/Properties/lean-audit.json`'s `shape.inline` entry for `scheduledRequirement` at c92bc0a53f (ours),
+    5e3e9ea235 (theirs) and their merge base fc4958a86b: both sides add the two premises restated over `sessionLayout`, ours
+    keeping the two texts they restate and theirs dropping them.  Compared whole, the guarantee's map refused; premise by
+    premise the dropped texts go and the added ones stay.  The sides gave each added premise a different reason, and those two
+    still refuse, each named; with ours' reasons as theirs', the guarantee merges to theirs' map."""
+    sides = json.loads((FIXTURES / "inline-scheduled-requirement.json").read_text())
+    g = "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"
+    base, ours, theirs = (sides[n]["shape"]["inline"][g] for n in ("base", "ours", "theirs"))
+    added, dropped = [p for p in theirs if p not in base], [p for p in base if p not in theirs]
+    assert len(added) == len(dropped) == 2 and all(p in ours for p in added) and all(ours[p] == base[p] for p in dropped)
+    _, why = M.merge(sides["base"], sides["ours"], sides["theirs"])
+    assert why == [f"shape[inline][{g}][{p}]: added on both sides, differently" for p in ours if p in added]
+    agreed = {"shape": {"inline": {g: ours | {p: theirs[p] for p in added}}}}
+    merged, why = M.merge(sides["base"], agreed, sides["theirs"])
+    assert why == [] and merged["shape"]["inline"][g] == theirs
+    assert merged["shape"]["inline"][g] == {p: w for p, w in base.items() if p not in dropped} | {p: theirs[p] for p in added}
+
+
+def test_an_inline_premise_both_sides_add_differently_refuses_and_the_other_shape_sections_still_refuse_whole():
+    """`shape.inline` merges premise by premise (`DEEPER`); `frozen`, `properties` and `conjectures` entries still merge whole,
+    so two sides that change one entry differently refuse even where they changed different fields of it."""
+    prop = {"function": "P.f", "outcome": "accept"}
+    base = {"shape": {"inline": {"P.t": {"a": "why a", "b": "why b"}}, "properties": {"P.p": prop}, "frozen": {"P.z": "lemma"}}}
+
+    def inline(**ps):
+        return {"shape": base["shape"] | {"inline": {"P.t": ps}}}
+
+    def frozen(why):
+        return {"shape": base["shape"] | {"frozen": {"P.z": why}}}
+
+    def prop_(**f):
+        return {"shape": base["shape"] | {"properties": {"P.p": prop | f}}}
+
+    merged, why = M.merge(base, inline(a="why a", b="why b", c="why c"), inline(b="why b", d="why d"))
+    assert why == [] and merged["shape"]["inline"] == {"P.t": {"b": "why b", "c": "why c", "d": "why d"}}
+    assert M.merge(base, inline(a="why a", b="why b", c="one"), inline(a="why a", b="why b", c="one"))[1] == []
+    _, why = M.merge(base, inline(a="why a", b="why b", c="one"), inline(a="why a", b="why b", c="another"))
+    assert why == ["shape[inline][P.t][c]: added on both sides, differently"]
+    _, why = M.merge(base, inline(b="why b"), inline(a="changed", b="why b"))
+    assert why == ["shape[inline][P.t][a]: removed on one side and changed on the other"]
+    merged, why = M.merge(base, inline(b="why b"), inline(a="why a"))
+    assert why == [] and "inline" in merged["shape"] and merged["shape"]["inline"] == {}, "a guarantee left with no premise goes"
+    assert M.merge(base, frozen("restatable"), frozen("open"))[1] == ["shape[frozen][P.z]: changed on both sides, differently"]
+    assert M.merge(base, prop_(function="P.g"), prop_(outcome="refuse"))[1] == [
+        "shape[properties][P.p]: changed on both sides, differently"]
+
+
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
     """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
