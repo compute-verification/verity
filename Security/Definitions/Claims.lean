@@ -539,6 +539,7 @@ structure Form where
   rowsV1 : Bool
   rowsV2OrSeg : Bool
   wiresAcyclic : Bool
+  templated : Bool
 
 /-- **Flock's statement**: `2^m` trace bits in blocks of `2^kLog`, the block circuit `C` (a Boolean circuit), the blocks'
 inputs and outputs (`inp b g`, `out b g`: the public or hidden value block `b` reads at `C`'s gate `g`), the public
@@ -602,7 +603,9 @@ with hidden outputs, the general instance form: the unit repeated, reading any n
 any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
 row a `sha512/row/v2` or `sha512/row-seg/v1` row; and no output port pinned (META `pinned_outputs`), which both row forms
-(`rowsV1`, `rowsV2OrSeg`) read. -/
+(`rowsV1`, `rowsV2OrSeg`) read. A templated statement (`templated`: its unit read from a template, the unit's fields
+those of the unit it unrolls to) only under `--zk`, with hidden outputs, without registered reads and at one table, its
+unit reading one input group and returning the outputs. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧
@@ -611,7 +614,9 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     (s.form.sharedRows → s.form.hiddenOutputs ∧ s.form.registeredReads ∧ s.form.leaf = "hm96-sha512/v1") ∧
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
-    (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg))
+    (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg)) ∧
+    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ ¬ s.form.registeredReads ∧ s.form.tables ≤ 1 ∧
+      s.form.unitInputGroups = 1 ∧ ¬ s.form.tail)
 
 /-- **The zero-filled word** of length `n`: at each position the first opened column there, zero where none was opened.
 Positions from `n` on are ignored. -/
