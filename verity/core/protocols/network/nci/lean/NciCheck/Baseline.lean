@@ -47,20 +47,24 @@ statements (`NciCheck.Properties`) stand as they are:
   entry of any other kind, `output` among them);
 * `trusted`: the trusted input is not as stated: its keys, a log record that is no object or breaks the chain, `run` the
   digest of no record of the log, or `params` not distinct names of types;
+* `run-program`: the run's own record is not this Program's (its `program` is not `Prog.sha512`), whatever θ is. The
+  run's record is the registration that sampled proofs commit to, so it names the Program checked even when θ is empty
+  and no entry reads it;
 * then θ entry by entry:
   - `theta-record-unknown`: `D` is the digest of no record of the log;
   - `theta-not-at-deployment-start`: `D` is a record of the log other than its first. It replaces the rule that `D`
     precede the run's own record: the first record is at or before every run's own, the first run's being that record
     itself, so this one code is the whole timing rule;
   - `theta-root`: `D` registers no value `V` whose root is `R` (its last entry for `V`, as Python's dict reads it);
-  - `theta-unbound`: the run's record is not this program's (its `program` is not `Prog.sha512`), `params` don't lower
-    onto the root's input nodes, or the run's record has no `registered` entry for `p` whose root is `R`;
+  - `theta-unbound`: `params` don't lower onto the root's input nodes, or the run's record has no `registered` entry for
+    `p` whose root is `R`;
   - `theta-width`: `D`'s rows and words don't give `p`'s `n_p` gates of `w` bits, rounded up to whole u16 words.
 
 ## Cost
 
-O(log + params' input nodes + θ · (log + one record)): one digest per record of the log, one lowering of the parameters
-onto the root body's input nodes, and per θ entry lookups in two records. Nothing here walks a gate.
+O(log + params' input nodes + θ · (log + one record)): one digest per record of the log, one comparison of the run's
+record's program, one lowering of the parameters onto the root body's input nodes, and per θ entry lookups in two
+records. Nothing here walks a gate.
 -/
 
 namespace NciCheck.Baseline
@@ -251,15 +255,14 @@ def dims (e : Json) : Option (Nat × Nat × Nat) := do
   return (r, w, b)
 
 /-- A θ entry in root node `k`, whose gates are `width` bits each, with provenance `p`: checked against the trusted
-input `T`, the program's digest `program`, each root node's parameter `own` and each parameter's gate count `counts`. -/
-def entryStep (T : Trusted) (program : String) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat)
-    (p : Prov) : Except String Unit := do
+input `T`, each root node's parameter `own` and each parameter's gate count `counts`. -/
+def entryStep (T : Trusted) (own : Array (Option Nat)) (counts : Array Nat) (k width : Nat) (p : Prov) :
+    Except String Unit := do
   let some d := T.digests.findIdx? (· == p.registration) | throw "theta-record-unknown"
   if d != 0 then throw "theta-not-at-deployment-start"
   let some e := lastWith T.log[0]! "registered" "value" p.value | throw "theta-root"
   if strAt e "root" != some p.root then throw "theta-root"
   let run := T.log[T.run]!
-  if strAt run "program" != some program then throw "theta-unbound"
   let some (some i) := own[k]? | throw "theta-unbound"
   let some mine := lastWith run "registered" "value" T.params[i]!.1 | throw "theta-unbound"
   if strAt mine "root" != some p.root then throw "theta-unbound"
@@ -278,14 +281,14 @@ def provenance (j tr : Json) (node : Array Nat → Nat → Nat) : Except String 
     | .error _ => throw "program"
   let ps ← provenanceOf j i.theta.size
   let T ← trustedOf tr
+  if strAt T.log[T.run]! "program" != some (Flock.hexOf P.sha512) then throw "run-program"
   let body := (P.defs[P.root]!).body
   let own := (ownersOf P T.params).getD (Array.replicate body.nodes.size none)
   let counts := countsOf body.offsets own T.params.size
-  let program := Flock.hexOf P.sha512
   for t in [0:i.theta.size] do
     let k := node body.offsets ((natOf? i.theta[t]!).getD 0)
     let width := (inputWidth? (P.defs[(body.nodes[k]!).fn]!).key).getD 0
-    entryStep T program own counts k width ps[t]!
+    entryStep T own counts k width ps[t]!
 
 /-- The check of record: `NciCheck.Desc.evaluate` (θ and the owners per root node), then θ's provenance against the
 trusted input `tr`; the verdict is the policy check's. -/
@@ -307,6 +310,8 @@ def fixOf : String → Option String
       "registration, value, root}; theta holds registered public data only, never an earlier run's output")
   | "trusted" => some ("the trusted input is the service's: {log: the deployment's registration records in R6's " ++
       "chain, run: the run's own record's digest, params: [[name, type], ...]}")
+  | "run-program" => some ("register the run under the Program checked: the run's own record's program is the " ++
+      "Program's SHA-512, whatever theta is")
   | "theta-record-unknown" => some "cite a record of the prover's registration log by its digest"
   | "theta-not-at-deployment-start" => some "cite the registration log's first record"
   | "theta-root" => some "cite the root the record registers for that value"
