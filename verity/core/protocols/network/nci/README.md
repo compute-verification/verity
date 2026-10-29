@@ -26,7 +26,9 @@ scenarios register a policy as if it were a subprotocol.
   (`Verity.Partition.IsCK`): every block exactly c gates, padding included, and at most k fresh input bits
   (`Nci.novelReads`). `Nci.CompliesRate c α` is the form the check reads: blocks of at most c gates,
   each reading at most α fresh input bits per gate. A (c, k)-partition complies at rate α = k/c
-  (`Nci.SecurityProofs.compliesRate_of_complies`), and each guarantee is stated at (c, k).
+  (`Nci.SecurityProofs.compliesRate_of_complies`), and each guarantee is stated at (c, k). The way back is proved
+  too: `Nci.Guarantees.CompliesCK` pads a partition complying at rate α into a (c, ⌊αc⌋)-partition, and
+  `Nci.Guarantees.ExpandComplies` carries the rate through the bit-level expansion at c·W for gates up to W bits wide.
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
@@ -48,8 +50,10 @@ nothing else but Lean core.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
   each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`.
 
-The check stays experimental until its agreement with `Nci.CompliesRate` is proved. On a verdict that
-complies, every block meets the (c, k) budgets at c = `gamma` and k = α·c (`NciCheck.Properties.Refines`). `benchmarks/nci` holds the
+The check's agreement with `Nci.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
+compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict that complies, every block meets the
+(c, k) budgets at c = `gamma` and k = α·c (`NciCheck.Properties.Refines`). What is open is the step from the check's
+accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 
 ## Names
