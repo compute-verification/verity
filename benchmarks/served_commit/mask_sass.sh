@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # M_key·y's instructions a salt on sm_90a, from the committer's own native_rows.cu: builds mask_probe.cu (MASK_UNROLL 0 and 1),
 # disassembles it and prices it (mask_sass.py). CPU only: nothing is launched. The CUDA wheels go into a scratch venv outside
-# the run dir. cwd: the source tree's root. Output: $OUT/{mask_r*.sass, mask_r*.ptxas, mask_sass.json, summary.txt, tools.txt}.
+# the run dir. cwd: the source tree's root. Output: $OUT/{mask_u*.sass, mask_u*.ptxas, mask_sass.json, summary.txt, tools.txt}.
 set -euo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT

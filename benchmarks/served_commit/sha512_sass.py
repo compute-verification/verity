@@ -111,8 +111,37 @@ def loops(ins: list[dict]) -> list[tuple[int, int]]:
     return sorted(out, key=lambda x: x[0] - x[1])
 
 
+def paths(ins: list[dict], a: int, b: int) -> list[list[int]]:
+    """Every path through ins[a..b] by fall-through and forward branches inside it, as index lists: the body of a loop entered
+    at a whose back edge is at b. A backward branch (a nested loop's) falls through; a branch out of the range ends a path."""
+    idx = {i["addr"]: n for n, i in enumerate(ins)}
+    out: list[list[int]] = []
+    stack = [(a, [])]
+    while stack:
+        n, path = stack.pop()
+        while n <= b:
+            path = path + [n]
+            i = ins[n]
+            t = idx.get(i["target"]) if i["op"].startswith("BRA") and isinstance(i["target"], int) else None
+            if t is not None and t > n:
+                if t <= b:
+                    stack.append((t, path))
+                if not i["pred"]:
+                    path = path if t > b else None
+                    break
+            elif i["op"].startswith("BRA") and not i["pred"] and n < b and t is None:
+                break
+            n += 1
+        if path is not None:
+            out.append(path)
+        if len(out) > 64:
+            raise SystemExit(f"over 64 paths through the loop at {ins[a]['addr']:#x}")
+    return out
+
+
 def per_compression(ins: list[dict], inner_trips: int) -> dict:
-    """The outer loop's trip (a block's loads and one compression); a loop nested inside it runs inner_trips times."""
+    """The outer loop's trip (a block's loads and one compression); a loop nested inside it runs inner_trips times. A body with
+    more than one path can't be priced by weighting each instruction once a trip: price its paths (mask_sass.py's rolled form)."""
     ls = loops(ins)
     if not ls:
         raise SystemExit("no loop in the probe: expected one trip a block")
@@ -120,6 +149,10 @@ def per_compression(ins: list[dict], inner_trips: int) -> dict:
     body = ins[a:b + 1]
     mult: Counter = Counter()
     inner = [(c, d) for c, d in ls[1:] if a <= c and d <= b]
+    for c, d in [(a, b)] + inner:
+        if len(p := paths(ins, c, d)) > 1:
+            raise SystemExit(f"the loop at {ins[c]['addr']:#x} has {len(p)} paths a trip, which a count weighting each "
+                             "instruction once a trip overprices: price each path and weight it by its trips")
     for c, d in inner:
         for i in ins[c:d + 1]:
             mult[i["addr"]] = inner_trips
