@@ -8,19 +8,19 @@
 [segment]
 eps = 0.21
 selection = "the L-step block, drawn uniformly (superseded by whole dot products)"
-source = "the spot check before whole dot products, the L-step block (a segment-type unit): writing half of one token's attention-output row wrong lands gate/up's operand on minus its own noise, so the token's gate/up words are 0 and their checks pass; fan-out ≈ 900–1,800, ε ≈ 21% (SPEC)"
+source = "the spot check before whole dot products, the L-step block (a segment-type unit): writing half of one token's attention-output row wrong lands gate/up's operand on minus its own noise, so the token's gate/up words are 0 and their checks pass; fan-out ≈ 900–1,800, ε ≈ 21%"
 
 [whole]
 eps = 0.0035
 selection = "whole dot products, uniform, one session of ≤ 256 a site a round"
-source = "whole dot products alone: Fan 14 at gate/up and 17.9 at 8B's lm_head (the RMSNorm outlier trick halves the wrong words a steer needs), +0.26–0.35% over ε_luck, the sup (SPEC)"
+source = "whole dot products alone: Fan 14 at gate/up and 17.9 at 8B's lm_head (the RMSNorm outlier trick halves the wrong words a steer needs), +0.26–0.35% over ε_luck, the sup"
 
 [whole-recompute]
 eps = 0.0
 selection = "whole dot products with their operands recomputed one stage back, uniform, the same sessions"
-source = "whole-dot-product proofs that recompute their operands one stage back: ε_adapt falls inside ε_luck; each proof grows by ≈ 1.7·10⁷ MACs a producer row (SPEC)"
+source = "whole-dot-product proofs that recompute their operands one stage back: ε_adapt falls inside ε_luck; each proof grows by ≈ 1.7·10⁷ MACs a producer row"
 
 [per-stage]
 eps = 0.0
 selection = "a fresh coin each stage, six round trips a layer"
-source = "per-stage coins: ε_adapt = 0 at six round trips a layer (SPEC)"
+source = "per-stage coins: ε_adapt = 0 at six round trips a layer"

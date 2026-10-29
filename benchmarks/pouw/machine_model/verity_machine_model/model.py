@@ -171,19 +171,19 @@ def census_files(m: Model, data: Path = DATA) -> list[Path]:
 
 
 def citations() -> dict[str, str]:
-    """`data/citations.toml`: the notes many lines cite, in `data/` and every device directory, each cited in a line's
-    `runs` as `@NAME`."""
+    """`data/citations.toml`: the notes and run records many lines cite, in `data/` and every device directory, each
+    cited in a line's `runs` or a TOML string as `@NAME`."""
     return tomllib.loads((DATA / "citations.toml").read_text())
 
 
 def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
     """`data/census/runs.toml`: the run lists many census lines share (a refit's every line cites every run its fit read),
-    each cited in a line's `runs` as `@NAME`; and `citations`, each a list of its one note."""
+    each cited in a line's `runs` as `@NAME`; and `citations`, each a list of its one note or run record."""
     p = data / "census" / "runs.toml"
     own = {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
     shared = {k: (v,) for k, v in citations().items()}
     if both := set(own) & set(shared):
-        raise SystemExit(f"{p}: {sorted(both)} also name a note in {DATA / 'citations.toml'}; give the run list its "
+        raise SystemExit(f"{p}: {sorted(both)} also name a citation in {DATA / 'citations.toml'}; give the run list its "
                          f"own name")
     return own | shared
 
