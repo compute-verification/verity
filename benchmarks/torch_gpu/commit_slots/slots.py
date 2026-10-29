@@ -17,7 +17,7 @@ A row's leaf, row g of slot s (rows numbered in the layout's order within a slot
   b||c = hm96.SHA512.commit_string(KEY, x, y)                public, 128 bytes
   leaf = unit_domain(u).leaf(r, r, "hm96-sha512/row/v2", hm96.SHA512.tree_leaf(KEY, b||c))
 
-The layout (:class:`Layout`) is the step's public structure: groups (what one ``add`` commits, e.g. a layer), each of units,
+The layout (:class:`CommitShape`) is the step's public structure: groups (what one ``add`` commits, e.g. a layer), each of units,
 each of rows, each row the concatenation of byte ranges (:class:`Part`) of the slot's row of the group's tensors. Every slot
 has the same layout. A unit and a slot tree's domain don't name the slot or the step: the step tree's leaf index fixes the
 slot, and the step domain the step. :func:`commit` is the reference commitment; :func:`open_unit` opens one unit of one slot
@@ -50,7 +50,7 @@ from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree,
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.ml.crypto.chacha20 import keystream
 
-__all__ = ["UNIT_MAX_BITS", "Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
+__all__ = ["UNIT_MAX_BITS", "Group", "CommitShape", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
            "edge_layout", "fixture", "fresh_salt_key", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",
            "row_salts", "slot_domain", "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids",
            "verify_unit"]
@@ -69,7 +69,7 @@ DIGEST_BYTES = INST.digest_bytes
 
 # --- the layout --------------------------------------------------------------------------------------------------------
 
-class Layout(L.Layout):
+class CommitShape(L.Layout):
     """A step's public structure, ``commitments.layout``'s (its groups in order, the same for every slot, a repeated group one
     object; ``name`` names it), with the indices and the digest the slot's trees take."""
 
@@ -129,7 +129,7 @@ class Layout(L.Layout):
                              .encode("utf-8"))
 
 
-def layout_digest(layout: Layout) -> bytes:
+def layout_digest(layout: CommitShape) -> bytes:
     return layout.digest
 
 
@@ -145,14 +145,14 @@ def _domain(tag: str, manifest: dict[str, Any], leaves: int) -> CommitmentDomain
     return CommitmentDomain(identity_digest_sha512(tag, manifest), -1, RangeIndexedDomain(0, leaves), hash="sha512")
 
 
-def unit_domain(context: bytes, layout: Layout, unit: int) -> CommitmentDomain:
+def unit_domain(context: bytes, layout: CommitShape, unit: int) -> CommitmentDomain:
     """Unit ``unit``'s tree over its rows, the same in every slot and step of a run."""
     rows = len(layout.units[unit])
     return _domain(UNIT_TAG, {"context": _context(context), "layout": layout_digest(layout).hex(), "unit": unit, "rows": rows,
                               "schema": ROW_SCHEMA}, rows)
 
 
-def unit_domain_ids(context: bytes, layout: Layout) -> bytes:
+def unit_domain_ids(context: bytes, layout: CommitShape) -> bytes:
     """Every unit's ``unit_domain(context, layout, u).domain_id``, 64 bytes each in unit order, in one pass: the same bytes
     hashed, with each unit's manifest written straight into its canonical JSON and the domain message framed around its
     binding once per row count."""
@@ -187,13 +187,13 @@ def _domain_frame(rows: int) -> tuple[bytes, bytes]:
     return lo[:k], lo[k + DIGEST_BYTES:]
 
 
-def slot_domain(context: bytes, layout: Layout) -> CommitmentDomain:
+def slot_domain(context: bytes, layout: CommitShape) -> CommitmentDomain:
     """A slot's tree over its units' roots, the same in every slot and step of a run."""
     return _domain(SLOT_TAG, {"context": _context(context), "layout": layout_digest(layout).hex(), "units": layout.unit_count,
                               "schema": ROOTS_SCHEMA}, layout.unit_count)
 
 
-def step_domain(context: bytes, layout: Layout, step: int, slots: int) -> CommitmentDomain:
+def step_domain(context: bytes, layout: CommitShape, step: int, slots: int) -> CommitmentDomain:
     """Step ``step``'s tree over its ``slots`` slots' roots."""
     if type(step) is not int or step < 0 or type(slots) is not int or slots < 1:
         raise ValueError("a step is a nonnegative integer and has at least one slot")
@@ -214,7 +214,7 @@ def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
 
 # --- committing --------------------------------------------------------------------------------------------------------
 
-def slot_rows(layout: Layout, outputs: Sequence[Sequence[Any]], slot: int) -> list[bytes]:
+def slot_rows(layout: CommitShape, outputs: Sequence[Sequence[Any]], slot: int) -> list[bytes]:
     """Slot ``slot``'s rows in order, from ``outputs[i][j]``, group i's tensor j as (slots, bytes) uint8 (or anything
     ``np.asarray`` reads as (slots, ...) and views as bytes)."""
     if len(outputs) != len(layout.groups):
@@ -255,7 +255,7 @@ class SlotCommit:
         return self.tree.root
 
 
-def commit_slot(context: bytes, layout: Layout, salt_key: bytes, slot: int, rows: Sequence[bytes]) -> SlotCommit:
+def commit_slot(context: bytes, layout: CommitShape, salt_key: bytes, slot: int, rows: Sequence[bytes]) -> SlotCommit:
     """Slot ``slot``'s subtree from its rows alone (:func:`slot_rows`): what a replay of its request rebuilds."""
     flat = [r for u in layout.units for r in u]
     if len(rows) != len(flat) or any(len(r) != row.nbytes for r, row in zip(rows, flat, strict=True)):
@@ -274,11 +274,11 @@ class StepCommit:
     slot_roots: tuple[bytes, ...]
 
 
-def step_tree(context: bytes, layout: Layout, step: int, slot_roots: Sequence[bytes]) -> RootTree:
+def step_tree(context: bytes, layout: CommitShape, step: int, slot_roots: Sequence[bytes]) -> RootTree:
     return RootTree(step_domain(context, layout, step, len(slot_roots)), slot_roots)
 
 
-def commit(context: bytes, layout: Layout, step: int, salt_key: bytes, outputs: Sequence[Sequence[Any]], slots: int) -> StepCommit:
+def commit(context: bytes, layout: CommitShape, step: int, salt_key: bytes, outputs: Sequence[Sequence[Any]], slots: int) -> StepCommit:
     """The reference commitment of a step of ``slots`` slots: ``outputs`` as :func:`slot_rows` reads them."""
     roots = [commit_slot(context, layout, salt_key, s, slot_rows(layout, outputs, s)).root for s in range(slots)]
     return StepCommit(step_tree(context, layout, step, roots).root, tuple(roots))
@@ -307,7 +307,7 @@ class UnitOpening:
                    RootOpening.of_json(doc["unit_path"]), RootOpening.of_json(doc["slot_path"]))
 
 
-def open_unit(context: bytes, layout: Layout, step: int, salt_key: bytes, slot_roots: Sequence[bytes], slot: int, unit: int,
+def open_unit(context: bytes, layout: CommitShape, step: int, salt_key: bytes, slot_roots: Sequence[bytes], slot: int, unit: int,
               rows: Sequence[bytes]) -> UnitOpening:
     """The opening of ``unit`` of ``slot`` from the slot's rows (a replay of its request) and the step's slot roots."""
     sc = commit_slot(context, layout, salt_key, slot, rows)
@@ -318,7 +318,7 @@ def open_unit(context: bytes, layout: Layout, step: int, salt_key: bytes, slot_r
                        step_tree(context, layout, step, slot_roots).open([slot]))
 
 
-def verify_unit(step_root: bytes, context: bytes, layout: Layout, step: int, slots: int, opening: UnitOpening,
+def verify_unit(step_root: bytes, context: bytes, layout: CommitShape, step: int, slots: int, opening: UnitOpening,
                 rows: Mapping[int, tuple[bytes, bytes]] | None = None) -> bool:
     """Whether ``opening`` opens unit ``opening.unit`` of slot ``opening.slot`` of the step whose root is ``step_root``; with
     ``rows``, ``rows[r] = (row, salt)`` are exactly its rows' bytes and salts."""
@@ -353,7 +353,7 @@ def _cut(source: int, offset: int, nbytes: int, cap: int) -> list[tuple[Row, ...
 
 
 def h200_layout(layers: int = 52, d: int = 16384, heads: int = 256, head_dim: int = 64, kv_heads: int = 1, mlp: int = 65536,
-                ctx_rows: int = 16) -> Layout:
+                ctx_rows: int = 16) -> CommitShape:
     """The frozen H200 shape's step layout, every op's per-token output committed (compute-accounting's "every op" count),
     one group a layer, each op's output cut into one-row units of at most ``UNIT_MAX_BITS`` (32 KiB):
 
@@ -381,10 +381,10 @@ def h200_layout(layers: int = 52, d: int = 16384, heads: int = 256, head_dim: in
             sources.append(n)
             units += _cut(src, 0, n, cap)
     group = Group(tuple(sources), tuple(units))
-    return Layout(f"h200-mqa-d{d}-h{heads}x{head_dim}-kv{kv_heads}-f{mlp}-c{ctx_rows}-every-op/v1", (group,) * layers)
+    return CommitShape(f"h200-mqa-d{d}-h{heads}x{head_dim}-kv{kv_heads}-f{mlp}-c{ctx_rows}-every-op/v1", (group,) * layers)
 
 
-def random_outputs(layout: Layout, slots: int, rng: np.random.Generator, groups: Iterable[int] | None = None) -> list[list[np.ndarray]]:
+def random_outputs(layout: CommitShape, slots: int, rng: np.random.Generator, groups: Iterable[int] | None = None) -> list[list[np.ndarray]]:
     """Uniform bytes for every tensor of the chosen groups (all by default), (slots, bytes) uint8 each."""
     chosen = range(len(layout.groups)) if groups is None else groups
     return [[rng.integers(0, 256, (slots, n), dtype=np.uint8) for n in layout.groups[i].sources] for i in chosen]
@@ -394,29 +394,29 @@ def _rows(source: int, *sizes: int) -> tuple[Row, ...]:
     return tuple(Row((Part(source, sum(sizes[:i]), n),)) for i, n in enumerate(sizes))
 
 
-def edge_layout() -> Layout:
+def edge_layout() -> CommitShape:
     """A small layout over SHA-512's chunk edges: rows of 1 to 240 bytes, a proof block of 4 rows (no pad), one of 3 (a pad), one of 1,
     a row of two parts (64 s8 codes, then their f32 scale) and one of 3 bytes; 5 proof blocks, so the slot tree pads 3."""
     g0 = Group((961,), (_rows(0, 1, 111, 112, 113), tuple(Row((Part(0, 337 + a, n),)) for a, n in ((0, 127), (127, 128), (255, 129))),
                         (Row((Part(0, 721, 240),)),)))
     g1 = Group((64, 4), ((Row((Part(0, 0, 64), Part(1, 0, 4))),), (Row((Part(1, 1, 3),)),)))
-    return Layout("commit-slots/edge/v1", (g0, g1))
+    return CommitShape("commit-slots/edge/v1", (g0, g1))
 
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "commit-slots-v1.json"
 
 
-def _layout_json(layout: Layout) -> dict[str, Any]:
+def _layout_json(layout: CommitShape) -> dict[str, Any]:
     return {"name": layout.name, "groups": [{"sources": list(g.sources), "units": [[[[p.source, p.offset, p.nbytes] for p in r.parts]
                                                                                    for r in u] for u in g.units]}
                                             for g in layout.groups]}
 
 
-def load(path: str | os.PathLike[str]) -> Layout:
+def load(path: str | os.PathLike[str]) -> CommitShape:
     """The layout in the file ``path`` (:func:`_layout_json`'s form), read and checked by ``commitments.layout.load``: equal
     groups are one object, so a plan lays each out once."""
     lay = L.load(path)
-    return Layout(lay.name, lay.groups)
+    return CommitShape(lay.name, lay.groups)
 
 
 def fixture() -> dict[str, Any]:
