@@ -23,12 +23,6 @@ struct MsShape {
 #define OPS_242(C, O) : "+" C(d[0]), "+" C(d[1]) : O(a[0]), O(a[1]), O(a[2]), O(a[3]), O(b[0]), O(b[1])
 #define SIG_211 " {%0,%1}, {%2}, {%3}, {%0,%1};"
 #define OPS_211(C, O) : "+" C(d[0]), "+" C(d[1]) : O(a[0]), O(b[0])
-#define SIG_822 " {%0,%1,%2,%3,%4,%5,%6,%7}, {%8,%9}, {%10,%11}, {%0,%1,%2,%3,%4,%5,%6,%7};"
-#define OPS_822(C, O)                                                                                            \
-  : "+" C(d[0]), "+" C(d[1]), "+" C(d[2]), "+" C(d[3]), "+" C(d[4]), "+" C(d[5]), "+" C(d[6]), "+" C(d[7])     \
-  : O(a[0]), O(a[1]), O(b[0]), O(b[1])
-#define SIG_422 " {%0,%1,%2,%3}, {%4,%5}, {%6,%7}, {%0,%1,%2,%3};"
-#define OPS_422(C, O) : "+" C(d[0]), "+" C(d[1]), "+" C(d[2]), "+" C(d[3]) : O(a[0]), O(a[1]), O(b[0]), O(b[1])
 // 2:4 sparse A (mma.sp): the metadata selects elements 0 and 1 of every group of four (0x4, valid for tf32's 1:2 too),
 // sparsity selector 0; A holds half the registers of the dense shape's.
 #define SIG_S422 " {%0,%1,%2,%3}, {%4,%5}, {%6,%7}, {%0,%1,%2,%3}, %8, 0x0;"

@@ -7,6 +7,8 @@
 //   m_<a>_<b>...    a mix in one warp, its forms round-robin on independent chains (h32.cuh's h32_mix), 512 an iteration
 // Each probe's note is what h32.py prices: c=CLASS (ffma, int32, fp64, other; mix for a mix across classes) and
 // w=PATTERN:REGS,..., the 32-bit registers one warp instruction of each counted pattern writes a lane.
+// CUDA 13.0 splits two-source IADD across IMAD.IADD and IADD3, and two-register half2 and bf16x2 add, mul and fma
+// across HFMA2.MMA and HADD2, HMUL2 or HFMA2; it lowers min.f64 to DSETP and two selects. The expects count those.
 #include "../../opcode_probe/probe.cuh"
 #include "h32.cuh"
 
