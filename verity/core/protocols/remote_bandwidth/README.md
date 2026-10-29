@@ -154,6 +154,10 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `p2_lean.py`: the Lean verifier of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
   it: built in `lean/` unless `--lean-exe` names a built one (without lake on the PATH, the one built there), a fresh
   process each session. The standard library only, so the party runs as an auditor gate starts it (`python3 -s -E`).
+- `session_parties.py`: `period.session` as two parties of the deployment layer (`verity.core.deploy`): the verifier
+  and its challenger, on their own clock and coins, which time each root by its arrival (`Received.at`), disclose the
+  session's coins at its end (`audit.Session.disclose`) and finish with its answer and case; and the prover, on its
+  node's store (`capabilities["store"]`), which checks each challenge it was sent against them (`period.Prover.end`).
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
 - `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote and freed, as the audit's appends,
