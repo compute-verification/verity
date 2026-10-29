@@ -1213,7 +1213,8 @@ their SHA-512. A session directory supplies only the record and the openings. Wi
 ### 16.9 Strict and legacy conformance
 
 Daniel's rules: the verifier checks proofs and never evaluates any part of the computation; circuits are total; the
-circuit is public and every value is private. The verifier of record implements them as two modules:
+circuit is public and every value is private. The spec states conformance as two modules, of which the verifier of record
+implements only the first:
 
 - **Strict** (the default): accepts only statements whose checks are the Flock proof, the session, the frame-v3 roots over
   public digests and outputs, and hashes of pinned padding constants. Today that is the circuit statement (§16.5).
@@ -1227,8 +1228,12 @@ circuit is public and every value is private. The verifier of record implements 
   Legacy statements also make intermediate values public (chunk chaining values, accumulators, cut words), which the rule
   "every value is private" forbids; the legacy module accepts that as recorded.
 
-A legacy verdict is never a strict verdict. The circuits' totality is a property of the pinned files, checked by level 3's
-lowering theorem, not at run time.
+A legacy verdict is never a strict verdict, and the verifier of record (`flock-verify`) has no legacy module: it refuses
+every session of a legacy statement before it reads a file (`ProvedScope.legacyStatements`, `ProvedScope.legacyWhy`:
+pure-block, IR frame v2 and v3, IR sampling, IR block and vllm-block), and every statement before hm96-sha512 rows
+(the netlist statement and the circuit statements up to `631567f7`) once every check has passed
+(`ProvedScope.statementRules`). `Flock.Test.Legacy` pins both. The circuits' totality is a property of the pinned files,
+checked by level 3's lowering theorem, not at run time.
 
 ### 16.10 The hm96-sha512 row statement (PR #83 from `eb90718f`; with the e2e bindings from `e51e2b86`, `verity/flock-circuit@e51e2b86`)
 
@@ -2117,9 +2122,10 @@ allows only `propext`, `Classical.choice` and `Quot.sound`):
 `verity/ml/flock/verifier/vectors.json` (`flock-verifier-vectors/v1`) lists them; the bytes stay in the evidence store
 (`research data fetch <record> --path <path>`).
 
-- **Honest sessions** (`honest`, `expect: accept`): pure-block, IR frame v2 and v3, IR sampling (legacy L-SAMPLE) and
-  vllm-block cells, and the PR #83 circuit statement, each with its record, verifier run and commit, public input files,
-  `Hello` and statement digest. The earliest pure-block sets are pre-G2 records (§5.1).
+- **Honest sessions** (`honest`, upstream-only: upstream accepts each and the Lean verifier refuses each,
+  `honest_upstream_only`): pure-block, IR frame v2 and v3, IR sampling (legacy L-SAMPLE) and vllm-block cells, and the
+  PR #83 circuit statement, each with its record, verifier run and commit, public input files, `Hello` and statement
+  digest. The earliest pure-block sets are pre-G2 records (§5.1).
 - **Record-level negatives** (`file_negatives`): recipes applied to an honest session, each with its expected verdict. The
   required acceptance is `unused_high_bits_of_query_coin`: flipping bit 127 of a query coin must not change the verdict
   (§13.5). Two informational cases, accepted on honest proofs, are §19's A1 and A2.

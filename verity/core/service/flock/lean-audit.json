@@ -66,6 +66,7 @@
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
   "Flock.Test.RequireLink",
+  "Flock.Test.Legacy",
   "VStar"
  ],
  "exempt": {
