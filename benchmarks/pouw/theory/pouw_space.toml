@@ -630,7 +630,7 @@ source = "SW-NOISE final §4 Domain: SW-LEAN's ssnTargetG needs only that step 1
 rank = 0
 status = "open"
 owner = "N-NOISE (composition proposed by N-CARD)"
-source = "D.cancel on a served sparse noise: the noise lanes are repeated negated in ceil((S + 3)/32) more k32 steps against the same public rows, so the final word is A·Bᵀ exactly (free in M0 until the final-word lemma) and every earlier word keeps a fresh bit's nonzero coefficient; that those words stay pairwise distinct and non-free is the open claim (ssn-distinct covers served layouts only)"
+source = "D.cancel on a served sparse noise: the noise lanes are repeated negated in ceil((S + 3)/32) more k32 steps against the same public rows, so the final word is A·Bᵀ exactly (free in M0 until the final-word lemma) and every earlier word keeps a fresh bit's nonzero coefficient; that those words stay pairwise distinct and non-free is the open claim (ssn-distinct covers served layouts only). N-NOISE interim §9 (note compute-research/20261029T0825Z-report-np-noise), symbolic on a 2x3x5 instance: every intermediate word distinct, and every final word (6 of 30) a function of the data alone, which the card prices as its final_word term, H32/K (N-NOISE's T1 1.29% under M0; the card's term 1.24% of stock on Llama's mix of K)"
 
 [premise.ssn-fold-distinct]
 rank = 0
@@ -1092,14 +1092,14 @@ source = "N-RED interim 1 §3: with G known when B is chosen the tags cancel and
 [attack.replay-table]
 status = "refuted"
 targets = ["ssn-1l-tag"]
-source = "N-RED interim 1 A5: a salt-free table of every (a1, c_t) vector under M0 with device memory, 3.33% / 0.42% / 0.03% of stock at m 64 / 512 / 8,192; closed by the atomic call (every design's base) or a per-call G"
+source = "N-RED interim 1 A5: a salt-free table of every (a1, c_t) vector under M0 with device memory, 3.33% / 0.42% / 0.03% of stock at m 64 / 512 / 8,192; closed by the atomic call (every design's base) or a per-call G. N-NOISE interim §9 and N-SMELL list A5 open for side A under M0 with a per-window G, since the table can be built after G is known; N-RED's own condition is the atomic call or a per-call G, so it is closed at atomic-call's rank 3 (its call-local free set excludes the table by fiat, as it does a replayed row, N-COMPOSE) and reopens if the atomic call is refuted"
 
 [attack.fix2-quadrant]
 status = "open"
 targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2", "N.nn-prmt-sv4", "N.nn-prmt-sv4-aorb",
            "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb", "N.nn-rot2-sv28-aorb", "N.nn-rawS-sv4-aorb"]
 priced = "unpriced (estimate: the share p of a chosen step's words whose increment is the likeliest value, a quarter for fix2)"
-source = "N-LEAN interim 1 §2b (estimate, unchecked; N-RED to check, N-NOISE to price): chosen data with a step dot of -1 in every column (A[i, k_t] = -1, B[j, k_t] = 1, fixed before w_t) makes fix2's step increment -1 + (1 + b_t[i])·w_t[j] zero wherever b_t[i] = 0 and w_t[j] = +1, a quarter of the step's entries, with no row vector repeating (4-word tiles repeat about 3.1%). The prover groups B's columns by w_t once a window and the rows by b_t each call (TMA row moves, A1's premise) and skips that quadrant's MMA, about 2 coordinates a row-step against n/4 words. Its general form holds for any per-step increment that is a function of row coins and window-fixed column weights, so every 1-bit and 4-bit SSN variant (fix, fix2, hw); N-NOISE's sv4 and sv28 codes are such increments (N-CARD's reading, unchecked by either lane)"
+source = "N-LEAN interim 1 §2b (estimate, unchecked; N-RED to check, N-NOISE to price): chosen data with a step dot of -1 in every column (A[i, k_t] = -1, B[j, k_t] = 1, fixed before w_t) makes fix2's step increment -1 + (1 + b_t[i])·w_t[j] zero wherever b_t[i] = 0 and w_t[j] = +1, a quarter of the step's entries, with no row vector repeating (4-word tiles repeat about 3.1%). The prover groups B's columns by w_t once a window and the rows by b_t each call (TMA row moves, A1's premise) and skips that quadrant's MMA, about 2 coordinates a row-step against n/4 words. Its general form holds for any per-step increment that is a function of row coins and window-fixed column weights, so every 1-bit and 4-bit SSN variant (fix, fix2, hw); N-NOISE's sv4 and sv28 codes are such increments (N-CARD's reading, unchecked by either lane). As written it needs chosen weights, a weight lane equal to 1 across every output column; with 31 activation lanes against n columns chosen activations can't make it on generic weights (N-SMELL interim 1 item 45), so it stands while M0 lets the prover choose the model, the coordinator's open model-choice question"
 
 # N-COVER interim 1's whole served step (note compute-research/20261029T0745Z-report-np-cover; step_cover.py on
 # cursor/compute-research-np-cover-5f9b, run r20261029-073342-47ea, art:f00fddacf69da4869d35b6a4e019684fea9a3919aac28035df6da24d5da22676;

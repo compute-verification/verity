@@ -976,6 +976,30 @@ def if_refuted(card: dict, rows: list[dict]) -> list[tuple[str, dict | None]]:
     return out
 
 
+def if_attack_refuted(card: dict, rows: list[dict]) -> list[tuple[str, dict | None]]:
+    """The best T1-passing design if each open attack on a passing design is refuted alone, and if all of them are."""
+    hit = sorted({a for r in rows if r["t1_pass"] for a in r["attacks"]})
+    out = [(a, next((r for r in rows if r["t1_pass"] and set(r["attacks"]) <= {a}), None)) for a in hit]
+    if len(hit) > 1:
+        out.append(("every open attack", next((r for r in rows if r["t1_pass"]), None)))
+    return out
+
+
+def leaner(card: dict, rows: list[dict], best: dict) -> list[tuple[str, dict]]:
+    """For each unsettled premise the best row takes beyond the base, the first T1-passing row whose premises are the
+    best's without it (or fewer), under no attack the best isn't under: what the headline's T1 costs without it."""
+    base, prem = set(card["space"]["base"]), card["premise"]
+    out = []
+    for p in best["premises"]:
+        if p in base or prem[p]["status"] not in UNSETTLED + ("scratch",):
+            continue
+        b = next((r for r in rows if r["t1_pass"] and p not in r["premises"]
+                  and set(r["premises"]) <= set(best["premises"]) and set(r["attacks"]) <= set(best["attacks"])), None)
+        if b is not None:
+            out.append((p, b))
+    return out
+
+
 def alternates(rows: list[dict]) -> dict[str, dict | None]:
     """The best row free of open attacks that meets T1 and T2 at any rank, and the best if every unmeasured T3 came in
     under its target."""
@@ -1019,13 +1043,13 @@ def row_line(i, row: dict) -> str:
             f"{pct(t['denoise'])} | {pct(t['hiding'])} ({pct(row['hiding_closed'])}) | {pct(t['host'])} "
             f"({row['host_route']:.2f}x) | {t2s(row)} "
             f"({row['t2']['unfused']:.1f}x) {'pass' if row['t2_pass'] else 'fail'} | {pct(row['t3_worst'])} | "
-            f"{row['delta_star']:.1e} | {len(row['open'])}: {opened(row)} |")
+            f"{row['delta_star']:.1e} | {len(row['open'])}: {opened(row)} | {', '.join(row['attacks']) or '-'} |")
 
 
 HEADER = ["| # | design | rank m/h (overall) | effective | T1 | +coins | final word | uncommitted | coin branch | forming | "
           "lane fix | derivation | de-noise | hiding (closed) | host (route H) | T2 sync / async (unfused) | T3 | delta* | "
-          "open (matmul) |",
-          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+          "open (matmul) | open attacks |",
+          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
 
 
 def render(card: dict, results: dict, space_info: dict) -> str:
@@ -1083,11 +1107,30 @@ def render(card: dict, results: dict, space_info: dict) -> str:
         lines += ["", "Refused, by first reason:", ""] + [f"- {k}: {c:,}" for k, c in sorted(reasons.items(), key=lambda kv: -kv[1])]
         best = res["rows"][0]
         p = best["t2"]["extra_parts_ms"]
-        lines += ["", f"**Best: {best['design']}** ({best['title']}). T2's parts a forward: stock "
+        if best["attacks"]:
+            lines += ["", f"**No design ranks first** (NIGHT §5: a design with an open finding can't): every design "
+                          f"{'passing T1' if best['t1_pass'] else 'priced'} here carries an open attack. First by the "
+                          f"ranking otherwise, under {', '.join(best['attacks'])}:"]
+        lines += ["", f"**{'Best' if not best['attacks'] else 'First, attacked'}: {best['design']}** ({best['title']}). "
+                      f"T2's parts a forward: stock "
                       f"{best['t2']['engines']['async']['stock_ms']:.2f} ms (async), "
                       + ", ".join(f"{k} {v:.2f} ms" for k, v in p.items())
                       + f", hashing {best['t2']['hash_ms']:.2f} ms. It still needs:", ""]
         lines += [f"- {n}" for n in needs(best)]
+        lean = leaner(card, res["rows"], best)
+        if lean:
+            lines += ["", "Without each premise it takes beyond the base (the same attacks or fewer):", "",
+                      "| without | design | rank (overall) | T1 | T2 sync / async | T3 |", "|---|---|---|---|---|---|"]
+            lines += [f"| {p} | {b['design']} | {rk(b)} | {pct(b['t1'])} | {t2s(b)} | {pct(b['t3_worst'])} |"
+                      for p, b in lean]
+        if res["if_attack_refuted"]:
+            lines += ["", "If an open attack is refuted:", "",
+                      "| refuted | best then | rank (overall) | T1 | T2 sync / async | T3 | still open |",
+                      "|---|---|---|---|---|---|---|"]
+            for a, b in res["if_attack_refuted"]:
+                lines.append(f"| {a} | - | - | - | - | - | - |" if b is None else
+                             f"| {a} | {b['design']} | {rk(b)} | {pct(b['t1'])} | {t2s(b)} | {pct(b['t3_worst'])} | "
+                             f"{opened(b)} |")
         lines += ["", "If a premise fails:", "", "| refuted | best then | rank (overall) | T1 | T2 sync / async | T3 | still open |",
                   "|---|---|---|---|---|---|---|"]
         for drop, b in res["if_refuted"]:
@@ -1152,6 +1195,7 @@ def main() -> int:
     for point in card["point"]:
         rows, refused = ranking(card, designs, point, delta)
         results[point] = {"rows": rows, "refused": refused, "if_refuted": if_refuted(card, rows),
+                          "if_attack_refuted": if_attack_refuted(card, rows),
                           "frontier_effective": frontiers(rows, "rank_effective"),
                           "frontier_nominal": frontiers(rows, "rank")}
     results["_joint"] = {"Llama-3.2-1B at T 512 (64 and 512 rows) and T 8,192": joint(results, ("t512", "t512r512", "t8192")),
@@ -1177,7 +1221,8 @@ def main() -> int:
         print(f"== {card['point'][point]['title']} ({len(res['rows']):,} priced, {len(res['refused']):,} refused)")
         for i, row in enumerate(res["rows"][:8], 1):
             print(f"  {i:2d}. {row['design']:<52} {rk(row)} eff {LABEL[row['rank_effective']]}  T1 {row['t1']:7.3%}  "
-                  f"T2 {t2s(row)}  T3 {pct(row['t3_worst'])}  open {opened(row)}")
+                  f"T2 {t2s(row)}  T3 {pct(row['t3_worst'])}  open {opened(row)}"
+                  + (f"  ATTACKED {', '.join(row['attacks'])}" if row["attacks"] else ""))
         for lv, fr in res["frontier_nominal"]:
             print(f"   frontier at nominal rank <= {LABEL[lv]}: " + ", ".join(
                 f"{r['design']} ({pct(r['t1'])}, {r['t2']['judged']:.1f}x, {pct(r['t3_worst'])})"
@@ -1399,6 +1444,24 @@ def main() -> int:
                  and "nn-a1-a2-chosen" in cardrow("nn-prmt-sv4-aorb")["attacks"]
                  and "nn-sv28-tile" in cardrow("nn-rot2-sv28-aorb")["attacks"],
                  ", ".join(f"{k[0]} {k[1]} {v:.4%}" for k, v in got.items()) + f", sv28 {max(sv28):.1e}")
+    fix2 = {p: dict(results[p]["if_attack_refuted"]).get("fix2-quadrant") for p in llama}
+    checks.check("no design ranks first on Llama (NIGHT §5): every design passing T1 is an SSN code under N-LEAN's open "
+                 "sub-row attack fix2-quadrant, and refuting it alone gives back a tagged SSN lead free of other attacks; "
+                 "on V4-like an unattacked per2 ranks first",
+                 all(results[p]["rows"][0]["t1_pass"] and "fix2-quadrant" in results[p]["rows"][0]["attacks"]
+                     and all(r["attacks"] for r in results[p]["rows"] if r["t1_pass"]) for p in llama)
+                 and all(b is not None and b["attacks"] == ["fix2-quadrant"] and "tag" in b["choice"]["noise"]
+                         for b in fix2.values())
+                 and not results["v4like"]["rows"][0]["attacks"] and results["v4like"]["rows"][0]["choice"]["noise"] == "per2",
+                 ", ".join(f"{p} {b['design'] if b else 'none'}" for p, b in fix2.items())
+                 + f"; v4like {results['v4like']['rows'][0]['design']}")
+    lead = results["t512"]["rows"][0]
+    lean = dict(leaner(card, results["t512"]["rows"], lead))
+    oim = lean.get("one-instruction-minimal")
+    checks.check("the T 512 lead's 0.000% takes one-instruction-minimal, which it doesn't need to pass: the same design "
+                 "without it is 0.048% (N-SMELL interim 2 item 7's 0.0483%)",
+                 "one-instruction-minimal" in lead["premises"] and oim is not None and 0.00045 < oim["t1"] < 0.00052,
+                 f"{oim['design']} {oim['t1']:.4%}" if oim else "none")
     noisy = [n for n, d in designs.items() if d["choice"]["noise"] in ("nsf", "perm")]
     checks.check("a noise whose words repeat on data (nsf, perm) is refused while its share is unpriced",
                  noisy and all(n in results["t8192"]["refused"] and "dup" in results["t8192"]["refused"][n][0] for n in noisy),
@@ -1541,9 +1604,15 @@ def main() -> int:
                                                     "t2": b["t2"]["judged"], "t3": b["t3_worst"], "needs": needs(b)}
                                           for k, b in alternates(res["rows"]).items()},
                            "best_periods": periods(card, res["rows"][0]) if res["rows"] else None,
+                           "ranks_first": bool(res["rows"]) and not res["rows"][0]["attacks"],
                            "if_refuted": [{"refuted": drop, "best": b and b["design"], "t1": b and b["t1"],
                                            "t2": b and b["t2"]["judged"], "open": b and [o["premise"] for o in b["open"]]}
-                                          for drop, b in res["if_refuted"]]}
+                                          for drop, b in res["if_refuted"]],
+                           "if_attack_refuted": [{"refuted": a, "best": b and b["design"], "t1": b and b["t1"],
+                                                  "t2": b and b["t2"]["judged"], "rank": b and LABEL[b["rank"]]}
+                                                 for a, b in res["if_attack_refuted"]],
+                           "without": [{"without": p, "design": b["design"], "t1": b["t1"], "rank": LABEL[b["rank"]]}
+                                       for p, b in (leaner(card, res["rows"], res["rows"][0]) if res["rows"] else [])]}
                        for p, res in results.items() if not p.startswith("_")},
             "joint": {k: [{x: y for x, y in j.items() if x != "rows"} for j in v[:20]] for k, v in results["_joint"].items()},
             "cards": {cid: {p: (v if isinstance(v, list) else slim(v)) for p, v in per.items()} for cid, per in card_rows.items()}}
@@ -1552,7 +1621,7 @@ def main() -> int:
         w = csv.writer(fh)
         w.writerow(["point", "position", "design", *(f"{a}.{s}" for a, s in card["space"]["slots"]), "rank_matmul",
                     "rank_hashing", "rank", "rank_effective", "t1", "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
-                    "hash_bytes_per_mac", "open"])
+                    "hash_bytes_per_mac", "open", "attacks"])
         for p, res in results.items():
             if p.startswith("_"):
                 continue
@@ -1566,7 +1635,7 @@ def main() -> int:
                             f"{e['sync']['ratio']:.4g}", f"{e['async']['ratio']:.4g}", f"{r['t2']['unfused']:.4g}",
                             "" if r["t3_worst"] is None else f"{r['t3_worst']:.4g}",
                             f"{r['delta_star']:.4g}", f"{r['hash_bytes_per_mac']:.4g}",
-                            " ".join(o["premise"] for o in r["open"])])
+                            " ".join(o["premise"] for o in r["open"]), " ".join(r["attacks"])])
     print(f"wrote {out / 'ranking.md'}, {out / 'pouw_space.json'}, {out / 'ranking.csv'}")
     return checks.finish()
 
