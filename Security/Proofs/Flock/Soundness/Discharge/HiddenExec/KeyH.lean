@@ -209,9 +209,7 @@ theorem out_copy_key {T : Model.Statement} (a : AcceptedH T) (hce : a.st.c = c) 
       (a.st.c.leavesOut.getD u' #[])[j] := by
     rw [← hwj]
     omega
-  have er : unitRows a.st a.L.unit_built = Rows.ofNet hU := Placed.ofNet_eq (lunit_flat P.tmpl) _ hU
-  have := out_copyH a ho hrf hz o hg x hu' hj ht (by rw [er]; exact h1) (by rw [er]; exact h2) (by rw [er]; exact hx)
-    hjo hkk hw
+  have := out_copyH a ho hrf hz o hg x hu' hj ht h1 h2 hx hjo hkk hw
   rw [hq, hk]
   exact this
 

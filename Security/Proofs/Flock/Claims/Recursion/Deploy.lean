@@ -40,10 +40,7 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   prover's values), one set for every part. So the prover sends them, after the inner rounds and before any V*
   session, as the staging round's message (`encStage`); the coin server's transcript of the inner rounds is the
   verifier's own (`Brings.tr`). The deployed composer (`flock-verify rec-compose`) accepts only where every part was
-  checked against one staged rows file and one set of every other input the parts share, each part at its own index
-  (`ComposeParts.composed_parts`: each part is then `partRaw`'s form, up to a SHA-512 collision). That the parts'
-  sessions are one run of `V` is the open condition C10 `OneRun` (`ComposeParts`), which needs the service's
-  interactive-run record.
+  checked against one staged rows file.
 * **V\* statements.** Part `s`'s statement is what the prover staged (`Stage.ofMsg`: the part's public file, the
   inner session's record and the shared rows off the staging message, the transcript the coin server's), in the part's
   recursive flags (`staged`). Its numbers (`numsOf`: `VO`'s rounds and `deployZkRec`'s errors, `N₀` and weight) are to be the ones `x`
@@ -91,25 +88,22 @@ structure PartX where
   bindings : ByteArray
 
 /-- **What the compiled verifier holds before the run**: the inner statement's bytes, the verifier's own inner shape
-(`--rec-inner`), the circuit registration (`--rec-inner-registration`), the V* parts, each with its own bindings, and
-the inner population's link table as its root and row count (`--rec-links`), which every part's session refuses
-(`linksOf`). -/
+(`--rec-inner`), the circuit registration (`--rec-inner-registration`), and the V* parts, each with its own bindings. -/
 structure RecX where
   inner : Claims.Msg
   recInner : ByteArray
   registration : Option ByteArray
   parts : List PartX
-  links : Option (ByteArray × ℕ)
 
-/-- The compiled statement's format string, its first field: `v4` carries the link table, and `decodeX` refuses `v3`. -/
-def XFORMAT : String := "flock-verify-recursion/v4"
+/-- The compiled statement's format string, its first field. -/
+def XFORMAT : String := "flock-verify-recursion/v3"
 
 def PartX.encode (p : PartX) : Claims.Msg := encBytes ⟨p.base.encode.toArray⟩ ++ encBytes p.bindings
 
 /-- **The compiled statement's canonical bytes.** -/
 def RecX.encode (w : RecX) : Claims.Msg :=
   encStr XFORMAT ++ encNat w.inner.length ++ w.inner ++ encBytes w.recInner ++
-    encOpt encBytes w.registration ++ encList PartX.encode w.parts ++ encOpt (fun l => encBytes l.1 ++ encNat l.2) w.links
+    encOpt encBytes w.registration ++ encList PartX.encode w.parts
 
 def PartX.read : Rd PartX := do
   let b ← rdBytes
@@ -124,11 +118,7 @@ def RecX.read : Rd RecX := do
   let recInner ← rdBytes
   let registration ← rdOpt rdBytes
   let parts ← rdList PartX.read
-  let links ← rdOpt (do
-    let t ← rdBytes
-    let n ← rdNat
-    pure (t, n))
-  pure ⟨inner, recInner, registration, parts, links⟩
+  pure ⟨inner, recInner, registration, parts⟩
 
 /-- **The compiled statement's decoder**: `RecX.read` on all of `x`, kept only when its encoding is `x`. -/
 def decodeX (x : Claims.Msg) : Option RecX :=
@@ -313,9 +303,8 @@ def filesOf (r : XR) : Option RecCoins.Source :=
   r.partition.map fun p => .files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none, some (innerFormOf r.innerRaw)⟩
 
 /-- **What the compiled verifier reads of the statement**, as `RecScope` reads it: the inner statement's bytes and
-files, its own inner shape, no V* session's record, each being a run message, and the link table's root and row
-count. -/
-def readOf (r : XR) : RecScope.Read := ⟨r.w.inner, filesOf r, r.shape, [], r.w.links⟩
+files, its own inner shape, and no V* session's record, each being a run message. -/
+def readOf (r : XR) : RecScope.Read := ⟨r.w.inner, filesOf r, r.shape, []⟩
 
 /-- The statement's reading, where `readX` reads it. -/
 def decodeR (x : Claims.Msg) : Option RecScope.Read := (readX x).map readOf
@@ -324,14 +313,14 @@ def decodeR (x : Claims.Msg) : Option RecScope.Read := (readX x).map readOf
 inner shape (`RecScope.accepts`), the inner statement's bytes, its dimensions as check 5 sets it up, no circuit
 commitment, the form off the verifier's own inner shape, and no draw (the V* records are run messages; their draws are
 refused at the run, `DeployScope`). -/
-def parse (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement := RecScope.parseOf decodeR x
+def parse (x : Claims.Msg) : Option Claims.Recursion.Stmt := RecScope.parseOf decodeR x
 
 /-- **The claims' scope check**: the deployed one (`RecScope.scopeCheckOf`) at `decodeR`, which reads only what the
 statement carries: the setup's checks accept its inner shape and the inner scope check takes its inner statement. -/
 def scopeCheck (ivScope : Claims.Msg → Bool) (x : Claims.Msg) : Bool := RecScope.scopeCheckOf ivScope decodeR x
 
 /-- The inner statement's bytes. -/
-def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.CompiledStatement.inner).getD []
+def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.Stmt.inner).getD []
 
 /-- The V* parts' count. -/
 def nS (x : Claims.Msg) : ℕ :=
@@ -385,7 +374,7 @@ def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArr
 
 /-- Part `s`'s recursive statement: its Flock statement at the staged public file, the verifier's own inner shape,
 `--rec-part s`, the part's bindings, the staged shared rows, the inner statement's files, the staged record and
-transcript, the registration, how the inner statement is set up (`innerFormOf`), and the link table. -/
+transcript, the registration, and how the inner statement is set up (`innerFormOf`). -/
 def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     RecRaw where
   base := { p.base with publicFile := st.pub x ms s }
@@ -404,7 +393,6 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   innerStatementCoins := some r.innerRaw.osCoins
   innerTables := some r.innerRaw.tables
   innerDraw := r.innerRaw.draw
-  recLinks := r.w.links
 
 open Classical in
 /-- **Part `s`'s statement as staged** at the rounds `ms` before the sessions: its encoding, where that reads back as

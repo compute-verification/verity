@@ -1,6 +1,5 @@
 import Proofs.NetworkCertifier.AdviceString
 import Definitions.NetworkCertifier.Guarantees.AdviceV1Kraft
-import Proofs.NetworkCertifier.AdviceV1Counted
 import Mathlib.Basic.Real.Basic
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Order.Interval.Finset.Nat

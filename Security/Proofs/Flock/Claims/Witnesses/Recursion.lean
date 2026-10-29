@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.Witnesses.Flock
 import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.Indexed
 import Definitions.Claims.Recursion
+import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Refutation witnesses: the ZK-recursion compiler's claims
@@ -93,7 +94,7 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
 
 /-- A recursion statement in scope: a dense inner table at `m = 22`, `k_log = 6`, one region and four claims, with no
 RecSparse phase and no V* session. -/
-def recStmt : Recursion.CompiledStatement where
+def recStmt : Recursion.Stmt where
   inner := []
   innerDims := none
   circ := none
@@ -187,7 +188,7 @@ def zvZR (Coin : Type) (circ : Option Msg) (SO : ℕ → Msg → ℕ → OSim) :
     SO := SO }
 
 theorem recStmt_inScope : Recursion.InScope recStmt :=
-  ⟨rfl, le_rfl, by decide, le_rfl, rfl, ⟨rfl, rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
+  ⟨rfl, le_rfl, by decide, le_rfl, rfl, Or.inl ⟨rfl, rfl⟩, fun _ h => absurd h List.not_mem_nil⟩
 
 /-! ## `ksR`'s extraction and numbers -/
 

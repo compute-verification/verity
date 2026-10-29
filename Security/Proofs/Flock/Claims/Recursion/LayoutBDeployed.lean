@@ -27,7 +27,7 @@ the plain one, but at the representation `Bound.IVStar` binds:
   an XOR form, `b ⊕ Φy` (`hmDigest`: `HmNets.maskBit`'s mask, read backwards). The digest `d` is no column of the
   circuit, which is why the layout reads at forms.
 * **Pieces.** None. The last round's pieces are its rows and salts, then the element-level last message, at the byte
-  offsets the bound record's `final` fixes; `KSBoundRouteCols` leaves `final` free, so they are a layout at a chosen
+  offsets the bound record's `final` fixes; `KSBoundRoute` leaves `final` free, so they are a layout at a chosen
   `final`. The held ports' rows and salts are here (`rowHidden`, `hmSalt`).
 
 What holds of the route's layout premises here:
@@ -38,8 +38,8 @@ What holds of the route's layout premises here:
   depend on the coins, so no coin-independent layout holds it in the shipped V*. The same holds at each stream round
   that commits tops (a Ligerito level's first round, `cap (i + 1)` nodes) or copies level 0's top, and at the last
   round until a `final` fixes its pieces.
-* `LayoutB.WholeBeforeLast` holds (`wholeBeforeLast_layoutBDeployed`), so `HeldWhole` does and route 2C's staged route
-  (`ksLin2_route_staged`) applies at this layout.
+* `LayoutB.WholeBeforeLast` holds (`wholeBeforeLast_layoutBDeployed`), so `HeldWhole` does and READERS1's route
+  (`ksBoundRoute_heldWhole`) applies at this layout.
 * `PartChecksB`, `PartOpensB`, `DecompB`, `ReadersTrue` and `ReadersLogColl` are statements about these forms now.
   `ReadersTrue` asks the hm96 slots' calls to be true evaluations, which is the hm96 slot's and the row chain's
   semantics at `Flock.check` (`Discharge/Hm/{Compress,Hm96,Row}`): it no longer needs a change of representation.
@@ -171,7 +171,7 @@ there are no pieces. -/
 theorem heldB_layoutBDeployed_iff {W : Type} (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (shape : Claims.Recursion.Form → Prop) :
     Claims.Recursion.VStarB.HeldB D I layoutBDeployed shape ↔
-      ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → ¬ shape st.form := by
+      ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → ¬ shape st.form := by
   constructor
   · intro h x st hst hf
     obtain ⟨hK, hcl, -⟩ := h x st hst hf
