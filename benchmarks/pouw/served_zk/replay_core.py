@@ -23,14 +23,14 @@ Without ``--runs`` it selects every `job.sh` attempt in the evidence store and f
   and Lean's.  In a window of the 336-byte entry rows (9 Oct on) an ACCEPT opening must open and a REJECT one must not;
   the windows before them hold entries of an earlier layout, so theirs compare Python with Lean only.
 * **coin cases** go to `core_check.pass_epoch` and `core_check.draw` and Lean's (`of_record`): ``select`` (the recorded
-  draw from the challenger's coin commitment, its draw coin's opening, the stream's digest, the receipt and draw.json),
+  draw from the challenger's coin commitment, its sampling coin's opening, the stream's digest, the receipt and draw.json),
   with generated controls (a unit changed, the coin tampered, opened after another registration, another stream or
   receipt, one unit fewer under the registration's K), each refused; and where ``--pass RUN=MANIFEST`` gives the run's pass (its ``served_run``),
   ``receive-honest``'s pass and the coin controls ``receive-coin-<case>`` and ``receive-unrecorded``, regenerated as
   `job.sh` made them (a v2 pass's ``receive-unrecorded`` relabelled v1 under a fixed beacon, where `job.sh` drew one).
   A DRAWN or REGISTERED check must get no refusal; a REFUSED one or a control a refusal.  Each is a replay of a recorded run, so the rules read the recorded coin versions too (`core_check.COINS_RECORDED`,
   `COIN_EARLY`).
-* the other checks (coins, the stream's state, the firewall, Lean's tile verifier, replays, shapes) are not core_check's.
+* the other checks (coins, the stream's state, the ZK server, Lean's tile verifier, replays, shapes) are not core_check's.
 
 A run of an older record version (no registration, or another scheme) and the v2 registrations run through both sides
 for agreement only.  Python and Lean must give the same outcome on every input, reason included.

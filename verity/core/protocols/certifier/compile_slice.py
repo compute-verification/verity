@@ -20,7 +20,7 @@ window's blocks (`served_rows.register`'s G); at G = P the unit is the first, so
   the certified record's commitment (its b‖c);
 - ``srv``, the served rows: the step rows the served window ran (P steps of `rows_bits`, idle ones zero; `srv_row`;
   each step's rows at the runner's batch positions), a row the verifier holds by its b‖c to the window's row of the
-  served rows' registration (`served_rows`), committed on the Commit side before the draw. At G < P they are P / G
+  served rows' registration (`served_rows`), committed on the Commit side before the sample. At G < P they are P / G
   rows ``srv0`` … (`srv_rows`), row j steps [j·G, (j + 1)·G) and held to window w's leaf w·(P / G) + j
   (`served_rows.leaf`); step u is checked against row u // G;
 - ``cin`` and ``cout``, the charge's carry-in and carry-out (`charge_chain.encode`'s 96 bits): the window's reads of

@@ -38,7 +38,7 @@ def dampener(over: dict, tier: str) -> float:
 def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
     """Unmonitored compute trains like the unconstrained developer, and so do dark fragments of monitored capacity
     (reference efficiency: ``evaluate`` at ``residual_mfu`` = MFU_0); the rest are counted multiplications, so
-    D = 1 / (s + rest / mfu): the overhead calculator's ``multiple_bound`` in Lean's form, ``remoteDampener``, at tiers'
+    D = 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteDampener``, at tiers'
     terms."""
     p = P | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"], p["mfu"])
@@ -51,7 +51,7 @@ def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
 
 def test_the_remote_dampener_at_the_defaults():
     """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) the residual r = 0.33 trains at
-    MFU_0 and NCI's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
+    MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
     3.04, the same terms against a reference at capacity. Without the reference-efficiency assumption the residual is at
     peak, ``Nci.Guarantees.DampenerRemote``'s rho = max(1, 1/(s + x/MFU_0)) as stated, and D is 1.21; without the hosts
     assumption too (host CPUs at 12.6% of the GPUs) x = 0.45 is above MFU_0 and D is 1; without the hosts assumption

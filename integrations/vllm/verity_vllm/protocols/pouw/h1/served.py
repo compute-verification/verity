@@ -80,7 +80,7 @@
   domain bound to the window's open root and the weights' to none, as their trees were. `register` holds the window's
   trees to an earlier record of the log under the same domain (R7-held) and writes each call's file (`file_name`).
 * `descriptor` is a declared Program's descriptor bytes, the period's ``circuit`` (their SHA-512) and the window
-  evidence's ``descriptor``, from which core's credit reads the layout it draws from (`credit.layout_of`);
+  evidence's ``descriptor``, from which core's credit reads the layout it samples from (`credit.layout_of`);
   `declared_layout` is that layout without building the Program.
 """
 from __future__ import annotations

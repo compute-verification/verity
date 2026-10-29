@@ -327,19 +327,19 @@ def reference(product: R.Product, seen: collections.Counter):
 
 class UndecidedPort(D.ProtocolPort):
     """A product port whose best verdict is undecided: integrity (v2) accepts only on a session's proof, which no case
-    carries, so the run's non-vacuity bar is a case every component left undecided or accepted."""
+    carries, so the run's non-vacuity bar is a case every subprotocol left undecided or accepted."""
     accepted = R.UNDECIDED
 
 
 class RejectingPort(D.ProtocolPort):
-    """A product port whose drawn cases reject: its three subprotocols must commit to one window record, and on one
+    """A product port whose sampled cases reject: its three subprotocols must commit to one window record, and on one
     record integrity (v2) refuses PoUW's window (its program reads registered values, outside v2's mirror), so the
-    drawn cases don't reach undecided. Its bar is the two ways its subprotocols' records meet, counted in `seen`."""
+    sampled cases don't reach undecided. Its bar is the two ways its subprotocols' records meet, counted in `seen`."""
     accepted = R.REJECT
 
 
 def port(name: str, product: R.Product, seen: collections.Counter, kind: type[D.ProtocolPort]) -> D.ProtocolPort:
-    """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
+    """`name serve` of the Lake package `name`, on the product's cases and, one sample in ten, any JSON line."""
     return kind(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
                 package=PROTOCOLS / name, need_rejects=kind is UndecidedPort)
 

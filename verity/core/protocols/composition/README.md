@@ -135,11 +135,11 @@ Lean to:
   unverified), whose Lean their packages' difftests hold to those verifiers (`../pous/check/tests/test_run_protocol.py`,
   `../remote_bandwidth/lean/tests/test_protocol.py`).
 
-Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
+Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
+(one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
 policy is never undecided), every case hands the subprotocols the same blobs (sampled proofs' circuit and public file),
 and the composition's inputs, its blobs or the case itself are often broken. Sampled proofs accept only on a session's
-proof, which no case carries (its cases are audits with no session, undecided when their draw drew nothing, and audits
+proof, which no case carries (its cases are audits with no session, undecided when their sample sampled nothing, and audits
 whose sessions' files are in no blob), so no product accepts in the difftest until a v2 case with a proof does. Often
 the tied subprotocols are put on one record (`one_record`), and otherwise they mostly commit to two, which the product
 refuses. Remote's cases reject: on one record all three are on PoUW's, which the one-stage audit refuses (PoUW's window
@@ -147,7 +147,7 @@ reads registered values, outside v2's mirror). Onsite's reach undecided: on one 
 audit's own circuit on its record, which it accepts.
 `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that refusal changes no other verdict of
 the product's. `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the rule above from one
-without reject dominance: such a reference disagrees with the Lean on a case where one subprotocol rejects and another
+in which a rejection need not reject the whole: such a reference disagrees with the Lean on a case where one subprotocol rejects and another
 is undecided.
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
