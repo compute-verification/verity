@@ -48,7 +48,8 @@
 #     makes the record reject: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
-# Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
+# Coins: sampled proofs' draw is on a local development challenger session's coins (prove_path's run.sh default,
+# PP_CHALLENGER=local; the verifier draws none of its own) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
 # PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER, at the engine's T and S
@@ -309,7 +310,7 @@ fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
 else
-  say "COINS sampled proofs: the verifier's own live coins (Lean's IO.getRandomBytes, in-process); $H1_COINS; the bandwidth" \
+  say "COINS sampled proofs: a local development challenger session on this node (PP_CHALLENGER=local), no auditor's coins; $H1_COINS; the bandwidth" \
       "verifier on vy-auditor-2 (10.96.0.36:7952) is INF-263, due Tue 27 Oct 18:00Z"
 fi
 

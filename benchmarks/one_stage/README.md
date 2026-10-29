@@ -48,7 +48,7 @@ negatives.
   its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
   warden, each answered with the tokens the server streamed it.
-- `a5_tp_gates.py` (`a5_tp.sh` with `A5_COINS=verifier` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
+- `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
   `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
   of two requests whose cross-rank transfers hold transfer gates, which no served TP2 window has yet. Each rank's partial of
   each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prove path (prove_path.py) on a CPU machine: a TP Commit's ranks committed over the stand-in compiler's Programs for the run's
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
-# commitment, drawn through a5's per-rank service.Stream on the verifier's own coins, proved by M0 --zk behind the Lean firewall
+# commitment, drawn through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean firewall
 # and verified by Lean, the advice's root then held to the registration the draw followed; then one forged run, a unit whose
 # committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
 # flock-circuit and Lean's flock-verify are built from this tree, in scratch.
@@ -35,7 +35,7 @@
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
 #     draw, until multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
-#   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
+#   PP_JOBS=N ranks at once (the audit's default every audited rank, one challenger session; a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
 #   PP_TRANSFER_GATES="T ..." the templates the registered compiler lists as holding transfer gates (--transfer-gate, both
@@ -44,8 +44,8 @@
 #   160 RoPE heads at step 1 as the stand-in transfer gates: PP_PARTITION=benchmarks/prove_path/llama32_1b_tg_l0_step1.json
 #   PP_TRANSFER_GATES='RoPEHead_v1{D=64}' PP_SETS=rope-head/d64/bf16, its forged run PP_FORGED_PARTITION=benchmarks/prove_path/
 #   llama32_1b_tg_l0_step24.json PP_FORGE=0:0 (a RoPE head, drawn because every one is).
-#   PP_CHALLENGER=local: each window drawn on a local challenger session's coins (--challenger local, a5_coins), not the
-#   verifier's own, pinned on main's first-parent history fetched from the clone's origin. PP_CHALLENGER=gate:USER@HOST:
+#   PP_CHALLENGER=local (the default): each window drawn on a local challenger session's coins (--challenger local, a5_coins),
+#   pinned on main's first-parent history fetched from the clone's origin; the verifier draws no coins of its own. PP_CHALLENGER=gate:USER@HOST:
 #   the auditor host's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
 #   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
 #   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY).
@@ -86,19 +86,18 @@ for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic
   $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$SET > $O/sets-$SET.log 2>&1 || exit 9
 done
 TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
-CH=()
-if [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
-  UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
-  git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
-    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
-  CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
-  case $PP_CHALLENGER in gate:*)
-    [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
-    [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=gate:… opens the window's root once: run one arm, PP_ONLY=honest|forged"; exit 4; }
-    CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
-  esac
-fi
+PP_CHALLENGER=${PP_CHALLENGER:-local}
+# the verifier's own copy of main's first-parent history, which the session's pin must be on
+UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
+  || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
+  && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
+CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
+case $PP_CHALLENGER in gate:*)
+  [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
+  [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=gate:… opens the window's root once: run one arm, PP_ONLY=honest|forged"; exit 4; }
+  CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
+esac
 PLAIN=(); LAW=subset; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)
@@ -138,7 +137,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
     return $rc
   fi
   $TIME $PP audit $src $op --windows $W/$name-windows --partition $part \
-    ${ranks:+--ranks $ranks} --jobs ${PP_JOBS:-1} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
+    ${ranks:+--ranks $ranks} ${PP_JOBS:+--jobs $PP_JOBS} ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${TG[@]}" "${CH[@]}" "${PLAIN[@]}" \
     ${PP_VLLM_PYTHON:+--vllm-python $PP_VLLM_PYTHON} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
   local rc=$?
   grep '^PROVE-PATH' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
