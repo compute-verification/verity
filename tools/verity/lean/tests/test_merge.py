@@ -388,7 +388,16 @@ def test_an_inline_premise_both_sides_add_differently_refuses_and_the_other_shap
     so two sides that change one entry differently refuse even where they changed different fields of it."""
     prop = {"function": "P.f", "outcome": "accept"}
     base = {"shape": {"inline": {"P.t": {"a": "why a", "b": "why b"}}, "properties": {"P.p": prop}, "frozen": {"P.z": "lemma"}}}
-    inline = lambda **ps: {"shape": base["shape"] | {"inline": {"P.t": ps}}}
+
+    def inline(**ps):
+        return {"shape": base["shape"] | {"inline": {"P.t": ps}}}
+
+    def frozen(why):
+        return {"shape": base["shape"] | {"frozen": {"P.z": why}}}
+
+    def prop_(**f):
+        return {"shape": base["shape"] | {"properties": {"P.p": prop | f}}}
+
     merged, why = M.merge(base, inline(a="why a", b="why b", c="why c"), inline(b="why b", d="why d"))
     assert why == [] and merged["shape"]["inline"] == {"P.t": {"b": "why b", "c": "why c", "d": "why d"}}
     assert M.merge(base, inline(a="why a", b="why b", c="one"), inline(a="why a", b="why b", c="one"))[1] == []
@@ -398,9 +407,7 @@ def test_an_inline_premise_both_sides_add_differently_refuses_and_the_other_shap
     assert why == ["shape[inline][P.t][a]: removed on one side and changed on the other"]
     merged, why = M.merge(base, inline(b="why b"), inline(a="why a"))
     assert why == [] and "inline" in merged["shape"] and merged["shape"]["inline"] == {}, "a guarantee left with no premise goes"
-    frozen = lambda why: {"shape": base["shape"] | {"frozen": {"P.z": why}}}
     assert M.merge(base, frozen("restatable"), frozen("open"))[1] == ["shape[frozen][P.z]: changed on both sides, differently"]
-    prop_ = lambda **f: {"shape": base["shape"] | {"properties": {"P.p": prop | f}}}
     assert M.merge(base, prop_(function="P.g"), prop_(outcome="refuse"))[1] == [
         "shape[properties][P.p]: changed on both sides, differently"]
 
