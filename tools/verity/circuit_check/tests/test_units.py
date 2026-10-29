@@ -623,6 +623,105 @@ def test_bindings_built_apart_keep_a_pinned_target_and_read_no_pin(tmp_path):
     assert out["values"] == whole["values"] and out["hits"] == sorted(set(out["values"]) - {"SynK_v1{K=2}"}), out["hits"]
 
 
+#: a unit staged whole (`checks.UNIT_OWNERS` is ``syn.pouw.`` in `BLOCKED`): SynTile, made by `syn.build`'s function, which binds
+#: it at no top level, and bound at the top level of `syn.pouw.tile` alone, which only SynHolder's body imports; the tiled
+#: binding makes SynTile from `syn.build`, and the held one reaches it through SynHolder's body
+TILE_FILES = {
+    "syn/build.py": """
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+
+_MADE = []
+
+
+def tile():
+    if not _MADE:
+        @composite("SynTile", 1, [], lambda S: ((("a", V), ("b", V)), V))
+        def SynTile(B, S, a, b):
+            return B.call(SynAdd, B.call(SynAdd, a, b), b)
+        _MADE.append(SynTile)
+    return _MADE[0]
+""",
+    "syn/pouw/__init__.py": "",
+    "syn/pouw/tile.py": "from syn.build import tile\n\nSynTile = tile()\n",
+    "syn/holder.py": """
+from verity.ml.circuits import composite
+
+from syn.prims import V
+
+
+@composite("SynHolder", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynHolder(B, S, a, b):
+    from syn.pouw.tile import SynTile
+    return B.call(SynTile, a, b)
+""",
+}
+TILE_BINDINGS = """def tiled():
+    from syn.build import tile
+    return [bind(tile())]
+
+
+def held():
+    from syn import holder
+    return [bind(holder.SynHolder)]
+
+
+"""
+#: each target's value, whether `checks.unit_block` applies to it, and the names of its failures; it reads the target's pin, so
+#: a new pin reruns that target alone
+BLOCK_CHECK = """
+def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
+    from circuit_check import checks as CK
+    from verity.ml.circuits.evaluation.reference import evaluate
+
+    F = CK.Findings()
+    w = CK.unit_block(fn, F)
+    pins.get("pieces", {}).get(fn.id)
+    return {"failures": F.failures, "warnings": [], "gates": fn.gates,
+            "value": [evaluate(fn, 3, 0x0105), w["applies"], [f["name"].split(" ")[0] for f in F.failures]]}
+"""
+#: `FORKED` with C-Flock's range at 2^5 witness bits, which SynTile's 48 port bits are past, and ``syn.pouw.`` PoUW's; a unit
+#: counted here first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's
+#: registries have it
+BLOCKED = FORKED.replace("rep = cli.run(", "from verity_flock import circuit as FC\nfrom syn.prims import SynAdd\nFC.unit_witness(SynAdd)\n"
+                         "FC.K_MAX, CK.UNIT_OWNERS = 5, ('syn.pouw.',)\nrep = cli.run(")
+
+
+@pytest.mark.slow
+def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(tmp_path):
+    """The fail-open case: from the bindings' records, built apart or reused, with ``--jobs`` or without, a unit staged whole
+    and past C-Flock's range fails ``block/past-range`` as a full build fails it, though the module that makes it PoUW's
+    (`sidecars.owner`, `checks.UNIT_OWNERS`) is imported only by another binding's body, which a full build builds before any
+    check: once the records count and SynTile alone misses (its new pin), no process here builds SynHolder's body.  A lookup
+    that read only what the checking process imported would skip the check."""
+    from test_cache import _set_pin
+
+    trees = []
+    for name in ("t", "here"):
+        root = _tree(tmp_path / name)
+        for rel, text in TILE_FILES.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(text.lstrip("\n"))
+        (root / "syn/check.py").write_text(BLOCK_CHECK.lstrip("\n"))
+        _edit(root, "syn/catalog.py", "BINDINGS = [", TILE_BINDINGS + "BINDINGS = [")
+        _bindings(root, '(("_tiled_roots",), tiled)', '(("_held_roots",), held)')
+        trees.append(root)
+    root, here = trees
+    in_turn = BLOCKED.replace(", jobs=2, isolate=True, fork=True)", ")")
+    whole = _run(here, in_turn)
+    assert whole["values"]["SynTile_v1"][1:] == [True, ["block/past-range"]], whole["values"]
+    assert not [fid for fid, v in whole["values"].items() if v[2] and fid != "SynTile_v1"], whole["values"]
+    first = _run(root, BLOCKED)
+    assert first["here"] == [] and first["stats"]["units"]["reused"] == 0, (first["here"], first["stats"]["units"])
+    assert first["values"] == whole["values"], (first["values"], whole["values"])
+    for tree, harness in ((root, BLOCKED), (here, in_turn)):
+        _set_pin(tree, "SynTile_v1", {"and": 1})
+        out = _run(tree, harness)
+        assert out["stats"]["units"]["rebuilt"] == [] and out["hits"] == sorted(set(whole["values"]) - {"SynTile_v1"}), out
+        assert out["values"] == whole["values"], (out["values"], whole["values"])
+
+
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
     its Boolean version among them though no record holds one, and a vocabulary kind that doesn't bind refuses them by name, as
