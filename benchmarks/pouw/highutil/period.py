@@ -14,8 +14,8 @@ batch, and the periods replay that one prefill. Both operands are committed befo
 (operand, layer, block), its rows hm96 rows (`OperandTree`), whose roots the registration carries. `prep --seeded`
 seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the checkpoint doesn't have.
 
-**A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is
-the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
+**A period**, one execution block (`ExecutionBlocks.proto`): the registration (the operand roots, the operands' source,
+the period's shape, W_reg) is the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
 in one sequence. Block b's operand-root receipt is H(registration, b, block b-2's value-root receipt; the registration's
 digest for b < 2), and its seeds coin opens after it, so blocks 0 and 1's open with the session, before the wall starts. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
 seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
@@ -766,7 +766,10 @@ class Plan:
     q: int        # proof blocks a period
 
 
-class Period:
+class ExecutionBlocks:
+    """Execution blocks back to back on one driver: `proto` one registration's sampling blocks under live coins, credited
+    all or nothing, and `plain` a baseline over as many steps; `g` numbers the steps on across them."""
+
     def __init__(self, drv: GpuDriver | RefDriver, coins: Coins | None, trees: dict[tuple[str, int, int], OperandTree], cfg: Path, row: int,
                  source: dict, secret: bytes, work: Path, pool: ProcessPoolExecutor) -> None:
         self.drv, self.coins, self.trees, self.cfg, self.row = drv, coins, trees, cfg, row
@@ -967,7 +970,7 @@ def cmd_run(a: argparse.Namespace) -> int:
                   + " ".join(f"{k}{li}.{tb} {x.root.hex()[:16]}" for (k, li, tb), x in trees.items() if tb == 0), flush=True)
             drv = RefDriver(cfg, row) if a.lib == "ref" else GpuDriver(a.lib, cfg, row, plan.steps)
             print("driver " + " ".join(drv.ready), flush=True)
-            per = Period(drv, coins, trees, cfg, row, source, secret, work, pool)
+            per = ExecutionBlocks(drv, coins, trees, cfg, row, source, secret, work, pool)
             # warm-up: one plain block, so the clocks and caches settle before anything is timed
             bases = baselines(a.plain)
             drv.block(0, 0, min(plan.steps, 50), f"plain-{bases[0]}", "none", work / "none", work / "none")
