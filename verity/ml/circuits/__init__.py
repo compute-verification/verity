@@ -30,7 +30,7 @@ descriptor codec whose format and canonical bytes (RFC 8785 JCS) are specified i
 from .types import Value, Array, Tuple, RecordType, Type, leaves_of  # noqa: F401
 from .refs import Coll, array_of, tuple_of, record_of  # noqa: F401
 from .defs import (PrimitiveDefinition, CompositeDefinition, SpecializedDefinition, IntrinsicSummary, bind, primitive, composite,  # noqa: F401
-                   Registry, REGISTRY)
+                   DefinitionTable, REGISTRY)
 from .program import Program, input_prim  # noqa: F401
 from .layout import Circuit, GateSelection, Region, FunctionCall, Gate  # noqa: F401
 from .query import query, groups, GapError, QueryError  # noqa: F401

@@ -55,7 +55,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterable, Sequence
 
-from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, Node, PrimitiveDefinition, SpecializedDefinition, bind,
+from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, BodyNode, PrimitiveDefinition, SpecializedDefinition, bind,
                     composite)
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
@@ -964,7 +964,7 @@ def _sources(refs: Refs) -> set[tuple[str, int]]:
     return {(space, idx) for space, idx, _ in refs}
 
 
-def _is_ordinary_node(node: Node) -> bool:
+def _is_ordinary_node(node: BodyNode) -> bool:
     """A node whose output is ordinary in every padded Program: an `Input<w>` gate (a prescribed value, produced by no body)."""
     return getattr(node.fn, "family", None) == "Input"
 
@@ -1298,7 +1298,7 @@ def _remap(r: Refs, args: Sequence[Coll], k0: int) -> Refs:
     return Explicit(tuple(items))
 
 
-def emit_lifted_node(B: Builder, node: Node, lf: Any, largs: Sequence[Coll], enable: Coll | None) -> Coll:
+def emit_lifted_node(B: Builder, node: BodyNode, lf: Any, largs: Sequence[Coll], enable: Coll | None) -> Coll:
     """Emit ONE lifted node with `enable` as the callee's last operand (B7): a `call`/`primitive` appends it; a `batch` shares it across
     the members (axis `None`); a `scan` passes it as the last `shared` argument (the lifted step's last parameter).  A callee without an
     enable parameter (`Input<w+1>`, the root-owned controller members) takes none."""
@@ -1312,7 +1312,7 @@ def emit_lifted_node(B: Builder, node: Node, lf: Any, largs: Sequence[Coll], ena
     raise ValueError(node.form)
 
 
-def lifted_callee_for(node: Node, acls: Sequence[str], node_class: str = ORDINARY) -> FunctionDefinition:
+def lifted_callee_for(node: BodyNode, acls: Sequence[str], node_class: str = ORDINARY) -> FunctionDefinition:
     """The lifted callee of `node` reading its arguments at the classes `acls` (G1): a primitive -> `with_ordinary(lifted_prim(fn), mask)`;
     a specialization -> `lift_def(fn, acls)` (a scan's carry is always lifted); an `Input<w>` gate -> itself (ordinary, A11) unless the
     body forced it lifted (`node_class`), then `Input<w+1>`."""
@@ -1336,7 +1336,7 @@ def lifted_callee_for(node: Node, acls: Sequence[str], node_class: str = ORDINAR
 
 def replay_lifted(B: Builder, body, args: Sequence[Coll], enable: Coll | Callable[[int], Coll] | None = None, *,
                   arg_classes: Sequence[str] | None = None) -> Coll:
-    """Emit `body`'s nodes into `B` with lifted callees/types.  Node `k` of the replay is node `k` of the original with the
+    """Emit `body`'s nodes into `B` with lifted callees/types.  BodyNode `k` of the replay is node `k` of the original with the
     same gate count (one lifted gate per gate, by induction), so offsets, node indices and operand runs are identical.
     `enable` (B7): the enable every replayed node receives as its last operand — one `Coll` (the call's enable: every node the call
     owns inherits it, `a_local = 1`), or a function of the ORIGINAL node index (a flat body whose segments are owned by different
