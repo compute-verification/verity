@@ -187,7 +187,8 @@ an audit reaches the scan only through the entries its slots' Programs compute (
 its slots' Programs read, so that link-window's term charges every entry bit (`faulty_entries`) when `b ≥ 1`, and its δ
 is in `eps`:
 
-    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
+    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "capacity": κ_t, "cells": c,
+     "eps": m · δ + Σ δ_i (+ δ_t), "pool": {"blocks": N_t, "delta": δ_t, "f": F_t, "q": q_t, "reach": R} or null,
      "scans": [terms, …], "schedules": c, "windows": m}
 
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
@@ -206,10 +207,19 @@ is in `eps`:
   unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified draw leaves possible too. `faulty_entries` is `E_w`, its slot entries' bits (`Scan.entries`:
   `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4), when an audit its `prog` is tied to
-  is drawn in part with a `bound` of at least one wrong unit (`faultyEntries`), else 0.
-* `eps` is the scans' δ summed, `m · δ`, and each tied audit's drawn in part (`chargedOf`), whose bound
-  `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
-  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
+  is drawn in part with a `bound` of at least one wrong unit (`faultyEntries`), else 0. It is `β_w`, reported here
+  and charged in `K` only through `capacity`, once a period.
+* `capacity` is `κ_t`, the tied audits' term over the monitoring period (`Pool.capacity`):
+  `min(F_t · (R + ⌈log2 (N_t + 1)⌉), Σ_w β_w)`, `PooledLeakAccepted`'s tied factor, from sampled proofs' pooled bound
+  at the tied audits' samples (`tiedPool`): `N_t` the tied audits' proof blocks over the link-windows, `q_t` the least
+  per-proof-block detection probability of a tied audit's sample (`drawRate`: `k / n`, or the least `k_s / n_s` of its
+  strata), `δ_t` the least δ of a charged one, `F_t ≥ ln(1/δ_t)/q_t` (`tiedF`), and `R` its link-window's `E_w`, every
+  entry bit a tied proof block's outputs can reach. `pool` is that pool when its count is the smaller, else null and
+  `κ_t = Σ_w β_w`.
+* `eps` is the scans' δ summed, `m · δ`, each tied audit's drawn in part (`chargedOf`), whose bound `faulty_entries`
+  reads, and `δ_t` when `pool` is not null: the δ part of the union over the monitoring period's windows that
+  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors, and of the
+  tied audits' pooled bound, at `δ_t` plus their knowledge errors.
 
 **Profile**: the link and `m`.
 
@@ -1224,10 +1234,11 @@ structure AuditTerms where
   faultySets : Nat
   faultyBits : Nat
   jitter : Nat
-  /-- The slot entries' bits a tied audit's wrong units can set (`β_w`, the rows form's; 0 in the clock form). -/
+  /-- The slot entries' bits a tied audit's wrong units can set (`β_w`, the rows form's; 0 in the clock form), which
+  the period's capacity term bounds together (`Public.capacity`), not this window's bits. -/
   faultyEntries : Nat := 0
 
-def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.faultySets + t.faultyBits + t.jitter + t.faultyEntries
+def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.faultySets + t.faultyBits + t.jitter
 
 /-- A compute audit's terms in the clock form, from its layout terms, its facts and the jitter bound: each of its at
 most `b` wrong units commits at most its Program's widest unit's bits. -/
@@ -1243,6 +1254,47 @@ def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) : AuditTerms :=
   { facts := f, free := s.free + tied, faultySets := clog2 (atMost f.units f.wrong),
     faultyBits := f.wrong * max s.ingress s.egress, jitter := clog2 (jitter ^ s.steps), faultyEntries := faulty }
 
+/-- The rows form's tied audits over the monitoring period, as sampled proofs' pooled bound reads them
+(`NetTiming.Guarantees.PooledLeakAccepted`'s `hpool`): fewer than `f` (`F_t`) of their `blocks` (`N_t`) proof blocks
+are incorrect, except with probability `delta` (`δ_t`) at the per-proof-block detection probability `q` (`q_t`), and
+one reaches at most `reach` (`R`) of its link-window's slot entry bits. -/
+structure Pool where
+  f : Nat
+  reach : Nat
+  blocks : Nat
+  delta : Core.Ratio
+  q : Core.Ratio
+
+/-- `F_t · (R + ⌈log2 (N_t + 1)⌉)`: each of fewer than `F_t` incorrect tied proof blocks, which of the `N_t`, and the
+`R` entry bits it reaches. -/
+def Pool.bits (p : Pool) : Nat := p.f * (p.reach + clog2 (p.blocks + 1))
+
+/-- **`κ_t`**: `min(F_t · (R + ⌈log2 (N_t + 1)⌉), Σ_w β_w)` with the pool, `Σ_w β_w` (`span`) without. -/
+def Pool.capacity (pool : Option Pool) (span : Nat) : Nat := match pool with
+  | some p => min p.bits span
+  | none => span
+
+/-- **`F_t`** at `δ` and the detection probability `q = k / n`: `⌈L · 0.6931471808 / q⌉` with `L = ⌈log2 δ.den⌉`, so
+`q · F_t ≥ L · 0.6931471808 > L · ln 2 ≥ ln (1/δ)` (`Properties.NetworkPeriod.TiedFMeets`) and the pooled bound's
+escape `(1 - q)^F_t` is at most `δ`; none at `δ = 0`, `k = 0` or `n = 0`. -/
+def tiedF (δ : Core.Ratio) (k n : Nat) : Option Nat :=
+  if δ.num = 0 ∨ k = 0 ∨ n = 0 then none
+  else some ((clog2 δ.den * 6931471808 * n + 10 ^ 10 * k - 1) / (10 ^ 10 * k))
+
+/-- A sample's least per-proof-block detection probability, as `(k, n)`: `k / n` for `subset:k` of a level of `n`, the
+least `k_s / n_s` over a stratified sample's strata of at least one proof block, and `(0, 1)` when its strata leave one
+of the level's proof blocks out. -/
+def drawRate (l : Core.Level) : Option (Nat × Nat) := match l.draw with
+  | some (.subset k) => some (min k l.size, l.size)
+  | some (.stratified ss) =>
+    if ss.foldl (fun (n : Nat) st => n + st.size) 0 < l.size then some (0, 1)
+    else ss.foldl (fun (r : Option (Nat × Nat)) st =>
+      if st.size = 0 then r
+      else match r with
+        | some (k, n) => if min st.k st.size * n < k * st.size then some (min st.k st.size, st.size) else r
+        | none => some (min st.k st.size, st.size)) none
+  | _ => none
+
 structure Public where
   /-- The compute audits' facts. -/
   audits : Array Facts
@@ -1257,13 +1309,18 @@ structure Public where
   /-- The facts of the rows form's tied audits drawn in part (`chargedOf`), whose bounds `faulty_entries` reads, so
   whose δ is in `eps`. -/
   charged : Array Facts := #[]
+  /-- `κ_t`, the tied audits' capacity term over the monitoring period (`Pool.capacity`; 0 in the clock form). -/
+  capacity : Nat := 0
+  /-- The tied audits' pool when `κ_t` is its count rather than `Σ_w β_w` (`rowsTerms`), so whose δ is in `eps`. -/
+  pool : Option Pool := none
 
-def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
+def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0 + x.capacity
 
-/-- `Σ_i δ_i` over the units and the charged audits, exactly, in lowest terms: the union bound on `K` failing. -/
+/-- `Σ_i δ_i` over the units, the charged audits and the pool, exactly, in lowest terms: the union bound on `K`
+failing. -/
 def Public.eps (x : Public) : Core.Ratio :=
-  let (n, d) := (x.units.map (·.facts) ++ x.charged).foldl
-    (fun (n, d) f => (n * f.delta.den + f.delta.num * d, d * f.delta.den)) (0, 1)
+  let (n, d) := ((x.units.map (·.facts) ++ x.charged).map (·.delta) ++ (x.pool.map (·.delta)).toArray).foldl
+    (fun (n, d) (δ : Core.Ratio) => (n * δ.den + δ.num * d, d * δ.den)) (0, 1)
   ⟨n / Nat.gcd n d, d / Nat.gcd n d⟩
 
 /-- `Σ_c ⌈log2 (cap_c + 1)⌉`. -/
@@ -1282,11 +1339,15 @@ def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitt
 length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each link-window's scan's from the scan's
 terms, its facts, its tied audits' free inputs and the entry bits their wrong units can set (`scans`, a triple a
 link-window). The compute audits' own terms are in none: a tied audit's free inputs and wrong units are in its
-link-window's, and the δ of one drawn in part (`charged`) in `eps`. -/
+link-window's, and the δ of one drawn in part (`charged`) in `eps`. The entry bits are charged once a period, as the
+capacity term `κ_t` at the tied audits' pool (`Pool.capacity` over `Σ_w β_w`), and the pool's δ is in `eps` when its
+count is the smaller. -/
 def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (cells : Array Nat)
-    (jitter windows : Nat) (charged : Array Facts := #[]) : Public :=
+    (jitter windows : Nat) (charged : Array Facts := #[]) (pool : Option Pool := none) : Public :=
+  let span := (scans.map (·.2.2)).foldl (· + ·) 0
   { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter,
-    rows := true, schedules := capsTerm cells, windows, charged }
+    rows := true, schedules := capsTerm cells, windows, charged, capacity := Pool.capacity pool span,
+    pool := pool.filter (·.bits < span) }
 
 /-- Audit `i`'s facts when the rows form charges it: accepted, tied to a link-window's scan (`tiedOf`) and drawn in
 part, so its at most `b` wrong units are in its link-windows' terms (`faultyEntries`) and its δ in `eps`. -/
@@ -1302,13 +1363,42 @@ def faultyEntries (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan
   if (tiedAudits c.audits reg).any fun i => (chargedOf p c as i).any (1 ≤ ·.wrong) then scan.entries
   else 0
 
+/-- Audit `i`'s sample's detection probability (`drawRate`), read off the profile of its answer, which `auditCheck`
+accepted. -/
+def auditRate (e : Evidence) (i : Nat) : Option (Nat × Nat) := do
+  let x ← e.audits[i]?
+  let j ← x.profile
+  let prof ← (Core.Integrity.ofJson j).toOption
+  let #[l] := prof.levels | none
+  drawRate l
+
+/-- **The tied audits' pool over the monitoring period** (`Pool`), from the sampling design: `N_t` their proof blocks
+over the link-windows (`tiedAudits`, window by window), `δ_t` the least δ of the charged ones (`chargedOf`), `q_t` the
+least detection probability of a tied audit's sample (`auditRate`), `R` the scan's `E_w` (a tied proof block's outputs
+reach the scan only as its link-window's slot entries) and `F_t` from `δ_t` and `q_t` (`tiedF`); none when no tied
+audit is charged or a tied sample detects nothing. -/
+def tiedPool (p : Params) (c : Commitment) (e : Evidence) (as : Array (Found Facts)) (scan : Scan) : Option Pool := do
+  let δ ← ((Array.range as.size).filterMap (chargedOf p c as)).foldl (fun (m : Option Core.Ratio) f => match m with
+    | some d => if f.delta.num * d.den < d.num * f.delta.den then some f.delta else m
+    | none => some f.delta) none
+  let (k, n) ← ((Array.range c.audits.size).filter (tiedOf p.form c)).foldlM (fun (k, n) i => do
+    let (k', n') ← auditRate e i
+    pure (if k' * n < k * n' then (k', n') else (k, n))) (1, 1)
+  let units := fun (i : Nat) => match as[i]? with
+    | some (.ok f) => f.units
+    | _ => 0
+  let blocks := c.windows.foldl (fun (s : Nat) reg => (tiedAudits c.audits reg).foldl (fun s i => s + units i) s) 0
+  let f ← tiedF δ k n
+  pure { f, reach := scan.entries, blocks, delta := δ, q := (Core.Ratio.mk' k n).getD ⟨k, n⟩ }
+
 /-- The rows form's public on acceptance: `rowsTerms` over the accepted audits' facts, each link-window's scan's facts,
-tied audits' free inputs and `β_w` (`faultyEntries`), and the charged audits (`chargedOf`). -/
-def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat)) :
-    Public :=
+tied audits' free inputs and `β_w` (`faultyEntries`), the charged audits (`chargedOf`) and the tied audits' pool
+(`tiedPool`). -/
+def rowsPublic (p : Params) (c : Commitment) (e : Evidence) (as : Array (Found Facts)) (scan : Scan)
+    (scans : Array (Facts × Nat)) : Public :=
   rowsTerms (as.filterMap (·.toOption)) scan
     ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p c as scan reg)) p.cells p.jitter p.windows
-    ((Array.range as.size).filterMap (chargedOf p c as))
+    ((Array.range as.size).filterMap (chargedOf p c as)) (tiedPool p c e as scan)
 
 structure Profile where
   link : String
@@ -1344,7 +1434,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
       .accept (match p.form with
           | .clock ss =>
             terms p.audits (as.filterMap (·.toOption)) p.cells p.jitter (ss.deltas.length * ss.rhos.length) p.windows
-          | .rows _ _ scan => rowsPublic p c as scan scans)
+          | .rows _ _ scan => rowsPublic p c e as scan scans)
         { link := p.link, windows := p.windows }
 
 /-- The terms' JSON, each with its `faulty_entries` when `entries` (the rows form's scans). -/
@@ -1359,11 +1449,17 @@ def factsJson (fs : Array Facts) : Json :=
   .arr <| fs.map fun f => Json.mkObj [("delta", .str f.delta.toString), ("drawn", toJson f.drawn),
     ("units", toJson f.units), ("wrong_units", toJson f.wrong)]
 
+def poolJson : Option Pool → Json
+  | some p => Json.mkObj [("blocks", toJson p.blocks), ("delta", .str p.delta.toString), ("f", toJson p.f),
+      ("q", .str p.q.toString), ("reach", toJson p.reach)]
+  | none => .null
+
 def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units true)] else []))
+    (if x.rows then [("capacity", toJson x.capacity), ("pool", poolJson x.pool), ("scans", termsJson x.units true)]
+     else []))
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]
@@ -1477,5 +1573,28 @@ def protocol : Core.Protocol where
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"
 #guard !(progPort "scan/prog" || progPort "scan/prog01" || progPort "scan/prog/" || progPort "Scan/prog0" ||
   progPort "scan/prog0x" || progPort "prog0" || progPort "scan/state" || progPort "")
+-- F_t at δ = 10^-6 (L = ⌈log2 10^6⌉ = 20): ⌈20 · 0.6931471808 / q⌉, 14 at q = 1 and 139 at q = 1/10; none at δ = 0
+-- or at a sample that detects nothing
+#guard clog2 (10 ^ 6) == 20 && tiedF ⟨1, 10 ^ 6⟩ 1 1 == some 14 && tiedF ⟨1, 10 ^ 6⟩ 1 10 == some 139 &&
+  tiedF ⟨0, 1⟩ 1 1 == none && tiedF ⟨1, 10⟩ 0 5 == none && tiedF ⟨1, 10⟩ 1 0 == none
+-- a sample's least detection probability: k / n for subset:k, the least k_s / n_s over strata of 1, 4 and 5 proof blocks
+-- drawing 1, 1 and 2 (1/4), and 0 when the strata leave one of the level's proof blocks out
+#guard
+  let lvl := fun (size : Nat) (d : Core.Draw) => ({ name := unitLevel, query := none, size, draw := some d } : Core.Level)
+  drawRate (lvl 10 (.subset 3)) == some (3, 10) &&
+    drawRate (lvl 10 (.stratified #[⟨"E", 1, 1⟩, ⟨"S", 4, 1⟩, ⟨"R", 5, 2⟩])) == some (1, 4) &&
+    drawRate (lvl 10 (.stratified #[⟨"E", 1, 1⟩, ⟨"R", 8, 8⟩])) == some (0, 1)
+-- w63k4's scan (E_w = 896) with a tied audit charged in every link-window, its pool F_t = 14 incorrect proof blocks of
+-- N_t = 16 at δ_t = 10^-6, each reaching R = 896 entry bits: 14 · (896 + ⌈log2 17⌉) = 12,614 bits. Over 1 link-window
+-- Σ_w β_w = 896 is the smaller, so κ_t is 896, K as before, and eps without δ_t; over 20, κ_t is the pool's 12,614 in
+-- place of 20 · 896 = 17,920, and eps is 20 · 1/100 + 10^-6
+#guard
+  let scan : Scan := { steps := 32, free := 0, ingress := 300, egress := 512, entries := 8 * 112 }
+  let f : Facts := { units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }
+  let pool : Pool := { f := 14, reach := 896, blocks := 16, delta := ⟨1, 10 ^ 6⟩, q := ⟨1, 1⟩ }
+  let over := fun (m : Nat) => rowsTerms #[] scan ((Array.range m).map fun _ => (f, 9088, 896)) #[] 1 m #[] (some pool)
+  pool.bits == 12614 && (over 1).capacity == 896 && (over 1).K == 9088 + 896 && (over 1).pool.isNone &&
+    (over 1).eps.toString == "1/100" && (over 20).capacity == 12614 && (over 20).K == 20 * 9088 + 12614 &&
+    (over 20).pool.isSome && (over 20).eps.toString == "200001/1000000"
 
 end NetworkCheck.Period
