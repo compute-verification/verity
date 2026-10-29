@@ -34,8 +34,9 @@ Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row not
 (`verity.core.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
 Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel and
 committer, `lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
-the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`), and each engine step's calls are one pass, published
-at the step's end (`lead.LeadRun`).
+the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`). Each engine step's forward is one pass and one window,
+whose salt follows its key's leaf, the weights' root and its call count, and is published at the step's end
+(`lead.LeadRun`).
 What is a placeholder is listed in `info` (``placeholder``).
 """
 from __future__ import annotations
@@ -196,7 +197,7 @@ class Settings:
     graphs: tuple[int, ...] = ()
     #: Pearl-C's: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
     period: Mapping[str, Any] | None = None
-    #: the lead's kernel and committer (`lead.LeadBackend`: ``load``, ``a_root``, ``call``)
+    #: the lead's kernel and committer (`lead.LeadBackend`: ``load``, ``key_leaf``, ``a_root``, ``call``, ``words_root``)
     backend: Any = None
 
     @classmethod
@@ -235,9 +236,9 @@ class Settings:
         if not isinstance(start, int) or isinstance(start, bool) or start < 0:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
         backend = raw.get("backend")
-        if backend is not None and not all(callable(getattr(backend, f, None)) for f in ("load", "a_root", "call")):
-            raise ValueError("pouw setting 'backend' is the lead's kernel and committer: load(w, layer), "
-                             "a_root(w, call, xq, key) and call(w, layer, xq, s_a, feed)")
+        if backend is not None and not all(callable(getattr(backend, f, None)) for f in PL.BACKEND):
+            raise ValueError(f"pouw setting 'backend' is the lead's kernel and committer (`lead.LeadBackend`): "
+                             f"{', '.join(PL.BACKEND)}")
         return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *PHS.of(raw), backend)
 
 
@@ -826,8 +827,8 @@ def _install_lead(entry: str, settings: Settings, target: Target) -> Option:
         raise ValueError(f"{entry} refused at install: " + "; ".join(off))
     committed = target.weight_commitments.get(entry) or commit_weights(PL.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
-    run = PL.LeadRun(entry, settings.backend, PL.F.InProcessCertifier(), weights_root(roots), rank=target.rank,
-                     world=target.context.world)
+    run = PL.LeadRun(entry, settings.backend, PL.F.InProcessCertifier(), weights_root(roots), len(layers),
+                     rank=target.rank, world=target.context.world)
     for w, layer in enumerate(layers):
         settings.backend.load(w, layer)
     h = target.hooks(entry)

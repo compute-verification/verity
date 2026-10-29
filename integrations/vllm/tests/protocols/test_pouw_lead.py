@@ -1,8 +1,12 @@
-"""`protocols.pouw.lead`: the lead as a PoUW scheme on the int8 plain arm. Each linear call's rows are committed
-(root(A_j)) before its coins are released, the backend serves the call's y on them, its words root follows, and each
-engine step's calls are one pass whose `PassCommitment` is published at the step's end; the option is refused where it
-can't be what it says (no backend, other schemes' settings, beside sampled proofs or PoUS) and uninstalls to the plain
-arm."""
+"""`protocols.pouw.lead`: the lead as a PoUW scheme on the int8 plain arm.
+
+- Each engine step's forward is one pass and one window. Its salt is sampled after its key's leaf, the weights' root and
+  its call count.
+- Each linear call's rows are committed (root(A_j)) before its coins are released, and the backend serves the call's y
+  on them.
+- The forward's one words root comes at the step's end, and then the pass's `PassCommitment` is published.
+- The option is refused where it can't be what it says: no backend, other schemes' settings, or beside sampled proofs or
+  PoUS. It uninstalls to the plain arm."""
 from __future__ import annotations
 
 import hashlib
@@ -56,41 +60,62 @@ def _plain(layer, xq, s_a):
     return E.dequantize(E.int_mm(xq, layer.weight), s_a, layer.weight_scale)
 
 
-def a_root(call, xq, key):
-    return hashlib.sha512(R.header(call) + xq.numpy().tobytes() + key).digest()
+def a_root(call, xq, window):
+    return hashlib.sha512(R.header(call) + xq.numpy().tobytes() + window.key + window.salt).digest()
+
+
+def key_leaf(key):
+    return hashlib.sha512(b"leaf" + key).digest()
 
 
 class Backend:
-    """The lead's kernel and committer, standing in: the plain product as y, root(A_j) a hash of the call, its rows and
-    the pass's key, and a words root over the call's rows and coins."""
+    """The lead's kernel and committer, standing in: the plain product as y, the key's leaf a hash of the key, root(A_j)
+    a hash of the call, its rows and the window, and the words root a hash of the window and its calls' rows and coins."""
 
     variant = "stand-in"
 
     def __init__(self, log: list | None = None):
-        self.loaded, self.log = [], [] if log is None else log
+        self.loaded, self.log, self.words = [], [] if log is None else log, []
 
     def load(self, w, layer):
         self.loaded.append(w)
 
-    def a_root(self, w, call, xq, key):
-        self.log.append(("a_root", w, call, key))
-        return a_root(call, xq, key)
+    def key_leaf(self, key):
+        self.log.append(("key_leaf", key))
+        return key_leaf(key)
+
+    def a_root(self, w, call, xq, window):
+        self.log.append(("a_root", w, call, window))
+        return a_root(call, xq, window)
 
     def call(self, w, layer, xq, s_a, feed):
         self.log.append(("backend", w, feed.call))
-        return _plain(layer, xq, s_a), hashlib.sha512(xq.numpy().tobytes() + feed.head().tobytes()).digest()
+        self.words.append(xq.numpy().tobytes() + feed.head().tobytes())
+        return _plain(layer, xq, s_a)
+
+    def words_root(self, window):
+        self.log.append(("words_root", window))
+        words, self.words = self.words, []
+        return hashlib.sha512(window.key + window.salt + b"".join(words)).digest()
 
 
 class Link(F.InProcessCertifier):
-    """The in-process certifier, logging each release with the root it was handed."""
+    """The in-process certifier, logging each window it opens and each release with the root it was handed."""
 
     def __init__(self, log: list):
         super().__init__(np.random.default_rng(0).bytes)
         self.log = log
 
+    def open(self, pass_index, key_leaf, weights_root, calls):
+        self.log.append(("open", pass_index, key_leaf, weights_root, calls))
+        return super().open(pass_index, key_leaf, weights_root, calls)
+
     def release(self, call, root):
         self.log.append(("release", call, root))
         return super().release(call, root)
+
+
+W = b"\x07" * 64
 
 
 @pytest.fixture(autouse=True)
@@ -149,58 +174,94 @@ def test_own_auditor_coins_are_not_added_under_the_lead():
     assert "coins" in pouw.challenged({"pouw": {}}, ("pouw:ncp-v1",))["pouw"]
 
 
-def test_a_call_commits_its_rows_before_its_coins_and_its_words_after():
+def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_its_coins():
+    """C3's order: the key's leaf, then the link's salt, sampled once it holds that leaf, the weights' root and the
+    window's call count; then each call's root(A_j) under the window, its coins and its kernel."""
     log = []
     backend, layer = Backend(log), Linear(24, 1)
-    run = PL.LeadRun(ENTRY, backend, Link(log), b"\x07" * 64, key=_keys())
-    key = run.pass_key
-    assert len(key) == PL.KEY_BYTES
+    run = PL.LeadRun(ENTRY, backend, Link(log), W, 4, key=_keys())
+    assert run.window is None and run.record is None
     x = _x(5, 2)
     xq, s_a = E.quantize_rows(x)
     y = run.call(3, layer, xq, s_a)
     assert torch.equal(y.view(torch.int16), _plain(layer, xq, s_a).view(torch.int16))
+    window, record = run.window, run.record
+    assert (window.index, window.calls, len(window.key)) == (0, 4, PL.KEY_BYTES) and window.salt == record.salt
+    assert (record.weights_root, record.key_leaf, record.window_calls) == (W, key_leaf(window.key), 4)
     call = F.Call(0, 0, 3, 5, K, 24)
-    root = a_root(call, xq, key)
-    assert log == [("a_root", 3, call, key), ("release", call, root), ("backend", 3, call)]
-    assert run.record.a_roots == [root] and len(run.record.words_roots) == 1
+    root = a_root(call, xq, window)
+    assert log == [("key_leaf", window.key), ("open", 0, key_leaf(window.key), W, 4), ("a_root", 3, call, window),
+                   ("release", call, root), ("backend", 3, call)]
+    assert record.a_roots == [root] and record.words_root is None
     run.call(0, Linear(16, 4), *E.quantize_rows(_x(1, 5)))
-    assert [c.index for c in run.record.calls] == [0, 1] and run.details["calls"] == 2
+    assert [c.index for c in record.calls] == [0, 1] and run.details["calls"] == 2
+    assert [e[0] for e in log].count("open") == 1
 
 
-def test_a_step_is_a_pass_published_at_its_end():
+def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
     log = []
-    run = PL.LeadRun(ENTRY, Backend(log), Link(log), b"\x07" * 64, key=_keys(), rank=1, world=2)
+    link = Link(log)
+    run = PL.LeadRun(ENTRY, Backend(log), link, W, 2, key=_keys(), rank=1, world=2)
     assert run.end_pass() is None
     layers = [Linear(24, 1), Linear(40, 2)]
     for w, layer in enumerate(layers):
         run.call(w, layer, *E.quantize_rows(_x(3 + w, w)))
-    record = run.record
+    record, window = run.record, run.window
     out = run.end_pass(step=True)
     assert isinstance(out, PassCommitment) and out is record.published and run.passes == [out]
+    assert [e[0] for e in log][-1] == "words_root" and [e[0] for e in log].count("words_root") == 1
     sha = lambda parts: hashlib.sha512(b"".join(parts)).digest()  # noqa: E731
-    assert (out.scheme, out.rank, out.world, out.pass_index, out.salt, out.kernel) == (PL.SCHEME, 1, 2, 0, b"", "stand-in")
+    assert (out.scheme, out.rank, out.world, out.pass_index, out.salt, out.kernel) == \
+        (PL.SCHEME, 1, 2, 0, link.windows[0].salt, "stand-in")
     assert out.units == 2 and out.tiles == sum(R.tiles(c.shape) for c in record.calls)
-    assert out.activation_roots == sha(record.a_roots) and out.transcript_root == sha(record.words_roots)
-    assert run.commits["passes"] == [out.to_json()] and run.details["passes"] == 1
-    assert run.end_pass() is out
+    assert out.activation_roots == sha(record.a_roots) and out.transcript_root == record.words_root
+    assert out.records_root == sha([key_leaf(window.key), (2).to_bytes(8, "big"), *map(R.header, record.calls)])
+    assert run.commits["passes"] == [out.to_json()] and run.commits["calls"] == 2 and run.details["passes"] == 1
+    assert run.end_pass() is out and run.window is None
     run.call(0, layers[0], *E.quantize_rows(_x(2, 9)))
-    keys = [e[3] for e in log if e[0] == "a_root"]
-    assert run.record.pass_index == 1 and keys[0] == keys[1] != keys[2] == run.pass_key
+    assert run.window.index == run.record.pass_index == 1 and run.window.key != window.key
+    assert run.window.salt == link.windows[1].salt != link.windows[0].salt
     with pytest.raises(R.RecordError, match="no sample before"):
         run.record.commitment()
     run.finish()
     assert [p.pass_index for p in run.passes] == [0, 1]
 
 
+def test_a_window_past_its_call_count_is_refused_and_never_published():
+    log = []
+    run = PL.LeadRun(ENTRY, Backend(log), Link(log), W, 2, key=_keys())
+    for w in range(2):
+        run.call(w, Linear(16, w), *E.quantize_rows(_x(1, w)))
+    with pytest.raises(R.RecordError, match="past the window's 2 calls, fixed before its salt"):
+        run.call(2, Linear(16, 2), *E.quantize_rows(_x(1, 2)))
+    assert [e[0] for e in log][-2:] == ["backend", "a_root"]
+    with pytest.raises(R.RecordError, match="call 2 raised before its kernel served it"):
+        run.end_pass()
+    assert not run.passes
+
+
+def test_a_window_the_link_refuses_commits_no_call():
+    class Closed(Link):
+        def open(self, *a):
+            super().open(*a)
+            raise F.FeedError("no salt")
+    log = []
+    run = PL.LeadRun(ENTRY, Backend(log), Closed(log), W, 2, key=_keys())
+    with pytest.raises(F.FeedError, match="no salt"):
+        run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
+    assert [e[0] for e in log] == ["key_leaf", "open"] and run.window is None
+    assert run.end_pass() is None
+
+
 def test_a_failed_call_leaves_its_pass_unpublishable():
-    """No retries: a call whose backend raised has its root(A_j) and no words, so its pass is never published."""
+    """No retries: a call whose backend raised has its root(A_j) and no served words, so its pass is never published."""
     class Broken(Backend):
         def call(self, *a):
             raise RuntimeError("kernel fault")
-    run = PL.LeadRun(ENTRY, Broken(), Link([]), b"\x07" * 64, key=_keys())
+    run = PL.LeadRun(ENTRY, Broken(), Link([]), W, 2, key=_keys())
     with pytest.raises(RuntimeError, match="kernel fault"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
-    with pytest.raises(R.RecordError, match="has its A root and no words"):
+    with pytest.raises(R.RecordError, match="call 0 raised before its kernel served it"):
         run.end_pass()
 
 
@@ -210,11 +271,11 @@ def test_a_call_the_link_refuses_gets_no_kernel():
             super().release(call, root)
             raise F.FeedError("refused")
     log = []
-    run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), b"\x07" * 64, key=_keys())
+    run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), W, 2, key=_keys())
     with pytest.raises(F.FeedError, match="refused"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
-    assert [e[0] for e in log] == ["a_root", "release"]
-    with pytest.raises(R.RecordError, match="has its A root and no words"):
+    assert [e[0] for e in log] == ["key_leaf", "open", "a_root", "release"]
+    with pytest.raises(R.RecordError, match="call 0 raised before its kernel served it"):
         run.end_pass()
 
 
@@ -244,8 +305,9 @@ def test_install_serves_each_call_through_the_lead_and_uninstalls_to_the_plain_a
     runner = Runner(model)
     served = runner.execute_model(x)
     assert torch.equal(served.view(torch.int16), plain.view(torch.int16))
-    assert [e[0] for e in log] == ["a_root", "release", "backend"] * 3
+    assert [e[0] for e in log] == ["key_leaf", "open", *["a_root", "release", "backend"] * 3, "words_root"]
     assert [e[2].linear for e in log if e[0] == "backend"] == [0, 1, 2]
+    assert [e[4] for e in log if e[0] == "open"] == [3] and option.commits["calls"] == 3
     assert len(option.commits["passes"]) == 1 and option.commits["passes"][0]["units"] == 3
     runner.execute_model(_x(2, 8))
     assert [p["pass_index"] for p in option.commits["passes"]] == [0, 1]
