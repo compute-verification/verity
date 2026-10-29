@@ -55,6 +55,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, ClassVar
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import descriptor_id
@@ -328,15 +329,15 @@ _LINE = (f"bytes 16·(index mod {S.LINES_PER_BLOCK}) to +15 of SHA-512(\"{S.LABE
 #: matmul u64 LE), seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B), H_ℓ `pearl_c4.labelled`'s SHA-512), each under its rule's
 #: versioned id
 DERIVATIONS = {
-    "ea": A.Derivation("verity/pouw/anchor/pearl-c4/ea/v2", "seed_a",
+    "ea": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_EA, "seed_a",
                        _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
-    "eb": A.Derivation("verity/pouw/anchor/pearl-c4/eb/v2", "seed_b",
+    "eb": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_EB, "seed_b",
                        _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
-    "fa": A.Derivation("verity/pouw/anchor/pearl-c4/fa/v2", "seed_b",
+    "fa": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_FA, "seed_b",
                        _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
-    "fb": A.Derivation("verity/pouw/anchor/pearl-c4/fb/v2", "seed_b",
+    "fb": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_FB, "seed_b",
                        _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
-    "g": A.Derivation("verity/pouw/anchor/pearl-c4/g/v2", "seed_b",
+    "g": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_G, "seed_b",
                       f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
                       f"byte UE4M3 1.0 ({S.NVFP4.one:#04x}); FP32 words", gram_g, 32),
 }

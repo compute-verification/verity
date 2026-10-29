@@ -24,10 +24,12 @@ import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from verity.ml.commitments import domains
+
 from ..protocol import Matmul, Tile, tagged
 
-RECORDS_TAG = "verity/pouw/pearl-c/records/v2"
-SPLIT_TAG = "verity/pouw/pearl-c/split/v1"
+RECORDS_TAG = domains.POUW_PEARL_C_RECORDS
+SPLIT_TAG = domains.POUW_PEARL_C_SPLIT
 ALIGN = 128
 
 
