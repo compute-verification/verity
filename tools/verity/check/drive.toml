@@ -26,11 +26,10 @@ land = "review"
 # step on the merge gate (not circuit-check, `gate = false` in ci.toml), and a red step's culprit is reverted on `checked`,
 # never on `main`. "main" lands on `main` and checks it after. Only drive's App pushes `checked`
 land_into = "checked"
-# the after-landing run reuses no suite, Lean or step pass (`check.py --no-cache`), until a suite's reuse is per test; circuit-check
-# alone reuses its per-target passes (`--circuit-cache`), each keyed by everything that target read, since a cold `--all` (~4 h,
-# ten SHA-512 Definitions at 141-167 GB one at a time) outlasted every after-landing run from 24 Oct. The nightly `audit-main`
-# (`--no-cache`, no circuit cache) still checks every part cold, so it checks that reuse daily
-after_landing_no_cache = true
+# the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
+# run (pytest 74 min, lean-audit 73 min, circuit-check hours) holds every landing; circuit-check reuses its per-target passes
+# either way. The nightly `audit-main` (`--no-cache`, no circuit cache) checks every part cold, so it checks that reuse daily
+after_landing_no_cache = false
 # after_landing_shards = N runs the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`train.sh
 # --deferred STEPS --shard K/N`), so it takes about its longest shard; 1 (absent) is one run of every step
 after_landing_shards = 3
