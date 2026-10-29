@@ -897,14 +897,14 @@ def main() -> None:
     binder = None
     if args.store:
         from verity_vllm.protocols.remote_bandwidth.binder import Binder, Every
-        from verity_vllm.protocols.remote_bandwidth.registry import Store
+        from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
         window = {}
         if args.store_window:
             from verity.core.protocols.remote_bandwidth.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}
-        binder = Binder(Store(), weights=lambda r: store_weights(r, install, args), **window).install()
+        binder = Binder(NodeMemory(), weights=lambda r: store_weights(r, install, args), **window).install()
     max_tokens_cap = args.steps + math.ceil(max(batches) * max(contexts) / args.max_batched_tokens) + 8
     cc = {"cudagraph_capture_sizes": CAPTURE}
     if not args.compiled:
