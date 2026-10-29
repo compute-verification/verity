@@ -810,14 +810,14 @@ KNOWN: dict[str, str] = {
     "tools/config/verity_config/registry.py::Machine": "homonym, a pod's machine type: rename (ci)",
     "tools/config/verity_config/settings.py::Registry":
         "homonym, one distribution's settings from the environment: rename (ci)",
-    "verity/core/attest/__init__.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "tools/move/layout.py::Layout": "homonym, a layout move's directory map: rename (ci)",
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
     "tools/verity/lean/run_daily.py::Node": "homonym, node 1's paths for the daily Lean run: rename (lean)",
     # verity/core/
+    "verity/core/attest/__init__.py::Period":
+        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/core/deploy/manifest.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (proofs)",
     "verity/core/deploy/manifest.py::Machine":
