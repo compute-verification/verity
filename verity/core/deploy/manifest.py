@@ -1,5 +1,4 @@
-"""A protocol's manifest, and the placement check (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §3,
-§4.1, and its addenda of 23:50Z and 00:08Z).
+"""A protocol's manifest, and the placement check.
 
 The manifest is a typed object in each protocol's package (`render` writes it as TOML, which is only a rendering):
 
