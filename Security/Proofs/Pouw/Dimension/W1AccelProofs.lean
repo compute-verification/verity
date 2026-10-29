@@ -11,7 +11,8 @@ import Mathlib.Tactic.NormNum
 # W1 over the accelerator model: proofs
 
 `freshWrites` (a run changes at most the words it writes, at every grid point), `w1FreshWords` (the card-level bound
-from `CardWithinAccelW1`), and the H200 instance's one-tick witness (`h200FreshTick`, `w1TimeH200_le`).
+from `CardWithinAccelW1`), `w1EntryWordsAt` (its per-entry form: the distinct words of disjoint stored entries), and the
+H200 instance's one-tick witness (`h200FreshTick`, `w1TimeH200_le`).
 -/
 
 open scoped NNRat
@@ -160,6 +161,31 @@ theorem w1FreshWordsAt : W1FreshWordsAt := by
     split_ifs <;> rfl
   rw [hc] at h
   simpa using h
+
+/-- **Stored entries' distinct words at each content**, proved from `w1FreshWordsAt`: for disjoint entries `L e` of
+locations outside the register file whose every word the code changes, the distinct words they hold, summed over the
+entries, are at most `w / cw`. No hypothesis says that entries hold different values: a copy into an entry is a write. -/
+theorem w1EntryWordsAt {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (cw : ℚ≥0)
+    (canW : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop) (hW : CardWithinAccelW1 c cap oracle cw canW)
+    (f : c.Mem → c.Mem) (w : ℚ≥0) (D : c.Mem → Prop) (hf : canW f w D) (M : c.Mem) (hM : D M)
+    {E : Type} (es : Finset E) (L : E → Finset (Σ s : Store, Fin (c.size s)))
+    (hdisj : (es : Set E).PairwiseDisjoint L) (hLs : ∀ e ∈ es, ∀ l ∈ L e, l.1 ≠ .reg)
+    (hnew : ∀ e ∈ es, ∀ l ∈ L e, f M l ≠ M l) :
+    cw * ((∑ e ∈ es, ((L e).image (f M)).card : ℕ) : ℚ≥0) ≤ w := by
+  classical
+  have hin : ∀ l ∈ es.biUnion L, ∃ e ∈ es, l ∈ L e := fun l hl => Finset.mem_biUnion.mp hl
+  have h := w1FreshWordsAt ι c cap oracle cw canW hW f w D hf M hM (es.biUnion L) fun l hl => by
+    obtain ⟨e, he, hle⟩ := hin l hl
+    exact hLs e he l hle
+  have hcount : (∑ e ∈ es, ((L e).image (f M)).card) ≤ ((es.biUnion L).filter fun l => f M l ≠ M l).card := by
+    rw [Finset.filter_true_of_mem fun l hl => by
+      obtain ⟨e, he, hle⟩ := hin l hl
+      exact hnew e he l hle, Finset.card_biUnion hdisj]
+    exact Finset.sum_le_sum fun e _ => Finset.card_image_le
+  calc cw * ((∑ e ∈ es, ((L e).image (f M)).card : ℕ) : ℚ≥0)
+      ≤ cw * (((es.biUnion L).filter fun l => f M l ≠ M l).card : ℚ≥0) :=
+        mul_le_mul_of_nonneg_left (by exact_mod_cast hcount) (by simp)
+    _ ≤ w := h
 
 /-- **At `h200Measured`, W1 is 32 a word**, proved from `H100.h32H200Measured`. -/
 theorem w1H200Measured32 : W1H200Measured32 := fun _ _ _ _ h => by
