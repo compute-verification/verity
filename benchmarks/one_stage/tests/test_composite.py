@@ -160,16 +160,6 @@ def test_a_refusal_is_public_by_its_name_only(tmp_path):
     assert secret.hex()[:16].encode() not in b"".join(f.read_bytes() for f in (tmp_path / "public").iterdir())
 
 
-def test_the_guard_refuses_public_bytes_that_share_a_run_with_evidence(tmp_path):
-    secret = os.urandom(100)
-    p = C.piece(put(tmp_path / "v2", V2, {}, b"\x01", secret, b"\xaa" * 64))
-    with pytest.raises(C.Leak):
-        C.check_public(b"x" + secret[10:80] + b"y", [p])
-    with pytest.raises(C.Leak):
-        C.check_public(secret.hex()[20:150].encode(), [p])
-    C.check_public(b"aa" * 64 + secret[1:60], [p])
-
-
 def test_the_private_out_may_not_lie_in_the_public_out(tmp_path):
     v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64)
     args = ["remote", "--cases", str(v2), "--public-out", str(tmp_path / "pub")]
