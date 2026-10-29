@@ -68,6 +68,16 @@ def Strategy.init {L : Layout} (σ : Strategy L) (stream : Coins L → ℕ → F
     Addr → Fin 1 → Fin tileWords → ℤ :=
   Sum.elim (fun a _ => σ.pre a) (fun c _ => stream ω c)
 
+/-- The values the certifier's coin stream may carry at `ω`: zero and the coins' components. -/
+def coinValues {L : Layout} (ω : Coins L) : Set ℤ :=
+  {v | v = 0 ∨ (∃ i t, v = ((ω.1 i t : ℕ) : ℤ)) ∨ (∃ i q, v = ((ω.2.1 i q : ℕ) : ℤ)) ∨ (∃ q j, v = ω.G q j) ∨
+    ∃ t k ℓ j, v = ω.s t k ℓ j}
+
+/-- **The coin stream is raw coins**: every word the certifier streams is zero or a coin's component, in at most the
+node's memory of tiles. -/
+def RawStream (L : Layout) (stream : Coins L → ℕ → Fin tileWords → ℤ) : Prop :=
+  (∀ ω c, L.mem ≤ c → stream ω c = 0) ∧ ∀ ω c p, stream ω c p ∈ coinValues ω
+
 /-- **The priced W1 work** of a strategy at a coin value: its trace at the W1 table `pr`. -/
 def Strategy.work {L : Layout} (pr : Prices100) (σ : Strategy L) (ω : Coins L) : ℕ :=
   cost100 pr (σ.exec ω).trace
