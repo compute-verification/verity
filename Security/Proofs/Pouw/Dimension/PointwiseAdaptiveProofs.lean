@@ -11,10 +11,13 @@ point, as in `adaptive_pairs_le`. Each bound reads only the targets an outcome r
 * **Balls against any initial memory** (`run_ball_table_le`, `adaptive_ball_table_le`). An initial chunk within `r y`
   of a target is within it of no other, so `run_ball_le` holds with no hypothesis on `m₀`, less `R + 1` a slot. Its
   count is at most `⌊(w − 1)/2⌋ + 1` a target, about half of the target's `w` words.
-* **Per-entry credit under whole-register writes** (`card_lanes_le`, `adaptive_lanes_le`). With a register as one
-  word, a write sets all its lanes; the lanes' distinct values over the steps are at most the lanes times the
-  register's, so the per-entry distinct count is paid, less the lanes for each register value repeated across groups
-  or held initially.
+* **Per-entry credit at word writes** (`run_words_le`, `adaptive_entries_le`). Each entry sits at one position of a
+  chunk; a run writes at least the new (position, value) pairs it holds, so when no two entries at one position share
+  a value and the initial memory holds none, the entries' distinct values are paid in full.
+* **Per-entry credit under whole-register writes** (`card_lanes_le`, `adaptive_lanes_le`, `adaptive_registers_le`).
+  With a register as one word, a write sets all its lanes; the lanes' distinct values over the steps are at most the
+  lanes times the register's, so the per-entry distinct count is paid, less the lanes for each register value
+  repeated across groups or held initially, and in full when none is.
 * **The attained side** (`pathRun_le_card`, `adaptive_attained`, `adaptive_levels_attained`,
   `adaptive_ones_attained`). The path run (`pathRun_attained`) holds any targets at `w` writes a distinct value.
   Row-step chunks that are a function of the row and its level, `G i (c i t)`, number at most `Σ_i |{c i t}|`, and a
@@ -195,6 +198,70 @@ theorem adaptive_lanes_le [DecidableEq V] [Inhabited V] {Λ Ω E T : Type} [Fint
   calc _ ≤ Fintype.card Λ * ∑ ω ∈ O, ∑ e ∈ groups, (steps.image (R ω e)).card +
         Fintype.card Λ * ∑ ω ∈ O, writes (P ω) := add_le_add h2 (Nat.mul_le_mul_left _ h1)
     _ = _ := add_comm _ _
+
+/-- **A run writes at least the new (position, value) pairs it holds**, each at some slot after some prefix. -/
+theorem run_words_le [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w))
+    (Z : Finset (Fin w × V)) (hZ : ∀ pv ∈ Z, ∃ i a, run m₀ (P.take i) a pv.1 = pv.2)
+    (hnew : ∀ pv ∈ Z, ∀ a, m₀ a pv.1 ≠ pv.2) : Z.card ≤ writes P := by
+  classical
+  choose i a hia using hZ
+  refine le_trans (card_le_card fun pv hpv => ?_) (run_pairs_le m₀ P
+    (Z.attach.image fun pv => run m₀ (P.take (i pv.1 pv.2)) (a pv.1 pv.2)) fun y hy => ?_)
+  · exact mem_filter.2 ⟨mem_biUnion.2 ⟨_, mem_image.2 ⟨⟨pv, hpv⟩, mem_attach _ _, rfl⟩,
+      mem_pairs.2 (hia pv hpv)⟩, hnew pv hpv⟩
+  · obtain ⟨pv, -, rfl⟩ := mem_image.1 hy
+    exact ⟨_, _, rfl⟩
+
+open Classical in
+/-- **Per-entry credit at word writes** (models P and C), check (b)'s obligation. Entry `e` sits at position `pos e`
+of a chunk (`w = 1`: copies move one word, free; `w = 4`: copies move four), and every outcome's program holds each of
+its values `R ω e t` there at some point. When no two entries at one position share a value and no initial slot
+holds an entry's value at its position, the entries' distinct values over the steps, summed, are at most the
+writes. Both hypotheses are what a program's chance or chosen coincidences break: a value another entry or the
+initial memory holds is a copy, not a write. -/
+theorem adaptive_entries_le [DecidableEq V] [Inhabited V] {Ω ι T : Type} (O : Finset Ω) (m₀ : Ω → A → Fin w → V)
+    (P : Ω → List (Step A V w)) (entries : Finset ι) (steps : Finset T) (pos : ι → Fin w) (R : Ω → ι → T → V)
+    (hY : ∀ ω ∈ O, ∀ e ∈ entries, ∀ t ∈ steps, ∃ i a, run (m₀ ω) ((P ω).take i) a (pos e) = R ω e t)
+    (hdist : ∀ ω ∈ O, ∀ e ∈ entries, ∀ e' ∈ entries, ∀ t ∈ steps, ∀ t' ∈ steps,
+      pos e = pos e' → R ω e t = R ω e' t' → e = e')
+    (hnew : ∀ ω ∈ O, ∀ e ∈ entries, ∀ t ∈ steps, ∀ a, m₀ ω a (pos e) ≠ R ω e t) :
+    ∑ ω ∈ O, ∑ e ∈ entries, (steps.image (R ω e)).card ≤ ∑ ω ∈ O, writes (P ω) := by
+  refine sum_le_sum fun ω hω => ?_
+  let f : ι → Finset (Fin w × V) := fun e => steps.image fun t => (pos e, R ω e t)
+  have hf : ∀ e, (f e).card = (steps.image (R ω e)).card := fun e =>
+    calc (f e).card = ((steps.image (R ω e)).image fun v => (pos e, v)).card := by rw [image_image]; rfl
+      _ = _ := card_image_of_injective _ fun v v' h => (Prod.ext_iff.1 h).2
+  have hdisj : (entries : Set ι).PairwiseDisjoint f := fun e he e' he' hne =>
+    disjoint_left.2 fun pv h1 h2 => by
+      obtain ⟨t, ht, rfl⟩ := mem_image.1 h1
+      obtain ⟨t', ht', h⟩ := mem_image.1 h2
+      exact hne (hdist ω hω e he e' he' t ht t' ht' (Prod.ext_iff.1 h).1.symm (Prod.ext_iff.1 h).2.symm)
+  calc ∑ e ∈ entries, (steps.image (R ω e)).card = ∑ e ∈ entries, (f e).card := sum_congr rfl fun e _ => (hf e).symm
+    _ = (entries.biUnion f).card := (card_biUnion hdisj).symm
+    _ ≤ writes (P ω) := run_words_le (m₀ ω) (P ω) _ (fun pv hpv => by
+          obtain ⟨e, he, hpv⟩ := mem_biUnion.1 hpv
+          obtain ⟨t, ht, rfl⟩ := mem_image.1 hpv
+          exact hY ω hω e he t ht) fun pv hpv => by
+          obtain ⟨e, he, hpv⟩ := mem_biUnion.1 hpv
+          obtain ⟨t, ht, rfl⟩ := mem_image.1 hpv
+          exact hnew ω hω e he t ht
+
+/-- **Per-entry credit under whole-register writes, given distinct registers** (model W): when no two groups share a
+register value and no initial slot holds one, the lanes' distinct values over the steps are at most `|Λ|` a write.
+The hypotheses are `adaptive_entries_le`'s at the grain of a whole register, which chance rarely breaks. -/
+theorem adaptive_registers_le [DecidableEq V] [Inhabited V] {Λ Ω E T : Type} [Fintype Λ] [DecidableEq Λ]
+    (O : Finset Ω) (m₀ : Ω → A → Fin 1 → Λ → V) (P : Ω → List (Step A (Λ → V) 1)) (groups : Finset E)
+    (steps : Finset T) (R : Ω → E → T → Λ → V)
+    (hY : ∀ ω ∈ O, ∀ e ∈ groups, ∀ t ∈ steps, ∃ i a, run (m₀ ω) ((P ω).take i) a 0 = R ω e t)
+    (hdist : ∀ ω ∈ O, ∀ e ∈ groups, ∀ e' ∈ groups, ∀ t ∈ steps, ∀ t' ∈ steps, R ω e t = R ω e' t' → e = e')
+    (hnew : ∀ ω ∈ O, ∀ e ∈ groups, ∀ t ∈ steps, ∀ a, m₀ ω a 0 ≠ R ω e t) :
+    ∑ ω ∈ O, ∑ e ∈ groups, ∑ ℓ : Λ, (steps.image fun t => R ω e t ℓ).card ≤
+      Fintype.card Λ * ∑ ω ∈ O, writes (P ω) := by
+  calc _ ≤ Fintype.card Λ * ∑ ω ∈ O, ∑ e ∈ groups, (steps.image (R ω e)).card := by
+        rw [mul_sum]
+        exact sum_le_sum fun ω _ => by rw [mul_sum]; exact sum_le_sum fun e _ => card_lanes_le steps (R ω e)
+    _ ≤ _ := Nat.mul_le_mul_left _ (adaptive_entries_le O m₀ P groups steps (fun _ => 0) R hY
+          (fun ω hω e he e' he' t ht t' ht' _ h => hdist ω hω e he e' he' t ht t' ht' h) hnew)
 
 /-- **Any targets are held at `w` writes a distinct value**: the path run through them in one slot. -/
 theorem pathRun_le_card [DecidableEq V] (m₀ : A → Fin w → V) (a : A) (Y : Finset (Fin w → V)) :
