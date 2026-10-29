@@ -1,6 +1,6 @@
 """N2's advised unit proved in zero knowledge and decided on the proof: each link-window of an advised link
 (`service.LinkWindows(advised=…)`, its unit `NetworkAdvisedLinkWindow_v2`: both ends' head checks and the advised
-counts on the counts those heads hold) committed, registered on the link's own stream, proved by C-Flock `prove --zk`
+counts on the counts those heads hold) committed, registered on the link's own stream, proved by Flock `prove --zk`
 behind the Lean firewall, delivered, and decided by N2's verifier of record with the link's advice
 (`LinkWindows.outcome(advice=…)`), through `n2_zk`'s statement and rounds (`n2_zk.stager`, `stage`, `member`).
 

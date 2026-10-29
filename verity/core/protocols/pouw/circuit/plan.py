@@ -20,7 +20,7 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
 **The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a drawn tile's closure is its rows' units
 in the call (`RowA`, or `rowk`'s pieces; TM rows, or `pc8`'s short last tile row's r), and its TN rows' units in the
 weight's Program (``b_rows``), each once per plan (`Plan.proved_b`); its W_ref is the caller's (the tile's cells' share of the scheme's).  It opens
-nothing: its rows are C-Flock-committed ports.
+nothing: its rows are Flock-committed ports.
 
 **Openings** are row-granular (the red team's X-SPC-57): A and the weight are committed one leaf per row, so a proved
 unit opens exactly the rows it reads.

@@ -107,7 +107,7 @@ def instance_args(params: Sequence[Type], arrays: Sequence[np.ndarray], i: int) 
 
 
 def flat(arrays: Sequence[np.ndarray]) -> np.ndarray:
-    """``(n, leaves)`` uint64: every vector's input leaves in parameter order (what a C-Flock lowering evaluates)."""
+    """``(n, leaves)`` uint64: every vector's input leaves in parameter order (what a Flock lowering evaluates)."""
     n = arrays[0].shape[0] if arrays else 0
     return np.concatenate([np.asarray(a, dtype=np.uint64).reshape(n, -1) for a in arrays], axis=1) if arrays else np.zeros((n, 0), np.uint64)
 
