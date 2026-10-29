@@ -1,5 +1,6 @@
 import PouwCommit.Draws
 import SampledProofs.Challenger
+import Identity.Domains
 
 /-!
 # A live window's round coins (`window.py`, "Live windows")
@@ -19,11 +20,11 @@ namespace PouwWindow
 open SampledProofs.Challenger (LiveCommitment LiveOpening)
 
 def COINS : String := "coins"
-def LIVE_SCHEME : String := "verity/pouw/epoch-coins/live/v1"
+def LIVE_SCHEME : String := Domains.POUW_EPOCH_COINS_LIVE
 def SALT : String := "pouw/salt"
 def DRAW : String := "pouw/draw"
 def ROUND : String := "pouw/round"
-def ROUND_NOISE_DOMAIN : String := "verity/pouw/round-noise/v1"
+def ROUND_NOISE_DOMAIN : String := Domains.POUW_ROUND_NOISE
 
 /-- A window's coin mode (Compose's `CoinMode`). -/
 inductive CoinMode where
