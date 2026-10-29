@@ -4,7 +4,8 @@
 #   research run --on vy-dc-h200-5 --project verity --campaign CAMPAIGN --source . --cwd source --as LANE \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/denoise/denoise.sh
 #
-# Env: MS (default "64 512 8192"), LINEARS (default every one of Llama-3.2-1B's: qkv o gu down head), REPS (default 5),
+# Env: MS (default "64 512 8192"), LINEARS (default every one of Llama-3.2-1B's: qkv o gu down head; also the
+# DeepSeek-V4-like v4sq 7168 x 7168, v4gu 4096 x 7168 and v4dn 7168 x 2048, N x K), REPS (default 5),
 # LEASE (default gpu-lease 1 --wait --max-min 40 --; empty when already under a lease).
 set -uo pipefail
 D=benchmarks/pouw/denoise
@@ -12,7 +13,8 @@ O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 \
   -o "$O/denoise" $D/denoise.cu -lcuda -lcublasLt > "$O/build.log" 2>&1 || { tail -30 "$O/build.log"; exit 3; }
-declare -A NK=([qkv]=3072:2048 [o]=2048:2048 [gu]=16384:2048 [down]=2048:8192 [head]=128256:2048)
+declare -A NK=([qkv]=3072:2048 [o]=2048:2048 [gu]=16384:2048 [down]=2048:8192 [head]=128256:2048
+               [v4sq]=7168:7168 [v4gu]=4096:7168 [v4dn]=7168:2048)
 shapes=()
 for m in ${MS:-64 512 8192}; do
   for l in ${LINEARS:-qkv o gu down head}; do shapes+=("$l-m$m:$m:${NK[$l]}"); done
