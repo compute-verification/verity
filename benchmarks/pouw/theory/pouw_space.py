@@ -45,8 +45,9 @@ A design whose modules leave a field unpriced is refused and never ranked; so is
 64 rows a call, C15; past its noise's `n_max` columns) or taking a refuted premise. Cards (the `card` tables) name
 designs by their modules, with their origin's claimed numbers, which are checked here.
 
-The ranking, at each point: designs that meet T1 first (T1 is hard), then free of open attacks, then the effective
-overall rank, then the nominal, then T2's and T3's targets, then the fewest open premises, then T1, T2 and T3.
+The ranking, at each point: designs that meet T1 first (T1 is hard; those that don't by T1), then free of open
+attacks, then the effective overall rank, then the nominal, then T2's and T3's targets, then the fewest open premises,
+then T1, T2 and T3.
 Per-period figures are on the card's one basis (`scale.basis`): stock work held fixed.
 
   uv run python benchmarks/pouw/theory/pouw_space.py [--card PATH] [--out DIR] [--delta D] [--mutations]
@@ -684,7 +685,8 @@ def t2_of(card: dict, point: str, agg: dict, r: float, wide_measured: bool) -> d
 
 
 def rank_key(row: dict) -> tuple:
-    return (not row["t1_pass"], bool(row["attacks"]), row["rank_effective"], row["rank"], not row["t2_pass"],
+    return (not row["t1_pass"], 0.0 if row["t1_pass"] else row["t1"], bool(row["attacks"]), row["rank_effective"],
+            row["rank"], not row["t2_pass"],
             not row["t3_pass"], len(row["open"]), row["t1"], row["t2"]["judged"],
             row["t3_worst"] if row["t3_worst"] is not None else math.inf)
 
