@@ -19,7 +19,7 @@ calls concatenate their chunks into one words instance, chunks never spanning ca
 
 **The keyed root.**  An instance's public digest is its keyed root d = SHA-512(ks_w || salt_w || M_top)
 (``verity.ml.commitments.keyed``), in the subtree root's place.  A window's instances are A_j at f calls + j, one a call, and the
-forward's words at 2^63 + f, one a forward.  :class:`Window` keys them in the order d's hiding needs.  The window's call count
+forward's words at 2^63 + f, one a forward.  :class:`WindowKeying` keys them in the order d's hiding needs.  The window's call count
 is fixed when it is made.  keyLeaf (ks_w's hm96 leaf) and the weights' root are recorded before salt_w arrives.  Each position
 then gets one d.  It refuses everything else (:class:`Refused`).
 """
@@ -37,7 +37,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
-           "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "Refused", "Subtree", "Window", "a_position", "a_segments", "chunks",
+           "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "Refused", "Subtree", "WindowKeying", "a_position", "a_segments", "chunks",
            "committed_tiles", "instance_domain", "key_leaf", "keyed_root", "pad_cols", "pad_rows", "stream", "subtree",
            "words_position", "words_values"]
 
@@ -165,7 +165,7 @@ def key_leaf(ks_w: bytes, y0: bytes) -> bytes:
     return H.tree_leaf(H.default_key, H.commit_string(H.default_key, ks_w, y0))
 
 
-class Window:
+class WindowKeying:
     """One window's keyed digests.  ``calls`` (calls a forward) is fixed here.  :meth:`register` gives what the challenger
     records: the weights' root, keyLeaf and ``calls``.  :meth:`open` then takes salt_w.  Then :meth:`a_root` and
     :meth:`words_root` key one digest at each position.  ks_w and y0 are fresh OS bytes unless given, and ks_w is never

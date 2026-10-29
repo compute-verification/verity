@@ -218,8 +218,8 @@ KS_W, SALT_W = hashlib.sha512(b"lead/keyed/vector/ks_w").digest(), hashlib.sha51
 WEIGHTS = hashlib.sha512(b"lead/keyed/vector/weights").digest()
 
 
-def _window(calls: int = 64) -> L.Window:
-    return L.Window(calls, ks_w=KS_W, y0=_label("y0", L.KEY_SALT_BYTES))
+def _window(calls: int = 64) -> L.WindowKeying:
+    return L.WindowKeying(calls, ks_w=KS_W, y0=_label("y0", L.KEY_SALT_BYTES))
 
 
 def test_window_reproduces_the_keyed_vectors():
@@ -261,7 +261,7 @@ def test_window_refuses_positions_outside_its_injective_map():
     window refuses a call count, a call or a forward outside them."""
     for calls in (0, -1, 1 << 63, 2.0):
         with pytest.raises(L.Refused):
-            L.Window(calls)
+            L.WindowKeying(calls)
     calls = 5
     positions = {L.a_position(f, calls, j) for f in range(7) for j in range(calls)}
     assert positions == set(range(7 * calls)) and max(positions) < L.words_position(0)
@@ -301,7 +301,7 @@ def test_window_refuses_salt_w_before_its_registration():
 
 
 def test_windows_with_fresh_keys_differ():
-    a, b = L.Window(4), L.Window(4)
+    a, b = L.WindowKeying(4), L.WindowKeying(4)
     assert a.key_leaf != b.key_leaf
     for w in (a, b):
         w.register(WEIGHTS)
