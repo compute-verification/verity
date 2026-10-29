@@ -27,7 +27,7 @@ from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 
 
 def run_failing(com, sched):
-    """RS.run without its no-error assertion: the steps, then finalize."""
+    """RS.commit_run without its no-error assertion: the steps, then finalize."""
     com.reset()
     com.install()
     for kv in sched:
@@ -63,9 +63,9 @@ def test_a_step_past_the_learn_budget_fails_the_run_by_name(monkeypatch, retain,
         assert not ok and why == f"collector failed: {failure[:200]}"
 
         com.learn_only = True                      # the next run: warm-up, then record, on the same ring
-        RS.run(com, RS.SCHED)
+        RS.commit_run(com, RS.SCHED)
         com.learn_only = False
-        rec = RS.run(com, RS.SCHED)
+        rec = RS.commit_run(com, RS.SCHED)
         assert "collector_failure" not in rec.extra and rec.extra["native_collect"]["refused_after_failure"] == 0
         RS.check_run(rec, com.row_keys)
     finally:
