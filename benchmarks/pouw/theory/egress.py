@@ -621,7 +621,7 @@ def statement_check(inp: dict, ll: dict, res: dict) -> dict:
     cfg = inp["llama_3_2_1b"]
     calls_per_forward = cfg["layers"] * len(cfg["linears"])
     out = {}
-    for did in ("rows", res["closing"]["id"]):
+    for did in dict.fromkeys(("rows", res["closing"]["id"], COORDINATOR_LEAD)):
         out[did] = {}
         for key, p in res["designs_by_id"][did]["points"].items():
             extra = {"a_j_to_the_certifier": 8.0 * ll["a_bytes_per_token"],
