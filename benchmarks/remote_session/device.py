@@ -10,8 +10,8 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
            buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
-           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store
-           salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j), key the verifier's (`set_payload_key`) or else the store's own;
+           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j =
+           `store_salt(key, PAYLOAD_LABEL, j)`, key the verifier's (`set_payload_key`) or else the store's own;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
