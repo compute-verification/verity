@@ -26,7 +26,7 @@ data sheet, which prices those words as time on a declared device.
 
 The logical layer:
 
-* `CoinMode`, `Declared`: the circuit as the IR gives it, a `Accounting.Gates.Dag` (memory accounting's form, with its
+* `CoinMode`, `Declared`: the circuit as the IR gives it, a `Accounting.Gates.IntDag` (memory accounting's form, with its
   wiring), each gate's Definition call site, each call site's round (the coin its noise reads: one coin a round),
   each round's coin mode (live or seeded), the coin before which the service commits each value under
   a root (`Declared.commitRound`, where the proofs' layer cuts it, and `LayerCommitted` holds it to the IR's cut, or
@@ -39,7 +39,7 @@ The logical layer:
 * `Declared.binding`, `Declared.Reads`, `Declared.Writes`: each gate's input binding, which gates read which, and the
   values the prover writes (every gate but a coin input).
 * `isWord`, `wordGates`, `Kind`, `kindAt`: the circuit's committed words of served products (`T_t`), and each gate's
-  kind, computed from the IR, never asserted: its primitive, its site's statics (what `Gates.roleOf` reads) and
+  kind, computed from the IR, never asserted: its primitive, its place's statics (what `Gates.roleOf` reads) and
   whether each operand depends on a run input (an activation) or not (a weight), a receipt word's read off its tile's
   operand rows. So a gather-fed `QKᵀ` and a weight matmul of one shape are different kinds.
 * `unitGates`, `unitWords`, `Declared.roundOf`, `Declared.stageOf`, `Declared.kindOf`: a unit's gates and words, its
@@ -141,8 +141,8 @@ inductive CoinMode
   | seeded
   deriving DecidableEq, Repr
 
-/-- **A declared circuit**: its gates in the IR's canonical order (`Accounting.Gates.Dag`: each gate's operation,
-operands, interval, primitive, site and whether it is committed), and as the IR binds them:
+/-- **A declared circuit**: its gates in the IR's canonical order (`Accounting.Gates.IntDag`: each gate's operation,
+operands, interval, primitive, place and whether it is committed), and as the IR binds them:
 * `call i`: the Definition call site, of `calls`, that made gate `i`, numbered in the circuit's order;
 * `round c`: call site `c`'s round, of `rounds`: its noise reads that round's coin, released after the round's operands
   are committed (one coin a round; one salt for the window, COMPILE);
@@ -163,7 +163,7 @@ operands, interval, primitive, site and whether it is committed), and as the IR 
   coordinate, or a K-chunk committing its running sum, which no served kind is cut into; glue between
   products is in units of its own). -/
 structure Declared (ι : Type) where
-  dag : Gates.Dag ι
+  dag : Gates.IntDag ι
   calls : ℕ
   call : ℕ → ℕ
   rounds : ℕ
@@ -193,51 +193,51 @@ def Declared.Writes {ι : Type} (Cd : Declared ι) (ℓ : ℕ) : Prop :=
 /-- Whether each gate's value depends on a run input, in order: a `run` input, or a gate that reads such a value.
 Unlike `Gates.dynamic` it leaves coins out, so it tells an activation (a request's tokens and what they reach) from a
 weight or a codec's parameters. -/
-def runDep {ι : Type} (C : Gates.Dag ι) : List Bool :=
+def runDep {ι : Type} (C : Gates.IntDag ι) : List Bool :=
   C.foldl (fun ds g => ds ++ [match g.op with
     | .input b _ => b == .run
     | _ => g.args.any fun j => ds.getD j false]) []
 
 /-- **A committed word**: a committed gate on a served product's main chain, its word `T_t` (S8-PORT's COMMIT layout:
 the final `T_1`, or the prefix `T_1 … T_{K/L}`). -/
-def isWord {ι : Type} (g : Gates.Gate ι) : Bool := g.commit && g.role.isServed
+def isWord {ι : Type} (g : Gates.IntGate ι) : Bool := g.commit && g.role.isServed
 
 /-- The circuit's committed words, as gate indices in the circuit's order. -/
 def wordGates {ι : Type} (Cd : Declared ι) : List ℕ :=
   (List.range Cd.dag.length).filter fun i => Cd.dag[i]?.any isWord
 
-/-- **A product's kind**, read off the IR: its primitive's id, its site's statics (the step zeroed: `K`, `L` and the
+/-- **A product's kind**, read off the IR: its primitive's id, its place's statics (the step zeroed: `K`, `L` and the
 tail groups, what `Gates.roleOf` reads) and whether its `a` and `b` operands depend on a run input. -/
 structure Kind where
   prim : String
-  site : Gates.Site
+  place : Gates.Place
   actA : Bool
   actB : Bool
   deriving DecidableEq
 
-/-- A site's statics: an `S8Dot_v1` body's `K`, `L` and tail groups, its step zeroed; an H1 + fx1 tile's receipt
+/-- A place's statics: an `S8Dot_v1` body's `K`, `L` and tail groups, its step zeroed; an H1 + fx1 tile's receipt
 word's dot kind and `K`, its word and operand rows zeroed. -/
-def statics : Gates.Site → Gates.Site
+def statics : Gates.Place → Gates.Place
   | .dot K L tail _ => .dot K L tail 0
   | .receipt d K _ _ _ => .receipt d K 0 [] []
   | .other => .other
 
 /-- An s8-family step's `k`, and `0` for any other operation. -/
-def mmaK {ι : Type} : Gates.Op ι → ℕ
+def mmaK {ι : Type} : Gates.IntOp ι → ℕ
   | .mma _ _ k _ => k
   | _ => 0
 
-/-- The gates of gate `g`'s `a` and `b` operands: a receipt word's tile's operand rows (`Gates.Site.receipt`), and
+/-- The gates of gate `g`'s `a` and `b` operands: a receipt word's tile's operand rows (`Gates.Place.receipt`), and
 otherwise `args[1 … k]` and `args[k+1 …]`. -/
-def operandGates {ι : Type} (g : Gates.Gate ι) : List ℕ × List ℕ :=
-  match g.site with
+def operandGates {ι : Type} (g : Gates.IntGate ι) : List ℕ × List ℕ :=
+  match g.place with
   | .receipt _ _ _ a b => (a, b)
   | _ => (g.args.tail.take (mmaK g.op), g.args.tail.drop (mmaK g.op))
 
-/-- Gate `g`'s kind in circuit `C`: its primitive, its site's statics, and whether any of its `a` operands and any
+/-- Gate `g`'s kind in circuit `C`: its primitive, its place's statics, and whether any of its `a` operands and any
 of its `b` operands (`operandGates`) depends on a run input. -/
-def kindOfGate {ι : Type} (C : Gates.Dag ι) (g : Gates.Gate ι) : Kind :=
-  ⟨g.prim, statics g.site, (operandGates g).1.any fun j => (runDep C).getD j false,
+def kindOfGate {ι : Type} (C : Gates.IntDag ι) (g : Gates.IntGate ι) : Kind :=
+  ⟨g.prim, statics g.place, (operandGates g).1.any fun j => (runDep C).getD j false,
     (operandGates g).2.any fun j => (runDep C).getD j false⟩
 
 /-- **Gate `i`'s kind** (`kindOfGate`), and an empty one past the circuit's gates. -/
@@ -679,7 +679,7 @@ def drawOf {N K : ℕ} {Ξ : Type} (hK : K ≤ N) (β : Equiv.Perm (Fin N) × Ξ
 /-- **Tile `t`'s slots**, from the IR: unit `t`'s gates (its outputs, which its proof opens), then each one's operands,
 in the circuit's order (a position may repeat). -/
 def Declared.slots {ι : Type} (Cd : Declared ι) (t : ℕ) : List ℕ :=
-  unitGates Cd t ++ (unitGates Cd t).flatMap fun j => ((Cd.dag[j]?).map Gates.Gate.args).getD []
+  unitGates Cd t ++ (unitGates Cd t).flatMap fun j => ((Cd.dag[j]?).map Gates.IntGate.args).getD []
 
 /-- **The window's proofs' run-dependent half**, on the window's one service round over the rounds' coins and the
 draw `B`: whether the proof of the `i`-th drawn tile was accepted and the values its opening gives its slots, and each
