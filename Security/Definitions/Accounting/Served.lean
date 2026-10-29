@@ -406,7 +406,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   `LayerCommitted` (an input has no second case), so `perCall`'s `z` and `y`, committed the round after,
   are words the unit computes;
 * `committed`: a gate that is no input is `inner` exactly when the IR doesn't mark it a committed output
-  (`Gates.Gate.commit`), so no opened value is declared inner and committed at its cut by fiat;
+  (`Gates.IntGate.commit`), so no opened value is declared inner and committed at its cut by fiat;
 * `noised`: a `receipt` gate, and in `perCall` an `outZ` or `outY` gate, reads its round's coin (`coinMark` past its
   round). This is reachability: the coin input is in the gate's cone, not that the gate's value depends on the coin. It
   is what Compose's cut reads (`Declared.cutOf`), so it is what the commit order needs; that a receipt's value is the
