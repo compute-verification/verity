@@ -12,6 +12,10 @@ Modes, on the same windows (so the rises are paired):
   sink   noise on every row but the window's first (BOS at position 0, the attention sink, whose massive activations
          make one code of noise large against its other entries), which is served as in int8 and earns no credit.
   sink_nodown   sink with the down projection exact too.
+  pv<L>  int8, with D-OUT's noise on P over a public prefix of L keys: for every query at position ≥ L, the lead's P
+         (LUT codes in [0, 127], key 0 its own sink block) over keys 1 .. L-1 becomes P - r + ½, which adds
+         (p_max / 127)·Σ_t (½ - r_t)·V_t to the output (1/L_lut = p_max/127, p_max the row's largest softmax weight).
+         Only queries past the prefix change, so the private tokens' rise is exp((NLL_pv - NLL_int8) / (ctx - L)) - 1.
 In every mode the norms, RoPE (llama3 scaling), attention (fp32 softmax) and the tied LM head (fp32) are the same, and
 every stage's output is rounded to bf16. The int8 products accumulate in fp32 rather than int32: exact while partial
 sums stay under 2^24, and within a few fp32 ulps beyond.
@@ -65,7 +69,27 @@ def row_quant(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.clamp(torch.round(x / s), -127, 127), s
 
 
-NOISY = {"noise", "sink", "sink_nodown"}
+LINEAR_NOISE = {"noise", "sink", "sink_nodown"}
+
+
+def noisy(mode: str) -> bool:
+    return mode in LINEAR_NOISE or mode.startswith("pv")
+
+
+def attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mode: str, gen: torch.Generator | None) -> torch.Tensor:
+    """Causal GQA attention on [heads, T, D] (fp32), with the pv<L> modes' prefix noise."""
+    out = torch.nn.functional.scaled_dot_product_attention(q[None], k[None], v[None], is_causal=True, enable_gqa=True)[0]
+    if not mode.startswith("pv"):
+        return out
+    L, (H, T, D), KV = int(mode[2:]), q.shape, k.shape[0]
+    g, later, keys = H // KV, torch.arange(L, T)[:, None], torch.arange(T)[None, :]
+    for h in range(KV):
+        s = (q[h * g:(h + 1) * g, L:] @ k[h].t()) / math.sqrt(D)
+        s.masked_fill_(keys > later, float("-inf"))
+        p_max = torch.exp(s.amax(-1) - torch.logsumexp(s, -1))
+        r = torch.randint(0, 2, (g, T - L, L - 1), generator=gen, dtype=torch.float32)
+        out[h * g:(h + 1) * g, L:] += ((0.5 - r) @ v[h, 1:L]) * (p_max / 127)[..., None]
+    return out
 
 
 class Linear:
@@ -82,7 +106,7 @@ class Linear:
         if mode == "bf16":
             return x @ self.bf16_t
         X, s = row_quant(x)
-        if mode in NOISY and not (mode == "sink_nodown" and self.call == "down"):
+        if mode in LINEAR_NOISE and not (mode == "sink_nodown" and self.call == "down"):
             r = torch.randint(0, 2, X.shape, generator=gen, dtype=torch.float32)
             half = self.half_sum.expand(X.shape[0], -1).clone()
             if mode != "noise":
@@ -149,9 +173,8 @@ class Model:
             q = rope(qkv[:, :H * D].view(T, H, D), cos, sin).bfloat16().float()
             k = rope(qkv[:, H * D:(H + KV) * D].view(T, KV, D), cos, sin).bfloat16().float()
             v = qkv[:, (H + KV) * D:].view(T, KV, D)
-            a = torch.nn.functional.scaled_dot_product_attention(
-                q.transpose(0, 1)[None], k.transpose(0, 1)[None], v.transpose(0, 1)[None], is_causal=True,
-                enable_gqa=True)[0].transpose(0, 1).reshape(T, H * D).bfloat16()
+            a = attention(q.transpose(0, 1), k.transpose(0, 1), v.transpose(0, 1), mode, gen)
+            a = a.transpose(0, 1).reshape(T, H * D).bfloat16()
             x = x + lay["o"](a, mode, gen)
             h = rmsnorm(x, lay["post"], eps)
             act = (torch.nn.functional.silu(lay["gate"](h, mode, gen).float()) * lay["up"](h, mode, gen).float()).bfloat16()
@@ -192,7 +215,7 @@ def main() -> int:
     ids = token_ids(args.tokenizer, args.text)
     model = Model(args.base, args.config, args.int8)
     bos = model.cfg["bos_token_id"]
-    runs = [(m, None) for m in args.modes if m not in NOISY] + [(m, s) for m in args.modes if m in NOISY for s in range(args.seeds)]
+    runs = [(m, None) for m in args.modes if not noisy(m)] + [(m, s) for m in args.modes if noisy(m) for s in range(args.seeds)]
     out = {"tokens": len(ids), "threads": torch.get_num_threads(), "ctx": {}}
     for ctx, n in zip(args.ctx, args.windows):
         count = len(ids) // (ctx - 1)
@@ -203,7 +226,7 @@ def main() -> int:
             row = {"window": w, "scored": ctx - 1}
             for mode, seed in runs:
                 t0 = time.perf_counter()
-                gen = torch.Generator().manual_seed((seed * 65_537 + ctx) * 1_000_003 + w) if mode in NOISY else None
+                gen = torch.Generator().manual_seed((seed * 65_537 + ctx) * 1_000_003 + w) if noisy(mode) else None
                 key = mode if seed is None else f"{mode}:{seed}"
                 row[key] = model.nll(win, mode, gen)
                 print(f"ctx {ctx} window {w} {key}: ppl {math.exp(row[key] / row['scored']):.4f} "
@@ -218,7 +241,8 @@ def main() -> int:
 
 def summary(rows: list[dict], keys: list[str], count: int) -> dict:
     """Per key: perplexity over the windows. Per noisy key against int8 and bf16 (and int8 against bf16): the rise, with
-    the standard error of the mean per-token log-ratio over windows; per noisy mode, the seeds' mean and range."""
+    the standard error of the mean per-token log-ratio over windows; per noisy mode, the seeds' mean and range of the
+    rise against int8 (for pv<L>, over the private tokens)."""
     scored = sum(r["scored"] for r in rows)
     ppl = {k: math.exp(sum(r[k] for r in rows) / scored) for k in keys}
     s: dict = {"windows": len(rows), "of": count, "scored": scored, "ppl": ppl}
@@ -234,8 +258,13 @@ def summary(rows: list[dict], keys: list[str], count: int) -> dict:
             s[f"vs_{ref}"] = {k: rise(k, ref) for k in noisy + (["int8"] if ref == "bf16" and "int8" in ppl else [])}
     if "int8" in ppl:
         for mode in dict.fromkeys(k.split(":")[0] for k in noisy):
-            r = [s["vs_int8"][k]["rise"] for k in noisy if k.split(":")[0] == mode]
-            s.setdefault("mode_vs_int8", {})[mode] = {"mean": float(np.mean(r)), "min": min(r), "max": max(r), "seeds": len(r)}
+            ks = [k for k in noisy if k.split(":")[0] == mode]
+            r = [s["vs_int8"][k]["rise"] for k in ks]
+            if mode.startswith("pv"):
+                private = sum(row["scored"] + 1 - int(mode[2:]) for row in rows)
+                r = [math.exp(sum(row[k] - row["int8"] for row in rows) / private) - 1 for k in ks]
+            s.setdefault("mode_vs_int8", {})[mode] = {"mean": float(np.mean(r)), "min": min(r), "max": max(r), "seeds": len(r),
+                                                     **({"tokens": "private"} if mode.startswith("pv") else {})}
     return {"summary": s, "rows": rows}
 
 
