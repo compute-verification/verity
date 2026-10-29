@@ -18,7 +18,7 @@ and quantize kernels (`lane_ops(kind, "stock")`). Each tensor component is price
 own padding (FA3's 64-row tile at decode) is not counted in its favour.
 
 Prices are units a register written, three readings (`READINGS`): `floor` (H32's class table, 32 for every writer),
-`paired` (CORE-H32's cheapest measured context: an ALU op beside an FMA-pipe op) and `alone` (the op's own measured
+`paired` (the cheapest measured context: an ALU op beside an FMA-pipe op) and `alone` (the op's own measured
 price). One dense int8 MAC is 1 unit and one bf16 MAC 2. DistinctWrites forces 32 a committed word that is distinct and
 non-free on the salt grid; premises (`PREMISES`) raise that per class. Each op's output has a class:
 
@@ -42,7 +42,7 @@ coin word (`dithered`), which makes the rounded values and their packs targets a
 code, and every later step 28 data lanes and one register shared by every row, a raw coin word (a move), against W₀ =
 [1, 0, 0, 0]; the accumulator's init cancels the shared bytes. Its forming is one LOP3 a row a call, at α = 32/28.
 
-`check()` reproduces CORE-NCP's MAC shares and noise_sweep's ssn_1l terms, checks ssn_sh's and the int8 PV blocks'
+`check()` reproduces the served model's decode and prefill MAC shares and noise_sweep's ssn_1l terms, checks ssn_sh's and the int8 PV blocks'
 distinctness on every data case (with mutations that must fail), the softmax chain's classes on a noisy row, the
 magic-number conversion's exact range, the degree-3 exp2's error, that dithered rounds vary across salts where plain
 ones don't (`sim_dither`) and the small-m instruction choice. Output: a JSON
@@ -74,16 +74,16 @@ PRICE = {
     "I2F": (32, 128.0, 128.0), "MUFU": (32, 256.0, 256.0), "SHFL": (32, 128.0, 128.0), "HFMA2": (32, 32.28, 32.28),
     "RED": (32, 1000.0, 1000.0), "LOOKUP": (32, 472.0, 472.0),
 }
-#: I2F.F32.S32 is unmeasured (F2I's 128.2 assumed); RED is CORE-H32's lower bound for a reduction to memory
+#: I2F.F32.S32 is unmeasured (F2I's 128.2 assumed); RED's is a measured lower bound for a reduction to memory
 PRICE_ESTIMATED = ("I2F", "RED", "HFMA2", "FMNMX")
 TENSOR = {"s8": {"kreg": 32, "mma": 48.07}, "bf16": {"kreg": 16, "mma": 48.07}}
 REFINED_FLOOR = 32.26
 
 #: name: (rank, what it credits)
 PREMISES = {
-    "MeasuredFloor": ("1", "every committed word costs at least 32.26 (CORE-H32's cheapest measured writer)"),
+    "MeasuredFloor": ("1", "every committed word costs at least 32.26 (the cheapest measured writer)"),
     "CvtMinimal": ("2", "I2F's function costs its measured price (checkable by a family search, derive_minimal-style)"),
-    "TensorSemantics": ("3", "a tensor instruction's word costs its measured price at its shape (SW-PREMISES #6)"),
+    "TensorSemantics": ("3", "a tensor instruction's word costs its measured price at its shape"),
     "MufuSpeed": ("4a", "MUFU's functions (ex2, tanh, rsq, rcp) cost at least MUFU's measured 256"),
 }
 
@@ -174,8 +174,9 @@ def lane_ops(kind: str, variant: str, exp: str = "mufu", dv: int = 64) -> list[t
                 "lean": [("UNPK", 1, "R"), ("FMUL", 1, "T"), ("FFMA3", 1, "T"), ("F2FP", 0.5, "R")],
                 "fused": [("FMUL", 2, "T"), ("FADD", 1, "T")]}[variant]
     if kind == "kvq":
-        return [] if variant != "fused" else [("FMNMX", 1, "S"), ("SHFL", 2 / 16, "X"), ("FMNMX", 2 / 16, "S"),
-                                              ("FFMA", 1, "R"), ("PRMT", 0.75, "R")]
+        # q and k are Hadamard-rotated before they're quantized: log2(64) butterfly FADDs on the ~5/6 that are q or k
+        return [] if variant != "fused" else [("FADD", 5, "T"), ("FMNMX", 1, "S"), ("SHFL", 2 / 16, "X"),
+                                              ("FMNMX", 2 / 16, "S"), ("FFMA", 1, "R"), ("PRMT", 0.75, "R")]
     if kind == "silu":
         return {"stock": [("UNPK", 2, "R"), ("FMUL", 1, "T"), ("MUFU", 1, "M"), ("FADD", 1, "T"), ("MUFU", 1, "M"),
                           ("FMUL", 2, "T"), ("F2FP", 0.5, "R")],
@@ -275,8 +276,8 @@ POINTS = {
     "dec64_8k": {"prompts": 64, "tokens": 1, "context": 8192, "decode": True, "label": "decode, batch 64, context 8K"},
 }
 
-#: the served step's measured parts at T 8,192 (8 × 1K, sync): CORE-NCP / HASH-56's step, noise_sweep's GEMM time, and
-#: p1a-levers' attention share; the rest is the step less those and the host gap
+#: the served step's measured parts at T 8,192 (8 × 1K, sync): the step, noise_sweep's GEMM time and the attention
+#: share; the rest is the step less those and the host gap
 STOCK_T8192_MS = 37.77
 GEMM_T8192_MS = nsw.STEP["T8192"]["gemm_ms"]
 ATT_T8192_MS = 2.9
@@ -418,14 +419,15 @@ PLANS = [
 PLAN = {p.name: p for p in PLANS}
 
 T3 = {
-    "linear": ("~0 (served noise std 6.0 / 9.2 units at K 2,048 / 8,192 vs ~330 quant; SW-NOISE)", 0.0),
-    "lm_head": ("+0.03% (estimate: int7 lm_head +0.07-0.08% measured by SW-PPL, scaled by 1/4 for int8)", 0.0003),
-    "qk": ("+0.16% (estimate: int7 QK +0.63% measured by SW-PPL, /4); +0.06% with a Hadamard (int7 +0.24%)", 0.0016),
-    "pv": ("+0.05% (estimate: int7 PV with the sink in its own block +0.19%, SW-PPL, /4)", 0.0005),
+    "linear": ("~0 (served noise std 6.0 / 9.2 units at K 2,048 / 8,192 vs ~330 quant)", 0.0),
+    "lm_head": ("+0.03% (estimate: int7 lm_head's measured +0.07-0.08%, /4 for int8's halved step)", 0.0003),
+    "qk": ("+0.07% (estimate: int7 QKᵀ with q and k Hadamard-rotated, measured +0.29% at 8K, /4)", 0.0007),
+    "pv": ("+0.16% (estimate: int7 P·V with the sink in its own block, measured +0.65% at 8K, /4; int7 QKᵀ and P·V "
+           "together measured +0.66%, so the sum with qk is conservative)", 0.0016),
     "silu": ("~0 (tanh.approx.f32: relative error <= 2^-10.99, below bf16's 2^-9; estimate)", 0.0),
     "softmax": ("~0 (poly exp2 checked below; P is u8 at 1/255)", 0.0),
-    "dither": ("+1.2% (estimate: rounding variance x2 on every int8 activation, interpolated between int8 and CORE-NCP's "
-               "int7 activations at +3.5%; P and QK's int8 inside the attention terms)", 0.012),
+    "dither": ("+1.2% (estimate: rounding variance x2 on every int8 activation, interpolated between int8 and int7 "
+               "activations' measured +3.5%; P and QKᵀ's int8 inside the attention terms)", 0.012),
 }
 
 
@@ -480,7 +482,7 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
 
 def lane_variant(c: Comp, plan: Plan) -> tuple[str, bool]:
     if c.kind == "kvq":
-        return ("fused" if plan.attention == "i8" else "stock"), False
+        return ("fused" if plan.attention == "i8" else "stock"), plan.attention == "i8"
     if c.kind == "sampler":
         return ("fused" if plan.lm_head != "stock" and plan.lanes == "fused" else "stock"), False
     if c.kind == "attn_out" and plan.lanes == "fused":
@@ -549,7 +551,7 @@ def stock_ms(model: str, point: str) -> tuple[float, str]:
     t = sh["rows"]
     if model == "llama":
         if point == "T8192_8x1k":
-            return STOCK_T8192_MS, "measured (HASH-56's served step, sync; CORE-NCP)"
+            return STOCK_T8192_MS, "measured (the served step, sync)"
         host = HOST_FIT_MS[0] + HOST_FIT_MS[1] * t
         gemm = max(GEMM_T8192_MS * t / 8192, 1.24e9 / HBM_B_S * 1e3) + 0.525e9 / HBM_B_S * 1e3
         s_ref = 8192 * 512.5 * LLAMA["heads"] * LLAMA["layers"]
@@ -955,13 +957,13 @@ def check() -> list[dict]:
         att = L["heads"] * keys * (L["dk"] + L["dv"]) * L["layers"]
         tot = lin + head + att
         got[keys] = tuple(round(100 * x / tot, 1) for x in (lin, head, att))
-    ok("CORE-NCP's decode MAC shares (linears / head / attention) at 144, 288, 2K and 8K keys",
+    ok("decode MAC shares (linears / head / attention) at 144, 288, 2K and 8K keys",
        all(abs(g - w) <= 0.1 for keys in ncp for g, w in zip(got[keys], ncp[keys])), got)
     pre = {}
     for ctx, want in ((2048, 93.5), (8192, 78.4)):
         att = L["heads"] * (ctx + 1) / 2 * (L["dk"] + L["dv"]) * L["layers"]
         pre[ctx] = round(100 * lin / (lin + att), 1)
-    ok("CORE-NCP's prefill linear shares at 2K and 8K", pre == {2048: 93.5, 8192: 78.4}, pre)
+    ok("prefill linear shares at 2K and 8K", pre == {2048: 93.5, 8192: 78.4}, pre)
     ok("Llama-3.2-1B linears are 973.1M MACs a token", round(lin / 1e6, 1) == 973.1, lin)
     v4a = sum(n * k for n, k in V4["dense"].values()) - sum(n * k for n, k in (V4["dense"]["sh_gate_up"],
                                                                                V4["dense"]["sh_down"]))
