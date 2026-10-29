@@ -21,8 +21,11 @@ held by the Lean verifier's registered reads (`flock-verify verify --zk --regist
   with the warden's wiring, opened to the verifier: the named gap). The verifier's port names the units' digest in
   its value (`warden_rows.port`), so a statement made for any other units' wiring is refused by Lean's registered
   reads, even at the same rows.
-* **Members.** One statement of n units each, a shared-row public file whose registered ports are the verifier's own
-  (`--registered`, `warden_rows.port` at the warden's root):
+* **Members.** One statement of n units each, a shared-row public file every port of which is one of the verifier's
+  own registered reads (`--registered`, which `Flock.Registered.checkComplete` holds to every port of the
+  circuit): the member's warden port at the warden's root (`warden_rows.port`), and its other port at the member's
+  committed value of it (`committed_value`: its units' rows under its own salts, committed before staging, the root
+  the registration names before any coin, `audit_member`):
   - ``sender``: ``o0`` registered, under the warden's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, unit 0's cell one byte off: rows the
@@ -67,7 +70,10 @@ from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, PAD  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams, cell  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import produced, registered as G  # noqa: E402
 
+#: the unit's ports: its input row and its output row
+PORTS = ("row", "o0")
 MEMBERS = {"sender": ("o0", True), "receiver": ("row", True), "unsigned": ("o0", False), "altered": ("o0", False),
            "pad": ("o0", False), "pad-named": ("o0", False), "swapped": ("o0", False)}
 #: what Lean's registered reads, and the host's read of them, refuse each refused member by
@@ -194,21 +200,58 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
     return WR.refusal(port, at.dom, mr.entry, [WR.bc(r, s) for r, s in zip(mr.rows, mr.salts)])
 
 
+def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
+    """A member's own rows of a port no warden row registration holds (one a unit, its u16 words), committed before
+    staging as a value registered on `head`'s link-window: each row under a salt of the prover's own, in a tree whose
+    domain binds the statement's Program (its SHA-512, `program`) and the warden's root, so the root, which the
+    registration names before any coin, opens under no other link-window's. The statement commits the port's rows under
+    the same salts, so they open it."""
+    return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, G.WORD_BITS, WR.SCHEMA,
+                               window=head.root.hex())
+
+
+def value_port(v: G.Registered, reads_from: int = 0) -> dict:
+    """The verifier's own `--registered` port of a registered value `v` at its root (a committed value's,
+    `committed_value`, the one the registration names): unit `reads_from + i` reads its row i."""
+    return produced.port(v.value, v.entry(), v.root.hex(), list(range(v.leaves)), WR.SCHEMA) | \
+        ({G.READS_FROM: int(reads_from)} if reads_from else {})
+
+
 # --- the audit (`n2_zk`'s flow on one-stage's a0, a7 and a8) ------------------------------------------------------------
+
+def _statement():
+    """What staging a statement reads: one-stage's partition, Flock's unit stager and the Program's encoding."""
+    import numpy as np
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity_flock import class_statement as CS
+
+    return SimpleNamespace(np=np, P=P, canonical_json=canonical_json, encode_program=encode_program, V2=V2, CS=CS)
+
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))
     import a0
     import a7
     import a8
-    import numpy as np
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_flock import class_statement as CS
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R, verifier as V
 
-    return SimpleNamespace(a0=a0, a7=a7, a8=a8, np=np, D=D, P=P, R=R, V=V, canonical_json=canonical_json,
-                           encode_program=encode_program, V2=V2, CS=CS)
+    return SimpleNamespace(**vars(_statement()), a0=a0, a7=a7, a8=a8, D=D, R=R, V=V)
+
+
+def check_shape(M, sg: SimpleNamespace) -> None:
+    """The statement's m, k_log + the blocks' log, within Flock's ``--zk`` prover's shape, which proving needs."""
+    nbl = max(3, (-(-sg.n // sg.st.meta["vus_per_block"]) - 1).bit_length())
+    if not 25 <= sg.st.meta["k_log"] + nbl <= M.a7.M_MAX:
+        raise SystemExit(f"m = {sg.st.meta['k_log']} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's "
+                         "shape)")
+
+
+def public_header(out: Path, n: int) -> dict:
+    """A staged statement's public file's header line."""
+    with open(out / f"pub-{n}.bin", "rb") as f:
+        return json.loads(f.readline())
 
 
 def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
@@ -229,27 +272,26 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
     assert tid == M.P.template_id(defn) and cnt == n
     return SimpleNamespace(defn=defn, program=program, query=query, n=n, base=base, st=st, out=out,
                            lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
-                           program_file=out / "program.json")
+                           program_file=out / "program.json", program_sha512=part["program"])
 
 
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
-    """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its registered
-    port's rows under its salts and paths (`member_rows`), every other row under a fresh salt; and the verifier's own
-    `--registered` file at the warden's root."""
+    """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its warden
+    port's rows under its salts and paths (`member_rows`) and its other port's under those of the member's committed
+    value of them (`committed_value`); and the verifier's own `--registered` file, which names both ports: the warden
+    port at the warden's root, the other at the committed value's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
-    k_log = st.meta["k_log"]
-    nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
-    if not 25 <= k_log + nbl <= M.a7.M_MAX:
-        raise SystemExit(f"{name}: m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
     port, _ = MEMBERS[name]
+    other = next(p for p in PORTS if p != port)
     mr = member_rows(name, at)
     words = M.np.asarray([WR.words(r) for r in mr.rows], dtype=M.np.uint16)
-    fresh = [os.urandom(WR.SALT_BYTES) for _ in range(n)]
-    salts = {"row": fresh, "o0": mr.salts} if port == "o0" else {"row": mr.salts, "o0": fresh}
+    value = committed_value(sg.program_sha512, at.head, other, words.tolist())
+    _w, salts, entry = value.statement(range(n))
     set_name = f"{st.iset.name}-{name}"
-    got = st.stage({"row": words}, out, os.urandom(32), salts=salts, indices=range(sg.base, sg.base + n),
-                   set_name=set_name, tables={"row": words}, refs={"row": list(range(n))}, registered={port: mr.entry})
+    got = st.stage({"row": words}, out, os.urandom(32), salts={port: mr.salts, other: salts},
+                   indices=range(sg.base, sg.base + n), set_name=set_name, tables={"row": words},
+                   refs={"row": list(range(n))}, registered={port: mr.entry, other: entry})
     outs = M.np.asarray(got["outs"]["o0"], dtype=M.np.uint16)
     if not M.np.array_equal(outs, words):
         raise SystemExit(f"{name}: the identity's outputs are not its inputs")
@@ -257,15 +299,15 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    reads = WR.reads_file({port: WR.port(at.head, at.opening.wiring, at.params, at.units, sg.base)})
+    reads = WR.reads_file({port: WR.port(at.head, at.opening.wiring, at.params, at.units, sg.base),
+                           other: value_port(value, sg.base)})
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
-    m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
-         "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"], "salts": got["salts"],
-         "ports": st.ports, "port": port, "rows": mr.rows, "own": mr.own, "partition_file": sg.partition_file,
-         "program_file": sg.program_file, "registered_file": out / "registered.json", "opens": opened(at, mr),
-         "predicted": refused(at, mr, sg.base), "units": mr.units.digest().hex(), "stage_s": round(time.time() - t0, 1)}
-    m["header"] = M.a0.public_header(out, n)
-    return m
+    return {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
+            "set": set_name, "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
+            "salts": got["salts"], "ports": st.ports, "port": port, "committed": {other: value}, "rows": mr.rows,
+            "own": mr.own, "partition_file": sg.partition_file, "program_file": sg.program_file,
+            "registered_file": out / "registered.json", "opens": opened(at, mr), "predicted": refused(at, mr, sg.base),
+            "units": mr.units.digest().hex(), "stage_s": round(time.time() - t0, 1), "header": public_header(out, n)}
 
 
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
@@ -279,13 +321,35 @@ def firewall(M, m: dict) -> dict:
     return {"FC_FIREWALL": "1", **M.a0.firewall_env(m)}
 
 
+def committed_roots(m: dict) -> tuple[dict, list]:
+    """The registration's entries of a member's committed values (`committed_value`), each ``<member>/committed/<port>``:
+    the domain the verifier expects (its own, from the Program, the value's name and the warden's root) and the root the
+    prover registers, which the verifier's registered reads name."""
+    want, roots = {}, []
+    for p, v in m["committed"].items():
+        q, d = f"{m['name']}/committed/{p}", v.domain.domain_id.hex()
+        want[q] = {"leaves": v.leaves, "domain": d}
+        roots.append({"port": q, "root": v.root.hex(), "leaves": v.leaves, "domain": d})
+    return want, roots
+
+
+def registered_roots(m: dict, rec: dict) -> dict:
+    """The verifier's registered reads (``m["registered_file"]``) name each committed port at the root the registration
+    names (`committed_roots`), before any coin."""
+    ports = json.loads(m["registered_file"].read_text())["ports"]
+    named = {r["port"]: r["root"] for r in rec["roots"]}
+    codes = [p for p in m["committed"] if ports[p]["root"] != named.get(f"{m['name']}/committed/{p}")]
+    return {"ok": not codes, "codes": codes, "detail": {}}
+
+
 def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -> dict:
-    """Member m registered, sampled by the verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean
-    with the verifier's own registered reads. Writes what the verifier received under ``out / "verifier"``."""
+    """Member m registered (its frame ports and its committed value's root, `committed_roots`), sampled by the
+    verifier's Lean (every unit), proved --zk behind the ZK server and held by Lean with the verifier's own registered
+    reads. Writes what the verifier received under ``out / "verifier"``."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
     n, name = m["n"], m["name"]
-    want, roots = {}, []
+    want, roots = committed_roots(m)
     fv = m["header"]["frame_v3"]
     for p_, w in a7.frame_ports(m["set"], m["meta"], n).items():
         want[f"{name}/{p_}"] = w
@@ -296,11 +360,12 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                                       f"egress link-window {at.window} (warden_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
-           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root"}
+           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root; "
+                   f"{', '.join(m['committed'])} the member's committed value at its registered root"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
-              f"statement/{name}": a7.statement_checks(m, rec, want)}
+              f"statement/{name}": a7.statement_checks(m, rec, want), "registered": registered_roots(m, rec)}
     receipt = R.receipt(rec, "one-stage-e2e verifier (warden_zk.py)")
     res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
     if not all(v["ok"] for v in checks.values()):
@@ -401,6 +466,7 @@ def prove(a) -> int:
         f"under the warden's certificate: {summary['unsigned_registration']}")
     M = _one_stage()
     sg = stager(M, B, a.units, out / "stager")
+    check_shape(M, sg)
     summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
                          "pin": sg.st.pin, "base": sg.base}
     log(f"stager: {sg.defn.id}, {sg.lower_s} s, k_log {sg.st.meta['k_log']}, pin {sg.st.pin[:16]}")
