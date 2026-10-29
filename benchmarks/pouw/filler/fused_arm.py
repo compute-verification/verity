@@ -90,8 +90,8 @@ class Fused:
 
     def placement(self, phase, b, l):
         if phase == "prefill":
-            return A.Placement("co")
-        return A.Placement("split", self._row(b, l)[0])
+            return A.Colocation("co")
+        return A.Colocation("split", self._row(b, l)[0])
 
     def fused(self, phase, b, l):
         return None if phase == "prefill" else self._row(b, l)[1]
@@ -188,7 +188,7 @@ class FusedPumpK(FusedPump):
 
     def placement(self, phase, b, l):
         if phase == "prefill":
-            return A.Placement("split", 4)
+            return A.Colocation("split", 4)
         return super().placement(phase, b, l)
 
     def filler_at(self, phase, b, l):
