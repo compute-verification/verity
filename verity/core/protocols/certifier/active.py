@@ -84,7 +84,7 @@ side never sees the salt.
 The certifier's record cells are its grids and two sealed slots per PoUW window: `_salts[p]`, which holds the salt and
 is opened only by `reveal`, and `_weights[p]`, the 64-byte root of the weights PoUW's noise seed reads. The prover
 hands that root once (`commit_weights(p, root, signature)`), signed under the prover key registered with the
-certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's draw, is still ahead;
+certifier (`prover_key`, over `weights_message`), while p's first ingress tick, the salt's sample, is still ahead;
 `committed(p, registration)` opens it on `reveal`'s conditions. So the certifier's word orders the prover's weights
 before the salt, and no one else can fix them. The record's open cells (`Accounting.Attribution.openCells`) are the
 grids, a function of the traffic, and what the certifier sends into the block is a function of its record.
@@ -92,7 +92,7 @@ grids, a function of the traffic, and what the certifier sends into the block is
 (`sampled_proofs.service.Registration`) and fails closed without it: it refuses unless the receipt is that
 registration's (`one_stage.registration.receipt`) and `registered` reads p off the registration, while p's last
 ingress record is unpublished (t_d), once the certifier's clock is more than `reveal_deadline` past p's end (one PoUW
-window by default), for a window whose salt was never drawn, and for one it has revealed already. So the salt reaches
+window by default), for a window whose salt was never sampled, and for one it has revealed already. So the salt reaches
 one registration of p, made within the deadline after p's work. `check_salts` is the audit's read of it: p's first raw
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
@@ -106,10 +106,10 @@ spends p's one reveal, nor does a request for another certifier or another run, 
 challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id and
 run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
 value too, so a consumer can key p on the certifier run, (key id, run id, link) (`Proxy.certifier_run`, the same on a
-`RemoteCertifier`), where two proxies on one link name don't collide. The
+`CertifierClient`), where two proxies on one link name don't collide. The
 salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
-`run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
+`run`, one JSON line per request and per answer, and `CertifierClient` is the challenger's client, which takes the
 certifier's key and run id from the deployment record and returns the value it verified, as a keyless proxy does in
 process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. Given
 `certificates`, the endpoint also serves each certifier window's certificates' public part to any caller, unsigned: each
@@ -248,9 +248,9 @@ def weights_message(link: str, window: int, root: bytes, context: bytes = b"") -
 REVEAL_REQUEST_TAG = "verity-network-certifier/reveal-request/v1"
 REVEAL_RESPONSE_TAG = "verity-network-certifier/reveal-response/v1"
 SALT_KIND, WEIGHTS_KIND = b"salt", b"weights"
-#: a proxy's run id, drawn at its construction (`Proxy.run_id`)
+#: a proxy's run id, sampled at its construction (`Proxy.run_id`)
 RUN_ID_BYTES = 32
-#: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
+#: the longest request or answer line `serve_reveals` and `CertifierClient` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
 REVEAL_LINE_BYTES = 1 << 20
 #: the longest a ticker waits at once. Linux lets an epoll wait end late by 0.1 % of its timeout, 0.5 % in a niced
@@ -303,7 +303,7 @@ def reveal_response_message(key_id: bytes, run_id: bytes, link: str, window: int
 class Revealed:
     """The certifier's signed answer to a reveal request: PoUW window `window`'s salt or weights' root, `value`, its
     `signature` over `reveal_response_message`, and the certifier's `key_id` and `run_id` that it binds. With the link
-    it verifies for, they are the certifier run (`Proxy.certifier_run`, `RemoteCertifier.certifier_run`). Keyed on the
+    it verifies for, they are the certifier run (`Proxy.certifier_run`, `CertifierClient.certifier_run`). Keyed on the
     certifier run and the window, two proxies on one link name, or two runs of one, don't collide."""
 
     window: int
@@ -1124,11 +1124,11 @@ class Proxy:
       off a registration, by default `served_window`), its last ingress record is published, and the certifier's clock
       is no more than `reveal_deadline` past p's end (one PoUW window by default); with `prover_key`,
       `commit_weights(p, root, signature)` records the weights' root the prover signed (`weights_message`, under
-      `prover_context`) before p's salt is drawn, and `committed(p, registration)` gives it on `reveal`'s conditions;
+      `prover_context`) before p's salt is sampled, and `committed(p, registration)` gives it on `reveal`'s conditions;
     - with `challenger_key` and `signer`, both or neither, `reveal(p, registration, request)` and `committed(p,
       registration, request)` take only a request the auditor's challenger signed under `challenger_key`
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
-      (`reveal_response_message`), which `serve_reveals` serves to a `RemoteCertifier`; without them they are the
+      (`reveal_response_message`), which `serve_reveals` serves to a `CertifierClient`; without them they are the
       in-process calls, which take no request and return the value. `challenger_key` comes from the auditor's
       deployment record, never from the prover's configuration, and `trusted-host` covers that record's custody.
       Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy draws from
@@ -1227,7 +1227,7 @@ class Proxy:
         self._salts: dict[int, bytes] = {}
         self._revealed: set[int] = set()
         self._weights: dict[int, bytes] = {}
-        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the draw and the commit never interleave
+        self._seal = threading.Lock()  # `commit_weights` may run off the loop: the sample and the commit never interleave
         self._salt_out: asyncio.Queue | None = None
         self._salt_task: asyncio.Task | None = None
         self.salts_released = self.salts_delivered = 0
@@ -1480,7 +1480,7 @@ class Proxy:
     def certifier_run(self) -> tuple[bytes, bytes, str]:
         """This certifier run's identity, (key id, run id, link): the signer's key id, `run_id` and the ingress link
         name, the one the reveal messages bind. Every signed answer binds it, and consumers key PoUW windows on it: a
-        `Revealed`'s `key_id` and `run_id`, with the link it verifies for, are it, and a `RemoteCertifier` of this proxy
+        `Revealed`'s `key_id` and `run_id`, with the link it verifies for, are it, and a `CertifierClient` of this proxy
         gives the same. A proxy without a signer has no key id, so it raises `ValueError`."""
         if self.signer is None:
             raise ValueError("a proxy without a signer has no key id, so no certifier run")
@@ -1557,7 +1557,7 @@ class Proxy:
         certifier's word orders it before the window's salt. Only the registered prover's root is taken: `signature`
         verifies under `prover_key` over `weights_message(ingress link, window, root, prover_context)`. It refuses
         (`RuntimeError`) without a prover key, on a signature that doesn't verify, once the window's first ingress tick,
-        the salt's draw, has run or was missed (a proxy back from maintenance after it), and a second root for the
+        the salt's sample, has run or was missed (a proxy back from maintenance after it), and a second root for the
         window."""
         if self.salt is None:
             raise ValueError("the salt is off")
@@ -1757,7 +1757,7 @@ async def serve_reveals(proxy: Proxy, host: str, port: int, *,
     return await asyncio.start_server(handle, host, port, limit=REVEAL_LINE_BYTES)
 
 
-class RemoteCertifier:
+class CertifierClient:
     """The auditor challenger's handle on a network certifier's reveal endpoint (`serve_reveals`) at `host`:`port`, in
     place of the `Proxy` an in-process caller holds. `run_id` is that proxy's `Proxy.run_id`, which the auditor's
     deployment record gives beside `certifier_key`, as it gives the certifier `challenger_key` (not a signed hello,

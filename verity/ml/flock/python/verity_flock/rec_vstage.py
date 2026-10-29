@@ -10,7 +10,7 @@ With each level, that level's committed tops are staged too, every node held at 
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE] [--part-jobs N]
 
-``stage`` refuses an inner session whose record holds no draw (`rec_live.inner_draw`, exit 2): the verifier refuses every
+``stage`` refuses an inner session whose record holds no sample (`rec_live.inner_draw`, exit 2): the verifier refuses every
 session over it (`RecSetup.innerDrawn`), so the coin server answers ``Register`` with the verifier's full draw
 (``rec_live --draw``).
 
@@ -22,8 +22,8 @@ v, the final check's κ and its query rows (`rec_algebra.verifier_rows`), each o
 (`rec_outer.coefficients`, its position checked against `rec_vstar`'s), and the entries its reads files name: per round i that
 absorbs message elements, the value ``rec-c<i>`` rebuilt from that round's two ``c_k`` (`rec_residuals.commits_entry`), and
 each level's committed tops, rebuilt from their recorded ``b || c`` (`rec_outer.TopValue`). **The prover's side**: the openings
-from its proofs, its tops with the salts the firewall committed them under (`rec_vstar.tops`), its running sums
-(`rec_outer.Chain`, under salts drawn once and kept in ``--salts FILE``, so that every statement staged with one FILE reads one
+from its proofs, its tops with the salts the ZK server committed them under (`rec_vstar.tops`), its running sums
+(`rec_outer.Chain`, under salts sampled once and kept in ``--salts FILE``, so that every statement staged with one FILE reads one
 chain), and its message rows with the salts it committed them under in the inner session, registered as ``rec-c<i>`` (row r:
 rep r's) under `rec_outer.session_program` of ``public.json``, which the chain shares.
 
@@ -48,9 +48,9 @@ the stream's messages as ``rec-opening-c<i>`` in the verifier's round order (`op
   (the part whose v holds it).
 * ``top``: a wrong top. The prover commits the last level's first opening with its first sibling one bit off (a fresh row it
   commits honestly), so the opening climbs to another node, and gives that node as its output row under the ``b || c`` the
-  firewall committed for the top node its position names (``L<last>/``).
+  ZK server committed for the top node its position names (``L<last>/``).
 * ``top-salt``: a top that does not match its salt. Level 0's first opening, honest but for its output row's salt, one bit off
-  the salt the firewall committed ``root_B``'s node under (``L0/``).
+  the salt the ZK server committed ``root_B``'s node under (``L0/``).
 
 In both, the opening climbs to the output row the prover gives, and that row does not open the committed ``b || c``.
 
@@ -212,7 +212,7 @@ def _sparse_stream(public: dict, rep: int) -> list[dict]:
 
 def sparse_reps(public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict) -> list[tuple]:
     """Each rep's sparse phase (`rec_live.sparse_rounds` at the bucket's `rec_sparse.Shape` ``sp``, T = 1) as the session holds
-    it, per rep ``(coins, messages)``: its coins from the coin server's record of its stream (v2's round, which draws none,
+    it, per rep ``(coins, messages)``: its coins from the coin server's record of its stream (v2's round, which samples none,
     skipped), the inner points from the rep's coins (`rec_sparse.inner_points`) and the slots' layout factors from META's
     range ``rng`` of the hidden circuit (`rec_sparse.layout_factors`), all public; its messages the prover's rows of its
     rounds, h its rep's h round's, and the registered claim its claim round's, the last (the prover's ``Σ_p eq(ζ_p, p) u_p``,
@@ -259,7 +259,7 @@ def sparse_messages(program: str, public: dict, private: dict, sp) -> tuple[dict
 def stage_sparse(public: dict, private: dict, vf: SimpleNamespace, program: str, regs: dict, own: dict, sp, rng: dict, out: Path,
                  evaluate: bool = True, messages_: tuple[dict, dict] | None = None) -> dict:
     """The sparse phase's RecSparse statement over both reps (`rec_sparse.stage`): each rep's instance from `sparse_reps`, its
-    message ports and ``claim`` read as the firewall committed them (``messages_``, default `sparse_messages`), ``h`` as the
+    message ports and ``claim`` read as the ZK server committed them (``messages_``, default `sparse_messages`), ``h`` as the
     algebra's h round (``regs`` and ``own``, `messages`' of the reps' rounds)."""
     reps_ = sparse_reps(public, private, vf, sp, rng)
     inst = SP.session_rows(sp, [m for _, m in reps_], [SP.verifier_row(sp, c) for c, _ in reps_])
@@ -292,7 +292,7 @@ def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> 
     """R's registered opening's messages (`messages`), port ``m<i>`` reading ``rec-opening-c<i>``: round i of
     `rec_algebra.rounds` at the opening-only shape ``sh`` (``Flock/RecOpening.lean``'s ``rounds``, which its unit's row ports
     follow: each claim's ring switch, then Ligerito's), the i-th round of ``stacked/rep0`` that commits a message. Each must sit
-    at a round `rec_live.stacked_rounds` absorbs a message in, so that the coin server recorded its ``c_k`` before it drew
+    at a round `rec_live.stacked_rounds` absorbs a message in, so that the coin server recorded its ``c_k`` before it flipped
     that round's coins and every later one."""
     stream = f"{RL.STACKED}/rep0"
     ks = sorted(r["k"] for r in public["rounds"] if r["stream"] == stream and r["commits"])
@@ -377,7 +377,7 @@ def staged_shared_rows(v: Path) -> dict:
 def stage_cap(inner: Path, out: Path, evaluate: bool = True, levels: list[int] | None = None) -> dict:
     """RecCap alone at every level (or at ``levels``) over the inner session ``inner`` (`rec_cap.stage`: level 0 under
     ``out``, a later level ``l`` under ``out/L<l>``): each level's tops rebuilt from the recorded ``b || c`` and the salts
-    the firewall committed them under, at `rec_outer.session_program` of ``public.json``, as `stage` builds them. Returns
+    the ZK server committed them under, at `rec_outer.session_program` of ``public.json``, as `stage` builds them. Returns
     each level's result by ``L<l>``."""
     inner = Path(inner)
     public_b = (inner / "public.json").read_bytes()
@@ -511,7 +511,7 @@ def stage(inner: Path, fold: dict, out: Path, levels: list[int] | None = None, a
     docstring). ``salts``: the running sums' salts file (`acc_salts`; None: fresh ones). ``cap`` (`rec_shape.Cap`): refuse a
     session whose V* is not the cap's shape (`rec_shape.check`) before staging. ``sparse``: the bucket's `rec_sparse.Shape`
     and META's range of the hidden circuit; the sparse phase's RecSparse statement over both reps (`sparse_reps`), its
-    messages read as the firewall committed them (`sparse_messages`, h as the algebra's h round), under ``out/sparse``; with
+    messages read as the ZK server committed them (`sparse_messages`, h as the algebra's h round), under ``out/sparse``; with
     R in the session, `stage_stacked` under ``out/stacked``. With no forgery, each staged level's committed tops held by its
     RecCap (`rec_cap.stage`): level 0's under ``out/cap`` (``cap``), a later level ``l``'s under ``out/cap/L<l>``
     (``caps``). ``version``: the levels' population programs'

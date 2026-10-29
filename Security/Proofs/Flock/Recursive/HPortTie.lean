@@ -315,10 +315,10 @@ theorem rowPort_of_checkRows {s : VStar.Stmt} {own : Array Flock.Registered.Port
 /-- **A V* circuit's rows are unsegmented** (`scopeOk`'s `v1Ports`). -/
 theorem segs_of_scopeOk {c : Flock.Circuit} (h : Layout.scopeOk c = true) (q : Fin c.ports.size) :
     c.ports[q.val]!.segs = none := by
-  unfold Layout.scopeOk Layout.v1Ports at h
+  unfold Layout.scopeOk Layout.v1Ports Layout.v1Rows at h
   simp only [Bool.and_eq_true, Array.all_eq_true', Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at h
   rw [getElem!_pos c.ports q.val q.isLt]
-  obtain ⟨⟨⟨-, hs⟩, -⟩, -⟩ := h.2 _ (Array.getElem_mem q.isLt)
+  obtain ⟨⟨⟨-, hs⟩, -⟩, -⟩ := h.2.1 _ (Array.getElem_mem q.isLt)
   simpa using hs
 
 end checks
