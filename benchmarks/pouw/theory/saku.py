@@ -7,6 +7,9 @@ Checks (exact integer arithmetic, small shapes, seeded):
              committed word is the code term plus the row's coin prefix sum, computed without the GEMM.
   ortho      an exact design's zero-data operands (NCP, ncp3) have orthogonal row spans, dims summing to at most the
              stack width, so a uniform instance embedded in the noise is at most half the width.
+  width_bound random exact linear designs at and above N-EXACT's width bound W >= K + rank Q + rank T: zero-data spans
+             of dims rank Q and rank T, orthogonal, so SAK-U certifies at most min of them and the certified gap,
+             W - min(rank Q, rank T), is at least K + max(rank Q, rank T): at least stock.
   exact_skip the middle-segment adversary on ncp3 (forward, then backward from the known total) outputs every committed
              word without computing one segment, at zero data and with A.B as advice.
   dch_linear prover-chosen data (zero, random, rank 1, zero halves, repeated rows, constant, Gram, one side zero) never
@@ -191,6 +194,51 @@ def ortho(rng, design="ncp", m=24, n=20, k=48, draws=6):
             "spans_orthogonal": cross, "dims_le_width": dx + dy <= 3 * k, "embed_max": min(dx, dy)}
 
 
+def unit_tri_inv(t, lower):
+    """Exact inverse of a unit triangular integer matrix (object dtype)."""
+    w = t.shape[0]
+    inv = np.eye(w, dtype=object)
+    for i in (range(w) if lower else range(w - 1, -1, -1)):
+        for j in (range(i) if lower else range(i + 1, w)):
+            if t[i, j]:
+                inv[i] = inv[i] - t[i, j] * inv[j]
+    return inv
+
+
+def exact_design(rng, k, rq, rt, slack=0):
+    """A random exact linear design X = A·P + E·Q, Y = R·B + T·F (X·Y = A·B for every A, B, E, F) at width
+    W = K + rq + rt + slack, from a random unimodular basis G (columns R | T | slack | ·) and its inverse H (rows
+    P | · | Q)."""
+    w = k + rq + rt + slack
+    lo = np.tril(rng.integers(-1, 2, (w, w)), -1).astype(object) + np.eye(w, dtype=object)
+    up = np.triu(rng.integers(-1, 2, (w, w)), 1).astype(object) + np.eye(w, dtype=object)
+    g = lo.dot(up)
+    h = unit_tri_inv(up, False).dot(unit_tri_inv(lo, True))
+    return {"P": h[:k], "Q": h[w - rq:], "R": g[:, :k], "T": g[:, k:k + rt], "W": w}
+
+
+def width_bound(rng, k, rq, rt, slack=0, m=6, n=5, draws=3):
+    """N-EXACT's width theorem and the embedding bound on one random exact design: exact on random data; at zero data
+    X0 = E·Q and Y0 = T·F have row spans of dims rank Q and rank T, orthogonal (Q·T = 0, Lemma O), with
+    K + dim_x + dim_y <= W; a SAK-U instance embedded in them is at most min(dim_x, dim_y) wide, so the certified gap
+    W - min(dim_x, dim_y) is at least K + max(dim_x, dim_y), at least stock (K)."""
+    d = exact_design(rng, k, rq, rt, slack)
+    p, q, r, t, w = d["P"], d["Q"], d["R"], d["T"], d["W"]
+    rnd = lambda *s: rng.integers(-7, 8, s).astype(object)
+    a, b, e, f = rnd(m, k), rnd(k, n), rnd(m, rq), rnd(rt, n)
+    exact = bool((((a.dot(p) + e.dot(q)).dot(r.dot(b) + t.dot(f))) == a.dot(b)).all())
+    ident = all(bool((x == y).all()) for x, y in ((p.dot(r), np.eye(k, dtype=object)), (p.dot(t), 0), (q.dot(r), 0),
+                                                     (q.dot(t), 0)))
+    x0 = np.concatenate([rnd(m, rq).dot(q) for _ in range(draws)])
+    y0 = np.concatenate([t.dot(rnd(rt, n)).T for _ in range(draws)])
+    dx, dy = rank_mod_p(x0.tolist()), rank_mod_p(y0.tolist())
+    cross = bool((x0.dot(y0.T) == 0).all())
+    gap = w - min(dx, dy)
+    return {"K": k, "rank_Q": rq, "rank_T": rt, "W": w, "exact": exact, "identities": ident, "dim_x": dx, "dim_y": dy,
+            "spans_orthogonal": cross, "width_bound": k + dx + dy <= w, "embed_max": min(dx, dy),
+            "certified_gap_over_stock": gap / k, "gap_ge_K_plus_max": gap >= k + max(dx, dy)}
+
+
 def rank_mod_p(a, p=2_147_483_647):
     """Rank over GF(p), a lower bound on the rank over Q."""
     a = [[int(v) % p for v in row] for row in a]
@@ -324,6 +372,9 @@ def main():
     checks = {"ncp_zero": [ncp_zero(rng, L=L) for L in (32, 64, 128)],
               "ssn_zero": [ssn_zero(rng, L=L) for L in (32, 64, 128)],
               "ortho": [ortho(rng), ortho(rng, "ncp3")],
+              "width_bound": [width_bound(rng, k, rq, rt, slack) for k, rq, rt, slack in
+                              ((4, 4, 4, 0), (6, 6, 0, 0), (6, 0, 6, 0), (5, 1, 3, 0), (4, 2, 2, 3), (8, 3, 5, 1),
+                               (6, 6, 6, 2), (7, 0, 0, 0))],
               "exact_skip": [exact_skip(rng, L=L, zero=z) for L in (32, 64, 128) for z in (True, False)],
               "dch_linear": [segment_relations(rng, kind, L=L)
                              for kind in ("zero", "random", "rank1", "zero_half", "repeated_rows", "constant", "gram",
@@ -333,6 +384,8 @@ def main():
     ok &= all(r["zero_data_words_match"] and r["served_noise_is_coins_only"] for r in checks["ssn_zero"])
     ok &= all(o["final_zero"] and o["spans_orthogonal"] and o["dims_le_width"] for o in checks["ortho"])
     ok &= all(r["total_relation"] and r["relations"] == 1 for r in checks["dch_linear"])
+    ok &= all(r["exact"] and r["identities"] and r["spans_orthogonal"] and r["width_bound"] and r["gap_ge_K_plus_max"]
+              and (r["dim_x"], r["dim_y"]) == (r["rank_Q"], r["rank_T"]) for r in checks["width_bound"])
 
     pricing = {}
     for t in (64, 512, 8192):
