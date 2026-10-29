@@ -236,7 +236,7 @@ theorem coins_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU
   have hjs : (partOf zo.I d u.val).val < sts.size := by rw [hsz]; exact (partOf zo.I d u.val).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf zo.I d u.val).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl zo.hcH))
     rw [ZkHidden.parseH_tagsAt ((zkTags_typed zo.I).trans zo.ht), zo.hcH] at h1
     exact (Except.ok.inj h1).symm
   exact ⟨_, hcst, array_forM_ok hfm _ hjs⟩

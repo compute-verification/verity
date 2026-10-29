@@ -30,7 +30,7 @@ the code side's.
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
    `num > den`. That the verifier refuses what is out of it is `ScopeMatches`, open.
 5. **Named pieces**: the commitment (`Commitment`, `Commitment.Binds`, and its published leaf layer `Commitment.layer`);
-   the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal unit (`Netlist`,
+   the program and its units (`BGate`, `Prog`, `Partition`, `Prog.Correct`); the universal unit (`PrivateCircuit`,
    `Universal`), a fact about the programs private circuits run as; the acceptance probabilities (`OneStage.Pa`,
    `Rule.Pa`, `Design.Pa`); the extractor (`E`): `k` accepted runs, in each `k` accepted reruns of the second stage, in
    each Flock's `E^rep` on every checked unit's session; the expected-time finder (`Bext`); and the parameters
@@ -234,29 +234,29 @@ def SizeClass.indexBits (c : SizeClass) : ℕ := Nat.log2 (c.nIn + c.G - 1) + 1
 the `nIn` inputs and then one per gate. Gate `(op, a, b)` reads wires `a` and `b` and computes XOR, AND, XNOR or NAND
 (`op`'s bit 0 picks AND, bit 1 negates); a wire at or past the reading gate's own reads `0`, as does an output past the
 last wire. -/
-structure Netlist where
+structure PrivateCircuit where
   nIn : ℕ
   gates : List (Fin 4 × ℕ × ℕ)
   outs : List ℕ
 
-/-- The netlist run gate by gate on `x` (`interpret`). -/
-def Netlist.eval (n : Netlist) (x : List Bool) : List Bool :=
+/-- The private circuit run gate by gate on `x` (`interpret`). -/
+def PrivateCircuit.eval (n : PrivateCircuit) (x : List Bool) : List Bool :=
   let ws := n.gates.foldl (fun ws g =>
     let a := ws.getD g.2.1 false
     let b := ws.getD g.2.2 false
     ws ++ [xor (if g.1.val % 2 = 1 then a && b else xor a b) (decide (g.1.val / 2 = 1))]) x
   n.outs.map fun o => ws.getD o false
 
-/-- The netlist is of class `c`: `G` gates over `N_IN` inputs, `N_OUT` outputs, every index in `K` bits. -/
-def Netlist.Fits (c : SizeClass) (n : Netlist) : Prop :=
+/-- The private circuit is of class `c`: `G` gates over `N_IN` inputs, `N_OUT` outputs, every index in `K` bits. -/
+def PrivateCircuit.Fits (c : SizeClass) (n : PrivateCircuit) : Prop :=
   n.nIn = c.nIn ∧ n.gates.length = c.G ∧ n.outs.length = c.nOut ∧
     (∀ g ∈ n.gates, g.2.1 < 2 ^ c.indexBits ∧ g.2.2 < 2 ^ c.indexBits) ∧ ∀ o ∈ n.outs, o < 2 ^ c.indexBits
 
 /-- `v` in `k` bits, low bit first. -/
 def bitsLE (k v : ℕ) : List Bool := (List.range k).map v.testBit
 
-/-- The netlist as the universal unit's `(op, src, out)` arguments, in leaf order (`arguments`). -/
-def Netlist.args (c : SizeClass) (n : Netlist) : List Bool :=
+/-- The private circuit as the universal unit's `(op, src, out)` arguments, in leaf order (`arguments`). -/
+def PrivateCircuit.args (c : SizeClass) (n : PrivateCircuit) : List Bool :=
   n.gates.flatMap (fun g => bitsLE 2 g.1.val) ++
     n.gates.flatMap (fun g => bitsLE c.indexBits g.2.1 ++ bitsLE c.indexBits g.2.2) ++
     n.outs.flatMap (bitsLE c.indexBits)
@@ -441,9 +441,9 @@ def InScope (P : Partition) (s : Stmt) : Prop :=
 /-- What the deployed sampled verifier brings, read by the claims: the verifier, its parser and scope check, its own
 evaluation of a statement's partition query on its program, descriptor and gates (`partition`, `P = Q(C)`), the
 trace's commitment, the universal unit of each size class (the program a private circuit's units run, its arguments the
-private netlist), and the Flock verifier its sessions run (`flock`): whether it is the masked one, its parser, the
-opened columns of a run, the code, each trace's codeword length and decoding radius, and how a trace is read as a
-witness.
+private circuit's description), and the Flock verifier its sessions run (`flock`): whether it is the masked one, its
+parser, the opened columns of a run, the code, each trace's codeword length and decoding radius, and how a trace is
+read as a witness.
 
 The draw is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the first stage (the proof units'
 draw under two-stage sampling, and the sessions), so runs that keep the other rounds make the same first draw and see the
@@ -776,11 +776,11 @@ def KSCount (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
 /-- **Sampling: binding** of the trace's commitment, as a collision reduction, at every `H`. -/
 def Binding (D : Deploy Coin Col T) : Prop := ∀ H, D.commit.Binds H
 
-/-- **Sampling: the universal unit**: the program of class `c` (`UniversalUnit_v1{G, N_IN, N_OUT}`) maps every netlist
-of the class, as its arguments, and inputs `x` to the netlist's outputs on `x`. A private circuit runs as a program
-built of universal units, its netlist committed values like any other input. -/
+/-- **Sampling: the universal unit**: the program of class `c` (`UniversalUnit_v1{G, N_IN, N_OUT}`) maps every private
+circuit of the class, as its arguments, and inputs `x` to the private circuit's outputs on `x`. A private circuit runs
+as a program built of universal units, its description committed values like any other input. -/
 def Universal (D : Deploy Coin Col T) : Prop :=
-  ∀ (c : SizeClass) (n : Netlist) (x : List Bool), n.Fits c → x.length = c.nIn →
+  ∀ (c : SizeClass) (n : PrivateCircuit) (x : List Bool), n.Fits c → x.length = c.nIn →
     (D.universal c).eval (n.args c ++ x) = n.eval x
 
 /-- **Sampling: the faulty set is the boundary form's**: on a topologically ordered program, a replay unit whose proof
