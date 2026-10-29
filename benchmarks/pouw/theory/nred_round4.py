@@ -44,6 +44,11 @@ meet in a birthday pool of every row of the column. `salt` adds a per-row ρ_i (
 the stock epilogue's `IADD3` row source as N-EXACT's xu does; `salt_bigw` also draws the window weights with
 |W| ∈ [64, 127]. `reversed` replays the lanes out and back instead of in order.
 
+`W/…` reads N-FLOOR's `tile-grain` premise (note 20261029T1148Z-report-np-floor §2): an m16n8 MMA is skipped only
+whole. A word is held when its value already occurs in its column (free search, as literal P). `W/tile` prices a
+skipped tile at N-FLOOR's per-word figures (copy 0.40, the rest off the tensor pipe at 256); `W/whole` counts only
+tiles whose 128 words are all held, which is N-FLOOR's own reading.
+
 `mask_blocks` checks N-HIDE's remedy (b) mask on A's 1 KiB leaves against a V chosen before the salt.
 
 `a5_lead` is round 2's A5 search (`nred_round2.a5_step_greedy`) on the lead: with s drawn per call after A_j a row's
@@ -107,6 +112,65 @@ def _merge_groups(v: np.ndarray, t: np.ndarray) -> tuple[int, int]:
     new = np.ones(len(mg), dtype=bool)
     new[1:] = (mg[1:] != mg[:-1]) | (mv[1:] != mv[:-1]) | (mt[1:] != mt[:-1])
     return int((~first).sum()), int(new.sum())
+
+
+TILE_M, TILE_N = 16, 8
+COPY_TILE_WORD, OFF_TENSOR_WORD = 0.40, 256.0
+COL_KEY = np.int64(1) << 40
+
+
+def _tile_saving(held: np.ndarray) -> tuple[int, int, float]:
+    """N-FLOOR's `tile-grain` (note 20261029T1148Z-report-np-floor §2): an m16n8 MMA (32 units a word) is skipped only
+    whole, its held words copied at 0.40 and the rest produced off the tensor pipe at 256, so it pays from 113 of its
+    128 words. `held` (m, n) at one step; returns (whole repeats, paying tiles, units saved)."""
+    m, n = held.shape
+    r = held.reshape(m // TILE_M, TILE_M, n // TILE_N, TILE_N).sum(axis=(1, 3))
+    gain = r * (OFF_TENSOR_WORD - COPY_TILE_WORD) - TILE_M * TILE_N * (OFF_TENSOR_WORD - H32)
+    return int((r == TILE_M * TILE_N).sum()), int((gain > 0).sum()), float(gain[gain > 0].sum())
+
+
+def _whole_share(tg: dict, k: int) -> float:
+    """Whole repeats only (N-FLOOR's "whole-tile repeats are the only copies that save"): each saves its 128 words
+    at 32 − 0.40, over the instance's entries × k units of stock."""
+    return tg["whole_repeats"] * TILE_M * TILE_N * (H32 - COPY_TILE_WORD) / (tg["entries"] * k)
+
+
+def _isin_cols(q: np.ndarray, x: np.ndarray) -> np.ndarray:
+    """q[i, j] occurs in x[:, j]."""
+    off = np.arange(q.shape[1], dtype=np.int64) * COL_KEY
+    xs = np.sort((x + off).ravel())
+    qq = (q + off).ravel()
+    pos = np.searchsorted(xs, qq).clip(max=len(xs) - 1)
+    return (xs[pos] == qq).reshape(q.shape)
+
+
+def _held_earlier_block(v: np.ndarray) -> np.ndarray:
+    """v (m, n) at one step: the word's value occurs in its column in an earlier 16-row block."""
+    m, n = v.shape
+    blk = np.arange(m) // TILE_M
+    _, first, inv = np.unique((v + np.arange(n, dtype=np.int64) * COL_KEY).T.ravel(), return_index=True,
+                              return_inverse=True)
+    return blk[(first % m)[inv].reshape(n, m).T] < blk[:, None]
+
+
+def lead_tile_grain(w: np.ndarray) -> dict:
+    """Tile grain on the lead's words w (m, s, n): a word is held when its value occurs in its column at an earlier
+    step or an earlier 16-row block of its step (free search, as literal P)."""
+    m, s, n = w.shape
+    _, first, inv = np.unique((w + np.arange(n, dtype=np.int64)[None, None] * COL_KEY).transpose(2, 1, 0).ravel(),
+                              return_index=True, return_inverse=True)
+    p = first[inv].reshape(n, s, m).transpose(2, 1, 0)
+    tp, ip = (p % (s * m)) // m, p % m
+    now = np.arange(s)[None, :, None]
+    blk = np.arange(m) // TILE_M
+    held = (tp < now) | ((tp == now) & (blk[ip] < blk[:, None, None]))
+    full = pay = 0
+    units = 0.0
+    for t in range(s):
+        f, p_, u = _tile_saving(held[:, t])
+        full, pay, units = full + f, pay + p_, units + u
+    return {"tiles": (m // TILE_M) * (n // TILE_N) * s, "entries": m * n, "whole_repeats": full, "paying": pay,
+            "held_words": float(held.mean()), "units_an_entry": units / (m * n)}
 
 
 WIDE_OFFSET = sum(100 * 255 ** lane for lane in range(4))
@@ -200,6 +264,7 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
 
     return {"equal_to_honest": bool(np.array_equal(w, honest)), "steps": s, "tile": tile,
             "d0_range": [int(d0.min()), int(d0.max())], "masked_sources_a_row": with_source / m,
+            "tile_grain": lead_tile_grain(w),
             "saved": {"entry": entry, "xrow": xrow, "tilecol": tilecol, "column": column, "lag1": lag1,
                       "masked": masked},
             "groups": {"entry": entry_groups / per, "xrow": xrow_groups, "tilecol": tc_groups / per,
@@ -221,6 +286,8 @@ def shares(inst: dict, k: int, big_n: int) -> dict:
     src = inst["masked_sources_a_row"] / big_n
     out["P/masked"] = H32 * (sv["masked"] - src) / k
     out["M/masked"] = H32 * (sv["masked"] * (1 - (SELECT_A_WORD + COPY_A_WORD) / H32) - src) / k
+    out["W/tile"] = inst["tile_grain"]["units_an_entry"] / k
+    out["W/whole"] = _whole_share(inst["tile_grain"], k)
     for price in PRICES:
         q = price / H32
         decide = (s - 1) / tile
@@ -257,6 +324,7 @@ def runs(seed: int = 97, m: int = 256, n: int = 64) -> dict:
                        "shares": weighted(insts, shape),
                        "per_k": {f"k{kk}": {"saved": v["saved"], "groups": v["groups"], "c_track": v["c_track"],
                                             "steps": v["steps"], "d0_range": v["d0_range"],
+                                            "tile_grain": v["tile_grain"],
                                             "shares": shares(v, kk, max(nn for nn, k2 in shape.values() if k2 == kk))}
                                  for kk, v in insts.items()}}
                 out[f"{cfg}{'+wide' if tag == 'wide' else ''}/{pattern}/{shape_name}"] = row
@@ -357,6 +425,10 @@ def mirror_instance(k: int, m: int, n: int, rng: np.random.Generator, variant: s
     acc = {f"{p}/{when}": [0, 0] for p in ("column", "tile") for when in ("final", "interior")}
     entry_seen = []
     rev = variant == "reversed"
+    target = d0 + rho[:, None]
+    by_interior = np.zeros((m, n), dtype=bool)
+    prev = None
+    tg = {when: [0, 0, 0.0] for when in ("final", "interior")}
     for t in range(s):
         lane = t if t < h else (h - 1 - (t - h) if rev else t - h)
         word = word + (1 if t < h else -1) * u[:, lane, None] * wv[lane][None]
@@ -365,6 +437,16 @@ def mirror_instance(k: int, m: int, n: int, rng: np.random.Generator, variant: s
             word = word - u[:, mid, None] * wv[mid][None]
         out_word = word + rho[:, None] if t == s - 1 else word
         when = "final" if t == s - 1 else "interior"
+        held = _held_earlier_block(out_word)
+        if when == "interior":
+            by_interior |= _isin_cols(target, out_word)
+            if prev is not None:
+                held |= _isin_cols(out_word, prev)
+        else:
+            held |= by_interior
+        for slot, val in enumerate(_tile_saving(held)):
+            tg[when][slot] += val
+        prev = out_word
         tiles = out_word.reshape(m // MIRROR_POOL_TILE, MIRROR_POOL_TILE, n)
         acc[f"column/{when}"][0] += int((m - _distinct(out_word, 0)).sum())
         acc[f"column/{when}"][1] += int(_repeated_values(out_word, 0).sum())
@@ -377,7 +459,10 @@ def mirror_instance(k: int, m: int, n: int, rng: np.random.Generator, variant: s
     return {"steps": s, "final_word_is_code_and_tags": final_clean,
             "saved": {key: v[0] / per for key, v in acc.items()}, "groups": {key: v[1] / per for key, v in acc.items()},
             "a2r_revisits": float((s - _distinct(walk, 1)).sum()) / (walk.shape[0] * n),
-            "d0_distinct_a_column": float(_distinct(d0, 0).mean())}
+            "d0_distinct_a_column": float(_distinct(d0, 0).mean()),
+            "tile_grain": {when: {"tiles": (m // TILE_M) * (n // TILE_N) * (1 if when == "final" else s - 1),
+                                  "entries": per, "whole_repeats": v[0], "paying": v[1], "units_an_entry": v[2] / per}
+                           for when, v in tg.items()}}
 
 
 def mirror_shares(inst: dict, k: int, big_n: int, m: int) -> dict:
@@ -393,6 +478,9 @@ def mirror_shares(inst: dict, k: int, big_n: int, m: int) -> dict:
             for price in PRICES:
                 out[f"P'{price:g}/{key}"] = H32 * (base - price / H32 * (gr[key] + nsteps / rows)) / k
     out["P/a2r_entry"] = H32 * (inst["a2r_revisits"] - (s - 1) / big_n) / k
+    for when in ("final", "interior"):
+        out[f"W/tile/{when}"] = inst["tile_grain"][when]["units_an_entry"] / k
+        out[f"W/whole/{when}"] = _whole_share(inst["tile_grain"][when], k)
     return out
 
 
@@ -410,7 +498,8 @@ def mirror_runs(seed: int = 103, n: int = 64) -> dict:
             out[f"{variant}/m{m}"] = {"shares": sh, "final_word_is_code_and_tags": all(
                 v["final_word_is_code_and_tags"] for v in insts.values()),
                 "per_k": {f"k{kk}": {key: v[key] for key in ("steps", "saved", "groups", "a2r_revisits",
-                                                             "d0_distinct_a_column")} for kk, v in insts.items()}}
+                                                             "d0_distinct_a_column", "tile_grain")}
+                          for kk, v in insts.items()}}
     return out
 
 
@@ -570,6 +659,24 @@ def check(rep: dict) -> list[dict]:
        max(v["gap_share_of_stock"] for v in a5["call"].values()) == 0)
     ok("A5 on the lead: s drawn once a window reopens it (ssn_1l's 16·t vectors), > 1% at m 64",
        a5["window"]["ssn_1l/m64"]["gap_share_of_stock"] > 0.01, a5["window"]["ssn_1l/m64"]["gap_share_of_stock"])
+    narrow_w = [r[f"{c}/{p}/llama"]["shares"] for c in ("blc4a-t64-e7", "blc1a-t128-e4") for p in ("a2c", "a2r")]
+    wide_w = [r[f"{c}+wide/{p}/{sh}"]["shares"] for c in ("blc4a-t64-e7", "blc7a-t64-e7") for p in ("a2c", "a2r")
+              for sh in SHAPES]
+    ww_w = [r[f"blc4a-t64-e7-w127+wide/{p}/{sh}"]["shares"] for p in ("a2c", "a2r") for sh in SHAPES]
+    ok("tile grain (N-FLOOR), whole repeats only: the narrow-tag lead still saves > 1% on Llama, e4 and e7 alike",
+       min(v["W/whole"] for v in narrow_w) > 0.01, [v["W/whole"] for v in narrow_w])
+    ok("tile grain, whole repeats only: the wide tag leaves e7 < 1% (blc4a, blc7a; Llama and V4 dense), and wide + "
+       "(1, 127, 1) repeats no tile", max(v["W/whole"] for v in wide_w) < 0.01 and max(v["W/whole"] for v in ww_w) == 0,
+       [v["W/whole"] for v in wide_w])
+    ok("tile grain at N-FLOOR's per-word prices (a tile pays from 113 of 128 held): the narrow lead > 1%; wide + "
+       "(1, 127, 1) pays no tile", min(v["W/tile"] for v in narrow_w) > 0.01 and max(v["W/tile"] for v in ww_w) == 0,
+       [v["W/tile"] for v in narrow_w + wide_w])
+    ok("mirror under tile grain, 8,192 rows: the final step's tiles repeat whole (> 1% of stock, narrow and wide "
+       "tags); no interior tile repeats; the per-row salt takes the final step to 0",
+       min(nar["W/whole/final"], wid["W/whole/final"]) > 0.01
+       and max(v["shares"]["W/whole/interior"] for v in mr.values()) == 0
+       and sal["W/whole/final"] == big["W/whole/final"] == 0,
+       [nar["W/whole/final"], wid["W/whole/final"], sal["W/whole/final"]])
     return res
 
 
@@ -584,19 +691,23 @@ def main() -> None:
     mir = rep["mirror"]["narrow/m8192"]["shares"]
     rep["periods"] = {"P/xrow": ne.periods(lead["P/xrow"]), "P'32/xrow": ne.periods(lead["P'32/xrow"]),
                       "P/entry": ne.periods(lead["P/entry"]),
-                      "mirror_P'32/column/final_m8192": ne.periods(mir["P'32/column/final"])}
+                      "mirror_P'32/column/final_m8192": ne.periods(mir["P'32/column/final"]),
+                      "W/whole": ne.periods(lead["W/whole"]),
+                      "mirror_W/whole/final_m8192": ne.periods(mir["W/whole/final"])}
     rep["checks"] = check(rep)
     for key, v in rep["runs"].items():
         sh = v["shares"]
         print(f"{key:32s} eq={v['equal_to_honest']}  " + "  ".join(
             f"{g}={100 * sh[g]:.2f}%" for g in ("P/lag1", "P/entry", "P/xrow", "P/tilecol", "P/column",
                                                 "P'32/lag1", "P'32/entry", "P'32/xrow", "P'32/tilecol",
-                                                "P'32/column", "P'71.7/lag1", "P/masked", "M/masked")))
+                                                "P'32/column", "P'71.7/lag1", "P/masked", "M/masked", "W/tile",
+                                                "W/whole")))
     for key, v in rep["mirror"].items():
         sh = v["shares"]
         print(f"mirror {key:16s} " + "  ".join(
             f"{g}={100 * sh[g]:.3f}%" for g in ("P/column/final", "P'32/column/final", "P'32/tile/final",
-                                                "P/column/interior", "P'32/column/interior", "P/a2r_entry")))
+                                                "P/column/interior", "P'32/column/interior", "P/a2r_entry",
+                                                "W/tile/final", "W/whole/final", "W/whole/interior")))
     print("A5: " + "  ".join(f"{k}={100 * v['gap_share_of_stock']:.2f}%"
                              for part in rep["a5"].values() for k, v in part.items()))
     for kk, v in rep["scaling"].items():
