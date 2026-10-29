@@ -325,7 +325,9 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
    time only when a whole tile repeats; a lane's predicated copy costs 13.5–50.5 units more than computing the word.
    **P plus measured floors is withdrawn**: select-floor and copy-floor hold only where issue slots bind, and both fail
    beside the lead's wgmma. Under tile-grain, N-ADAPT's proved W case applies, its masked copies save nothing, and
-   4-bit coins suffice (N-RED §4). Bare P stays in the frontier as the conservative column.
+   4-bit coins suffice (N-RED §4). Bare P stays in the frontier as the conservative column. N-FLOOR restated
+   tile-grain as a work premise at **rank 3** (its shapes are rank 1, its counting rule rank 3) and measured the lead's
+   words leaving the tensor pipe in 2,048–4,096-word tiles a warp.
 3. model-public (chosen weights): the coin lanes close it, so the lead doesn't need it (default: not taken).
 4. Hiding: `pad-leaf-ruled` (keyed leaf) and L2 (private roots). Default: L1 + (a), no ruling needed.
 5. Does T1 include the network term? Default: reported beside T1; the lead closes it either way.
