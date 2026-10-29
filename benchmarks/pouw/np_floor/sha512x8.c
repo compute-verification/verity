@@ -2,8 +2,10 @@
 // the three-input XORs, Ch and Maj): the host CPU's best SHA-512 for independent hm96 rows. Each thread runs chains
 // of compressions whose 16 message words are the previous state's 8 words and their complements, as sha.cu does on the
 // card; lanes 0, 3 and 7 are checked against a scalar reference, and the scalar reference against FIPS 180-4's
-// "abc" vector. Prints bytes compressed a second on 1 thread and on N.
-//   gcc -O3 -march=sapphirerapids -fopenmp sha512x8.c -o sha512x8
+// "abc" vector. A second form runs two sets of 8 chains a thread interleaved (compress8x2, its lanes checked too). The
+// core's clock under 512-bit integer work comes from a dependent VPADDQ chain, so cycles a compression follow even in a
+// guest. Prints bytes compressed a second on 1 thread and on N, for both forms, and the clocks.
+//   gcc -O3 -march=sapphirerapids -fopenmp sha512x8.c -o sha512x8; ./sha512x8 [THREADS] [SECONDS]
 #include <immintrin.h>
 #include <omp.h>
 #include <stdint.h>
@@ -83,6 +85,40 @@ static inline void compress8(__m512i s[8], const __m512i m[16]) {
   s[6] = _mm512_add_epi64(s[6], g), s[7] = _mm512_add_epi64(s[7], h);
 }
 
+// compress8 on two independent states at once, so the core can overlap one's round chain with the other's.
+static inline void compress8x2(__m512i s[2][8], const __m512i m[2][16]) {
+  __m512i w[2][16], a[2], b[2], c[2], d[2], e[2], f[2], g[2], h[2];
+  for (int j = 0; j < 2; j++) {
+    for (int i = 0; i < 16; i++) w[j][i] = m[j][i];
+    a[j] = s[j][0], b[j] = s[j][1], c[j] = s[j][2], d[j] = s[j][3];
+    e[j] = s[j][4], f[j] = s[j][5], g[j] = s[j][6], h[j] = s[j][7];
+  }
+#pragma GCC unroll 80
+  for (int i = 0; i < 80; i++) {
+#pragma GCC unroll 2
+    for (int j = 0; j < 2; j++) {
+      if (i >= 16) {
+        const __m512i w15 = w[j][(i - 15) & 15], w2 = w[j][(i - 2) & 15];
+        const __m512i s0 = XOR3(ROR(w15, 1), ROR(w15, 8), _mm512_srli_epi64(w15, 7));
+        const __m512i s1 = XOR3(ROR(w2, 19), ROR(w2, 61), _mm512_srli_epi64(w2, 6));
+        w[j][i & 15] = _mm512_add_epi64(_mm512_add_epi64(w[j][i & 15], s0), _mm512_add_epi64(w[j][(i - 7) & 15], s1));
+      }
+      const __m512i kw = _mm512_add_epi64(_mm512_set1_epi64((long long)K[i]), w[j][i & 15]);
+      const __m512i t1 = _mm512_add_epi64(_mm512_add_epi64(h[j], XOR3(ROR(e[j], 14), ROR(e[j], 18), ROR(e[j], 41))),
+                                          _mm512_add_epi64(CH(e[j], f[j], g[j]), kw));
+      const __m512i t2 = _mm512_add_epi64(XOR3(ROR(a[j], 28), ROR(a[j], 34), ROR(a[j], 39)), MAJ(a[j], b[j], c[j]));
+      h[j] = g[j], g[j] = f[j], f[j] = e[j], e[j] = _mm512_add_epi64(d[j], t1);
+      d[j] = c[j], c[j] = b[j], b[j] = a[j], a[j] = _mm512_add_epi64(t1, t2);
+    }
+  }
+  for (int j = 0; j < 2; j++) {
+    s[j][0] = _mm512_add_epi64(s[j][0], a[j]), s[j][1] = _mm512_add_epi64(s[j][1], b[j]);
+    s[j][2] = _mm512_add_epi64(s[j][2], c[j]), s[j][3] = _mm512_add_epi64(s[j][3], d[j]);
+    s[j][4] = _mm512_add_epi64(s[j][4], e[j]), s[j][5] = _mm512_add_epi64(s[j][5], f[j]);
+    s[j][6] = _mm512_add_epi64(s[j][6], g[j]), s[j][7] = _mm512_add_epi64(s[j][7], h[j]);
+  }
+}
+
 // One thread's 8 chains of `blocks` compressions; lane l's seed is seed + l. Returns lane 0's and lane 7's state[0].
 static void chain8(uint64_t seed, long blocks, uint64_t out[8]) {
   __m512i s[8], m[16];
@@ -94,6 +130,51 @@ static void chain8(uint64_t seed, long blocks, uint64_t out[8]) {
     compress8(s, m);
   }
   _mm512_storeu_si512(out, s[0]);
+}
+
+// chain8's chains, 16 a thread: two sets of 8 (seeds seed + l and seed + 8 + l) through compress8x2. out[0..7] is the
+// first set's state[0], out[8..15] the second's.
+static void chain8x2(uint64_t seed, long blocks, uint64_t out[16]) {
+  __m512i s[2][8], m[2][16];
+  const __m512i lanes = _mm512_set_epi64(7, 6, 5, 4, 3, 2, 1, 0);
+  for (int j = 0; j < 2; j++)
+    for (int i = 0; i < 8; i++)
+      s[j][i] = _mm512_xor_si512(_mm512_set1_epi64((long long)IV[i]),
+                                 _mm512_add_epi64(_mm512_set1_epi64((long long)(seed + 8 * j)), lanes));
+  for (long r = 0; r < blocks; r++) {
+    for (int j = 0; j < 2; j++)
+      for (int i = 0; i < 8; i++) m[j][i] = s[j][i], m[j][8 + i] = _mm512_xor_si512(s[j][i], _mm512_set1_epi64(-1));
+    compress8x2(s, m);
+  }
+  _mm512_storeu_si512(out, s[0][0]);
+  _mm512_storeu_si512(out + 8, s[1][0]);
+}
+
+// The core's clock while it runs 512-bit integer work: a chain of dependent VPADDQ (latency 1 cycle on Golden Cove),
+// and the same with scalar ADD. Cycles a second.
+static double clock_hz(int wide) {
+  const long n = 400000000;
+  double t0 = now();
+  if (wide) {
+    __m512i x = _mm512_set1_epi64(1), y = _mm512_set1_epi64(3);
+    for (long i = 0; i < n; i += 8)
+      __asm__ volatile(
+          "vpaddq %1, %0, %0\n\tvpaddq %1, %0, %0\n\tvpaddq %1, %0, %0\n\tvpaddq %1, %0, %0\n\t"
+          "vpaddq %1, %0, %0\n\tvpaddq %1, %0, %0\n\tvpaddq %1, %0, %0\n\tvpaddq %1, %0, %0"
+          : "+v"(x)
+          : "v"(y));
+    uint64_t o[8];
+    _mm512_storeu_si512(o, x);
+    if (o[0] == 42) printf(" ");
+  } else {
+    uint64_t x = 1;
+    for (long i = 0; i < n; i += 8)
+      __asm__ volatile("add %0, %0\n\tadd %0, %0\n\tadd %0, %0\n\tadd %0, %0\n\t"
+                       "add %0, %0\n\tadd %0, %0\n\tadd %0, %0\n\tadd %0, %0"
+                       : "+r"(x));
+    if (x == 42) printf(" ");
+  }
+  return n / (now() - t0);
 }
 
 static uint64_t chain1(uint64_t seed, long blocks) {
@@ -116,6 +197,10 @@ int main(int argc, char** argv) {
   uint64_t o[8];
   chain8(1000, 64, o);
   const int lanes_ok = o[0] == chain1(1000, 64) && o[7] == chain1(1007, 64) && o[3] == chain1(1003, 64);
+  uint64_t o2[16];
+  chain8x2(1000, 64, o2);
+  const int x2_ok = o2[0] == chain1(1000, 64) && o2[7] == chain1(1007, 64) && o2[8] == chain1(1008, 64) &&
+                    o2[15] == chain1(1015, 64);
   long blocks = 1024;
   for (;;) {
     double t0 = now();
@@ -127,21 +212,32 @@ int main(int argc, char** argv) {
     }
     blocks *= 4;
   }
-  printf("{\"abc_ok\": %d, \"lanes_ok\": %d", abc_ok, lanes_ok);
+  printf("{\"abc_ok\": %d, \"lanes_ok\": %d, \"x2_ok\": %d", abc_ok, lanes_ok, x2_ok);
+  printf(", \"t1_hz_scalar\": %.6g, \"t1_hz_avx512\": %.6g", clock_hz(0), clock_hz(1));
   for (int pass = 0; pass < 2; pass++) {
     const int nt = pass ? threads : 1;
-    uint64_t sink = 0;
-    double t0 = now();
+    for (int x2 = 0; x2 < 2; x2++) {
+      uint64_t sink = 0;
+      double t0 = now();
 #pragma omp parallel num_threads(nt) reduction(^ : sink)
-    {
-      uint64_t q[8];
-      chain8(64 * omp_get_thread_num(), blocks, q);
-      sink ^= q[0] ^ q[5];
+      {
+        uint64_t q[16];
+        if (x2)
+          chain8x2(64 * omp_get_thread_num(), blocks / 2, q);
+        else
+          chain8(64 * omp_get_thread_num(), blocks, q);
+        sink ^= q[0] ^ q[5];
+      }
+      double wall = now() - t0;
+      printf(", \"%st%d_bytes_per_s\": %.6g, \"%st%d_sink\": %llu", x2 ? "x2_" : "", nt,
+             8.0 * 128 * (blocks / (x2 ? 2 : 1)) * (x2 ? 2 : 1) * nt / wall, x2 ? "x2_" : "", nt,
+             (unsigned long long)(sink & 0xffff));
     }
-    double wall = now() - t0;
-    printf(", \"t%d_bytes_per_s\": %.6g, \"t%d_sink\": %llu", nt, 8.0 * 128 * blocks * nt / wall, nt,
-           (unsigned long long)(sink & 0xffff));
+    double hz = 0;
+#pragma omp parallel num_threads(nt) reduction(+ : hz)
+    hz += clock_hz(1);
+    printf(", \"t%d_hz_avx512_mean\": %.6g", nt, hz / nt);
   }
   printf("}\n");
-  return !(abc_ok && lanes_ok);
+  return !(abc_ok && lanes_ok && x2_ok);
 }
