@@ -180,7 +180,7 @@ def check_shared(layout: Any, m: Map) -> None:
             src = _sources(entries)
             outputs += [(gi, src[t.op] + 1, 0, 4) if u.scale_only else (gi, src[t.op], u.offset + i * u.stride, u.nbytes)
                         for t, us in entries for u in us if u.template != "AllGather_v1" for i in range(u.count)]
-    L.check_shared(L.Layout(layout.name, tuple(layout.groups)), outputs)
+    L.check_shared(L.RowsPerSlot(layout.name, tuple(layout.groups)), outputs)
 
 
 @dataclass(frozen=True)
