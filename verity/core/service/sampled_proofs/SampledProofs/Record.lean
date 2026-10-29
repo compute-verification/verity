@@ -149,12 +149,9 @@ def floatJson (r : Core.Ratio) : V Json := do
 /-- `SHA-512` of Python's `canonical_json`, hex. -/
 def pySha512 (j : Json) : V String := do return sha512Hex (← PyJson.canonical j).toUTF8
 
-/-- A record's canonical JSON is Python's `canonical_json`: `Flock.canon` writes it, and it holds only characters below
-0x7f, where the two write every string alike. -/
-def pyCanonical (rec : Json) : Bool :=
-  match Flock.canon rec with
-  | .ok s => s.toList.all fun c => c.toNat < 0x7f
-  | .error _ => false
+/-- A record's canonical JSON is Python's `canonical_json`: `Flock.canon` writes it, which it does for every record whose
+numbers are integers, escaping every string as `canonical_json` does. -/
+def pyCanonical (rec : Json) : Bool := (Flock.canon rec).toOption.isSome
 
 structure Input where
   registration : Json
@@ -189,7 +186,7 @@ def inputOf (j : Json) : V Input := do
   need (keys? j == some INPUT_KEYS) s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}"
   let reg := getD j "registration"
   need (reg matches .obj _) "the registration is not an object"
-  need (pyCanonical reg) "the registration holds a number that is not an integer, or a character from 0x7f on"
+  need (pyCanonical reg) "the registration holds a number that is not an integer"
   for k in ["anchors", "law", "partition", "population", "program", "protocol", "query", "roots", "scheme"] do
     need (field? reg k).isSome s!"the registration has no {k}"
   need (int? (getD reg "population")).isSome "the registration's population is not an integer"
@@ -311,7 +308,7 @@ def record (i : Input) : V Json := do
 /-! ## `Flock.canon` is `canonical_json` on records `pyCanonical` admits
 
 On such a record the two encoders write the same bytes, so the window record's digest is `SHA-512(format || 0 ||
-canonical_json(record))`; a character from 0x7f on, or a fraction, is where they part. -/
+canonical_json(record))`; a fraction is where they part. -/
 
 private def sameCanon (j : Json) : Bool :=
   let py := (PyJson.canonical j).toOption
@@ -325,8 +322,7 @@ private def PRINTABLE : String := String.ofList ((List.range 0x7f).map Char.ofNa
 #guard sameCanon (parsed "{\"format\":\"verity/registration/v2\",\"protocol\":\"verity/sampled-proofs/one-stage/v1\",\"program\":\"ab01\",\"roots\":[{\"port\":\"x\",\"root\":\"00ff\",\"leaves\":4,\"domain\":\"11\"}],\"window\":{\"kind\":\"served\",\"stream\":\"aa\",\"prover\":\"bb\"},\"previous\":null,\"law\":{\"law\":\"bernoulli\",\"p\":\"1/3\"},\"population\":12,\"anchors\":[],\"registered\":[{\"value\":\"W\",\"root\":\"cc\",\"leaves\":2,\"words\":4,\"domain\":\"dd\",\"word_bits\":32}],\"leaf_layer\":null,\"neg\":-5,\"t\":true,\"e\":{}}")
 #guard sameCanon (parsed "{\"format\":\"verity/registration/v1\",\"b\":1,\"B\":2,\"ab\":3,\"a\":4,\"_\":[[],[{}],0]}")
 #guard sameCanon (Json.mkObj [("format", Json.str "verity/registration/v1"), (PRINTABLE, Json.str PRINTABLE)])
-#guard !pyCanonical (Json.str "\x7f") && (Flock.canon (Json.str "\x7f")).toOption != (PyJson.canonical (Json.str "\x7f")).toOption
-#guard !pyCanonical (Json.str "dé")
+#guard sameCanon (Json.mkObj [("format", Json.str "verity/registration/v1"), ("\x7fé", Json.str "dé\x01😀")])
 #guard !pyCanonical (parsed "{\"p\":0.5}")
 
 end SampledProofs.Record
