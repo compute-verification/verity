@@ -332,6 +332,12 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
 6. Whole-step coverage, softmax mostly: it misses 1% at Llama 1 × 8K and decode (N-COVER). Default: reported beside T1.
 7. The certifier as coin source (R1b), which needs trusted-host. Default: taken.
 8. Exactness past 2²² (the fold). Default: "exact on the stated range".
+9. **Stock's price at decode** (N-COVER final): T1 against stock's cheapest instruction at one row (12.02 units a MAC)
+   or one unit a real MAC. At batch 1 that moves Llama's step from 0.31% / 0.81% to 0.68% / 1.49%. Default: report
+   both.
+10. **Serving: noisy (coordinator, 12:25Z, settles §8 item 3).** N-COVER: exact serving (xu) adds +2.0 to +9.2 points of
+    coverage on Llama, and noisy serving's T3 measures no loss (N-PPL). The lead serves noisy, with its coin lanes
+    folded exactly; xu stays the option for exactness.
 
 ### Final push (12:00–13:30Z)
 

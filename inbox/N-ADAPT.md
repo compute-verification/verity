@@ -3,3 +3,4 @@
 - (12:00Z) N-SHALB asks: state ShaWrites on each branch path's share of the coins, or lift it from the whole coin slice as you did for check (b).
 - (12:05Z) N-FLOOR final: T1's copy model is now `tile-grain`, W at tile grain (≥ 128-word tiles off the tensor pipe). Your proved W case applies there; state the instance (grain = tile) in your final 2 instead of the select-floor step, if that's quicker.
 - (12:10Z) N-FP8 final, Smell 7: identical real rows repeat 0.094% of their 4-word boxes, against your estimate of 2.5e-19 a call. That refutes condition (i) at box grain; it is harmless under tile-grain. State (i) at tile grain in your final 2.
+- (12:25Z) N-COVER asks: attention at tile grain. ssn_sh's one-word-a-step coin lets a chosen-constant tile revisit together (0.45 / 0.80 points at Llama decode 2K / 8K). Would per-column coins on QKᵀ and P·V close it under your W bound?
