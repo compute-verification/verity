@@ -19,64 +19,18 @@ from __future__ import annotations
 
 import re
 
+from research.vocabulary import CODE as _CODE, DOC_TERM as _DOC_TERM, DOC_TERMS, TERM as _TERM, TERMS  # noqa: F401
 from test_repository import ROOT, _tracked
 
-#: Each retired term and what to write instead.
-TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system"}
-_SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
-_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b", re.I)
-
+#: The terms' table, which `research msg` reads too.
+VOCABULARY = "tools/research/src/research/vocabulary.py"
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
 RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
 
-#: Retired in the maintained docs' prose, and what to write instead.
-DOC_TERMS = {
-    "wrong unit, incorrect unit": "incorrect proof block",
-    "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
-    "isolation unit, IU": "isolation block",
-    "replay unit": "replay block",
-    "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
-    "components, the composite's product": "subprotocols, composition",
-    "firewall": "ZK server",
-    "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
-                                                      "stays in backticks)",
-    "builder, advice compiler, circuit builder": "registered compiler",
-    "declared advice": "advice",
-    "declared circuit": "registered circuit",
-    "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
-                                                             "registered compiler turns into the execution block",
-    "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
-    "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
-    "declaration block, declaration period": "execution block, execution phase",
-    "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
-                                                            "verification phase)",
-    "hm96 rows, outside the commitments' docs": "hiding commitments",
-    "that period's coins": "before any coins are flipped",
-    "rejection dominates, reject dominance": "any rejection rejects the whole",
-    "physical block": "server-time block",
-    "thread block": "CTA",
-    "KV block": "KV page",
-    "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
-    "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
-                                          "renamed)",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
-}
-_SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
-_DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
-                       rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
-                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
-                       rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
-                       rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
-                       rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
-                       rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
-                       rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
-                       rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
-                       rf"|\bcommit{_SPACE}periods?\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
-_CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
     "the PoUW window's keyed draw takes A4 and A5": "Flock's ASSUMPTIONS.md: a queued PR rewrites the next line; renamed after it lands",
@@ -185,9 +139,9 @@ PENDING: dict[str, str] = {
 
 
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean, PENDING and this one, which names the terms to find them."""
+    """Every file but the Lean, PENDING and the two that name the terms to find them (this one and the table)."""
     return sorted(f for f in files if not f.endswith((".lean", "lean-audit.json", "lakefile.toml"))
-                  and f not in PENDING and f != "tests/test_retired_terms.py")
+                  and f not in PENDING and f not in ("tests/test_retired_terms.py", VOCABULARY))
 
 
 def _read(f: str) -> str | None:
