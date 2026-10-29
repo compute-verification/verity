@@ -654,7 +654,7 @@ def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "") -> Path:
     lines = [{"binary": "sm90_h32", "probe": p, "note": n, "rates": r, "run": "r1", "tags": [], "stop_gap": None,
               "until": None} for p, n, r in rows if not p.startswith(drop or "\0")]
     # the wgmma loop over the kernel's cycles and the lanes' OP_UNTIL loop over the stop's: 10% apart
-    lines.append({"binary": "sm90_h32_tc", "probe": "wu_dadd", "note": "c=mix w=IGMMA.64x128x32.S8.S8*:64,DADD:2",
+    lines.append({"binary": "sm90_h32_tc", "probe": "wu_dadd", "note": "c=mix s=s8 w=IGMMA.64x128x32.S8.S8*:64,DADD:2",
                   "rates": {"0:IGMMA.64x128x32.S8.S8*": 0.0625 * 0.9, "1:DADD": 2.0}, "run": "r1", "tags": [],
                   "stop_gap": 0.1, "until": 2})
     for b in ("sm90_h32", "sm90_h32_tc"):
@@ -666,9 +666,16 @@ def _h32_run(out: Path, s8_rate: float = 1 / 32, drop: str = "") -> Path:
 def test_h32_prices_each_class_and_writes_the_lean_table(tmp_path):
     """h32.py: a probe's price is 4,096 over Σ rate x 32 x REGS of its counted patterns; each field is its class's least
     price rounded down, `mac` each shape's least price per register over k x elems (nominalMac when all are nominal),
-    b1 wgmma prices tc, a mix only the co-issue minimum (an OP_UNTIL probe read over the stop's cycles). A shape
-    below nominal is written out and fails H32; a class with no probe leaves H32 undecided and writes no Lean."""
+    b1 wgmma prices tc, a mix only the co-issue minimum (an OP_UNTIL probe read over the stop's cycles, its wgmma at
+    no more than the data-sheet rate). A shape below nominal is written out and fails H32; a class with no probe
+    leaves H32 undecided and writes no Lean."""
     h = _load("h32")
+    # a wgmma at its data-sheet rate over the whole kernel, its warpgroups 25% apart: the stop's window holds 75%
+    apart = {"binary": "sm90_h32_tc", "probe": "wu256_imad_ffma", "tags": [], "run": "r1", "stop_gap": 0.25,
+             "until": 2, "note": "c=mix s=s8 w=IGMMA.64x256x32.S8.S8*:128,IMAD:1,FFMA:1",
+             "rates": {"0:IGMMA.64x256x32.S8.S8*": 1 / 32, "1:IMAD": 0.625, "1:FFMA": 0.625}}
+    assert abs(h.price(apart)["regs_sm_clk"] - (128 + 40)) < 1e-9
+    assert abs(h.price({**apart, "note": apart["note"].replace(" s=s8", "")})["regs_sm_clk"] - (128 / 0.75 + 40)) < 1e-9
     t = h.table(h.read(_h32_run(tmp_path / "nominal")))
     assert {c: m["mac"] for c, m in t["mac"].items()} == {c: nom for c, _, _, nom in h.SHAPES.values()}
     assert t["mac"]["s8"]["probe"] == "wa_s8_n256" and abs(t["mac"]["e4m3F16"]["reg_price"] - 64) < 1e-9

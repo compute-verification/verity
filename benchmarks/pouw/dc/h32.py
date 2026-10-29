@@ -1,6 +1,6 @@
 """H32 on the H200 (sm_90a): the timed H32 probes (probes/sm90_h32*.cu) in MH100's unit, as a `Prices100` table.
 
-  python3 h32.py RUN_OUT [--json OUT] [--lean OUT]
+  python3 h32.py RUN_OUT... [--json OUT] [--lean OUT]
 
 RUN_OUT is `emp.sh time`'s output, each binary's rows.jsonl under RUN_OUT/<binary>/. A probe's note names its class and
 the 32-bit registers one warp instruction of each counted pattern writes a lane:
@@ -11,7 +11,10 @@ CLASS is ffma, int32, fp64, other or tc (`Prices100`'s fields), wgmma (`mac`, SH
 class: writers co-issued across classes). A probe writes Σ rate × 32 × REGS registers a SM a clock over its counted
 patterns, rate being the pattern's warp instructions a SM a clock in rows.jsonl (every loop); its price is 4,096 over
 that, the unit being one dense int8 MAC at 4,096 a SM a clock. A probe with an OP_UNTIL loop (`until`) is read over
-the stop's cycles: its fixed loop's rates are scaled by 1 / (1 - stop_gap), the reading in the adversary's favour.
+the stop's cycles: its fixed loop's rates are scaled by 1 / (1 - stop_gap), the reading in the adversary's favour. The
+stop is the first fixed warp's, so when the fixed loop is a wgmma whose warpgroups finish apart, that scaling credits
+the window with work done after it. A mix whose fixed loop is a wgmma names its shape (s=SHAPE), and the fixed loop is
+then read at no more than the shape's data-sheet rate, 4,096 / (k × elems × nominalMac) registers a SM a clock.
 
 The table is Round 7's rule: each field the least price of its class's probes, rounded down; `mac s` is the least
 price per register of shape s's probes (any N) over k × elems, rounded down. A mix's least price is the co-issue
@@ -49,15 +52,24 @@ def price(row: dict) -> dict:
     until, gap = (row.get("until") or 0) - 1, row.get("stop_gap")
     if gap is not None and until < 0:
         raise ValueError(f"{row['probe']}: a stop_gap but no OP_UNTIL loop")
-    regs = 0.0
+    cap = None
+    if n["class"] == "mix" and n["shape"]:
+        if n["shape"] not in SHAPES:
+            raise ValueError(f"{row['probe']}: s={n['shape']} is no Shape100 shape")
+        _, k, elems, nominal = SHAPES[n["shape"]]
+        cap = UNIT / (k * elems * nominal)
+    fixed = read_as_is = 0.0
     for key, rate in row["rates"].items():
         loop, pat = key.split(":", 1)
         if pat in n["w"]:
-            r = rate if gap is None or int(loop) == until else rate / (1 - gap)
-            regs += r * 32 * n["w"][pat]
+            if gap is None or int(loop) == until:
+                read_as_is += rate * 32 * n["w"][pat]
+            else:
+                fixed += rate / (1 - gap) * 32 * n["w"][pat]
     missing = [p for p in n["w"] if not any(k.split(":", 1)[1] == p for k in row["rates"])]
     if missing:
         raise ValueError(f"{row['probe']}: note counts {missing}, which its rates don't hold")
+    regs = read_as_is + (fixed if cap is None else min(fixed, cap))
     return {**n, "probe": row["probe"], "binary": row["binary"], "run": row["run"], "tags": row["tags"],
             "regs_sm_clk": regs, "price": UNIT / regs}
 
@@ -122,11 +134,11 @@ def lean(t: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("run_out", type=Path)
+    ap.add_argument("run_out", type=Path, nargs="+")
     ap.add_argument("--json", type=Path)
     ap.add_argument("--lean", type=Path)
     a = ap.parse_args(argv)
-    priced = read(a.run_out)
+    priced = [p for d in a.run_out for p in read(d)]
     t = table(priced)
     for p in sorted(priced, key=lambda p: (p["class"], p["price"])):
         tags = "".join(f" [{x}]" for x in p["tags"])
