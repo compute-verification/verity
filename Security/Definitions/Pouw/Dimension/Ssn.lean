@@ -1,4 +1,5 @@
-import Definitions.Pouw.Assumptions.Dimension.H100W
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
 
 /-!
 # Served sparse noise in the bit model: the committed words and the served layouts (trusted definitions)
