@@ -703,6 +703,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests" / "fixtures").mkdir(parents=True)
@@ -778,6 +779,7 @@ def _per_test_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests").mkdir(parents=True)
@@ -810,6 +812,7 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text(f'[tool.uv.workspace]\nmembers = {list(members)!r}\n'.replace("'", '"'))
     for path, test in members.items():
@@ -1414,6 +1417,7 @@ def _traced_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
@@ -1475,6 +1479,7 @@ def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_t
     root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
+    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
