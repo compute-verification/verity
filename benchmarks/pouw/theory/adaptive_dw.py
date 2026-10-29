@@ -360,39 +360,60 @@ def row_levels(design: str, a, co: dict, s: int) -> np.ndarray:
     return np.cumsum(inc, axis=1) * tiles + (np.arange(m) // BLC_TILE % tiles)[:, None]
 
 
+#: MMA output tiles (rows, columns): a warp's 128 words at the finest wgmma, and a warpgroup's m64n8.
+TILES = ((16, 8), (64, 8))
+
+
+def tile_excess(words: np.ndarray, rows: int, cols: int) -> float:
+    """Model W at tile grain (`adaptive_lanes_le` with the tile's words as the lanes): what the per-group distinct
+    tiles exceed the pooled ones by, times the tile's words, as a share of the words. Zero means no two groups share a
+    whole tile value, `adaptive_registers_le`'s hypothesis at tile grain."""
+    m, s, n = words.shape
+    t = words.reshape(m // rows, rows, s, n // cols, cols).transpose(0, 3, 2, 1, 4).reshape(-1, s, rows * cols)
+    per_group = sum(len(np.unique(g, axis=0)) for g in t)
+    pooled = len(np.unique(t.reshape(-1, rows * cols), axis=0))
+    return rows * cols * (per_group - pooled) / words.size
+
+
 #: Coins a class pins, as a layout's warp-uniform view sees them: a warp over one row's columns sees the row coins, a
 #: warp over one column's rows the column coins. `point` is one outcome alone, a class that pins every coin.
 CLASSES = {"point": None, "rows": ("b", "a1"), "columns": ("G", "s"), "all_but_G": ("b", "a1", "s")}
 
 
-def shared_entries(stack: np.ndarray) -> int:
-    """`stack` (k + 1, m, S, n): one class's words at k + 1 of its outcomes. The (entry, value) pairs whose value, as a
-    function on those outcomes, some other entry also takes at some step: an upper bound on what a class containing
-    them shares across entries (`Priced.shared`), since agreement throughout the class implies agreement on them."""
-    k1, m, s, n = stack.shape
-    keys = stack.transpose(1, 3, 2, 0).reshape(m * n * s, k1)
-    entry = np.repeat(np.arange(m * n), s)
-    _, key = np.unique(keys, axis=0, return_inverse=True)
-    pairs = np.unique(np.stack([key.ravel(), entry]), axis=1)
-    entries_a_key = np.bincount(pairs[0])
-    return int((entries_a_key[pairs[0]] >= 2).sum())
+def refine(key: np.ndarray, words: np.ndarray) -> np.ndarray:
+    """Split the entry-steps' classes of equal values (`key`, entry-major) by one more outcome's words (m × S × n)."""
+    return np.unique(np.stack([key, words.transpose(0, 2, 1).ravel()]), axis=1, return_inverse=True)[1].ravel()
 
 
-def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: int = 8) -> dict:
-    """Each class's shared pairs over k outcomes drawn in it (the coins it pins kept, the rest drawn afresh), as a
-    share of the words, beside check (b)'s credit at the first outcome."""
+def shared_count(key: np.ndarray, entry: np.ndarray) -> int:
+    """The (entry, value) pairs whose value, as a function on the outcomes `key` has seen, another entry also takes at
+    some step: an upper bound on what a class containing those outcomes shares across entries (`Priced.shared`), since
+    agreement throughout the class implies agreement on them."""
+    pairs = np.unique(np.stack([key, entry]), axis=1)
+    return int((np.bincount(pairs[0])[pairs[0]] >= 2).sum())
+
+
+def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: int = 8, k_max: int = 64) -> dict:
+    """Each class's shared pairs, as a share of the words, beside check (b)'s credit at the first outcome. Outcomes are
+    drawn in the class (the coins it pins kept, the rest afresh), at least k and then until no pair is left or k_max:
+    a pair two entries hold equal at every draw is only an upper bound, which more draws can only shrink."""
     rng = np.random.default_rng(seed)
     pub = public(design, n, s, rng)
     a, b = data(case, design, m, n, s, pub, rng)
     co = coins(design, m, n, s, rng)
     words = honest(design, a, b, pub, co, s)
-    out = {"design": design, "case": case, "m": m, "n": n, "S": s, "k": k, **entry_credit(words)}
+    out = {"design": design, "case": case, "m": m, "n": n, "S": s, **entry_credit(words)}
+    out |= {f"tile_excess_{r}x{c}": tile_excess(words, r, c) for r, c in TILES if m % r == 0 and n % c == 0}
+    entry = np.repeat(np.arange(m * n), s)
+    first = refine(np.zeros(entry.size, dtype=np.int64), words)
     for name, keep in CLASSES.items():
-        stack = [words]
-        for _ in range(0 if keep is None else k):
+        key, drawn, shared = first, 0, shared_count(first, entry)
+        while keep is not None and (drawn < k or shared) and drawn < k_max:
             fresh = coins(design, m, n, s, rng)
-            stack.append(honest(design, a, b, pub, {c: co[c] if c in keep else fresh[c] for c in co}, s))
-        out[f"shared_{name}"] = shared_entries(np.stack(stack)) / words.size
+            key = refine(key, honest(design, a, b, pub, {c: co[c] if c in keep else fresh[c] for c in co}, s))
+            drawn += 1
+            shared = shared_count(key, entry) if drawn >= k else shared
+        out[f"shared_{name}"], out[f"draws_{name}"] = shared / words.size, drawn
     return out
 
 
@@ -510,6 +531,8 @@ def main(argv: list[str] | None = None) -> int:
                     "ok": r[f"shared_{name}"] == 0} for name in CLASSES if name != "point"]
         checks.append({"name": f"{tag} no two groups share a whole register (lanes_le_cost_separated)",
                        "ok": r["model_w_excess"] == 0})
+        checks += [{"name": f"{tag} no two groups share a whole {key[12:]} tile (adaptive_registers_le, tile grain)",
+                    "ok": v == 0} for key, v in r.items() if key.startswith("tile_excess_")]
     for r in rows + res["rows_sweep"] + res["level_sweep"] + res["class_sweep"]:
         print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()})
     print(json.dumps(res["at_scale"], indent=1))
