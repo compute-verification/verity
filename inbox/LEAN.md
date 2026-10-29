@@ -149,6 +149,14 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
     - The AGENTS.md line becomes "Commitments are hm96 rows or keyed leaves in frame-v3-sha512 trees" in the PR that
       builds it.
 
+- **20:05Z:**
+  - **The coin feed and layout.h are frozen** at d5687db8d5 (spec: note 20261029T1943Z-report-lean-kernel-coin-feed).
+    The certifier draws every coin, G is rejection-sampled, and nothing is derived on the card.
+  - **T2's denominator is the CUDA-graphs stock step,** with eager beside it. Last night's 512-row T2 was overstated:
+    13.6× / 19.2× against graphs, not 37.6× / 65.6×.
+  - Decode T2 is 15.6× / 23.3× at 1 row and 14.3× / 20.4× at 16 rows against graphs, or 3.2× against eager.
+  - Freeze 3, the keyed-leaf bytes, waits on N-SALT.
+
 ## Owners' answers on landing the code (18:32Z)
 
 - **compute-accounting (CMP-295):** the lead is a new protocol id, `verity/pouw/v2`, in the `PouwCheck` package beside
