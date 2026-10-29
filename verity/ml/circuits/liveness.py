@@ -90,10 +90,12 @@ class Liveness:
     `transitive=False` (the default) computes **dead gates** in the sense of §8.6: no consumer and not
     protected — every consumer counts, even one that is itself dead. `transitive=True` computes the gates with
     **no dependency path to a protected output** (dead gates plus everything that only feeds dead gates):
-    the "can its value affect the protected result?" question of §8.6, a superset of the first."""
+    the "can its value affect the protected result?" question of §8.6, a superset of the first.  A batch argument whose
+    members read more than `member_limit` partial pieces in all is taken as read whole (`approximate`); None: never."""
 
-    def __init__(self, transitive: bool = False) -> None:
+    def __init__(self, transitive: bool = False, member_limit: int | None = _MEMBER_LIMIT) -> None:
         self.transitive = transitive
+        self.member_limit = member_limit
         self._cache: dict[tuple[int, Intervals], BodyLiveness] = {}
         self._keep: list = []  # keep the specialisations alive (ids are the cache key)
 
@@ -149,7 +151,7 @@ class Liveness:
         for lo, hi in live_ret:
             mark(body.ret.slice(lo, hi))
 
-        transitive = self.transitive
+        transitive, limit = self.transitive, self.member_limit
         for k in range(len(nodes) - 1, -1, -1):
             node = nodes[k]
             fn = node.fn
@@ -223,7 +225,7 @@ class Liveness:
                                 Lp = a.type.elem.leaves
                                 if total(rd) == Lp:
                                     mark(a.refs.slice(m_lo * Lp, m_hi * Lp))
-                                elif cnt * len(rd) <= _MEMBER_LIMIT:
+                                elif limit is None or cnt * len(rd) <= limit:
                                     for m in range(m_lo, m_hi):
                                         for lo, hi in rd:
                                             mark(a.refs.slice(m * Lp + lo, m * Lp + hi))
