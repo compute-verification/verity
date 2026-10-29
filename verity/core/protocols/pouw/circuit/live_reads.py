@@ -19,9 +19,9 @@ SLOT_WORDS, HEADER_WORDS = 2, 2 * HEADER
 #: the statement's output row of the unit's ok, which reads the known ``<prefix>live-ok``
 OK_PORT = "o0"
 OK_VALUE = "live-ok"
-#: the statement's output rows, as C-Flock's unit stager takes them: the unit's one output, its ok
+#: the statement's output rows, as Flock's unit stager takes them: the unit's one output, its ok
 STATEMENT_OUT_ROWS = ((G.SCHEMA_V2, (0,)),)
-#: ``requests@0``'s row format: a statement needs a row whose commitment compresses before its last SHA-512 block (C-Flock's
+#: ``requests@0``'s row format: a statement needs a row whose commitment compresses before its last SHA-512 block (Flock's
 #: and Lean's ``sha512x3`` range holds no slot otherwise), and a ``row/v2`` row of at most 111 bytes has none, so the headers
 #: are ``row-seg/v1`` rows; ``slots@<s>``, ``m@<s>``, ``round@<s>``, ``caps`` and ``live-ok`` are ``row/v2`` rows, as known
 #: content is
@@ -113,7 +113,7 @@ def ok_table(program: str, prefix: str, window: str, rounds: int) -> tuple[list[
 
 
 def statement_rows(T: int, v2: bool = False) -> list[tuple[str, str, int, list[str]]]:
-    """The input rows of a live statement, each ``(port, schema, bits, params)`` as C-Flock's unit stager takes them: each
+    """The input rows of a live statement, each ``(port, schema, bits, params)`` as Flock's unit stager takes them: each
     slot leaf its own row (``slot_<i>``), then each request header (``req_<i>``, a ``row-seg/v1`` row, `REQUEST_SCHEMA`),
     then ``m`` and ``s``, and under `v2` each public cap its own row (``cap_<i>``), the others ``row/v2`` rows. Its one
     output row is ``o0`` (`OK_PORT`), the unit's ok."""

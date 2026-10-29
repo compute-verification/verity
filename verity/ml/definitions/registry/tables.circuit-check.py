@@ -20,7 +20,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
 
 
 def _table_read_roots() -> list[Any]:
-    """The word reads at small tables, each with its Boolean form (`verity.ml.circuits.boolean.table`, which C-Flock lowers it
+    """The word reads at small tables, each with its Boolean form (`verity.ml.circuits.boolean.table`, which Flock lowers it
     by): one row of 2^6 one-word entries, `exp2_lut127`'s 2^8 entries of two words, and 2^10 one-word entries in 16 rows."""
     from verity.ml.circuits.boolean import table as BT
     from verity.ml.circuits.defs import bind
