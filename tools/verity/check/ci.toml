@@ -11,7 +11,7 @@ owner = "ci"
 part = "tests"
 group = 1
 
-# Group 2: C-Flock's Rust build and tests, and the property checks every circuit passes.
+# Group 2: Flock's Rust build and tests, and the property checks every circuit passes.
 [[job]]
 name = "flock-circuit-build"
 owner = "proofs"

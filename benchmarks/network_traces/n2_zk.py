@@ -1,7 +1,7 @@
 """N2's verdict of record from zero-knowledge proofs of N2's registered unit, on a certifier-serve run: each link-window
 committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's `Stream`), selected
 (Selection All: its one unit, no coins), its unit (`NetworkLinkWindow_v5`, both ends' head checks on their pinned gate
-ids) proved by C-Flock `prove --zk` behind the Lean firewall, delivered, and decided by `LinkWindows.outcome`: the
+ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and decided by `LinkWindows.outcome`: the
 verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the verifier's own copy and its output
 row read. No host check reads the opening; `--debug-clear` adds the in-the-clear comparison to each verdict, which
 decides nothing.
@@ -25,10 +25,10 @@ decides nothing.
   certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
-* **The period** (``--draw K``): each member's windows sampled rather than all proved, as `n2_advised_zk`'s: every
-  window's salted root committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and
-  only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
-  stream's δ, on the Lean verifier of record's draw. ``tampered`` then changes every window (`every_count`), which any
+* **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
+  committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and only those
+  registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
+  stream's δ, on the Lean verifier of record's sample. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
 * **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
@@ -37,13 +37,13 @@ decides nothing.
   the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at once, held to the prover's
   reference and to the IR reference; each statement's salts come from a key of its own, and the verifier's opening of its
   ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
-* **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the firewall on
-  the statement (the server serving the stream's draw), deliver, and the outcome of record. Per window: prove (the
+* **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the ZK server on
+  the statement (the server serving the stream's sample), deliver, and the outcome of record. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
   included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
-  another: outer proofs go through the firewall one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
+  another: outer proofs go through the ZK server one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
-  (the salted root, nothing of the certificates) and the draw; the two certificates' public fields, from the certifier,
+  (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the certifier,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
   hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
   outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
@@ -80,7 +80,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -89,7 +89,7 @@ from verity.core.protocols.sampled_proofs import service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
 ENDS = ("egress", "ingress")
-#: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the draw of record's
+#: the sampled period's negative (``--draw K``, K < n): the prover proves another K-subset than the sample of record's
 OTHER = "other_subset"
 ROUNDS = ("honest", "tampered", "extra", "late")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
@@ -187,7 +187,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
                     for e, i in zip(ENDS, insts)},
             expect=int(word == 0b11 and others), statement=None))
-    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused, advice=None)
+    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
     if clock is not None:
         st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
         previous = None
@@ -217,7 +217,7 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
 
 def every_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
     """Every window's egress head with one count more (`one_count`'s change, in each window): the tampered member of a
-    sampled period (``--draw``), which refuses it whichever windows it draws."""
+    sampled period (``--draw``), which refuses it whichever windows it samples."""
     return one_count(lw, 0, pair)
 
 
@@ -225,11 +225,14 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
     where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose counts the unit leaves to N2's advised unit, and on a warden link, whose counts are its schedule's);
-    extra, egress heads fail their counts alone, on one window or more; late, egress heads
-    fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
+    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
+    extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
+    faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
+    `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
     xs = rd.windows
+    if name == "late":
+        return not xs and any(w == 0 for *_, w in rd.issuer_refused)
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
                                                                             x.failed["ingress"]) for x in xs):
         return False
@@ -242,7 +245,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
         signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
         want = ["signed"] if signed else ["counts", "signed"]
         return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
-    allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
+    allowed = {"extra": ([], ["counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
 
@@ -266,7 +269,7 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
 
 #: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
 #: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call. The held
-#: blobs are fields of the ``wit`` row (``fields``): an advised head, 157 + L + 4T bytes, ends off a 16-byte boundary,
+#: blobs are fields of the ``wit`` row (``fields``): a head of 157 + L + 4T bytes ends off a 16-byte boundary,
 #: and the instance holds its salt after it, never its zero-padded last chunk.
 public_pieces = functools.partial(LS.public_pieces, fields=True)
 
@@ -416,7 +419,7 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
         (d / "tables").mkdir(exist_ok=True)
         os.link(sg.circuit, d / "circuit.txt")
         bcs = SVC._commitments(d / "pub-1.bin", 0)
-        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs, members[name].advice)
+        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs)
         if not (bcs and mine is not None and lw.row(mine, "pub") == lw.row(x.args, "pub")
                 and SVC._opens(lw.row(mine, "pub"), lw.bits("pub"), salts["pub"][0], bcs["pub"])
                 and SVC._opens(SVC.output_row(words[k]), SVC.OUT_BITS, salts["o0"][0], bcs["o0"])):
@@ -435,7 +438,7 @@ def firewall(M, sg: SimpleNamespace) -> dict:
 
 
 def one_session(jobs: int) -> None:
-    """A driver's ``--jobs``: 1, its members proved one after another, each session behind the firewall alone
+    """A driver's ``--jobs``: 1, its members proved one after another, each session behind the ZK server alone
     (`ONE_SESSION`); any other count is refused before anything runs."""
     if jobs != 1:
         raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one firewalled session at a time: --jobs 1")
@@ -455,7 +458,7 @@ def _free_port() -> int:
 
 
 def other_subset(drawn: dict) -> list[int]:
-    """A K-subset of the period's windows that isn't the draw's: the first K the draw didn't hold, then drawn ones
+    """A K-subset of the period's windows that isn't the sample's: the first K the sample didn't hold, then sampled ones
     from the start where it left fewer than K (none other at K = n)."""
     held = set(drawn["units"])
     return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
@@ -464,25 +467,25 @@ def other_subset(drawn: dict) -> list[int]:
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
            coins=None, forge=None) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
-    firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
+    ZK server, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
     listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
 
-    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
-    advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
-    decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
-    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the draw of
-    record: the Lean verifier of record's (``--lean``) draw on the coins the period draw read (`service.lean_draw`),
+    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root is
+    committed first, then `coins` draw K of the windows, and only those are registered, proved and
+    decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the sample of
+    record: the Lean verifier of record's (``--lean``) draw on the coins the period flip read (`service.lean_draw`),
     which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
-    on the session once the draw has read them, and the result's ``segment`` is what they released. ``forge``, a
-    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a draw object
+    on the session once the sample has read them, and the result's ``segment`` is what they released. ``forge``, a
+    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a sample object
     listing them (`other_subset`), which is what ``period.json`` then holds."""
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
                        coins=cs._no_coins, clock=time.monotonic)
     gpu = getattr(a, "gpu", False)
-    # the firewall rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
+    # the ZK server rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
     env = {**firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
@@ -490,8 +493,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     drawn, windows, segment = None, rd.windows, None
     if k is not None:
         try:
-            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
-                                   advice=None if rd.advice is None else AD.digest(rd.advice))
+            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
@@ -521,13 +523,12 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         late = stream.deliver(draw, delivered.sessions())
         t = time.time()
         outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
-                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None,
-                                     advice=rd.advice)
+                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
         findings, refused = LEAN_RUNS.get(str(delivered.proof.public), (None, "no Lean run"))
-        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs, rd.advice)
+        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
         proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
                  "refused": refused, "proved": refused is None and lw.proved(findings or [])
                  and all(list(f.units) == [0] for f in findings),
@@ -557,8 +558,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
-                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1}
-                              | lw._advice_output(rd.advice))
+                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
         rows.append(row)
         log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
