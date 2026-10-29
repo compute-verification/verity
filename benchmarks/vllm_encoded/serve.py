@@ -19,7 +19,7 @@ Arms:
             (ro-sketch-blake3/v0), and with
             ``--commit`` also each decode step's commit: the step's tags in one buffer, their leaves and the tree's
             root, after the step's last linear
-  pstack    the remote bandwidth audit's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
+  pstack    PoUB's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
             the BF16 lm_head as it is, paged.cu's attention and KV append over vLLM's own cache; stack's denominator
   stack     the same kernels over codec words only (`stack.py`, ``--wt-lib`` a WT_RECEIPT build at a full-slot field,
             ``--reader-lib``, ``--paged-lib``): every linear's fused decode + GEMM + sketch-sha512 receipts and each decode
