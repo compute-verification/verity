@@ -418,7 +418,7 @@ theorem sound_okForms (UB PB : ℕ) (hUB : UB ≤ 32) (hPB : PB ≤ 32) (row xr 
   refine Eq.trans ?_ (okRef_eq (ev z rz) (ev z ((VStar.linkField row 0).getD 0 Lin.zero)) (ev z tl) (ev z ft)
     (ev z fz) (ev z eq) hF hL htl' hft' hfz' heq')
   rw [hr, hkinds, hfo, hlo, hisF, hisL]
-  simp only [ev_xor, ev_one, Bool.xor_true]
+  simp only [ev_xor, ev_one, Bool.xor_true, hisF, hisL]
 
 /-! ## Freshness -/
 
