@@ -65,7 +65,7 @@ predicates give that.  Instances of a Definition are laid out identically, so a 
   the Definition holding the unit, never on n;
 * L2 Statement: the circuit of the unit, cut from the program at its place, is the entry's Definition and has the shape the
   entry records [unit-definition, unit-shape];
-* L3 Bind: its inputs and outputs as root gates of the program, the positions its committed values are opened at (`Unit`);
+* L3 Bind: its inputs and outputs as root gates of the program, the positions its committed values are opened at (`ProofBlock`);
 * L4 Correct: given the committed values (a trace of root gate -> value), its gates applied to its inputs give its
   outputs [unit-incorrect].
 """
@@ -82,7 +82,7 @@ from .codec import canonical_json, program_digest
 from .cut import (RECOMPUTE, WIDE_FAN_IN, WIRING, CallGraph, QueryInapplicable, boundary_widths, call_scope, check_cut,
                   evaluate_definition, separable, wide_operands)
 from .partition import RECOMPUTE_RULES, CutVerdict
-from .units import Activation, UnitCircuit
+from .units import Activation, ProofBlockCircuit
 
 FORMAT = "verity/partition/v2"
 ROW_BYTES = 128
@@ -164,7 +164,7 @@ class Entry:
     units: int
     owner: tuple[int, ...] = ()                       # FLAT: a unit per computing gate (`cut.CallGraph` order)
     shape: tuple[int, ...] = ()                       # FLAT: a class per unit, classes numbered in first-use order
-    classes: tuple[str, ...] = ()                     # FLAT: `units.UnitCircuit.shape` per class
+    classes: tuple[str, ...] = ()                     # FLAT: `units.ProofBlockCircuit.shape` per class
     parts: tuple[tuple[int | None, int], ...] = ()    # PARTS: (child entry or None, members) per body node
 
 
@@ -846,7 +846,7 @@ def _flat_owner(j: int, adv: Advice) -> list[int]:
 
 
 @dataclass(frozen=True)
-class Unit:
+class ProofBlock:
     """Unit `index` at its place: root Call `call` (root-body node `node`), member `member`, the (body node, member) steps down to the
     flat Definition `definition` holding it, the unit `unit` of that entry, its circuit, and the root gates its outputs and inputs
     are (L3: the positions their committed values open at).  `filler`: an index in n..n_b-1, no gates."""
@@ -860,7 +860,7 @@ class Unit:
     entry: int = -1
     unit: int = -1
     definition: str = ""
-    circuit: UnitCircuit | None = None
+    circuit: ProofBlockCircuit | None = None
     base: int = 0
     outputs: tuple[int, ...] = ()
     inputs: tuple[int, ...] = ()
@@ -930,18 +930,18 @@ def _place(program: Any, node: int, member: int, path: Sequence[tuple[int, int]]
     return fn, base
 
 
-def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: Any, acts: dict | None = None) -> Unit:
+def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: Any, acts: dict | None = None) -> ProofBlock:
     """L1-L3 for unit `i`: where it is (from the rows), its circuit cut from the program there, and its outputs' and inputs' root
     gates.  `detail` holds the L2 failures (`unit-definition`, `unit-shape`)."""
     got = locate(st, read, i)
     if got is None:
-        return Unit(i, filler=True)
+        return ProofBlock(i, filler=True)
     k, node, member, path, j, u, en = got
     fn, base = _place(program, node, member, path)
     bad: dict[str, list] = {}
     if definition_digest(fn) != en.definition:
         bad["unit-definition"] = [[j, fn.id]]
-        return Unit(i, False, k, node, member, tuple(path), j, u, fn.id, None, base, detail=bad)
+        return ProofBlock(i, False, k, node, member, tuple(path), j, u, fn.id, None, base, detail=bad)
     acts = {} if acts is None else acts
     a = acts.get(fn.id)
     if a is None:
@@ -952,11 +952,11 @@ def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: A
     if uc.shape != en.classes[en.shape[u]]:
         bad["unit-shape"] = [[j, u]]
     root = _roots(program, a, base, uc)
-    return Unit(i, False, k, node, member, tuple(path), j, u, fn.id, uc, base, tuple(root[x] for x in uc.outputs),
+    return ProofBlock(i, False, k, node, member, tuple(path), j, u, fn.id, uc, base, tuple(root[x] for x in uc.outputs),
                 tuple(root[x] for x in uc.inputs), bad)
 
 
-def _roots(program: Any, a: Activation, base: int, uc: UnitCircuit) -> dict[int, int]:
+def _roots(program: Any, a: Activation, base: int, uc: ProofBlockCircuit) -> dict[int, int]:
     """Activation-local gate -> root gate, for the unit's gates and every operand they read."""
     out: dict[int, int] = {}
     circ = program.circuit
@@ -1023,6 +1023,6 @@ def from_v1(obj: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "UNIT_CLASS_MAX",
-           "UNIT_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "Unit", "grid", "definition_digest",
+           "UNIT_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "ProofBlock", "grid", "definition_digest",
            "unit_class", "build", "rows", "pad", "decode", "predicates",
            "statement", "validate", "digest", "check", "locate", "unit", "check_unit", "openings", "from_v1"]
