@@ -86,7 +86,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[name] = ("linears", stock, True)
     want["int8-vllm-v1"] = want["int8-vllm-s22-v1"] = ("linears", stock, False)
     want["ssn-1l-tag-magic-v1"] = ("linears", "int8-vllm-v1", True)
-    want["ssn-1l-tag-magic-s22-v1"] = ("linears", "int8-vllm-s22-v1", True)
+    for name in ("ssn-1l-tag-magic-s22-v1", "ssn-1l-tag-blc4a-xu-v1", "ssn-1l-tag-blc4a-w127-xu-v1"):
+        want[name] = ("linears", "int8-vllm-s22-v1", True)
     for name in ("int8-qk-had-v1", "int8-pv-u8-v1", "int8-attn-v1", "dither-int8-pv-v1", "ssn-all-v1"):
         want[name] = ("all", stock, True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
@@ -324,6 +325,8 @@ def test_defaults_are_filled_and_typed():
     ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn_1l_tag"\ncoin_lanes = 2', "coin_lanes is 0"),
     ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn_1l_tag"\ncoin_lanes = 3\ncoin_bits = 8',
      "fits a B' byte"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn_1l_tag"\ncoin_lanes = 1\ncoin_a = 127',
+     "needs coin_lanes 3"),
 ])
 def test_rejections_name_the_problem(text, message):
     with pytest.raises(ValueError, match=message.replace("[", r"\[").replace("]", r"\]")):

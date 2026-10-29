@@ -1,0 +1,15 @@
+description = "the lead as served exactly: ssn-1l-tag-blc4a-v1's coins and lanes drawn, committed and gated, then removed by N-EXACT's fold (xu: the magic epilogue at 22-bit weight scales, the coin column sum through IADD3's column source), so it serves int8-vllm-s22-v1 bit for bit; lm_head and attention bf16"
+plain = "int8-vllm-s22-v1"
+
+[[linear]]
+step = "int8"
+epilogue = "magic"
+scale_bits = 22
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_tag"
+fused = true
+coin_lanes = 3
+coin_bits = 7
+denoise = true

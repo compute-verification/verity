@@ -303,12 +303,13 @@ def test_aorb_noise_is_its_formula(m, n, side_b):
     assert torch.equal(got, want.T if side_b else want) and run.gates.log["accumulator"]["failed"] == 0
 
 
-def test_blc_coin_lanes_are_a_tile_column_term():
+@pytest.mark.parametrize("coin_a", [1, 127])
+def test_blc_coin_lanes_are_a_tile_column_term(coin_a):
     """`ssn_1l_tag` with blc4a's coin lanes against its k32 layout written out: step 0 holds 24 data lanes, the row tags
-    against G and a1 against C; each later step 28 data lanes, three coin lanes against A' = 1 (odd coins on +-127 a
-    64-row tile, step and column) and the row lane 1 + l_t against 1. The accumulator less the public bias and each
-    tile's column sum of coins is what the step serves, and de-noised the product; at k 86 it takes one step more than
-    the lead's 31 data lanes."""
+    against G and a1 against C; each later step 28 data lanes, three coin lanes against A' = (1, coin_a, 1) (odd coins
+    on +-127 a 64-row tile, step and column) and the row lane 1 + l_t against 1. The accumulator less the public bias
+    and each tile's weighted column sum of coins is what the step serves, and de-noised the product; at k 86 it takes
+    one step more than the lead's 31 data lanes."""
     g = torch.Generator().manual_seed(3)
     m, k, n = 128, 86, 40
     s = 1 + -(-(k - steps.SSN_TAG_DATA) // 28)
@@ -321,7 +322,7 @@ def test_blc_coin_lanes_are_a_tile_column_term():
     def served(denoise, rows=m):
         mm = matmul.MM("linear", "mlp.down_proj", run, x[:rows], w).integer(x[:rows], w)
         return steps.served_linear(mm, lambda _m: x[:rows].long() @ w.long().T, rule="ssn_1l_tag", coin_lanes=3,
-                                   denoise=denoise)
+                                   coin_a=coin_a, denoise=denoise)
 
     mm = matmul.MM("linear", "mlp.down_proj", run, x, w)
     lanes, a1, key = mm.coins((m, s - 1)).double(), mm.coins((m, 4)).double(), mm.coins((steps.TAG_LANES,), 2 ** 16)
@@ -335,13 +336,14 @@ def test_blc_coin_lanes_are_a_tile_column_term():
         lo = 24 + 28 * (t - 1)
         d = min(28, k - lo)
         xa[:, 32 * t:32 * t + d], wa[:, 32 * t:32 * t + d] = x[:, lo:lo + d], w[:, lo:lo + d]
-        xa[:, 32 * t + 28:32 * t + 31] = 1
+        xa[:, 32 * t + 28:32 * t + 31] = torch.tensor([1.0, coin_a, 1.0], dtype=torch.float64)
         xa[:, 32 * t + 31], wa[:, 32 * t + 31] = 1 + lanes[:, t - 1], 1
     folded = torch.empty(m, n, dtype=torch.float64)
+    weights = torch.tensor([1.0, coin_a, 1.0], dtype=torch.float64)[None, :, None]
     for tile in range(m // 64):
         wa[:, [32 * t + c for t in range(1, s) for c in range(28, 31)]] = coins[tile].reshape(-1, n).T
         r = slice(64 * tile, 64 * (tile + 1))
-        folded[r] = xa[r] @ wa.T - coins[tile].sum((0, 1))
+        folded[r] = xa[r] @ wa.T - (weights * coins[tile]).sum((0, 1))
     assert torch.equal(served(False), folded - torch.round(code.sum(0) / 2 + 1.5 * (s - 1)))
     assert torch.equal(served(True), (x.long() @ w.long().T).double())
     assert run.gates.log["accumulator"]["failed"] == 0
@@ -476,19 +478,21 @@ def test_served_noise_stays_in_the_product(llama, ids):
 
 def test_a_denoised_lead_serves_stock(llama, ids):
     """De-noised, the lead serves stock bit for bit; under the magic epilogue it serves vLLM's epilogue bit for bit at
-    22-bit scales, and the tallies count each arm's own outputs."""
-    arms = ["int8-channel127-v1", "ssn-1l-tag-dn-v1", "int8-vllm-v1", "int8-vllm-s22-v1", "ssn-1l-tag-magic-v1",
-            "ssn-1l-tag-magic-s22-v1", "aorb-sv4-v1", "ssn-1l-tag-v1"]
+    22-bit scales, with blc4a's coin lanes (either weighting) too, and the tallies count each arm's own outputs."""
+    xu = ("ssn-1l-tag-magic-s22-v1", "ssn-1l-tag-blc4a-xu-v1", "ssn-1l-tag-blc4a-w127-xu-v1")
+    arms = ["int8-channel127-v1", "ssn-1l-tag-dn-v1", "int8-vllm-v1", "int8-vllm-s22-v1", "ssn-1l-tag-magic-v1", *xu,
+            "aorb-sv4-v1", "ssn-1l-tag-v1", "ssn-1l-tag-blc4a-v1"]
     r = evaluate(llama, ids[:4], arms)
     g = r["gates"]
     assert passed({"gates": {n: v for n, v in g.items() if n not in matmul.G.TALLIES}}), g
     nll = {k.split("/")[0]: v for k, v in r["nll"].items()}
     assert np.array_equal(nll["ssn-1l-tag-dn-v1"], nll["int8-channel127-v1"])
-    assert np.array_equal(nll["ssn-1l-tag-magic-s22-v1"], nll["int8-vllm-s22-v1"])
-    assert not np.array_equal(nll["ssn-1l-tag-v1"], nll["int8-channel127-v1"])
-    assert not np.array_equal(nll["aorb-sv4-v1"], nll["int8-channel127-v1"])
+    assert all(np.array_equal(nll[a], nll["int8-vllm-s22-v1"]) for a in xu)
+    for noisy in ("ssn-1l-tag-v1", "aorb-sv4-v1", "ssn-1l-tag-blc4a-v1"):
+        assert not np.array_equal(nll[noisy], nll["int8-channel127-v1"]), noisy
+    assert not np.array_equal(nll["ssn-1l-tag-blc4a-v1"], nll["ssn-1l-tag-v1"])
     by = g["epilogue_differs"]["by"]
-    assert set(by) == {"ssn-1l-tag-magic-v1", "ssn-1l-tag-magic-s22-v1"} and by["ssn-1l-tag-magic-s22-v1"][1] == 0
+    assert set(by) == {"ssn-1l-tag-magic-v1", *xu} and all(by[a][1] == 0 for a in xu)
     assert by["ssn-1l-tag-magic-v1"][0] == by["ssn-1l-tag-magic-s22-v1"][0] > 0
     assert g["epilogue"]["checked"] > 0 and g["epilogue"]["failed"] == 0
 

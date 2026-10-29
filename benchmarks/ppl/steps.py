@@ -1237,11 +1237,13 @@ def _check_served(p):
             or not 1 <= p["coin_bits"] <= 7):
         raise ValueError(f"served.coin_lanes is 0 or one of {tuple(BLC_TILE)}, only on ssn_1l_tag, and coin_bits "
                          "1..7, so a coin fits a B' byte")
+    if not 1 <= p["coin_a"] <= 127 or (p["coin_a"] != 1 and p["coin_lanes"] != 3):
+        raise ValueError("served.coin_a is the middle of three coin lanes' A' (1..127), so it needs coin_lanes 3")
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
 def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz: int = 1, denoise: bool = False,
-                  coin_lanes: int = 0, coin_bits: int = 7):
+                  coin_lanes: int = 0, coin_bits: int = 7, coin_a: int = 1):
     """Noise added to the exact integer product and served (`denoise`: committed, gated on the committed words, and
     removed in the epilogue, which leaves the exact product), fresh every call, over S = ceil(k / 28)
     k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
@@ -1253,11 +1255,11 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn_1l_tag` is `ssn_1l` with row tags (S = 1 +
     ceil((k - 24) / 31)): it adds T(i) G (`row_tags`, `tag_matrix`, G fresh every call) and serves 1 + nz l (`nz` 1
     or 2), so its bias is rint((sum C + (2 + nz) (S - 1)) / 2), drawing ssn_1l's coins first; with `coin_lanes`
-    (blc1a, blc4a) that many of a later step's other lanes hold coins against A' = 1, odd and uniform on
-    +-(2^coin_bits - 1) a (`BLC_TILE`-row tile, step, column): their sum is the tile's column term, which the
-    epilogue's fold removes exactly, so they serve nothing and are not drawn here; they leave 31 - coin_lanes data
-    lanes a later step (S = 1 + ceil((k - 24) / (31 - coin_lanes))) and add their largest sum to the accumulator's
-    bound. Rows that leave a smaller tile (its row and window coins) are refused; `aorb_sv4` is
+    (blc1a, blc4a) that many of a later step's other lanes hold coins against A' = 1 (the middle of three against
+    A' = `coin_a`), odd and uniform on +-(2^coin_bits - 1) a (`BLC_TILE`-row tile, step, column): their sum is the
+    tile's column term, which the epilogue's fold removes exactly, so they serve nothing and are not drawn here; they
+    leave 31 - coin_lanes data lanes a later step (S = 1 + ceil((k - 24) / (31 - coin_lanes))) and add their largest
+    sum to the accumulator's bound. Rows that leave a smaller tile (its row and window coins) are refused; `aorb_sv4` is
     AorB/rgap1/sv4+tag+nz: on side A (`aorb_side_b` false, for the whole call's columns) `ssn_1l_tag` at nz 2 with
     C the call's columns' `sv_code(4)` vectors; on side B the same with rows and columns exchanged: a1 bits n x 4
     against the rows' sv4 vectors, column tags T(j) against a G a row, later lanes 1 + 2 l a column, l bits
@@ -1302,7 +1304,7 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
             top = max(top, G.absmax(noise))
             if not denoise:
                 acc[i:i + NOISE_ROWS] += noise
-        top += coin_lanes * (s - 1) * (2 ** coin_bits - 1)
+        top += (coin_lanes - 1 + coin_a) * (s - 1) * (2 ** coin_bits - 1) if coin_lanes else 0
         bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top
         mm.gate("accumulator", bound <= G.S32, bound)
         return acc

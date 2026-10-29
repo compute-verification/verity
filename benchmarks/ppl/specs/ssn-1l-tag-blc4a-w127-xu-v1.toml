@@ -1,0 +1,16 @@
+description = "ssn-1l-tag-blc4a-xu-v1 with N-LIT's coin weighting A' = (1, 127, 1): the coin lanes' weighted sum is still a tile's column term, folded exactly, so it serves int8-vllm-s22-v1 bit for bit; only the committed words' range grows, to 129 (S - 1) 127 of coin; lm_head and attention bf16"
+plain = "int8-vllm-s22-v1"
+
+[[linear]]
+step = "int8"
+epilogue = "magic"
+scale_bits = 22
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_tag"
+fused = true
+coin_lanes = 3
+coin_bits = 7
+coin_a = 127
+denoise = true
