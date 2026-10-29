@@ -5,7 +5,7 @@ import Definitions.Pous.Accounting.EraseMeets
 /-!
 # Secure erasure: volatile memory in full use through the spot reads
 
-Added on 4 Oct 2026, under the model Daniel set that day: the disks are unplugged, so the prover's memory is volatile
+Under this model the disks are unplugged, so the prover's memory is volatile
 only (device memory and host DRAM), and the audit is a proof of memory utilization. The game is
 `Security/Definitions/Pous/Model/SecureErasure.lean`, the requirement `EraseMeets`
 (`Security/Definitions/Pous/Accounting/EraseMeets.lean`). Proofs: `Security/Proofs/Pous/SecureErasure/`.
@@ -14,7 +14,7 @@ only (device memory and host DRAM), and the audit is a proof of memory utilizati
 `(D, Q)` game the band family is proved in, and the incompressibility of the keyed fill there (the band's `TimedINC`,
 proved, `PousSpongeChain.chainExPostFactoG_v6`): a timed spot read within `(D, Q)` needs the block, or what it takes to
 rebuild it within `D` rounds, in memory. No named assumption. **No bandwidth-separation premise:** none of them reads or
-assumes the host-link bound `TwoTierBandwidth` (PR #1010, dropped on 3 Oct 2026); device memory and host DRAM count
+assumes the host-link bound `TwoTierBandwidth`, which is dropped; device memory and host DRAM count
 alike.
 -/
 
@@ -43,11 +43,11 @@ a bound on a band-fill wipe at the reference `Π₂`** (Feistel10 over SHAKE256;
 There a prover keeps the five odd rounds' 200-byte SHAKE256 states of each block (1,000 bytes a 64 KiB block, 1.53% of
 `|C|`) and rebuilds any block in 481 sequential Keccak-f, a tenth of one `Π₂` call and within the `D = 5` deadline on
 one CPU core. So no read deadline bounds it to `(D, Q) = (5, 2^20)`, and it is accepted at all 2152 reads with about 98%
-of its memory foreign (art:7617c8017e80). For a wipe, cite `Pous.Guarantees.StreamedWipeMeetsFamily`.
+of its memory foreign (the resume attack). For a wipe, cite `Pous.Guarantees.StreamedWipeMeetsFamily`.
 
 `M` must be the prover's whole volatile memory, on-chip SRAM included; with host DRAM, `N` is the total over 32 MiB.
 `N = 3072` is 96 GiB (`SecureErasureMeets96GiB`), the GDDR7 an RTX PRO 6000 has, but no fill covers all of it: software
-sees about 95 GiB, and the 4 Oct 2026 calibration filled 93.86 GiB, so `N = 3003` whole segments (93.84 GiB). On one
+sees about 95 GiB, and the calibrated fill reaches 93.86 GiB, so `N = 3003` whole segments (93.84 GiB). On one
 device the guarantee holds at the `N` the fill reaches, and the memory outside the fill adds to what a prover can keep.
 The read deadline `T_read` is a symbol of the model; no hardware deadline realizes it at the reference `Π₂` (above). In
 the model it is any deadline within which the prover completes at most 5 rounds of calls to the ideal `Π₂` and `2^20`
@@ -61,7 +61,7 @@ content's count, at most `2152 · 2^-256`).
 
 It rests on the ideal-primitive model (false at the reference `Π₂`, above), the keyed fill's incompressibility (the
 band's `TimedINC`, proved) and the `(D, Q)` game, as `BandMultiMeetsFamily` does; no named assumption and no
-bandwidth-separation premise (`TwoTierBandwidth`, dropped on 3 Oct 2026, is not used). Proof:
+bandwidth-separation premise (`TwoTierBandwidth`, which is dropped, is not used). Proof:
 `PousErase.secure_erasure_meets_family`.
 
 Frozen (no-function, hash): an `EraseMeets` in an ideal model, which no Lean function computes. -/

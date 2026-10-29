@@ -15,8 +15,6 @@
     {"file": "verity_vllm/check/replay/fork.py", "kind": "silent-except", "symbol": "oom_kills", "detail": "except (OSError, StopIteration, ValueError, IndexError): return None"},
     {"file": "verity_vllm/check/replay/population.py", "kind": "silent-except", "symbol": "_stratum_spec", "detail": "except (TypeError, ValueError): return spec"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "silent-except", "symbol": "_cpu_quota", "detail": "except (OSError, ValueError): pass"},
-    {"file": "verity_vllm/check/replay/tier_a_pool.py", "kind": "silent-except", "symbol": "_Forked.next", "detail": "except queue.Empty: continue"},
-    {"file": "verity_vllm/check/root_policy.py", "kind": "silent-except", "symbol": "_arg_value", "detail": "except (KeyError, IndexError, TypeError): return None"},
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "silent-except", "symbol": "record_shard_pin", "detail": "except (OSError, ValueError): return None"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._end_step", "detail": "except OSError: pass"},

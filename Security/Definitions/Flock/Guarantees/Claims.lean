@@ -5,9 +5,9 @@ import Definitions.Claims
 
 `ClaimsStated` reads every claim of `Definitions.Claims`, and its named assumptions and trusted base, so the Lean check
 records each one's text (and every definition it reads) under `reads`: a changed claim is a changed record, which
-reaches Daniel when it lands. It says nothing about the verifier. A claim leaves it when a guarantee states that claim
+is reported when it lands. It says nothing about the verifier. A claim leaves it when a guarantee states that claim
 at the deployed verifier, and the guarantee's own record holds the text from then on. `Nontrivial` stays: it is
-established by a test against recorded sessions (`check`'s `lean-agreement` job), not by a Lean proof (TOP-53).
+established by a test against recorded sessions (`check`'s `lean-agreement` job), not by a Lean proof.
 -/
 
 namespace Flock.Guarantees

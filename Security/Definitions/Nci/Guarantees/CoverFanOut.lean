@@ -4,7 +4,7 @@ import Definitions.Nci.Assumptions.CoverFanOut
 /-!
 # The cover theorem's fan-in/fan-out tightening: the guarantees
 
-Daniel's covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
+The covering bound (`Nci.Guarantees.CoveringBound`) charges a block for the weights and the tokens of the
 multiplications it completes. Fan-in and fan-out charge it per value it reads. A block that reads a value of a token finishes, through it, only
 the counted products whose activations key back to that value: at most `aOut` (Kimi K2: 37,248, the MoE input). To do
 more of a token's work without reading more of it, the block must hold one of the token's accumulation chains whole,
@@ -20,7 +20,7 @@ Kimi K2's numbers are for its forward products (`c = 1`). With Dgrad counted, on
 `α₀ = 0.301`, and `Keyed`'s position-0 dq_rope cut), they are about 1.66·10⁴ and 7.3·10⁴; keeping those dq_rope
 products at `aOut = 49152` instead gives 1.39·10⁴ and 5.5·10⁴.
 
-The statements are division-free. The comparison with Daniel's covering bound at two costs
+The statements are division-free. The comparison with the covering bound at two costs
 (`Nci.Guarantees.CoveringBoundTwoCosts`, about 166 for Kimi K2 at `c_w = 2.5`, `c_a = 4`) and its additive form
 (`Nci.Cover.Guarantees.CoveringBoundAdditive`, about 660) is of numbers, not theorems: the premises differ (`Keyed` in
 place of activation-chaining, and `ColumnsIncompressible` added; `FanOutIntensity` beats the additive bound at

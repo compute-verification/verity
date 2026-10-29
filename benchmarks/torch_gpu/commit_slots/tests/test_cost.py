@@ -1,6 +1,6 @@
 """A row-slot's hashing, counted on the host twin, never timed. A one-row unit's row-slot costs nine compressions: its row
-digest one, hm96's c two and h two (h's padding block over a constant schedule), its frame leaf one and its unit's slot-tree
-leaf one (both from midstates, in the leaf kernel's thread), and about one slot-tree node, two; and three ChaCha20 blocks.
+digest one, hm96's c two and h two (h's padding chunk over a constant schedule), its frame leaf one and its proof block's slot-tree
+leaf one (both from midstates, in the leaf kernel's thread), and about one slot-tree node, two; and three ChaCha20 chunks.
 Its unit's frame table costs one compression an add, whatever the slots. The path before cost ten: the slot-tree leaf was
 hashed from the IV (two) in a call of its own."""
 from __future__ import annotations

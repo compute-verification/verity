@@ -1,5 +1,5 @@
-"""A live dither-a-so window's audit, run as an Attempt (`research run`) from the VM that holds the lane's gate key:
-the session and the auditor's ledger fetched from infra's gate, the GPU run's manifest and stop record and the
+"""A live dither-a-so window's audit, run from the machine that holds the gate key:
+the session and the auditor's ledger fetched from the challenger's gate, the GPU run's manifest and stop record and the
 challenger's key record fetched from the store, then
 
 * ``manifest-check.json``: `dither_manifest.check` at this tree (every round root and the manifest root recomputed from
@@ -9,7 +9,7 @@ challenger's key record fetched from the store, then
   this tree): the session trusted on the stand-in root (`remote.trusted_session`, every head of the ledger), the round
   coins (`core_check.rounds` over the recomputed round roots, its session run from a commit the host's pins log
   ``--pins`` records on the auditor's first-parent list of main ``--main``), the salt coin after the stand-in root and
-  the draw coin
+  the sampling coin
   after the recomputed manifest root (`challenger.live_reason`, each the root the challenger's signed log shows), the
   commitment the manifest's, a live epoch's;
 * ``check-end.json``: the GPU run's own `dither_so.check_end` of the window (its stop record's ``end``), which needs the
@@ -20,9 +20,8 @@ labelled `challenger-pins head` (each head keeps its label when the next is put)
 
 ``audit.json`` holds the three verdicts, the commits and the inputs' SHA-512s; the exit status is 0 only when all hold.
 
-    research run --campaign dither-loop --run-record -- python benchmarks/hash/dither/live_audit.py \\
-        --session SID --run RUN --gate USER@HOST --ssh-key KEY --key-record ART --period P --core-from MAIN \\
-        --main FIRST_PARENT [--pins PINS]
+    OUT=DIR python3 benchmarks/hash/dither/live_audit.py audit --session SID --run RUN --arm ARM --gate USER@HOST \\
+        --ssh-key KEY --key-record ART --period P --core-from MAIN --main FIRST_PARENT [--pins PINS]
 """
 from __future__ import annotations
 
@@ -176,8 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     au.add_argument("--run", required=True, help="the GPU run whose window the session served")
     au.add_argument("--run-record", help="its run record's art: (default: the store's attempt for --run)")
     au.add_argument("--arm", required=True, help="the arm whose window the session served")
-    au.add_argument("--gate", required=True, help="infra's gate, USER@HOST")
-    au.add_argument("--ssh-key", required=True, help="the lane's gate key")
+    au.add_argument("--gate", required=True, help="the challenger's gate, USER@HOST")
+    au.add_argument("--ssh-key", required=True, help="the SSH key the gate accepts")
     au.add_argument("--key-record", required=True, help="the challenger's key record's art: (challenger-key current)")
     au.add_argument("--period", required=True)
     au.add_argument("--core-from", required=True, help="a checkout of main whose verity runs core's check")

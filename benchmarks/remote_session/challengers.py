@@ -1,17 +1,18 @@
-"""Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof service's one challenger
+"""Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof system's one challenger
 (`coins.Coins`, `sampled_proofs.challenger`):
 
-- `Local`: a `LiveChallenger` in the verifier's process, drawing from `secrets.token_bytes`.
+- `Local`: a `LiveChallenger` in the verifier's process, sampling from `secrets.token_bytes`.
 - `Serve`: the challenger's own process, `benchmarks/live_challenger/serve.py`, started for the session on the
   verifier's machine with its LMS key (`--challenger-key`), reached over its 127.0.0.1 by `sampled_proofs.remote`'s
-  client. It draws its coins in the Lean (`one_stage.verifier.coins`), signs its record before it listens and its
+  client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before it listens and its
   release log when the client closes the session. Not the auditor host: the verifier's machine is the audit's (never
   the prover's), but no ledger opens the session for its window, so the read is `challenger.session_of`'s, under the
   key the run wrote.
-- `Gate`: the auditor host's challenger (vy-challenger-1), through its gate (`benchmarks/live_challenger/auditor.py`)
+- `Gate`: the auditor's challenger host, through its gate (`benchmarks/live_challenger/auditor.py`)
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
-  host serves it from its pinned tree and reaches this machine's 127.0.0.1 through `ssh -R` at the open's port; the
+  host serves it from its pinned tree and reaches this machine's 127.0.0.1 at the open's port through this machine's
+  certifier coin link (the auditor's coins' path); the
   hello carries the open's secret, and a challenger whose coin commitment isn't the open's is refused before its first
   coin. The read is the ledger's (`audit.Session.trusted_reason`): the one session it opens for R inside the period,
   ended and closed, its files the ones the end sealed, under the key whose public key's SHA-512 the run pins, and run
@@ -50,8 +51,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SERVE = ROOT / "benchmarks" / "live_challenger" / "serve.py"
 KINDS = ("local", "serve", "gate")
 GATE_PORTS = range(7811, 7900)
-"""The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by the host's
-`ssh -R`: the verifier's own port is none of them."""
+"""The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by its certifier
+coin link to the host: the verifier's own port is none of them."""
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
@@ -147,8 +148,8 @@ Call = Callable[[list[str]], tuple[int, bytes]]
 
 def ssh_gate(ssh: Sequence[str]) -> Call:
     """Gate requests over ssh: `ssh` is ssh's options and destination (the lane's gate key with `-i`, and the host's
-    line of /etc/vy/peers); the host's authorized_keys forces the key's command, `vy-challenger-gate LANE`, which reads
-    the request's words from ssh's original command."""
+    line of /etc/vy/peers); the host's authorized_keys forces the key's command, the challenger's gate with LANE, which
+    reads the request's words from ssh's original command."""
     def call(words: list[str]) -> tuple[int, bytes]:
         p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", *ssh, shlex.join(words)],
                            capture_output=True, stdin=subprocess.DEVNULL)

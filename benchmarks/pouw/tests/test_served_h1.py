@@ -497,7 +497,7 @@ def _calls(rounds: int) -> list[dict]:
 
 def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
     """A served window's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
-    root and the step's units under its live salt, then the draw coin after the receipts root; the manifest, its window
+    root and the step's units under its live salt, then the sampling coin after the receipts root; the manifest, its window
     `WINDOW`."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     salt = cs.salt(root)
@@ -519,7 +519,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
 
 def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_and_a_forged_window_is_refused(tmp_path):
     """A window's coins from the challenger off the node (`coins.open_coins` over `RemoteChallenger`): salt, one round a
-    step and the draw, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
+    step and the sample, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
     session as the gate publishes it (out/ beside request.json and open.json), every head of the auditor's ledger and
     the window's manifest, recomputes the round roots, salts and draw root from the manifest's committed roots, and
     passes it under the key key.json holds, ``(checked)`` only when it names the key's deployment record, the window's
@@ -679,8 +679,8 @@ def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_pa
 
 def test_the_draw_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent_under():
     """`RoundPipe.draw` reads its time on the pipe's clock while it holds the lock `send` records each round under, through
-    the draw's open: another thread can't take it then, every round sent before has an earlier time and the one sent
-    after a later one; a draw after the coins are closed is refused."""
+    the sample's open: another thread can't take it then, every round sent before has an earlier time and the one sent
+    after a later one; a sample after the coins are closed is refused."""
     ticks = itertools.count()
     cs = CO.open_coins(None, EPOCH, 4, random.Random("prover").randbytes)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
@@ -892,6 +892,42 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
             CO.open_coins(host.session, EPOCH, ROUNDS)
         assert host.ended() is None
         assert [json.loads(x)["event"] for x in (host.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
+
+
+def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_any_other_error_at_once():
+    """An onsite window's client retries a refused connect (no hello, no coin) until the session's tunnel listens, every
+    half second up to `wait_s` on the injected clock; past it `CoinError` refuses it, and any other error raises at once."""
+    at = CO.Session(SID, "127.0.0.1:7811", b"\x01" * 32)
+    challenger = CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("challenger").randbytes)
+
+    def run(outcomes, wait_s=CO.R.TUNNEL_WAIT_S):
+        now, calls, slept = [0.0], [], []
+
+        def connect(address, secret):
+            calls.append((address, secret))
+            got = outcomes[min(len(calls), len(outcomes)) - 1]
+            if isinstance(got, BaseException):
+                raise got
+            return got
+
+        def sleep(s):
+            slept.append(s)
+            now[0] += s
+
+        try:
+            return CO.open_coins(at, EPOCH, ROUNDS, connect=connect, wait_s=wait_s, clock=lambda: now[0], sleep=sleep)
+        finally:
+            assert calls == [(at.address, at.secret)] * len(calls)
+            run.calls, run.slept = len(calls), slept
+
+    cs = run([ConnectionRefusedError(), ConnectionRefusedError(), challenger])
+    assert cs.challenger is challenger and cs.source == "off-node" and (run.calls, run.slept) == (3, [0.5, 0.5])
+    with pytest.raises(CO.Ch.CoinError, match="nothing listened"):
+        run([ConnectionRefusedError()], wait_s=2)
+    assert (run.calls, run.slept) == (5, [0.5] * 4)
+    with pytest.raises(ConnectionResetError):
+        run([ConnectionResetError()])
+    assert (run.calls, run.slept) == (1, [])
 
 
 def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_and_half_a_session_is_refused(monkeypatch):

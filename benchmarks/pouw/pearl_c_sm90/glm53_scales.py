@@ -95,7 +95,7 @@ def header(url: str) -> tuple[str, int, dict]:
     """The shard's final URL (the Hub's redirect, resolved once), its data start and its header."""
     for t in range(6):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": "bytes=0-7"}), timeout=120) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": "bytes=0-7"}), timeout=120) as r:  # noqa: S310  (BASE's https URL)
                 final, n = r.geturl(), struct.unpack("<Q", r.read())[0]
             break
         except OSError:

@@ -1,11 +1,12 @@
-"""`pouw_h1_registered_device` (VLLM-79): H1's registered values hashed by `pouw_cuda/registered_rows.cu`, held byte for byte to
+"""`pouw_h1_registered_device`: H1's registered values hashed by `pouw_cuda/registered_rows.cu`, held byte for byte to
 `pouw_h1_registered.commit`'s NumPy path and to core's `registered.Registered.commit`. Over random rows of 16-bit words (one row
 to a few thousand, one word to a z/y record's 3072, a row whose bytes sit 2 and 4 bytes off an 8-byte boundary), under each
 domain binding, nonces past 2^32 and 2^63, and given salts: the ``b || c`` strings, every tree level, the root, domain and
 leaf count. The CPU twin (`host_commit`, the kernels' functions under g++) runs everywhere with a C++ compiler; the device
 tests need CUDA and nvcc and skip elsewhere: there, rows go in several chunks and a tree wide enough for a launch a level,
 `commit` takes the GPU under ``VERITY_H1_REGISTER=gpu`` (and by default), and a small served H1 window registers the same
-entries, digest and manifest rows on either path."""
+entries, digest and manifest rows on either path, and the same again, with the same receipts, served from the device
+with its z/y records hashed where the arm wrote them."""
 from __future__ import annotations
 
 import shutil
@@ -182,3 +183,24 @@ def test_a_served_window_registers_the_same_on_either_path(monkeypatch):
 
     got, want = window("gpu"), window("numpy")
     assert got == want and got[4] and len(got[1]) == 2 * len(T.SHAPES) * T.STEPS + (T.STEPS + 1) * len(T.KS)
+
+
+def test_a_window_served_on_the_device_registers_what_its_host_copy_does(monkeypatch):
+    """The window above with receipts, served with the arm's tensors on the GPU, so each call's z/y records stay where the
+    arm wrote them and are hashed there: every entry, the served digest, each call's manifest row, each z table's root and
+    each receipt are those of the same window served on the host, registered on the GPU and with NumPy."""
+    torch = _gpu()
+    from tests.protocols import test_pouw_h1_served as T
+
+    def window(where, device):
+        monkeypatch.setattr(NR, "MODE", where)
+        torch.manual_seed(0)
+        weights, made = T._period(T._weights()), T._Prepared()
+        run, _ws, _got = T._window(T.W1, weights=weights, served=2, receipts=made, device=device)
+        assert not run.served.refused, run.served.refused
+        zy = {v: r.root for v, r in run.served.registered.items() if "zy@" in v}
+        return (run.served.entries(), run.served.digest(), [run.tables[c.index] for c in run.calls], zy,
+                {c: r.tobytes() for c, r in made.items()})
+
+    got, host, numpy = window("gpu", "cuda"), window("gpu", None), window("numpy", None)
+    assert got == host == numpy and got[3] and len(got[4]) == len(T.SHAPES) * T.STEPS

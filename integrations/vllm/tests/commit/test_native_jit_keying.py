@@ -1,6 +1,6 @@
-"""[R17 rel M-0803 / COORD R17-41 (1)] the native collector's JIT build is keyed by its SOURCE SET, and the loaded .so must expose every
-name the source binds -- the two rules that make a stale .so (cp-big 22:15:25Z: int-1 content adopted by the r17-int-3 ship because
-torch's mtime test saw it as up to date) impossible to adopt and impossible to miss.  Torch-free: runs on the laptop and in the pod gate."""
+"""The native collector's JIT build is keyed by its SOURCE SET, and the loaded .so must expose every
+name the source binds -- the two rules that make a stale .so (another tree's build that torch's mtime test sees as up to date)
+impossible to adopt and impossible to miss.  Torch-free: runs on the laptop and in the pod gate."""
 from __future__ import annotations
 
 import os
@@ -102,13 +102,13 @@ def test_release_json_records_the_collector_source_digest():
                               "3333 /workspace/cp/nc_build/ab12cd34ef56/verity_native_collect.so source_digest=ab12cd34ef56ff bindings=48")
     assert arts["verity_native_collect.so"] == {"sha256": "3333", "path": "/workspace/cp/nc_build/ab12cd34ef56/verity_native_collect.so",
                                                 "source_digest": "ab12cd34ef56ff", "bindings": "48"}
-    # the pre-M-0803 two-token line still parses (records written by earlier releases)
+    # the two-token line still parses (records written by earlier releases)
     assert rj.parse_artifacts("HIDDEN-GPU-OK 1 /a sm", "FA2-TAP-OK 2 /b", "3 /nc/verity_native_collect.so")["verity_native_collect.so"] == \
         {"sha256": "3", "path": "/nc/verity_native_collect.so"}
 
 
 def test_ext_keys_its_build_dir_by_the_digest_and_refuses_a_stale_load():
-    src = open(os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_collect.py")).read()
+    src = open(os.path.join(HERE, "..", "..", "verity_vllm", "commit", "committer", "native_ext.py")).read()
     assert "native_jit.jit_load(\"verity_native_collect\", native_jit.source_paths(HERE)" in src
     assert "missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, \"native_collect.cpp\"))" in src
     assert "raise RuntimeError" in src.split("missing = native_jit.missing_bindings")[1][:400]

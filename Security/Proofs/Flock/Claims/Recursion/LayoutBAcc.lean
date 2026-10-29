@@ -21,6 +21,10 @@ rows as `LayoutB`'s shared-row slots:
   part holding it once, else the first holding it at all; the owner holds every slot of row `p` at its first holding.
 * **Where the messages carry them** (`finAcc`, `accIn`): the bound last message, after `finOpen rest`'s pieces, carries
   each held row once, as its owner holds it (`accBlock`), and every slot of row `p` sits there.
+* **The rows' hm96 calls** (`accCalls`): each holding's port's two calls at its instance (`hmCalls`), and at a level's
+  `acc` its unit's `acc_out` output row's (`accOutCalls`, the row at its output bits, `accOutForms`), beside
+  `layoutBTops`' calls (`layoutBAcc_calls`). `rowCall_held` and `outCall_held` place a holding's row call and its
+  unit's `acc_out` row call among its part's calls.
 
 `rowsLaid_layoutBAcc` proves `RowsLaid` with no hypothesis: the readers' messages carry each slot's owner's value where
 `accIn` places it. `chainAt rest` reads row `p` there as two elements, and `chainAt_held` proves it reads the row's
@@ -102,9 +106,57 @@ def accRowAt (r : XR) (s σ : ℕ) : Option (List (Msg × List HmNets.Lin)) :=
     else (r.w.parts[s]?.bind partCircuit).bind fun c' => ((accHoldings r s σ.unpair.1)[σ.unpair.2]?).map (accSegs c')
   | none => none
 
+/-- The circuit and holding at which part `s` holds slot `σ` (`accRowAt`'s). -/
+def accHoldAt (r : XR) (s σ : ℕ) : Option (Circuit × (String × ℕ)) :=
+  match accCanon r σ.unpair.1 with
+  | some (o, c, h) =>
+    if s = o then some (c, h)
+    else (r.w.parts[s]?.bind partCircuit).bind fun c' => ((accHoldings r s σ.unpair.1)[σ.unpair.2]?).map (c', ·)
+  | none => none
+
 /-- **The chain block**: each held row up to the chain's last, as its owner holds it, with the owner's part. -/
 def accBlock (r : XR) : List (ℕ × ℕ × List (Msg × List HmNets.Lin)) :=
   (List.range (chainTop r + 1)).filterMap fun p => (accCanon r p).map fun e => (p, e.1, accSegs e.2.1 e.2.2)
+
+/-! ## The chain's rows' hm96 calls -/
+
+/-- **Part `s`'s holdings of the chain, at any row**: each port and instance at which its statement reads a row of it. -/
+def accHeld (r : XR) (s : ℕ) : List (String × ℕ) :=
+  match (RecVStar.statements r.shape).toOption.bind (·[s]?) with
+  | some st => (accCands r st).filter fun h => (accRead r st h.1 h.2).isSome
+  | none => []
+
+/-- **Output port `q`'s row at instance `n`**, at forms: word `k` bit `t` (row bit `16 k + t`) the output bit
+`HmOut.outCol` places it at in the instance's block and VU, where `k` is within the port's run of output words
+(`HmOut.outGroup`), and zero past it (`HmOut.delta`'s forced zero). -/
+def accOutForms (c : Circuit) (q n : ℕ) : List HmNets.Lin :=
+  (List.range (16 * (c.ports.getD q default).words)).map fun i =>
+    if i / 16 < (HmOut.outGroup c (q - HmOut.nIn c)).2.2.2 then
+      HmNets.Lin.var (n / c.g * 2 ^ c.kLog +
+        (HmOut.outCol c (n % c.g) ((HmOut.outGroup c (q - HmOut.nIn c)).2.2.1 + i / 16) + i % 16))
+    else ⟨[], false⟩
+
+/-- **Output port `q`'s hm96 calls at instance `n`**: the salt's, `SHA-512(p_salt ‖ y) = c`, then the row's at its
+output bits (`accOutForms`), `SHA-512(rowIn row) = d`. -/
+def accOutCalls (c : Circuit) (q n : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  [(Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512),
+    ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [], accOutForms c q n, hmDigest c q n)]
+
+/-- **A holding's hm96 calls**: its port's at its instance (`hmCalls`), and at a level's `acc` its unit's `acc_out`
+output row's (`accOutCalls`), the chain's next row (`RecVStar.accReads`). None at a port the circuit lacks. -/
+def accPortCalls (c : Circuit) (h : String × ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  (match c.ports.findIdx? (·.name == h.1) with
+    | some q => hmCalls c h.1 q h.2
+    | none => []) ++
+  (if h.1 = "acc" then
+    match c.ports.findIdx? (·.name == "acc_out") with
+    | some q => accOutCalls c q h.2
+    | none => []
+  else [])
+
+/-- **Part `s`'s calls on the chain's rows**: each holding's (`accPortCalls`). -/
+def accCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  ((r.w.parts[s]?.bind partCircuit).map fun c => (accHeld r s).flatMap (accPortCalls c)).getD []
 
 section Layout
 
@@ -127,9 +179,11 @@ def accIn (x : Msg) (σ : ℕ) : Option (ℕ × ℕ) :=
   else none
 
 /-- **V\*'s bound layout with the `rec-acc` chain's rows as slots**: `layoutBTops (finAcc rest)`, with the chain's
-holdings as slots (`accRowAt`), each row's owner (`accCanon`), and where the last message carries them (`accIn`). -/
+holdings as slots (`accRowAt`), each row's owner (`accCanon`), where the last message carries them (`accIn`), and the
+hm96 calls on the chain's rows (`accCalls`) beside `layoutBTops`' calls. -/
 def layoutBAcc : LayoutB :=
   { layoutBTops (finAcc rest) with
+    shaAt := fun x s => (layoutBTops (finAcc rest)).shaAt x s ++ ((readX x).map fun r => accCalls r s).getD []
     rowAt := fun x s σ => (readX x).bind fun r => accRowAt r s σ
     rowOwner := fun x σ => (readX x).bind fun r => (accCanon r σ.unpair.1).map (·.1)
     rowIn := accIn rest }
@@ -449,6 +503,114 @@ theorem chainAt_held {x : Msg} {ws : List Claims.Flock.Wit} {p i off o : ℕ} {w
   rw [LayoutB.row_of_owner ho hw hv] at hlaid
   rw [chainAt_of_accIn rest hin t]
   exact elems_of_take hlaid hl
+
+/-! ## The chain's calls -/
+
+/-- **`layoutBAcc`'s calls**: `layoutBTops`', then the chain's rows' (`accCalls`). -/
+theorem layoutBAcc_calls (x : Msg) (s : ℕ) (w : Claims.Flock.Wit) :
+    (layoutBAcc rest).calls x s w = (layoutBTops (finAcc rest)).calls x s w ++
+      (((readX x).map fun r => accCalls r s).getD []).map fun p => (p.1 ++ readForms w p.2.1, readForms w p.2.2) := by
+  unfold LayoutB.calls layoutBAcc
+  exact List.map_append ..
+
+theorem mem_calls_of_accCalls {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} (w : Claims.Flock.Wit)
+    {p : Msg × List HmNets.Lin × List HmNets.Lin} (hp : p ∈ accCalls r s) :
+    (p.1 ++ readForms w p.2.1, readForms w p.2.2) ∈ (layoutBAcc rest).calls x s w := by
+  rw [layoutBAcc_calls, hr]
+  simp only [Option.map_some, Option.getD_some]
+  exact List.mem_append_right _ (List.mem_map.2 ⟨p, hp, rfl⟩)
+
+theorem mem_accCalls {r : XR} {s : ℕ} {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c)
+    {h : String × ℕ} (hh : h ∈ accHeld r s) {p : Msg × List HmNets.Lin × List HmNets.Lin}
+    (hp : p ∈ accPortCalls c h) : p ∈ accCalls r s := by
+  unfold accCalls
+  rw [hc]
+  simp only [Option.map_some, Option.getD_some]
+  exact List.mem_flatMap.2 ⟨h, hh, hp⟩
+
+/-- A holding of a row is a holding of the chain. -/
+theorem mem_accHeld {r : XR} {s p : ℕ} {h : String × ℕ} (hh : h ∈ accHoldings r s p) : h ∈ accHeld r s := by
+  unfold accHoldings at hh
+  unfold accHeld
+  rcases hst : (RecVStar.statements r.shape).toOption.bind (·[s]?) with _ | st
+  · simp [hst] at hh
+  · simp only [hst] at hh ⊢
+    obtain ⟨hm, he⟩ := List.mem_filter.1 hh
+    exact List.mem_filter.2 ⟨hm, by rw [beq_iff_eq.1 he]; rfl⟩
+
+theorem accRowAt_eq (r : XR) (s σ : ℕ) : accRowAt r s σ = (accHoldAt r s σ).map fun e => accSegs e.1 e.2 := by
+  unfold accRowAt accHoldAt
+  cases accCanon r σ.unpair.1 with
+  | none => rfl
+  | some e =>
+    obtain ⟨o, c, h⟩ := e
+    dsimp only
+    split_ifs
+    · rfl
+    · cases r.w.parts[s]?.bind partCircuit with
+      | none => rfl
+      | some c' => cases (accHoldings r s σ.unpair.1)[σ.unpair.2]? <;> rfl
+
+/-- **What a part holds at a slot is one of its holdings of the slot's row**, at its circuit. -/
+theorem accHoldAt_spec {r : XR} {s σ : ℕ} {c : Circuit} {h : String × ℕ} (he : accHoldAt r s σ = some (c, h)) :
+    r.w.parts[s]?.bind partCircuit = some c ∧ h ∈ accHoldings r s σ.unpair.1 := by
+  unfold accHoldAt at he
+  cases hcan : accCanon r σ.unpair.1 with
+  | none => simp [hcan] at he
+  | some e =>
+    obtain ⟨o, c', h'⟩ := e
+    rw [hcan] at he
+    dsimp only at he
+    split_ifs at he with hso
+    · cases he
+      subst hso
+      obtain ⟨-, hc, hh⟩ := accCanon_spec hcan
+      exact ⟨hc, List.mem_of_mem_head? (Option.mem_def.2 hh)⟩
+    · obtain ⟨c'', hc'', he⟩ := Option.bind_eq_some_iff.1 he
+      obtain ⟨h'', hj, he⟩ := Option.map_eq_some_iff.1 he
+      cases he
+      exact ⟨hc'', List.mem_of_getElem? hj⟩
+
+/-- A held row's bytes: its port's row read at its instance (`rowHidden`). -/
+theorem readSegs_accSegs (w : Claims.Flock.Wit) (c : Circuit) (h : String × ℕ) :
+    readSegs w (accSegs c h) = readForms w (((rowHidden c h.1 h.2).getD []).map HmNets.Lin.var) := by
+  simp [readSegs, accSegs]
+
+/-- **A holding's row call**: where part `s`, of circuit `c`, holds the chain at `h`, at its port `q` (`pt`), it records
+the row's evaluation `SHA-512(rowPrefix words ‖ row) = d`, at the row it holds and its slot's digest (`hmDigest`). -/
+theorem rowCall_held {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
+    (hc : r.w.parts[s]?.bind partCircuit = some c) {h : String × ℕ} (hh : h ∈ accHeld r s) {q : ℕ}
+    (hq : c.ports.findIdx? (·.name == h.1) = some q) {pt : Port} (hpt : c.ports[q]? = some pt)
+    (w : Claims.Flock.Wit) :
+    ((HmRow.rowPrefix pt.words).data.toList ++ readSegs w (accSegs c h), readForms w (hmDigest c q h.2)) ∈
+      (layoutBAcc rest).calls x s w := by
+  have hm : ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
+      ((rowHidden c h.1 h.2).getD []).map HmNets.Lin.var, hmDigest c q h.2) ∈ accPortCalls c h := by
+    unfold accPortCalls
+    rw [hq]
+    exact List.mem_append_left _ (show _ ∈ hmCalls c h.1 q h.2 by simp [hmCalls])
+  have e := mem_calls_of_accCalls rest hr w (mem_accCalls hc hh hm)
+  simp only [hpt, Option.map_some, Option.getD_some] at e
+  rw [readSegs_accSegs]
+  exact e
+
+/-- **A level unit's `acc_out` row call**: where part `s`, of circuit `c`, holds the chain at its unit `u`'s `acc`,
+and the circuit has the output port `acc_out` at `q` (`pt`), it records that row's evaluation at the output bits
+(`accOutForms`) and its slot's digest (`hmDigest`). -/
+theorem outCall_held {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit}
+    (hc : r.w.parts[s]?.bind partCircuit = some c) {u : ℕ} (hh : ("acc", u) ∈ accHeld r s) {q : ℕ}
+    (hq : c.ports.findIdx? (·.name == "acc_out") = some q) {pt : Port} (hpt : c.ports[q]? = some pt)
+    (w : Claims.Flock.Wit) :
+    ((HmRow.rowPrefix pt.words).data.toList ++ readForms w (accOutForms c q u), readForms w (hmDigest c q u)) ∈
+      (layoutBAcc rest).calls x s w := by
+  have hm : ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [], accOutForms c q u,
+      hmDigest c q u) ∈ accPortCalls c ("acc", u) := by
+    unfold accPortCalls
+    rw [if_pos (rfl : ("acc", u).1 = "acc"), hq]
+    exact List.mem_append_right _ (show _ ∈ accOutCalls c q u by simp [accOutCalls])
+  have e := mem_calls_of_accCalls rest hr w (mem_accCalls hc hh hm)
+  simp only [hpt, Option.map_some, Option.getD_some] at e
+  exact e
 
 end Facts
 

@@ -7,7 +7,7 @@ import Definitions.Nci.Assumptions.CoverPartialSum
 /-!
 # The cover theorem's partial-sum tightening: the guarantees
 
-Daniel's covering bound (`Nci.Guarantees.CoveringBound`) and the fan-out bounds count a block's products as a
+The covering bound (`Nci.Guarantees.CoveringBound`) and the fan-out bounds count a block's products as a
 rectangle, tokens (or values) times parameters, which is `k²`-sized. A matrix multiplication's products are a cube (`Cube`): output row, input column and token, whose shadows
 are weights, activations and output entries. By Loomis–Whitney a block that uses `p` weights and `Q` activations at
 tokens it reads little of, and contributes to `Y` entries there, computes at most `√(p Q Y)` products there, so a block
@@ -31,7 +31,7 @@ Kimi K2's forward products (`k = 2·10⁷`, `s = 4.52·10¹⁶`, `α₀ = 0.147`
 `f = 4`, `6.1·10⁴` at `a = 390`. The gain grows with `a`: `r` saturates at `1.84 √(b f b_p / (2 k))` once
 `a ≳ 0.82 √(2 k b_p / (b f))` (about 2,700 at `f = 1`), which needs entries wider than kv_b's 512 (B2, blue1).
 
-The red team's figures for this tier assume `ConditionalUpdateHardness` over `Keyed`'s value gates in place of
+The figures for this tier assume `ConditionalUpdateHardness` over `Keyed`'s value gates in place of
 `UpdateHardness`, which no guarantee here states. The weights' bits are then paid outside the values' gates, the read
 pool is `k`, and `ρ ≥ α₀ (s / k) · r / (r + 1)` with `r = psRate b f a aOut k μ`. At `f = 1` that is about 6.3·10⁴ at
 `a = 390`, 7.4·10⁴ at `a = 464` (`E = 48`, at `bcol = 2.5`) and 8.1·10⁴ at `a = 512` (`E` deducted only where root walks

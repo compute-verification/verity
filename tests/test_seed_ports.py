@@ -55,7 +55,13 @@ KEY_COUNTS = {
         "the population tests' stand-in key count: a position alone, whose population keeps it",
     "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
-    "benchmarks/e2e_h200/e2e_h200/program.py::program":
+    "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
+        "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
+    "verity/ml/definitions/registry/torch_attention.py::_POSITION":
+        "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
+    "verity/ml/definitions/registry/torch_step.py::_POSITION":
+        "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
+    "examples/h200/e2e_h200/program.py::program":
         "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {

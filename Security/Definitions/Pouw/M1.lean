@@ -11,12 +11,12 @@ import Mathlib.Data.Fintype.Sum
   - weight `w`'s `F_L` (`k × 16`) and `F_R` (`16 × n`): `(s, w, c)` for `c < 2^21`.
   The index and the weight id are 64-bit fields and the group a 60-bit field. `A_u` enters as its block on
   `2^17 × 2^16`, which contains every in-domain shape, entry-wise mod 128 (injective on int7). A unit's `E_L`
-  queries are asked for no other unit below `2^64` (red-team B1).
-* **Distribution** (tt-attacks §4, W6 as fixed at 21:18Z): the outer factors `E_L` and `F_R` uniform on
+  queries are asked for no other unit below `2^64`.
+* **Distribution** (tt-attacks §4, W6): the outer factors `E_L` and `F_R` uniform on
   `{−3, …, 3}`, the inner factors `E_R` and `F_L` uniform on `{±1}`, all independent, one oracle answer each.
   Noise entries are in `[−48, 48]`.
 * **Domain** `m1Domain`: `2^12 ≤ m ≤ 2^17` with `16 ∣ m`, `k = n = 2^16` (so `m·G ≤ 2^21`), 64-bit weight ids, and
-  every unit's group serving at least `2^16` rows on its weight (red-team B3, B8).
+  every unit's group serving at least `2^16` rows on its weight.
 * **`W_ref`** is a parameter of `m1`. `m1Wref` is the explicit `H_ref` schedule of llm-shapes §3, with the
   per-(epoch, weight) and per-(epoch, weight, group) products apportioned to units by rows.
 -/
@@ -106,9 +106,8 @@ def rowShare (work mu rows : ℕ) : ℕ := (work * mu + rows - 1) / rows
 * `u`'s share of its weight's `F = F_L·F_R` (`16·k·n`) and of packing `F` and forming `B + F` as `A + E` is formed
   (`20·k·n`) per (epoch, weight);
 * `576·m`: the int8 limb split of `X1` (entries up to about `2^23`), and `u`'s share of the limb split of its group's
-  `G_g` (`576·n` per (epoch, weight, group)). Red-team P7-4: the split was free only under the old byte-move rule;
-  Daniel's 03:35Z rule prices sub-word extraction like PRMT.
-Per unit this is red-team B3's count `mkn + 2mkr + 6mrn + 20mk + 32mn`, plus P7-4's `576·m`.
+  `G_g` (`576·n` per (epoch, weight, group)). Sub-word extraction is priced like PRMT.
+Per unit this is the count `mkn + 2mkr + 6mrn + 20mk + 32mn`, plus the limb split's `576·m`.
 Shares are rounded up, so the units of a group or of a weight together cover its work (`Sanity.rowShare_covers`). -/
 def m1Wref (L : Layout) (u : ℕ) : ℕ :=
   let m := (L.shape u).m

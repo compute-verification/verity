@@ -1,5 +1,4 @@
-"""J10-R's units at the frozen shape against the Definition's expected values (`fixtures.py`), bit for bit, on one GPU
-(HASH-22):
+"""J10-R's proof blocks at the frozen shape against the Definition's expected values (`fixtures.py`), bit for bit, on one GPU:
 
     python check.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm] [--jobs 32]
                     [--calls q-4096,...] [--operands-only]
@@ -7,18 +6,18 @@
 DIR holds fixtures.py's expected.npz and fixtures.json (each array held to its sha256 there). Every build is checked the
 same way, none against another:
 
-* **anchors** (small calls, every unit): each build's receipts (and the fallback's seeds and z) against
+* **anchors** (small calls, every proof block): each build's receipts (and the fallback's seeds and z) against
   `h1tile.j10r_reference` itself, at 64 x 64 x 512 (m = 2), 64 x 32 x 1024 and 32 x 64 x 4608 (m = 3), with the
   max-magnitude rows of `shape.SPECIAL`;
 * **each fixture call** (linear, M): A and B regenerated whole (`shape.whole`, in S, over --jobs processes) and each
-  sampled unit's 32 rows of each held to the digests fixtures.json pins; the served z, `torch._int_mm(A, B^T)`, on every
-  sampled unit's 32 x 32 cells; then each h1u build over the whole call, run under 0xA5 and then 0x5A (receipts, row
+  sampled proof block's 32 rows of each held to the digests fixtures.json pins; the served z, `torch._int_mm(A, B^T)`, on every
+  sampled proof block's 32 x 32 cells; then each h1u build over the whole call, run under 0xA5 and then 0x5A (receipts, row
   workspace, seeds): no word left unwritten (holding each poison after its run) or differing between the two runs in any
-  unit, every sampled unit's receipt word for word and its seed_c and sigma_R; with --sm the same call
-  by kh_units_multi_j10r_sm, every word equal to kh_units_multi_j10r's; and the fallback (--ref) on the sampled units:
+  proof block, every sampled proof block's receipt word for word and its seed_c and sigma_R; with --sm the same call
+  by kh_units_multi_j10r_sm, every word equal to kh_units_multi_j10r's; and the fallback (--ref) on the sampled proof blocks:
   receipts, z and seeds.
 
-check.json holds every count; check-got.npz the sampled units' receipts per build. Exit 4 if any word differs.
+check.json holds every count; check-got.npz the sampled proof blocks' receipts per build. Exit 4 if any word differs.
 --operands-only generates S's operands and exits (run it before taking the GPU).
 """
 from __future__ import annotations
@@ -33,8 +32,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import shape as S
 import units as UN
 
@@ -61,7 +59,7 @@ def libs_of(h1u: list[str], ref: str | None, sm: bool) -> dict:
 
 def run_build(lib, a, b, salt, roots, base, picks) -> dict:
     """One build on one call, run under each poison (`units.twice`): {receipts of picks (uint32), seed_c and sigma of
-    picks (bytes), z of picks (the fallback's), words left unwritten and words unstable between the runs (in every unit
+    picks (bytes), z of picks (the fallback's), words left unwritten and words unstable between the runs (in every proof block
     the build computed)}."""
     if isinstance(lib, UN.Ref):
         c = UN.RefCall(lib, a, b, salt, roots, base, units=picks)

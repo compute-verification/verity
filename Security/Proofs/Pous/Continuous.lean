@@ -18,7 +18,7 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
 
 * `Continuous/MissCount.lean`: the counting step, pure probability (`PousContinuous.pr_misses_le`,
   `PousContinuous.pr_misses_gt_le`).
-* `Continuous/Verifier.lean`: the memory challenger enforces the three rules PR #896's draft assumed: no pipelining
+* `Continuous/Verifier.lean`: the memory challenger enforces the three rules an earlier draft assumed: no pipelining
   (`no_pipelining`, `close_le_send`), a hard deadline (`closed_le`, `not_reject`), and every answer past `Δ` counted
   (`hit_on_time`, `late_not_hit`).
 * `Continuous/PerAnswer.lean`: both guarantees from `TimedINC` (`PousContinuous.per_answer`,

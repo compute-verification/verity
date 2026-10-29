@@ -8,7 +8,7 @@ dataflow; 588 s of a Qwen3-4B B32 Commit's 949 s).  The Commit (`--plan PLAN`) t
 equals its own (`key`: the Program digest, the sha256 of the required manifest and of the workload, the Programs it reads, the code
 identity over the integration and core, the vLLM version); a plan it cannot read or whose key differs, and it derives the facts
 itself and records `plan_recomputed` with the reason (`use`).  The facts are the same either way: the plan stores them in the
-order they were derived.  Nothing drawn from the run root is planned: the replay sample and the slim bundle's reads come after
+order they were derived.  Nothing sampled from the run root is planned: the replay sample and the slim bundle's reads come after
 the Commit, from the root it fixed.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 
 SCHEMA = "verity-vllm/commit-plan/v1"
 
@@ -195,7 +195,7 @@ def verdict_entry(args: Any, rec: dict[str, Any] | None) -> dict[str, Any]:
 class Options:
     """Derive a Commit's plan (the producer facts of its manifest, keyed by what they are a function of) without an engine."""
 
-    workload: str = option("--workload", help="the row's workload (the Commit's --workload)")
+    workload: str = option("--workload", type=workload_arg, help="the row's workload (the Commit's --workload)")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required-value manifest")
     program_digest: str | None = option("--program-digest", default=None, help="the Commit's Program digest of record")
     program_dir: str | None = option("--program-dir", default=None, help="B=1: the Build's request Program dir")

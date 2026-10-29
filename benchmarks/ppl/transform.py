@@ -1,8 +1,8 @@
-"""H1's offline weight transform (decision 82, `specs/co32c-u16-cohalf.toml`): an HF checkpoint to the int8 weights the
+"""H1's offline weight transform (`specs/co32c-u16-cohalf.toml`): an HF checkpoint to the int8 weights the
 served co32c linears take (cgemm.cu's `cwedit_h1`: W in [-110, 110], plus one fp32 scale a row).
 
-It is the weight side of `steps.py`'s H1 linear arm, folded once so serving does no smoothing: SmoothQuant (decision 51,
-`smooth`), the rotation (`rotate_linear`, Q seeded by the input width), and the ±110 floor quantization
+It is the weight side of `steps.py`'s H1 linear arm, folded once so serving does no smoothing: SmoothQuant
+(`smooth`), the rotation (`rotate_linear`, Q seeded by the input width), and the ±110 floor quantization
 (`int8_linear`'s weights). The three steps are, per linear:
 
   smooth   W <- W * m (input columns), and 1 / m folds into the activation path: the RMSNorm before q/k/v and gate/up,

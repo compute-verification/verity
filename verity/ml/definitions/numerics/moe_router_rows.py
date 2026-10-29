@@ -11,7 +11,7 @@ def moe_router_topk(logits: np.ndarray, *, E: int, TOPK: int, VPT: int, renormal
     t*VPT .. t*VPT+VPT-1: thread max (F32Max, ascending), warp butterfly xor T/2 .. 1 (lane 0); `ex_i = NvExpf(x_i - max)` (F32Sub, the
     CUDA math-library expf sequence, MUFU.EX2 from the measured table); thread sum from 0.f (F32Add, ascending), butterfly; `rcp = 1.f / sum`
     (F32Div, IEEE); `p_i = ex_i * rcp` (F32Mul), non-finite -> +0; TOPK rounds: lowest-index strict argmax (F32GtStrict scan from p[0]),
-    the winner masked to -10000.f.  `renormalize` (MoeRouterTopKNorm_v1, MOE-04): selected sum ascending from 0.f, denom = sum > 0 ? sum :
+    the winner masked to -10000.f.  `renormalize` (MoeRouterTopKNorm_v1): selected sum ascending from 0.f, denom = sum > 0 ? sum :
     1.f, scale = 1.f / denom (F32Div), w_k = w_k * scale (F32Mul).  Returns (router_w f32 words [TOPK] u32, router_ids i32 words [TOPK] u32)."""
     from verity.ml.definitions.registry import moe as RMOE
     from verity.ml.definitions.numerics import moe_twins

@@ -1,4 +1,4 @@
-"""VLLM-87's Triton kernels (`int8_attention_triton.kv_rows`, `lut_rows`) at the PTX and SASS level (`int8_attention_sass`):
+"""The int8 attention's Triton kernels (`int8_attention_triton.kv_rows`, `lut_rows`) at the PTX and SASS level (`int8_attention_sass`):
 each variant Triton launches, compiled for sm_120 and sm_90, passes; lut_rows compiled with contraction allowed, and its PTX
 with the rounding modes stripped through ptxas, are refused at both levels; a kv_rows dividing with Triton's `/` is refused;
 and contraction can't change kv_rows, whose Definition has no product.  Needs Triton with its bundled ptxas and nvdisasm, not

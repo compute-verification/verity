@@ -3,7 +3,7 @@
 The process loads the Programs of record, indexes them and enumerates their populations (`driver.populate`: minutes for a batch-8
 deployment) while the GPU works.  Once the run is committed, the Commit sends the run's seed and facts (`Planner.plan`); the process draws
 the replay's sample and walks the picks against a recording reader (`driver.planned`), and returns the committed reads they make.  The
-Commit then makes those reads against its own store (`c2_replay.plan`), so its GPU hold pays only for reading them.  The draw is the
+Commit then makes those reads against its own store (`c2_replay.plan`), so its GPU hold pays only for reading them.  The sample is the
 replay's own (`sampled_replay`), so the reads are the ones the CPU replay will make; a read the plan missed is not in the bundle and
 fails closed there.
 """
@@ -49,7 +49,7 @@ class Planner:
         return self._ready
 
     def plan(self, facts: dict[str, Any]) -> dict[str, Any]:
-        """The draw's committed reads ({"reads": [(step, name, lo, hi)], "plan": the plan record}); the process exits after it."""
+        """The sample's committed reads ({"reads": [(step, name, lo, hi)], "plan": the plan record}); the process exits after it."""
         self.ready()
         self._conn.send(facts)
         try:

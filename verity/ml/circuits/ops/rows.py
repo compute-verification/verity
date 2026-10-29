@@ -1,4 +1,4 @@
-"""Row units as IR composites: one proof block a row, the unit writing the whole row (the e2e demo's decoder, CMP-92).
+"""Rows as composites: one proof block a row, writing the whole row (the e2e demo's decoder).
 
     Bf16AddRow_v1{N}   (a: Array<N, bf16>, b: Array<N, bf16>) -> Array<N, bf16>    the residual add: Bf16AddF2fp_v1 per element
     Argmax_v1{V}       (logits: Array<V, bf16>) -> Value<16>                      greedy selection: the 16-bit index of the
@@ -80,7 +80,7 @@ def argmax(logits: Sequence[int]) -> int:
 @composite("Bf16AddRow", 1, ["N"], lambda S: ((("a", Array(S.N, BF16)), ("b", Array(S.N, BF16))), Array(S.N, BF16)),
            conformance="exact-model-tested", refuse=refuse_n)
 def Bf16AddRow(B, S, a, b):
-    """The residual add of a row of N bf16 words, one unit a row: `Bf16AddF2fp_v1` per element, ``bf16_rn(f32(a) + f32(b))``
+    """The residual add of a row of N bf16 words, one proof block a row: `Bf16AddF2fp_v1` per element, ``bf16_rn(f32(a) + f32(b))``
     with every NaN 0x7FFF (``add.rn.f32`` then ``cvt.rn.bf16.f32`` on sm_90)."""
     return B.batch(F.Bf16AddF2fp, a, b, axes=(0, 0))
 
@@ -88,7 +88,7 @@ def Bf16AddRow(B, S, a, b):
 @composite("Argmax", 1, ["V"], lambda S: ((("logits", Array(S.V, BF16)),), INDEX), conformance="exact-model-tested",
            refuse=refuse_v)
 def Argmax(B, S, logits):
-    """Greedy selection over V bf16 logits, one unit a row: the scan from (logits[0], 0) taking (logits[k], k) iff
+    """Greedy selection over V bf16 logits, one proof block a row: the scan from (logits[0], 0) taking (logits[k], k) iff
     `Bf16GtStrict_v1(logits[k], best)`, so the first maximum wins, a NaN is never taken and a NaN logits[0] is never left;
     the index as an unsigned 16-bit word (`TokenSelect_v1{V}`'s function)."""
     best, at = logits[0], B.call(P.const(16, 0))

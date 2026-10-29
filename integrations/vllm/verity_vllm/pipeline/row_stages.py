@@ -1,32 +1,32 @@
-"""A single-GPU row's stages under `verity-vllm row`: precheck -> Build -> Match -> Commit, stopping at the first FAIL.
+"""A single-GPU workload's phases under `verity-vllm row`: precheck -> Build -> Match -> Commit, stopping at the first FAIL.
 
 * **Precheck** (before any engine): the release line of the tree that runs, source identity (every package resolves
-  from this tree under the stages' interpreters), the target family (row id device class == declared target == device)
+  from this tree under the phases' interpreters), the target family (row id device class == declared target == device)
   and the ADVISORY host-memory admission plan (never a stop).  A failing precheck is exit 3, by name.
-* **Build**: the step Program, the request wrapper Program (``--lp``/``--t``, default the envelope; a stochastic row:
+* **Build**: the step Program, the request wrapper Program (``--lp``/``--t``, default the envelope; a stochastic workload:
   its first request) and every other declared request shape, each under its launch context at B >= 2; then GP-01's
-  workload Program (the row's Program digest) and the required-value manifest of record (``manifest build`` /
+  workload Program (the workload's Program digest) and the required-value manifest of record (``manifest build`` /
   ``build-global``; exit 13 when it does not build, 3 when the core registry is not importable).  After a PASS Build the
-  row stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
+  workload stops (exit 21) unless every call-boundary identity of the manifest has a source the Commit attaches
   (``Row.call_boundaries``: the CPU gate ``gate call-boundaries``, over the Programs the Commit reads with ``boundary-plan``, which
   writes the Commit's call-boundary plan on a PASS).
 * **Match**: the observed run and the fold (``match``), the per-request comparison (B=1 against the served shape; B>1
   the X-09 decomposition, deriving any shape it names as missing and rerunning once), the global Match (GM-01) and, on
-  a stochastic row, the sampler value check; ``row_records.match_summary`` decides.  A leased row runs ``match`` as its GPU
+  a stochastic workload, the sampler value check; ``row_records.match_summary`` decides.  A leased workload runs ``match`` as its GPU
   phase under the lease, then its CPU phase with no device (`pipeline.gpu_lease`).
 * **Commit**: the pairs protocol (``commit``) with the manifest of record, the Program digest read from the Build, the
   Match record for the live oracle compare, the Build's Programs for the sampled replay and the weights of record
   (derived beside the component Program, re-derived when stale); then the manifest verification and the verdict
-  record (``verdict from-record``), whose outcome is the stage's decision.
+  record (``verdict from-record``), whose outcome is the phase's decision.
 
 A **config run** (``--config-run 1``): the Build and the strict word check, ONE instrumented Commit under bounded staging with a
-k-unit replay (uniform by default, ``--replay-draw``), and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
-``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** stage (``row_config.replay``, on CPU) decides
-it and writes ``config_record.json``.  The **plan** stage (``row_plan``, on CPU) derives what the Commit needs before the GPU is held;
-a config run's Build without the Commit or a plan stage of its own ends with it, and its FAIL leaves the Commit to derive what it
+replay of k proof blocks (uniform by default, ``--replay-draw``), and ``config_record.json``; no Match, no manifest-verify (``pipeline.row_config``).  With
+``--replay-deferred 1`` the Commit seals its replay bundle and ends PENDING; the **replay** phase (``row_config.replay``, on CPU) decides
+it and writes ``config_record.json``.  The **plan** phase (``row_plan``, on CPU) derives what the Commit needs before the GPU is held;
+a config run's Build without the Commit or a plan phase of its own ends with it, and its FAIL leaves the Commit to derive what it
 would have held.
 
-Exit: 0 every requested stage PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
+Exit: 0 every requested phase PASS; 10 Build FAIL; 11 Match FAIL; 12 Commit FAIL; 13 manifest not built; 14 Match
 record incomplete at Commit; 15 plan FAIL; 20 strict word check FAIL (config run); 21 a call-boundary identity without a source the
 Commit attaches; 3 precheck FAIL; 2 no workload; 128+signal when cancelled.
 """
@@ -55,7 +55,7 @@ from verity_vllm.program import prefix_plan as PP
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
 CAP = 14400
 #: a derive on ir="boolean" lifts every word Definition to bits after the word derive: 2.6x the word derive's wall on Qwen3-0.6B,
-#: and over 900 s against 357 s on the int8 Llama-3.1-8B row (VLLM-27)
+#: and over 900 s against 357 s on the int8 Llama-3.1-8B workload
 BOOLEAN_DERIVE_SCALE = 4
 
 
@@ -68,7 +68,7 @@ class SingleRow(Row):
                  build: BuildConfig, match: MatchConfig, commit: CommitConfig, protocols: tuple[str, ...] | None = None):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="row_pod")
         self.gpu_util, self.cb, self.cm, self.ck_ = gpu_util, build, match, commit
-        self.protocols = protocols            # the row's protocol set beside sampled proofs (protocol_options.at_row), None by default
+        self.protocols = protocols            # the workload's protocol set beside sampled proofs (protocol_options.at_row), None by default
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
@@ -111,7 +111,7 @@ class SingleRow(Row):
     def guarded(self, what: str, fn: Any, *args: Any) -> str:
         try:
             return fn(*args)
-        except Exception as e:  # noqa: BLE001 -- a summary that cannot be written is a FAIL of its stage, named in row.log
+        except Exception as e:  # noqa: BLE001 -- a summary that cannot be written is a FAIL of its phase, named in row.log
             self.log(f"{what} failed: {type(e).__name__}: {e}")
             return "FAIL"
 
@@ -188,7 +188,7 @@ class SingleRow(Row):
         self.MML = self.I + self.O
         self.tgt = R.declared_target(self.path(self.wl), self.protocols, row=self.row)
         self.tgt_args = ["--target", self.tgt] if self.tgt else []
-        # the attention implementation the row executes (declared, else the pinned vLLM's default for this device) selects the tap
+        # the attention implementation the workload executes (declared, else the pinned vLLM's default for this device) selects the tap
         _, fa = self.output(self.cli("row", "fa-version", self.wl, *self.tgt_args), stderr=subprocess.DEVNULL)
         if self.guarded_max():
             self.hidden_so = self.env.hidden_so or (self.env.hidden_so_fa3_guarded if fa.strip() == "3" else self.env.hidden_so_fa2_guarded)
@@ -222,7 +222,7 @@ class SingleRow(Row):
 
     # ------------------------------------------------------------------------------------------------ manifest
     def guarded_max(self) -> bool:
-        """The row runs the guarded-max tap build: by default, as every row's attention is FA2/FA3 (GUARDED_MAX_TAP=0 for A/B only)."""
+        """The workload runs the guarded-max tap build: by default, as every workload's attention is FA2/FA3 (GUARDED_MAX_TAP=0 for A/B only)."""
         return self.ck_.guarded_max_tap == "1"
 
     def required_manifest(self, stage: str, digest: Callable[[], str] | None = None) -> int | None:
@@ -293,7 +293,7 @@ class SingleRow(Row):
         for _, lf, _, _ in extra:
             rc2 = rc_of(lf) if rc_of(lf) != 0 else rc2
         rc2 = rc_x if rc_x != 0 else rc2
-        self.log(f"Build derives ran {jobs_n}-wide (SYS-06): step rc={rc1} request rc={rc2} shapes={len(extra) + 1} wall={int(time.time()) - t0}s")
+        self.log(f"Build derives ran {jobs_n}-wide: step rc={rc1} request rc={rc2} shapes={len(extra) + 1} wall={int(time.time()) - t0}s")
         return rc1, rc2
 
     def derived_dirs(self) -> list[str]:
@@ -398,7 +398,7 @@ class SingleRow(Row):
                     if not (gm_rc == 4 and p == 1):
                         break
                     self.derive_missing(derived, "X-09 (inside GM-01)")
-                open(f"{d}/match_compare.log", "w").write("$ (shared, R17-28 P1) X-09 document written by cb_a.global_match --decomp-out; see global_match.log\n")
+                open(f"{d}/match_compare.log", "w").write("$ (shared) X-09 document written by cb_a.global_match --decomp-out; see global_match.log\n")
                 return R.decomp_rc(d), gm_rc, True
             rcc = 3
             for p in (1, 2):
@@ -489,7 +489,7 @@ class SingleRow(Row):
             raise Stop(11)
 
     def match_cmd(self, phase: str | None = None) -> list[str]:
-        """The Match's ``match`` command line, over ``phase`` (default the row's ``--match-phase``)."""
+        """The Match's ``match`` command line, over ``phase`` (default the workload's ``--match-phase``)."""
         d, cm = self.d, self.cm
         snapmax = ["--snapshot-max-bytes", cm.snapshot_max_bytes] if cm.snapshot_max_bytes else []
         # the Programs the Match compares against (B=1 the request Program, B>=2 its components): the fold binds their sampler construction
@@ -507,7 +507,7 @@ class SingleRow(Row):
 
     def form_b(self) -> None:
         """Required values the replay has no evaluator for are value-checked by form (B) alone, complete only over EVERY
-        step: the row default snapshot steps become ``all`` for them (an explicit ``--snapshot-steps`` stands, named)."""
+        step: the workload's default snapshot steps become ``all`` for them (an explicit ``--snapshot-steps`` stands, named)."""
         from verity_vllm.check.replay.coverage import form_b_families
         try:
             f = form_b_families(json.load(open(f"{self.d}/manifest.json")))
@@ -531,7 +531,7 @@ class SingleRow(Row):
         raise Stop(rc)
 
     def commit_cmd(self, taps: list[str]) -> list[str]:
-        """The Commit's command line; `taps`: the row's taps that apply to it (`row_records.applicable_taps`), whose sources it attaches."""
+        """The Commit's command line; `taps`: the workload's taps that apply to it (`row_records.applicable_taps`), whose sources it attaches."""
         ck = self.ck_
         pairs, warmup = ("1", "1") if self.config_run else (str(ck.pairs), "2")
         cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
@@ -543,7 +543,7 @@ class SingleRow(Row):
             if ck.replay_deferred in ("1", "slim"):
                 cmd += ["--replay-deferred", *(["slim"] if ck.replay_deferred == "slim" else [])]
         if self.protocols:
-            cmd += self.tgt_args                      # the declared target with the row's protocols; unset, the Commit reads the workload's
+            cmd += self.tgt_args                      # the declared target with the workload's protocols; unset, the Commit reads the workload's
         # the windowed collector (ring of window_slots x window_mb MiB, raw copies retained on host, openings verified after release)
         # is the default; window_mb=0 is per-step blocks, retain=device the device-resident footprint.  Bounded staging is the config
         # run's (the Commit's own default is bounded whenever windowed)
@@ -568,8 +568,8 @@ class SingleRow(Row):
         return cmd + R.tap_source_args(taps, self.env)
 
     def vu_export_dir(self) -> str:
-        """Where the Commit exports the row's sampled VUs (`pipeline.vu_export`): inside the research run dir when there is one, so the
-        run's custody preserves them; else beside the row.  `provenance.json` there names the row and the shipped source."""
+        """Where the Commit exports the workload's sampled VUs (`pipeline.vu_export`): inside the research run dir when there is one, so the
+        run's custody preserves them; else beside the row dir.  `provenance.json` there names the workload and the shipped source."""
         rd = self.env.research_run_dir
         d = os.path.join(rd, "vu-export", self.row) if rd else f"{self.d}/vu-export"
         os.makedirs(d, exist_ok=True)
@@ -588,7 +588,7 @@ class SingleRow(Row):
 
     def manifest_of_record(self, stage: str = "commit") -> str:
         """The required-value manifest the Commit runs over: the one named, else the Build's when it is of record (`R.manifest_not_of_record`:
-        the query of record with a partition, the Build's Program digest, the row's tap policies, a passing word check); any other is moved
+        the query of record with a partition, the Build's Program digest, the workload's tap policies, a passing word check); any other is moved
         aside, never used, and the manifest rebuilt here from the Build's request Programs."""
         d = self.d
         man = self.ck_.required_manifest or ""
@@ -687,7 +687,7 @@ class SingleRow(Row):
             self.log(f"manifest of record VERIFY FAILED: {R.tail(f'{d}/manifest_verify.log', 200)}")
 
     def commit_prepare(self) -> tuple[int, list[str], str]:
-        """The Commit stage up to its command line -> (its timeout, its command, its manifest of record or "")."""
+        """The Commit phase up to its command line -> (its timeout, its command, its manifest of record or "")."""
         d, ck = self.d, self.ck_
         kb, kt = max(1, (self.B + 3) // 4), max(1, (self.I + self.O + 287) // 288)
         to = ck.commit_timeout or min(CAP, 2400 * kb * kt)

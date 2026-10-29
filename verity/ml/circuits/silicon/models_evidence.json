@@ -1,0 +1,98 @@
+{
+ "hopper_bf16_m16n8k16": {
+  "h100": "r20260922-185339-e337",
+  "rtx5090": "r20260922-182911-1f10"
+ },
+ "hopper_bf16_wgmma_k16": {
+  "ss": "r20260926-020157-242a",
+  "rs": "r20260926-020210-aee8"
+ },
+ "ada_e5m2_m16n8k32": {
+  "runs": [
+   "r20260922-175732-172a",
+   "r20260922-182641-e27d"
+  ]
+ },
+ "hopper_e5m2_wgmma_k32": {
+  "run": "r20260922-183837-940b"
+ },
+ "blackwell_sm120_e4m3_m16n8k32": {
+  "probe": "r20260930-030915-23f3",
+  "fit": "r20260930-031244-ecbc",
+  "specials": {
+   "capture": "r20260930-041757-0bde",
+   "eval": "r20260930-052000-e32d"
+  },
+  "sweep": "r20260930-063457-5410"
+ },
+ "blackwell_sm120_e5m2_m16n8k32": {
+  "probe": "r20260930-031447-a5ad",
+  "sweep": "r20260930-063527-4d6b"
+ },
+ "blackwell_sm100_tcgen05_e4m3": {
+  "device": "GPU-2e39ef52",
+  "run": "r20261019-081000-ad35"
+ },
+ "blackwell_sm100_tcgen05_e5m2": {
+  "device": "GPU-2e39ef52",
+  "run": "r20261019-081000-ad35"
+ },
+ "blackwell_sm120_nvf4_m16n8k64": {
+  "device": "GPU-506928f9",
+  "captures": "r20260922-182011-88f8",
+  "fit": "r20260922-215616-3c10",
+  "confirmation": "r20260922-221716-65b9",
+  "autoproof": {
+   "device": "GPU-297048d1"
+  }
+ },
+ "blackwell_sm120_mxf4_m16n8k64": {
+  "device": "GPU-506928f9",
+  "captures": "r20260922-182548-e654",
+  "fit": "r20260922-215831-c3d8",
+  "confirmation": [
+   "r20260922-221824-8d99",
+   "r20260922-222148-6342"
+  ]
+ },
+ "blackwell_sm120_mxf4_m16n8k64_underflow_signed": {
+  "fit": "r20260922-215831-c3d8",
+  "confirmation": [
+   "r20260922-221824-8d99",
+   "r20260922-222148-6342"
+  ]
+ },
+ "blackwell_sm100_tcgen05_nvf4": {
+  "device": "GPU-d1d0c3f4",
+  "runs": [
+   "r20260923-001528-f5c5",
+   "r20260923-001759-d869",
+   "r20260923-001856-7d63",
+   "r20260923-002315-b793"
+  ]
+ },
+ "blackwell_sm100_tcgen05_mxf4": {
+  "device": "GPU-d1d0c3f4",
+  "mxf4": [
+   "r20260923-001838-42a4",
+   "r20260923-002320-6fbf"
+  ],
+  "mxf4nvf4_2x": [
+   "r20260923-001832-17dc",
+   "r20260923-001903-c420"
+  ],
+  "floor": {
+   "run": "r20261019-080611-3d1d",
+   "device": "GPU-2e39ef52"
+  }
+ },
+ "blackwell_sm120_e2m1_m16n8k32": {
+  "run": "r20260930-071201-d356",
+  "device": "GPU-5f1149a4",
+  "confirmation": "r20260930-073334-fdac",
+  "chain": {
+   "run": "r20260930-073445-e2b6",
+   "device": "GPU-2b59d5fe"
+  }
+ }
+}

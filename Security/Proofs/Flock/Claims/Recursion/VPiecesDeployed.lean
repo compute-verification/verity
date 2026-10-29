@@ -13,7 +13,7 @@ This file fixes the pieces and the owners, and proves `hR`.
   (`OpenPiece`, `openHolds`) or a `rec-cap` node (`CapPiece`, `capHolds`), each kind's list and what each says as its
   lowering gives them (`vholdsD` at the deployed three).
 * **The owners** (`noB`, `keep`, `vown`): no part owns a base check (`hrest` holds them off any witnesses:
-  RESTVERDICT's `BasesHold`); `dense` goes to part 0; each kind's piece to the owner its lowering gives it, kept to the
+  `BasesHold`); `dense` goes to part 0; each kind's piece to the owner its lowering gives it, kept to the
   statement's parts (`keep`: an owner past `nS x` owns nothing).
 * **`hR`** (`ownP_lt`, `hR_vown`): the owners are the statement's parts, for every kind's owners, since `keep` keeps
   only those.
@@ -51,7 +51,7 @@ def vholds (resH : ResPiece → Msg → List Msg → List Coin → Prop) (openH 
   | .cap q, x, ms, cs => capH q x ms cs
 
 /-- What a piece says at the deployed three: `resHolds`, `openHolds` and `capHolds`. -/
-abbrev vholdsD (elemAt : Msg → List Msg → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
+abbrev vholdsD (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (sideAt : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (rowAt : Msg → List Msg → CapPiece → ByteArray) : VPiece → Msg → List Msg → List Coin → Prop :=

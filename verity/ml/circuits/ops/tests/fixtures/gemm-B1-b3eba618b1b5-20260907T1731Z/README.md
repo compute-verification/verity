@@ -1,10 +1,8 @@
 # Authenticated GEMM operation fixtures (B1-b3eba618b1b5-20260907T1731Z)
 
-Contract section 16.8.  30 fixtures, 6,285,205 bytes, from bundle profile
+30 fixtures, 6,285,205 bytes, from bundle profile
 `b3eba618b1b5` (capture format weights v2); families down_proj, gate_up_proj, lm_head, o_proj, qkv_proj,
-phases prefill and decode, 3 per (family, phase).  Every fixture was checked
-`exact` by the independent GEMM relation (`verity_vllm_numerics.relations.independent_gemm`) on this
-pod; `fixture.json` records the committed and predicted words.
+phases prefill and decode, 3 per (family, phase).  `fixture.json` records the committed and predicted words.
 
 Per fixture directory `<family>_<phase>_<n>/`:
 

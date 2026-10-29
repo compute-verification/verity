@@ -1,4 +1,4 @@
-"""IR-registered FP32 and BF16 arithmetic primitives: FP32 add/mul/fma/div rounded to nearest even (no ftz), the FTZ family
+"""Registered FP32 and BF16 arithmetic primitives: FP32 add/mul/fma/div rounded to nearest even (no ftz), the FTZ family
 of the fast-math FlashAttention-2 build, `max`, the `-inf` guard, and the BF16 element-wise operations the eager kernels
 compute in FP32 and round once to BF16.
 
@@ -243,7 +243,7 @@ def F32FmaSubFtz(a: int, b: int, c: int) -> int:
     return ftz_bits(f32_fma_bits(ftz_bits(a), ftz_bits(b), ftz_bits(c) ^ 0x80000000))
 
 
-# --- version 2: every NaN result the GPU's `F32_NAN_PTX` (the L40S / H100 probe art:e5dd6ce9..., every build, ftz on and off);
+# --- version 2: every NaN result the GPU's `F32_NAN_PTX` (measured on the L40S and H100, every build, ftz on and off);
 # equal to `_v1` on every other word ------------------------------------------------------------------------------------------
 
 

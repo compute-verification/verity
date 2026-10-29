@@ -90,20 +90,20 @@ that came in from the rest and its rebuilds: a block whose contents came over th
 relayed block costs `min(|z|, |E|)` bits on a link, and the GPU's HBM held the rest (`BoundReceiptShare`). Against
 `RateAudit`, binding the receipts to `z` takes the rest's mix out of the floor: without it, the rest makes every
 receipt from the store it holds, and nothing crosses a link. In bits the event's complement is the remote statement's
-`CoLocated` route (lane ra-remote-theorem) in this game: `k·b ≤ footprint + S + rebuilt·b + L + (L_z + λ + z_out)·b/a
+`CoLocated` route in this game: `k·b ≤ footprint + S + rebuilt·b + L + (L_z + λ + z_out)·b/a
 + λ`, the GPU's reads, its state and rebuilds, the bits in at `1:1` and the bits out and the tile outputs the rest
 made by tile work (`z_out = F_z·a/w`) at `|E|/|z|`.
 
 **What the game takes.** Each block's receipt binds a tile output of its own (the game's `z` is one independent value
 per block), so one shipped tile output unlocks one block; a binding shared by `n` receipts unlocks `n`. The mix is a
 random oracle on the whole of `E_j` and `z_j`, so a location makes a receipt only holding both; the deployed receipt
-hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which lane ra-bound-receipt proves
+hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which `BoundSketchRelay` gives
 `½·min(|z|, |E|)` bits per relayed block, by Lindsey's lemma: the deployed bound is up to `2×` weaker than this game's.
 The rest's tile work stands for every way it gets a tile output without the link, the activations' route among them:
 its information is free here and only its work counts. The node is fixed before the mix is drawn: its state and memory
 are functions of the store and the tile outputs, never of the mix. Over a window's passes that is a mix derived afresh
 each pass from the chained seed; a mix (or a sketch matrix) fixed for the window lets a location keep, from one pass,
-a digest of each block that makes the next pass's receipts without it (red team F29), which this game doesn't cover.
+a digest of each block that makes the next pass's receipts without it, which this game doesn't cover.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptLink`, from `RateAudit`'s compression on each location (the GPU's view at
 each tile output and mix, the rest's at each store and mix), with the GPU's mix at the tile outputs and the rest's at
@@ -165,13 +165,13 @@ so at most `|E|/min(|z|, |E|)` times the links' bits each way with the slack, pl
 
   `(L + m·b)·min(a, b)·w ≤ b·((L + L_z + λ)·w + F_z·a)`.
 
-**The reading.** Divide the first by `a·w`: `L + m·b ≤ L + (L_z + λ + z_out)·b/a` with `z_out = F_z·a/w`, the
-remote statement's `inBits + (outBits + zOut)·b/z_b` (`CoLocated`'s link part, lane ra-remote-theorem) at `z_b = a`.
-Divide the second by `min(a, b)·w` and by the store's bits the window reads, `k·b`, which at a window `T` is `ΣR·T`:
-the share of the floor the links take is `μ_link ≤ ((L + L_z)/T)/ΣR · |E|/min(|z|, |E|)` plus `λ`'s and the rest's
-tile work's `F_z/(w·k)`, with `(L + L_z)/T` the link's capacity, both directions. At `|z| ≥ |E|` a relayed block costs
-its contents, and the link's share is `RateAudit`'s `c_free/|E|`; at tile binding, `|z|/|E| = 4m/k` for a batch of `m`
-rows and a reduction of `k`, it is `k/(4m)` times that on the outbound side.
+**The reading.** Divide the first by `a·w`: `L + m·b ≤ L + (L_z + λ + z_out)·b/a` with `z_out = F_z·a/w`, the remote
+statement's `inBits + (outBits + zOut)·b/z_b` (`CoLocated`'s link part) at `z_b = a`. Divide the second by `min(a, b)·w`
+and by the store's bits the window reads, `k·b`, which at a window `T` is `ΣR·T`: the share of the floor the links take
+is `μ_link ≤ ((L + L_z)/T)/ΣR · |E|/min(|z|, |E|)` plus `λ`'s and the rest's tile work's `F_z/(w·k)`, with `(L + L_z)/T`
+the link's capacity, both directions. At `|z| ≥ |E|` a relayed block costs its contents, and the link's share is
+`RateAudit`'s `c_free/|E|`; at tile binding, `|z|/|E| = 4m/k` for a batch of `m` rows and a reduction of `k`, it is
+`k/(4m)` times that on the outbound side.
 
 Proof: `Accounting.SecurityProofs.BoundReceiptShare`, by division.
 

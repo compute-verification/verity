@@ -17,7 +17,7 @@ are statements, proved in `Proofs/Core/Accel`, not assumptions: they follow from
   operand therefore takes several MMAs: that much is semantics, not an assumption. P1 is a statement of exactness,
   not of cost: the cheapest exact route for a wide operand is a minimum over the card's formats, block scales
   included (on sm_120 a block-scaled `nvf4` or `mxf4` MMA, at half an `s8` MAC's units, shifts base-8 digits through
-  its scales inside one MMA, RT-MODEL M10), and a cost bound must take that minimum.
+  its scales inside one MMA), and a cost bound must take that minimum.
 * **(P2) An MMA's products sum into exactly one destination; C is a register read.** An MMA's output `o` reads row
   `o / n` of `A`, column `o % n` of `B` and accumulator `o` only (`P2Local`; a 2:4 sparse MMA's, row `o / n`'s kept
   elements and the elements of column `o % n` its selectors name, `P2LocalSp`), and distinct outputs read distinct row
@@ -25,7 +25,7 @@ are statements, proved in `Proofs/Core/Accel`, not assumptions: they follow from
   is an input like `A` and `B`, read from registers its operands name, and `D` is written where its own operands name
   (`mma.sync` on both cards takes `D ≠ C`): one accumulator value may seed several MMAs, each at its own units and no
   more. That fork is the card's, and the model keeps it, so delivering an accumulator to new words costs nothing
-  beyond the MMA's own products and slot: a pricing over this model may not charge a delivery per seed (RT-MODEL M5;
+  beyond the MMA's own products and slot: a pricing over this model may not charge a delivery per seed (so
   the ring-fragment cost `#products + d·Σ(f_p − 1)` does not hold here as stated, and depth-1 Strassen saves 2 of its
   5 extra deliveries through seeds). An instruction writes only the locations its outputs name
   (`P2Frame`), so a product reaches another word only through further instructions, and each of those uses at least

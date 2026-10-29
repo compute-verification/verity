@@ -1,5 +1,5 @@
-"""`verity_int8::scaled_mm_zy`'s y pinned bit for bit to compute-accounting's dequant Definition, `h1zy.PouwZyDequant_v2`
-(RT4-INT-33): F2fpBf16_v2(F32Mul_v4(F32Mul_v4(S32ToF32Rn_v2(z), s_a), s_w)), the served order with no bias, every NaN 0x7FFF.
+"""`verity_int8::scaled_mm_zy`'s y pinned bit for bit to compute-accounting's dequant Definition, `h1zy.PouwZyDequant_v2`:
+F2fpBf16_v2(F32Mul_v4(F32Mul_v4(S32ToF32Rn_v2(z), s_a), s_w)), the served order with no bias, every NaN 0x7FFF.
 
 * **On CUDA** (skipped without it) every cell of every record's y, and of the served y, is `h1zy.dequant` (the Definition's
   word view) of the cell's exact z at its slot's s_a (0 on an empty slot) and its column's s_w; every record parses as

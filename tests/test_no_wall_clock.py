@@ -36,8 +36,6 @@ SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
     "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
-    "integrations/vllm/tests/check/adversarial.py::run_checkers": "the mutation harness reports each run's seconds; no test reads them",
-    "integrations/vllm/tests/check/adversarial.py::run_one": "the mutation harness reports each fold's seconds; no test reads them",
     "integrations/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
     "integrations/vllm/tests/engine/int8_decode_split_gpu.py":
@@ -51,6 +49,8 @@ ALLOWED: dict[str, str] = {
         "the by-hand local gate (not collected) gives infra's auditor.py the times its signed entries record, as on vy-challenger-1",
     "integrations/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":
         "the by-hand live rehearsal (not collected) polls the live gate's status for a session's end entry: it has no wait verb",
+    "integrations/vllm/tests/protocols/pous_gpu.py":
+        "the PoUS option's GPU smoke (not collected) records its load, install, decode and step seconds; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::run": "the GPU run records its install, serve and compile seconds; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::compile_from": "the host compile records its seconds; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::fill": "the GPU run records its serve and step seconds; nothing reads them",
@@ -59,7 +59,7 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::await_end":
         "the live run polls the live gate's status for a window's session end entry before reserving the next: it has no wait verb",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::await_listener":
-        "the live run waits for the challenger's ssh -R listener (ss -ltn) once a second; a probe connect would take its one client",
+        "the live run waits for the challenger's session port to listen (ss -ltn) once a second; a probe connect would take its one client",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::served_measures":
         "the GPU run records its step seconds and when serving ended; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
@@ -164,8 +164,8 @@ def _test_sources() -> list[str]:
 
 def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     """`check` builds the Lean verifier and every Lake package, and installs elan when `lake` is missing, while the pytest step
-    runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order (as
-    verity-flock did, r20260929-015410-5a20). Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
+    runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order.
+    Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
     that suite declares the build outputs it uses under `[tool.verity.tests] artifacts`, which key its cached pass."""
     spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec)

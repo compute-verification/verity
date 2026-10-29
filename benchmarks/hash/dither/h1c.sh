@@ -2,8 +2,8 @@
 # h1c.cu built for sm_120a on the CPU, then h1cgate.py (or H1C_GATE, e.g. h1agate.py: the served calls' A tables) on one
 # leased GPU for at most 25 minutes: the served window's tables on a full step against commit.py, then their timing.  Extra
 # arguments go to the gate.
-#   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
-#     --env GPU_LEASE_WHO=kernels-dither-rtx -- bash benchmarks/hash/dither/h1c.sh
+# On an RTX PRO 6000 under a GPU lease:
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/h1c.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 mkdir -p /workspace/pouw
@@ -17,7 +17,7 @@ CUDA=${CUDA:-/usr/local/cuda-13.0}
 grep -A2 "h1c_" "$OUT/build-h1c.log" | grep -i "registers\|spill" | head
 [ -n "${BUILD_ONLY:-}" ] && { echo "h1c: built (BUILD_ONLY)"; exit 0; }
 PY=${PY:-/workspace/jobs/venv312/bin/python3}
-export PYTHONPATH=$ROOT:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
+export PYTHONPATH=$ROOT:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1:$ROOT/benchmarks/hash/dither
 echo "h1c: asking for one GPU at $(date -u +%H:%M:%SZ)"
 gpu-lease 1 --wait --max-min 25 -- timeout 1450 "$PY" "benchmarks/hash/dither/${H1C_GATE:-h1cgate.py}" --lib "$S/libh1c.so" \
   --out "$OUT" "$@"

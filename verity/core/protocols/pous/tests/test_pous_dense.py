@@ -63,7 +63,7 @@ def test_construction_is_lean_chain_dense():
 
 
 def test_costs():
-    """Block i costs i + 1 calls of Π₂; decode runs the rows in parallel: B rounds, B(B + 1)/2 calls."""
+    """Label i costs i + 1 calls of Π₂; decode runs the rows in parallel: B rounds, B(B + 1)/2 calls."""
     params = dense.DenseParams(8, 64)
     prims = dense.reference(params)
     t = tag(salt_value(SALT), 0)

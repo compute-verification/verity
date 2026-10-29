@@ -43,7 +43,7 @@ from verity_vllm.check.replay.fork import die_with_parent
 
 FLAG = "MATCH_IMPL"
 
-# [R17 mfast, COORD R17-7.2] what this module IS at this revision, on every result document (`impl` block) and in the differential
+# what this module IS at this revision, on every result document (`impl` block) and in the differential
 # harness's report header; `identity` meant "check re-exports the checker of record" (harness plumbing proof, 69a67a90e).
 IMPL_NAME = "fast"
 CANDIDATE_STAGE = "v6-memo-x09share-internhash-specid+legs+compactargs"   # mprof units 1-4b (memo, X-09 Projection share, G7 O(1), digest-id Merkle payload, identity shortcut, _spec_id on the definition, cache release, per-process ids enforced) + mfast legs (MATCH_WORKERS; G8 matching returned as facts) + mfast compact operand progressions (MATCH_COMPACT)
@@ -75,7 +75,7 @@ def reset() -> None:
     stats.clear()
 
 
-# [R17 rev F-r17-06] the memo tables pin the Prog / Projection objects they were computed from; without a release a process that
+# the memo tables pin the Prog / Projection objects they were computed from; without a release a process that
 # checks several records in a row (harness in-process mode, tests, a profiler loop) grows by one record's caches per record.  check()
 # brackets its body with enter()/leave(): the OUTERMOST call (depth 0 again -- the alternate-criterion run is a nested check() and must
 # keep the memo) drops every table.  row_pod = one record per process, so the release changes nothing on a row of record.
@@ -87,9 +87,9 @@ def enter() -> None:
     _depth += 1
 
 
-config: dict = {}       # [rev S-r17-17 / M-0276 (4)] the declared configuration of the fast path as `ops()` read it (workers cap, operand form,
+config: dict = {}       # the declared configuration of the fast path as `ops()` read it (workers cap, operand form,
                         # switches as read from the environment) -- stated on the document's impl block
-last_stats: dict = {}   # [rev F-r17-09] the outermost check()'s counters, snapshotted at leave() BEFORE the release: the CLI's impl block
+last_stats: dict = {}   # the outermost check()'s counters, snapshotted at leave() BEFORE the release: the CLI's impl block
                         # (impl_info, called after check() returned) reports the run's configuration -- MATCH_WORKERS used, MATCH_COMPACT,
                         # memo hit / miss -- instead of an empty table
 
@@ -183,10 +183,10 @@ def _canonical_hash_memo(P: SEQ.Prog, seqs: list[list[int]], unfold: bool) -> st
     return h
 
 
-# [rev F-r17-07] THE ID SPACE IS PER PROCESS.  `_merkle_ids` assigns small ids to payload digests in FIRST-SIGHT order, so the same
+# THE ID SPACE IS PER PROCESS.  `_merkle_ids` assigns small ids to payload digests in FIRST-SIGHT order, so the same
 # digest gets different ids in two processes that saw different things first: a dag_hashes dict is meaningful ONLY in the process that
 # computed it (or in a child forked afterwards, which inherits the table).  Two dicts from two processes must never be compared or
-# mixed (a worker's dict seeded into the parent's memo beside a parent-computed dict = two id spaces, F-r17-07).  The dicts therefore
+# mixed (a worker's dict seeded into the parent's memo beside a parent-computed dict = two id spaces).  The dicts therefore
 # carry their origin pid and the memo refuses a dict from any process other than this one or its parent -- loudly, never a wrong match.
 _merkle_ids: dict[tuple, int] = {}   # structural Merkle key (unit 6) -> small id; one table per process (see above)
 
@@ -204,13 +204,13 @@ def _check_origin(h) -> None:
     inherited); a plain dict (no origin) is refused like a foreign one -- never compared."""
     if not isinstance(h, _Hashes):
         raise RuntimeError(f"global_match_fast: dag_hashes memo holds a {type(h).__name__} without an origin pid -- only a _Hashes computed "
-                           f"by this process is accepted (F-r17-08)")
+                           f"by this process is accepted")
     if h.pid not in (os.getpid(), os.getppid()):
         raise RuntimeError(f"global_match_fast: dag_hashes ids from process {h.pid} used in process {os.getpid()} -- the small-id space is "
-                           f"per process (F-r17-07); recompute in this process or map ids back to digests before crossing")
+                           f"per process; recompute in this process or map ids back to digests before crossing")
 
 
-# [R17 mprof unit 6] STRUCTURAL INTERNING replaces sha256(json(payload)) in the fast path's dag_hashes.  The record's Merkle hash is
+# STRUCTURAL INTERNING replaces sha256(json(payload)) in the fast path's dag_hashes.  The record's Merkle hash is
 # sha256 of the JSON text of [spec, form, parts, out] with every node-space run written as ["N", <producer's hash>, lo, hi] and every
 # other run as its tuple; two instances compare equal iff those texts are equal.  On this domain (str / int leaves only) text equality
 # is structural equality, so an id assigned by a dict keyed on the STRUCTURE -- (spec, form, out, one id per operand), the operand id
@@ -220,7 +220,7 @@ def _check_origin(h) -> None:
 # (prefix node, base, delta, count) WITHIN ONE CALL (the producers named by a (step, index) base are this Prog's, under this cone):
 # the attention gather at position t+1 is the gather at position t plus one producer, so it costs ONE trie step instead of t -- the
 # run count no longer multiplies the work.  The relation is unchanged: every memoised node is the trie node the full walk would reach.
-# A non-node progression is one trie step of its own (a different item set, the same partition: the operand is a normal form).  Values stay equality keys inside ONE process (F-r17-07: `_Hashes` carries the pid).
+# A non-node progression is one trie step of its own (a different item set, the same partition: the operand is a normal form).  Values stay equality keys inside ONE process (`_Hashes` carries the pid).
 _trie: dict[tuple, int] = {}         # (prefix node, run item) -> node; node 0 = the empty operand; per process, released on leave
 
 
@@ -257,7 +257,7 @@ def _dag_hashes_intern(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, i
                                 node, start = n, c - 1
                             s0, jj0, lo0, hi0 = base
                             ds, djj, dlo, dhi = delta
-                            # [F-r17-10, rev M-0338/M-0383] pm is keyed on STRUCTURE, so an entry must be what the full walk reaches for
+                            # pm is keyed on STRUCTURE, so an entry must be what the full walk reaches for
                             # EVERY later consumer: a producer named by ITS id is stable (hashes only grows), a producer named by the
                             # marker (not hashed yet: forward ref, or dead under this cone) is not -- the record re-reads `hashes` per
                             # consumer, and a resolved consumer after the producer gets the producer's digest where the forward-ref
@@ -312,7 +312,7 @@ def _dag_hashes_memo(P: SEQ.Prog, only: set[int] | None = None) -> dict[int, int
     key = (id(P), None if only is None else id(only))
     hit = _dag_memo.get(key)
     if hit is not None and hit[0] is P and (only is None or hit[1] is only):
-        _check_origin(hit[2])   # F-r17-07: a dict computed in another process (seeded from a worker) is refused, not compared
+        _check_origin(hit[2])   # A dict computed in another process (seeded from a worker) is refused, not compared
         stats["dag_hashes_hit"] += 1
         return hit[2]
     stats["dag_hashes_miss"] += 1
@@ -364,7 +364,7 @@ _proj_registry: dict[tuple, tuple] = {}    # construction key -> (oracle Prog, P
 
 def _proj_key(oracle: SEQ.Prog, inst_idx, tok_node, weights_node, seed_node, peer_node=None) -> tuple:
     w = frozenset(weights_node) if isinstance(weights_node, (set, frozenset, list, tuple)) else frozenset({weights_node})
-    return (id(oracle), tuple(inst_idx), tok_node, w, seed_node, peer_node)   # [R17 D90] the request's peers node is part of the view
+    return (id(oracle), tuple(inst_idx), tok_node, w, seed_node, peer_node)   # the request's peers node is part of the view
 
 
 class _MemoProjection(_CanonMemo, PJ.Projection):
@@ -511,11 +511,11 @@ def ops() -> Ops:
     """The fast path's Program operations for one `global_match.check` and the X-09 run inside it: the fold and components as MemoProg,
     Projections that register for reuse, the memoised comparison / hashes / live cone, X-09's per-request legs on forked workers
     (MATCH_WORKERS).  Also states the run's declared configuration (`config`)."""
-    # [R17 mfast, BRIEF §5 step 2] every Prog loaded here holds its operands as run progressions (cb_a.compact) unless MATCH_COMPACT=0
+    # every Prog loaded here holds its operands as run progressions (cb_a.compact) unless MATCH_COMPACT=0
     # (the A/B switch for the representation alone); the record's Progs are runs
     compact = settings.get(COMPACT_ENV)
     stats["compact_args"] = int(compact)
-    # [rev S-r17-17 condition / M-0276 (4)] the run's DECLARED configuration, stated on the document's impl block beside the counters:
+    # the run's DECLARED configuration, stated on the document's impl block beside the counters:
     # the effective worker cap (MATCH_WORKERS or the default), the operand form, and the switches as read -- not inferred from hits
     raw_w = settings.get(WORKERS_ENV)
     config.clear()
@@ -609,7 +609,7 @@ def _x09_legs(items: list, leg: Callable, weight: Callable) -> list:
 def seed_dag_hashes(P: SEQ.Prog, hashes: dict) -> None:
     """RETIRED: a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
     The legs return G8's per-step matching as facts instead (global_match._perm_match in the leg)."""
-    raise RuntimeError("seed_dag_hashes is retired (F-r17-07): legs return matching facts, never hash dicts across processes")
+    raise RuntimeError("seed_dag_hashes is retired: legs return matching facts, never hash dicts across processes")
 
 
 def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | None = None) -> list:

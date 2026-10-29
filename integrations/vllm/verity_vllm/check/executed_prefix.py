@@ -53,21 +53,21 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
     A request whose prefix was REDUCED from its cap (an EOS stop) with no linkable Match account is a problem: the committer's count alone
     is never sufficient (condition (a)).  With no reduction anywhere (every request ran its cap) a missing account is recorded, not a
     problem -- nothing was placed on the committer's word.  `served_tokens` {r<i>: [the Commit's served ids]}: when given, tokens_equal
-    is the FULL generated_token_ids list equality (rev S-r17-23 (c)); without it, length + last token.  Returns {"ok", "required",
+    is the FULL generated_token_ids list equality; without it, length + last token.  Returns {"ok", "required",
     "problems", "tokens_equal", "g6", ...}."""
     problems: list[str] = []
     reduced = sorted(r for r, v in (epr.get("requests") or {}).items() if v.get("eos_stop"))
     required = bool(reduced)
     res: dict[str, Any] = {"required": required, "reduced_requests": reduced, "tokens_json": None, "global_match": None, "notes": list(account.get("notes") or []),
                            "match_dir": account.get("match_dir"),
-                           "rule": "R17-27 (a): n_exec from the LINKED serving transcript (Commit served == Match tokens.json == G6 account); "
+                           "rule": "(a) n_exec from the LINKED serving transcript (Commit served == Match tokens.json == G6 account); "
                                    "(b) lag attested declared == tokens.json == G6; the committer's own count is never sufficient by itself"}
     tok = account.get("tokens")
     gm = account.get("global_match")
     if tok is None:
         if required:
             problems.append(f"executed prefix reduced from the cap for {reduced} on the committer's own served count alone: the Match record's "
-                            f"capture/tokens.json is not beside the Commit ({'; '.join(res['notes']) or 'no account'}) -- never sufficient by itself (R17-27 (a))")
+                            f"capture/tokens.json is not beside the Commit ({'; '.join(res['notes']) or 'no account'}) -- never sufficient by itself (executed-prefix condition (a))")
     else:
         by_rid: dict[str, dict[str, Any]] = {}
         for e in tok.get("requests") or []:
@@ -90,7 +90,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                 continue
             c_served = rec.get("served_output_len")
             c_toks = None if served_tokens is None else served_tokens.get(rid)
-            if c_toks is not None:                                                  # rev S-r17-23 (c): the FULL list, not length + last
+            if c_toks is not None:                                                  # The FULL list, not length + last
                 same = [int(t) for t in c_toks] == m_served
                 _first = next((i for i, (a, b) in enumerate(zip(c_toks, m_served)) if int(a) != int(b)), min(len(c_toks), len(m_served)))
             else:
@@ -100,31 +100,31 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             if not same:
                 problems.append(f"{rid}: the Commit served {c_served} tokens (last {rec.get('last_served_token')}) but the Match record's tokens.json served "
                                 f"{len(m_served)} (last {m_served[-1] if m_served else None})"
-                                + (f", first differing position {_first}" if _first is not None else "") + ": not one serving transcript (R17-27 (a))")
+                                + (f", first differing position {_first}" if _first is not None else "") + ": not one serving transcript (executed-prefix condition (a))")
                 continue
             m_exec = e.get("executed_prefix_len")
             m_srv = e.get("served_output_len")
             if m_srv is not None and int(m_srv) != int(c_served):
-                problems.append(f"{rid}: tokens.json served_output_len {m_srv} != the Commit's {c_served} (R17-27 (a))")
+                problems.append(f"{rid}: tokens.json served_output_len {m_srv} != the Commit's {c_served} (executed-prefix condition (a))")
             if m_exec is None and rec.get("eos_stop"):
-                problems.append(f"{rid}: tokens.json executed_prefix_len is null (EOS stop under an unattested lag) while this rule places {rec['executed_prefix_len']} (R17-27 (b))")
+                problems.append(f"{rid}: tokens.json executed_prefix_len is null (EOS stop under an unattested lag) while this rule places {rec['executed_prefix_len']} (executed-prefix condition (b))")
             elif m_exec is not None and int(m_exec) != int(rec["executed_prefix_len"]):
-                problems.append(f"{rid}: tokens.json executed_prefix_len {m_exec} != this rule's {rec['executed_prefix_len']} (served {c_served}, cap {rec['cap']}, LAG {epr.get('lag')}) (R17-27 (a))")
+                problems.append(f"{rid}: tokens.json executed_prefix_len {m_exec} != this rule's {rec['executed_prefix_len']} (served {c_served}, cap {rec['cap']}, LAG {epr.get('lag')}) (executed-prefix condition (a))")
         res["tokens_json"] = {"path": account.get("tokens_path"), "sha256": account.get("tokens_sha256"), "lag": tj_lag,
                               "async_scheduling": (tok.get("lag") or {}).get("async_scheduling") if isinstance(tok.get("lag"), dict) else None,
                               "tokens_equal": eq, "tokens_equal_rule": ("full generated_token_ids list" if served_tokens is not None else "length + last token"),
                               "requests_n": len(by_rid),
-                              # a_r AS THE MATCH RECORD SERVED IT, per request (the fact reqval's not-executed class reads; R17-27 (a))
+                              # a_r AS THE MATCH RECORD SERVED IT, per request (the fact the not-executed class reads)
                               "served_by_request": {r: len(e.get("generated_token_ids") or []) for r, e in by_rid.items()},
                               "executed_by_request": {r: e.get("executed_prefix_len") for r, e in by_rid.items()}}
         res["tokens_equal"] = all(v is True for v in eq.values()) if eq else None
         if declared_lag is not None and (tj_lag is None or int(tj_lag) != int(declared_lag)):
-            problems.append(f"lag not attested on the record: the Program declares LAG {declared_lag}, the Match record's tokens.json attests {tj_lag!r} (R17-27 (b))")
+            problems.append(f"lag not attested on the record: the Program declares LAG {declared_lag}, the Match record's tokens.json attests {tj_lag!r} (executed-prefix condition (b))")
     if gm is None:
         if required and tok is not None:
             res["notes"].append("global_match.json not beside the Match record: the G6 account leg is missing")
             problems.append(f"executed prefix reduced from the cap for {reduced}: GM-01's account (global_match.json) is not beside the Match record -- the "
-                            f"Commit's count is linked to the served output only, not to the Match account (R17-27 (a))")
+                            f"Commit's count is linked to the served output only, not to the Match account (executed-prefix condition (a))")
     else:
         g6 = gm.check("G6")
         lens = g6.lengths_by_request if g6 is not None and g6.lengths_by_request is not None else {}
@@ -134,16 +134,16 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                                "failed_checks": failed, "g6_status": None if g6 is None else g6.status,
                                "lag": {k: gl.get(k) for k in ("declared", "record_attests", "tokens_json_lag", "exercised", "variable_lag")}}
         if gm.verdict != "PASS":
-            problems.append(f"GM-01 verdict {gm.verdict!r} (failed {failed}): the Match account this prefix must be linked to did not pass (R17-27 (a))")
+            problems.append(f"GM-01 verdict {gm.verdict!r} (failed {failed}): the Match account this prefix must be linked to did not pass (executed-prefix condition (a))")
         if g6 is None:
-            problems.append("global_match.json has no G6 check: no chronology account to link the executed prefix to (R17-27 (a))")
+            problems.append("global_match.json has no G6 check: no chronology account to link the executed prefix to (executed-prefix condition (a))")
         else:
             if gl.get("variable_lag"):
-                problems.append("G6 reports VARIABLE LAG on this record: no constant-lag placement is linkable (R17-1 / R17-27)")
+                problems.append("G6 reports VARIABLE LAG on this record: no constant-lag placement is linkable (executed-prefix rule)")
             if declared_lag is not None:
                 for leg in ("declared", "record_attests"):
                     if gl.get(leg) is None or int(gl[leg]) != int(declared_lag):
-                        problems.append(f"G6 lag.{leg} {gl.get(leg)!r} != the Program's declared LAG {declared_lag} (R17-27 (b))")
+                        problems.append(f"G6 lag.{leg} {gl.get(leg)!r} != the Program's declared LAG {declared_lag} (executed-prefix condition (b))")
             # recorder request id -> r<i> by the workload request id (G6's lengths are keyed by the recorder's id)
             g6_by_r: dict[str, dict[str, Any]] = {}
             for rec_rid, L in lens.items():
@@ -156,12 +156,12 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             for rid, rec in (epr.get("requests") or {}).items():
                 L = g6_by_r.get(rid)
                 if L is None:
-                    problems.append(f"{rid}: no G6 lengths_by_request entry (G6 covers {sorted(g6_by_r)[:8]}): not in the Match account (R17-27 (a))")
+                    problems.append(f"{rid}: no G6 lengths_by_request entry (G6 covers {sorted(g6_by_r)[:8]}): not in the Match account (executed-prefix condition (a))")
                     continue
                 if rec.get("served_output_len") is not None and L.get("served_output_len") is not None and int(L["served_output_len"]) != int(rec["served_output_len"]):
-                    problems.append(f"{rid}: G6 served_output_len {L['served_output_len']} != the Commit's {rec['served_output_len']} (R17-27 (a))")
+                    problems.append(f"{rid}: G6 served_output_len {L['served_output_len']} != the Commit's {rec['served_output_len']} (executed-prefix condition (a))")
                 if L.get("executed_prefix_len") is not None and int(L["executed_prefix_len"]) != int(rec["executed_prefix_len"]):
-                    problems.append(f"{rid}: G6 executed_prefix_len {L['executed_prefix_len']} != this rule's {rec['executed_prefix_len']} (R17-27 (a))")
+                    problems.append(f"{rid}: G6 executed_prefix_len {L['executed_prefix_len']} != this rule's {rec['executed_prefix_len']} (executed-prefix condition (a))")
             res["global_match"]["requests_linked"] = sorted(g6_by_r)
             res["global_match"]["lengths_by_request"] = {r: {k: L.get(k) for k in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted")} for r, L in g6_by_r.items()}
     # (b) on every leg, one boolean the C2 population's class reads: declared == tokens.json == G6.declared == G6.record_attests

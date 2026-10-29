@@ -1,0 +1,14 @@
+{
+  "rule": "P15 (one implementation, no versioned twins)",
+  "entries": [
+    {"file": "verity/ml/definitions/numerics/rmsnorm_fused.py", "kind": "def-twin", "symbol": "<module>", "detail": "variance_v1 ~ variance"},
+    {"file": "verity/ml/definitions/numerics/rmsnorm_fused.py", "kind": "def-twin", "symbol": "<module>", "detail": "variance_v2 ~ variance"},
+    {"file": "verity/ml/definitions/registry/b1.py", "kind": "def-twin", "symbol": "<module>", "detail": "_forward_positions_v2 ~ forward_positions"},
+    {"file": "verity/ml/definitions/registry/b1.py", "kind": "def-twin", "symbol": "<module>", "detail": "_forward_positions_v4 ~ forward_positions"},
+    {"file": "verity/ml/definitions/registry/lifted.py", "kind": "def-twin", "symbol": "<module>", "detail": "lifted_prim_v1 ~ lifted_prim"},
+    {"file": "verity/ml/definitions/registry/topp_geometry.py", "kind": "def-twin", "symbol": "<module>", "detail": "splits_for_v1 ~ splits_for"},
+    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "module-twin", "symbol": "<module>", "detail": "global_match_fast ~ global_match"},
+    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "def-twin", "symbol": "NativeHostCommitter", "detail": "_acquire_impl ~ acquire"},
+    {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "def-twin", "symbol": "<module>", "detail": "_serve_v3_binder ~ serve_binder"}
+  ]
+}

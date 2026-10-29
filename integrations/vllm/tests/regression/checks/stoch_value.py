@@ -1,18 +1,18 @@
-"""(T0) The sampler VALUE check of a stochastic row reproduces (R15 stoch; row_pod.sh's `rcs`, `match_summary.json` `stoch_value_check`):
+"""(T0) The sampler VALUE check of a stochastic row reproduces (row_pod.sh's `rcs`, `match_summary.json` `stoch_value_check`):
 `match_stoch.json` -- every sampled row of the record recomputed with the Program's own sampler Definition (`GumbelTopPTokenSelect_v1{V,S}`,
 the registry interpreter walking the V lanes) from the Match record's snapshots of the device sampler chain, under the DECLARED seed /
 temperature / top-p.  Lifted: its verdict and reasons, the summary (engine steps in the record, sampled rows, rows checked, the row tally,
-completeness, device-tied facts, masked rows, the Program's S agreement, the draw ledger), the declared facts, the per-request S the Build
+completeness, device-tied facts, masked rows, the Program's S agreement, the sample ledger), the declared facts, the per-request S the Build
 derived, and per sampled row (step, row, request, event, pos, served token, recomputed token, V, S, chain, declared / device facts,
 status) as a sha256; plus the snapshot steps the stochastic Match took (`match/run.json` `snapshot_steps`: EVERY engine step -- the value
 check is complete only when every sampled row is snapshotted).
 
 Recomputed: `verity_vllm.check.replay.stoch_recompute.recompute_run` with the CURRENT code over the record's capture (`match/capture/
-log.jsonl.gz` + `snapshots.json` + the value files the sampler chain reads -- fixtures.toml pins exactly those, not the 870 MB of every
+log.jsonl.gz` + `snapshots.json` + the value files the sampler chain reads -- files.toml pins exactly those, not the 870 MB of every
 snapshot), the in-repo workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
 `build_workload/workload_program.json`: the stop rule); the snapshot steps are the steps the capture's `snapshots.json` dumped.  In
 candidate mode the candidate's own `match_stoch.json` + `match/run.json` are lifted the same way.  STRONG: a sampler Definition that moves
-a lane, a draw read at another counter, an S derived differently, an unsnapshotted step -- each moves a status, a count or the verdict.
+a lane, a sample read at another counter, an S derived differently, an unsnapshotted step -- each moves a status, a count or the verdict.
 
 Applies to stochastic rows only (a greedy row has no match_stoch.json: row_pod's rcs = -1).
 """
@@ -85,7 +85,7 @@ def actual(row: resolver.Row) -> dict:
     from verity_vllm.check.fold_compare import SnapshotStore
     capture = [rel for rel in row.files if rel.startswith("match/capture/")]
     if "match/capture/log.jsonl.gz" not in capture or "match/capture/snapshots.json" not in capture:
-        raise resolver.NotResolvable(f"{row.key}: fixtures.toml pins no match/capture/log.jsonl.gz + snapshots.json (the sampler value check's input)")
+        raise resolver.NotResolvable(f"{row.key}: files.toml pins no match/capture/log.jsonl.gz + snapshots.json (the sampler value check's input)")
     build = [rel for rel in row.files if (rel.startswith("build_request") and rel.endswith("/result.json")) or rel in _BUILD_DOCS]
     view = resolver.scratch(row) / "stoch_value"
     _linked(row, capture + build, view)

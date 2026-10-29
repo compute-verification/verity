@@ -13,7 +13,7 @@ same pair runs on the pristine engine: no hooks, no wrapped runner methods, noth
 
 `coverage_declaration()` returns the document `coverage_check.py` consumes: which manifest classes this committer binds,
 how (bound-as-leaf | registered-input | derived-from-bound{rule}), and per class the counts/bytes it actually bound in
-the run — so a fast subset cannot be reported as the full interface (DANIEL-BRIEF A2/A4; BRIEF §1 non-goals).
+the run — so a fast subset cannot be reported as the full interface.
 """
 
 from __future__ import annotations

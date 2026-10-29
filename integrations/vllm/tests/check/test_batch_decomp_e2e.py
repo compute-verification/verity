@@ -1,4 +1,4 @@
-"""X-09 / MB-01 (R13 M-BATCH-DECOMP) end-to-end: the batch decomposition of a batched eager fold, CPU, bit-exact on the
+"""X-09 / MB-01 end-to-end: the batch decomposition of a batched eager fold, CPU, bit-exact on the
 synthetic toy configuration of `tests/observe/test_fold_synthetic.py` (real `b1` definitions, hand-written raw
 events), through the real fold -> `persist_program` record -> `batch_decomp.decompose` path (the log is written with
 `log.dumps`, as the capture does).
@@ -8,7 +8,7 @@ to the fold of the SAME request served alone (B = 1) -- exactly what the per-req
 with at B = 1 today (the single-request fold stands in for `derive_step`'s output).  Positives: B = 2 with unequal LP and
 unequal T; a request finishing early (no rows in later steps); B = 1 is the identity.  Negatives: a mis-attributed row
 -> not equal; a cross-request operand (r1's attention reading r0's KV row) -> XREQ, FAIL; a missing derived shape ->
-MISSING_DERIVED, never assumed.  Written by lane p0b/mbatch as an independent check of lane dense's X-09."""
+MISSING_DERIVED, never assumed.  An independent check of X-09."""
 
 from __future__ import annotations
 
@@ -369,11 +369,11 @@ def test_negative_cross_request_operand_fails_the_row(memory, tmp_path, derived_
 
 
 def test_prog_retains_one_copy_of_the_operand_references_and_the_verdicts_are_unchanged(memory, tmp_path, derived_is_a_fold):
-    """[R16 global, GM-01 memory at LP 4096 / F-global-mem] `cb_a.compare.Prog` keeps ONE representation of the operand references
+    """`cb_a.compare.Prog` keeps ONE representation of the operand references
     (`inst[*].args` runs): the decoded IR body (`nodes`) is released after the instance list is built and the fold rows' `operand_refs`
     (a third copy, O(LP^2) over a long prefill) are reduced to parameter-space runs at read time and dropped once the weight-field map
     is derived.  The comparisons read `inst`/`inputs` only, so the verdicts -- positive (B=2, unequal LP and T) and the cross-request
-    negative -- are the ones the retaining representation gave (R15 capacity M-0815: GM-01 > 351 GiB on the 4096/512 fold)."""
+    negative -- are the ones the retaining representation gave (GM-01 > 351 GiB on the 4096/512 fold)."""
     d, r = fold_batched([R0, R1], tmp_path / "b2")
     P = load_oracle(d, "oracle")
     assert P.nodes is None and P.n_nodes == len(P.inst) + len(P.inputs)

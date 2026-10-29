@@ -7,15 +7,14 @@ import Definitions.Pous.Assumptions.P2
 /-!
 # B2: a location as PoUS's responder (trusted)
 
-Obligation B2 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.10), on PoUS's ring model, for a location
-that does no arithmetic modulo `p` during a window (so no ring answer is in flight at a challenge, the row's `f = 0`;
-where it does, `B2Window` states the oracle-location form's core). A strategy `S` maps PoUS's outcome (the primitive `ω`, the
-encoder's coins, the `k` challenges) to a run, causal from every tick. PoUS sends each challenge when the last answer
-arrives (Daniel's ruling of 12 Oct, decisions item 5), so the challenge ticks are read off the run: challenge `j`
-reaches the location `X` at tick `t x j`, the ticks increasing in each run, and `t x (j + 1)` is a function of what
-happened before it (`ArrivalRule`). Its answer is read off what `X` does during window `j`. What `X` does during a
-window includes its state at the window's end (v2.6), so its state at each challenge tick is a function of its state
-at the previous one and of what reached it in between.
+Obligation B2 of the actual-circuit model, on PoUS's ring model, for a location that does no arithmetic modulo `p`
+during a window (so no ring answer is in flight at a challenge, the row's `f = 0`; where it does, `B2Window` states the
+oracle-location form's core). A strategy `S` maps PoUS's outcome (the primitive `ω`, the encoder's coins, the `k`
+challenges) to a run, causal from every tick. PoUS sends each challenge when the last answer arrives, so the challenge
+ticks are read off the run: challenge `j` reaches the location `X` at tick `t x j`, the ticks increasing in each run,
+and `t x (j + 1)` is a function of what happened before it (`ArrivalRule`). Its answer is read off what `X` does during
+window `j`. What `X` does during a window includes its state at the window's end, so its state at each challenge tick is
+a function of its state at the previous one and of what reached it in between.
 
 * `LengthCode`, the coding lemma: strings of at most `M` bits inject into `M + 1` bits (`lengthCode`). With `Recall`'s
   `length (content X t) ≤ mem X t`, a state of `mem ≤ M` bits fits in an `(M + 1)`-bit code.
@@ -46,24 +45,24 @@ at the previous one and of what reached it in between.
 * `B2Adds`, lemma M through `B2Determines`: under `AuditSecureOn … N 0 0 0 c δ ε`, a location that keeps a uniform
   `q`-bit `z` passes while `q + N ≥ M + 1 + τ + H + k` with probability at most `δ + ε + c·2^-k`; `B2AddsP2Ring`, the
   same at P2's deployed point under `P2RingAuditSecure 0 0 0`, with `δ + 2^-129 + 2^-130 + 105·2^-k`.
-* `B2Window`, the core of the oracle-location form (B2's row at 13:50Z and 14:05Z): where the location does use the
-  ring, at oracle locations of its own (`RingWindow`), a window whose multiplications take at least `ℓ > 0` ticks to
-  answer and which spans at most `D·ℓ` ticks is a step of an `(N, D, Q, L)` sequential responder, which asks the
-  additions, `one` and the keys at once and holds each multiplication until the earliest held one could be due. With
-  `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`.
-  `B2WindowAudit`: so under `AuditSecureOn … N D Q L`, a location that starts in an `N`-bit state and answers with such
-  windows, each within `(Q, L)`, answers every challenge with probability at most `δ + ε`; `B2WindowP2Ring`, the same at
-  P2's deployed point under `P2RingAuditSecure D Q L`, with `δ + 2^-129 + 2^-130`, paced: one challenge every `T` ticks
-  and every multiplication at least `ℓ` ticks, with `T ≤ D·ℓ`. What is not stated yet: the windows
-  read off a strategy's runs (oracle locations on `Actual.Run`, `Wd` from `CausalFrom` with the state's content, the
-  help and the answers in flight coded into `N` bits).
+* `B2Window`, the core of the oracle-location form (B2's row): where the location does use the ring, at oracle locations
+  of its own (`RingWindow`), a window whose multiplications take at least `ℓ > 0` ticks to answer and which spans at
+  most `D·ℓ` ticks is a step of an `(N, D, Q, L)` sequential responder, which asks the additions, `one` and the keys at
+  once and holds each multiplication until the earliest held one could be due. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency
+  form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`. `B2WindowAudit`: so under
+  `AuditSecureOn … N D Q L`, a location that starts in an `N`-bit state and answers with such windows, each within
+  `(Q, L)`, answers every challenge with probability at most `δ + ε`; `B2WindowP2Ring`, the same at P2's deployed point
+  under `P2RingAuditSecure D Q L`, with `δ + 2^-129 + 2^-130`, paced: one challenge every `T` ticks and every
+  multiplication at least `ℓ` ticks, with `T ≤ D·ℓ`. What is not stated yet: the windows read off a strategy's runs
+  (oracle locations on `Actual.Run`, `Wd` from `CausalFrom` with the state's content, the help and the answers in flight
+  coded into `N` bits).
 
 A fixed schedule is the case `t x = t` for every `x`: `ArrivalRule`, `SetupFixed`'s tick and `TicksIn` at `τ = 0` hold,
-`IngressFixed` is the fixed window's ingress, and every run's windows last at most `t k`, so these statements give
-#1857's at `τ = 0`. The help is whatever the setup fixes that, with the challenge, determines what reaches `X`: under
-isolation nothing, and when the rest of the prover learns nothing that depends on the challenges or their ticks (the
-model's `e = 0` across the audit), what the rest sends `X` during the whole audit, with `H` the log of the number of
-values it takes. The proofs are in `Security/Proofs/Accounting/Responder.lean`, `B2Window`'s in
+`IngressFixed` is the fixed window's ingress, and every run's windows last at most `t k`, so these statements give the
+fixed-schedule statements at `τ = 0`. The help is whatever the setup fixes that, with the challenge, determines what
+reaches `X`: under isolation nothing, and when the rest of the prover learns nothing that depends on the challenges or
+their ticks (the model's `e = 0` across the audit), what the rest sends `X` during the whole audit, with `H` the log of
+the number of values it takes. The proofs are in `Security/Proofs/Accounting/Responder.lean`, `B2Window`'s in
 `Security/Proofs/Accounting/Responder/Latency.lean`.
 -/
 

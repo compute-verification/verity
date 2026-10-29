@@ -1,5 +1,5 @@
 """load-commit: what the network certifier's commit of the weights' load costs on the auditor host, per core, for the demo's
-frozen H200 shape (CMP-92: MQA, width 16,384, 52 layers, MLP 65,536, byte vocabulary, context 32; 130.10 GiB of INT8
+frozen H200 shape (MQA, width 16,384, 52 layers, MLP 65,536, byte vocabulary, context 32; 130.10 GiB of INT8
 W8A8 weights, P2-encoded into about 0.93·U of HBM).
 
 Two commitments of the load, each measured exactly as its verifier recomputes it (each checked, on a sample, against the
@@ -14,7 +14,7 @@ reference it must equal):
   `sha512/row/v2` digest (17 compressions after the prefix's midstate), its leaf (1) and one RFC 6962 node (2).
 
 ``raw`` is SHA-512 over 64 MiB buffers (the compression rate OpenSSL reaches on one core), and ``urandom`` the
-operating system's generator, which draws the hm96 salts.
+operating system's generator, which samples the hm96 salts.
 
     python benchmarks/network_traces/load_commit.py --out DIR [--rows 65536] [--blocks 8192] [--procs 1,4,16]
 
@@ -53,7 +53,7 @@ ROW_BYTES = 2 * ROW_WORDS
 P2_BLOCK, P2_PAYLOAD, P2_SEGMENT = 2056, 2054, 1 << 16
 PROGRAM = "00" * 64
 
-# the frozen shape (CMP-92, compute-accounting 23:00Z): per layer, (rows, cols) of each INT8 weight matrix, K = cols
+# the frozen shape: per layer, (rows, cols) of each INT8 weight matrix, K = cols
 D, LAYERS, MLP, HEAD, VOCAB, CTX = 16384, 52, 65536, 64, 256, 32
 MATRICES = {"wq": (D, D), "wk": (HEAD, D), "wv": (HEAD, D), "wo": (D, D), "up": (MLP, D), "down": (D, MLP)}
 

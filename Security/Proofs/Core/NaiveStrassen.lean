@@ -5,8 +5,6 @@ import Proofs.Core.NaiveStrassen.Eval
 /-!
 # Naive tiled against Strassen: the statements and their non-vacuity witnesses
 
-ACCEL NAIVE-STRASSEN (CMP-110; note:compute-research/20261026T0140Z-draft-accel-naive-strassen).
-
 Theorem 1 at `L = 12` and its size form at `c = 4096` are proved on all four instances from one table, the RTX PRO
 6000 data sheet's, which every other instance's atoms map onto (`Packed.Dom`). The table is computed and checked by
 `decide +kernel` (`NaiveStrassen/Eval.lean`): a pure kernel check, with no `native_decide` and no compiled code. Its

@@ -2,12 +2,14 @@ schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-commit-served"
 # The Commit (sampled proofs, rows-sha512: hm96-sha512 hiding rows in frame-v3-sha512 trees) against stock FP8 as vLLM
-# serves it. llama31-8b-fp8-1gpu-commit's two eager arms (`commit` against batch-invariant eager `stock-fp8`), plus
+# serves it. Two eager arms, `commit` against batch-invariant eager `stock-fp8` (sampled-proofs:rows-sha512 is refused
+# as a protocol arm on verity_vllm.LLM, so the arm installs the Commit's committer itself, verity_bench.vllm.commit_arm,
+# whose module-boundary hooks compiled graphs never run), plus
 # `stock-fp8@compiled` (vLLM's serving defaults, torch.compile and its CUDA-graph mode) and `commit@compiled`, the same
 # committer acquiring through the compiled-serving source (verity_vllm's ServedCompiledSource), token-controlled by
 # `stock-fp8@compiled`: commit@compiled / stock-fp8@compiled is the served Commit's overhead, and commit /
 # stock-fp8@compiled the eager Commit's against served stock. `stock-fp8@compiled` has no control: compiled and eager FP8 tokens differ
-# (llama31-8b-fp8-1gpu-compiled). The preset is llama31-8b-fp8-1gpu-commit's.
+# (llama31-8b-fp8-1gpu-compiled-full).
 arms = ["stock-fp8", "commit", "stock-fp8@compiled", "commit@compiled"]
 arm_modules = ["verity_bench.vllm.commit_arm:COMMIT", "verity_bench.vllm.commit_arm:COMMIT_COMPILED"]
 sweep = "quick"
@@ -34,7 +36,7 @@ max_model_len = 8384
 resident_gpu_memory_utilization = 0.40
 block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
-# MEM-15: every isolated (block-mode) engine of one arm group gets the same exact KV pool (#2036's kv-pool gate).
+# Every isolated (`blocks`) engine of one arm group gets the same exact KV pool (the kv-pool gate checks it).
 block_kv_cache_memory_bytes = 60129542144
 
 [admission]

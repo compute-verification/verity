@@ -1,4 +1,4 @@
-// SHA-512 on sm_90a / sm_100a for H1's per-unit streams (pouw.circuit.seeds): a seed's noise block t is
+// SHA-512 on sm_90a / sm_100a for H1's per-unit streams (pouw.circuit.seeds): a seed's noise chunk t is
 // SHA-512(NOISE_TAG || seed || u64be t), one compression of a 96-byte message whose words 0..10 are the seed's. So rounds
 // 0..10 (the midstate) and every schedule term free of word 11 are a seed's, computed once (NoiseMid), and a block runs
 // rounds 11..79 on them with immediate constants.
@@ -6,23 +6,19 @@
 #include <cstdint>
 typedef unsigned long long u64;
 typedef unsigned int u32;
-namespace sh {
-typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace sh
+#include "../../torch_gpu/sha512_rows/sha512x.cuh"
 
 // NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0") as three big-endian words
 constexpr u64 TAG0 = 0x7665726974792f70ULL, TAG1 = 0x6f75772f6e6f6973ULL, TAG2 = 0x652f763100000000ULL;
 
-__device__ constexpr u64 KC[80] = WT_SHA512_K;
-__device__ constexpr u64 IVC[8] = WT_SHA512_IV;
+__device__ constexpr u64 KC[80] = {SX_K_LIST};
 
 __device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 - n)); }
 
 // H1S_ROTF = R (0..6) puts R of each round's six Sigma rotations, and H1S_ROTFW = R (0..4) R of the schedule's four sigma
 // rotations, on the FMA pipe (rotr_f) instead of two funnel shifts on the ALU pipe: sm_90's ALU pipe (SHF, LOP3, IADD3)
 // is 16 lanes a sub-partition and its IMAD pipe another 16, and a unit's hashing is nearly all ALU-pipe work, so moving
-// some of it can raise the units' throughput where the ALU pipe binds (shabench.cu's V 12..16). Both 0 is the funnel
+// some of it can raise the units' throughput where the ALU pipe binds. Both 0 is the funnel
 // shifts' code as before. Served on the H200, R = 6 is slower than 0: Dither's T 64 step +20% with today's units, +6%
 // with J10-R's. rotr_f<N>: with lo and hi x's halves (swapped for N > 32), n = N mod 32 and m = 2^(32 - n)
 // read from constant memory (so ptxas can't fold it back into shifts), c = {lo >> n, lo << 32 - n} = {mul.hi(lo, m),
@@ -139,8 +135,7 @@ __device__ __forceinline__ void noise_mid(const u64* seed, NoiseMid& m) {
     m.c[i - 16] = x;
   }
   u64 v[8];
-#pragma unroll
-  for (int j = 0; j < 8; ++j) v[j] = IVC[j];
+  sx::iv(v);
 #pragma unroll
   for (int r = 0; r < 11; ++r) RND(r, w[r]);
 #pragma unroll
@@ -171,8 +166,10 @@ __device__ __forceinline__ void noise_block(const NoiseMid& m, u64 t, u64 s[8]) 
 #pragma unroll
   for (int r = 11; r < 80; ++r) RND(r, W[r]);
   // after 80 rounds the names are back in place: v[0] is a
+  u64 iv[8];
+  sx::iv(iv);
 #pragma unroll
-  for (int q = 0; q < 8; ++q) s[q] = IVC[q] + v[q];
+  for (int q = 0; q < 8; ++q) s[q] = iv[q] + v[q];
 }
 
 // blocks ta and tb of one stream (noise_block's of each), their two compressions' rounds interleaved: two independent
@@ -216,22 +213,23 @@ __device__ __forceinline__ void noise_block2(const NoiseMid& m, u64 ta, u64 tb, 
     RNDV(va, r, WA[r]);
     RNDV(vb, r, WB[r]);
   }
+  u64 iv[8];
+  sx::iv(iv);
 #pragma unroll
   for (int q = 0; q < 8; ++q) {
-    sa[q] = IVC[q] + va[q];
-    sb[q] = IVC[q] + vb[q];
+    sa[q] = iv[q] + va[q];
+    sb[q] = iv[q] + vb[q];
   }
 }
 
 // a whole message's digest from its 64-bit words (len16 x 16 of them, padding included), the rolled compression
 __device__ __forceinline__ void sha512_words(const u64* msg, int blocks, u64 s[8]) {
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = IVC[j];
+  sx::iv(s);
 #pragma unroll 1
   for (int b = 0; b < blocks; ++b) {
     u64 w[16];
 #pragma unroll
     for (int j = 0; j < 16; ++j) w[j] = msg[16 * b + j];
-    sh::sha512_compress(s, w);
+    sx::compress<0, 1>(s, w);
   }
 }

@@ -37,8 +37,10 @@ to Python.
 * a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
   `coin`, `round`, `root`).
 * a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
-  records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); `field_of` (those,
-  `lane` null for the combine, and `path`); `wires` (those); `wire_of` (those and `wire`).
+  records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); a J10-R leaf's
+  `j10r_lane_ports` (`r`, `c`, `k`, `n` the lane's chunks, `lane`, `chunk`) and `j10r_combine_ports` (`r`, `c`, `k`,
+  `n`); `field_of` (those, `lane` null for the combine, `n` null or absent for v1's, and `path`); `wires` (those);
+  `wire_of` (those and `wire`).
 * a drawn leaf's known rows (`PouwWindow.KnownRows`, held to `h1_lanes`' `known_rows` by `tests/test_known_rows.py`):
   `known_rows` (`admit` 0/1 list, `salt` and the two `roots` 64-byte hex, `position` a u64, `lane` or null for the
   combine): each known port's rows' words.
@@ -141,11 +143,20 @@ def ofN {α : Type} [ToJson α] (f : Nat → Int → Except String α) : _root_.
 
 def leafTile (j : Json) : Except String Lanes.Tile := do pure ⟨← nat j "r", ← nat j "c", ← nat j "k"⟩
 
-/-- A lane's ports (`lane` its index), or the combine's (`lane` null). -/
-def leafPorts (j : Json) : Except String (List Lanes.Port) := do
+/-- A J10-R leaf's chunk of a lane (`lane` its index, `chunk` its chunk of `n`), or its combine (`lane` null). -/
+def j10rPorts (j : Json) : Except String (List Lanes.Port) := do
   match field? j "lane" with
-  | none | some .null => Lanes.combine? (← leafTile j)
-  | some _ => Lanes.lane? (← leafTile j) (← nat j "lane")
+  | none | some .null => Lanes.combine2? (← leafTile j) (← nat j "n")
+  | some _ => Lanes.chunk? (← leafTile j) (← nat j "n") (← nat j "lane") (← nat j "chunk")
+
+/-- A lane's ports (`lane` its index), or the combine's (`lane` null); a J10-R leaf's (`j10rPorts`) where `n` is given. -/
+def leafPorts (j : Json) : Except String (List Lanes.Port) := do
+  match field? j "n" with
+  | some .null | none =>
+    match field? j "lane" with
+    | none | some .null => Lanes.combine? (← leafTile j)
+    | some _ => Lanes.lane? (← leafTile j) (← nat j "lane")
+  | some _ => j10rPorts j
 
 def sourceJson : Lanes.Source → Json
   | .read v r => Json.mkObj [("read", toJson v), ("row", toJson r)]
@@ -294,6 +305,11 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("lane_ports", fun j => do
     pure (Json.arr ((← Lanes.lane? (← leafTile j) (← nat j "lane")).map leafPortJson).toArray)),
   ("combine_ports", fun j => do pure (Json.arr ((← Lanes.combine? (← leafTile j)).map leafPortJson).toArray)),
+  ("j10r_lane_ports", fun j => do
+    pure (Json.arr ((← Lanes.chunk? (← leafTile j) (← nat j "n") (← nat j "lane") (← nat j "chunk")).map
+      leafPortJson).toArray)),
+  ("j10r_combine_ports", fun j => do
+    pure (Json.arr ((← Lanes.combine2? (← leafTile j) (← nat j "n")).map leafPortJson).toArray)),
   ("field_of", fun j => do
     let path ← str j "path"
     pure <| match Lanes.fieldOf? (← leafPorts j) path with

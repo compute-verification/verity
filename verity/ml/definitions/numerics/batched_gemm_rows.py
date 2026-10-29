@@ -9,6 +9,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static
 
 FAMILY = "BatchedGemm_v1"
@@ -17,17 +18,17 @@ EVALUATOR = ("verity.ml.definitions.numerics.batched_gemm_rows.batched_gemm (Bat
              "cuBLAS's batched bf16 GEMM of the MLA absorbs, bf16_gemm_check.bmm_rows)")
 #: The H200 capture that holds cuBLAS's ``torch.bmm`` on the served W_UK_T / W_UV views to this kernel's model (`bmm_rows`), word for
 #: word, at GLM-5.3's TP8 absorb statics (B 8) and the M its TP8 Commit row serves (prefill 256, decode 1), in both configurations.
+_CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
 PROVENANCE = {
     "property": "glm53_bf16_gemm_capture (verity-vllm/glm53-bf16-gemm-capture/v3), tests/properties/glm53_bf16_gemm_capture_gpu.py",
-    "run": "r20261016-234133-bbc8",
-    "record": "c0e09902b0a2057a77d81b7cda6ba8952fd15ee2836bd69f25dbac83b91d5100",
-    "record_served_default": "fe538de7a4602a9f1888c7f4eddafbf0f950db8b13008333f9488fb39aaf507f",
-    "art": {"record": "art:5fcc5a4937ac75ceec31bd22abc11194ec0c55d27e77ffd3690b1ad8976feeaf",
-            "run": "art:4bc894c68a07c3947a61c23263c4e062762359b73c7883dca4b3b2fca9ff16fc"},
+    "run": _CAPTURE["run"],
+    "record": _CAPTURE["record"],
+    "record_served_default": _CAPTURE["record_served_default"],
+    "art": _CAPTURE["art"],
     "device": "vy-glm53-eu, cc 9.0 with 132 SMs (the record's gate names the part), driver 580.173.02, torch 2.13.0+cu129 on the "
               "venv's libcublas.so.12, vLLM 0.28.1rc1.dev472+gd9105ea80 (the record's cublas_version 130101 is the node's system "
               "libcublas.so.13, which that run's find_library picked, not the library torch loaded)",
-    "captured_utc": "2026-10-16",
+    "captured_utc": _CAPTURE["captured_utc"],
     "variants": {"split_k_off": "GO", "served_default": "GO"},
     "cases": {"q_nope_absorb": {"B": 8, "K": 192, "N": 512, "M": [1, 4, 16, 128, 256], "words": 1658880, "mismatch": 0},
               "v_absorb": {"B": 8, "K": 512, "N": 256, "M": [1, 4, 16, 128, 256], "words": 829440, "mismatch": 0}},

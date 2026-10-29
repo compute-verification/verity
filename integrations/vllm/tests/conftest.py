@@ -1,6 +1,6 @@
 """Known failures on `main`, marked expected to fail so that `check` gates every other test of this suite.
 
-Each one failed on `main` a8e72c81 (with #331's dead-module fix) with torch 2.14 and 2.4.1 on CPU, before this suite joined
+Each one failed on `main` with torch 2.14 and 2.4.1 on CPU, before this suite joined
 `check`; the reason says what it found. They are not strict: the check machines' torch and numpy differ from the lock's,
 and a strict mark that passed there would fail `check`. Fix the test or the code, then delete its entry.
 
@@ -62,7 +62,7 @@ def pytest_collection_modifyitems(items) -> None:
 
 @pytest.fixture(autouse=True)
 def _sweep_dir_in_tmp(tmp_path_factory, monkeypatch):
-    """The row driver's sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
-    SWEEP_DIR unset would write rows there (VLLM-21); every test gets its own instead, which a test can still override."""
+    """`verity-vllm row`'s sweep directory default (`cli.MACHINE`'s /workspace/cp/sweep) exists on a GPU node, so a test that leaves
+    SWEEP_DIR unset would write its workload dirs there; every test gets its own instead, which a test can still override."""
     monkeypatch.setenv("SWEEP_DIR", str(tmp_path_factory.mktemp("sweep")))
 

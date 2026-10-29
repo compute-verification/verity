@@ -37,8 +37,7 @@ PROFILES = {"bf16-hopper": "bf16-hopper-mma-draft/2026-09-22", "fp8-ada": "fp8-a
 
 
 def _guard():
-    instances._ligero()
-    from ligero import timing_guard
+    from . import timing_guard
     return timing_guard
 
 

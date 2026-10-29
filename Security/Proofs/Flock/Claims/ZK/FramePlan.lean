@@ -2,7 +2,7 @@ import Proofs.Flock.Claims.ZK.FrameAsks
 import Proofs.Flock.Claims.ZK.FrameSched
 
 /-!
-# A rep's scheduled rounds against its plan (Stage B, R2)
+# A rep's scheduled rounds against its plan
 
 The loop requests a rep's rounds at the plan's counts (`Session.repPlan`), and the frame checks the device against the
 rep's schedule so far (`Loop.schedSoFar`): the algebraic phase's rounds (`Skeleton.rounds`, counted in `FrameCount`),

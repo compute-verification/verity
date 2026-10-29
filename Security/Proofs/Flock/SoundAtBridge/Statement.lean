@@ -4,11 +4,10 @@ import Proofs.Flock.SoundAtBridge.Session
 /-!
 # PoUW's proof premise from C-Flock's rows link (trusted)
 
-`Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`, #2855's
-layer, whose relation reads the path's coins) from C-Flock's `Flock.Guarantees.EndToEndRegisteredRows`, applied once
+`Flock.Guarantees.SoundAtBridge` concludes the proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`, the
+layer whose relation reads the path's coins) from C-Flock's `Flock.Guarantees.EndToEndRegisteredRows`, applied once
 per unit, when proof `i` of round `w` on the window's path `x` is a C-Flock session `sess x w i` (a `RowsSession`)
-with outcome `out x w i`. It closes the three gaps compute-accounting's red team found (RT4-LOGIC-7, PRF-107) as
-follows:
+with outcome `out x w i`. It closes the three gaps between the two as follows:
 
 1. **the probability bridge** is three named premises: the window's law at each `(w, i)` is its sessions'
    (`WindowLaw`), the layer accepts a proof only where flock-verify accepts its session (`AcceptedLive`), and the
@@ -37,20 +36,20 @@ open scoped ENNReal
 
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 
-/-- **Gap 1, the window's law** (open; owner @compute-accounting, the window law, with @proofs): at each round `w` and
+/-- **Gap 1, the window's law** (open): at each round `w` and
 proof `i`, the window's coins, read through the session proof `i` runs and its outcome, have the sessions' law
 (`SessionLaw`): the session's coins are the path's, fresh and uniform given its setting and its prover. -/
 def WindowLaw (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ w i, SessionLaw (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)
     (fun x => out x w i)
 
-/-- **Gap 1, acceptance** (open; owner @compute-accounting, the layer): the layer accepts proof `i` of round `w` only
+/-- **Gap 1, acceptance** (open): the layer accepts proof `i` of round `w` only
 where flock-verify accepts its session's outcome (`LiveAcceptsZKR`). -/
 def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ x w i, pf.accepted x w i → LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
 
-/-- **Gap 2, the opening is the plurality** (open; owner @compute-accounting, where `opened` is defined): at each
+/-- **Gap 2, the opening is the plurality** (open): at each
 `(w, i)`, an accepted proof's opening is other than `rows` of its session's value layer (`XplurZC`) with probability
 at most `δo`; `δo = 0` when `opened` is defined as that value (`openedPlur_zero`). -/
 def OpenedPlurAt (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
@@ -58,10 +57,10 @@ def OpenedPlurAt (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
   ∀ w i, Pouw.RelativeSecurity.prob
     (fun x => pf.accepted x w i ∧ pf.opened x w i ≠ rows (sess x w i) (sess x w i).Xv) ≤ δo
 
-/-- **Gap 1, the relation is what the drawn units certify** (open; owner @compute-accounting, the relation's
-Definition): on every path, when no drawn unit of proof `i`'s session is wrong (`WrongAt`) and every drawn unit's rows
-are right at its own owned reads (`RowsAt`), proof `i`'s relation holds at `rows` of the value layer; it can hold
-only for a relation that reads no undrawn unit and no input row at a read the verifier doesn't own. -/
+/-- **Gap 1, the relation is what the drawn units certify** (open): on every path, when no drawn unit of proof `i`'s
+session is wrong (`WrongAt`) and every drawn unit's rows are right at its own owned reads (`RowsAt`), proof `i`'s
+relation holds at `rows` of the value layer; it can hold only for a relation that reads no undrawn unit and no input
+row at a read the verifier doesn't own. -/
 def RelOfRows (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) : Prop :=
   ∀ x w i, (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) →
@@ -76,7 +75,7 @@ open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 /-- **PoUW's proof premise from C-Flock's rows link, at `δ_ZK = δo + δ`.** For any window of proofs
-(`pf : Accounting.TS.ProofLayer Ω S nπ V`, #2855's, its relation on the path) whose proof `i` of round `w` on the
+(`pf : Accounting.TS.ProofLayer Ω S nπ V`, its relation on the path) whose proof `i` of round `w` on the
 path `x` is the C-Flock session `sess x w i` (`EndToEndRegisteredRows`' setting with one registrant's opening per
 unit, `RowsSession`) with outcome `out x w i`, and a reading `rows s` of a session's value layer as a layer value:
 given `EndToEndRegisteredRows`' named assumptions at every session and every unit's opening (`RowsSession.CR`), the

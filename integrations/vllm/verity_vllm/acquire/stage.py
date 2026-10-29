@@ -1,4 +1,4 @@
-"""The plan at a GPU stage's entry: runtime tree of the built engine -> plan from the row's required-value manifest, both written beside
+"""The plan at a GPU phase's entry: runtime tree of the built engine -> plan from the row's required-value manifest, both written beside
 the stage's outputs; the caller installs (`install_from_plan`) or adapts the committer (`apply_plan_to_committer`).
 
     docs = plan_at_stage(model, runner, manifest_path, out_dir, source="m1_capture")

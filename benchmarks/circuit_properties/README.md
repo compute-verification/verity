@@ -8,8 +8,8 @@ wholly inside one block. Each is defined for an arbitrary Boolean circuit and a 
 
 A circuit is a Program in `verity-ir/descriptor/v1` (`verity/ml/circuits/PROTOCOL.md`) in the Boolean profile (§9),
 read through its canonical layout (§6): a `verity.ml.circuits.program.Program`, or `codec.decode_program`'s result. It is
-the format NCI's check reads gate by gate (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`) and
-`Nci.Cover.Circuit` formalizes (`Security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served rows lower
+the format the inference-only policy's check reads gate by gate
+(`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`) and `Nci.Cover.Circuit` formalizes (`Security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
 to on bits. A word circuit has no per-product gates (one tensor-core step gate computes 16 products), so s_× and
 whole-in-block are defined only on the Boolean lowering; `ops.NotSeparable` refuses a word op.
 
@@ -50,7 +50,7 @@ m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 ## Reference circuits
 
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
-positions; `references.configs()` lists the served configurations and two shapes with no served row (Qwen2.5-7B,
+positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,
 Llama-3.1-405B), labeled as constructed. The circuits are forward layers: the IR declares no training (backward,
 optimizer) circuit.
 

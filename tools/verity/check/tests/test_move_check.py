@@ -622,6 +622,57 @@ def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
     assert f["path"] == "tools/research/src/research/store/moves.json" and "T/Models/Core/A.lean" in f["reason"]
 
 
+SPLIT_DIR = {
+    "p/circuit/__init__.py": "",
+    "p/circuit/a.py": "from p.circuit.live import T\n\nA = T + 1\n",
+    "p/circuit/live.py": "T = 1\n",
+    "p/circuit/a.sidecar.py": "from p.circuit.a import A\n",
+    "p/other.py": "X = 1\n",
+    "suite/pyproject.toml": 'inputs = ["p/circuit", "p/other.py"]\n',
+    MC.MOVES: json.dumps({"about": "x", "moves": []}, indent=2) + "\n",
+}
+
+
+def _split_dir(tmp_path: Path, paths: dict[str, str] | None) -> dict:
+    """`p/circuit/` moves to `q/circuit/` but for `live.py`, which goes to `p/`: no rename pairs the directory, and the
+    one-line sidecar whose import is rewritten is below git's similarity. ``paths`` is the entry appended to `moves.json`."""
+    repo, base = _repo(tmp_path, SPLIT_DIR)
+    _move(repo, "p/circuit/live.py", "p/live.py")
+    for f in ("__init__.py", "a.py", "a.sidecar.py"):
+        _move(repo, f"p/circuit/{f}", f"q/circuit/{f}")
+    _write(repo, {"q/circuit/a.py": "from p.live import T\n\nA = T + 1\n", "q/circuit/a.sidecar.py": "from q.circuit.a import A\n",
+                  "suite/pyproject.toml": 'inputs = ["q/circuit", "p/other.py"]\n'})
+    if paths is not None:
+        _write(repo, {MC.MOVES: json.dumps({"about": "x", "moves": [{"paths": paths}]}, indent=2) + "\n"})
+    return _check(repo, base)
+
+
+def test_the_appended_moves_entry_pairs_what_no_rename_does(tmp_path):
+    r = _split_dir(tmp_path, {"p/circuit/live.py": "p/live.py", "p/circuit/": "q/circuit/"})
+    assert r["certified"], r["refusals"]
+    assert r["map"]["p/circuit"] == "q/circuit"
+    assert {e["path"] for e in r["edits"]} >= {"suite/pyproject.toml", "q/circuit/a.sidecar.py", MC.MOVES}
+
+
+def test_without_the_entry_a_split_directory_is_refused(tmp_path):
+    paths = {f["path"] for f in _split_dir(tmp_path, None)["refusals"]}
+    assert {"suite/pyproject.toml", "q/circuit/a.sidecar.py"} <= paths
+
+
+def test_an_entry_the_range_does_not_bear_out_adds_nothing(tmp_path):
+    """An entry is a map only where the range moved each file it names to its place: `r/circuit/` is nowhere at HEAD."""
+    r = _split_dir(tmp_path, {"p/circuit/live.py": "p/live.py", "p/circuit/": "r/circuit/"})
+    assert "p/circuit" not in r["map"]
+    assert {MC.MOVES, "suite/pyproject.toml"} <= {f["path"] for f in r["refusals"]}
+
+
+def test_a_moves_file_that_is_not_json_declares_nothing_and_is_refused(tmp_path):
+    repo, base = _repo(tmp_path, SPLIT_DIR)
+    _write(repo, {MC.MOVES: '{"about": "x", "moves": [\n'})
+    r = _check(repo, base)
+    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [(MC.MOVES, "not JSON")]
+
+
 def test_a_lock_field_the_writer_wraps_anew_is_still_a_move(tmp_path):
     """`check.py --update` wraps a list a renamed module lengthened past its line: the same value, laid out anew."""
     lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
@@ -810,10 +861,77 @@ def test_a_word_that_names_no_moved_path_is_refused_in_prose(tmp_path):
     assert f["path"] == "README.md" and f["reason"] == "edit beyond moved paths and module names"
 
 
+WORD_OLD = {"examples/toy/run.sh": "echo toy\n",
+            "README.md": "The end-to-end examples (`examples/toy/run.sh`) are the milestone's.\n",
+            "registry.json": '{"examples": ["who runs `examples/`?"], "owns": ["examples/toy/"]}\n',
+            "pkg/app/ladder.py": 'def examples(root):\n    return sorted((root / "examples").iterdir())\n'}
+WORD_NEW = {"README.md": "The end-to-end examples (`demos/toy/run.sh`) are the milestone's.\n",
+            "registry.json": '{"examples": ["who runs `demos/`?"], "owns": ["demos/toy/"]}\n',
+            "pkg/app/ladder.py": 'def examples(root):\n    return sorted((root / "demos").iterdir())\n'}
+
+
+def _word(tmp_path: Path, edits: dict[str, str]) -> dict:
+    repo, base = _repo(tmp_path, WORD_OLD)
+    _move(repo, "examples/toy/run.sh", "demos/toy/run.sh")
+    _write(repo, edits)
+    return _check(repo, base)
+
+
+def test_a_moved_top_level_name_left_standing_as_a_word_is_certified(tmp_path):
+    r = _word(tmp_path, WORD_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_a_moved_top_level_name_rewritten_to_anything_else_is_refused(tmp_path):
+    [f] = _word(tmp_path, {**WORD_NEW, "README.md": WORD_NEW["README.md"].replace("end-to-end examples", "end-to-end samples")})[
+        "refusals"]
+    assert f["path"] == "README.md" and "samples" in f["hunk"]
+
+
 def test_anchor_that_names_another_directory_is_refused(tmp_path):
     [f] = _app(tmp_path, {}, {"pkg/tests/protocols/bandwidth/test_remote.py": "ROOT = Path(__file__).resolve().parents[4]\n"})[
         "refusals"]
     assert f["path"] == "pkg/tests/protocols/bandwidth/test_remote.py" and "parents[4]" in f["hunk"]
+
+
+SH_BODY = "".join(f'echo "step {i} of the session, unchanged by the move"\n' for i in range(12))
+SH_OLD = ('#!/usr/bin/env bash\nSELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")\n'
+          'ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)\ncd "$(dirname "${BASH_SOURCE[0]}")/../../.."\n'
+          'bash "$(dirname "$0")/../../../pkg/app/store/host.py"\n' + SH_BODY)
+
+
+def _shell(tmp_path: Path, new: str) -> dict:
+    """A script three directories down moves to two (the streamed wipe's `demo.sh` to `examples/wipe/`)."""
+    repo, base = _repo(tmp_path, {**APP, "bench/pous/wipe/demo.sh": SH_OLD})
+    for old, new_dir in APP_MOVES:
+        _move(repo, old, new_dir)
+    _move(repo, "bench/pous/wipe/demo.sh", "examples/wipe/demo.sh")
+    _write(repo, {"examples/wipe/demo.sh": new})
+    return _check(repo, base)
+
+
+SH_NEW = ('#!/usr/bin/env bash\nSELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")\n'
+          'ROOT=$(cd "$(dirname "$SELF")/../.." && pwd)\ncd "$(dirname "${BASH_SOURCE[0]}")/../.."\n'
+          'bash "$(dirname "$0")/../../pkg/app/protocols/bandwidth/host.py"\n' + SH_BODY)
+
+
+def test_a_shell_scripts_paths_from_its_own_directory_recounted_are_certified(tmp_path):
+    r = _shell(tmp_path, SH_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_a_shell_path_from_its_own_directory_that_names_another_one_is_refused(tmp_path):
+    [f] = _shell(tmp_path, SH_NEW.replace('"$SELF")/../..', '"$SELF")/..'))["refusals"]
+    assert f["path"] == "examples/wipe/demo.sh" and '"$SELF")/.." &&' in f["hunk"]
+
+
+def test_a_shell_path_from_a_variable_that_is_not_the_scripts_own_path_is_refused(tmp_path):
+    other = SH_OLD.replace('SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")', 'SELF=$NVCC')
+    repo, base = _repo(tmp_path, {**APP, "bench/pous/wipe/demo.sh": other})
+    _move(repo, "bench/pous/wipe/demo.sh", "examples/wipe/demo.sh")
+    _write(repo, {"examples/wipe/demo.sh": other.replace('"$SELF")/../../..', '"$SELF")/../..')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "examples/wipe/demo.sh" and "SELF" in f["hunk"]
 
 
 def test_relative_import_rewritten_absolute_is_certified(tmp_path):

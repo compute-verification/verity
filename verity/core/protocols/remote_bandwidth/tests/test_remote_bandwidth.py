@@ -134,7 +134,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     as its root arrives, chained from the pass before.  `plan(t, i)` is pass (t, i)'s plan (None: the whole store);
     `run(prover, t, i, challenges, previous, plan)` replaces the honest pass and `sent(ps)` the runs sent with its
     root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not.
-    The session's coins are `coins_`, or a challenger in this process drawing under `label`."""
+    The session's coins are `coins_`, or a challenger in this process sampling under `label`."""
     tiles = tiles or (audit.NoiseTiles(96) if store.registration.bind else None)
     clock = Clock()
     s = Session(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
@@ -406,7 +406,7 @@ def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Recor
 
 
 def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None:
-    """Daniel's hybrid claim at 2^-40 (#1884), as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
+    """The hybrid claim at 2^-40, as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
     openings each (d·n ≥ 18,470) are short by under 0.15% over the horizon, and by under 1% in every window, together.
     Read per window, each window's own bound at δ is about 1% of its receipts, with 7·δ in all."""
     n, d, u, delta = 7, 2773, 100_000, 2.0 ** -40
@@ -443,7 +443,7 @@ def test_the_ledger_refuses_a_window_its_capacity_cannot_have_read() -> None:
 
 def test_the_horizon_puts_the_shortfall_where_it_hides_most() -> None:
     """Windows of unequal size: the pooled bound's shortfall goes to the largest windows first, each capped where its
-    draws would have found it (s distinct draws found s correct receipts), and a window opened whole has none."""
+    samples would have found it (s distinct draws found s correct receipts), and a window opened whole has none."""
     lengths, s, delta = (5000, 1000, 1000, 40), 40, 1e-6
     wrong, floor = audit.pooled(synthetic(lengths, s, delta))
     budget = -math.expm1(math.log(delta) / (4 * s)) * 4 * s
@@ -888,7 +888,7 @@ def test_draws_wait_for_the_windows_roots(store) -> None:
 
 
 def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
-    """A paced window takes at most k roots, so its k-th makes them final once its boundary has left: it is drawn then,
+    """A paced window takes at most k roots, so its k-th makes them final once its boundary has left: it is sampled then,
     with no wait for the next window's first root or its deadline, and the openings coin's request names that root on
     the challenger's log."""
     clock = Clock()

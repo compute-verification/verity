@@ -39,27 +39,25 @@ bits costs at least `(2x/b)·c_root`. A completion measured below that, by a fac
 term divided by `θ`.
 
 **The stated instance is the deployed codec's**, Sloth over `p = 2^1024 − 105`, masked, at `k = 3` (`codec.DEFAULT`
-of `verity/core/protocols/remote_bandwidth/codec.py`, Daniel's ruling, #1884, 12 Oct; `k = 2` at the same width the
+of `verity/core/protocols/remote_bandwidth/codec.py`, as ruled; `k = 2` at the same width the
 fallback): `WorkHardness 1024 3 c_root cost`, `x` of a word's 1,024 bits at `(3x/b)·c_root`. The `Prop` reads the codec
 only through `b`, `rounds` and `c_root`, so the mask changes no statement, only what the price rests on. The
 guarantees hold at every `rounds`; `k = 3` is the one they are read at.
 
-**Where it stands** (red team, `ra-rate-redteam`, 12 Oct 18:00Z). At `k = 2` the adversary keeps a word's top `b − x`
-bits and completes the rest from the known payload by a 4-dimensional lattice, up to `x ≈ b/10` at every width
-(r20261012-163319-2804), so the claim at `x = b/10 − 8` is 0.168 of a root at 512 bits. fplll, the best of five
-reducers, costs 2.07 roots there, 12.3× the claim (r20261012-164518-ccba); Howgrave-Graham's larger lattices are 2–5×
-worse per bit (r20261012-170857-6e04). At the reduction's operation-count floor (r20261012-170958-f49a, estimated from
-operation counts, not measured) the margin is about 1.2× on the GPU (range 0.75–2.7×) and 1.6× on the host
-(0.99–3.6×): on that estimate 512 bits is the widest word unmasked `k = 2` protects, 640 bits is at parity and 768 is
-broken. For the upgrade path, `p = 2^512 − 569` unmasked at `k = 2`, the residual conjecture is
-`WorkHardness 512 2 c_root cost`: no 4D reduction at 512 bits completes a dropped tail below `2x/b` of a root.
+**Where it stands.** At `k = 2` the adversary keeps a word's top `b − x` bits and completes the rest from the known
+payload by a 4-dimensional lattice, up to `x ≈ b/10` at every width, so the claim at `x = b/10 − 8` is 0.168 of a root
+at 512 bits. fplll, the best of five reducers, costs 2.07 roots there, 12.3× the claim; Howgrave-Graham's larger
+lattices are 2–5× worse per bit. At the reduction's operation-count floor (estimated from operation counts, not
+measured) the margin is about 1.2× on the GPU (range 0.75–2.7×) and 1.6× on the host (0.99–3.6×): on that estimate 512
+bits is the widest word unmasked `k = 2` protects, 640 bits is at parity and 768 is broken. For the upgrade path,
+`p = 2^512 − 569` unmasked at `k = 2`, the residual conjecture is `WorkHardness 512 2 c_root cost`: no 4D reduction at
+512 bits completes a dropped tail below `2x/b` of a root.
 
-**The masked codec** (lane ra-codec-mix, verity#1894), the deployed one. A public XOR `σ_K` between rounds defeats the
-red team's 4D completion (none of 200 masked words completed, against all 200 plain ones, at every width), and the
-price's justification becomes that no completion skips the inner root. Its residual conjecture is the stated instance,
-`WorkHardness 1024 3 c_root cost`.
+**The masked codec**, the deployed one. A public XOR `σ_K` between rounds defeats the 4D completion (none of 200 masked
+words completed, against all 200 plain ones, at every width), and the price's justification becomes that no completion
+skips the inner root. Its residual conjecture is the stated instance, `WorkHardness 1024 3 c_root cost`.
 
-**At `k = 1` it is false at every width** (F27). A word's dropped bottom third completes by a 2-dimensional lattice
+**At `k = 1` it is false at every width**. A word's dropped bottom third completes by a 2-dimensional lattice
 whose floor is half a GMP extended GCD: 0.025 of a root at 512 bits, 0.019 at 640, 0.015 at 768, 0.009 at 1,024,
 0.005 at 1,536 and 0.003 at 2,048, against the per-bit 0.32–0.33, a break of 13–110×. `WorkHardness b 1 c_root cost` is
 outside the claim: a guarantee taking it says nothing about a deployed one-round codec, and at one round the claim
@@ -67,8 +65,8 @@ holds only for words whose payload is unknown, under `Incompressible(W)`, which 
 def WorkHardness (b rounds cRoot : ℕ) (cost : ℕ → ℕ) : Prop :=
   ∀ x, x ≤ b → x * (rounds * cRoot) ≤ b * cost x
 
-/-- **W, compute additivity, for a joint run's bandwidth game** (the actual-circuit model's obligation W,
-`note:console/20261012T0645Z-draft-actual-circuit-model` §5 and §8: compute adds by a direct-sum conjecture). At every
+/-- **W, compute additivity, for a joint run's bandwidth game** (the actual-circuit model's obligation W:
+compute adds by a direct-sum conjecture). At every
 value of the audits' coins, the compute account's work over the compute window and the compute of the run's bandwidth
 game (its tags at `c_tag` and its completions at `cost x` for `x` bits), which falls in the compute window, together
 fit in the device's priced work over that window:

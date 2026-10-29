@@ -1,4 +1,4 @@
-"""`verity/codec-frontier-point/v0` points (ra-codec-wide's schema, `benchmarks/word_codec/frontier.py`) from this
+"""`verity/codec-frontier-point/v0` points (the schema of `benchmarks/word_codec/frontier.py`) from this
 lane's runs: a GEMM run's `codec-tensor.json` (layer-weighted y per field, batch and tag) and a rates run's (x and Δ
 at k = 1, at the locked clock, so x_boosted is false and the renderer grants the clock).
 

@@ -1,6 +1,6 @@
 """The bounded warm-up learns every step's plan from `throwaway_requests`; the record run must stage the same layout.
 
-SmolLM2-135M Gumbel (top-p 1) sm_120, B1 256/32 (r20260930-161743-b1cc, r20260930-165604-f57a): every decode step failed closed with
+SmolLM2-135M Gumbel (top-p 1) sm_120, B1 256/32: every decode step failed closed with
 "ran 2005760 bytes against a plan of 2005504".  The warm-up requests dropped the per-request `seed`, so the warm-up batch was unseeded
 and the sampler hook bound no `runner.sampler/seed`; every seeded record step then staged 8 more bytes past the plan's end.  The worker
 compares 256 B-padded lengths, so the tail shows only where the plan ends within 8 bytes of a chunk boundary -- 135M's decode step did,

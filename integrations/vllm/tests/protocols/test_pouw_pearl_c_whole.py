@@ -502,8 +502,8 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
 def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16(monkeypatch, tmp_path):
     """vLLM's ``capture_model`` captures a forward at each of its batch sizes, the largest first, each after a warm-up outside
     the capture.  A call's A words and tree are sized by its m₁₆ (a shape's buffers and a pipeline per m₁₆), so the second
-    size's capture copies into a stage of its own (r20261024-023642-dc8a: one stage a weight, sized at 128 tokens, refused
-    the 32-token capture's copy), and each size's replay keeps the records and files its calls keep made alone."""
+    size's capture copies into a stage of its own (one stage a weight, sized at 128 tokens, refuses the 32-token
+    capture's copy), and each size's replay keeps the records and files its calls keep made alone."""
     torch = pytest.importorskip("torch")
     run, capturing = Calls(torch), [False]
     run.weights = {7: SimpleNamespace(k=8, excluded=(1,)), 8: SimpleNamespace(k=4, excluded=())}

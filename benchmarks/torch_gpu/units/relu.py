@@ -1,4 +1,4 @@
-"""ReLU on bf16 words, the MLP's activation (CIR-100): units_relu, elementwise, and its twin.  The frozen step folds it
+"""ReLU on bf16 words, the MLP's activation: units_relu, elementwise, and its twin.  The frozen step folds it
 into down_quant (quant.py with RELU on, the same relu16); this is the standalone unit.
 
 OPS: y = +0 (0x0000) where 0 > x strictly (sign set, magnitude nonzero, not NaN), else x: -0 and every NaN are

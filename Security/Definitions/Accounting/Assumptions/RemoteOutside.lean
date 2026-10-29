@@ -3,7 +3,7 @@ import Definitions.Accounting.Remote.Outside
 /-!
 # No device outside the node computes on the store: statement C in full (trusted)
 
-A relay prover (red team round 4, RD-14) forwards each window's coin from a thin node to a helper outside it, which
+A relay prover forwards each window's coin from a thin node to a helper outside it, which
 holds the encoded store and computes the receipts. No block crosses the node's boundary links, so `Identity` holds and
 the links' charge (`Links`) is untouched, yet the node holds nothing. What excludes it is where the receipts'
 computation ran. `SketchBound` used to carry that inside its derivation (the sketch model's `Present`); here it is split

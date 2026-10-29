@@ -1,4 +1,4 @@
-"""Exact GF(2) circuit of one tensor-core transition (verity.ml.circuits.silicon GroupSum.step) over `forms` (formerly C-Flock's `unit`).
+"""Exact GF(2) circuit of one tensor-core transition (verity.ml.circuits.silicon GroupSum.step) over `forms` (formerly Flock's `unit`).
 
 Exponents are carried in "S-units" (E + 254), so every exponent is a small unsigned integer; the floor is F + 254.
 The group sum follows verity.ml.circuits.silicon.models.group_sum literally, with the normalisation folded into one shift:
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 
-from verity.ml.circuits.boolean.forms import (ONE, ZERO, Circuit, L, NOT, OR, add, and_reduce, compress_columns, const, const_bits, lzc,
+from verity.ml.circuits.boolean.forms import (ONE, ZERO, Circuit, NOT, OR, add, and_reduce, compress_columns, const_bits, lzc,
                  multiply, mux, or_reduce, shl_window, shr, sub)
 
 S_BIAS = 254
@@ -206,10 +206,3 @@ def f32_to_bf16(C, u):
     low, lsb = u[:16], u[16]
     carry = add(C, low, const_bits(0x7FFF, 16), cin=lsb, width=16, carry_out=True)[16]
     return add(C, u[16:32], [carry], width=16)
-
-
-def epilogue_only():
-    C = Circuit()
-    u = C.input("u", 32)
-    C.output("y16", f32_to_bf16(C, u))
-    return C

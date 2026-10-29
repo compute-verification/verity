@@ -1,21 +1,21 @@
 """P2 v1's decode throughput on one GPU, kernel by kernel, each gated byte-exact against `reference.py`.
 
 For every library given (`--lib DIR`, each a `libp2v1.so` built with other switches), on `--blocks` uniformly random canonical
-blocks of `C` with the v4 keys of a fixed setup:
+labels of `C` with the v4 keys of a fixed setup:
 
-- `keys_s`: the counter-mode SHA-512 expansion of every block's `K` and `t` (`gpu.Kernels.keys`), alone;
+- `keys_s`: the counter-mode SHA-512 expansion of every label's `K` and `t` (`gpu.Kernels.keys`), alone;
 - `kernel_s`: `p2v1_decode` alone, on keys expanded beforehand;
 - `decode_s`: the harness's decode pass (`gpu.Kernels.decode`: keys, then the kernel), or the library's fused decode
   (`p2v1_decode_fused`, the keys expanded inside it) when the library has one;
-- the gate: sampled blocks (and edge values of `c` in the first blocks) decoded on the device equal the reference's decode
+- the gate: sampled labels (and edge values of `c` in the first labels) decoded on the device equal the reference's decode
   under the reference's keys, their `K` and `t` rows equal the reference's (`reference.keys`), the library reports v4's
   keys (`Kernels.keys_version`), the deployment entry of the pinned `p2-v4-keys.json` (`harness.KEYS`) expands on the device
-  to its pinned `K` and `t`, every block of `m` equals the first library's, and no kernel flag is raised; with `--keys-all`,
-  every block's `K` and `t` rows equal `reference.stream`'s (hashlib on every CPU, compared by SHA-512 per range of
-  blocks).
+  to its pinned `K` and `t`, every label of `m` equals the first library's, and no kernel flag is raised; with `--keys-all`,
+  every label's `K` and `t` rows equal `reference.stream`'s (hashlib on every CPU, compared by SHA-512 per range of
+  labels).
 
 GB/s is of `W`, the payload bytes (2,054 of each 2,056-byte block), over the median time.  `setup_s` is the wall time of the
-first expansion of every block's keys (the setup's key derivation for the whole store, allocation included), before the timed
+first expansion of every label's keys (the setup's key derivation for the whole store, allocation included), before the timed
 repetitions.  Writes `decode-bench.json`, and with `--result-dir` the run's `result.json` (`result_doc`): the device as
 nvidia-smi names it, `keys_per_s`, `setup_s` and the keys' agreement with the reference, of the first library."""
 from __future__ import annotations
@@ -63,7 +63,7 @@ KEYS_RANGE = 2048
 
 
 def _range_digests(job: tuple[int, int, int]) -> tuple[int, str, str]:
-    """SHA-512 of the `K` rows and of the `t` rows (first candidates) of blocks `lo .. hi − 1`."""
+    """SHA-512 of the `K` rows and of the `t` rows (first candidates) of labels `lo .. hi − 1`."""
     lo, hi, segments = job
     P = R.DEPLOYMENT.with_segments(segments)
     prefix = R.expand_prefix(SALT, P, MODEL)
@@ -76,7 +76,7 @@ def _range_digests(job: tuple[int, int, int]) -> tuple[int, str, str]:
 
 
 def keys_all(k, t, n: int, segments: int) -> dict[str, object]:
-    """Every block's `K` and `t` rows on the device against hashlib's, a range of `KEYS_RANGE` blocks a job on every CPU."""
+    """Every label's `K` and `t` rows on the device against hashlib's, a range of `KEYS_RANGE` labels a job on every CPU."""
     import multiprocessing as mp
     import os
 
@@ -91,7 +91,7 @@ def keys_all(k, t, n: int, segments: int) -> dict[str, object]:
 
 
 def pinned_keys(lib_dir: str, build_dir: str) -> dict[str, object]:
-    """The pinned deployment keys (`harness.KEYS`, w = 16,448) expanded by this library at their setup and block."""
+    """The pinned deployment keys (`harness.KEYS`, w = 16,448) expanded by this library at their setup and label."""
     v = next(x for x in json.loads(KEYS.read_text())["vectors"] if int(x["w"]) == R.DEPLOYMENT.w)
     seg, blk = int(v["segment"]), int(v["block"])
     P = R.DEPLOYMENT.with_segments(seg + 1)
@@ -112,7 +112,7 @@ def smi_device(uuid: str | None) -> str:
 
 def result_doc(doc: dict, smi: str, run_id: str, run_dir: Path, out: Path, argv: list[str]) -> dict:
     """The run's `result.json` (research/result/v0.1) from `decode-bench.json`'s document, for its first library: `device`
-    from nvidia-smi's `index, uuid, name` line, `keys_per_s` (blocks whose `K` and `t` are derived per second, at the median
+    from nvidia-smi's `index, uuid, name` line, `keys_per_s` (labels whose `K` and `t` are derived per second, at the median
     of the timed expansions), `setup_s`, and `agreement`, the keys' checks against the reference."""
     r = doc["results"][0]
     g = r["gate"]

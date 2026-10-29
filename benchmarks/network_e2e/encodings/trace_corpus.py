@@ -1,4 +1,4 @@
-"""TRACE-CORPUS's vLLM scheduler traces (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`) as this
+"""The trace corpus's vLLM scheduler traces (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`) as this
 directory's traces: I1 v0's advice, the public anchors, the admission steps, the step durations and the serving caps.
 
 A trace directory holds the joined `steps.jsonl` and `requests.jsonl` and its own `meta.json` (the server's argv); its
@@ -11,7 +11,7 @@ parent holds the run's `meta.json` (the traffic's `max_tokens` caps). The mappin
   `preempted`;
 - **each hit's sources**, block by block: the first request (in first-row order) whose prompt holds the same tokens up
   to the block's end (vLLM's block hashes chain the prefix), and for a resumed row's blocks past its prompt, the request
-  itself. Eviction and recompute can make vLLM's own source a later request; nothing checks sources yet (ENC-DERIVED);
+  itself. Eviction and recompute can make vLLM's own source a later request; nothing checks sources yet (`derived.py`);
 - **releases**: each kept output at the bucket of its step's `t_output`; **anchors**: each request's `arrival` bucket,
   both from the first arrival;
 - **admission**: the step of each request's first row;

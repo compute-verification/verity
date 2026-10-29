@@ -1,7 +1,7 @@
 [project]
 name = "verity-circuit-check"
 version = "0.1.0"
-description = "circuit-check: the standard property checks every Definition, subcircuit template and served row passes (correspondence with the reference evaluator on edge inputs, redundant and dead gates, the partition invariant, Boolean lowering pins)."
+description = "circuit-check: the standard property checks every Definition, subcircuit template and served workload passes (correspondence with the reference evaluator on edge inputs, redundant and dead gates, the partition invariant, Boolean lowering pins)."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "verity-flock", "verity-numerical", "numpy"]
 
@@ -28,18 +28,16 @@ markers = [
 ]
 
 [tool.verity.tests]
-# its passes on vy-nebius-1 took up to an hour (3,634 s, 7 Oct), past suites.py's SUITE_TIMEOUT_S
+# a pass can take up to an hour, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
-# its tests are independent (122 passed under 12 xdist workers, r20261015-040240-480b); serially the suite was the check's
-# critical path, 3,916-4,445 s on 14 Oct
+# its tests are independent; serially the suite is the check's critical path
 parallel = true
 # one xdist worker's share, which `--mem-gb` (else the cgroup's memory.max) divides by. Each worker of a run with a slow catalog
 # test makes circuit-check's catalog before any test runs (conftest.py's `catalog`; `--quick` makes none) from what each catalog
-# binding reaches, building no body: 2.6 GiB (r20261025-205455-6022). Where no record of this checker's version counts, the
+# binding reaches, building no body: about 2.6 GiB. Where no record of this checker's version counts, the
 # first worker builds that, a process forked per binding, while the others wait: its processes take what the workers' shares
-# leave as they wait (conftest.py's `_budget`), each counted at what `heavy.json` says it grows (boolean_sigma's roots 23.9
-# GiB, the next 12.0).
-# Built whole in each worker, as before, a worker peaked at 52.8 GB (r20261022-105829-2a96). A circuit-check a test starts
+# leave as they wait (conftest.py's `_budget`), each counted at what `heavy.json` says it grows.
+# Built whole in each worker instead, the catalog takes a worker past 50 GB. A circuit-check a test starts
 # keeps to this share too (conftest.py's `worker_slot_gb`).
 worker_gb = 8
 # In place of its dependencies' directories (`inputs_only`; `verity`'s brings the root's dev group, the whole workspace): the
@@ -51,6 +49,8 @@ worker_gb = 8
 # (`units._unchanged`), and which a whole build never imports. pouw/weights.py and sampled_proofs/__init__.py: h1zy reads an
 # H1 lane's chunks along K from weights (`chunks`), and weights imports one_stage. sampled_proofs/challenger.py and
 # claims/__init__.py: pouw/coins.py names its entropy's claim instance through the challenger's `coin_claim`.
+# verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
+# the package's names.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py",
@@ -58,6 +58,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/randomness", "verity/ml/definitions", "verity/ml/flock/python/verity_flock", "verity/ml/windows",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/protocol.py",
+          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/grind.py", "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
@@ -84,7 +85,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/certifier/io_request.py", "verity/core/protocols/certifier/io_request.circuit-check.py",
           "verity/core/protocols/certifier/io_request.circuit-check.json",
-          "verity/core/protocols/certifier/warden.py", "verity/core/protocols/certifier/release.py",
+          "verity/core/protocols/certifier/warden.py", "verity/core/protocols/certifier/pacer.py",
+          "verity/core/protocols/certifier/release.py",
           "verity/core/protocols/certifier/io_ids.py", "verity/core/protocols/certifier/io_ids.circuit-check.py",
           "verity/core/protocols/certifier/io_ids.circuit-check.json",
           "verity/core/protocols/certifier/ingress_scan.py", "verity/core/protocols/certifier/ingress_scan.circuit-check.py",
@@ -118,7 +120,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/records",
-          "integrations/vllm/verity_vllm/engine/hooks.py",
+          "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/spec.py",
           "integrations/vllm/verity_vllm/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
           "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/core/protocols/sampled_proofs/__init__.py",

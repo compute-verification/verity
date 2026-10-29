@@ -1,4 +1,4 @@
-"""Lane B200-FP8's CPU side: ``f8_model``'s vectorized step held word for word to the scalar references (``GroupSum.step`` for one
+"""The B200 FP8 probe's CPU side: ``f8_model``'s vectorized step held word for word to the scalar references (``GroupSum.step`` for one
 format unscaled, ``k32.GroupSumCandidate.step_scaled`` for mixed formats and UE8M0 scales) on every family ``f8_sm100`` generates, and
 a fake-silicon dry run of ``f8_sm100``'s capture and eval: the layout gate passes on a device that computes a candidate, the eval
 names that candidate alone among the floors on the floor probe, and one flipped word is counted.  No kernel is built or run."""
@@ -129,7 +129,7 @@ B200_CAPTURE = HERE / "tests" / "fixtures" / "tc-sm100-f8-2026-10-19.json"
 
 @pytest.mark.parametrize("kind", list(S.KINDS))
 def test_b200_capture_records_are_sm120s_step_and_refute_every_other_candidate(kind):
-    """The B200's captured words of every kind (r20261019-081000-ad35, ``f8_sm100.py pin``): sm_120's QMMA step reproduces
+    """The B200's captured words of every kind (``f8_sm100.py pin``): sm_120's QMMA step reproduces
     each, and every other candidate misses one, except the floors a plain kind can't see (any floor <= -126 is its words)."""
     kk, fa, fb = S.KINDS[kind]
     records = json.loads(B200_CAPTURE.read_text())["kinds"][kind]

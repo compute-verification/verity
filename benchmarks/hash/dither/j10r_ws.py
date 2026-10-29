@@ -1,6 +1,6 @@
 """A J10-R call's workspace (h1u.cu's `kh_units_multi_j10r` with its _sm and _smc forms, and `kh_units_multi_j10rc`
 with ``rc``), sized by the loaded build: its `kh_j10r_workspace_bytes`, which dispatches on the build's own flags
-(`kh_j10r_flags`: H1U_JW's column blocks and W' after the rows, H1U_JRC's column blocks). Every loader that allocates
+(`kh_j10r_flags`: H1U_JW's column tiles and W' after the rows, H1U_JRC's column tiles). Every loader that allocates
 the workspace (dither_so's tables, served_h1's `producer.Units`, unitsbench's `MultiJ10R`) takes its size from
 `workspace_bytes`, so no caller sizes an H1U_JW build by its rows alone and lets its units write past the buffer.
 
@@ -51,7 +51,7 @@ def _rows(h: Any) -> Any:
 
 
 def rows_bytes(h: Any, m: int, k: int) -> int:
-    """The build's row blocks alone at M rows and contraction K (`kh_j10r_rows_bytes`): what a caller sizing by the rows
+    """The build's row tiles alone at M rows and contraction K (`kh_j10r_rows_bytes`): what a caller sizing by the rows
     allocated, short of an H1U_JW build's workspace."""
     return int(_rows(h)(int(m), int(k)))
 
@@ -80,7 +80,7 @@ def flags(h: Any) -> int:
 def workspace_bytes(h: Any, m: int, n: int, k: int, rc: bool = False) -> int:
     """The bytes the build's units read and write in one call's workspace at M rows, N columns and contraction K:
     `kh_units_multi_j10rc`'s with ``rc`` (which `kh_units_multi_j10r` may run on too), else `kh_units_multi_j10r`'s
-    (its rows' blocks, and under H1U_JW its column blocks and W'). Monotone in M: a workspace of T rows serves any
+    (its rows' blocks, and under H1U_JW its column tiles and W'). Monotone in M: a workspace of T rows serves any
     M <= T. `WorkspaceError` where the build and the request disagree: ``rc`` without H1U_JRC, a size of 0, short of
     the rows, or not its flags' (an H1U_JW build's no larger than its rows, any other's not its rows; its
     `kh_j10r_jw_bytes`, where it has one, not the same)."""

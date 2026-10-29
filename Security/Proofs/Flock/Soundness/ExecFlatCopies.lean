@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Types.ProgramPlaces
 
 A flat statement's Δ (`HmRow.delta`, no typed template) is its slot constants' pairs, the rows' constant bits, then each
 unit copy's leaf bits, cut bits and wired bits (`delta_flat`). `HmRow.check` wires each of a unit's input ports exactly
-once (`CheckFacts.wired`, leaves by `leaves_in`), and #434's `Typed.flatNet` makes the unit's inputs its net's input port
+once (`CheckFacts.wired`, leaves by `leaves_in`), and `Typed.flatNet` makes the unit's inputs its net's input port
 bits in order, so the ports' bits are distinct columns. At each of a unit copy's input port bits, Δ then has one copy
 pair, over the net's self row there:
 - `Layout.delta_port`: the count of Δ's pairs at a port bit is its own and its source's (`flatSrc`);
@@ -842,7 +842,7 @@ theorem setupH_flatFacts (ht : tags.typed = true)
       exact absurd hhn (by unfold HmRow.HM_NET; decide)
 
 /-- **A flat class's input copies, at each unit slot**: input `w`'s block rows read the column Δ copies into it
-(`flatSrcAt`). The unit's inputs are its net's input port bits in order (`Typed.flatNet`, #434). -/
+(`flatSrcAt`). The unit's inputs are its net's input port bits in order (`Typed.flatNet`). -/
 theorem setupH_flatInput (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net)) {s₀ w : ℕ}

@@ -1,5 +1,5 @@
 """The vocabulary-range policy (`verity_vllm.query.vocab_range`) and its source: `EmbeddingShard_v1` commits exactly the shifted id and the
-two range bits (no recompute); `values` is the IR's arithmetic on every edge id; off, a TP rank's manifest is byte-identical; on, one
+two range bits (no recompute); `values` is the circuit's arithmetic on every edge id; off, a TP rank's manifest is byte-identical; on, one
 `vocab_range` identity per (step, embedding site) on the site's op path with the rank's own range; the plan, coverage and form (B) know the
 family.  The source: tests/acquire/test_vocab_range_source.py."""
 from __future__ import annotations

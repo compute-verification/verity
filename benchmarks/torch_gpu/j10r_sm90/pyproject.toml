@@ -1,6 +1,6 @@
-# J10-R's units at the frozen shape on the H200 (HASH-22): the fixtures from the Definition (`fixtures.py` over `shape.py`),
-# the fallback unit (`j10r_ref.cu`), the GPU check and bench. Not a package: the scripts put this directory on their path.
-# The suite holds the restated weights to ALLP-IFACE's generator and the fixtures' writer and reader to the Definition, on
+# J10-R's proof blocks at the frozen shape on the H200: the fixtures from the Definition (`fixtures.py` over `shape.py`),
+# the fallback kernel (`j10r_ref.cu`), the GPU check and bench. Not a package: the scripts put this directory on their path.
+# The suite holds the restated weights to the seeded generator and the fixtures' writer and reader to the Definition, on
 # the CPU. Needs numpy (and the workspace's verity).
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -79,7 +79,7 @@ def test_search_reproduces_the_shard_closed_form():
 
 
 def test_chain_bound_is_kappa_f():
-    """rho >= kappa_chain f(K) / (2 alpha), the activation rate capped by the crossing over the residual's entries."""
+    """The slowdown >= kappa_chain f(K) / (2 alpha), the activation rate capped by the crossing over the residual's entries."""
     K, Gamma = 2e7, 6.4e16
     chain = {"kappa": 0.1, "d": 1536, "path": "x"}
     want = 0.1 * S.read_factor(K, 4.0, 4.0, 1536) / (2 * K / Gamma)

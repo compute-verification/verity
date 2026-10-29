@@ -1,4 +1,4 @@
-"""[R15 moe GATE-PATH] the Program names a node by the producing module's path in the source module's own `named_modules()` vocabulary.
+"""The Program names a node by the producing module's path in the source module's own `named_modules()` vocabulary.
 
 vLLM 0.28 moved the MoE router call into the runner (`MoERunner.gate = gate`, called in its forward): the exported `nn_module_stack` of
 the router Gemm ends in a bare `gate`, so the Qwen3-30B-A3B Program named 48 routers `gate/...` while the collector binds
@@ -86,7 +86,7 @@ def test_rooted_entries_are_kept_verbatim_including_shared_rope():
 
 
 def test_rooted_duplicate_stays_under_the_duplicate_name_fail_closed_at_coverage():
-    # global M-0595 (2): an export that yields the full duplicate path itself is NOT rewritten -- the collector binds `layers.1.gate`,
+    # an export that yields the full duplicate path itself is NOT rewritten -- the collector binds `layers.1.gate`,
     # so a manifest built from this name fails C1 coverage as missing (the pre-fix symptom, named), never a silent merge
     ctx = _ctx(_Model())
     n = _node(("", _Model), ("layers.1", _Block), ("layers.1.experts", _Runner), ("layers.1.experts.gate", torch.nn.Linear))
@@ -95,7 +95,7 @@ def test_rooted_duplicate_stays_under_the_duplicate_name_fail_closed_at_coverage
 
 
 def test_unresolved_unrooted_entries_are_counted_for_the_provenance():
-    # global M-0595 (3): an unrooted entry under no registered path keeps its bare name (as before) and is COUNTED, so the
+    # an unrooted entry under no registered path keeps its bare name (as before) and is COUNTED, so the
     # 48-layers-under-one-name failure mode is visible at derive (`annotations.derive.unresolved_module_paths`), not first at Commit
     ctx = _ctx(_Model())
     for k in range(3):

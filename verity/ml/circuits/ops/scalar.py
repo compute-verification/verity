@@ -1,4 +1,4 @@
-"""IR-registered scalar primitives: the basic integer, bit, select and comparison operations, the FP32 instructions
+"""Registered scalar primitives: the basic integer, bit, select and comparison operations, the FP32 instructions
 whose semantics is a bit operation or an exact comparison on the encoding (`abs`, `neg`, `max`, `min`, `cvt.sat`), and the
 f32 -> s8 rounding cast (`cvt.rni.sat.s8.f32`).
 
@@ -16,8 +16,8 @@ from verity.ml.circuits.silicon.cast import bf16_is_nan, f32_is_nan
 
 F32, BF16, I32, S8, U16, BIT = Value(32), Value(16), Value(32), Value(8), Value(16), Value(1)
 #: the GPU's canonical FP32 NaN: max.f32 / min.f32 of two NaNs, and every NaN result of add, sub, mul, div and fma (`fp32`'s `_v2`), an
-#: invalid operation and a NaN operand alike, no operand's payload, sign or signalling bit kept (the L40S / H100 probe
-#: art:e5dd6ce9fa74e7ca4538b848943d8bb555f2adac528277848395dbf4cdff66a5: every build, PTX and C++ operators, ftz on and off)
+#: invalid operation and a NaN operand alike, no operand's payload, sign or signalling bit kept (measured on the L40S and H100:
+#: every build, PTX and C++ operators, ftz on and off)
 F32_NAN_PTX = 0x7FFFFFFF
 
 __all__ = ["BIT", "BF16", "F32", "I32", "S8", "U16", "Bf16GtStrict", "BitAnd", "BitNot", "BitOr", "F32BitsShl23", "F32Eq",
@@ -95,8 +95,7 @@ def F32Sat(a: int) -> int:
 @primitive("F32ToS8RniSat", 1, [("x", F32)], S8, conformance="exact-model-tested")
 def F32ToS8RniSat(x: int) -> int:
     """`cvt.rni.sat.s8.f32`: x rounded to the nearest integer, ties to even, saturated to [-128, 127] (the infinities too),
-    NaN 0; the s8 code. The same as torch's ``round(x).clamp(-128, 127).to(torch.int8)`` on CPU, NaN included
-    (`verity_torch_loop`'s tests)."""
+    NaN 0; the s8 code. The same as torch's ``round(x).clamp(-128, 127).to(torch.int8)`` on CPU, NaN included."""
     u = x & 0xFFFFFFFF
     if f32_is_nan(u):
         return 0

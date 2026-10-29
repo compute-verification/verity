@@ -1,13 +1,13 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-bandwidth"
-# PoUS's bandwidth audit on served inference: memory accounting's plain stack (bandwidth-plain) and its encoded,
+# PoUS's bandwidth audit on served inference: the bandwidth audit's plain stack (bandwidth-plain) and its encoded,
 # receipted stack (bandwidth-audit, gated against bandwidth-plain), each with the fill-sk16 filler over the paged KV pool.
 arms = ["stock-fp8", "bandwidth-plain", "bandwidth-audit"]
 arm_modules = ["benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT"]
 sweep = "quick"
 reps = 3
-# A bandwidth engine's first one to three runs stall on their first prefill step (18 Oct, r20261018-234212-f0ea):
+# A bandwidth engine's first one to three runs stall on their first prefill step:
 # each engine warms until two consecutive runs agree.
 warmups = 2
 max_warmups = 8
@@ -17,13 +17,10 @@ setup = "benchmarks/harness/setup/vllm_encoded.sh"
 
 [env]
 FLASHINFER_CUDA_ARCH_LIST = "12.0f"
-# The re-baseline's quoted quick ratios (14 Oct, art:c3ee801d...) are with KV receipts on.
 VERITY_VLLM_BENCH_KV_RECEIPTS = "on"
 
-# The 14 Oct re-baseline's content-bound checkpoint on vy-nebius-2 (a point refuses files that hash otherwise). It was
-# chosen when verity_vllm.LLM didn't take the KV pin, so a revision-pinned model's arms got different pools
-# (r20261018-193741-fea1: 491376 vs 494064 tokens) and the kv-pool gate failed; LLM now takes it
-# (`kv_cache_memory_bytes`), and `runner.engine_args` pins both paths.
+# A node-local checkpoint bound by its `model_digest` (a point refuses files that hash otherwise). The KV pin holds
+# on both paths, a local checkpoint's and a revision-pinned one's (`kv_cache_memory_bytes`, `runner.engine_args`).
 [preset]
 id = "llama31-8b-fp8-1gpu-bandwidth"
 model = "/workspace/pouw/mvp-e2e/models/llama-3.1-8b-instruct"
@@ -40,7 +37,7 @@ max_model_len = 8384
 resident_gpu_memory_utilization = 0.40
 block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
-# MEM-15: every isolated (block-mode) engine of one arm group gets the same exact KV pool (llama31-8b-fp8-1gpu's).
+# Every isolated (`blocks`) engine of one arm group gets the same exact KV pool (llama31-8b-fp8-1gpu's).
 block_kv_cache_memory_bytes = 60129542144
 
 [admission]

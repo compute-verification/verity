@@ -14,7 +14,7 @@ import pytest
 
 from tests.check import test_glm53_rank_rehearsal as R
 from tests.observe.test_fold_glm53_defaults import view
-from verity_vllm.engine.profiles import generic as G
+from verity_vllm.observe.fold.profiles import generic as G
 from verity_vllm.observe.events import TritonLaunch
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as DSA

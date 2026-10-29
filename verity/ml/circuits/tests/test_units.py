@@ -16,7 +16,7 @@ from verity.ml.circuits.evaluation.reference import standalone_call
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.cut import derived_committed
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -123,8 +123,8 @@ def test_equal_shapes_are_equal_circuits(program):
 
 
 def test_a_unit_computes_its_calls_values(program):
-    """Each unit's gates, evaluated on the values its flat Definition's transcript gives its inputs, reproduce that transcript at
-    the unit's outputs."""
+    """Each proof block's gates, evaluated on the values its flat Definition's trace gives its inputs, reproduce that trace
+    at the proof block's outputs."""
     rng = random.Random(7)
     units = PartitionUnits(program, PO.query(16, 32))
     seen = set()
@@ -148,7 +148,7 @@ def test_a_unit_computes_its_calls_values(program):
 
 
 def test_pinned_shapes(program):
-    """The shapes of the test program's `Q_word` units: a change here changes every class digest a backend has recorded."""
+    """The shapes of the test program's `Q_word` units: a change here changes every class digest a proof system has recorded."""
     got = sorted(c.representative.form for c in PartitionUnits(program, PO.query(16, 32)).classes().values())
     assert len(got) == len(set(got))
     assert hashlib.sha512(codec.canonical_json(got)).hexdigest() == "94f3cb71f5e3cd2637f39cd3df9998db80f1ef692a3aa5d77bab14516564452ac26ab702b5a520ced5ab3c6a2eaa9a41fa1102c273be1b1846c03fea86ada2db"

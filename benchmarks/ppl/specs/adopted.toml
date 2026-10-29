@@ -1,4 +1,4 @@
-description = "the adopted design end to end: adopted-linears and adopted-attention (tonight's d63-sm50-smkv-at)"
+description = "the adopted design end to end: adopted-linears and adopted-attention"
 
 [[linear]]
 step = "smooth"

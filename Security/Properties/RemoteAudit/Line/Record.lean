@@ -34,7 +34,8 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one s
 * `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Draw.Committed`):
   holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordDraw`;
   `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
-* `ofRecord`: a trace with the Lean verifier's verdict on the record as its own, the trace the line's premises read.
+* `ofRecord`: a trace over the registration's blocks (`overBlocks`) with the Lean verifier's verdict on the record as
+  its own, the trace the line's premises read.
 * `recordPace`: the record's groups as the model's paced session, group `g`'s first pass the passes before it, its coin
   and its end `e_g` the record's as `stretches` reads them (`ended`); past the last group its coin stands, so the coins
   stay in order.
@@ -101,10 +102,22 @@ def Record.summary (node : Node) (r : Record) : Option RemoteAudit.Session.Summa
   | .ok (_, s) => s.summary
   | .error _ => none
 
-/-- **The trace of record**: the trace `T` with the Lean verifier's verdict on the record, accepting exactly where
-`Verified` does. -/
+/-- **The trace over `N` registered blocks**: `T` with each of its sets of registered blocks read as indices below `N`,
+the rest unchanged. A trace's registered blocks are the model's name for the store; at `T.blocks = N` this is `T`. -/
+def overBlocks {Ω : Type} (T : Trace Ω) (N : ℕ) : Trace Ω :=
+  let re : Finset (Fin T.blocks) → Finset (Fin N) := fun s => Finset.univ.filter fun j => (j : ℕ) ∈ s.image Fin.val
+  { T with
+    blocks := N
+    plan := fun ω p => re (T.plan ω p)
+    correct := fun ω p => re (T.correct ω p)
+    mem := fun ω t => re (T.mem ω t)
+    chip := fun ω t => re (T.chip ω t) }
+
+/-- **The trace of record**: the trace `T` over the registration's blocks (`overBlocks` at `Node.blocks`, the `N` the
+Lean verifier's record of the session gives the line) with the Lean verifier's verdict on the record, accepting exactly
+where `Verified` does. -/
 def ofRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) : Trace Ω :=
-  { T with accepts := fun ω => Verified node (rec ω) }
+  { overBlocks T node.blocks with accepts := fun ω => Verified node (rec ω) }
 
 /-- The record's line on the node: `lineOfRecordAt` at the node's windows a draw, the Lean verifier's record of the
 session and the node's `samples`, or refused where it gives none. -/

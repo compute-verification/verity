@@ -10,6 +10,13 @@ them, background always). So for an agent that holds a handle (its id is in a `h
 read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes. Each
 verdict is appended to $AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type
 and background flag, never its prompt.
+
+It also refuses a cloud agent's (a `bc-` conversation's) write through Linear's MCP connector, which acts as Daniel, so the
+write would show as his: every Linear tool but the reads in `LINEAR_READS`, called through `CallDynamicTool` (namespace
+Linear) or offered directly, as `MCP:<tool>` (`.cursor/hooks.json`'s `MCP:` matcher; an HTTP server's tool names no server, so
+a direct call is judged by `LINEAR_WRITES`, the connector's write tools, which no other connector's share). The refusal names
+the app's way to do it (the using-slack skill). Reads pass, and so does a local session's write, Daniel's own among them. These
+verdicts aren't logged.
 """
 import json
 import os
@@ -22,6 +29,15 @@ REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY",
 LOG = Path(os.environ.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
 LOOKUPS = {"explore", "cursor-guide", "ci-investigator", "videoReview"}
 AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+LINEAR_READS = ("get_", "list_", "search_", "extract_")
+#: the Linear connector's tools that write, as a direct MCP call names them (`MCP:<tool>`)
+LINEAR_WRITES = frozenset({
+    "save_issue", "save_comment", "delete_comment", "save_document", "save_issue_label", "create_issue_label",
+    "retire_issue_label", "restore_issue_label", "save_project", "save_project_label", "retire_project_label",
+    "restore_project_label", "save_milestone", "save_release", "save_release_note", "save_status_update",
+    "delete_status_update", "share_issue", "unshare_issue", "mark_notification", "save_diff_comment", "resolve_diff_thread",
+    "delete_diff_comment", "submit_diff_review", "update_diff", "merge_diff", "create_attachment", "delete_attachment",
+    "create_attachment_from_upload", "prepare_attachment_upload", "prepare_file_upload"})
 
 
 def holders() -> dict[str, str]:
@@ -39,6 +55,8 @@ def task_input(event: dict):
     args = event.get("tool_input")
     if event.get("tool_name") == "CallDynamicTool":
         return args.get("arguments") if isinstance(args, dict) and args.get("toolName") == "Task" else None
+    if str(event.get("tool_name") or "").startswith("MCP:"):
+        return None
     return args
 
 
@@ -56,14 +74,39 @@ def reason(event: dict) -> str | None:
             f"foreground: {', '.join(sorted(LOOKUPS))}.")
 
 
+def linear_write(event: dict) -> str | None:
+    """Why a cloud agent's call of a Linear connector tool that writes is refused, else None."""
+    args, name = event.get("tool_input"), str(event.get("tool_name") or "")
+    if not AGENT_ID.fullmatch(str(event.get("conversation_id") or "")):
+        return None
+    if name.startswith("MCP:"):
+        tool = name.removeprefix("MCP:")
+        if tool not in LINEAR_WRITES:
+            return None
+    elif name != "CallDynamicTool" or not isinstance(args, dict):
+        return None
+    else:
+        tool = str(args.get("toolName") or "")
+        if "linear" not in str(args.get("namespace") or "").lower() or tool.startswith(LINEAR_READS):
+            return None
+    return (f"Refused by tools/agent-guard/task_hook.py: Linear's MCP connector acts as Daniel, so `{tool}` would show as "
+            "his. Write through the app, as your handle (the using-slack skill): `research msg ask --as ME --to @OWNER "
+            "--file BRIEF.md` files an issue; `research msg linear state|edit|place ISSUE ...` changes one and `research "
+            "msg linear comment ISSUE TEXT --as ME` comments; `research.linear.Linear().gql(...)` with `createAsUser` does "
+            "what no verb does. The connector's reads pass.")
+
+
 def main() -> int:
     try:
         event = json.loads(sys.stdin.read() or "{}")
     except ValueError:
         event = {}
     event = event if isinstance(event, dict) else {}
+    if why := linear_write(event):
+        print(json.dumps({"permission": "deny", "agent_message": why, "user_message": why}))
+        return 0
     why, args = reason(event), task_input(event)
-    if event.get("tool_name") == "CallDynamicTool" and args is None:
+    if (event.get("tool_name") == "CallDynamicTool" or str(event.get("tool_name") or "").startswith("MCP:")) and args is None:
         print(json.dumps({"permission": "allow"}))
         return 0
     args = args if isinstance(args, dict) else {}

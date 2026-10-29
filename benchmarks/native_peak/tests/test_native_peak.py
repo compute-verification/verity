@@ -49,7 +49,7 @@ def test_spec_table_and_size_parsing():
     assert m.spec_peak("NVIDIA H100 80GB HBM3", "nvfp4")[0] is None
     assert m.spec_peak("NVIDIA H100 PCIe", "bf16")[0] == 756.0e12
     assert m.spec_peak("NVIDIA A10G", "bf16") == (None, None)
-    # RTX 5090 (lane fp4-proof): the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
+    # RTX 5090: the whitepaper's dense FP4-with-FP32-accumulate figure, not the sparse headline 3352
     assert m.spec_peak("NVIDIA GeForce RTX 5090", "nvfp4")[0] == 1676.0e12 and m.spec_peak("NVIDIA GeForce RTX 5090", "e4m3")[0] == 419.0e12
     assert m.spec_peak("NVIDIA GeForce RTX 4090", "nvfp4")[0] is None and "nvfp4" in m.DTYPES
     assert m.parse_sizes("8192, 16384") == [8192, 16384]

@@ -1,9 +1,9 @@
-"""[revb F-r17b-38 (i), R17-3] tp2_commit reads the sampled replay's POPULATION reconciliation against Q(P) (`population.query_checks`) per rank
-INTO the TP verdict, fail closed, by the dense committer's rule (commit_verdict._query_population_scope).  The negative is the exact shape of
-the TP2 B1 256/32 row of record on r17-int-2 (lane/r17-tp r17int2 finalize_pair0..2.json): every rank, every pair, query_checks.ok False with
+"""tp2_commit reads the sampled replay's POPULATION reconciliation against Q(P) (`population.query_checks`) per rank
+INTO the TP verdict, fail closed, by the dense committer's rule (commit_verdict._query_population_scope).  The negative is a TP2 B1 256/32
+row's finalize_pair<k>.json: every rank, every pair, query_checks.ok False with
 vus_outside_query 960 + identities_without_rows 960 (the shared rotary module: rows at model.layers.k.self_attn.rotary_emb, k >= 1, vs the
-manifest's alias identities layers.0 invocation 1..15, the TP merge having dropped op_path_aliases) under result True / grade complete --
-and a COMMIT PASS, because nothing read the field.  No engine, no torch: the gate is a pure function of the record."""
+manifest's alias identities layers.0 invocation 1..15, the TP merge having dropped op_path_aliases) under result True / grade complete,
+which must not PASS the commit.  No engine, no torch: the gate is a pure function of the record."""
 from __future__ import annotations
 
 import pytest
@@ -22,7 +22,7 @@ def _sr(rank: int, *, ok, outside: int = 0, without_rows: int = 0, unreachable: 
            "rows_disagree": {"n": 0, "first": []}, "ranks": {"replay": [rank], "manifest": [0, 1], "equal": True}, "accounted": True,
            "unstated_families": [], "executed_prefix_rule": {"applied": True, "faults": [], "evaluated_past_stop": {"n": 0, "first": []},
                                                              "manifest_cut_before_classification": {"n": 0, "first": []}}, "ok": ok}
-    if unreachable is not None:                              # [reqval 83dbe5bfd] the cause named beside the two symptoms (int-5)
+    if unreachable is not None:                              # the cause named beside the two symptoms
         chk["identities_unreachable_by_alias"] = {"n": unreachable, "first": _first(rank, 0)[:1] if unreachable else [], "alias_entries": 0}
     pop = {"vus": 8067, "scope": "Q_module_v1(P) = 8067 identities (...)"}
     if with_total:
@@ -44,14 +44,14 @@ def test_reconciled_rank_passes_and_states_the_scope():
 def test_the_int2_row_of_record_shape_fails_by_name_on_every_rank(rank):
     """960 VUs outside Q(P) + 960 required identities without rows, result True / grade complete -- the exact int-2 TP2 B1 record."""
     block, fail = query_population_gate(_sr(rank, ok=False, outside=960, without_rows=960), rank=rank, required=True)
-    assert fail is not None and fail.startswith(f"C2 population (rank {rank}, F-r17b-38)")
+    assert fail is not None and fail.startswith(f"C2 population (rank {rank})")
     assert "vus_outside_query x960" in fail and "identities_without_rows x960" in fail
     assert "layers.1.self_attn.rotary_emb" in fail            # the first offending identity is named
     assert block["ok"] is False and block["counts"]["vus_outside_query"] == 960
 
 
 def test_the_cause_named_by_reqval_travels_into_the_text_when_present():
-    """[reqval 83dbe5bfd] identities_unreachable_by_alias beside the two symptoms: whatever the dense text names, the TP verdict carries the count."""
+    """identities_unreachable_by_alias beside the two symptoms: whatever the dense text names, the TP verdict carries the count."""
     block, fail = query_population_gate(_sr(1, ok=False, outside=960, without_rows=960, unreachable=960), rank=1, required=True)
     assert fail is not None
     assert block["counts"]["identities_unreachable_by_alias"] == 960

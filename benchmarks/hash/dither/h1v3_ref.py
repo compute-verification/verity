@@ -1,6 +1,6 @@
-"""CA's H1V3 itself on a few units: `h1tile.reference(..., stream=True)` from the tree on PYTHONPATH (this source's own,
+"""H1V3 itself on a few units: `h1tile.reference(..., stream=True)` from the tree on PYTHONPATH (this source's own,
 PouwH1Tile_v4 ungated, unless a launcher's H1V3_SHA extracted another commit's `verity/`), so the gate holds the served
-kernel's z and receipts to the Definition's own code, not only to this lane's CPU twin.
+kernel's z and receipts to the Definition's own code, not only to dither_one's CPU twin.
 
     PYTHONPATH=TREE python h1v3_ref.py IN.json OUT.json
 

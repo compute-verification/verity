@@ -117,13 +117,10 @@ def test_the_reason_is_not_compared(server):
 
 
 def test_a_lenient_hex_decoder_is_caught(server):
-    """`bytes.fromhex` takes uppercase hex, which `Flock.unhex` refuses."""
+    """A decoder that takes uppercase hex, as `bytes.fromhex` does, where `Flock.unhex` refuses it."""
     def lenient(case):
         if isinstance(case, dict) and isinstance(case.get("commitment"), str) and isinstance(case.get("evidence"), str):
-            try:
-                case = case | {"commitment": bytes.fromhex(case["commitment"]).hex(), "evidence": bytes.fromhex(case["evidence"]).hex()}
-            except ValueError:
-                pass
+            case = case | {"commitment": case["commitment"].lower(), "evidence": case["evidence"].lower()}
         return example(case)
 
     with pytest.raises(D.Mismatch) as e:

@@ -18,7 +18,7 @@ another machine's in a deployment).  A window is on time at T when it committed 
 * **(d), proof-only reads.**  At the harness's hook (before its limit is calibrated, nothing else running): `E`'s raw read
   (torch's sum of it as int64), then every tag the tagger has, `PASSES` passes each from a clean L2 (the scrub first), timed
   on the device by the tagger's events (`Tagger.last_pass_ms`: its tags, and the pass to its root) and on the host from the
-  call to the root on the host; then `WINDOWS` windows and a skip control (`SKIP` of the blocks untagged over a poisoned
+  call to the root on the host; then `WINDOWS` windows and a skip control (`SKIP` of the labels untagged over a poisoned
   workspace), which must be rejected.
 * **(e), joint v0.**  The chain on plain W (the harness's honest-audit load), P2's timed audit (its responder in this
   process) and `ro-blake3/v1`'s windows at once: a thread opens one window at a time at random gaps (mean `GAP_S`) until the
@@ -66,7 +66,7 @@ CU_FUNC_CACHE_PREFER_L1 = 2
 
 
 def store_key(params: Any, salt: bytes, store: bytes) -> tuple[VerifierKey, MerkleTree]:
-    """`vk` over `E` (the store's blocks under PoUS's leaves, `pous.verifier.leaf_hash`) and the prover's tree, whose paths open
+    """`vk` over `E` (the store's labels under PoUS's leaves, `pous.verifier.leaf_hash`) and the prover's tree, whose paths open
     the store's samples."""
     nb, view = params.block_bytes, memoryview(store)
     if len(view) != params.blocks * nb:
@@ -152,7 +152,7 @@ class Pass(Protocol):
 
 class Prover(Protocol):
     """The store's one honest bandwidth prover (`Device`): `commit(window, slot, tagged)` opens the window, prepares, takes
-    σ, tags every block (or the first `tagged`, a skip control, over a poisoned workspace) into workspace `slot` and commits
+    σ, tags every label (or the first `tagged`, a skip control, over a poisoned workspace) into workspace `slot` and commits
     its root, returning the pass and the samples; `tag_pass` is a pass outside any window (one of (d)'s, or the kernels'
     first load), `scrub` the preparation's read, and `reserve` makes a tag's workspaces ahead."""
 
@@ -500,7 +500,7 @@ class Pause:
                 last, resumed[0], burst)
 
     def skip_control(self) -> None:
-        """One window with `SKIP` of the blocks untagged over a poisoned workspace, through the prover as the honest ones."""
+        """One window with `SKIP` of the labels untagged over a poisoned workspace, through the prover as the honest ones."""
         tagged = self.prover.blocks - round(SKIP * self.prover.blocks)
         w = self.ch.window(JOINT_TAG)
         tp, drawn = self.prover.commit(w, 0, tagged)
@@ -537,8 +537,7 @@ class Pause:
 def prefer_l1() -> int:
     """The current context's L1/shared-memory split preference set to L1 (`cuCtxSetCacheConfig`), CUDA's return code.  A
     kernel with no preference of its own keeps the split the last kernel left: after torch's kernels the tag pass ran at
-    1.1–1.4 ms against 0.84 from a fresh context, and at 0.83 with this set, the GEMMs' time unchanged (`probe.py steps`,
-    run r20261012-055226-416b)."""
+    1.1–1.4 ms against 0.84 from a fresh context, and at 0.83 with this set, the GEMMs' time unchanged (`probe.py steps`)."""
     import ctypes
     return ctypes.CDLL("libcuda.so.1").cuCtxSetCacheConfig(CU_FUNC_CACHE_PREFER_L1)
 

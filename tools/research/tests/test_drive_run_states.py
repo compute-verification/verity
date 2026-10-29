@@ -10,8 +10,7 @@ from research import drive as D
 
 
 def test_run_states_reads_runs_in_parallel_and_keeps_each_state_with_its_run(tmp_path, monkeypatch):
-    """20 Oct: the control pod's first tick took 33 min reading about 40 runs one `research status` (an ssh round trip) at a
-    time. Several are read at once, and each answer stays with the run it is about, whatever order they finish in."""
+    """Reading about 40 runs one `research status` (an ssh round trip) at a time took a tick 33 min. Several are read at once, and each answer stays with the run it is about, whatever order they finish in."""
     seen: set[int] = set()
     lock = threading.Lock()
 

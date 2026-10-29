@@ -1,3 +1,4 @@
+import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Claims.Complete.Json.Decode
 
 /-!
@@ -5,7 +6,9 @@ import Proofs.Flock.Claims.Complete.Json.Decode
 
 `decode_recordObj` reads the printed honest record back through `JsonSpec`'s `parse_print`, which hands it a parsed
 value alike the record (`Same`), and every check after that reads the parsed value only through `Same`. So the same
-checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse.
+checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse. It takes
+no JSON premise: S3 reads `require_link` by a match, and U1's `canon` is total (`canon_ok`,
+`canon_same`).
 
 * **Alike objects by lookup** (`same_mkObj`): a well-formed object (`WfObj`) is alike an object of distinct keys when
   each of that object's keys looks up a value alike its own and no other key looks up anything.
@@ -96,7 +99,7 @@ theorem keep_mkObj {l : List (String × Json)} (hd : Distinct l) {k : String} {v
 
 /-- **The honest record's checks pass at a value alike it** (S1–S14): what `decode_recordObj` proves after parsing,
 at any `j` alike the honest record. -/
-theorem decodeJ_same (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray}
+theorem decodeJ_same {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
@@ -120,7 +123,7 @@ theorem decodeJ_same (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray →
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
   unfold Record.decodeJWith
   simp only [hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, ok_bind,
-    beq_self_eq_true, check_true, S.beq_same _ _ (.bool true)]
+    beq_self_eq_true, check_true]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))
@@ -144,8 +147,8 @@ theorem decodeJ_same (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray →
       rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := S.canon_ok d hg
-      have hc' : canon dv = .ok c := by rw [← S.canon_same _ _ hdvs, hc]
+      obtain ⟨c, hc⟩ := FlockComplete.JsonRT.canon_ok d hg
+      have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]
       rfl

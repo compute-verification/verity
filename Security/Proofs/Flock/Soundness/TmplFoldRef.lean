@@ -4,7 +4,7 @@ import Flock.TmplFold
 import Flock.NetAt
 
 /-!
-# The template fold's reference, in closed form (PRF-133, part 3)
+# The template fold's reference, in closed form
 
 `Tmpl.foldRef` is the lincheck fold of a templated unit summed over its unrolled rows at their committed positions
 `π = Tmpl.posMap`: entry `s < 64` is `Σ_x Σ_{v ∈ A_x} [π v mod 64 = s] · α · e(π x) · g(π v)` plus the same over `B`

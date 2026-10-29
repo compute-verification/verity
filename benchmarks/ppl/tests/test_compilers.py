@@ -1,4 +1,4 @@
-"""PPL-COMPILE's steps: the formats' plain quantization (`fp`), Dither's coins on a format's integer grid (`native`) and
+"""The format steps: the formats' plain quantization (`fp`), Dither's coins on a format's integer grid (`native`) and
 int8 run exactly by limb splitting (`emulate`)."""
 import numpy as np
 import pytest

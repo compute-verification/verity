@@ -1,4 +1,4 @@
-description = "vLLM's plain int8 step (VLLM-18, #2377): the linears on int8, activations one scale per token (amax / 127) and weights one per row (top 127), rounded, no rotation, lm_head bf16; attention unrotated, Q per (head, token), P per row on [0, 127], V per channel, rounded; the LUT softmax with the sink its own block: key 0 out of the max and K's key 0 on its own scale, the head's calibrated from the calibration windows' keys 1..s-1 (PPL-LUT)"
+description = "vLLM's plain int8 step: the linears on int8, activations one scale per token (amax / 127) and weights one per row (top 127), rounded, no rotation, lm_head bf16; attention unrotated, Q per (head, token), P per row on [0, 127], V per channel, rounded; the LUT softmax with the sink its own block: key 0 out of the max and K's key 0 on its own scale, the head's calibrated from the calibration windows' keys 1..s-1"
 
 [[linear]]
 step = "int8"

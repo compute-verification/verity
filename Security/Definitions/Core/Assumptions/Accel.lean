@@ -50,7 +50,7 @@ them. With every register word `raw`, `decode` is the identity and this is a bit
 the model prices (the reasons are rows of the coverage table, `Accel/README.md`): the video and JPEG engines
 (fixed-function codecs on pixel formats); sm_120's RT cores (FP32 ray-box and ray-triangle tests); the texture path's
 filtering (FP interpolation at 8-bit fractional weights); the copy engines (moves only, at device memory's and the
-host link's bandwidth, which the model prices); and compute data compression (U7: the committed words are noised
+host link's bandwidth, which the model prices); and compute data compression (the committed words are noised
 and incompressible; a method bound by device memory or L2 on compressible data of its own is outside the claim).
 
 **Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until each
@@ -58,20 +58,20 @@ is added with its rate: `f16` accumulators, the 64-bit and `inc`/`dec` reduction
 NVSwitch `multimem` reductions, and the H200's `mma.sync` FP8. **Over-approximated units:** DMMA, the FP64 lanes,
 `HFMA2`, the float reductions and `redux.sync` are in the model as exact integer versions at the unit's rate and in
 its register layout, computing what the unit does on the integers it computes exactly (`Accel.Isa`'s docstring).
-**Encoding** (RT-LEAN-2 L30; coordinator, 26 Oct 04:30Z): the model's versions read two's-complement integers where
+**Encoding**: the model's versions read two's-complement integers where
 the card holds float codes, so the refinement is up to `decode`, which reads a register's float code of an integer
-within its format's exact range as that integer. **Scope limit, per input** (RT-LEAN-2, 06:34Z): `D` holds only
+within its format's exact range as that integer. **Scope limit, per input**: `D` holds only
 contents on which the code's run gives these units integer operands and results within their exact ranges, and starts
 no float reduction into a nonzero float code in shared or device memory (which `decode` reads as it is). The card's
 results on non-integers and its roundings past the exact range are outside the claim (the model reads an
-out-of-range operand as zero; coordinator's ruling, 26 Oct 04:00Z), but only on the contents where they occur: a
+out-of-range operand as zero), but only on the contents where they occur: a
 code that leaves the range on some contents is inside the claim on the rest.
 
-**Other devices of the period** (RT-PROTO P9, RT-UNITS U9): the node's host CPUs, with their AMX units, and its host
+**Other devices of the period**: the node's host CPUs, with their AMX units, and its host
 and peer links are not units of the card, and this Prop says nothing of them. They count in the period's capacity
-`C` instead, at θ's rows (CALIB): the host CPUs' SHA-512 at 4.90% (H200 node) and 5.07% (RTX PRO 6000 node) of the
-card's measured hashing, and AMX's exact s8 MACs at 3.15% and 9.51% of its dense INT8; the inventory premise is the
-coordinator's (A4). -/
+`C` instead, at θ's measured rows: the host CPUs' SHA-512 at 4.90% (H200 node) and 5.07% (RTX PRO 6000 node) of the
+card's measured hashing, and AMX's exact s8 MACs at 3.15% and 9.51% of its dense INT8; that this inventory is
+complete is a premise of its own (A4, `PeriodInventory`). -/
 def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ)
     (can : (c.Mem → c.Mem) → ℕ → (c.Mem → Prop) → Prop) : Prop :=
   ∃ x : Accel.Open, c.floors x ∧ AccelProductForm x ∧

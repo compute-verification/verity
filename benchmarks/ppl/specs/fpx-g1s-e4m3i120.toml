@@ -1,4 +1,4 @@
-description = "FPX-DESIGN FP8-g1, served: E4M3's integers up to 120 per token and per output row on every linear and lm_head, each operand the nearest level moved by a fair coin of 1 and centred (q + b - 1/2) (the coin, a fair bit a call (live in the design, seeded here), is Dither-2S's, so the one int8 GEMM of the integers m q + b is the credited and served one, its rank-one terms taken off in the epilogue), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+description = "FP8-g1, served: E4M3's integers up to 120 per token and per output row on every linear and lm_head, each operand the nearest level moved by a fair coin of 1 and centred (q + b - 1/2) (the coin, a fair bit a call (live in the design, seeded here), is Dither-2S's, so the one int8 GEMM of the integers m q + b is the credited and served one, its rank-one terms taken off in the epilogue), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
 
 [[linear]]
 step = "smooth"

@@ -3,15 +3,15 @@ import Definitions.Accounting.TS.Drawn
 /-!
 # A fixed word (trusted)
 
-ASK-40's option A, as Daniel ruled it: a unit's words are **fixed** when each of its multiplicative operands is bound
+Option A, as ruled: a unit's words are **fixed** when each of its multiplicative operands is bound
 before the coin its noise reads, or is written by a unit that is always proved, or by one the service prices at its
 public fan-out. Pricing is a property of the draw (`Priced`): some draw lands on the writer with probability at least
 its late cone's weight over the mean round weight `N_w`, the unit `DrawnLayer.Covers` charges in. Additive operands
 don't decide fixedness: a computed unit's work reads its multiplicative operands and its noise only
 (`Accounting.Guarantees.TS.AdditiveFixed`, a lemma, not an assumption).
 Option B (every operand bound before the coin) was refused because it drops K-chunk sums and glue-fed products, and
-option C (`UnitFixed`'s own reading) because it admits a cheater who cancels the noise (`A = −noise`). The scoping is
-note:20261019T0028Z-draft-adaptive-model; this file is its §2.1 with the slot roles the ruling needs and no
+option C (`UnitFixed`'s own reading) because it admits a cheater who cancels the noise (`A = −noise`). This file is
+that scoping with the slot roles the ruling needs and no
 well-founded chain, so late cones may be cyclic.
 
 `WordLayer` is a `DrawnLayer` with, per unit, its slots' roles, its noise, the words the run wrote, and its honest
@@ -50,7 +50,7 @@ inductive SlotRole
   | other
   deriving DecidableEq
 
-/-- **A drawn layer with its units' words** (ASK-40's option A): a `DrawnLayer` and, per unit `u`,
+/-- **A drawn layer with its units' words** (option A): a `DrawnLayer` and, per unit `u`,
 * `role u k`: slot `k`'s role;
 * `noise x u`: the noise `u`'s seed derives on `x`, in `N`;
 * `words x u`: the words the run wrote for `u` on `x`, in `W`;
@@ -97,7 +97,7 @@ A reader composing it with `DrawnLayer.Covers` passes `Covers` the same `Nw = Σ
 def Priced (wt : Fin S → J → ℝ) (v : Fin S × J) : Prop :=
   ∃ i, pf.coneWt wt v ≤ prob (fun b : B => pf.draw b i = v.2) * ((∑ w, ∑ j, wt w j) / S)
 
-/-- **ASK-40's option A: unit `u` is fixed** under the weights `wt` (public, a property of the layer and the weights):
+/-- **Option A: unit `u` is fixed** under the weights `wt` (public, a property of the layer and the weights):
 each of its multiplicative operands is bound before the coin its noise reads, or is written by a unit that is always
 proved or priced at its public fan-out (`Priced`). Its additive operands don't enter. -/
 def Fixed (wt : Fin S → J → ℝ) (u : Fin S × J) : Prop :=

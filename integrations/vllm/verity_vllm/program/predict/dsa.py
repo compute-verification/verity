@@ -47,7 +47,7 @@ class Net:
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         from verity_vllm.engine.profiles import family_facts as FF
-        from verity_vllm.engine.profiles.generic import _MLA_SCALES, _mla_weight_field, derive_config
+        from verity_vllm.observe.fold.profiles.generic import _MLA_SCALES, _mla_weight_field, derive_config
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
         from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY

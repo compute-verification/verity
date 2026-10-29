@@ -1,5 +1,5 @@
 """CPU-only invariants of the HBM-audit digest's wire format: the interleaved layout the Triton kernel uses equals the
-plain polynomial, and the digest depends on every block (universality witness). The device kernel is checked bit-exactly
+plain polynomial, and the digest depends on every label (universality witness). The device kernel is checked bit-exactly
 against this reference at run time by `driver.py validate`, which aborts the job on a mismatch; these tests pin the
 reference itself so a change to the format is caught without a GPU."""
 
@@ -37,7 +37,7 @@ def test_lane_points_in_range():
 
 
 def test_digest_depends_on_every_block():
-    """Changing one word of any challenged block changes the digest (the universality the audit relies on)."""
+    """Changing one word of any challenged label changes the digest (the universality the audit relies on)."""
     host = _blocks(8, seed=7).view(np.uint32)
     idx = np.array([0, 3, 5, 1, 7, 2], dtype=np.int64)
     base = D.reference_digest(host, idx, key=0xBEEF, lane=0)

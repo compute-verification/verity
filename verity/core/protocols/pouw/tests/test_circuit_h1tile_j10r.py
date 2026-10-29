@@ -1,5 +1,5 @@
-"""`circuit.h1tile`'s J10-R units, `PouwH1Tile_v5` and `PouwH1Tile_v6` (note:compute-accounting/20261019T0845Z-draft-rt-algo-r3,
-J10-R, RT-ALGO-11 and -16): one seed a call from its first position and its registered roots, a unit's rows' and columns'
+"""`circuit.h1tile`'s J10-R units, `PouwH1Tile_v5` and `PouwH1Tile_v6`
+(J10-R): one seed a call from its first position and its registered roots, a unit's rows' and columns'
 noise the call-scale stream's at public block counters, its fold keys σ_R's at its own position; and the SHA-512
 compressions that saves a unit against the note's formula."""
 from __future__ import annotations
@@ -116,7 +116,7 @@ def test_compressions_a_unit_against_the_note(m, n, k):
 @pytest.mark.slow
 @pytest.mark.parametrize("d", ["PouwH1Tile", "PouwH1Tile5"])
 def test_in_proof_compressions_are_today_s(d):
-    """Inside a drawn unit's proof J10-R hashes what today's form does, its blocks, its lanes' key blocks and four for its
+    """Inside a sampled proof block's proof J10-R hashes what today's form does, its blocks, its lanes' key blocks and four for its
     seeds (`unit_compressions`): the saving is the serving side's, which derives each block once a call."""
     body = _v(getattr(H, d)).body
     defn = _defns(body)

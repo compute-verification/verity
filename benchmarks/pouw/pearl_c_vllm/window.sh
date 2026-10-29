@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The e2e's timed window on node 2 (research store docs/pouw/mvp-e2e.md, "RTX PRO 6000"), from the run tree's root, with
-# GPU 1's build.sh output tarred as pearl-c-sm120-ship.tar:
+# The e2e's timed window on node 2, from the run tree's root, with GPU 1's build.sh output tarred as
+# pearl-c-sm120-ship.tar:
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
-#     --env GPU_LEASE_WHO=bc-dd22acf8 --send pearl-c-sm120-ship.tar -- \
+#     --env GPU_LEASE_WHO=<you> --send pearl-c-sm120-ship.tar -- \
 #     gpu-lease 8 --wait --timed --max-min 20 -- timeout 1140 bash benchmarks/pouw/pearl_c_vllm/window.sh
 # It times on the first leased GPU only.  In order, the first failure ends the window:
 #  1. identity: the device name and cc 12.0, with the UUID and clocks recorded;
@@ -51,7 +51,7 @@ p = json.load(open(sys.argv[1]))["flashinfer"]["prebuilt"]["sampling"]
 sys.exit(not (p.startswith(os.environ["FLASHINFER_WORKSPACE_BASE"] + "/") and os.path.exists(p)))' "$WORK/ready.json" \
   || fail SETUP "ready.json's FlashInfer sampling library is not in this build's cache $FLASHINFER_WORKSPACE_BASE: run setup.sh"
 export HF_HOME=${HF_HOME:-/workspace/hf}
-export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES%%,*} CUDA_DEVICE_ORDER=PCI_BUS_ID
 # NVML ignores CUDA_VISIBLE_DEVICES, so every nvidia-smi query names the leased GPU by its UUID (gpu-lease's first)
 UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}

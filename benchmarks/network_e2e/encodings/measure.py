@@ -3,15 +3,16 @@
     python measure.py synth --out DIR [--rates 0.5,2,6] [--windows 5] [--train 2] [--test 2]
     python measure.py corpus MODEL_DIR ... --out DIR [--folds 2]
 
-`synth` fits on synthetic traces of other seeds; `corpus` reads TRACE-CORPUS's traces (`trace_corpus.py`, each under
+`synth` fits on synthetic traces of other seeds; `corpus` reads the trace corpus's traces (`trace_corpus.py`, each under
 its server's own caps) and measures each fold under a codebook fit on the other folds (`codebooks/`).
 
 Each run fits the codebook on the training traces (the step-time model, its phase, and every table), registers it
 (`codebook.json`, with its SHA-512 digest), and on every test trace encodes each subject (v0's fields, the admission
 steps, and the residual) under every code, decodes it back (a mismatch fails the run), and records each window's bits,
-with the static and conditional codes' bits per field. Where ADV-SPEC's module is installed it also builds each trace's
-advice there (which checks its meaning) and records ADV-SPEC's own layout and charge as a reference row. It writes
-`table.json` (per trace and window, and the summary) and `table.md`, for `research data put --kind advice-encoding/v1`.
+with the static and conditional codes' bits per field. Where the advice module is installed it also builds each trace's
+advice there (which checks its meaning) and records the advice module's own layout and charge as a reference row. It
+writes `table.json` (per trace and window, and the summary) and `table.md`, which go into the store as one
+`advice-encoding/v1` tree.
 
 The worst case of each code, per window, is reported two ways: at the window's public counts (its certified arrivals
 and replayed resumes, with every advice field at its registered cap), and at the caps (`arrivals_per_bucket · T`
@@ -49,7 +50,7 @@ SUBJECTS = ("v0", "admit", "residual")
 
 
 def adv_spec():
-    """ADV-SPEC's advice module (I1 v0's canonical layout and its charge), or None where it isn't installed."""
+    """The advice module (I1 v0's canonical layout and its charge), or None where it isn't installed."""
     try:
         import verity.core.protocols.certifier.advice as A
     except ImportError:
@@ -58,7 +59,7 @@ def adv_spec():
 
 
 def to_adv_spec(A, adv):
-    """ADV-SPEC's `Advice` for this module's, which checks the advice's meaning as it is built."""
+    """`advice.Advice` for this module's, which checks the advice's meaning as it is built."""
     return A.Advice(tuple(A.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish) for q in adv.requests),
                     tuple(A.StepAdvice(tuple(A.Row(x.request, x.kind, x.start, x.n, x.cache_hit, x.preempted,
                                                    tuple(A.Source(r, n) for r, n in x.sources)) for x in s.rows))
@@ -346,7 +347,7 @@ def _counted(t: dict, key: str) -> list[int]:
 
 def summarize(result: dict, cb, T: int) -> dict:
     """One row per subject and code over every test window with an arrival or any bits; the conditional and static
-    codes' bits per field; ADV-SPEC's own layout where it is installed."""
+    codes' bits per field; the advice module's own layout where it is installed."""
     rows = []
     caps_arrivals = cb.caps.arrivals_per_bucket * T
     tail = {f: 2 if f not in ("fixed", "gamma") else 0 for f in C.FAMILIES}
@@ -489,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--windows", type=int, default=5)
     s.add_argument("--train", type=int, default=2)
     s.add_argument("--test", type=int, default=2)
-    c = sub.add_parser("corpus", help="TRACE-CORPUS's traces (trace_corpus.py): each model directory's traces")
+    c = sub.add_parser("corpus", help="the trace corpus's traces (trace_corpus.py): each model directory's traces")
     c.add_argument("roots", type=Path, nargs="+", help="a corpus run's model directory, <out>/corpus/<model>")
     c.add_argument("--out", type=Path, required=True)
     c.add_argument("--folds", type=int, default=2)
@@ -503,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         caps = dataclasses.replace(traces[0]["caps"], **{f.name: max(getattr(t["caps"], f.name) for t in traces)
                                                          for f in dataclasses.fields(traces[0]["caps"])})
         label = a.label or ", ".join(r.name for r in a.roots)
-        res = run(traces, traces, caps, 600, 100_000, a.out, f"TRACE-CORPUS vLLM traces ({label})", folds=a.folds)
+        res = run(traces, traces, caps, 600, 100_000, a.out, f"trace-corpus vLLM traces ({label})", folds=a.folds)
         print((a.out / "table.md").read_text())
         print(f"{res['meta']['seconds']} s")
     if a.cmd == "synth":

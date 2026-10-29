@@ -1,4 +1,4 @@
-"""`engine.static_schedule`: a run that declares `sampling.ignore_eos` is held to a schedule the declaration alone decides (VLLM-31)."""
+"""`engine.static_schedule`: a run that declares `sampling.ignore_eos` is held to a schedule the declaration alone decides."""
 from __future__ import annotations
 
 from verity_vllm.engine import static_schedule as ss
@@ -82,4 +82,4 @@ def test_against_warmup_fails_a_run_whose_schedule_differs_from_the_warmups():
 def test_host_prefix_cache_refusal():
     assert ss.host_prefix_cache_refusal(False) is None and ss.host_prefix_cache_refusal(None) is None
     msg = ss.host_prefix_cache_refusal(True)
-    assert "enable_prefix_caching=false" in msg and "VLLM-31" in msg
+    assert "enable_prefix_caching=false" in msg and "circuit-native form" in msg

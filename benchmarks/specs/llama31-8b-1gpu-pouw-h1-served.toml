@@ -11,7 +11,7 @@ id = "llama31-8b-1gpu-pouw-h1-served"
 # (LLAMA31_8B, the checkpoint `benchmarks/hash/dither/pin.sh` makes the pin from), since vLLM can't load the pin as FP8.
 # It shares the preset's scheduler (T = 64 tokens a step, 64 sequences) and its 8 GiB KV pin, so its ratio isolates what
 # H1 and the eager exact-int8 engine add a step; the cost of T = 64 itself (prefill chunked into 64-token steps) is the
-# step budget, which `llama31-8b-fp8-1gpu-compiled`'s stock-fp8@compiled times at 4,096. Compiled FP8's tokens differ
+# step budget, which `llama31-8b-fp8-1gpu-compiled-full`'s stock-fp8@compiled times at 4,096. Compiled FP8's tokens differ
 # from exact int8's, so it has no control and is timed on its own gated tokens.
 arms = ["stock-fp8@compiled", "stock-int8", "pouw:eps1-sm120-h1fx1"]
 sweep = "quick"

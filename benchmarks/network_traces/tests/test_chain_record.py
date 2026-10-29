@@ -4,17 +4,18 @@ window's declared sync signed), refuses the window of a record whose signature i
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
-window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
-warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
+window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
+Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
+the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
-let through as negatives; d1's K is #4404's horizon count over the compute audits' draws and free inputs and the
-network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
-honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
+let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' draws and free
+inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
+(exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
-period answer, an accepted report writes the block record's certifier entry by #4404's `block_leg`, in the block
-record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link, session
-and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
+period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
+block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
+session and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
 verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
 doesn't give, other audits, another registration, a link-window N2 didn't register, a missing case, no verifier, a
 refused or scan-only chain or no server."""
@@ -37,7 +38,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-BLOCK_SCHEMA = HERE.parent / "e2e_demo" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
+BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
 
 
 def _load(name: str):
@@ -223,6 +224,7 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
     assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
+    assert n2s["eps_at_delta"]["wrong_units_at_delta"]["0.5"] == 1
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
@@ -242,7 +244,7 @@ def period():
 
 
 def _period(d: Path, case: dict, answer: dict) -> str:
-    """#4404's runner's pair, ``certifier.answer.json`` with ``certifier.case.json`` beside it."""
+    """all_protocols' runner's pair, ``certifier.answer.json`` with ``certifier.case.json`` beside it."""
     d.mkdir(parents=True, exist_ok=True)
     (d / "certifier.case.json").write_text(json.dumps(case))
     (d / "certifier.answer.json").write_text(json.dumps(answer))
@@ -282,6 +284,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     """certifier/v0 cases from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest), which
     also re-decides them here in the Lean executable's place."""
     import jsonschema
+    from block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
     case = period.case("accept", 1, "clock")
     answer = period.reference(case)
@@ -290,7 +293,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["block"]["written"] is True, got["block"]
     entry = got["block"]["entry"]
-    assert entry == cr._allp().block_leg(answer, server="node-1", runs=["r-chain", "c1"])
+    assert entry == block_leg(answer, server="node-1", runs=["r-chain", "c1"])
     schema = json.loads(BLOCK_SCHEMA.read_text())
     jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
                                      "$ref": "#/$defs/leg"}).validate(entry)
@@ -412,14 +415,14 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
-    assert doc["widths"] == {"NS": 149_520, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
-    assert doc["terms"]["b"] == 154_352 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
+    assert doc["widths"] == {"NS": 149_648, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
     assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
     assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
-        5 * (154_352 + math.log2(lw * 64 + 1)))
+        5 * (154_480 + math.log2(lw * 64 + 1)))
     with pytest.raises(SystemExit, match="drew 16 of 64"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
@@ -432,6 +435,8 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
+    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    assert cr.subset_bound(4, 2, 0.5) == 1
 
 
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):

@@ -551,7 +551,7 @@ class Pipeline:
     def row_tree(self, tag: str, x: str, count: int, dom: str) -> list[tuple[str, object]]:
         """A tree over `count` FP32 rows of x: their row digests (s512_rows, a CTA a row), the HM96 leaves over them, then
         its levels.  A's salt nonce is its unit index, read from `unit`; B's HM96_WEIGHTS + weight."""
-        d, b = self.dev, self.b
+        b = self.b
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
         # read at launch: a ring's sets each hold their call's keys, and the lanes point `keys` at the set's before each call
         block = lambda: self.keys["unit"] + 96 if tag == "a" else 0  # noqa: E731

@@ -4,10 +4,10 @@ kernel version (`--versions`) gated in the same run before any is timed.
 One step of Llama-3.1-8B's 128 served linears (layer by layer qkv, o, gate_up, down, B the int8 pin's weights as vLLM merges
 them) at T slots, each call's first M_c slot rows random s8 and admitted, the rest zero (`served_h1`'s slot table), its units
 at SERVE-H1's static positions (step s, `serve.static_layout`), a random salt and random roots.  Calls alternate M_c between
-two counts, so some calls have a dead row block.
+two counts, so some calls have a dead row tile.
 
-    gate     per version, h1r into an output poisoned with 0xA5, against `served_h1/receipts.gated_receipts` (CA's torch
-             path, its noise through CA's `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
+    gate     per version, h1r into an output poisoned with 0xA5, against `served_h1/receipts.gated_receipts` (served_h1's
+             torch path, its noise through served_h1's `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
              (`receipts.gated_reference`) on chosen units (K = 4096 and 14336, first and last, a dead one); a no-write control
              (nowrite: the poison must survive and be refused); the launch captured as a CUDA graph and replayed into a fresh
              poison, then under a second salt written into the same device buffer (as a served step does), each against

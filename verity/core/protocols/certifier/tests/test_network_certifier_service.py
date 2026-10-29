@@ -1,10 +1,10 @@
-"""One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
+"""One link-window's network certificates through the proof system (N2): the round trip to an accepted, exhaustive
 outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
 profile, and each way a link-window fails closed, on injected coins and an injected clock. Each round's verdict of
 record is decided on a stand-in proof of the unit (`standin`: the prover's rows and output word by the gates'
 references, the Lean run reading its session file), and held to the in-the-clear check on the opening, the debug
 comparison, and to the oracle (`LinkWindows.stand_in`), which compares the Program's egress grid: the same verdict,
-except where only the frames differ from the Program's, which N2 leaves to N3."""
+except where only the frames differ from the Program's, which N2 doesn't hold."""
 
 import itertools
 import json
@@ -254,10 +254,10 @@ def test_the_profile_binds_egress_too_and_ends_where_it_ends(tmp_path):
     assert run.lw.declares(1, 2, ig[2]) and not run.lw.declares(1, 3, ig[2])
 
 
-def test_n2_compares_no_grid_and_leaves_the_frames_to_n3(tmp_path):
+def test_n2_compares_no_grid_and_holds_no_frames(tmp_path):
     """The head check holds the head's status, grid and counts, and N2 compares no grid in the clear: a window whose
     frames differ from the Program's grid in content alone, or in order within a bucket, at the profile's counts, is
-    accepted where the in-the-clear oracle rejects it, since its frames are N3's to hold. An egress head under another
+    accepted where the in-the-clear oracle rejects it, since N2 holds counts only. An egress head under another
     parameters digest is rejected though its certificate verifies."""
     run = Run(tmp_path, occupancy=honest_occupancy())
 

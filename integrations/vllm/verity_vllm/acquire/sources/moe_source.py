@@ -203,7 +203,7 @@ class MoeBlockSource:
         self.active = False
         self.stats = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
                       "unattributed": 0, "shapes": {}, "plane_flushes": 0, "router": {}, "outputs": 0}
-        # [FLUSH-03] the committer decides (gather collector: a launch; arena committer: nothing staged -> False); absent = an old committer
+        # the committer decides (gather collector: a launch; arena committer: nothing staged -> False); absent = an old committer
         self._flush_after_plane = getattr(committer, "flush_after_plane", None)
         self.act_scaled: bool | None = None          # set by the run's first w2 launch: True when its A carries group scales (block FP8)
         self.planes: tuple[str, ...] = MOE_PLANES    # the planes every MoE layer binds per step, fixed with act_scaled
@@ -304,7 +304,7 @@ class MoeBlockSource:
         name = f"{self.module_of[self.cur_layer] if self.at_calls else f'moe/L{self.cur_layer}'}/{what}"
         self.c._acquire(name, t, job)
         if what == "up" and self._flush_after_plane is not None and self._flush_after_plane("up"):
-            self.stats["plane_flushes"] += 1             # [FLUSH-03] `up` leaves the device before the block's w2 launch overwrites its workspace
+            self.stats["plane_flushes"] += 1             # `up` leaves the device before the block's w2 launch overwrites its workspace
         nb = t.numel() * t.element_size()
         self.stats["launches"] += 1
         self.stats["bytes"] += nb
@@ -526,16 +526,16 @@ class MoeBlockSource:
                  "at_calls": self.at_calls, "hash_layers": sorted(self.hash_layers),
                  "router": dict(self.stats["router"]), "router_kernel_steps": {k: list(v) for k, v in self.router_steps.items()},
                  "outputs": {"modules": len(self.outputs), "bound": self.stats["outputs"]},
-                 "evidence": ("MOE-03 source: wraps vllm._custom_ops.topk_softmax / moe_sum / moe_wna16_marlin_gemm, "
+                 "evidence": ("MoE block source: wraps vllm._custom_ops.topk_softmax / moe_sum / moe_wna16_marlin_gemm, "
                               "fused_moe.invoke_fused_moe_triton_kernel (also at experts.triton_moe), grouped_topk_router.grouped_topk, "
                               "fused_topk_bias_router.fused_topk_bias and torch.ops._C.per_token_group_fp8_quant; per MoE layer per step "
                               f"{', '.join(self.planes)} "
-                              "snapshotted into the packed step stream (same run root) right after each kernel; [FLUSH-03] the up plane is "
+                              "snapshotted into the packed step stream (same run root) right after each kernel; the up plane is "
                               "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias), "
                               "and on Marlin act and down after the w2 launch (moe_sum's output is carved from act's workspace) -- "
                               f"{self.stats['plane_flushes']} flushes; identity_check requires exactly "
-                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py (cp-moe, "
-                              f"registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
+                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py "
+                              f"(registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
 
 
 __all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",

@@ -44,7 +44,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
 
 CUDA, HC, H, OUT = "cuda:0", 4, 7168, 24
 H200 = dataclasses.replace(target_of_header(None)[0], compute_capability=(9, 0), num_sms=132, batch_invariant=False)
-PROFILE = importlib.import_module("verity_vllm.engine.profiles.derived_DSV4_PRO_tp8").PROFILE
+PROFILE = importlib.import_module("verity_vllm.observe.fold.profiles.derived_DSV4_PRO_tp8").PROFILE
 
 
 def view(alloc, shape, dtype="bfloat16"):

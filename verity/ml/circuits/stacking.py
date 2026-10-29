@@ -27,8 +27,7 @@ data-dependent read of one of V words, counted in fresh index bits) and ``folds`
 and fx1's `PouwFx1Absorb`). Only gates with an operand that depends on a run input are budgeted: a gate of constants and
 registered words computes the same function before the seed. A primitive the table doesn't list is refused. The table (`CLASSES`, and
 the families `class_of` reads) is Lean's `Accounting.Gates.classOf` id for id where Lean lists the id (`Bf16ToF32_v1` affine
-there too, by the 18 Oct ruling), and the red team's closed table (round 2) for the families built on demand that Lean
-doesn't list yet. The exact-int8 profile's
+there too), and a closed table for the families built on demand that Lean doesn't list yet. The exact-int8 profile's
 primitives (vLLM's `int8_exact`) aren't in Lean's registry yet: its casts, f64 products and `LutIndex_v1` (min(floor(max(d, 0)
 a / 2^32), 255)) are roundings, and `Exp2Lut127_v1` is a gather.
 

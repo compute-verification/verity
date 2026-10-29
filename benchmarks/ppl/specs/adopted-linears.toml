@@ -1,4 +1,4 @@
-description = "the adopted design's linears: SmoothQuant alpha 0.5 (foldable), rotated, activations dithered, weights on ±63 (tonight's d63-sm50-smkv)"
+description = "the adopted design's linears: SmoothQuant alpha 0.5 (foldable), rotated, activations dithered, weights on ±63"
 
 [[linear]]
 step = "smooth"

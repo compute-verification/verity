@@ -1,18 +1,17 @@
 """SCALAR-ROUTE's class P: can a program outside class P make a fresh Dither word in fewer than 2.03 issue slots without
 tables?
 
-QSTAR (note:20261017T0344Z-draft-eps1-qstar) proved class P (radix-packed programs) costs >= 1 + 28/27 ~ 2.04 issue slots
-a word (Theorem C), and named four shapes that escape the proof: count-coefficient fields, joint (non-radix) encodings,
-vertical bit-sliced words, and first-mixed hashing. The joint-encoding count permits as little as 1.875 < 2.03, so the
-proof alone does not exclude a sub-2.03 word. SCALAR-ROUTE (the coordinator's named assumption, Daniel's call) is that no
-such word exists without tables; QSTAR r3 (bc-98e285b9, branch cursor/isa-cap-ea24) checks the per-opcode premise ISA-CAP.
+Class P (radix-packed programs) provably costs >= 1 + 28/27 ~ 2.04 issue slots a word (Theorem C), and four shapes
+escape the proof: count-coefficient fields, joint (non-radix) encodings, vertical bit-sliced words, and first-mixed
+hashing. The joint-encoding count permits as little as 1.875 < 2.03, so the proof alone does not exclude a sub-2.03
+word. SCALAR-ROUTE (a named assumption) is that no such word exists without tables; `isa_cap_check.py` checks the
+per-opcode premise ISA-CAP.
 
 This script is the complementary half: a constructive search over the escape shapes, asking whether any *realizable* sm_120
 program in them makes a fresh committed Dither word below 2.03 issue slots without tables. The committed Dither word is a
 fresh s32: at the zero instance the bit product popc(R_l[i] & C_l[j]) over a 32-step prefix (two-sided dither), at a
 general instance a dot product sum_p R[i,p]*U[j,p] with U in [-63, 62] (7 bits). Freshness forbids a copy, a constant or a
-cheap function of other values (note:20261017T0310Z-report-eps1-program §1), and the verifier recomputes the word, so the
-program must produce it exactly.
+cheap function of other values, and the verifier recomputes the word, so the program must produce it exactly.
 
 Findings (checks below), per escape shape:
 - **Joint non-radix packing** (the shape whose count permits 1.875): to pack m rows' length-k partial sums into one 32-bit
@@ -21,16 +20,16 @@ Findings (checks below), per escape shape:
   costs **k/2 = 16 issue slots a word**, far above 2.03. The counting bound 1.875 is a proof gap, not a realizable route.
 - **First-mixed hashing**: a mixing hash of (R, C) is not the committed dot product (different functions), so producing a
   hash does not produce the committed word -- hashing is an obstruction to the lower-bound *proof*, not a cheaper route.
-- **Count-coefficient fields**: QSTAR Theorem B -- word-local, >= 8 issue slots a word (dp4a meets 8); far above 2.03.
-- **Vertical bit-sliced words**: QSTAR *measured* the best bit-sliced construction (`bb`, run r20261017-055042-7c59) at
-  **3.47 issue slots a word** with no co-run, > 2.03.
-- **Empirical no-table floor**: of every no-table construction QSTAR built, the cheapest is bit-sliced at **3.47 issue
-  slots**; dp4a 10.59, shared-memory Four Russians (fr8) 4.06. Every route below 2.03 QSTAR found is an L2 *table* route
+- **Count-coefficient fields**: Theorem B -- word-local, >= 8 issue slots a word (dp4a meets 8); far above 2.03.
+- **Vertical bit-sliced words**: the best bit-sliced construction (`bb`) measures **3.47 issue slots a word** with no
+  co-run, > 2.03.
+- **Empirical no-table floor**: of every no-table construction built, the cheapest is bit-sliced at **3.47 issue
+  slots**; dp4a 10.59, shared-memory Four Russians (fr8) 4.06. Every route found below 2.03 is an L2 *table* route
   (fr16_c32 at 1.906, 8 B of L2 traffic a word), which SCALAR-ROUTE prices by bytes, not issue slots.
 
 Verdict: no realizable program in any escape shape makes a fresh Dither word below 2.03 issue slots without tables; the
 empirical no-table floor is 3.47. SCALAR-ROUTE's no-table clause is validated against the escape shapes; closing the proof
-gap from 3.47 (reality) to 2.04 (class P) rests on ISA-CAP, which QSTAR owns.
+gap from 3.47 (reality) to 2.04 (class P) rests on ISA-CAP.
 
 Run: `python scalar_route.py [--mutations] [--verdict PATH]`. Stdlib + exact_kit only.
 """
@@ -59,15 +58,15 @@ def mix32(x: int) -> int:
     return x ^ (x >> 16)
 
 
-# The escape shapes QSTAR named, with status and the bound/measurement that excludes a sub-2.03 construction.
+# The escape shapes Theorem C's proof leaves open, with status and the bound/measurement that excludes a sub-2.03 construction.
 ESCAPES = [
     {"shape": "count-coefficient fields", "route": "word-local sum_p c_p U[j,p], c_p a prefix count of R",
-     "excluded_by": "word-local bound (QSTAR Theorem B)", "cost": ">= 8 issue slots a word"},
+     "excluded_by": "word-local bound (Theorem B)", "cost": ">= 8 issue slots a word"},
     {"shape": "joint (non-radix) encodings", "route": "m rows' correlated fields packed into one 32-bit word",
      "excluded_by": "overflow: only 2 rows fit a full dot product, so SWAR costs k/2 a word",
      "cost": ">= 16 issue slots a word (SWAR); counting bound 1.875 is a proof gap"},
     {"shape": "vertical bit-sliced words", "route": "32 rows' bit p masked by a bit of U, LOP3+POPC accumulate",
-     "excluded_by": "QSTAR measured (bb, run r20261017-055042-7c59)", "cost": "3.47 issue slots a word, no co-run"},
+     "excluded_by": "measured (bb)", "cost": "3.47 issue slots a word, no co-run"},
     {"shape": "first-mixed hashing", "route": "one instruction mixed on every fiber (hash of R, hash of U)",
      "excluded_by": "a hash is not the committed dot product", "cost": "not a committed-word route"},
 ]
@@ -135,7 +134,7 @@ def hash_of_inputs(R: int, C: int) -> int:
 def main() -> int:
     checks = Checks()
 
-    # coverage: all four escape shapes QSTAR named are addressed.
+    # coverage: all four escape shapes are addressed.
     for e in ESCAPES:
         checks.check(f"escape addressed: {e['shape']}", bool(e["excluded_by"]), e["cost"])
 
@@ -153,7 +152,7 @@ def main() -> int:
     ok3, true3 = packed_dot_nonneg(3, k)
     checks.check("joint packing: a concrete 3-row SWAR overflows (lanes corrupt, not the committed word)", not ok3,
                  f"true={true3} > 10-bit lane")
-    # QSTAR's combine-overflow fact: two radix words of three 9-entry fields overflow when added (2305^3 > 2^32), so packed
+    # the combine-overflow fact: two radix words of three 9-entry fields overflow when added (2305^3 > 2^32), so packed
     # accumulation is not free -- each output needs an extraction the creation count does not charge.
     checks.check("packed accumulation overflows: 2305^3 > 2^32 (three 9-entry fields don't add freely)",
                  2305 ** 3 > (1 << 32))
@@ -171,18 +170,18 @@ def main() -> int:
     maxw = max(committed_zero_word(next(g), next(g)) for _ in range(500))
     checks.check("hashing: the committed zero word is a small popcount (<= 32), a hash spans 32 bits", maxw <= 32, maxw)
 
-    # (3) count-coefficient and (4) bit-sliced are excluded by QSTAR's word-local bound and measurement, both >> 2.03.
-    checks.check("count-coefficient: word-local >= 8 issue slots a word (QSTAR Theorem B)", 8.0 >= 2.03)
-    checks.check("bit-sliced: measured 3.47 issue slots a word, no co-run (QSTAR bb, r20261017-055042-7c59)",
+    # (3) count-coefficient and (4) bit-sliced are excluded by the word-local bound and the measurement, both >> 2.03.
+    checks.check("count-coefficient: word-local >= 8 issue slots a word (Theorem B)", 8.0 >= 2.03)
+    checks.check("bit-sliced: measured 3.47 issue slots a word, no co-run (bb)",
                  3.47 >= 2.03)
 
-    # empirical no-table floor across every construction QSTAR built: the cheapest is bit-sliced 3.47; every route below
+    # empirical no-table floor across every construction built: the cheapest is bit-sliced 3.47; every route below
     # 2.03 is an L2 table route (fr16_c32 1.906, 8 B/word), priced by bytes.
     no_table_costs = {"bit-sliced bb": 3.47, "fr8 (shared tables)": 4.06, "dp4a": 10.59}
     table_routes = {"fr16_c32 (L2 tables, 8 B/word)": 1.906}
     checks.check("no-table empirical floor is 3.47 issue slots a word (> 2.03)", min(no_table_costs.values()) >= 2.03,
                  f"min {min(no_table_costs.values())}")
-    checks.check("every sub-2.03 route QSTAR found is an L2 table route (priced by bytes, not issue slots)",
+    checks.check("every sub-2.03 route found is an L2 table route (priced by bytes, not issue slots)",
                  all(v < 2.03 for v in table_routes.values()))
 
     if checks.mutations:

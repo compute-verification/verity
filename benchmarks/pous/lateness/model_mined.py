@@ -1,4 +1,4 @@
-"""Model: the mined quiet sweep's server times (art:f874e164, 1.26M answers) convolved with a measured network leg.
+"""Model: the mined quiet sweep's server times convolved with a measured network leg.
 
     python model_mined.py SWEEP_DIR PROBE.bin=LABEL... > mined-model.json
 

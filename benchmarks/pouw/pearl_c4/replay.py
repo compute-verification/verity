@@ -17,11 +17,11 @@ many fall outside D-SB's byte range (`device_scales`).
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
 * the records: one unit, no channel split, its real rows, and as excluded the rows that fail `row_passes` (D-NF) and the
   rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `clear_work.declare` has them;
-* the draws' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work law opens
+* the samples' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work law opens
   there: t draws by the records' credit and one tile per excluded row.
 
 **`verify`** recomputes everything from the transcript and the scheme: the salt, the records against the workload, the
-draws, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
+samples, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
 rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed debit
 (`pearl_c4.tile_debit`: F1′'s base split under the exact noise law given the drawn E lines and the realised scale bytes,
@@ -57,11 +57,14 @@ from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
 from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c4 as F
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity_config.settings import of
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
-import clear_audit as CA  # noqa: E402
-import clear_work as CW  # noqa: E402
+import clear_audit as CA
+import clear_work as CW
+
+settings = of(__file__)
 
 FORMAT = "verity/pouw/pearl-c4-transcript/v0"
 REPORT = "verity/pouw/pearl-c4-replay/v0"
@@ -325,7 +328,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("transcript")
     v.add_argument("--out", required=True)
     v.add_argument("--path", help="the transcript as the accept line names it (default: <run>:<file name>)")
-    v.add_argument("--commit", default=os.environ.get("VERITY_COMMIT", "unknown"))
+    v.add_argument("--commit", default=settings.VERITY_COMMIT or "unknown")
     v.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     args = ap.parse_args(argv)
     if args.cmd == "prove":

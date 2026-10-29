@@ -22,7 +22,7 @@ and their decisions (`bit`). A slot that doesn't ask changes nothing, so the cha
 slots that ask, in order: the window's decision stream, a `List Bool`. The run's decision stream is one per window. The
 asks themselves are not advice: the compile slice, its charge included, is proved on every advised window and never
 sampled, so `en` is the scan that slice proves, pinned by it. The carry from window to window (the KT counts and the
-run) is committed across windows and chained from the book's priors (#3801, `charge_chain.check_chain`), as `charges`
+run) is committed across windows and chained from the book's priors (`charge_chain.check_chain`), as `charges`
 starts from `priors` and passes each window's carry on.
 
 **What is left.** That `ChargeCount_v1`'s circuit computes `window` is not proved in Lean. circuit-check holds the circuit

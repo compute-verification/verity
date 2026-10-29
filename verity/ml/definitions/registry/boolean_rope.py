@@ -9,7 +9,7 @@ function on bits.
     RoPEHeadGptJ_v3{D}, RoPEGptJ_v3{NHEADS, D}   the same signatures, the interleaved pairing (`is_neox=False`)
                                                        word views, defined here: RoPEHeadGptJ_v2{D}, RoPEGptJ_v2{NHEADS, D}
 
-The rotations are traced from core's f32 builders (`verity.ml.circuits.silicon.fp`, `trace.definition`), the pieces C-Flock's lowering
+The rotations are traced from core's f32 builders (`verity.ml.circuits.silicon.fp`, `trace.definition`), the pieces Flock's lowering
 runs for the word primitives: ``t = RN32(y * s)`` (FMUL, subnormals kept), ``RN32(x * c - t)`` with one FFMA rounding, then
 bf16_rn with aten's NaN 0x7FC0. Every NaN of the f32 steps ends in that cast, so their payloads never reach the output. The
 composites are `b1`'s bodies on bits: `RoPEHead_v2` batches `RopeOut_v2` and `RopeOutAdd_v2` over the D/2 coordinate pairs and
@@ -26,6 +26,7 @@ from verity.ml.circuits.refs import Coll, Explicit, concat, strided_view
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.boolean.trace import definition
+from verity.ml.definitions.evidence import EVIDENCE
 
 from . import b1
 from . import prims as P
@@ -34,11 +35,12 @@ __all__ = ["RoPE", "RoPEGptJ", "RoPEGptJV2", "RoPEHead", "RoPEHeadGptJ", "RoPEHe
 
 BF16 = Array(16, BL.BIT)
 _XYCS = (("x", BF16), ("y", BF16), ("c", BF16), ("s", BF16))
+_DIFFTEST = EVIDENCE["cc12_difftest"]["run"]
 GPTJ_CONFORMANCE = ("exact-model-tested; RoPEHeadGptJ_v2 on bits (test_boolean_rope.py), which matches vLLM d9105ea80's "
-                    "`rotary_embedding(is_neox=False)` in 60 of 60 difftest cases (run r20261004-060203-ba52); "
+                    f"`rotary_embedding(is_neox=False)` in 60 of 60 difftest cases (run {_DIFFTEST}); "
                     "qualification: " + b1.COS_SIN_QUALIFICATION)
 GPTJ_V2_CONFORMANCE = ("exact-model-tested; 60 of 60 difftest cases (101,696 words) of vLLM d9105ea80's CUDA `rotary_embedding("
-                       "is_neox=False)` (bf16 query, key and cache, run r20261004-060203-ba52), q_pe/k_pe at GLM-4.7-Flash's "
+                       f"is_neox=False)` (bf16 query, key and cache, run {_DIFFTEST}), q_pe/k_pe at GLM-4.7-Flash's "
                        "and GLM-5.3's shapes; qualification: " + b1.COS_SIN_QUALIFICATION)
 
 

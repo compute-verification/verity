@@ -18,6 +18,16 @@ from verity_vllm.commit.committer.native_host import NativeHostCommitter
 from verity_vllm.commit.native_ranges import RangeOpening
 
 CHUNK = 64
+#: what the committers here read through `verity_vllm.settings`: unset, each is built with the default leaves, name and retention,
+#: whatever the process's environment holds
+ENV = ("VERITY_ABL", "VERITY_ARENA_GROW", "VERITY_ARENA_WAIT_S", "VERITY_FOOTPRINT", "VERITY_INLINE_D2H", "VERITY_MEMTRACE", "VERITY_PIN",
+       "VERITY_RETAIN", "VERITY_RETAIN_PINNED", "VERITY_SKIP")
+
+
+@pytest.fixture(autouse=True)
+def _default_settings(monkeypatch):
+    for k in ENV:
+        monkeypatch.delenv(k, raising=False)
 
 
 def stream(seed: int = 5, steps: int = 3, tensors: int = 3, nbytes: int = 700) -> list[list[tuple[str, bytes]]]:

@@ -1,6 +1,7 @@
-"""summarize.py OUT: each unit's numbers (OUT/<tag>/summary.json) and all of them (OUT/summary.json, one table row per unit), from
+"""summarize.py OUT: each proof block's numbers (OUT/<tag>/summary.json) and all of them (OUT/summary.json, one table row per
+proof block), from
 what job.sh leaves there: stage.json and the *.time files, the prover's LIVE lines, the selftests' NEG lines and the Lean
-verifier's VERDICT lines. The honest session and the selftest build's honest record pass only when the Lean verifier accepts
+verifier's VERDICT lines. The honest run and the selftest build's honest record pass only when the Lean verifier accepts
 them; every other control passes only when it rejects it (a forged output word refused)."""
 import json
 import statistics

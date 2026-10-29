@@ -153,9 +153,9 @@ def test_the_formats_round_trip():
 
 @pytest.mark.slow
 def test_check_is_the_deployed_point_under_s1s_lms():
-    """`check` is `check_at(DEPLOYED, memory_challenger.SCHEMES)`: the point is `2^19` blocks of 2,056 bytes in 8 segments,
+    """`check` is `check_at(DEPLOYED, memory_challenger.SCHEMES)`: the point is `2^19` labels of 2,056 bytes in 8 segments,
     `k = 105` and `Δ + RTT = 854,000 ns`; a run at it that a test signer signed is accepted under the test signers' schemes
-    and refused by `check` for its scheme alone, and a reduced run is refused by `check` for its block count."""
+    and refused by `check` for its scheme alone, and a reduced run is refused by `check` for its label count."""
     d = run.DEPLOYED
     assert (d.params.blocks, d.params.block_bytes, d.params.segments, d.params.blocks_per_segment) == (2 ** 19, 2056, 8, 2 ** 16)
     assert (d.params.w, d.params.c0, d.k, d.limit_ns) == (16448, 21065, 105, 854_000)

@@ -1,5 +1,6 @@
 import Mathlib.Data.List.Basic
 import Mathlib.Logic.Function.Basic
+import Definitions.Hash.Basic
 
 /-!
 # Merkle trees (PROTOCOL.md §14)
@@ -8,7 +9,7 @@ A level's commitment is a Merkle cap: the nodes at depth `c` of a binary tree ov
 Leaf `q` is `H(encode(column q))`; a node is `H(left ‖ right)`; an opening of position `pos` is the
 column and the `d − c` siblings from the leaf up to the cap entry `pos >> (d − c)`. The hash is
 one function on byte strings (SHA-512 in the target, `ASSUMPTIONS.md`), so every collision
-is a pair of distinct byte strings with the same hash.
+is a pair of distinct byte strings with the same hash (`Hash.HasCollision`).
 
 **Salted leaves.** A leaf scheme (`Leaf`) gives each column a leaf under a salt, and binds it: two columns with one
 leaf give a collision. `VerifiesL` is `Verifies` for any leaf scheme, and `Leaf.plain` is the unsalted leaf above.
@@ -20,8 +21,8 @@ namespace FlockSoundness.Merkle
 
 variable {Col D : Type}
 
-/-- A collision of a hash on byte strings. -/
-def Collision (H : List UInt8 → D) : Prop := ∃ x y : List UInt8, x ≠ y ∧ H x = H y
+/-- A collision of a hash on byte strings: `Hash.HasCollision`. -/
+abbrev Collision (H : List UInt8 → D) : Prop := Hash.HasCollision H
 
 /-- The byte encodings a tree uses: a column (its elements, 16 bytes each) and a digest. Both are
 injective, and all digests have one length, so a node's input determines its two children. -/

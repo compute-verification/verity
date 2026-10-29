@@ -1,7 +1,7 @@
 """Pool the erase-calibration runs into the percentile tables and the recommended secure-erasure deadline `T`.
 
 Reads every driver JSON (`validate.json`, `sweep.json`, `host.json`, `soak-*.json`, `probe-*.json`) under each `--runs`
-directory (fetched `research run` dirs; any depth) and writes `calibration.json` and `calibration.md` to `--out`:
+directory (run directories; any depth) and writes `calibration.json` and `calibration.md` to `--out`:
 
 - HBM: each sweep point (size x generator x layout x order) pooled over GPUs: p50/p99/p99.9/max of the end-to-end
   fill+digest time (`wall`: fresh key in, digest value on the host) and of the device's fill and digest phases, with the

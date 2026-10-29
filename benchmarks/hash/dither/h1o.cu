@@ -1,21 +1,21 @@
-// Dither's served linear in one stream (CA's H1V3, 07:04Z, with its exact wrap correction, 08:20Z): each call's
+// Dither's served linear in one stream (H1V3, with its exact wrap correction): each call's
 // y = dequant(z), z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T, from the noised mainloop that also computes the call's
 // H1 + fx1 receipts (`h1r_unit`'s MMAs over X = A + b and W' = B + c + U and its tail, `segment.call_words`), so the MMAs
 // whose words are receipted are the MMAs that serve: no other product of A and B is computed.  wb⁺ = [B + c + U > 127] and
 // wb⁻ = [B + c + U < -128] come from B and the noise in the unit (never an input), so z = X (B + c)^T exactly for every
 // int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the window's
-// salt and root(A_j), root(B_j) (`unit_seed`, the 17 Oct seeded regime), so a call needs its A table's root before its
+// salt and root(A_j), root(B_j) (`unit_seed`, the seeded regime), so a call needs its A table's root before its
 // units and nothing from a later round.  A served call is two plain launches on the caller's stream into caller-owned
 // buffers, the step read from the device (`H1OStep`), so a CUDA graph captured once serves every step:
 //   (h1c_a_call) the call's A slot rows (rows < m xq's bytes and scales, rows >= m the canonical empty row) and their
 //                table, its root where the units' seeds read it (h1c.cu; its row-independent parts once a step)
 //   h1o_units    a warp a unit (`h1r_unit<2, OutEpi>`): its seed_j and σ_R, the receipt, then z and y of the unit's cells;
-//                A rows >= m read as the canonical empty row (zero); a dead unit (its row block holds no admitted row)
+//                A rows >= m read as the canonical empty row (zero); a dead unit (its row tile holds no admitted row)
 //                writes zero receipts and zero z and y.  `h1o_unitsb` is the same in the block form (`h1b_unit<OutEpi>`,
 //                a unit a block of five warps), for decode, where a call's units would leave most SMs idle, and
 //                `h1o_unitss` in the split form (`h1s_unit<OutEpi>`, six warps: the hashing a chunk ahead of the
-//                building, the fold in two halves).  `h1o_unitsbp` and `h1o_unitssp` are those two peeled (CA, 11:02Z
-//                and 12:16Z; H1V3's PouwPeelSeg): z = O + 256 X (wb⁺ - wb⁻)ᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ, today's
+//                building, the fold in two halves).  `h1o_unitsbp` and `h1o_unitssp` are those two peeled
+//                (H1V3's PouwPeelSeg): z = O + 256 X (wb⁺ - wb⁻)ᵀ - X cᵀ - (b - 256 xa) Bᵀ = A Bᵀ, today's
 //                product from the same O, so y = dequant(A Bᵀ) serves the registered model; the receipts are the same
 //                words, and the peel adds binary-by-int8 MMAs beside the wrap MMA (no product of A itself)
 //   h1o_units{s,b}2[p]  those kernels as separate functions whose shared-memory carveout `h1o_init` sets to the maximum
@@ -219,7 +219,7 @@ __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F
   h1s_unit<OutEpiT<PL, BD>>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
-// J10 banded (measured only; labelled noise=j10-banded, kernels' reading of SharedNoise.lean, j10b_ref.py): band (ri, b)
+// J10 banded (measured only; labelled noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): band (ri, b)
 // of g column tiles reads one set of row streams, its leader unit ri ncb + b g's h1tile rows (seed_j's blocks l RB + c),
 // written here once a step into bws before the call's units, which hash only their own columns.  One warp a (live row
 // block ri, band b, J consecutive chunks), lane l row l; every lane derives the leader's seed_j (`unit_seed`, the
@@ -395,11 +395,11 @@ H1O_UNITS_EXPORT(h1o_unitsb2p_launch, unitsb, true, 2)
 H1O_UNITS_EXPORT(h1o_unitss2_launch, unitss, false, 2)
 H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
 
-// J10 banded, peeled (measured only; noise=j10-banded, kernels' reading of SharedNoise.lean): bws holds
+// J10 banded, peeled (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): bws holds
 // h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2) and 3 block with the rows read in the
 // segment loop (NoEpi::BAND 1), 1 split and 2 split2 (staged), 4 block2 and 5 block staged (BAND 2); mode 0 the band-rows
 // pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone, 3 mode 0 with the units launched as
-// the pass's programmatic dependents (their seeds, midstates and column blocks overlap the pass; band_wait before the rows)
+// the pass's programmatic dependents (their seeds, midstates and column tiles overlap the pass; band_wait before the rows)
 static int band_J(int units, int ncb, int k, int g) {
   const long long nrb = units / ncb, nl = (ncb + g - 1) / g, RB = (k >> 9) + 1;
   int J = 1;
@@ -515,7 +515,7 @@ extern "C" int h1o_ref_launch(const H1Call* call_dev, int units, const u64* seed
   return (int)cudaGetLastError();
 }
 
-// ASK-64's perCall measurement (labelled `percall-rtt`, measured only): between a call's A table and its units, the A
+// The per-call challenger round's measurement (labelled `percall-rtt`, measured only): between a call's A table and its units, the A
 // root to the host, a host function that holds the stream one challenger round, and a 64-byte coin back to the device,
 // all three on the caller's stream, so a captured graph keeps them (memcpy nodes and a host node).  The round is
 // simulated: the host function spins for the next of the waits h1o_percall_init took (the measured round trips, replayed

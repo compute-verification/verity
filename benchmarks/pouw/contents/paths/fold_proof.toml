@@ -1,4 +1,0 @@
-order = 346
-path = "`theory/fold_proof.py`"
-runs_on = "CPU"
-what = "FOLD-OPT at the sm_120 sheet's certificate (issue, DS-120) as a class statement read from the Lean data (≥ 16 warp instructions a unit, 4 lane-instructions a word), NO-MIX over two chains (no two-word instruction, nor `--wide3`'s ≤ 3-instruction programs, advances two chains), the counting from FOLD-MIN-4, and an instruction-count model of whole-block (bulk reduce-xor) folds, which break WIDTH-32"

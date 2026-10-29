@@ -39,12 +39,10 @@ numpy reference, and `driver.py validate` checks the device kernel against that 
 separation table (cheater/honest time ratio per `R`, `f`), and the recommended `(R, T)` for which `f ≥ 5%` host-resident
 is distinguishable from fully device-resident with margin.
 
-## Running (node 1, through the research queue)
+## Running (a GPU node)
 
 ```bash
-cd /workspace && uv run research run --queue --on vy-nebius-1 --source . --project verity --gpus 1 --cpus 8 --max-min 12 \
-  --preemptible --cwd source --declared-output 'out/*' -- \
-  bash -lc 'export TRITON_CACHE_DIR=/workspace/jobs/hbm-triton-cache; O=/workspace/jobs/hbm-out; \
+bash -lc 'export TRITON_CACHE_DIR=/workspace/jobs/hbm-triton-cache; O=/workspace/jobs/hbm-out; \
     cd benchmarks/pous/hbm_audit; PY=/workspace/jobs/venv312/bin/python; \
     "$PY" driver.py validate --out "$O"; "$PY" driver.py honest --out "$O" --c-gib 1,4,8,16 --r-lo 10 --r-hi 16 --trials 150; \
     "$PY" driver.py cheater --out "$O" --cheater-c-gib 8 --r-lo 10 --r-hi 16 --fracs 0.0,0.01,0.05,0.10,0.50,1.0'
@@ -53,14 +51,6 @@ cd /workspace && uv run research run --queue --on vy-nebius-1 --source . --proje
 The GPU Python with torch + Triton is the node's `/workspace/jobs/venv312`; `uv run --extra torch-cpu` is CPU-only (the
 reference test `tests/test_digest_reference.py` runs there). `honest`/`cheater` write **per point** to `--out` and skip
 points already there, so pointing `--out` at a path that survives across runs (not the per-run `$RESEARCH_RUN_DIR/out`)
-lets a sweep **resume** after a lease preemption — on node 1 the research pool forces `--preemptible` and a sibling lane
-preempts a fresh lease within ~6–12 s, so short backfill jobs with a warm Triton cache each advance the sweep until it is
-complete. Results are preserved to the evidence store as `evidence/v1` artifacts and cited by art id in the
-memory-accounting report.
-
-## Finding (RTX PRO 6000 Blackwell Server Edition, C = 8 GiB)
-
-Device digest `BW_dev ≈ 1.54 TB/s` (out of the 128 MB L2; peak ~1.79), PCIe H2D contiguous `BW_pcie ≈ 56 GB/s` → overlap
-threshold `f* = BW_pcie/BW_dev ≈ 3.6%`. A timed bulk read certifies "device-resident for any `f ≥ 10%`" robustly
-(`R = 8192`, `T ≈ 0.50 ms`, ~2× margin); `f = 5%` is distinguishable but thin-margin (~1.3–1.4×, since 5% ≈ 1.4·f*). The
-two smallest `R` (`R·64KiB ≤ L2`) are cache artefacts and are excluded from the recommendation.
+lets a sweep **resume** after a lease preemption: on a preemptible lease, short jobs with a warm Triton cache each
+advance the sweep until it is complete. `analyze.py` excludes from the recommendation every `R` whose challenged bytes
+are under `--cache-factor` (default 4) times the L2, since those reads are served partly from the cache, not HBM.

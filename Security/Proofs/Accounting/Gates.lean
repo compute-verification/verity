@@ -963,10 +963,9 @@ theorem p1024_squarings : p1024.squarings = 1021 := by
 
 `SquaringFloor` and `ChainSum` keep the falsified `EncodeChainHardness`'s floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`,
 `p ≡ 3 mod 4`). `2^n − c` with `n ≥ 68` and `c ≡ 1 mod 4`, `c ≤ 2^66`, is inside it, p1024 among them. Outside it the
-premises claim nothing, so the red team's early counterexamples
-(art:6bf31146fd1239ee0a07b05eae88f827c9b31948128a6d4a4c58c4b96d0a124e) don't refute them: at `ε = 0`, at `k = 0` and at
-a field narrower than a byte `ChainSum` holds, and the one-draw circuit behind the `ε = 0` counterexample is right on
-more than `ε` of the draws at no `ε` and field the floor admits. -/
+premises claim nothing, so the counterexamples outside it don't refute them: at `ε = 0`, at `k = 0` and at a field
+narrower than a byte `ChainSum` holds, and the one-draw circuit behind the `ε = 0` counterexample is right on more than
+`ε` of the draws at no `ε` and field the floor admits. -/
 
 /-- A field `2^n − c` with `n ≥ 68`, `c ≡ 1 mod 4` and `c ≤ 2^66` is inside the premises' floor on `p`. -/
 theorem floor_of_pow_sub (n c : ℕ) (hn : 68 ≤ n) (hc : c % 4 = 1) (hc' : c ≤ 2 ^ 66) :
@@ -987,7 +986,7 @@ theorem p1024_floor : 2 ^ 66 ≤ p1024.p ∧ p1024.p % 4 = 3 := by
   exact floor_of_pow_sub p1024.n p1024.c (by show 68 ≤ 1024; norm_num) (by show 105 % 4 = 1; norm_num)
     (by show 105 ≤ 2 ^ 66; norm_num)
 
-/-- At `ε = 0` it holds: the floor excludes the red team's `encodeChainHardness_false_eps0`. -/
+/-- At `ε = 0` it holds: the floor excludes `encodeChainHardness_false_eps0`. -/
 example (F : Field) (k B e εden : ℕ) (hden : 0 < εden) : ChainSum F k B e 0 εden := by
   intro hε
   rw [Nat.mul_zero] at hε

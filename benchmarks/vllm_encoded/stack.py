@@ -14,7 +14,7 @@ receipts  a decode step is a pass: before the model's forward (eager, the runner
           at the step's running offset, the lm_head's last; after it (in the lm_head's CUDA graph) reader.cu's leaves,
           pads and tree, and the root copied to the buffer the next pass reads. A forward with no lm_head after it
           (vLLM's warm-ups) leaves its pass uncommitted, and the next pass starts from the last root committed.
-lm_head   BF16 payloads (Daniel's ruling: its logits are BF16's) in the linears' plain layout (the BF16 matrix's bytes,
+lm_head   BF16 payloads (its logits are BF16's) in the linears' plain layout (the BF16 matrix's bytes,
           which mma.m16n8k16.bf16 takes as e4m3 m16n8k32 takes FP8), as words: wt.cu's wt_fused_sketch_bf decodes,
           multiplies (BF16 MMA, FP32 sums) and receipts them in one launch, the chunks' sums reduced in order to BF16;
           pstack: wt_gemm's BF16 mode over the plain fragments, the same sums. One CUDA graph a batch, its partial sums

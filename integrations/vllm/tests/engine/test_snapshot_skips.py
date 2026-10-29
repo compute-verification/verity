@@ -1,4 +1,4 @@
-"""The capture's snapshots never copy what can't hold a new value or can't be read on the host (VLLM-8):
+"""The capture's snapshots never copy what can't hold a new value or can't be read on the host:
 
 * an identity alias's call (``aten.detach``, which ``torch::from_blob`` dispatches) is not snapshotted at all;
 * a CPU tensor whose storage is device memory (`pinned.device_backed`) is listed as skipped, wherever it shows up;

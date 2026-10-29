@@ -11,7 +11,7 @@ gelu_tanh_kernel, true>`), the GeGLU of Gemma-2 (`GeluAndMul(approximate="tanh")
 
 The pinned build (vLLM d9105ea80, `_C_stable_libtorch.abi3.so`, sm_89) compiles this as `masked_act_and_mul_kernel<
 c10::BFloat16, gelu_tanh_kernel<c10::BFloat16>, true, false, false>(out, in, mask, d, n, float, float, float)` whose SASS is
-(cuobjdump on the pod, lane report `gelu_tanh_and_mul.sm89.sass`):
+(cuobjdump on the pod, `gelu_tanh_and_mul.sm89.sass`):
 
     PRMT R3, RZ, 0x5410, R0        ; f = (float)x            FMUL R0, R3, R3 ; FMUL R0, R3, R0      ; x_cube = (f*f)*f
     FFMA R0, R0, 0.044714998, R3   ; f + KAPPA*x_cube        FMUL R3, R3, 0.5                       ; 0.5f*f
@@ -22,13 +22,13 @@ c10::BFloat16, gelu_tanh_kernel<c10::BFloat16>, true, false, false>(out, in, mas
 
 The `y + 0.0f` was found by the difftest's `zeros` edge kind (every `y = -0` word came back `+0`; 16/20 -> 20/20 cases).
 
-Evidence (wave-1 exhaustive table `gelu_tanh_bf16_table.npy`, T[x] for all 65,536 bf16 words, and the factorisation check
+Evidence (the exhaustive table `gelu_tanh_bf16_table.npy`, T[x] for all 65,536 bf16 words, and the factorisation check
 `out == bf16(f32(T[x]) * f32(y))` on 2^20 random pairs): the body above reproduces T on every non-NaN word (65,282/65,282) and
 gives the kernel's 0x7FFF for NaN, including x = -inf where `(0.5f * -inf) * 0` is NaN; the alternative association
 `0.5f * (f * (1 + t))` is wrong on 129 words (overflow at |f| > 1.7e38), and FFMA vs separate FMUL+FADD for `inner` is not
-distinguishable on the domain.  `tanhf` is the lane's `TanhF32Rn` stand-in (see `tanh_f32.py`).
+distinguishable on the domain.  `tanhf` is the `TanhF32Rn` stand-in (see `tanh_f32.py`).
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.GeluTanhMulBf16`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations

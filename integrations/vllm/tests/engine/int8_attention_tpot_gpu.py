@@ -1,4 +1,4 @@
-"""VLLM-87 on one GPU: decode TPOT of the int8 Llama-3.1-8B pin served with `TargetProfile.int8_exact` "all" (eager, the
+"""On one GPU: decode TPOT of the int8 Llama-3.1-8B pin served with `TargetProfile.int8_exact` "all" (eager, the
 llama31-8b-1gpu-pouw-h1 spec's stock-int8 engine: max_num_batched_tokens 64), at batch ``--batch`` (8), with its attention
 ``--attention batched`` (`engine.int8_ops.paged_attention`, one kv_quant_batch and one window_rows_batch a layer) or
 ``reference`` (`int8_attention.reference_paged`: the same values request by request and KV head by KV head, the loop it

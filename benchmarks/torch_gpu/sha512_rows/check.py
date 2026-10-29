@@ -17,8 +17,7 @@ from typing import Any
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import engine as E
 
@@ -104,12 +103,12 @@ def check_rows(engine: E.Engine, slots: int = 3, seed: int = 1, variants: Sequen
 
 
 FUSED_DEST = (0, 5, 1, 6, 7, 2, 3, 8, 9, 10, 11, 4)   # check_leaves' rows: unit d < 5 is row g alone, else the rest's d - 5
-FUSED_RANK0 = (1 << 24) - 2                            # the units' ranks: a slot-tree leaf is one block below 2^24, else two
+FUSED_RANK0 = (1 << 24) - 2                            # the proof blocks' ranks: a slot-tree leaf is one chunk below 2^24, else two
 
 
 def check_leaves(engine: E.Engine, slots: int = 3, seed: int = 2) -> dict[str, Any]:
     """hm96 leaves under a salt key and under given salts, two domains, ranks and positions of 1 to 8 bytes (a frame leaf's
-    rest of prefix and value one block up to 6 bytes each, q <= 47, else two); and fused: five rows each a unit alone, whose
+    rest of prefix and value one chunk up to 6 bytes each, q <= 47, else two); and fused: five rows each a proof block alone, whose
     slot-tree leaves (ranks FUSED_RANK0 + d, from ``frame_table``) the leaf kernel writes, the other seven rows' leaves
     compacted."""
     rng = np.random.default_rng(seed)
@@ -200,7 +199,7 @@ def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
         c = E.digests(wide[t, [0, 2, 3, 4, 5, 6]])
         want += [big.node(4, first + i, c[2 * i], c[2 * i + 1]) for i in range(3)]
     bad["level4-front-child-strided"] = sum(a != b for a, b in zip(up, want, strict=True))
-    # each unit's slot-tree leaf from its frame table, one block below rank 2^24 and two from there, against frame_leaves
+    # each proof block's slot-tree leaf from its frame table, one chunk below rank 2^24 and two from there, against frame_leaves
     for rank0 in (0, (1 << 24) - 3, (1 << 56) - 2):
         n, S = 5, 2
         ft = engine.frame_table([big.domain_id], rank0, n)

@@ -132,7 +132,7 @@ def A2Witness4090 : Prop :=
 asymptotically; not used by the recommended chain. -/
 def A1W1Witness : Prop := ∀ (k : ℕ) (R : Mat) (γ₁ : ℝ), 1 / 2 ≤ γ₁ → A1_W1 γ₁ k R
 
-/-- **MinRank ≥ 2's witness, jointly with `Admissible` and checkpoint independence** (`minrank.md` §3, the shift by
+/-- **MinRank ≥ 2's witness, jointly with `Admissible` and checkpoint independence** (the shift by
 24): for every `k ≥ 1024` with `16 ∣ k`, some `R` passes `Admissible`, is checkpoint independent and has MinRank ≥ 2,
 so `A1_W1`'s premises on `R` hold together at every production `k`. -/
 def MinRank2Witness : Prop :=

@@ -4,10 +4,10 @@ each weight as its module runs.
 
 ~~~text
 arena      at load (`GPUModelRunner.load_model`, after), every parameter of two or more dimensions copied into one uint8
-           buffer of --arena-gib, each from a block boundary in module order, and the parameter pointed at its copy;
+           buffer of --arena-gib, each from a chunk boundary in module order, and the parameter pointed at its copy;
            the rest of the buffer zeros (through host memory, one engine at a time, when the GPU can't hold the buffer
            beside the loaded weights: `Arena`). The buffer is exported over CUDA IPC (`engine.<g>.json` in --dir: the
-           GPU's UUID, the handle, the offset and size, the weights' blocks and each entry's name, offset and bytes),
+           GPU's UUID, the handle, the offset and size, the weights' chunks and each entry's name, offset and bytes),
            so the prover's pass reads these bytes as they are served. Norms and other one-dimensional parameters stay
            outside it
 plain      a greedy probe alone in the batch (`probe`), then the arena's SHA-256 a GiB at a time (`plain_sha256` in
@@ -51,7 +51,7 @@ RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
 
 def pack(sizes: list[int], capacity: int) -> list[int]:
-    """Each of `sizes` bytes' offset in an arena of `capacity`, each from a block boundary, in order."""
+    """Each of `sizes` bytes' offset in an arena of `capacity`, each from a chunk boundary, in order."""
     out, at = [], 0
     for n in sizes:
         out.append(at)
@@ -109,7 +109,7 @@ class Decoder:
                 raise RuntimeError(f"kv_set_mask: {rc}")
 
     def decode(self, src: int, dst: int, blocks: int, first: int, stream: int) -> None:
-        """`blocks` blocks at device address src, the store's blocks first … first + blocks − 1, decoded to dst."""
+        """`blocks` chunks at device address src, the store's chunks first … first + blocks − 1, decoded to dst."""
         if rc := self.so.kv_decode(src, dst, blocks * self.words, first * self.words, self.rounds, 0, None, stream):
             raise RuntimeError(f"kv_decode: {rc}")
 
@@ -421,7 +421,7 @@ def main() -> int:
             continue
         try:
             s = load.step()
-        except Exception as e:  # a dropping session serves zeroed blocks' decodes; record, don't stop
+        except Exception as e:  # a dropping session serves zeroed chunks' decodes; record, don't stop
             s = {"t": time.time(), "ms": 0.0, "tokens": 0, "running": len(load.live), "error": repr(e)[:200]}
             load.abort()
         s["phase"] = ctl.get("phase") or ("plain-baseline" if not baseline else "plain")

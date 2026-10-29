@@ -1,5 +1,5 @@
-# Named premises the training classes cite (rho/classes.py, premise_status): where each stands, on what evidence, and
-# up to what block size it is credible. A premise has its `standing` for blocks of at most `credible_bits` novel bits
+# Named premises the training classes cite (rho/classes.py, premise_status): where each stands and up to what block
+# size it is credible. A premise has its `standing` for blocks of at most `credible_bits` novel bits
 # and its `beyond` above. Standings: supported (measured evidence for it), assumed (stated, no evidence either way),
 # contested (evidence against it at the scale, or a construction it hasn't answered), refuted (a measured execution
 # breaks it). `lean` is the cited name: a Lean assumption from a lock, or a `draft:` id of E1's premises.
@@ -12,134 +12,115 @@
 lean = "Nci.Cover.Assumptions.UpdateHardness"
 standing = "supported"
 beyond = "contested"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism", "art:6e9f828463b2"]
-credible_bits = { value = 1.1e9, unit = "bit", source = "E1 Lemma 9 / P0 (note:training-20261024T2310Z-draft-tvi-e1-sections): one step's data at Kimi K2's batch, 6.7e7 tokens x 17 bits", status = "derived" }
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 Lemma 9 / P0: one step's data at Kimi K2's batch, 6.7e7 tokens x 17 bits", status = "derived" }
 
 [premise.parameter-hard]
 lean = "Nci.Assumptions.ParameterHard"
 standing = "supported"
 beyond = "contested"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism", "art:6e9f828463b2"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.parameter-hard-at]
 lean = "Nci.Assumptions.ParameterHardAt"
 standing = "supported"
 beyond = "contested"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism", "art:6e9f828463b2"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.parameter-hard-priced-at]
 lean = "Nci.Assumptions.ParameterHardPricedAt"
 standing = "supported"
 beyond = "contested"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism", "art:6e9f828463b2"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.conditional-parameter-hard-at]
 lean = "Nci.Cover.Assumptions.ConditionalParameterHardAt"
 standing = "assumed"
 beyond = "contested"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.weights-incompressible]
 lean = "Nci.Assumptions.WeightsIncompressible"
 standing = "assumed"
 beyond = "contested"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
 [premise.columns-incompressible]
 lean = "Nci.Cover.Assumptions.ColumnsIncompressible"
 standing = "supported"
 beyond = "contested"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: the embedding's update replays with the step (E1 P0)", status = "derived" }
 
 [premise.value-read-hardness]
 lean = "Nci.Cover.Assumptions.ValueReadHardness"
 standing = "contested"
 beyond = "contested"
-evidence = ["art:ff2237e531a9", "note:training-20261024T2336Z-report-tvi-findings"]
-credible_bits = { value = inf, unit = "bit", source = "contested at every k: an exact block codes an activation in 0.87-0.94 bits given theta (art:ff2237e531a9), below f = 4", status = "measured" }
+credible_bits = { value = inf, unit = "bit", source = "contested at every k: an exact block codes an activation in 0.87-0.94 bits given theta (replay-consistent exact blocks on Qwen2.5-1.5B), below f = 4", status = "measured" }
 
 [premise.activation-reads]
 lean = "Nci.Cover.Assumptions.ActivationReads"
 standing = "contested"
 beyond = "refuted"
-evidence = ["art:ff2237e531a9", "art:f13e8dcc72e7", "note:training-20261024T2336Z-report-tvi-findings"]
-credible_bits = { value = 4e9, unit = "bit", source = "art:f13e8dcc72e7: a block holding Kimi K2's embedding and dense layer 0 updates computes their outputs from token ids (cheap inputs); contested below at f = 4 (art:ff2237e531a9)", status = "derived" }
+credible_bits = { value = 4e9, unit = "bit", source = "a block holding Kimi K2's embedding and dense layer 0 updates computes their outputs from token ids (cheap inputs, measured); contested below at f = 4 (exact blocks on Qwen2.5-1.5B)", status = "derived" }
 
 [premise.activation-chained]
 lean = "Nci.Assumptions.ActivationChained"
 standing = "supported"
 beyond = "supported"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism"]
 credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
 
 [premise.activation-chained-at]
 lean = "Nci.Assumptions.ActivationChainedAt"
 standing = "supported"
 beyond = "supported"
-evidence = ["note:training-20261022T1045Z-cover-assumptions-realism"]
 credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.ActivationChainedAt docstring: an activation's own bits are a cut, c_a about its width; the depth D it needs at k is classes.chained_share", status = "derived" }
 
 [premise.upstream]
 lean = "Nci.Cover.MulBlocks.Upstream"
 standing = "supported"
 beyond = "supported"
-evidence = []
 credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.MulBlocks.Upstream docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
 
 [premise.cube-wide]
 lean = "Nci.Cover.Cube.Wide"
 standing = "supported"
 beyond = "supported"
-evidence = []
 credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.Cube.Wide: the accumulation entries' width, a property of the recipe's shapes", status = "derived" }
 
 [premise.baseline-registered]
 lean = "Nci.Assumptions.BaselineRegistered"
 standing = "supported"
 beyond = "supported"
-evidence = []
 credible_bits = { value = inf, unit = "bit", source = "Nci.Assumptions.BaselineRegistered: what registration enforces (no dark value in the declaration's baseline)", status = "derived" }
 
 [premise.reference-layered]
 lean = "Nci.Assumptions.ReferenceLayered"
 standing = "assumed"
 beyond = "assumed"
-evidence = []
 credible_bits = { value = inf, unit = "bit", source = "Nci.Guarantees.ReferenceThreaded: the named conjecture at Kimi K2's shapes; its block-size limit is the threaded class's thread_k", status = "conjecture" }
 
 [premise.e1-activation-rate]
 lean = "draft:E1-activation-rate"
 standing = "assumed"
 beyond = "contested"
-evidence = ["art:ff2237e531a9", "note:training-20261024T2310Z-draft-tvi-e1-sections", "note:training-20261024T2336Z-report-tvi-findings"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0: past one step's data a block replays the step and with it the activations; the cheap-input prefix below is classes.expensive_share", status = "derived" }
 
 [premise.e1-h-gamma]
 lean = "draft:E1-H-gamma"
 standing = "assumed"
 beyond = "contested"
-evidence = ["art:2f1eae928df7", "note:training-20261024T2310Z-draft-tvi-e1-sections"]
-credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0, as premise.e1-activation-rate; exact coverings measured splitting at 1.1-1.5x (art:2f1eae928df7)", status = "derived" }
+credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0, as premise.e1-activation-rate; exact coverings measured splitting at 1.1-1.5x", status = "derived" }
 
 [premise.e1-r]
 lean = "draft:E1-R"
 standing = "assumed"
 beyond = "contested"
-evidence = ["note:training-20261024T2310Z-draft-tvi-e1-sections"]
 credible_bits = { value = 1.1e9, unit = "bit", source = "E1 P0, as premise.e1-activation-rate; priced only under an exact nonlinear optimizer consumer (Adam, Muon), not SGD", status = "derived" }
 
 [premise.e1-output-premise]
 lean = "draft:E1-output-premise"
 standing = "assumed"
 beyond = "contested"
-evidence = ["note:training-20261024T2310Z-draft-tvi-e1-sections", "note:training-20261024T2336Z-report-tvi-findings"]
-credible_bits = { value = 7.2e6, unit = "bit", source = "E1 Proposition 6b: k* = 0.9-23 MB at FP8 (beta_w 0.06-0.19, F_in 2.7-6.2 kbit, beta_v^R 0.18-0.63), the low end; recipe-kept tiles at NVFP4 reach 0.39-0.97 of the beta_v count (findings note)", status = "derived" }
+credible_bits = { value = 7.2e6, unit = "bit", source = "E1 Proposition 6b: k* = 0.9-23 MB at FP8 (beta_w 0.06-0.19, F_in 2.7-6.2 kbit, beta_v^R 0.18-0.63), the low end; recipe-kept tiles at NVFP4 reach 0.39-0.97 of the beta_v count (measured)", status = "derived" }
 
 # The elementary uncertified cap's premise (rho/classes.py Structure): q_U(U) = omega_max U / s_times counts an
 # uncertified or dark gate's operations at s_times gates each only if no counted operation has gates on both sides of
@@ -148,5 +129,4 @@ credible_bits = { value = 7.2e6, unit = "bit", source = "E1 Proposition 6b: k* =
 lean = "draft:no-straddle"
 standing = "assumed"
 beyond = "assumed"
-evidence = []
 credible_bits = { value = inf, unit = "bit", source = "a property of the circuit's operations, not of a block's bits", status = "derived" }

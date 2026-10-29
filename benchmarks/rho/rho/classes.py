@@ -17,9 +17,10 @@ be chained, the layers whose inputs aren't cheap) the count is divided by that s
 conversions are exact over a whole cover, and per block they assume each block does a representative mix of products.
 
 **Units.** The statements, and the attacks' constructions, are in the FLOP model: a block's compute in FLOPs
-(`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion layer's per-block cap
-`q_T(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which ρ is
-normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×` (`data/exclusion.toml`).
+(`FlopBudget`), its count in counted products. `per_block` turns one into the exclusion bound's per-block cap
+`q_T(c, k)` on gates through `hardware.Units`; `weight_per_gate` is the reference's weight per gate `w`, which the
+overhead is normalized by, and `Structure` the most a gate holds under a bound, `u = ω_max / s_×`
+(`data/exclusion.toml`), with `s_×` and `Units.gates_per_flop` from one source (`Structure.check`).
 """
 
 from __future__ import annotations
@@ -58,7 +59,7 @@ def per_block(a: Allowance, units: Units) -> Cap:
 
 def weight_per_gate(p: Profile, units: Units) -> float:
     """`w = κ / 2G`, the reference's counted weight per gate (its counted products, `κ/2` a FLOP, over its gates): what
-    ρ is normalized by. The most a gate holds under a bound is `Structure.weight`."""
+    the overhead is normalized by. The most a gate holds under a bound is `Structure.weight`."""
     return p.kappa / (2 * units.gates_per_flop)
 
 
@@ -77,10 +78,28 @@ class Structure:
     s_times: float | str
     #: `ω_max`: the most counted weight one operation carries
     omega_max: float = 1.0
+    #: where `s_×`'s gates come from, as `Units.basis` says it for `gates_per_flop` (`REFERENCE` is the FLOP model's);
+    #: none needed at `s_× ≤ 1`, which holds in every design
+    basis: str = ""
+    #: the runs that measured `s_×` (`art:` ids), cited beside the straddling premise
+    evidence: tuple[str, ...] = ()
 
     #: `U / s_×` counts the operations inside the uncertified gates only if none has gates on both sides; at `s_× = 1`
     #: each operation is charged to one gate, its output, and none can straddle
     STRADDLE = ("draft:no-straddle",)
+
+    def check(self, units: Units) -> None:
+        """Refuse an `s_×` and a `gates_per_flop` from different sources. The bound holds a gate at `u/w = ω_max 2G /
+        (κ s_×)` of the reference's weight, so `G` cancels only when both count the same gates: a Boolean design's
+        measured `s_×` beside the FLOP model's `G` moves every term counted at `u` (the dark leaves' first) with
+        nothing to say so."""
+        if (self.s_times != REFERENCE and float(self.s_times) <= 1) or self.basis == units.basis:
+            return
+        raise ValueError(
+            f"structure.{self.name}: s_times ({self.s_times}) comes from {self.basis or 'no stated basis'!r} but "
+            f"units.gates_per_flop ({units.gates_per_flop:g}) from {units.basis!r}; take both from one source: "
+            f"units.gates_per_flop and units.basis from the design s_times was counted on (basis = "
+            f"\"boolean:<design>\" on both), or structure = \"reference\" (2G / kappa, the FLOP model's)")
 
     def gates(self, w: float) -> float:
         """`s_×` in gates, given the reference's weight per gate `w` (`1 / w` at `REFERENCE`)."""
@@ -91,7 +110,7 @@ class Structure:
         return self.omega_max / self.gates(w)
 
     def cites(self) -> tuple[str, ...]:
-        return self.STRADDLE if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
+        return self.STRADDLE + self.evidence if self.s_times == REFERENCE or float(self.s_times) > 1 else ()
 
     def elementary(self) -> Structure:
         """One counted operation per gate, at most: the cap that needs no straddling premise."""
@@ -99,7 +118,8 @@ class Structure:
 
 
 def structure(registry: Registry, name: str) -> Structure:
-    return registry.fields(Structure, f"structure.{name}")
+    t = f"structure.{name}"
+    return registry.fields(Structure, t, evidence=tuple(registry.get(f"{t}.evidence", ())))
 
 
 class Outside(Exception):
@@ -111,7 +131,7 @@ class Argument(Protocol):
 
     name: str
     side: Literal["bound", "attack"]
-    #: the Lean statement first (or a `note:`/`art:`/`draft:` id), then the named premises
+    #: the Lean statement first (or a `draft:` id), then the named premises
     cites: tuple[str, ...]
 
     def allowance(self, p: Profile) -> Allowance: ...
@@ -308,8 +328,6 @@ def output_premise(k: float, map_width: float, map_width_min: float, b: float, b
     return map_width * k / beta_v if k <= output_cap(map_width_min, b, beta_x, beta_v) else math.inf
 
 
-E1 = "note:training-20261024T2310Z-draft-tvi-e1-sections"
-FINDINGS = "note:training-20261024T2336Z-report-tvi-findings"
 DEPTH = ("layers", "layer_weights")
 
 CLASSES: Mapping[str, Argument] = {a.name: a for a in (
@@ -355,15 +373,15 @@ CLASSES: Mapping[str, Argument] = {a.name: a for a in (
                          "Nci.Assumptions.BaselineRegistered", "Nci.Guarantees.ReferenceThreaded",
                          "Nci.Assumptions.ReferenceLayered"),
             ("b_a", "b_w", "thread_d", "thread_e", "thread_c", "thread_k"), threaded_checked),
-    Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate", E1, FINDINGS),
+    Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate"),
             ("fanout", "beta_x"), fanout_priced, counts="kappa_forward", share=expensive_share,
             share_reads=("layer_bits", "layers")),
-    Formula("fanout-split", ("draft:E1-Prop3-prime", "draft:E1-activation-rate", "draft:E1-H-gamma", E1),
+    Formula("fanout-split", ("draft:E1-Prop3-prime", "draft:E1-activation-rate", "draft:E1-H-gamma"),
             ("fanout", "beta_x", "gamma", "price", "price_max"), fanout_split, counts="kappa_forward",
             share=expensive_share, share_reads=("layer_bits", "layers")),
-    Formula("accumulator", ("draft:E1-Cor4a", "draft:E1-R", E1),
+    Formula("accumulator", ("draft:E1-Cor4a", "draft:E1-R"),
             ("h_eff", "b_ps", "step_tokens"), accumulator, counts="kappa_wgrad"),
-    Formula("output-premise", ("draft:E1-Prop6b", "draft:E1-output-premise", E1, FINDINGS),
+    Formula("output-premise", ("draft:E1-Prop6b", "draft:E1-output-premise"),
             ("map_width", "map_width_min", "b", "beta_x", "beta_v"), output_premise, counts="kappa_forward"),
 )}
 
@@ -372,8 +390,7 @@ STANDINGS = ("supported", "assumed", "contested", "refuted")
 
 
 def premises(registry: Registry | None = None) -> dict[str, dict]:
-    """`data/premises.toml` by the cited name (`lean`): each premise's `standing`, `beyond`, `credible_bits` and
-    `evidence`."""
+    """`data/premises.toml` by the cited name (`lean`): each premise's `standing`, `beyond` and `credible_bits`."""
     reg = registry or Registry.load()
     return {reg[f"premise.{n}.lean"]: reg.table(f"premise.{n}") for n in reg.names("premise")}
 

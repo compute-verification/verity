@@ -4,11 +4,11 @@
         [--k 105] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
 
 `READY.json` names the responder's port, the setup salt, the commitment to `W` and the store's manifest. The verifier keeps
-every leaf (`LEAVES.bin`, 64 bytes per block in block order: `SHA512(0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R(block))`, `R` the
-block's `sha512/row/v2` digest), computes the RFC 6962 root and the epoch id from them, and draws each audit's indices from
+every leaf (`LEAVES.bin`, 64 bytes per label in label order: `SHA512(0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R(block))`, `R` the
+label's `sha512/row/v2` digest), computes the RFC 6962 root and the epoch id from them, and draws each audit's indices from
 its own secret: `audit_id` from `verity/pous/p2-audit-id/v4` at the audit's counter, round `j`'s index `uniform(B, j)` of
 `verity/pous/p2-audit-challenge/v4`. Rounds are revealed one at a time; each is timed from the challenge's send to its
-answer's last byte, correct when the block's leaf is the retained one, on time within the limit, and the audit stops at the
+answer's last byte, correct when the label's leaf is the retained one, on time within the limit, and the audit stops at the
 first failure. `k` is 105, the deployment's.
 
 The limit, the calibration, the clocks and the record are the band memory challenger's (`band_gpu/memory_challenger.py`): `--calibrate-only` fixes
@@ -16,7 +16,7 @@ The limit, the calibration, the clocks and the record are the band memory challe
 at 354 µs), and every audit's secret source and every answer's time are kept.
 
 The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames (`wire.py`): a v4 RESPONSE also carries the
-block's authentication path (19 siblings of 64 bytes at B = 2^19, 1,216 bytes more), which a verifier that keeps every leaf
+label's authentication path (19 siblings of 64 bytes at B = 2^19, 1,216 bytes more), which a verifier that keeps every leaf
 does not need. Exit 0 when every audit accepted, 1
 otherwise.
 """

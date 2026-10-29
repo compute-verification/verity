@@ -102,8 +102,7 @@ def expectedRow (S T W : ℕ) (syncs : Fin W → ClockSync) (frames : List Logic
 /-- **The constant-rate Program.** Windows of `T` buckets, `W` of them with advice, the sync set `ss`, and the Program's
 frames `frames ins c ℓ` on each egress link `ℓ`, in canonical order, from the ingress `ins` and the content advice `c`.
 With advice `(c, σ)`, link `ℓ`'s row at step `t` is `expectedRow` of those frames under the declared syncs `σ`. Every
-link reads the same `σ`, one clock per spatial unit (`README.md`, modelling choice 15), which the audit enforces
-(PR #956). -/
+link reads the same `σ`, one clock per spatial unit (`README.md`, modelling choice 15), which the audit enforces. -/
 def constantRate {L S : ℕ} {In Ac : Type} (T W : ℕ) (ss : SyncSet)
     (frames : List In → Ac → Fin L → List LogicalFrame) : Program L S In (Ac × (Fin W → ss.Elem)) where
   rows t ins a ℓ := expectedRow S T W (fun w => ss.sync (a.2 w)) (frames ins a.1 ℓ) t

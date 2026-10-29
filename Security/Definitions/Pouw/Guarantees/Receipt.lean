@@ -19,7 +19,7 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
   multiplier.
 * `DuoRunWordInjective`: a run of any length binds each of its words at every start state when the others are
   fixed, for odd multipliers: Lemma B's (Inj) with the full state committed (LEDGER's case (a),
-  note:20261017T1723Z-draft-ledger §1.3).
+  §1.3).
 * `DuoWindowNoKernel`: four words with `DuoQuadNoKernel`'s keys have no all-state kernel anywhere in a run, whatever
   the words and keys before and after them. So in a run whose every four consecutive positions have those keys, two
   runs with the same final states on every start state differ, if at all, at two words at least four positions apart.

@@ -15,7 +15,7 @@ import Definitions.Accounting.TS.Unfolded
 import Definitions.Accounting.TS.SharedNoise
 import Definitions.Accounting.TS.J10R
 
-/-! The tensor–scalar model (EPS1, note:20261017T0324Z-draft-eps1-spec): the machine, its facets and bound, routes and
+/-! The tensor–scalar model (EPS1): the machine, its facets and bound, routes and
 labelled programs with the terms of the decomposition, the full-checking and sampled plays, sampled rounds under
 per-stage coins, the receipt rounds that split the luck premise into its operand and receipt halves, a round's unfolded
 share and the whole-unit luck, the counting objects of the tensor slot count, the output count, the fan-in count and

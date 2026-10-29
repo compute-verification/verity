@@ -3,7 +3,7 @@
     python reference.py --blocks 524288 --seed HEX --out expect.json [--workers 32]
 
 The store is the generated test store of `bandwidth_vectors.py` (`block`), which `tagger.cu`'s `fill_store` writes on the
-device.  `expect.json` holds every tag's roots over `--blocks` blocks under `--seed`, and the same over 37 blocks under
+device.  `expect.json` holds every tag's roots over `--blocks` labels under `--seed`, and the same over 37 labels under
 `SEED`, recomputed here and checked against `vectors.json`'s roots before anything is written.  `store_leaves` gives the
 store's PoUS leaf digests under `geometry(blocks)` and a salt, from which `gpu.py windows` builds `vk` and the store's
 audit paths once it knows its device: the salt is `audit.draw_salt` for that device under `COMMITMENT`, the test
@@ -35,14 +35,14 @@ CHUNK = 4096
 
 
 def block(j: int, block_bytes: int = BLOCK_BYTES) -> bytes:
-    """Block `j` of the generated test store."""
+    """Label `j` of the generated test store."""
     out = b"".join(hashlib.sha512(BLOCK_DOMAIN + j.to_bytes(8, "big") + c.to_bytes(4, "big")).digest()
                    for c in range(-(-block_bytes // 64)))
     return out[:block_bytes]
 
 
 def geometry(blocks: int) -> P2Params:
-    """P2's geometry at its registered point over `blocks` blocks: one segment up to 2^16, else whole segments of 2^16."""
+    """P2's geometry at its registered point over `blocks` labels: one segment up to 2^16, else whole segments of 2^16."""
     w, c0, per = POINT
     if blocks <= per:
         return P2Params(w, c0, blocks, 1)
@@ -63,7 +63,7 @@ def _chunk(args: tuple[int, int, bytes]) -> dict[str, list[bytes]]:
 
 
 def roots(blocks: int, seed: bytes, workers: int) -> dict[str, str]:
-    """Every tag's root over the first `blocks` generated blocks under `seed`."""
+    """Every tag's root over the first `blocks` generated labels under `seed`."""
     ys: dict[str, list[bytes]] = {name: [] for name in tags.TAGS}
     jobs = [(lo, min(lo + CHUNK, blocks), seed) for lo in range(0, blocks, CHUNK)]
     with ProcessPoolExecutor(max_workers=workers) as pool:
@@ -80,7 +80,7 @@ def _leaves_chunk(args: tuple[int, int, int, bytes]) -> list[bytes]:
 
 
 def store_leaves(blocks: int, salt: bytes, workers: int) -> list[bytes]:
-    """The generated store's PoUS leaf digests under `geometry(blocks)` and `salt`, in block order."""
+    """The generated store's PoUS leaf digests under `geometry(blocks)` and `salt`, in label order."""
     jobs = [(lo, min(lo + CHUNK, blocks), blocks, salt) for lo in range(0, blocks, CHUNK)]
     if workers <= 1:
         return [leaf for job in jobs for leaf in _leaves_chunk(job)]
@@ -89,7 +89,7 @@ def store_leaves(blocks: int, salt: bytes, workers: int) -> list[bytes]:
 
 
 def small() -> dict:
-    """The 37-block case under `SEED`, recomputed and held to `vectors.json`'s roots."""
+    """The 37-label case under `SEED`, recomputed and held to `vectors.json`'s roots."""
     vectors = json.loads(VECTORS.read_text())
     pinned = {r["tag"]: r["tag_root"] for r in vectors["roots"] if r["blocks"] == SMALL and r["seed"] == SEED.hex()}
     store = audit.Store(geometry(SMALL), bytes.fromhex(vectors["salts"][0]["salt"]), [block(j) for j in range(SMALL)])

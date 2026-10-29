@@ -9,15 +9,16 @@ import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 `stmtOk`: at every good case, the session spec names no keyed coin tree, a non-empty `Σ`, a printable draw that decodes
 to the statement's instances (`DrawOk`), and the statement's draw is the one it was set up at: `StmtOk`, from the case's
-setup alone, under the JSON library's specification (`JsonSpec`).
+setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
+tree its coins name.
 
-* The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), so the hello's `coins`
-  entry is absent or a string, and `CoinTree.ofHello` reads none (`ofHello_helloOf`). The scope check
+* The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
+  keeps the coins' tree (`Stmt.coinTree`, `setupOne_stmt`), so it names none (`tree?_none`). The scope check
   (`ProvedScope.check`) reads no coins, so it is `Raw.ins`, not the scope, that keeps a keyed coin tree out of the plain
   verifier's statements.
 * `Σ` is a SHA-512 digest (`setupH_stmt`, `Hidden.setupHidden_spec'`).
-* The public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the draw
-  (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`).
+* The public header is the population's, rebuilt (`loadPublic_header`), with the draw put in (`HmRow.drawn`), so its
+  `unit_draw` is the draw (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`).
 * The draw is the statement's parsed JSON (`jsonOf`) and stratified or, at hidden outputs, a subset (the setup's
   `ProvedScope.drawLaw`, `Ins.setup_drawLaw`, `law_of_lawWhy`), and a stratified or subset draw that decodes has exactly
   the keys it reads, each a string, a natural number or an array of them (`good_stratified`, `good_subset`), so it is
@@ -203,14 +204,26 @@ theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     (∃ pop, HmRow.loadPublic tags st.c pf = .ok pop ∧ ∀ d, draw = some d → HmRow.drawn st.c pop d = .ok st.pub) ∧
       HmRow.checkPublic st.c st.pub = .ok () ∧ st.n = st.pub.n ∧
       st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha) ∧
-      Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello := by
+      Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello ∧ st.coinTree = coins.tree? := by
   cases draw <;> unfold Stmt.setupH at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
     repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
     exact ⟨⟨_, by assumption, fun d hd => by first | (cases hd; done) | (cases hd; assumption)⟩, by assumption, rfl,
-      rfl, by assumption⟩
+      rfl, by assumption, rfl⟩
+
+set_option maxHeartbeats 4000000 in
+/-- `Stmt.setupHidden`'s statement keeps the coins' tree. -/
+theorem setupHidden_coinTree {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : st.coinTree = coins.tree? := by
+  cases draw <;> unfold Stmt.setupHidden at h <;> dsimp only at h <;> simp only [throw_bind', pure_bind] at h <;>
+    repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    rfl
 
 open Discharge in
 /-- **What a table's setup set up** (`setupOne`, either output mode): the public file a public-file load returned, at a
@@ -221,28 +234,30 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
     (∃ c pop, HmRow.loadPublic tags c pf = .ok pop ∧ ∀ d, draw = some d → HmRow.drawn c pop d = .ok st.pub) ∧
       (∀ d, st.pub.header.getObjVal? "unit_draw" = .ok d →
         ∃ u, Draw.UnitDraw.ofJson d = .ok u ∧ u.proved.size = st.n) ∧
-      0 < st.sigma.size ∧ Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello := by
+      0 < st.sigma.size ∧ Flock.helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello ∧
+      st.coinTree = coins.tree? := by
   rcases Bool.eq_false_or_eq_true tags.hiddenOutputs with hh | hh
   · rw [HiddenExec.setupOne_hidden hh] at h
+    have hct := setupHidden_coinTree h
     have S := Hidden.setupHidden_spec' h
     obtain ⟨pop, hl, -, hd⟩ := S.pub
     have T := FailClosed.ties_of_check (hidden := true) (Or.inr ⟨rfl, S.checkPublic⟩)
-    refine ⟨⟨_, pop, hmOut_loadPublic hl, hd⟩, fun d hd' => ?_, by rw [S.sigma, Sha512.hash_size]; omega, S.hello⟩
+    refine ⟨⟨_, pop, hmOut_loadPublic hl, hd⟩, fun d hd' => ?_, by rw [S.sigma, Sha512.hash_size]; omega, S.hello, hct⟩
     obtain ⟨u, hu, -, hn⟩ := T.instances d hd'
     exact ⟨u, hu, by rw [S.n, hn]⟩
   · rw [HiddenExec.setupOne_public hh] at h
-    obtain ⟨⟨pop, hl, hd⟩, hc, hn, hs, hhello⟩ := setupH_stmt h
+    obtain ⟨⟨pop, hl, hd⟩, hc, hn, hs, hhello, hct⟩ := setupH_stmt h
     have T := FailClosed.ties_of_check (hidden := false) (Or.inl ⟨rfl, hc⟩)
-    refine ⟨⟨_, pop, hl, hd⟩, fun d hd' => ?_, by rw [hs, Sha512.hash_size]; omega, hhello⟩
+    refine ⟨⟨_, pop, hl, hd⟩, fun d hd' => ?_, by rw [hs, Sha512.hash_size]; omega, hhello, hct⟩
     obtain ⟨u, hu, -, hn'⟩ := T.instances d hd'
     exact ⟨u, hu, by rw [hn, hn']⟩
 
 /-! ## The public header's draw -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a parsed object. -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `Json.parse` read). -/
 theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
-    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ t, Json.parse t = .ok pop.header) ∧ ∃ m, pop.header = .obj m := by
+    (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
   dsimp only at h
   simp only [throw_bind'] at h
@@ -253,7 +268,7 @@ theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Pub
     have hpj := ‹(pure _ : V Json) = Except.ok _›
     simp only [pure, Except.pure, Except.ok.injEq] at hpj
     subst hpj
-    exact ⟨⟨_, by assumption⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
+    exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
 set_option maxHeartbeats 4000000 in
 /-- `HmRow.drawn` puts the draw in the population's header. -/
@@ -278,16 +293,16 @@ theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeM
 
 /-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
 `unit_draw`. -/
-theorem unitDraw_of (S : Claims.JsonSpec printJ Flock.canon) {tags : Tags} {c : Circuit} {pf : ByteArray}
+theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray}
     {pop pub : Public} {d : Json} (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
     pub.header.getObjVal? "unit_draw" = .ok d := by
-  obtain ⟨⟨t, ht⟩, m, hm⟩ := loadPublic_header hl
-  have hw := S.parse_wf _ _ ht
-  rw [hm] at hw
+  obtain ⟨⟨j, hj⟩, m, hm⟩ := loadPublic_header hl
+  have hw := FlockDeploy.wf_norm j
+  rw [← hj, hm] at hw
   cases hw with
   | obj hwf _ => exact drawn_header hwf hm hd
 
-/-! ## The hello names no coin tree -/
+/-! ## The coins name no coin tree -/
 
 theorem good_nil : ∀ p ∈ ([] : List (String × Json)), Good p.2 := fun _ h => by cases h
 
@@ -310,45 +325,10 @@ theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     exact .str _
 
-/-- A canonical object whose `coins` is absent or a string names no coin tree (`CoinTree.ofHello`). -/
-theorem ofHello_none_of (S : Claims.JsonSpec printJ Flock.canon) {L : List (String × Json)} (hd : Distinct L)
-    (hg : ∀ p ∈ L, Good p.2) (hc : (L.map Prod.fst).contains "coins" = false ∨ ∃ x, ("coins", Json.str x) ∈ L)
-    {s : String} (h : Flock.canon (Json.mkObj L) = .ok s) : CoinTree.ofHello s = none := by
-  obtain ⟨j', hp, hs⟩ := S.parse_canon _ _ (good_mkObj hd hg) h
-  unfold CoinTree.ofHello
-  rcases hc with hc | ⟨x, hx⟩
-  · obtain ⟨e, he⟩ := hs.getObjVal_none rfl (get?_mkObj_none hc)
-    have hn : ((Json.parse s).toOption.bind fun j => (j.getObjVal? "coins").toOption) = none := by
-      rw [hp]
-      simp [Except.toOption, he]
-    rw [hn]
-    rfl
-  · obtain ⟨v', he, hv⟩ := hs.getObjVal (getObjVal?_mkObj hd hx)
-    rw [same_str hv] at he
-    have hn : ((Json.parse s).toOption.bind fun j => (j.getObjVal? "coins").toOption) = some (.str x) := by
-      rw [hp]
-      simp [Except.toOption, he]
-    rw [hn]
-    rfl
-
-/-- **The plain verifier's hello names no coin tree**: at the OS's coins or a seed's, `CoinTree.ofHello` reads none. -/
-theorem ofHello_helloOf (S : Claims.JsonSpec printJ Flock.canon) {tags : Tags} {sigma : ByteArray} {mPts : ℕ}
-    {coins : Coins} {hello : String} (hc : coins = .os ∨ coins = .seed)
-    (h : Flock.helloOf tags sigma mPts coins = .ok hello) : CoinTree.ofHello hello = none := by
-  unfold Flock.helloOf at h
-  rcases hc with rfl | rfl <;> dsimp only at h <;> repeat' split at h
-  all_goals
-    refine ofHello_none_of S (by simp) ?hg ?hc h
-    case hc => first | (left; simp; done) | (right; exact ⟨tags.coinScheme, by simp⟩)
-    case hg =>
-    repeat' first
-      | exact good_nil
-      | apply good_append
-      | apply good_cons
-      | exact .str _
-      | exact good_toJson _
-      | exact good_arr_strs _
-      | exact good_mkObj (by simp) (by simp [good_toJson]; exact .str _)
+/-- **The plain verifier's coins name no coin tree**: the OS's coins or a seed's (`Coins.tree?`), which the statement
+keeps as its `coinTree`. -/
+theorem tree?_none {coins : Coins} (hc : coins = .os ∨ coins = .seed) : coins.tree? = none := by
+  rcases hc with rfl | rfl <;> rfl
 
 /-! ## A stratified draw that decodes is printable -/
 
@@ -555,24 +535,26 @@ theorem _root_.FlockComplete.Case.one (c : Case H rel) :
     simp only [List.size_toArray, List.length_cons, List.length_nil, zero_add] at hsz
     omega
 
-/-- **What the record needs of the statement holds at every good case** (`StmtOk`), under the JSON library's
-specification: the plain verifier's coins name no coin tree, Σ is a SHA-512 digest, the draw is printable and decodes to
+/-- **What the record needs of the statement holds at every good case** (`StmtOk`): the plain verifier's coins name no
+coin tree, Σ is a SHA-512 digest, the draw is printable and decodes to
 the statement's instances, and the session's draw is the statement's. -/
-theorem stmtOk (S : Claims.JsonSpec printJ Flock.canon) : StmtOk H rel := by
+theorem stmtOk : StmtOk H rel := by
   intro c
   obtain ⟨st, -, hspec, h1⟩ := c.one
-  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, hhello⟩ := setupOne_stmt h1
+  obtain ⟨⟨c', pop, hl, hd⟩, hinst, hsig, -, hct⟩ := setupOne_stmt h1
   obtain ⟨w, hwz, hw⟩ := insOf_false (setupOf_some c.setup).1
   obtain ⟨hzk, hcoins, hdraw⟩ := Raw.ins_read hw
   have hz : c.s.read.zk = false := hzk.trans hwz
   obtain ⟨d, hdd⟩ := Option.isSome_iff_exists.1 c.ready_parts.1
-  have hu := unitDraw_of S hl (hd d hdd)
+  have hu := unitDraw_of hl (hd d hdd)
   have hU : c.spec.unitDraw = some d := by
     rw [hspec]
     simp [Stmt.spec, hu, Except.toOption]
   refine ⟨?_, ?_, ?_, by rw [hU, hdd]⟩
   · rw [hspec]
-    refine ofHello_helloOf S ?_ hhello
+    change st.coinTree = none
+    rw [hct]
+    refine tree?_none ?_
     simp only [Readable.Read.coins, hz, Bool.false_eq_true, ↓reduceIte]
     exact hcoins hwz
   · rw [hspec]

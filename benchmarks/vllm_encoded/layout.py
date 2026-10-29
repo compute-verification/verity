@@ -127,7 +127,7 @@ def store_words(n: int, k: int, bits: int) -> int:
     return tasks(n, k) * lane_words(bits) * LANES
 
 
-# --- ra-codec-wide's store (`benchmarks/word_codec/wide.py`): a lane's 2048 bits as L words of `payload` bits, each word
+# --- the wide codec's store (`benchmarks/word_codec/wide.py`): a lane's 2048 bits as L words of `payload` bits, each word
 # `limbs` u32 limbs, limb e of word w of lane l of task q at u32 index 32·limbs·(L·q + w) + 32·e + l -------------------
 
 def wide_lane_words(payload: int) -> int:

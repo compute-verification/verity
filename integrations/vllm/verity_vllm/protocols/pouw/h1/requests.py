@@ -1,5 +1,4 @@
-"""H1's requests and rounds (#2677's `Accounting.Served`, `cursor/int-tie-ea24` at 8f161917ab, not on main: a request entry is
-an `act` value, a run input under the root of the round that admits it, committed before that round's coin; RT3-INT-9).
+"""H1's requests and rounds (`Accounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin).
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
 * **Rounds.** Round s is step s, one round a step. vLLM's scheduler admits a request in the step that first schedules it
@@ -26,29 +25,29 @@ an `act` value, a run input under the root of the round that admits it, committe
   challenger's coins, and `pouw_h1_challenger.trusted_rounds_reason` holds those coins to the session the auditor's signed
   ledger opens and ends for the window, its record and log signed by the verifier's own challenger, and the rounds to
   PoUW's round rule of record (`core_check.rounds`).
-* **Admission** (`ADMISSIONS`, the pouw setting ``admission``): #2722's period fixes a window's live tiles before its
+* **Admission** (`ADMISSIONS`, the pouw setting ``admission``): the period fixes a window's live tiles before its
   first coin, so by default (``round-0``) a window admits requests only in round 0, and an entry under a later round is
   refused (`request_reason`); ``per-round`` admits in every round, for a statement that fixes each round's live tiles
-  before that round's coin (RT4-INT-22).
-* **Round values** (#2677's live order, RT4-INT-20): each call's A table (its T slots' s8 rows and f32 scales) and, when
-  its arm hands them over, its z table (one leaf a unit, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
+  before that round's coin.
+* **Round values** (the live order): each call's A table (its T slots' s8 rows and f32 scales) and, when
+  its arm hands them over, its z table (one leaf a proof block, its z/y record: z, then y = dq(z)) are hiding tables of the call (`pouw_h1.H1Run`, ``tables`` in its manifest row),
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
   root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
   manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
-* **The A rows under the round roots** (PRF-132, `credit.a_link`): the root round s's coin follows is over the round's
+* **The A rows under the round roots** (`credit.a_link`): the root round s's coin follows is over the round's
   ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
   rows of its calls of K call after call, whole, as the aligned subtrees of its registered tree (`round_row`,
   `pouw_h1_served.Served.segments`), registered as the run records the step's last call of K. So each call's A rows, the
-  ones its units read, are fixed under its own round's root before that round's coin, and no other round lists them.
+  ones its proof blocks read, are fixed under its own round's root before that round's coin, and no other round lists them.
   Round s's input-ids table ``ids@<s>`` (ROOTS1, `pouw_h1_commit`) is listed there whole too. Round 0's is built at
   admission, before the window opens: its prompts' tokens in step 0's batch order (`first_ids`), each request's first
   rows at the first slot its entry names. Its root is inside round 0's request root (`credit.requests_root` of the
   request table's root and it; round 0's row keeps the table's as ``request_table``), so the window's open root fixes
   the prompt tokens before the salt; its domain binds the window's session in place of that root.
-* **Not yet.** The round root has no admit root (H1 has no admit unit yet), no producer hands the run a receipt root
-  yet, and no unit reads the round coins yet.
+* **Not yet.** The round root has no admit root (H1 has no admit proof block yet), no producer hands the run a receipt root
+  yet, and no proof block reads the round coins yet.
 """
 from __future__ import annotations
 
@@ -70,7 +69,7 @@ from verity.ml.commitments import Commitment, MerkleTree, Opening, VerificationL
 
 @dataclass(frozen=True)
 class RequestEntry:
-    """An admitted request's entry (#2677's `Accounting.Served.Cls.act`, "a request entry its round admits"): its ordinal
+    """An admitted request's entry (`Accounting.Served.Cls.act`, "a request entry its round admits"): its ordinal
     among the window's admitted requests, the round that admitted it (its engine step), its first slot there (the first of
     its rows in that step's A tables, which round ``round``'s slot table names it at), its token cap and its prompt's token
     ids. It is a value, a hiding leaf of its round's request table under that round's root."""
@@ -111,7 +110,7 @@ RECEIPTS_TAG = "verity/pouw/h1/receipts/v1"
 DRAW_TAG = "verity/pouw/h1/draw/v1"
 #: round 0's ``receipts``: no round precedes it
 NO_RECEIPTS = bytes(64)
-#: the pouw setting ``admission``: requests admitted in round 0 only (#2722's period, the default), or in every round
+#: the pouw setting ``admission``: requests admitted in round 0 only (the default), or in every round
 ROUND0, PER_ROUND = "round-0", "per-round"
 ADMISSIONS = (ROUND0, PER_ROUND)
 #: the credit refusal of a call in a window that served a row of a request with no entry (`pouw_h1.H1Run.request_gaps`)
@@ -119,7 +118,7 @@ UNENTERED = "credit: request-without-entry: the window served a row of a request
 
 
 def late_admission(r: int) -> str:
-    return (f"admitted in round {r}, after round 0: the period fixes a window's live tiles before its first coin (#2722), "
+    return (f"admitted in round {r}, after round 0: the period fixes a window's live tiles before its first coin, "
             f"so a window admits only in round 0 (the pouw setting 'admission': '{PER_ROUND}' admits in every round)")
 
 

@@ -5,7 +5,7 @@ import Flock.TmplReads
 import Flock.KnownRead
 
 /-!
-# A templated unit's surely read columns are read by its committed net (PRF-133)
+# A templated unit's surely read columns are read by its committed net
 
 `Tmpl.readsSure` marks, from the template's description, input columns that a row of `Tmpl.rows` from the input rows to
 the constant reads (`Flock.TmplReads.rows_sure`). On the committed net (`Tmpl.unitNet`, `Tmpl.unrollAt`'s under

@@ -118,7 +118,7 @@ def committer_opts(opts: Options) -> SimpleNamespace:
     """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row: the
     vllm-v1 committer's own knobs are unset, since commit-arb serves no recorded vllm-v1 run again."""
     return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, of_record=None, commit=True,
-                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False)
+                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False, retention=SS.RetentionOptions())
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
@@ -191,7 +191,7 @@ def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], m
     With ``system_prompts`` N, each request opens with one of N system prompts (`system_prompt`, the user turn's prompt length
     then as drawn). With ``turns``, each conversation goes on for 0 … ``turns`` more turns, listed after the ``n`` first turns:
     a turn ``follows`` the one before it, and arrives ``gap`` steps after it finished, its prompt that turn's prompt, its
-    streamed ids and ``suffix`` (the user's next question, framed), which `run` puts together then. With both 0, the draws
+    streamed ids and ``suffix`` (the user's next question, framed), which `run` puts together then. With both 0, the samples
     and the requests are the same as without them."""
     lo, hi = prompt_tokens
     head, tail = frame or ((CHAT_HEAD, CHAT_TAIL) if chat else ("", "\n\nAnswer: "))

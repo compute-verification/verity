@@ -1,6 +1,6 @@
-"""G2's served arm: the Commit's overhead (rows-sha512, 4 KiB rows) over stock as vLLM serves it (torch.compile and CUDA
-graphs), beside the batch-invariant eager stock that GLM-5.3's eager-vs-eager points on G2's curve compare against, on one
-RTX PRO 6000 (sm_120).
+"""Renders the served arm's runs (`benchmarks/served_commit/served_arm.sh`, which measures them): the Commit's overhead
+(rows-sha512, 4 KiB rows) over stock as vLLM serves it (torch.compile and CUDA graphs), beside the batch-invariant eager stock
+that GLM-5.3's eager-vs-eager points on G2's curve (`curve.py`) compare against, on one RTX PRO 6000 (sm_120).
 
 One resident run interleaves, rep by rep and on one GPU, batch-invariant eager stock (`stock`, `stock-fp8`: the harness's
 eager), compiled stock (`stock@compiled`: vLLM's serving defaults, a served variant) and the Commit, compiled or eager. The
@@ -18,7 +18,7 @@ median with [min, max] over the pairs:
   eager-served  eager Commit / compiled stock: the overhead as served for a Commit that runs only eager
   eager         eager Commit / batch-invariant eager stock: the mode of GLM-5.3's points on G2's curve
   compiled-bi   compiled Commit / batch-invariant eager stock
-  f             compiled stock / batch-invariant eager stock, which turns an eager ratio into a served one (#3377's f)
+  f             compiled stock / batch-invariant eager stock, which turns an eager ratio into a served one
 The metrics are curve.py's: prefill ttft (time to first token, the mean over the batch's requests), decode itl_p50 (per-token
 latency p50) and run tpot (the run's wall over its generated tokens, prefill included). A ratio's gates pass when every gate on
 either arm passed (the harness's: an arm's tokens equal its control's, its KV pool equals its control's, it closed clean).
@@ -32,14 +32,14 @@ RTX PRO 6000's Builds of record are `integrations/vllm/verity_vllm/pins/served/*
 
     uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--tail RUN=FIXED]... [--runs-dir DIR] [--out DIR]
 
-Reads each run's `out/result.json` and `out/pin_check.txt` from DIR/RUN (`research fetch RUN --all`), else from its record in
-the evidence store.
+Reads each run's `out/result.json` and `out/pin_check.txt` from DIR/RUN (the run's directory, fetched whole), else from its
+record in the evidence store.
 Writes OUT/g2-served.md, OUT/g2-served.json (every measure with its pin and why it isn't counted, and each run's facts: timed
 points, host load, failed gates, pin) and OUT/g2-served.png; OUT defaults to $OUT, else ./out.
 
 ``--tail RUN=FIXED`` reads RUN's compiled Commit run time with FIXED's tail (`retail`): for a run whose Commit arm did more
-than commit between its last step and the clock stop (`prof_arm.RootsArm` wrote its profiling records there before
-8374522a79), FIXED being a run of the same model whose arm doesn't. Its rows are labeled ``RUN (tail FIXED)``.
+than commit between its last step and the clock stop (an older `prof_arm.RootsArm` wrote its profiling records there),
+FIXED being a run of the same model whose arm doesn't. Its rows are labeled ``RUN (tail FIXED)``.
 """
 from __future__ import annotations
 
@@ -356,7 +356,7 @@ def main() -> int:
     ap.add_argument("runs", nargs="+")
     ap.add_argument("--tail", action="append", default=[], metavar="RUN=FIXED",
                     help="RUN's compiled Commit run time with FIXED's tail (retail)")
-    ap.add_argument("--runs-dir", type=Path, help="read DIR/RUN/out/result.json where it exists (research fetch RUN --all)")
+    ap.add_argument("--runs-dir", type=Path, help="read DIR/RUN/out/result.json where it exists (the run's directory, fetched whole)")
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
     a = ap.parse_args()
     tails = dict(t.split("=", 1) for t in a.tail)

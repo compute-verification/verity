@@ -161,7 +161,7 @@ theorem band_epsProof_d2 (d : ℕ) (dom : ℕ → Bits 512) :
   rw [band_epsProof_one, βOne_2_97]
   norm_num
 
-/-- `ε_proof` at `D = 5`, `k = 111`, one segment: `3182352/2^28 ≈ 1.1855%`, lane E's figure. -/
+/-- `ε_proof` at `D = 5`, `k = 111`, one segment: `3182352/2^28 ≈ 1.1855%`. -/
 theorem band_epsProof_d5 (d : ℕ) (dom : ℕ → Bits 512) :
     epsProof (chainBandSeg 1 (2 ^ 9) d 524288 512 dom) (βOne 5 111) = 3182352 / 2 ^ 28 := by
   rw [band_epsProof_one, βOne_5_111]

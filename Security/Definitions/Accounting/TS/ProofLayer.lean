@@ -4,23 +4,23 @@ import Definitions.Accounting.TS.Play
 # A window's proofs: what (I8) reads of the proof service (trusted)
 
 EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof service and one of the
-TS model's accounting (note:20261017T1817Z-draft-i8-lean):
+TS model's accounting:
 
 * **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows in
   frame-v3-sha512 trees, committed before the round's σ) to the values the round committed (`ProofLayer.Moved`, its
-  failure). Its fork form (`ProofLayer.Forked`, the 8 Oct ruling's): two runs off one commitment, both accepted, open it
+  failure). Its fork form (`ProofLayer.Forked`, as ruled): two runs off one commitment, both accepted, open it
   differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof
   (`ProofLayer.SoundAt`); C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` is this bound for a session, against the
   committed transcript fixed at registration. The relation also reads the rows link: the proof's input rows are the
   rows its registered roots open to, and its output rows (the sinks committed after the coin) the Program's on those
-  rows and the coin. `Flock.Guarantees.EndToEndRegisteredRows` (#2840) states that bound for one session. The bridge
+  rows and the coin. `Flock.Guarantees.EndToEndRegisteredRows` states that bound for one session. The bridge
   from it to this premise is open: a window's proofs as C-Flock sessions under the window's coins, with `opened` the
   rows C-Flock's bound reads;
 * **pinning**: the relations pin every committed value's derivation (`ProofLayer.Pins`), a property of the
   Definitions the proofs pass. A check that takes an absorbed word as free witness lacks it (`PouwSegCheck_v2`: its
   window's absorbed prefix-word sets are witness); one that recomputes every word it absorbs from the unit's operands,
-  its seed and its noise has it (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`, #2417).
+  its seed and its noise has it (`PouwCallCheck_v1`, `PouwWarpCheck_v1`, `PouwSegCheck_v3`).
 
 `ProofLayer` is what a window's proofs carry on each path of coins: per round `w < S` and proof `i < n_π`, whether the
 verifier accepted it, the values its opening gives the round's leaves (its session's committed transcript, salts
@@ -101,7 +101,7 @@ def BindingAt [Fintype Ω] (δbind : ℝ) : Prop := ∀ w, prob (fun x => pf.Mov
 /-- **Two runs off one commitment open it differently** (the fork form): on `x` and on its continuation from round `w`
 on fresh coins `z`, which share round `w`'s leaves, every proof of round `w` is accepted, and some proof's openings
 differ. Where the proofs open hm96 rows of one frame-v3-sha512 tree against its root, different openings are two
-different inputs hashed to one SHA-512 digest along their paths: the break the 8 Oct ruling ties to the run, which
+different inputs hashed to one SHA-512 digest along their paths: the break the ruling ties to the run, which
 `cr/sha-512` bounds at a finder that runs the window twice from round `w`. -/
 def Forked (w : Fin S) (x z : Paths Ω S) : Prop :=
   pf.Proved x w ∧ pf.Proved (splice w x z) w ∧ ∃ i, pf.opened x w i ≠ pf.opened (splice w x z) w i
@@ -110,7 +110,7 @@ def Forked (w : Fin S) (x z : Paths Ω S) : Prop :=
 def Unsound (x : Paths Ω S) (w : Fin S) (i : Fin nπ) : Prop := pf.accepted x w i ∧ ¬ pf.rel x w i (pf.opened x w i)
 
 /-- **Proof soundness at `δ_ZK`**: each proof is accepted with an opening that fails its relation on the path with
-probability at most `δ_ZK` over the window's coins. C-Flock's `Flock.Guarantees.EndToEndRegisteredRows` (#2840) states
+probability at most `δ_ZK` over the window's coins. C-Flock's `Flock.Guarantees.EndToEndRegisteredRows` states
 this bound for one session; the bridge from a session's bound to this one is open. -/
 def SoundAt [Fintype Ω] (δzk : ℝ) : Prop := ∀ w i, prob (fun x => pf.Unsound x w i) ≤ δzk
 

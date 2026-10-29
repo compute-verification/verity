@@ -15,7 +15,7 @@ from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity.ml.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
-# -- [R15 fp8] block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
+# -- block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
 
 FP8_E4M3 = torch.float8_e4m3fn
 #: the quant op's pinned scalars (`per_token_group_quant_fp8(..., group_size=128, eps=1e-10, dtype=e4m3)` as vLLM calls it for

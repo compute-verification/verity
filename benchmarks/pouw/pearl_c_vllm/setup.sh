@@ -6,7 +6,7 @@
 # the window's build flags and cache path are these and nothing rebuilds there; the cache is the venv's FlashInfer build's own
 # (flashinfer_env.sh).  pyarrow reads the quality run's WikiText-2.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
-#     --env GPU_LEASE_WHO=bc-dd22acf8 -- bash benchmarks/pouw/pearl_c_vllm/setup.sh
+#     --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/pearl_c_vllm/setup.sh
 # Env: WORK (/workspace/pouw/mvp-e2e), HF_HOME (/workspace/hf).  Writes $WORK/ready.json.  LINK_VENV=DIR links a venv already
 # on the node (node 1's /workspace/jobs/venv312) as $WORK/venv312 instead of bootstrapping one, once its vLLM and torch are
 # pod_bootstrap.sh's pins; nothing is installed into it, so pyarrow (the quality run's) is left out.

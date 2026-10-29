@@ -218,33 +218,14 @@ omit [Fintype K] in
 theorem outZ_spec (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P planZ tab vb L c))
     (hS : Succ (rdZ A P planZ tab vb R τ c) x) :
     ∃ a b, outZ A P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
-  classical
-  have hex : ∃ p : ΩcZ A P planZ tab vb L c × vb.Val × vb.Val, p.2.1 ≠ p.2.2 ∧
-      p.2.1 ∈ rdZ A P planZ tab vb R τ c x.1 ∧ p.2.2 ∈ rdZ A P planZ tab vb R τ c p.1 ∧
-      (p.1 = x.1 ∨ nextRead (rdZ A P planZ tab vb R τ c) x.2 = some p.1) := by
-    rcases hS with h2 | ⟨v, hv, e', hn, hne⟩
-    · obtain ⟨a, ha, b, hb, hab⟩ := Finset.one_lt_card.1 (by omega :
-        1 < (rdZ A P planZ tab vb R τ c x.1).card)
-      exact ⟨(x.1, a, b), hab, ha, hb, Or.inl rfl⟩
-    · have hnon : (rdZ A P planZ tab vb R τ c e').Nonempty := by
-        have := List.find?_some hn
-        simpa using this
-      have hw : ∃ w ∈ rdZ A P planZ tab vb R τ c e', w ≠ v := by
-        by_contra hall
-        push Not at hall
-        apply hne
-        obtain ⟨w₀, hw₀⟩ := hnon
-        refine Finset.eq_singleton_iff_unique_mem.2 ⟨?_, hall⟩
-        rw [← hall w₀ hw₀]
-        exact hw₀
-      obtain ⟨w, hw, hwv⟩ := hw
-      exact ⟨(e', v, w), Ne.symm hwv, by rw [hv]; exact Finset.mem_singleton_self v, hw, Or.inr hn⟩
-  unfold outZ
-  rw [dite_eq_left_of_eq_true (eq_true hex)]
-  obtain ⟨hne, h1, h2, -⟩ := Classical.choose_spec hex
-  have s1 := opOfZ_spec A P planZ tab vb R τ h1
-  have s2 := opOfZ_spec A P planZ tab vb R τ h2
-  exact ⟨_, _, rfl, vb.collide_spec _ _ (s1.1.trans s2.1.symm) (by rw [s1.2, s2.2]; exact hne)⟩
+  have e : outZ A P planZ tab vb R τ c x = outOf (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c)
+      vb.collide x := by
+    unfold outZ outOf
+    congr
+  rw [e]
+  exact outOf_spec (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c) vb.collide
+    (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfZ_spec A P planZ tab vb R τ hv)
+    (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 
 /-! ## The link mass at one commit string -/
 

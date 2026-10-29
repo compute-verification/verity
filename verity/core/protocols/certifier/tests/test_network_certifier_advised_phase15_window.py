@@ -1,11 +1,11 @@
-"""REDTEAM phase 15, against N2-ADVICE's sync check (#3681): a window whose declared sync differs from the one the
-certifier ran it under refused every window of its link, since each window's floor read the declaration of every
-window that releases into it. Only that backward dependency is real: output λ released at b in window v needs its
-request's frames by b − δ − ⌊λ/ρ⌋, which can fall in an earlier window, so a floor read from v's declaration carries
-v's word into that window's view. The carry forward reads no sync: every floor bucket is at most its release bucket, so
-a later window's carried floor is the same under any δ ≥ 0. So every floor now reads the sync the certifier ran
-(`LinkWindows.clock_source`), and a declaration is checked in its own window alone, still fail-closed: the network
-verdict is the AND over the windows, so it refuses the link with that window.
+"""The advised link's sync check (`advised`): a window whose declared sync differs from the one the certifier ran it
+under is refused alone, not with every window of its link, as it would be were each window's floor to read the
+declaration of every window that releases into it. Only that backward dependency is real: output λ released at b in
+window v needs its request's frames by b − δ − ⌊λ/ρ⌋, which can fall in an earlier window, so a floor read from v's
+declaration carries v's word into that window's view. The carry forward reads no sync: every floor bucket is at most
+its release bucket, so a later window's carried floor is the same under any δ ≥ 0. So every floor reads the sync
+the certifier ran (`LinkWindows.clock_source`), and a declaration is checked in its own window alone, still
+fail-closed: the network verdict is the AND over the windows, so it refuses the link with that window.
 """
 
 from fractions import Fraction
@@ -82,7 +82,7 @@ def test_a_window_declaring_off_its_certified_sync_is_refused_alone():
 
 
 def test_the_verifier_of_record_refuses_only_the_window_run_off_its_declaration(tmp_path):
-    """Through the proof service (stand-in proofs) on simulated serving: the clock source says the certifier ran window
+    """Through the proof system (stand-in proofs) on simulated serving: the clock source says the certifier ran window
     2 at δ = 1, one of Σ_sync, where the prover declared δ = 2. Window 2 is refused and the rest accepted on the floors
     of the syncs the certifier ran, so the network verdict refuses the link (`Run.link` holds it to the AND)."""
     ran = list(SYNCS)

@@ -17,17 +17,21 @@ is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and
 What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
-registered width and prime), else 0 and 0 with the profile naming each gap. `certified_point` is the smallest such point
-holding a store, 256 blocks (526 KB) at least; the small point (`point_for`, 1,024-bit blocks) certifies nothing.
+registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
+holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap.
+`point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
+(`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
 Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path
 (r20261025-202504-23f6), so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
-over processes. An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
+over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
+a block, r20261026-161817-7dd1). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
-`certified_point` and audits it every period, the coins fresh from the OS. The memory challenger is a party of its own
-(`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed parameters
-(`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the node.
+`point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
+of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
+parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
+node.
 `trusted-host`'s premise, that the memory challenger runs on a machine the prover doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_party.placement`). The setup's salt is
 still drawn on the node.
@@ -70,26 +74,25 @@ K = P2.CERT_K
 LIMIT_NS = P2.DELTA_NS + P2.RTT_ALLOWANCE_CAP_NS
 
 
-def point_for(size: int, w: int = W, c0: int = C0, k: int = K, limit_ns: int = LIMIT_NS) -> R.Point:
-    """The smallest point at width `w` whose payload holds `size` bytes: one segment of up to 2^16 blocks, then more."""
+def point_for(size: int, w: int = P2.POINT[0], c0: int = P2.POINT[1], k: int = K, limit_ns: int = LIMIT_NS) -> R.Point:
+    """The smallest point at width `w` whose payload holds `size` bytes: one segment of up to 2^16 blocks, then more. At
+    the registered width and prime, the default, it has at least `2^8` blocks (`p2.CERT_FAMILY_BLOCKS`), so with `k =
+    105` and `Δ + RTT` at the cap `certificate` covers it to `2^27` blocks; `point_for(size, W, C0)` is the small point."""
     payload = (w - 16) // 8
-    blocks = max(1, -(-size // payload))
+    least = P2.CERT_FAMILY_BLOCKS[0] if (w, c0) == P2.POINT[:2] else 1
+    blocks = max(least, -(-size // payload))
     segments = -(-blocks // (1 << 16))
     return R.Point(P2.P2Params(w, c0, -(-blocks // segments), segments), k, limit_ns)
 
 
-def certified_point(size: int) -> R.Point:
-    """The smallest point P2's proved family certifies (`p2.family_certificate`) whose payload holds `size` bytes: the
-    registered width and prime, at least `2^8` blocks (`p2.CERT_FAMILY_BLOCKS`), `k = 105` and `Δ + RTT` at the cap."""
-    w, c0, _ = P2.POINT
-    return point_for(max(size, P2.CERT_FAMILY_BLOCKS[0] * ((w - 16) // 8)), w, c0)
-
-
 def certificate(q: P2.P2Params) -> Any:
     """`PousCheck.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
-    else P2's proved family's (`p2.family_certificate`), else none."""
+    else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks), else the per-period guarantee's
+    (`p2.wide_certificate`, to `2^27` blocks), else none."""
     registered = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
-    return registered if registered is not None and registered.segments == q.segments else P2.family_certificate(q)
+    if registered is not None and registered.segments == q.segments:
+        return registered
+    return P2.family_certificate(q) or P2.wide_certificate(q)
 
 
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
@@ -392,14 +395,132 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
     return mc.LmsSigner(key, state)
 
 
+LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
+"""The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
+_ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
+_CLOSE = ["chain", "ended", "lines", "session", "signature"]
+
+
+def _json(data: str | bytes) -> Any:
+    """`data` parsed, or the `ValueError` saying why it isn't JSON, for the caller to keep the file as it is."""
+    try:
+        return json.loads(data)
+    except ValueError as e:
+        return e
+
+
+def _entry(line: Any) -> dict | None:
+    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
+    if type(line) is not str or not line.startswith('{"body":'):
+        return None
+    e = _json(line)
+    return e if isinstance(e, dict) and sorted(e) == _ENTRY and e["schema"] in LEDGER_SCHEMAS else None
+
+
+def _ledger(lines: Sequence[Any]) -> list[dict] | None:
+    entries = [_entry(x) for x in lines]
+    return entries if entries and all(e is not None for e in entries) else None
+
+
+def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
+    """The indices of a ledger's `entries` its window cites: every entry of `sessions` and the open and close of each
+    period holding one of them (a period holds the sessions whose reserve, or one-step v2 open, falls in its lane between
+    its open and its close, as `challenger.verify_periods` counts them). Raises `ValueError` naming a session of
+    `sessions` the ledger doesn't open, or when `sessions` is empty: a reader of what's kept would find no entry of it."""
+    if not sessions:
+        raise ValueError("no challenger session is cited beside the auditor's ledger, so none of its entries would be kept")
+    keep: set[int] = set()
+    current: dict[Any, int] = {}
+    held: set[int] = set()
+    for i, e in enumerate(entries):
+        b, kind = e["body"], e["kind"]
+        if kind == "period-open":
+            current[b.get("lane")] = i
+        elif kind == "period-close":
+            if current.pop(b.get("lane"), None) in held:
+                keep.add(i)
+        elif e["session"] in sessions:
+            keep.add(i)
+            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
+                if (o := current.get(b.get("for") or b.get("by"))) is not None:
+                    keep.add(o)
+                    held.add(o)
+    opened = {e["session"] for e in entries if e["kind"] == "open"}
+    if missing := sorted(set(sessions) - opened):
+        raise ValueError(f"the auditor's ledger opens no session {missing[0]}, which a challenger close record beside it "
+                         f"cites ({len(entries)} entries, {len(missing)} of {len(sessions)} cited sessions unopened)")
+    return sorted(keep)
+
+
+def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
+    """`files` (path -> bytes) with every copy of the auditor's ledger cut to the entries its window cites (`cited`). A
+    copy is a `.jsonl` file each of whose lines is a ledger entry (infra's ``windows.jsonl``, ASCII as `ledger_text`
+    writes it) or a list of such lines in a `.json` document (`window_salt.Issued.live`'s ``ledger``); the sessions it
+    cites are those of the challenger close records (``{chain, ended, lines, session, signature}``, as `.json` files or
+    inside one) under the copy's directory, its own document included. A copy with no close record beside it is kept
+    whole: nothing cites its entries, so nothing says what a reader of it needs. A document holding a cut copy is
+    written back as `json.dumps(doc, sort_keys=True)`, as ``salt.json`` is written; every other file is kept as it is.
+    Raises `ValueError` naming the file when a copy would keep no entry of a session cited beside it, so the records
+    never hold a ledger cut short of what their window cites. PoUW's verifier reads the whole ledger (every entry,
+    chained from seq 0), so the uncut copy it reads stays on disk."""
+    parsed = {name: _json(data) for name, data in files.items() if name.endswith(".json") and b'"session"' in data}
+    docs = {name: doc for name, doc in parsed.items() if not isinstance(doc, ValueError)}
+    closes: list[tuple[str, str]] = []
+
+    def walk(name: str, v: Any) -> None:
+        if isinstance(v, dict):
+            if sorted(v) == _CLOSE and type(v["session"]) is str:
+                closes.append((name, v["session"]))
+            for x in v.values():
+                walk(name, x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(name, x)
+
+    for name, doc in docs.items():
+        walk(name, doc)
+
+    def cut(name: str, lines: list[str], entries: list[dict]) -> list[str] | None:
+        scope = name.rsplit("/", 1)[0] + "/" if "/" in name else ""
+        if not (sessions := {s for n, s in closes if n.startswith(scope)}):
+            return None
+        try:
+            return [lines[i] for i in cited(entries, sessions)]
+        except ValueError as e:
+            raise ValueError(f"{name}: {e}") from None
+
+    out = dict(files)
+    for name, data in files.items():
+        if name.endswith(".jsonl") and b"verity/challenger-auditor/" in data and data.isascii():
+            lines = [x for x in data.decode("ascii").split("\n") if x]
+            if (entries := _ledger(lines)) is not None and (kept := cut(name, lines, entries)) is not None:
+                out[name] = "".join(x + "\n" for x in kept).encode()
+
+    def copies(name: str, v: Any) -> Any:
+        if isinstance(v, dict):
+            return {k: copies(name, x) for k, x in v.items()}
+        if isinstance(v, list):
+            if (entries := _ledger(v)) is not None:
+                return v if (kept := cut(name, v, entries)) is None else kept
+            return [copies(name, x) for x in v]
+        return v
+
+    for name, doc in docs.items():
+        if b"verity/challenger-auditor/" in files[name] and (kept := copies(name, doc)) != doc:
+            out[name] = json.dumps(kept, sort_keys=True).encode()
+    return out
+
+
 def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",)) -> bytes:
     """The period's records as one byte string, the store the node keeps for the period: each file under `period_dir`
-    (but those under `skip`) in path order, framed `u32 len(path) ‖ path ‖ u64 len(bytes) ‖ bytes`."""
+    (but those under `skip`) in path order, every copy of the auditor's ledger cut to the entries its window cites
+    (`cite`), framed `u32 len(path) ‖ path ‖ u64 len(bytes) ‖ bytes`."""
     root = Path(period_dir)
+    files = {f.relative_to(root).as_posix(): f.read_bytes() for f in sorted(
+        p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in skip)}
     out = bytearray()
-    for f in sorted(p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in skip):
-        name, data = f.relative_to(root).as_posix().encode(), f.read_bytes()
-        out += len(name).to_bytes(4, "big") + name + len(data).to_bytes(8, "big") + data
+    for name, data in cite(files).items():
+        out += len(name.encode()).to_bytes(4, "big") + name.encode() + len(data).to_bytes(8, "big") + data
     return bytes(out)
 
 
@@ -410,8 +531,9 @@ CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
-    set up once, at the smallest point P2's proved family certifies (`certified_point`): `W` is the node's records at its
-    first period, encoded in up to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
+    set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its
+    first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up to
+    `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
     audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
     `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
     instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
@@ -430,7 +552,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     t = time.monotonic()
     if small or not (kept / "store.json").exists():
         store = records(period_dir)
-        point = point_for(len(store)) if small else certified_point(len(store))
+        point = point_for(len(store), W, C0) if small else point_for(len(store))
         held = setup_store(store, secrets.token_bytes(64), point, workers=1 if small else workers)
         if not small:
             held.save(kept)
@@ -465,6 +587,6 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
-           "certificate", "certified_point", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit",
+           "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg", "point_for",
            "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

@@ -19,7 +19,7 @@ Every `--poll` seconds (default 60), from the budgets in memory (the last good r
              each poll while it holds.
   max age    a pod under a line older than the line's max_pod_hours (RunPod's createdAt) is terminated: the bound for a pod whose lease
              never got armed.
-  uncovered  a project pod no line covers is terminated once it has been uncovered for `uncovered_grace_min` (Daniel, 2026-09-29), or
+  uncovered  a project pod no line covers is terminated once it has been uncovered for `uncovered_grace_min`, or
              only reported with `terminate_uncovered = false`.
 The guard never trips on the clock: each pod's lease (research.pods.lease) ends it on time.  A pod the guard terminated in the last
 TERMINATING_S seconds is not terminated again (the API lists it for a while after DELETE) but still counts toward spend.  Each

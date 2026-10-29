@@ -1,4 +1,4 @@
-"""Acceptance test: the IR running example (veritor's docs/verity-ir-2026-09-07.md §5, §7.2) exactly."""
+"""Acceptance test: the running example (veritor's docs/verity-ir-2026-09-07.md §5, §7.2) exactly."""
 
 from __future__ import annotations
 
@@ -8,9 +8,8 @@ import random
 import pytest
 
 from verity.ml.circuits import (Array, FunctionCall, Program, Region, Tuple, Value, bind, composite, decode_program, descriptor_size,
-                       encode_program, evaluate_call, evaluate_region, primitive, program_digest, query, GapError,
-                       QueryError, REGISTRY)
-from verity.ml.circuits.defs import CompositeDefinition
+                       encode_program, primitive, program_digest, query, GapError, QueryError, REGISTRY)
+from verity.ml.circuits.evaluation import evaluate_call, evaluate_region
 
 V16 = Value(16)
 MASK = 0xFFFF

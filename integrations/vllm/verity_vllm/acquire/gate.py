@@ -6,7 +6,7 @@ plan-vs-plan comparison.
     verity-vllm gate compare-plans <a.json> <b.json> [--out plan_compare.json]
     verity-vllm gate call-boundaries <row dir> [--out call_boundaries.json]
 
-`--runtime` is a `RuntimeTree` document: written by the GPU stage (`m1_capture` -> DIR/runtime_tree.json) or by
+`--runtime` is a `RuntimeTree` document: written by the GPU phase (`m1_capture` -> DIR/runtime_tree.json) or by
 `verity-vllm runtime-tree` from a model instantiated on the meta device as Build does (pod: needs vLLM).  `--programs-root`
 / `--program` name the Build's request Program dirs (`build_request*/`): the owning modules are read off their `runtime-correspondence/v1`
 record when they carry it (`correspondence.source = correspondence`), else off the manifest's v1 annotations -- the source is recorded in

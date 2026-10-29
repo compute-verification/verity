@@ -1,9 +1,9 @@
 // Blackwell datacenter (sm_100a / sm_103a) FP8 tensor-core probe: S chained `tcgen05.mma` per tile on one TMEM accumulator, raw
 // bits in and out.
 //
-// Lane B200-FP8.  The question is the bit-exact step of `tcgen05.mma.cta_group::1.kind::f8f6f4` (E4M3 / E5M2 operands, F32
+// The question is the bit-exact step of `tcgen05.mma.cta_group::1.kind::f8f6f4` (E4M3 / E5M2 operands, F32
 // accumulator, K = 32 an instruction) and of `kind::mxf8f6f4.block_scale.scale_vec::1X` (the same with one UE8M0 scale a row of A
-// and a column of B for each K = 32 block); run r20261019-081000-ad35 found sm_120's QMMA step (silicon.models
+// and a column of B for each K = 32 block); the capture found sm_120's QMMA step (silicon.models
 // BLACKWELL_SM100_E4M3 / _E5M2, f8_model.py for the mixed and scaled kinds).  It is tcgen05_fp4.cu's kernel with 8-bit
 // elements, distinct rows (no replicas) and N = 32:
 //
@@ -11,7 +11,7 @@
 //   1. warp 0 allocates 128 TMEM columns; thread 0 initialises an mbarrier.
 //   2. every thread writes its row of A (and threads 0..31 their row of B, B n-major) for each step into shared memory in the
 //      canonical K-major no-swizzle layout: core matrices of 8 rows x 16 bytes, LBO 128 between the two 16-byte K chunks of a row
-//      group, SBO 256 between 8-row groups (tcgen05_fp4.cu's layout, which lane tcgen05 validated: a K = 32 row of 8-bit codes is
+//      group, SBO 256 between 8-row groups (tcgen05_fp4.cu's layout, validated there: a K = 32 row of 8-bit codes is
 //      32 bytes, as a K = 64 row of nibbles is).
 //   3. each warp preloads its 32 TMEM lanes: the accumulator (lane m, columns 0..31 = C[m][0..31]) with tcgen05.st, and for
 //      mxf8f6f4 the scale factors in tcgen05_fp4.cu's 32-lane layout (word column c of lane L holds the scale byte of row 32c + L,

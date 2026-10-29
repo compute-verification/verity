@@ -1,4 +1,4 @@
-description = "co32c-u64 (FRONTIER): Dither-2S's served values with the weights capped for the peeled U on [-64, 64] (co32c's committed strip digits, the U checked_strip.py fixes, width 129): linears and lm_head weights dithered within +-63 (served [-62, 63]), activations dithered on 8 bits; Q K^T both dithered on 8 bits (last checked word served); P V as in adopted-bd-lm"
+description = "co32c-u64: Dither-2S's served values with the weights capped for the peeled U on [-64, 64] (co32c's committed strip digits, the U checked_strip.py fixes, width 129): linears and lm_head weights dithered within +-63 (served [-62, 63]), activations dithered on 8 bits; Q K^T both dithered on 8 bits (last checked word served); P V as in adopted-bd-lm"
 
 [[linear]]
 step = "smooth"

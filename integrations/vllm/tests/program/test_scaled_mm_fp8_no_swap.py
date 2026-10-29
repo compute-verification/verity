@@ -18,7 +18,7 @@ from verity.ml.definitions import word as W
 K, N = 32, 4
 DOT = BlackwellE4m3QmmaDot32
 
-#: red-team-vllm-semantics, finding `fp8-per-tensor-scale-order`, run r20260930-081238-476e (`fp8_order_repro.json`): the operand
+#: the red team's finding `fp8-per-tensor-scale-order` (`fp8_order_repro.json`): the operand
 #: sets its 4,000,000-draw search found on which the two scale orders round to different words.  (xq, wq as 32 e4m3 bytes in hex;
 #: sx, sw, the chain's accumulator; the unswapped word bf16(sx*(sw*acc)); the swapped word bf16(sw*(sx*acc))).
 RED_TEAM = [

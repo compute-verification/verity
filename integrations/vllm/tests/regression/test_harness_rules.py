@@ -6,7 +6,7 @@ skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
-rebuilds in a scratch of its own.
+rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.
 """
 from __future__ import annotations
 
@@ -112,6 +112,22 @@ def test_a_registered_fixture_is_found_by_its_path():
     art, rel = next(iter(reg.items()))
     assert resolver.registered(resolver.REGISTRY.parents[1] / rel) == art
     assert resolver.registered(resolver.EXPECTED_DIR / "no-such-row.json") is None
+    assert resolver.registered(resolver.FILES) is not None
+
+
+def test_a_rows_pins_are_files_tomls_and_nothing_resolves_unpinned_without_it(tmp_path, monkeypatch):
+    """An indexed row's sha256 / bytes pins are files.toml's (a registered fixture), read on first use: where files.toml is not
+    here, a file the row resolves is NotResolvable, never used unchecked."""
+    (tmp_path / "rows" / "k").mkdir(parents=True)
+    (tmp_path / "rows" / "k" / "a.json").write_text("{}")
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.setattr(resolver, "FILES", tmp_path / "files.toml")
+    row = resolver.Row("k", {"row": 9}, fixtures={}, indexed=True)
+    with pytest.raises(resolver.NotResolvable, match="fetch-fixtures"):
+        row.path("a.json")
+    (tmp_path / "files.toml").write_text('[rows."k".files."a.json"]\nrole = "record"\nbytes = 3\n')
+    with pytest.raises(resolver.InputMismatch, match="2 bytes on disk, pinned 3"):
+        row.path("a.json")
 
 
 def _post_flip_row(tmp_path, monkeypatch, *, rc: int | None):
@@ -146,8 +162,8 @@ def test_a_row_without_a_summary_or_a_verdict_of_record_is_not_summarised(tmp_pa
 
 
 def test_a_merged_programs_view_outlives_the_trees_it_links_from(tmp_path, monkeypatch):
-    """The store's trees/ is a cache that eviction may clear while a rebuild reads the view (#11's rebuild failed on its view's
-    result.json in r20261003-173418-89e5): the view holds hard links, so its files stay readable when their trees go."""
+    """The store's trees/ is a cache that eviction may clear while a rebuild reads the view: the view holds hard links, so its
+    files stay readable when their trees go."""
     data = {"build_request/instances.json.gz": gzip.compress(b"[]"), "build_request/result.json": b"{}"}
     programs, records = tmp_path / "programs" / "k", tmp_path / "records"
     for root, rel in ((programs, "build_request/instances.json.gz"), (records, "build_request/result.json")):
@@ -165,8 +181,8 @@ def test_a_merged_programs_view_outlives_the_trees_it_links_from(tmp_path, monke
 
 
 def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeypatch):
-    """#73's executed_prefix found its tokens.json in `applies` and not in `actual` when node 1's hourly eviction cleared trees/
-    between them (r20261003-174531-333b): a row's fetched tree is fetched again once it is gone."""
+    """An eviction of trees/ between a check's `applies` and its `actual` must not lose the row's inputs: a row's fetched tree is
+    fetched again once it is gone."""
     from tests.regression import store_io
     fetches = []
 
@@ -184,8 +200,8 @@ def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeyp
 
 
 def test_two_processes_rebuilding_one_row_share_no_scratch(tmp_path, monkeypatch):
-    """#57's manifest_digest and its refusal rebuild the same row; under the post-train job's xdist workers they ran at once and
-    one read the manifest the other was rewriting (JSONDecodeError 49 MB in, r20261003-190207-2759)."""
+    """#57's manifest_digest and its refusal rebuild the same row, and xdist workers may run them at once: each rebuild has its
+    own scratch, so neither reads a manifest the other is rewriting."""
     monkeypatch.setenv(resolver.SCRATCH_ENV, str(tmp_path))
     row = resolver.Row("k", {"row": 57}, fixtures={})
     monkeypatch.setattr(resolver.os, "getpid", lambda: 101)

@@ -3,8 +3,7 @@
 The protected `difftest.produce` is single-process and hands `production` the R operand tensors on `cuda:0`.  An NCCL all-reduce needs
 one process per rank, so `production` spawns R processes (torch.multiprocessing, NCCL backend over loopback), gives rank r its operand
 on `cuda:r`, all-reduces with `ReduceOp.SUM`, and returns rank 0's result; every other rank's result is asserted bit-equal (the "every
-rank receives the same word" fact of the module docstring).  Needs a host with R visible GPUs (2×4090 pod) — UNTESTED in the
-2026-09-17 window (no 2-GPU worker); the request is in `out/gen/window/tp2.md`.
+rank receives the same word" fact of the module docstring).  Needs a host with R visible GPUs (a 2×4090 pod).
 
     verity-vllm properties-admission produce --adapter verity_vllm.program.quarantine.collective.allreduce_difftest --n 20 --seed 7 --out DIR
     verity-vllm properties-admission check   --adapter verity_vllm.program.quarantine.collective.allreduce_difftest --dir DIR --out quarantine.json

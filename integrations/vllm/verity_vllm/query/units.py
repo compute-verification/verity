@@ -24,7 +24,7 @@ The Program is read through the :class:`Program` protocol so an integration can 
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
 (id, definition id, output ports, the Values each read), the Values its prescribed inputs produce, and its outputs.
 Prescribed inputs are modelled as *Values of a producer that is not a Call* (``ValueRef.call`` is the input's id, which
-the Program lists in ``inputs``), exactly as the IR gives ``Input`` gates their own canonical references.
+the Program lists in ``inputs``), exactly as a Program gives ``Input`` gates their own canonical references.
 """
 
 from __future__ import annotations

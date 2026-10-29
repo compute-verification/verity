@@ -16,9 +16,18 @@ of the trace:
 The trace stays the check: `pipeline.neutrality`'s heavy tier traces every row and compares with the pins, and a trace never reads
 the predictor (`program.frontend.inputs_trace`).
 
+A single-GPU row's Build of record needs no trace at all (`write_row`, `predict row`): from the row's declared inputs, each request
+Program with the names its trace gives it (`naming.write_build`, `build_request_<shape>/`), GP-01's workload over them
+(`build_workload/workload_program.json`: its digest, and the `lag` and `applicability.engine.async_scheduling` the declared target
+resolves), the row's required-value manifest over them (`manifest.json`, the row's own query and policies, `row_build`) and
+`predicted.json` (`records.predicted_row`), what predicted it and the manifest's sha256. That is the row's Build of record, the
+ahead-of-time compiler's, which a traced Build only cross-checks. `compare --predicted DIR` holds it to
+a traced Build of the same row: every Program digest, and the manifest's digest, Program digest and identities.
+
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR (--wrapper step --M N --pos0 N |
                              --wrapper request --LP N --T N) [--aot JSON]
-    verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N]
+    verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N] [--predicted DIR]
+    verity-vllm predict row --row ROW --out DIR [--config CONFIG_JSON] [--jobs N]
 """
 from __future__ import annotations
 
@@ -30,19 +39,23 @@ import multiprocessing
 import os
 import re
 import shutil
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import WORKLOADS, UsageError, option
+from verity_vllm.config import WORKLOADS, RowEngine, UsageError, option, row_file, workload_file
+from verity_vllm.records.predicted_row import FILE, PredictedRow
 
 from . import score as S
 from .build import build_program
 from .phi import Phi
 
 SCHEMA = "verity-vllm/aot-comparison/v1"
+#: what a predicted row's `build_workload/workload_program.json` names as its maker
+ROW_BUILT_BY = "verity_vllm.program.predict.aot"
 #: the traced derive dir's files a switched row's carries as written; `instances.json.gz` is the predicted Program's own
 CARRIED = ("result.json", "artifact.json", "construction_manifest.json", "derive-report.json", "tp_links.json", "inputs.json")
 REQUEST = re.compile(r"build_request_LP(\d+)_T(\d+)")
@@ -51,7 +64,7 @@ MECHANISM = "verity_vllm.program.predict: the Program from the row's declared in
 
 def phi_at(row: str, rank: int, config: str) -> Phi:
     """φ of `row` at `rank` from its declared inputs (`score.phi_of`), the checkpoint's `config.json` at `config`."""
-    phi = S.phi_of({"row": row, "workload": json.loads((WORKLOADS / f"{row}.json").read_text())}, config=config)
+    phi = S.phi_of({"row": row, "workload": json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())}, config=config)
     return Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}})
 
 
@@ -111,9 +124,9 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     return block
 
 
-def _predict_rank(task: tuple[str, int, str, str, list[str]]) -> dict[str, Any]:
-    """One rank's Programs of the traced Build: its step at the trace's (M, pos0), each request shape, GP-01's workload over them.
-    A request's Program goes once its component is built: the composition holds the components, never every request Program."""
+def _predict_rank(task: tuple[str, int, str, str, list[tuple[str, int, int]]]) -> dict[str, Any]:
+    """One rank's Programs of the traced Build: its step at the trace's (M, pos0), each request (name, LP, T), GP-01's workload over
+    them.  A request's Program goes once its component is built: the composition holds the components, never every request Program."""
     row, rank, config, step_dir, requests = task
     out: dict[str, Any] = {"requests": {}, "errors": {}, "secs": {}}
 
@@ -130,8 +143,7 @@ def _predict_rank(task: tuple[str, int, str, str, list[str]]) -> dict[str, Any]:
     st = json.loads(Path(step_dir, "result.json").read_text())
     out["step"] = getattr(timed("step", lambda: predict(phi, "step", M=int(st["M"]), pos0=int(st["pos0"]))), "digest", None)
     canon, comps = {}, {}
-    for name in requests:
-        LP, T = (int(x) for x in REQUEST.fullmatch(name).groups())
+    for name, LP, T in requests:
         if (r := timed(name, lambda: predict(phi, "request", LP=LP, T=T))) is not None:
             out["requests"][name] = r.digest
             if (c := timed("workload", lambda: S.request_component(r, canon))) is not None:
@@ -140,17 +152,34 @@ def _predict_rank(task: tuple[str, int, str, str, list[str]]) -> dict[str, Any]:
     return out
 
 
-def compare(row_dir: str, row: str, config: str, workers: int = 0) -> dict[str, Any]:
+def _rank_dir(row_dir: str, rank: int | str) -> str:
+    """The dir holding rank `rank`'s derive dirs in a traced row dir: a TP row's `build/rank<r>/`, a single-GPU row's own dir."""
+    for d in (os.path.join(row_dir, "build", f"rank{rank}"), os.path.join(row_dir, "build"), row_dir):
+        if os.path.isdir(os.path.join(d, "build_step")):
+            return d
+    raise UsageError(f"{row_dir}: no build_step of rank {rank} (under build/rank{rank}/, build/ or the row dir)")
+
+
+def _traced_shapes(row_dir: str, rank: int | str, programs: dict) -> dict[str, tuple[int, int]]:
+    """Each traced request Program's (LP, T) by its `build_summary.json` name (`request`: the `build_request/` envelope), as its
+    derive's `result.json` declares it."""
+    d, out = _rank_dir(row_dir, rank), {}
+    for n in programs["requests"]:
+        res = json.loads(Path(d, "build_request" if n == "request" else n, "result.json").read_text())
+        out[n] = (int(res["LP"]), int(res["T"]))
+    return out
+
+
+def compare(row_dir: str, row: str, config: str, workers: int = 0, predicted: str | None = None) -> dict[str, Any]:
     """Every Program the traced Build under `row_dir` holds (`epoch.build_programs`), predicted at its rank and shape, a fresh
     process a rank (`workers` at once; 0 = every rank: a reused one keeps the decode caches of the ranks before), and compared
-    digest by digest."""
+    digest by digest; with `predicted`, the predicted row's Build there too (`compare_row`)."""
     from verity_vllm.pipeline import epoch
     traced = epoch.build_programs(Path(row_dir))
     if not traced:
         raise UsageError(f"{row_dir}: no build_summary.json, so no traced Build to compare with")
-    tp = len(traced) > 1 or os.path.isdir(os.path.join(row_dir, "build", "rank0"))
-    step_dir = lambda r: os.path.join(row_dir, "build", *([f"rank{r}"] if tp else []), "build_step")   # noqa: E731
-    tasks = [(row, int(r), config, step_dir(r), sorted(p["requests"])) for r, p in traced.items()]
+    tasks = [(row, int(r), config, os.path.join(_rank_dir(row_dir, r), "build_step"),
+              [(n, *s) for n, s in sorted(_traced_shapes(row_dir, r, p).items())]) for r, p in traced.items()]
     with ProcessPoolExecutor(max_workers=workers or len(tasks), mp_context=multiprocessing.get_context("spawn"), max_tasks_per_child=1) as pool:
         got = dict(zip(traced, pool.map(_predict_rank, tasks)))
     ranks = {}
@@ -160,7 +189,85 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0) -> dict[str, 
         ranks[r] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
         ranks[r].update({k: got[r][k] for k in ("errors", "secs") if got[r][k]})
     equal = all(v["equal"] for p in ranks.values() for n, v in p.items() if n not in ("errors", "secs"))
-    return {"schema": SCHEMA, "row": row, "build": str(Path(row_dir).resolve()), "code_version": S.code_version(), "equal": equal, "ranks": ranks}
+    doc = {"schema": SCHEMA, "row": row, "build": str(Path(row_dir).resolve()), "code_version": S.code_version(), "equal": equal, "ranks": ranks}
+    if predicted is not None:
+        doc["predicted"] = compare_row(row_dir, predicted, traced)
+        doc["equal"] = equal and doc["predicted"]["equal"]
+    return doc
+
+
+def _manifest_facts(path: Path) -> dict[str, Any]:
+    from verity_vllm.records.required_manifest import RequiredManifest
+    m = RequiredManifest.load(path)
+    return {"manifest_digest": m.manifest_digest, "program_digest": m.program_digest, "identities": len(m.identities)}
+
+
+def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dict[str, Any]:
+    """A predicted row's Build (`write_row`, under `predicted`) against the traced Build of the same row under `row_dir`: each
+    request Program and the workload by digest, and the required-value manifest by its digest (over its identities), Program
+    digest and identity count."""
+    from verity_vllm.pipeline import epoch
+    traced = traced if traced is not None else epoch.build_programs(Path(row_dir))
+    if list(traced) != ["0"]:
+        raise UsageError(f"{row_dir}: a predicted row is one rank's, and the traced Build has ranks {sorted(traced)}")
+    p, rec = traced["0"], PredictedRow.of(json.loads((path := Path(predicted, FILE)).read_text()), str(path))
+    by_shape = {s: p["requests"][n] for n, s in _traced_shapes(row_dir, "0", p).items()}
+    parts = {"workload": (p["workload"], rec.workload_digest),
+             **{n: (by_shape.get(tuple(int(x) for x in REQUEST.fullmatch(n).groups())), d) for n, d in rec.requests.items()}}
+    out: dict[str, Any] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
+    t, q = _manifest_facts(Path(row_dir, "manifest.json")), _manifest_facts(Path(predicted, "manifest.json"))
+    out["manifest"] = {"traced": t, "predicted": q, "equal": bool(t["manifest_digest"]) and t == q}
+    return {"dir": str(Path(predicted).resolve()), "parts": out, "equal": all(v["equal"] for v in out.values())}
+
+
+def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, log=None) -> PredictedRow:
+    """A single-GPU row's Build of record at `out` from its declared inputs alone (module docstring): no trace, no vLLM.  The
+    checkpoint's `config.json` is `config`, else the pin's (`pinned_hf_config`).  Returns the record it writes beside them."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.pipeline import manifest as MN
+    from verity_vllm.program import prefix_plan as PP
+    from verity_vllm.query.required import QUERY_OF_RECORD
+    from .naming import named_program, write_build
+    w = json.loads(workload_file(row_file(row)).read_text())
+    if PP.prefix_caching(w):
+        raise UsageError(f"{row}: the row serves with prefix caching, and its workload Program's cached components are not predicted")
+    config = config or pinned_hf_config(w["model"], RowEngine.of(w).revision)
+    if config is None:
+        raise UsageError(f"{row}: no pinned config.json for {w['model']}@{RowEngine.of(w).revision}; pass --config")
+    if os.path.exists(os.path.join(out, "build_summary.json")):
+        raise UsageError(f"{out} is a traced row's dir: a predicted row's Build is written into a dir of its own")
+    phi = S.phi_of({"row": row, "workload": w}, config=str(config))
+    os.makedirs(out, exist_ok=True)
+    t0, canon, comps, requests = time.time(), {}, {}, {}
+    for LP, T in phi.request_shapes():
+        r = named_program(phi, LP, T)
+        name = f"build_request_{PP.shape_name(PP.shape(LP, T))}"
+        write_build(os.path.join(out, name), r.program, r.named)
+        requests[name], comps[(LP, T)] = r.digest, S.request_component(r, canon)
+        if log:
+            log(f"[predict] {name}: {r.digest[:16]}… ({r.n_root_nodes} nodes)")
+    wp = S.predict_workload(phi, comps, canon)
+    lag = phi.target_profile().async_scheduling_declaration()
+    os.makedirs(os.path.join(out, "build_workload"), exist_ok=True)
+    Path(out, "build_workload", "workload_program.json").write_text(json.dumps(
+        {"ok": True, "workload_digest": wp["digest"], "function": wp["function"], "lag": lag, "built_by": ROW_BUILT_BY,
+         "applicability": {"engine": {"async_scheduling": bool(lag["async_scheduling"])}}}, indent=1) + "\n")
+    policy = dict(word="16/32", norm_scales=True, guarded_max=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
+                  jobs=jobs or MN.cpus(), log=log)
+    if len(phi.requests) > 1:
+        man = MN.build_global(w, out, workload_digest=wp["digest"], **policy)
+    else:
+        man = MN.build(os.path.join(out, next(iter(requests))), workload=w, **policy)
+    raw = json.dumps(man, separators=(",", ":")).encode()
+    Path(out, "manifest.json").write_bytes(raw)
+    if MN.incomplete_rc(man):
+        raise UsageError(f"{row}: the predicted Build's manifest is incomplete (named above), so it has no {FILE}")
+    rec = PredictedRow(row=row, config=str(config), code_version=S.code_version(), requests=requests, workload_digest=wp["digest"],
+                       lag=wp["lag"], manifest_digest=man["manifest_digest"], manifest_sha256=hashlib.sha256(raw).hexdigest(),
+                       program_digest=man["program_digest"], identities=man["populations"]["identities"],
+                       secs=round(time.time() - t0, 1))
+    Path(out, FILE).write_text(json.dumps(rec.dump(), indent=1) + "\n")
+    return rec
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -188,19 +295,37 @@ class CompareOptions:
     config: str = option("--config", help="the pinned checkpoint's config.json")
     out: str = option("--out", help="comparison.json")
     workers: int = option("--workers", type=int, default=0, help="ranks predicted at once (0: every rank)")
+    predicted: str | None = option("--predicted", default=None, help="a predicted row's Build (`predict row`) to hold to the trace too")
     cmd: str = field(default="compare", init=False)
 
 
-def main(a: EmitOptions | CompareOptions) -> int:
+@dataclass(frozen=True, kw_only=True)
+class RowOptions:
+    """A single-GPU row's Build of record from its declared inputs alone: each request Program named, GP-01's workload, the manifest."""
+    row: str = option("--row")
+    out: str = option("--out", help="the Build's dir (build_request_<shape>/, build_workload/, manifest.json, predicted.json)")
+    config: str | None = option("--config", default=None, help="the checkpoint's config.json (default: the pin's, pinned_hf_config)")
+    jobs: int = option("--jobs", type=int, default=0, help="processes for the manifest's word check and components (0: the CPUs)")
+    cmd: str = field(default="row", init=False)
+
+
+def main(a: EmitOptions | CompareOptions | RowOptions) -> int:
     if a.cmd == "emit":
         if a.wrapper == "request" and (a.LP is None or a.T is None):
             raise UsageError("--wrapper request needs --LP and --T")
         block = emit(phi_at(a.row, a.rank, a.config), a.wrapper, a.trace, a.out, M=a.M, pos0=a.pos0, LP=a.LP, T=a.T, aot=json.loads(a.aot))
         print(json.dumps({"out": a.out, "digest": block["predicted_digest"], "timings": block["timings"]}))
         return 0
-    doc = compare(a.row_dir, a.row, a.config, a.workers)
+    if a.cmd == "row":
+        rec = write_row(a.row, a.out, config=a.config, jobs=a.jobs, log=lambda s: print(s, file=sys.stderr, flush=True))
+        print(json.dumps({k: getattr(rec, k) for k in ("row", "workload_digest", "manifest_digest", "program_digest", "identities", "secs")}))
+        return 0
+    doc = compare(a.row_dir, a.row, a.config, a.workers, a.predicted)
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     for r, p in doc["ranks"].items():
         print(f"rank {r}: " + "  ".join(f"{n} {'=' if v['equal'] else '≠'}" for n, v in p.items() if n not in ("errors", "secs")), flush=True)
+    if "predicted" in doc:
+        print(f"predicted {doc['predicted']['dir']}: " + "  ".join(f"{n} {'=' if v['equal'] else '≠'}" for n, v in doc["predicted"]["parts"].items()),
+              flush=True)
     print(f"[predict] {doc['row']}: {'EQUAL on every rank' if doc['equal'] else 'NOT EQUAL'} -> {a.out}", flush=True)
     return 0 if doc["equal"] else 1

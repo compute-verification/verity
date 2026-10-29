@@ -10,7 +10,7 @@ encoded contents `E_j` (`b` bits) and the tile output `z_j` its receipt binds (`
 `z_{j−1}`), with `h`-bit receipts. The challenge is fresh, not secret, so every location reaches the mix; what it
 lacks is an input.
 
-**Two locations** (the actual-circuit model's localization, `note:console/20261012T0645Z-draft-actual-circuit-model`):
+**Two locations** (the actual-circuit model's localization):
 the GPU, the audited location, which holds the tile outputs natively and reads the store from HBM, and the rest of the
 node, the memory side (host DRAM, a box outside), which holds all of the store and, before the window, nothing about
 the tile outputs. The links between them carry at most `L` bits to the GPU and `Lz` bits from it per window.

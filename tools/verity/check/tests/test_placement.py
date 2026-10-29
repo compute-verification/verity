@@ -97,18 +97,14 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
         CHECK.placement(machine([{**slot("d"), "trains": True}]))
 
 
-def test_spare_counts_the_checks_a_machine_could_start_now_which_drive_moves_waiting_trains_onto():
-    """24 Oct 05:28Z: two new empty nodes stood idle while trains waited 1-4 h in other machines' lines; drive reads how many
-    train checks each machine could start now and moves that many waiting trains there."""
-    two = machine([{**slot("a"), "trains": True}, {**slot("b"), "trains": True}, slot("c", HOLDER)])
-    assert CHECK.spare(two, priority=True) == 2 and CHECK.spare(two) == 0            # only=trains slots: a lane check gets none
-    assert CHECK.spare(machine([slot("a"), slot("b")], [waiter(priority=True)]), priority=True) == 1   # one is spoken for
-    assert CHECK.spare(machine([slot("a"), slot("b", blocked="12 GB of memory free, under the 560 GB")]), True) == 1
-    assert CHECK.spare(machine([slot("a"), slot("b")], pools=lean(free=1)), True) == 1                 # one Lean check slot free
-    assert CHECK.spare(machine([slot("a", HOLDER)]), True) == 0
-    assert CHECK.spare(machine(None), True) == 1                                     # no slots file: a check runs at once
-    assert CHECK.spare({**machine([slot("a")]), "deadline_in_s": 60}, True) == 0
-    assert CHECK.spare({"check": {"error": "x"}, "lean": {"pools": None}}, True) == 0
+def test_a_train_that_needs_a_train_slots_memory_skips_a_machine_of_smaller_slots_even_with_one_free():
+    small = machine([{**slot("c"), "mem": 64}, {**slot("d", HOLDER), "mem": 64}])     # cpu-3's lane slots
+    big = machine([{**slot("b", HOLDER), "mem": 300, "trains": True}])                 # a train slot, held
+    got, why, skipped = CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True, min_mem=CHECK.TRAIN_GB)
+    assert got == N2 and "b held" in why and skipped == [f"{N1}: no slot in /workspace/research/locks/slots holds this check's "
+                                                         "300 GB (c 64 GB, d 64 GB): it takes a train slot"]
+    assert CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True)[0] == N1         # a Lean check takes the free small one
+    assert CHECK.placement(machine([{**slot("a"), "mem": None}]), True, CHECK.TRAIN_GB)[0] is True   # no mem=: any size
 
 
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
@@ -206,7 +202,7 @@ def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_ca
 
 
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
-    """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots (#1344). The quick
+    """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots. The quick
     tier takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
     from research import queue as Q
 

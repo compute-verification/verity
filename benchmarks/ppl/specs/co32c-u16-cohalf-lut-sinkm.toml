@@ -1,4 +1,4 @@
-description = "co32c-u16-cohalf (H1, decision 82) with the LUT softmax with key 0 out of its max (m over keys 1..pos, key 0's weight against it), K per (layer, KV head) from the window's keys (PPL-LUT)"
+description = "co32c-u16-cohalf (H1) with the LUT softmax with key 0 out of its max (m over keys 1..pos, key 0's weight against it), K per (layer, KV head) from the window's keys"
 
 [[linear]]
 step = "smooth"

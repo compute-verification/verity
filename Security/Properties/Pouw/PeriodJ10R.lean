@@ -10,7 +10,7 @@ import Properties.Pouw.Period
 `Properties.Pouw.Period.CheckedCreditPeriod` with served H1's verdict on a window, `Credit.window`, in place of
 `protocol.check`, and with the tiles' draw the sampling block's stratified draw: the window's units are one subcircuit
 of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are drawn uniformly
-inside it, independently of the other strata (`FlockSoundness.Audit.Law.stratified σ k hk`, LEAN-56's
+inside it, independently of the other strata (`FlockSoundness.Audit.Law.stratified σ k hk`,
 `JointStratified`). The period's population is that stratum's size, `N_p = |stratum σ s_T|` (`tileCount`), and its
 draw size is the block's `k s_T`, read from the block's draw, not chosen here.
 
@@ -18,12 +18,12 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   the law is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
   order; and the tile stratum's coordinate of the block's draw at a permutation of the stratum, the units of its first
   `k s_T` images.
-* `TileStratumEscape`, a lemma to be proved: the tile coordinate at a uniform permutation misses a set `B` of the
-  block's units with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`, the factor of stratum `s_T` in
-  `FlockSoundness.Audit.Law.stratified_escape`. With the per-stratum projection lean asked STRATJOINT to export (one
-  stratum's escape from the joint draw, `Law.stratified σ k hk`'s coordinate `s_T`, a lemma to be), it makes the
-  period's tile coin the block's draw restricted to the tile stratum. Neither is a premise here: the period's game
-  draws its permutation uniformly, and the bound below is about that game.
+* `TileStratumEscape`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
+  a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
+  which is how `Law.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.Law.stratified_proj_escape`,
+  the per-stratum projection of the joint draw; `tileStratumEscape_eq_proj` joins the two). So the period's tile coin
+  is the block's draw restricted to the tile stratum, and the bound below, about the period's game, which draws its
+  permutation uniformly, needs no premise to be about that draw.
 * `Registered`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
   the window registers before its draw coin and the rest; its verdict, an accept being some credited calls; each
   window's inputs as functions of the period's coins; and the units its draw demands proofs of, as `windowLayout`
@@ -36,7 +36,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
 * `TileDrawIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
   the window's draw coin, `k s_T` of them; the service's soundness against `Credit.window`.
 * `RegisteredBeforeDraw`: each window's registration fixed before its draw coin, `Properties.Pouw.Period`'s form at
-  `Registered`.
+  `Registered`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
 * `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
   `Credit.window` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
   tile coordinates, its call's roots) and the noise and fold keys J10-R derives there; the unit's relation, its one
@@ -55,12 +55,12 @@ call's one seed `seed_c` (`callSeed`, of the salt, the call's first unit and its
 and root(`b/<K>`)), each unit's rows and columns read at its blocks (`unitNoise` at `Credit.j10rBlocks`, the
 verifier's), its fold keys at its own position (`unitKeys`). The unit's relation is `j10r_reference`'s at that noise
 (`pinnedAt`), one description, so there is no `StagedPins`: H1's relates the staged statement to a second, flat
-description, which main's one-description rule (25 Oct) forbids. The rate is symbolic in `k s_T` and the live share `ρ`.
+description, and a unit's relation has one description. The rate is symbolic in `k s_T` and the live share `ρ`.
 
 *The lucks at J10-R's noise* are one claim, `SharedNoiseLucks`: `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` in their
 per-tile form (`PerLiveTile`), claimed of J10-R's tile games, where the units of a call row read that row's noise and
-the units of a call column the column's. Its claim is the call-level one (FOLD-LUCK's reduction,
-note:compute-research/20261026T0222Z-draft-accel-fold-luck §7): the whole call is the round, and the three lucks of its
+the units of a call column the column's. Its claim is the call-level one:
+the whole call is the round, and the three lucks of its
 tiles are special cases of one moment-form slot over the call's joint coins, which assumes no independence between
 tiles sharing a row's or a column's noise. They are computational, not luck: every coin that enters the honest receipt
 (the noise, the salt, the fold's keys) is read by the prover before it commits, so each says how cheaply a program
@@ -80,14 +80,14 @@ the same `R × C` words, the live share is `N_live/N_p`: `ρ = 1` when the strat
 and 65,536 (down); such a unit is past C-Flock's `2^27` until `h1zy` has J10-R lanes.
 
 *What it takes that the deployed path doesn't give*, each a named premise.
-* `TileDrawIsCoin`, a code fact once its code exists. The code change (CMP-126): the verifier draws the tiles inside
+* `TileDrawIsCoin`, a code fact once its code exists. The code change: the verifier draws the tiles inside
   the sampling block's stratified draw, the tiles joining the integrity registration as one subcircuit, and reads
   `k s_T` from it; today `Credit.window` draws by its own work law (`Credit.law`, one stratum a `K` template, the
   period's committed `k`). `creditDrawn` is the verifier's own draw (`Credit.windowDrawn`, which `windowLayout` holds
   the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
   reading of the model's uniform permutation as the draw is exact only when the draw's stream is the live coin's own
-  bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle
-  (R-ACCEL-3), a named assumption Daniel confirms, which this statement then uses.
+  bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle,
+  a named assumption, which this statement then uses.
 * `RegisteredBeforeDraw`, `SaltIsLiveCoin`: as in `H1CheckedCreditPeriod`.
 * `TileServiceSound`: a fact to prove, C-Flock's soundness at each drawn unit under live coins.
 * `SharedNoiseLucks`: a claim (above). The unit's place (`place`) is a parameter: no Lean function exports the verifier's derivation of a
@@ -96,7 +96,11 @@ unit's call and blocks (`Credit.registeredFile`'s `j10r`).
   words, which `Play` leaves abstract (no definition from the committed values until the adaptive model), so no code
   can prove it. `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` shows it, and every other premise, satisfiable.
 
-The proofs are to be in `Proofs.Pouw.PeriodJ10R`, as `Proofs.Pouw.Period`'s: `CircuitCreditPeriod` at `tileRun`.
+The proofs are in `Proofs.Pouw.PeriodJ10R`, as `Proofs.Pouw.Period`'s: `CircuitCreditPeriod` at `tileRun`. Its two
+lemmas: the honest one, `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` (an honest period meets every premise, given
+three facts of `Credit.window` on honest windows that its compiled verifier's difftests evidence), and the nontrivial
+one, `Proofs.Pouw.PeriodJ10R.Nontrivial`'s `j10r_nontrivial` (the conclusion fails at the verifier that accepts every
+window, against the prover that fixes no word).
 -/
 
 namespace Properties.Pouw.PeriodJ10R
@@ -123,12 +127,14 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (π : Equiv.Perm (Fin (tileCount σ sT))) : Finset (Fin nB) :=
   Finset.univ.image fun i : Fin (k sT) => tileAt σ sT (π (Fin.castLE (hk sT) i))
 
-/-- **The tile coordinate at a uniform permutation is the stratum's draw** (a lemma to be proved): it misses a set
-`B` of the block's units with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's
-units and `m_s` those of `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Its twin on the law's
-side, which lean asked STRATJOINT to export (a lemma to be): `Law.stratified σ k hk`'s coordinate `s` misses `B` with
-the same factor, `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) /
-C(|stratum σ s|, k s)`. Together they make the period's tile coin the block's draw at the tile stratum. -/
+/-- **The tile coordinate at a uniform permutation is the stratum's draw**: it misses a set `B` of the sampling
+block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
+`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Proved:
+`SecurityProofs.tileStratumEscape` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the law's side is
+`Law.stratified_proj_escape`: `Law.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
+`prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
+`SecurityProofs.tileStratumEscape_eq_proj` equates the two, so the period's tile coin is the block's draw at the tile
+stratum. -/
 def TileStratumEscape : Prop :=
   ∀ {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (B : Finset (Fin nB)),
@@ -240,10 +246,10 @@ noncomputable def tileLayer {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ
 /-- **`Credit.window`'s draw is the tile coordinate of the sampling block's draw**: on every path and every window
 `Credit.window` credits, the units its draw demands proofs of (`creditDrawn`) are the window units (`unitOf`) of the tile
 stratum's coordinate at the window's draw coin (`tileDraw`'s, `drawOf`'s draws), `k s_T` of the stratum's
-`|stratum σ s_T|`. A code fact once its code exists. Code change (CMP-126): the verifier draws the tiles inside the
+`|stratum σ s_T|`. A code fact once its code exists. Code change: the verifier draws the tiles inside the
 sampling block's stratified draw, as one subcircuit of the integrity registration, and reads `k s_T` from it; today
 `Credit.window` draws by its own work law. Where the draw's stream is expanded from the live coin by SHA-512, reading
-it as the uniform permutation uses SHA-512 as a random oracle (R-ACCEL-3). -/
+it as the uniform permutation uses SHA-512 as a random oracle. -/
 def TileDrawIsCoin {C Ξ : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (Coin C Ξ m σ sT) n) : Prop :=
@@ -264,7 +270,13 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
         ¬ rel x w t (opened x w (unitOf (tileAt σ sT t)))) ≤ δks
 
 /-- **Each window's registration is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
-`Credit.window`'s registered inputs (`Registered`). -/
+`Credit.window`'s registered inputs (`Registered`). It keeps window `w`'s round coins, the salt among them, so it carries
+the registration before the draw coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
+J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before the window's salt
+coin, which is released against their root. The check holds a live window to that order: its salt opens on
+`anchoredEpochRoot W X k`, `X` the root of the activations the window committed (`windowAnchors`), and the loop commits
+the H1 tiles' A and B rows there, though not yet the served `x` and `sx`. No premise states the order yet (each
+anchor's root invariant under `spliceAt w 0`, the salt's coordinate). -/
 def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditWindows (Paths C m × B) n) : Prop :=
   ∀ (x z : Paths (Paths C m × B) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
 
@@ -314,7 +326,7 @@ end Place
 /-- **J10-R's unit relation, its one description**: window `w`'s unit `t` satisfies `j10r_reference`'s relation
 (`tile`, the registered J10-R Definition's function of a unit's noise and fold keys) at the noise and keys its public
 row gives in-circuit: those of its place under the window's salt as `Credit.window` reads it. The statement the service
-proves is this relation, #2352's pin (every word recomputed from committed operands at a pinned start), so no second
+proves is this relation, the pinned form (every word recomputed from committed operands at a pinned start), so no second
 description of the tile appears and no premise relates two. That the registered Definition computes `tile` is a code
 fact, circuit-check's pin of the Definition to `j10r_reference`. -/
 def pinnedAt {Ω V : Type} {n Np : ℕ} (salt : Paths Ω n → Fin n → ByteArray)
@@ -332,26 +344,26 @@ def j10rAtCoin {C B V : Type} {m n Np : ℕ} (hm : 0 < m) (enc : C → ByteArray
     tile ((place x w t).noise (enc (coinAt (coinAt x w).1 ⟨0, hm⟩)))
       ((place x w t).keys (enc (coinAt (coinAt x w).1 ⟨0, hm⟩))) t
 
-/-- **The lucks at J10-R's shared noise** (one claim; a decided-by-lane card for M3, a defect under R-ACCEL-4 that
-FOLD-LUCK, CMP-134, owns): every live tile's game in every window meets the three per-tile lucks, `OperandHMu`
+/-- **The lucks at J10-R's shared noise** (one claim): every live tile's game in every window meets the three per-tile
+lucks, `OperandHMu`
 (`μ = Sc.mu k`), `ReceiptLuckAt` (`r_B = Sc.rB k`) and `GuessLuckAt` (`p0 = Sc.guess k`), the form
 `CircuitCreditPeriod`'s rate reads. J10-R derives a call's noise from one seed (`J10R.callSeed`), so the units of a
 call row read that row's noise `U_r` and the units of a call column that column's `F_c` (`J10R.j10rNoise` from the
-unit's bases), and only the fold keys are a unit's own (`J10R.unitKeys`). The per-tile lucks were argued (#2482's H-μ
+unit's bases), and only the fold keys are a unit's own (`J10R.unitKeys`). The per-tile lucks were argued (H-μ
 at `μ = 3/4`, B′ at `r_B = ½`, the guess bound at `½`) of a tile whose noise is its own.
 
-What it claims is the call-level form (FOLD-LUCK's reduction, note:compute-research/20261026T0222Z-draft-accel-fold-luck
-§§6–7). The round is the whole call: every tile that reads the call's `U_r` and `F_c` is in one round, over the
+What it claims is the call-level form.
+The round is the whole call: every tile that reads the call's `U_r` and `F_c` is in one round, over the
 call's joint coins, and the three lucks of each of its tiles are special cases of one moment-form slot at that round,
 `E[1_pass · e^{η(c − cost/H)₊}] ≤ 1` (the proposed `Pouw.TheoremO.Slot`). That slot is one expectation over the joint
 coins and assumes no independence between tiles that share `U_r` or `F_c`; the period multiplies moments across
 rounds (live coins in sequence), never across a call's tiles. Read per tile, each tile's game is its game given the
 coins it shares with the call's other tiles (`PerLiveTile`'s "whatever the past"), and the slot is what makes that
 reading sound. Sharing changes no constant: each of a tile's terms `A_rB_c + A_rF_c + U_rB_c + U_rF_c` reads its own
-data block or its own pair `(U_r, F_c)` (§7). Every coin these games read reaches the prover before it commits, so the
-claim is computational, not luck (§§1, 6), and §8's no-cheap-part property of the fold is necessary for the slot at
-a useful `(c, η)`. Under R-ACCEL-6 (Daniel, 25 Oct 7:37 PM PDT) the one computational premise covers exact matrix
-products only, so this claim is to be proved in the slot's model or designed away (the no-fold receipt, R-ACCEL-7),
+data block or its own pair `(U_r, F_c)`. Every coin these games read reaches the prover before it commits, so the
+claim is computational, not luck, and the fold's no-cheap-part property is necessary for the slot at
+a useful `(c, η)`. The one computational premise covers exact matrix
+products only, so this claim is to be proved in the slot's model or designed away (the no-fold receipt),
 not assumed; until then it is a named premise. -/
 def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : Declared ι) {Np M n : ℕ}
     (Wp : Period C Ω (Fin Np) M n) : Prop :=

@@ -9,7 +9,7 @@ packages whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
-    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT`, artifacts)
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -635,25 +635,48 @@ def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
 
 
 #: the fast path's (`lean_changed.py --records`) trees a node keeps, its most recently used: each is a checkout with its own
-#: builds, about 40 GB and 490k inodes (vy-nebius-cpu-2 reached 95% of its inodes on 21 Oct with nine)
+#: builds, about 40 GB and 490k inodes (vy-nebius-cpu-2 reached 95% of its inodes on 21 Oct with nine). A node with more
+#: `build` Lean slots keeps one per slot (`build_slots`)
 RECORDS_KEPT = 3
+#: `lean_slot.py`'s SLOTS: the node's Lean slot caps, `build N` among them
+LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
+#: `lean_changed.py`'s kept passes under `lean-records/`, not a tree: they have their own cap (`PASSES_KEPT`)
+RECORDS_PASSES = "passes"
 
 
-def prune_records(store: Path, kept: int | None = None) -> int:
-    """Remove all but the ``kept`` (`RECORDS_KEPT`) trees of ``store`` (`lean-records/`) last used, by the newest of their
-    `.who`, `links.json` and `.lock`, each only when its `.lock` is free: a run holding or waiting on it keeps it. A link
-    to a tree elsewhere goes with its target. The number removed."""
-    kept = RECORDS_KEPT if kept is None else kept
+def build_slots(slots: Path | None = None) -> int:
+    """The node's `build` Lean slots (``slots``' `build N`), 0 when it lists none or can't be read."""
+    try:
+        text = (slots or LEAN_SLOTS).read_text()
+    except OSError:
+        return 0
+    for line in text.splitlines():
+        f = line.split("#")[0].split()
+        if len(f) == 2 and f[0] == "build" and f[1].isdigit():
+            return int(f[1])
+    return 0
+
+
+def prune_records(store: Path, kept: int | None = None, slots: int | None = None) -> int:
+    """Remove all but ``kept`` trees of ``store`` (`lean-records/`), each only when its `.lock` is free: a run holding or
+    waiting on it keeps it. ``kept`` is `RECORDS_KEPT`, or the node's ``slots`` (`build_slots`) when it has more, since each
+    slot's tree is the one a run there takes, and removing it hands that run a cold one (vy-nebius-cpu-1, 26 Oct: four
+    trees seeded for `build 8` and the hourly prune took two of them). The slots' own trees (`build-I`, I below ``slots``)
+    are kept first, then the rest by last use, the newest of their `.who`, `links.json` and `.lock`. A link to a tree
+    elsewhere goes with its target, and `passes/` is never touched. The number removed."""
+    slots = build_slots() if slots is None else slots
+    kept = max(RECORDS_KEPT, slots) if kept is None else kept
+    own = {f"build-{i}" for i in range(slots)}
     used = []
     for tree in store.iterdir() if store.is_dir() else ():
         try:
-            if tree.is_dir():
+            if tree.is_dir() and tree.name != RECORDS_PASSES:
                 stamps = [p.stat().st_mtime for p in (tree / ".who", tree / "links.json", tree / ".lock") if p.exists()]
-                used.append((max(stamps, default=tree.stat().st_mtime), tree))
+                used.append((tree.name in own, max(stamps, default=tree.stat().st_mtime), tree))
         except OSError:
             pass
     n = 0
-    for _, tree in sorted(used, reverse=True)[kept:]:
+    for _, _, tree in sorted(used, reverse=True)[kept:]:
         try:
             with open(tree / ".lock", "a") as f:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)

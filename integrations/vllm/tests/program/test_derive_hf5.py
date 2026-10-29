@@ -1,8 +1,7 @@
-"""Lane DERIVE-2: the transformers 5.x *plumbing* spellings REAL-HF found on the real classes (G-RH-1, -2, -4, -6, -8, -9, -10),
+"""The transformers 5.x *plumbing* spellings found on the real classes,
 each reproduced here as a plain torch module (no `transformers` import) with the op pattern the exported graph carries, checked
 for acceptance (and evaluation against torch CPU where the pattern computes something) AND a neighbouring negative that must
-stay refused. Op forms verified against `torch.export` of `transformers 5.16.1` `LlamaForCausalLM` / `GPT2LMHeadModel` (sdpa, f32)
-on 2026-09-09."""
+stay refused. Op forms verified against `torch.export` of `transformers 5.16.1` `LlamaForCausalLM` / `GPT2LMHeadModel` (sdpa, f32)."""
 from __future__ import annotations
 
 import math

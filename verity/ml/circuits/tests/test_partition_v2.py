@@ -1,5 +1,5 @@
 """`verity/partition/v2` (`verity.ml.circuits.partition_v2`): the advice of a private partition, its rows, the statement, the
-global predicates G1-G7 and their refusals, the local predicates L1-L4 on each drawn unit (from the opened rows alone, against
+global predicates G1-G7 and their refusals, the local predicates L1-L4 on each sampled proof block (from the opened rows alone, against
 the advice root of `verity.ml.commitments.advice`), v1's numbering in query mode, and the pinned vector
 `partition_v2_vectors.json`.  `python verity/ml/circuits/tests/test_partition_v2.py --write` rewrites it.
 
@@ -22,7 +22,7 @@ import test_template_instance as TT
 
 from verity.ml.circuits import codec, cut, partition_object as PO, partition_v2 as V
 from verity.ml.circuits.defs import REGISTRY
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation import evaluate_region
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value

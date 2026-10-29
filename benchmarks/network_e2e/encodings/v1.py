@@ -1,5 +1,5 @@
 """Advice v1: I1 v0 (`verity.core.protocols.certifier.advice`) sent as only what the certified record, the scheduler
-replay (ENC-REPLAY, `replay.py`) and the derived rules (ENC-DERIVED, `derived.py`) leave, in ENC-CODE's prefix-free,
+replay (`replay.py`) and the derived rules (`derived.py`) leave, in the advice code's prefix-free,
 self-delimiting code (`code_v1.py`) under the registered codebook.
 
 `encode(advice, record, registered) -> bytes` and `decode(bytes, record, registered) -> I1.Advice`, with
@@ -17,24 +17,25 @@ witness):
 The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
-comes after the release and overtakes it under load (TRACE-CORPUS behind the warden: 2,970 inversions of 499,500 pairs
-on its heavy trace, 3 on small KV). So the engine's arrival order (`arrival_order`, recovered from the advice) is sent
-as the permutation from release order to it (`_deviations`): for each arrival that isn't the earliest released request
-not yet arrived, its position and its rank among those, in code_v1's `order` field as (position, (rank,)). `streams`
-(`Decoded.streams`) is that permutation as IO-TIE's egress tie reads it: each I1 request's warden ordinal.
+comes after the release and overtakes it under load (the trace corpus behind the warden: 2,970 inversions of 499,500
+pairs on its heavy trace, 3 on small KV). So the engine's arrival order (`arrival_order`, recovered from the advice) is
+sent as the permutation from release order to it (`_deviations`): for each arrival that isn't the earliest released
+request not yet arrived, its position and its rank among those, in code_v1's `order` field as (position, (rank,)).
+`streams` (`Decoded.streams`) is that permutation as the I/O tie's egress side reads it: each I1 request's warden
+ordinal.
 
-**Replayed, 0 bits**: ENC-REPLAY's `replay` runs vLLM's scheduler over the requests in arrival order under the
+**Replayed, 0 bits**: `replay.replay` runs vLLM's scheduler over the requests in arrival order under the
 registered engine (`Registered.engine`, its KV pool `num_gpu_blocks` included), and gives every step's rows (request,
 start, n), new and resumed requests, cache hits (its block pool's LRU, eviction included) and preemptions, from one bit
 per open step: whether the next request had arrived.
 
 **Derived, 0 bits**: the batch order (`Registered.row_order`: Model Runner V2's stable sort of the scheduled rows by n,
-or the scheduler's own order), I1's numbering by first row, and ENC-DERIVED's walk (`derived._walk`) over the replayed
-rows, which recomputes every start and n by vLLM's rules and checks them against the replay, holds each hit under the
-cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request records
-(the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
+or the scheduler's own order), I1's numbering by first row, and the derived rules' walk (`derived._walk`) over the
+replayed rows, which recomputes every start and n by vLLM's rules and checks them against the replay, holds each hit
+under the cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request
+records (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
 
-**Sent**, as `code_v1.Window`s (`residual`), and nothing else:
+**Sent**, as `window_charge.Window`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
 - `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`_KV.hit`: each candidate its
@@ -46,7 +47,7 @@ cumulative pool bound to the longest cached prefix, and gives `kind`, the canoni
   prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (LEAK-LEAN's `BitsCount`).
 The resumes and the order of new requests that `derived._walk` would otherwise read are the replay's, so v1 sends none.
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
-derived hits with it (REDTEAM's phase 7).
+derived hits with it.
 
 **The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
 window is the earliest window an output at step s or later is released in (the last window where none follows). An
@@ -234,16 +235,16 @@ def _topo(after: dict[int, set[int]], key: Callable[[int], int]) -> tuple[list[i
 
 
 def streams(advice: I1.Advice, record: Record) -> tuple[int, ...]:
-    """The order permutation as IO-TIE's egress tie reads it (`walk.order` through the arrival order): for each I1
+    """The order permutation as the I/O tie's egress side reads it (`walk.order` through the arrival order): for each I1
     request q, the warden's ingress ordinal of the stream that carries it."""
     ordinal = {q.id: k for k, q in enumerate(record.requests)}
     return tuple(ordinal[q.id] for q in advice.requests)
 
 
 class Decoded(NamedTuple):
-    """What a string carries under the record: the advice; `streams`, each I1 request's warden ordinal (IO-TIE's egress
-    tie checks each cell's stream against its request q through it); and the arrival order, the ordinals in the order
-    the engine took them."""
+    """What a string carries under the record: the advice; `streams`, each I1 request's warden ordinal (the I/O tie's
+    egress side checks each cell's stream against its request q through it); and the arrival order, the ordinals in the
+    order the engine took them."""
 
     advice: I1.Advice
     streams: tuple[int, ...]
@@ -284,8 +285,8 @@ def windows(record: Record, T: int) -> int:
 class Registered:
     """What v1 reads besides the string and the record, fixed before the run: the engine's scheduler config, its KV pool
     `num_gpu_blocks` included (public, never in the advice: a prover that set it could buy derived hits with a bigger
-    pool), the stop ids, the runner's row order, the window T in buckets, ENC-CODE's codebook (`code_v1.Book`, whose
-    digest the registration holds; None for the uniform book), and ℓ."""
+    pool), the stop ids, the runner's row order, the window T in buckets, the advice code's codebook (`code_v1.Book`,
+    whose digest the registration holds; None for the uniform book), and ℓ."""
 
     engine: Any  # replay.Engine
     stop_ids: tuple[int, ...]
@@ -307,7 +308,7 @@ class Registered:
             raise V1Error("without chunked prefill the token budget holds a whole max_model_len prompt (vLLM's own check)")
 
     def config(self, engine: Any) -> Any:
-        """ENC-DERIVED's `Config` for `engine`."""
+        """The derived rules' `Config` for `engine`."""
         return D.Config(block_size=engine.block_size, num_gpu_blocks=engine.num_gpu_blocks,
                         max_num_batched_tokens=engine.max_num_batched_tokens, max_model_len=engine.max_model_len,
                         eos_token_id=self.stop_ids[0], stop_token_ids=self.stop_ids[1:],
@@ -471,9 +472,9 @@ def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: 
 
 def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
               decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
-    """The windows v1 sends (`code_v1.Window`). A decision goes to the earlier of its arrival's ingress window and the
-    earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window and the
-    earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
+    """The windows v1 sends (`window_charge.Window`). A decision goes to the earlier of its arrival's ingress window
+    and the earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window
+    and the earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
     admission); and a sent hit's shortfall to the earliest window that shows its step's. Each is nondecreasing in the
     replay's order, so each field's values, window after window, are the replay's."""
     earliest, win = _charged(record, reg, order, rp, W)
@@ -551,8 +552,8 @@ def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, in
 # --- I1 from the replay ------------------------------------------------------------------------------------------------
 
 def _advice(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp: Any) -> I1.Advice:
-    """I1 v0 from the replayed steps: the batch order, I1's numbering by first row, then ENC-DERIVED's walk, which must
-    give the replay's every start and n back, and the tie's request fields; each kept output's release from the
+    """I1 v0 from the replayed steps: the batch order, I1's numbering by first row, then the derived rules' walk, which
+    must give the replay's every start and n back, and the tie's request fields; each kept output's release from the
     record."""
     reqs = [record.requests[k] for k in order]
     batch = [sorted(st.rows, key=lambda r: r[2]) if reg.row_order == "batch" else list(st.rows) for st in rp.steps]
@@ -637,8 +638,8 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
 
 
 def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
-    """The windows `encode` codes (`code_v1.Window`s: the decisions, the order's deviations and the sent hits): what a
-    codebook is fit on."""
+    """The windows `encode` codes (`window_charge.Window`s: the decisions, the order's deviations and the sent hits):
+    what a codebook is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
 
@@ -799,7 +800,7 @@ def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple
 
 
 def windows_of(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client") -> dict[str, Any]:
-    """One TRACE-CORPUS trace's residual windows (`residual`), as JSON: what the other traces' books are fit on."""
+    """One trace-corpus trace's residual windows (`residual`), as JSON: what the other traces' books are fit on."""
     tr, rec, adv = _trace(path, stop_ids, ingress)
     wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T))
     return {"trace": label, "windows": [asdict(w) for w in wins]}
@@ -812,10 +813,10 @@ TABLE_CAPS = CV.Caps(arrived=1 << 20, hits=1 << 20, order=1 << 16, order_len=1)
 
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
-    """One TRACE-CORPUS trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send, or
-    on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
+    """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
+    or on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
     trace) and under the uniform book: each string's charge per window, the order's part of it, and whether it decodes
-    back to the trace's I1 v0; the residual's decisions, order entries and sent hits; ENC-REPLAY's ideal order bits
+    back to the trace's I1 v0; the residual's decisions, order entries and sent hits; the replay's ideal order bits
     (`replay.order_bits`); and I1 v0's own charge (`advice.bits_by_window`) for that advice."""
     tr, rec, adv = _trace(path, stop_ids, ingress)
     row: dict[str, Any] = {"trace": label, "ingress": ingress, "requests": len(rec.requests), "steps": len(adv.steps),
@@ -846,7 +847,7 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
 
 def render(rows: Sequence[dict[str, Any]], T: int) -> str:
     out = [f"| trace | requests | windows (T = {T}) | I1 v0 | v1 charged, held-out book (total; per window) | of it the "
-           "order | order entries (inversions) | ENC-REPLAY's ideal order bits | decisions | hits sent (short of the "
+           "order | order entries (inversions) | the replay's ideal order bits | decisions | hits sent (short of the "
            "cached prefix) | v1, uniform book (of it the order) | decode(encode(a)) == a |",
            "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
@@ -887,7 +888,7 @@ def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Advice v1's bits per window over TRACE-CORPUS traces, with its round "
+    ap = argparse.ArgumentParser(description="Advice v1's bits per window over trace-corpus traces, with its round "
                                              "trip, against I1 v0's charge; each trace's book fit on the others.")
     ap.add_argument("traces", nargs="+", help="LABEL=DIR: a trace's directory (steps.jsonl, requests.jsonl, meta.json, "
                                               "server.log)")

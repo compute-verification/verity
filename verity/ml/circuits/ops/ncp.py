@@ -1,4 +1,4 @@
-"""IR-registered `ncp-v2` dequantization: `PouwI32ToF32Rn_v1`, cvt.rn.f32.s32, and `NcpDequant_v1`, a credited Z's served
+"""Registered `ncp-v2` dequantization: `PouwI32ToF32Rn_v1`, cvt.rn.f32.s32, and `NcpDequant_v1`, a credited Z's served
 BF16 y = bf16(fp32(s)·fp32(t)·Z) + bias, the unit PoUW's `ncp2.linear` ends each output entry with and a served PoUW
 linear's row (`NcpLinearRow_v1`) ends with too.
 
@@ -10,7 +10,7 @@ from __future__ import annotations
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind, primitive
 from verity.ml.circuits.types import Value
 
-import verity.ml.circuits.ops.fp32  # noqa: F401  (registers F32Mul_v2, Bf16Add_v1)
+import verity.ml.circuits.ops.fp32  # registers F32Mul_v2, Bf16Add_v1
 import verity.ml.circuits.ops.prims  # noqa: F401  (registers F32ToBf16Rn_v1)
 
 U32, F32, BF16 = Value(32), Value(32), Value(16)

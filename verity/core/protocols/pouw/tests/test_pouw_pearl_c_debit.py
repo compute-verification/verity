@@ -1,4 +1,4 @@
-"""Pearl-C's debit replay (`pearl_c_debit`, red team F1): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
+"""Pearl-C's debit replay (`pearl_c_debit`): `Skip.wordFlags` against 448 of P1's Lean-checked word vectors,
 checked from scratch on skips, additive over a tile's words, and over the cap on the aligned-spike tile."""
 
 from __future__ import annotations

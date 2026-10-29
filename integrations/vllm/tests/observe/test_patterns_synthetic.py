@@ -1,4 +1,4 @@
-"""L3: synthetic raw-observation events for one decode step of one SmolLM2 layer (plus the sample phase), resolved
+"""Synthetic raw-observation events for one decode step of one SmolLM2 layer (plus the sample phase), resolved
 against the pinned profile.  The op names / schemas / argument orders are those of vLLM `d9105ea80` as far as they are
 known from the design and the previous adapter; `test_resolve_m1.py` checks the same patterns against the real M1 log."""
 
@@ -10,7 +10,7 @@ from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHe
                                    TritonLaunch, ViewDesc)
 from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
                                      schema_param_names, split_heads)
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
 from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
 from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
                                      Transparent, Unsupported, resolve_step)

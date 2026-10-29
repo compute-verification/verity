@@ -158,7 +158,7 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
 
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
-    candidate's check gets the last record and the first registration, and the verifier of record gives it the verdict the
+    candidate's check gets the last record and the first registration, and the verifier gives it the verdict the
     whole log gives: the held root, a fresh root (R7-held), a window logged before, a wrong previous, a v1 record."""
     prog = _program()
     reg = _registered(prog)
@@ -191,9 +191,9 @@ def test_r7_reads_each_values_first_registration():
 
 
 def test_a_supplied_position_reads_the_whole_log():
-    """W-a: a supplied position follows every unit of the log (`registered.log_base`), so a check whose supplied values
+    """W-a: a supplied position follows every proof block of the log (`registered.log_base`), so a check whose supplied values
     read one gets the whole log and its verdict. On the few records R6 and R7 read, the honest record's positions would
-    follow fewer units and it would be refused (`R7-supplied`)."""
+    follow fewer proof blocks and it would be refused (`R7-supplied`)."""
     base = _seeded_case()
     stream, log = _stream(), []
     for i in range(6):

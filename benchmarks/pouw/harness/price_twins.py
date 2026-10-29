@@ -63,7 +63,7 @@ CAST_VALUES = {"cast-8": Fraction(8), "cast-8.72": Fraction(218, 25), "cast-16":
                "cast-32.06": Fraction(1603, 50)}
 READINGS = {None: "forming-credited", "ChainOnly": "chain-only", "Chain": "chain-cap"}
 RULED_SIZING = "publicConst64"
-#: each FP8 statement's debit cap ρ: v1's moved from 1/400 to 1/1,000 (Daniel, 9:43 AM PDT on 2 Oct), v2's was 1/1,000
+#: each FP8 statement's debit cap ρ
 CAPS = {"pearl-c-sm120/v1": Fraction(1, 1000), "pearl-c-sm120/v2": Fraction(1, 1000)}
 NAME_CAPS = {"Rev1": Fraction(1, 400), "Cap1000": Fraction(1, 1000), "Rev1Cap1000": Fraction(1, 1000)}
 

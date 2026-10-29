@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""The units on one H200 (sm_90a), through their modules on torch tensors, against fixture.py's words from the twins.
+"""The units on one H200 (sm_90a) or RTX PRO 6000 (sm_120a), through their modules on torch tensors, against fixture.py's
+words from the twins.
 
-0. Identity, before anything runs: one visible device, compute capability 9.0, a name starting with UNITS_EXPECT (default
-   "NVIDIA H200"), and its UUID equal to GPU_LEASE_UUID when gpu-lease set it.  A mismatch exits 3 before any launch.
-1. The sweeps: units_sweep's block digests of every op (sweep.py) against CHECK/sweep.json; a block that differs is named.
+0. Identity, before anything runs: one visible device, a compute capability build.sh has a cubin for (lib.ARCHES), a name
+   starting with UNITS_EXPECT (default the arch's card, EXPECT), and its UUID equal to GPU_LEASE_UUID when gpu-lease set it.
+   A mismatch exits 3 before any launch.
+1. The sweeps: units_sweep's chunk digests of each op the cubin has (sweep.ARCH_OPS) against CHECK/sweep.json; a chunk
+   that differs is named, and on sm_120a (units_sweep_words) the first few such chunks' differing words are counted and
+   the first one given.  SWEEP_ONLY=1 stops here.
 2. The check.  Every batch is made of copies of a pool's rows, so every word of every batch has its expected word, and
    every word of every unit output is compared: RMSNorm's out, chunks, groups and rs; the quantizer's codes, scale and
    absmax tree; softmax's p, m and r; argmax's token and every chunk's best and index; ReLU's and the residual add's words.
@@ -22,7 +26,7 @@
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
   python3 check.py CHECK   (env: BATCHES=1,7,128,4096,16384,20480, REPS=20, STEP_REPS=5, TIME_B=4096,16384, UNITS_EXPECT,
-                            UNITS_ANY_GPU=1 for a dry run on another card, SWEEP=0 to skip the sweeps)
+                            UNITS_ANY_GPU=1 for a dry run on another card, SWEEP=0 to skip the sweeps, SWEEP_ONLY=1)
 """
 from __future__ import annotations
 
@@ -44,8 +48,14 @@ import relu as RL  # noqa: E402
 import rmsnorm as RN  # noqa: E402
 import softmax as SM  # noqa: E402
 import sweep as SW  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 HEADS = BE.HEADS
+#: each arch's card, the default UNITS_EXPECT
+EXPECT = {"sm_90a": "NVIDIA H200", "sm_120a": "NVIDIA RTX PRO 6000"}
+#: how many disagreeing chunks of an op are compared word by word
+DIFF_CHUNKS = 4
 JUNK = (0x7FC0, 0xFFC1, 0x7F80, 0xFF80, 0x7F7F, 0xFF7F)
 POISON = {torch.int8: -0x5B, torch.int16: -0x5A5B, torch.int32: -0x5A5A5A5B}  # 0xA5, 0xA5A5, 0xA5A5A5A5
 
@@ -58,17 +68,20 @@ def identity() -> dict:
     n = torch.cuda.device_count()
     props = torch.cuda.get_device_properties(0)
     uuid = str(getattr(props, "uuid", "")).lower().removeprefix("gpu-")
-    lease = os.environ.get("GPU_LEASE_UUID", "").lower().removeprefix("gpu-")
+    lease = (settings.GPU_LEASE_UUID or "").lower().removeprefix("gpu-")
     doc = {"devices": n, "name": props.name, "cc": f"{props.major}.{props.minor}", "uuid": uuid, "lease_uuid": lease or None,
            "sms": props.multi_processor_count, "torch": torch.__version__, "cuda": torch.version.cuda,
-           "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
-    want = os.environ.get("UNITS_EXPECT", "NVIDIA H200")
+           "cuda_visible_devices": settings.CUDA_VISIBLE_DEVICES}
+    arch = L.ARCHES.get((props.major, props.minor))
+    doc["arch"] = arch
+    want = settings.UNITS_EXPECT or EXPECT.get(arch, "")
     problems = []
     if n != 1:
         problems.append(f"{n} visible devices, want 1")
-    if (props.major, props.minor) != (9, 0):
-        problems.append(f"compute capability {props.major}.{props.minor}, want 9.0 (the cubin is sm_90a)")
-    if not os.environ.get("UNITS_ANY_GPU"):
+    if arch is None:
+        problems.append(f"compute capability {props.major}.{props.minor}: build.sh has cubins only for "
+                        f"{', '.join(f'{a} ({c[0]}.{c[1]})' for c, a in L.ARCHES.items())}")
+    if not settings.UNITS_ANY_GPU:
         if not props.name.startswith(want):
             problems.append(f"{props.name!r} is not {want!r}")
         if lease and uuid != lease:
@@ -249,16 +262,23 @@ def add_case(z, B: int | None, dev, seed: int) -> dict:
     return row
 
 
-def sweeps(check: str) -> list[dict]:
+def sweeps(check: str, arch: str) -> list[dict]:
     with open(os.path.join(check, "sweep.json")) as f:
         want = json.load(f)
+    words = "units_sweep_words" in L.lib().fns
     rows = []
-    for op in SW.OPS:
-        w = [int(h, 16) for h in want[str(op)]["blocks"]]
+    for op in SW.ARCH_OPS[arch]:
+        w = [int(h, 16) for h in want[str(op)]["chunks"]]
         got = SW.gpu(op)
-        diff = [b for b, (g, e) in enumerate(zip(got, w)) if g != e] + list(range(min(len(got), len(w)), max(len(got), len(w))))
-        rows.append({"part": "sweep", "op": op, "name": SW.OPS[op][0], "n": SW.OPS[op][1], "blocks": len(w),
-                     "blocks_mismatching": len(diff), "first_mismatching_blocks": diff[:16]})
+        diff = [c for c, (g, e) in enumerate(zip(got, w)) if g != e] + list(range(min(len(got), len(w)), max(len(got), len(w))))
+        row = {"part": "sweep", "op": op, "name": SW.OPS[op][0], "n": SW.OPS[op][1], "chunks": len(w),
+               "chunks_mismatching": len(diff), "first_mismatching_chunks": diff[:16]}
+        if words and diff:
+            try:
+                row["differences"] = [SW.first_difference(op, c, SW.gpu_words(op, c)) for c in diff[:DIFF_CHUNKS]]
+            except Exception as e:  # noqa: BLE001  (the models read verity: the row's verdict stands without its diagnosis)
+                row["differences_error"] = repr(e)
+        rows.append(row)
     return rows
 
 
@@ -271,15 +291,21 @@ def main(argv: list[str]) -> int:
         return 3
     dev = torch.device("cuda", 0)
     lib = L.lib()
-    emit({"part": "cubin", "path": str(lib.path), "sha256": lib.sha256})
+    emit({"part": "cubin", "arch": lib.arch, "path": str(lib.path), "sha256": lib.sha256})
     failures = []
-    if os.environ.get("SWEEP", "1") != "0":
-        for row in sweeps(check):
+    if settings.SWEEP:
+        for row in sweeps(check, lib.arch):
             emit(row)
-            if row["blocks_mismatching"]:
+            if row["chunks_mismatching"]:
                 failures.append(f"sweep {row['name']}")
+    if settings.SWEEP_ONLY:
+        if failures:
+            print("FAILED: " + ", ".join(failures), file=sys.stderr)
+            return 4
+        print(f"sweeps: 0 mismatching chunks in ops {list(SW.ARCH_OPS[lib.arch])} on {lib.arch}", file=sys.stderr)
+        return 0
     z = {k: np.load(os.path.join(check, f"{k}.npz")) for k in ("rmsnorm", "quant", "softmax", "argmax", "relu", "add")}
-    batches = [int(b) for b in os.environ.get("BATCHES", "1,7,128,4096,16384,20480").split(",")]
+    batches = list(settings.BATCHES)
 
     def run(rows, label: str) -> None:
         for row in rows if isinstance(rows, list) else [rows]:
@@ -308,7 +334,7 @@ def main(argv: list[str]) -> int:
     print(f"check: 0 mismatches at B {batches} (softmax at every length 1..32 and mixed), the pools' other widths, and "
           f"every sweep", file=sys.stderr)
     for B in BE.runs():
-        for row in BE.timing(dev, B, int(os.environ.get("REPS", "20")), int(os.environ.get("STEP_REPS", "5"))):
+        for row in BE.timing(dev, B, settings.REPS, settings.STEP_REPS):
             emit(row)
             print(BE.summary(row), file=sys.stderr)
         torch.cuda.empty_cache()

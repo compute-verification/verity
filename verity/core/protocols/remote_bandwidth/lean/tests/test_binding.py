@@ -4,7 +4,7 @@ so that both sides' reasons are compared word for word: the pin from a pin file'
 `models.json`, and that file itself) and each refusal (not UTF-8, neither JSON nor JSON lines, a registry without one
 checkpoint of the role, a role core's pin lacks, a malformed pin, a `checkpoint_sha512` that isn't its files', no
 config.json or no .safetensors file, another model's pin); canonical JSON and `checkpoint_sha512`; the payload salts;
-the expected root from the weights blocks' digests, held also to `audit.payload_tree` over the store's payloads; and
+the expected root from the weights chunks' digests, held also to `audit.payload_tree` over the store's payloads; and
 `Binding.hold` on hellos of the pinned model's store and on each refusal (a store short of the arenas, another
 layout, a malformed node, the root under another key, of another checkpoint, of another size, or not a root), with
 the expected root its record keeps; and `binding`, the binding as the verifier's Lean process starts it (`bind`: the
@@ -353,8 +353,8 @@ def test_expected_root(server, tmp_path) -> None:
                          [(1, 0, 0, 1, 16), (2, 3, 5, 3, 1), (3, 1, 2, 2, 2), (3, 1, 2, 8, 0)])
 def test_the_expected_root_is_the_payload_trees_over_the_stores_payloads(server, engines, extra, host, workers,
                                                                          chunk_log2) -> None:
-    """Independently of `store.expected_root`: `audit.payload_tree` over the store's payloads, block j salted with
-    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights blocks' digests alone, whole or as
+    """Independently of `store.expected_root`: `audit.payload_tree` over the store's payloads, chunk j salted with
+    `store_salt(key, PAYLOAD_LABEL, j)`, is the Lean's root from the weights chunks' digests alone, whole or as
     subtrees of `2^chunk_log2` leaves on `workers` threads."""
     weights = [expand(b"weights %d" % u, codec.BLOCK_BYTES) for u in range(3)]
     arena = weights + [bytes(codec.BLOCK_BYTES)] * extra
@@ -383,7 +383,7 @@ def _hello(v) -> tuple:
 
 
 def _binding(tmp: Path, role: str, digests: list[bytes], engines: int, arena_blocks: int) -> store.Binding:
-    """A `Binding` of `role` over an arena of the weights blocks' digests `digests`, past what it reads of the files,
+    """A `Binding` of `role` over an arena of the weights chunks' digests `digests`, past what it reads of the files,
     once `Store`'s check of its arenas passed."""
     b = object.__new__(store.Binding)
     b.role, b.arena, b.engines, b.arena_blocks, b.workers = role, _arena(digests), engines, arena_blocks, 1

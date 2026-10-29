@@ -1,4 +1,4 @@
-"""F3 (lane pouw rtx-pro GPU 4): LUT-GEMM over the 16-code E2M1 alphabet, tables from the weights, against dense NVFP4 on sm_120a.
+"""F3: LUT-GEMM over the 16-code E2M1 alphabet, tables from the weights, against dense NVFP4 on sm_120a.
 
 A cheaper-computation search: with the weights fixed, the partial dots of G consecutive weights of C columns against every one
 of the 16^G activation-code tuples can be tabulated in advance, so one table lookup replaces G x C E2M1 products.  This tool
@@ -51,6 +51,7 @@ sys.path.insert(0, str(HERE))
 import f1_rates as F1  # noqa: E402
 from emulation import E  # noqa: E402
 import probe as P  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 from verity.ml.circuits.silicon import models as M  # noqa: E402
 
@@ -58,7 +59,7 @@ ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f3-lut-sm120/v1"
 SRC = HERE / "f3_lut.cu"
 HEADER = HERE / "nvf4_step.cuh"
-NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math (the 09:34Z rule); build refuses them
+NVCC_FLAGS = ["-O2", "-std=c++17"]  # no -ftz / fast-math; build refuses them
 LUT_TPB, NATIVE_TPB = 256, 128
 AROW = 9
 WIDTHS = {"g1c2": (1, 2), "g1c4": (1, 4), "g1c8": (1, 8), "g2c2": (2, 2), "g2c4": (2, 4), "g4c2": (4, 2)}
@@ -417,7 +418,7 @@ class F3Device:
 class FakeF3:
     """CPU stand-in for the dry run: the LUT arms emulate f3_lut.cu through the packed tables and scale words, the native arm is
     the vectorised pinned model on the packed codes.  Its rates are invented (lookups at 32 per SM per clock, exact at a third of
-    that, NVFP4 at 2,048 products per SM per clock); ``--fake-silicon`` never runs under a research run."""
+    that, NVFP4 at 2,048 products per SM per clock); ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 2, 2000.0
 
@@ -426,7 +427,7 @@ class FakeF3:
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -726,12 +727,12 @@ def collect(args) -> int:
     meas += [{"name": f"{k}_products_per_sm_per_clock", "value": v["products_per_sm_per_clock"], "unit": "products/(SM*cycle)"}
              for k, v in rows.items()]
     clocks = sorted({str(w["clocks"]) for w in widths.values()})
-    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "clocks": clocks[0] if len(clocks) == 1 else "mixed", "label": "Measured" if clocks == ["locked-2100"] else "Measured, " + ",".join(clocks),
            "method": "F3 LUT-GEMM kernels from the fill queue (one width per chunk, each against dense NVFP4 in the same process), "
                      "collected; see f3_lut.json",
            "workload_fingerprint": {"tool": "tc_lut_fp4", "version": "1", "build_so_sha256": b.get("so_sha256"),
-                                    "widths": {k: v["sha256"] for k, v in widths.items()}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "widths": {k: v["sha256"] for k, v in widths.items()}, "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if ok else "failed", "checker": "every width's gates (UUID, cc 12.0, SASS, exact words = the "
                           "native atom's on every word and the pinned model's on a sample, dots = the integer group dots, at chains of 1 and 3 "
                           "and at the timed length) passed in its chunk, on this build",
@@ -752,12 +753,12 @@ def build_cmd(args) -> int:
               f"{g.get('lookup_loads') or g.get('mma_opcodes')}", flush=True)
     if rec.get("error"):
         print(rec["error"], flush=True)
-    if os.environ.get("RESEARCH_RUN_ID"):
-        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    if SHARED.RESEARCH_RUN_ID:
+        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
                "label": "Measured (ptxas and SASS of the F3 kernels; no device)",
                "method": "f3_lut.cu compiled for sm_120a with -Xptxas -v; each kernel's timed loop read from cuobjdump",
                "workload_fingerprint": {"tool": "tc_lut_fp4", "version": "1", "step": "build", "so_sha256": rec.get("so_sha256"),
-                                        "source_sha256": rec["source_sha256"], "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                        "source_sha256": rec["source_sha256"], "commit": SHARED.RESEARCH_SOURCE_COMMIT},
                "validation": {"status": "passed" if rec["ok"] else "failed",
                               "checker": "lookups per LUT loop, NT OMMA in the native loop, no spills, no FADD/FFMA/FMUL .FTZ",
                               "detail": ", ".join(n for n, g in (rec.get("gate") or {}).items() if not g["ok"]) or "every kernel",
@@ -793,8 +794,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", required=True)
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
-    if getattr(args, "fake_silicon", False) and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_width, "collect": collect}[args.cmd](args)
 
 

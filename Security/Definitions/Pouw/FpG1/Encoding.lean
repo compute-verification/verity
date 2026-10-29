@@ -3,8 +3,8 @@ import Mathlib
 /-!
 # FP8-g1 and W4A8-g1: the operand encodings (trusted)
 
-FPX-DESIGN's g1 designs (note:20261019T0817Z-report-fpx-design; `benchmarks/ppl/steps.py`'s `native_linear` with `act`
-or `weight` = `g1`, PR #2710). Each GEMM operand is an integer level `R` that the honest prover picks on a format's
+The g1 designs (`benchmarks/ppl/steps.py`'s `native_linear` with `act`
+or `weight` = `g1`). Each GEMM operand is an integer level `R` that the honest prover picks on a format's
 integer grid, plus a live fair coin `b`, served centred as `R + b − ½`; the int8 MMA multiplies the integers `R + b`,
 and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1.Gemm`).
 
@@ -22,9 +22,8 @@ and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1
   `0`) and `Entry.served = Entry.int − Entry.offset` the value the served model multiplies.
 * `Grids`, `Grids.On`: a device's g1 grids (sm_120: activations to 120, weights to 60, block scales to 5; B200 and
   H200 on Dither-2S: 120, 120 and 10) and an entry on them at its side: a level of its format's grid plus a coin.
-  sm_120's 60 and 5 are FPX-DESIGN's, derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1
-  (co32c-u16, weights to ±110), so on H1 they are conservative; g1's values fit both (RT2-FP-2,
-  note:20261019T1100Z-draft-rt2-fp). No Program checks `Grids.On`: it describes what an honest g1 prover commits.
+  sm_120's 60 and 5 are derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1
+  (co32c-u16, weights to ±110), so on H1 they are conservative; g1's values fit both. No Program checks `Grids.On`: it describes what an honest g1 prover commits.
 -/
 
 namespace Pouw.FpG1
@@ -111,8 +110,8 @@ structure Grids where
 namespace Grids
 
 /-- **sm_120 (RTX PRO 6000)**: activations on E4M3's integers to 120, weights to 60 and W4A8-g1's block scales to 5
-(`steps.py`'s `e4m3i60` and `nvi5`), so that a weight moved by its coin stays in co32c's 7-bit weights. FPX-DESIGN
-derived these for Dither-C's co32c; on H1 (co32c-u16, weights to ±110) they are conservative (RT2-FP-2). -/
+(`steps.py`'s `e4m3i60` and `nvi5`), so that a weight moved by its coin stays in co32c's 7-bit weights. They are
+derived for Dither-C's co32c; on H1 (co32c-u16, weights to ±110) they are conservative. -/
 def sm120 : Grids := ⟨120, 60, 5⟩
 
 /-- **B200 and H200 on Dither-2S**: both sides on E4M3's integers to 120 and W4A8-g1's block scales to 10, so that an

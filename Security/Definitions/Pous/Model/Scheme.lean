@@ -52,7 +52,7 @@ def SpaceBound (X : ℚ) : Prop :=
   ((sch.B * sch.ℓ + sch.t : ℕ) : ℚ) ≤ X * sch.n
 
 /-- `|C| ≥ |W|`. With the space bound this caps `|pp|` at `(X − 1)·|W|`, so `W` cannot sit in `pp`, which the
-audit never checks. **Provisional:** a clarification of the problem statement, waiting on Daniel. -/
+audit never checks. **Provisional:** a clarification of the problem statement, not yet confirmed. -/
 def CodeHoldsW : Prop := sch.n ≤ sch.B * sch.ℓ
 
 end Scheme

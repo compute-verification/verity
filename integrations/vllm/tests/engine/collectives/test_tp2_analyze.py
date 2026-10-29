@@ -1,4 +1,4 @@
-"""Lane tp2: the torch-free helpers of bench/tp2_analyze (the collective body arithmetic and the shard / position classifiers)."""
+"""The torch-free helpers of bench/tp2_analyze (the collective body arithmetic and the shard / position classifiers)."""
 
 from __future__ import annotations
 

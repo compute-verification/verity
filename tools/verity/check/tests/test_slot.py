@@ -32,6 +32,24 @@ def any_core(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def roomy_disk(monkeypatch, tmp_path):
+    """The machine's own /workspace never blocks a slot in these tests."""
+    monkeypatch.setattr(SLOT, "DISK", tmp_path / "no-disk")
+
+
+def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path):
+    """27 Oct: checks that started on cpu-2, -4, -5 and -6 at 97-99% inodes died mid-build with ENOSPC."""
+    slot = SLOT.parse("a 0-1")[0]
+    monkeypatch.setattr(SLOT, "DISK", tmp_path)
+    assert SLOT.blocked(slot, NOW) is None
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 2**62)
+    assert SLOT.blocked(slot, NOW).startswith(f"{tmp_path} has ") and "inodes free" in SLOT.blocked(slot, NOW)
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 0)
+    monkeypatch.setattr(SLOT, "DISK_MIN_GB", 1e18)
+    assert "GB free, under" in SLOT.blocked(slot, NOW)
+
+
+@pytest.fixture(autouse=True)
 def own_ramlock(monkeypatch, tmp_path):
     """A slot with mem= writes its research.mem reservation here, never into the machine's /workspace/ramlock."""
     monkeypatch.setattr(SLOT, "RAMLOCK", tmp_path / "ramlock")
@@ -48,7 +66,18 @@ def outside_a_slot(monkeypatch):
     """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once, and a
     `research run --mem-gb` (an agent-test job's 16 GiB) sets RUN_MEM_ENV, which would raise every slot's mem= the tests name."""
     monkeypatch.delenv("CHECK_SLOT", raising=False)
+    monkeypatch.delenv("CHECK_SLOTS", raising=False)
     monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
+    monkeypatch.delenv(SLOT.MIN_MEM_ENV, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def no_host_memory(monkeypatch):
+    """A slot with mem= waits on this machine's free memory (`memory_gb()`), which no two hosts share (CI-182): a test that takes
+    such a slot stubs it, and one that would read the host's fails. `memory_gb(root)` over a fake tree still reads that tree."""
+    real = SLOT.memory_gb
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: real(root) if root is not None else pytest.fail(
+        "reads this host's free memory: stub SLOT.memory_gb"))
 
 
 def test_a_slot_py_inside_a_held_slot_runs_its_command_there_and_a_stale_check_slot_waits_its_turn(tmp_path, monkeypatch):
@@ -350,6 +379,19 @@ def test_without_a_slots_file_the_command_runs_as_it_is(tmp_path, monkeypatch):
     with pytest.raises(Exec) as e:
         SLOT.main(["--", "true"], now=lambda: NOW)
     assert e.value.args[0] == ["true"]
+
+
+def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, monkeypatch, capsys):
+    """A CHECK_SLOTS pool the machine lacks is refused: run anyway, the job would run unpinned beside the GPU jobs."""
+    for pool, line in (("proofs", "p0 0-1\n"), ("trains", "t 2 only=trains\n")):
+        (tmp_path / pool).mkdir()
+        (tmp_path / pool / "slots").write_text(line)
+    monkeypatch.setenv("CHECK_SLOTS", str(tmp_path / "soundness" / "slots"))
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "soundness" / "slots")
+    monkeypatch.setattr(SLOT.os, "execvp", lambda f, argv: pytest.fail(f"ran {argv}"))
+    assert SLOT.main(["--", "true"], now=lambda: NOW) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err
+    assert "doesn't have" in err and err.rstrip().endswith(f": proofs; exit {SLOT.NOT_STARTED}")
 
 
 def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):
@@ -665,8 +707,8 @@ def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_pr
 
 
 def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_ones(tmp_path):
-    """CI-110, 19 Oct 19:12Z: the lowest train's resent check waited an hour behind the checks of trains above it, which came
-    first, though only it could land next. drive ranks a train's check by its members above `main`."""
+    """The lowest train's check goes ahead of the checks of trains above it that came first, since only it can land next.
+    drive ranks a train's check by its members above `main`."""
     unranked, u = SLOT.join(tmp_path, priority=True)                        # an older drive's check, with no rank
     high, h = SLOT.join(tmp_path, priority=True, rank=30)                   # a train above, first to arrive
     low, lo = SLOT.join(tmp_path, priority=True, rank=15)                   # the lowest train, resent later
@@ -732,13 +774,48 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
     assert ran["slot"] == "d"
     assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
     (tmp_path / "slots").write_text("d 0 only=trains\n")
-    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* eyeball review.*research run --on vy-nebius-cpu-K"):
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on vy-nebius-cpu-K"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 
+def test_a_check_that_needs_a_train_slots_memory_takes_only_a_slot_that_holds_it_and_refuses_a_machine_without_one(
+        tmp_path, monkeypatch, capsys):
+    """A train's full check in a lane slot ran its suites on one worker each and its circuit-check one target at a time: with
+    MIN_MEM_ENV a waiter skips a free slot under it, takes the one that holds it, never hands the variable to CMD, and on a
+    machine with no such slot exits NOT_STARTED before joining the line."""
+    (tmp_path / "slots").write_text("c 0 mem=64\nb 1 mem=300 only=trains\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: 1000.0)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda proc=None, priority=False: 0)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    ran = {}
+
+    def execvpe(f, argv, env):
+        ran.update(slot=env["CHECK_SLOT"], inherited=SLOT.MIN_MEM_ENV in env)
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setenv(SLOT.MIN_MEM_ENV, "300")
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
+    assert ran == {"slot": "b", "inherited": False}
+    (tmp_path / "slots").write_text("c 0 mem=64\nd 1 mem=64\n")
+    assert SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err
+    assert "needs a slot of at least 300 GB" in err and "c (64 GB), d (64 GB)" in err and "only=trains" in err
+    assert not list(tmp_path.glob("check-line/*"))
+    monkeypatch.delenv(SLOT.MIN_MEM_ENV)
+    with pytest.raises(Exec):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW)       # a Lean check needs no train slot
+    assert ran["slot"] == "c"
+    monkeypatch.setenv(SLOT.MIN_MEM_ENV, "lots")
+    with pytest.raises(SystemExit, match="not a whole number of GB"):
+        SLOT.main(["--priority", "--", "check.py"], now=lambda: NOW)
+
+
 def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_only_when_there_is_none(tmp_path, monkeypatch):
-    """CI-164: n2's and cpu-1's default pools are all only=trains, and the refusal sent a lane check to another machine though
-    each has a lane pool beside it (`gpu/slots`, `research/slots`)."""
+    """A machine whose default pool is all only=trains refuses a lane check naming the lane pool beside it, and names another
+    machine only when there is none (`gpu/slots`, `research/slots`)."""
     (tmp_path / "slots").write_text("d 0 only=trains\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
@@ -775,6 +852,33 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     assert calls[-1][calls[-1].index("--") + 1:][:6] == ["python3", "tools/verity/check/slot.py", "--priority", "--by", "lander", "--"]
     with pytest.raises(SystemExit):
         SLOT.main(["--fast", "--", "true"])
+
+
+def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_and_through_the_runs_environment(monkeypatch):
+    """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
+    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps alone need no train slot."""
+    spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
+    check = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(check)
+    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    calls = []
+    monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    want = f"{SLOT.MIN_MEM_ENV}={check.TRAIN_GB}"
+
+    def sent(*argv: str) -> bool:
+        assert check.record(list(argv)) == 0
+        cmd = calls[-1][:calls[-1].index("--")]
+        return any(a == "--env" and b == want for a, b in zip(cmd, cmd[1:]))
+
+    assert sent("--on", "vy-nebius-1", "--priority")
+    assert not sent("--on", "vy-nebius-1")
+    assert check.train_gb(True, "research", None, False) is None
+    assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
+    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
+    assert check.train_gb(True, None, None, True) is None
+    assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
 
 
 def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(tmp_path):
@@ -885,6 +989,7 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT, "PEERS", tmp_path / "absent-peers")
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    here = SLOT.twin_here
     assert SLOT.main(["--twin", "p2@vy-nebius-1", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
     assert (f"slot: not started: twin p2@vy-nebius-1 can't be claimed (vy-nebius-1 isn't in {tmp_path / 'absent-peers'}), "
             "so its twin there runs instead; exit 75") in capsys.readouterr().err
@@ -892,12 +997,7 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert SLOT.main(["--twin", "p2", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
     assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
             in capsys.readouterr().err)
-    monkeypatch.undo()                                                             # undoes any_core's pin too
-    monkeypatch.delenv("CHECK_SLOT", raising=False)                               # and outside_a_slot's
-    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
-    monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
-    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
-    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    monkeypatch.setattr(SLOT, "twin_here", here)
     assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
     t = [NOW]
     peeks = []

@@ -1,4 +1,4 @@
-"""Hopper (sm_90) bindings of the B1 typed serving program — lane HP, profile `b1-hopper`.
+"""Hopper (sm_90) bindings of the B1 typed serving program, profile `b1-hopper`.
 
 On an H100 the eager batch-invariant profile executes two functions that differ bit-for-bit from the Ampere/Ada
 ones TA1's B1 composites are bound to (REPORT §2, W4d):
@@ -50,12 +50,11 @@ from verity.ml.definitions.registry.prims import F32, f32_is_nan
 
 def _hopper_total():
     """The step's definition of record: `verity.ml.circuits.silicon.total` (veritor's `core/silicon_total.py` promoted verbatim, stdlib only,
-    Python >= 3.12).  Until R19 the pods evaluated a pure-Python 3.11 port (`registry.tc_total`, held word-equal to this by
-    tests); the Verity pod runtime is 3.12, so the definition itself evaluates."""
+    Python >= 3.12); the Verity pod runtime is 3.12, so the definition itself evaluates."""
     return HOPPER_BF16_WGMMA_K16, tc_dot_total
 
 
-# `verity.ml.circuits.silicon.total.HOPPER_BF16_WGMMA_K16` (lane HP's re-measured pipeline): the relation's parameters, stated once in core.
+# `verity.ml.circuits.silicon.total.HOPPER_BF16_WGMMA_K16` (the measured pipeline): the relation's parameters, stated once in core.
 HOPPER_WGMMA_K = HOPPER_BF16_WGMMA_K16.k                       # 16 operand pairs per step (one group: all sixteen products + acc)
 HOPPER_WGMMA_WIDTH = HOPPER_BF16_WGMMA_K16.width               # 26-bit adder
 HOPPER_WGMMA_ZERO_EXPONENT = HOPPER_BF16_WGMMA_K16.zero_exponent  # exponent floor -133

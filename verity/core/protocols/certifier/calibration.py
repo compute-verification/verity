@@ -6,7 +6,7 @@ From honest runs on the target hardware it picks, per boundary link:
 - the ingress grid.
 
 It reports the honest miss rate, the costs and the capacity. The protocol fixes τ_b, the frame size and the security
-target. The ingress bucket τ_in is 100 ms, decided on 29 Sep 2026 from a calibration of honest traces; the grid stays
+target. The ingress bucket τ_in is 100 ms, chosen from a calibration of honest traces; the grid stays
 configurable, so other buckets can be compared.
 
 The trace is JSON, with one entry per configuration:
@@ -442,7 +442,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--headroom", type=float, default=2.0)
     ap.add_argument("--epsilon", type=float, default=1e-4, help="target honest miss rate per window")
     ap.add_argument("--k-bits", type=float, default=None,
-                    help="K, the policy's budget per isolation unit in bits (NCI's inference-only policy: 9.12e7); "
+                    help="K, the policy's budget per isolation unit in bits (the inference-only policy: 9.12e7); "
                          "without it the ingress charge is reported in bits only")
     ap.add_argument("--target-k-share", type=float, default=None, help="with --k-bits")
     ap.add_argument("--target-span-s", type=int, default=3600)

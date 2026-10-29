@@ -23,7 +23,7 @@ def _segment_present() -> bool:
     return True
 
 
-@pytest.mark.skipif(not _segment_present(), reason="circuit.segment (#2417) is not on this tree, so the scheme cannot register")
+@pytest.mark.skipif(not _segment_present(), reason="circuit.segment is not on this tree, so the scheme cannot register")
 def test_the_scheme_registers_once_segment_is_present():
     """With segment on the tree, h1tile's guard must have registered the one `eps1-sm120-h1fx1` scheme; a silent miss fails
     here rather than leaving the scheme quietly absent."""

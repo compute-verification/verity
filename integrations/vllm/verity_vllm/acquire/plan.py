@@ -16,8 +16,8 @@ Sites (`SITE_KINDS`):
   native_tap        an existing kernel-level source (the attention hidden-stream tap, the fused-MoE block source, the TP partial source)
   runner_return     the runner's `sample()` return (`runner.sampler/sampled_token_ids`); runner_state = a buffer the runner consumed
                     (`seed`); launch_proxy = a host constant read from a kernel launch (`splits`)
-  registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match stage
-                    dumps and checks analytically (`root_policy.ANALYTIC_TABLES`)
+  registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match phase
+                    dumps and checks analytically (`analytic_table_of_buffer`)
   prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities, `padding_steps`)
 
 Policy (`POLICY`): a Value with one legal site takes it; with several, producer output first; consumer input when the producer is a
@@ -59,6 +59,18 @@ TP_FAMILY = "tp_rank_partials"
 WEIGHTS_FAMILY = "weights"
 #: manifest `boundary_class` / `enablement` values that mean "materialised by enablement, no runtime producer" (padding_steps)
 PRESCRIBED_ENABLEMENT = frozenset({"padding", "inactive"})
+
+
+def analytic_table_of_buffer(name: str) -> str | None:
+    """The analytic table (`cos_sin`, checked by `analytic.check_cos_sin`, or `normalizer`, by `analytic.check_normalizer`) a runtime
+    BUFFER (`named_buffers()` path) is the observation of, or None: the one place the two derived tables are recognised by name
+    (`m1_capture.dump_cos_sin` / `dump_normalizer` dump them; `sites_of` and `residuals_of` name them).  vLLM naming facts: the rotary table lives on every layer's `rotary_emb.cos_sin_cache` (one shared table), Gemma-2's normalizer on
+    `model.normalizer`."""
+    if name.endswith("rotary_emb.cos_sin_cache"):
+        return "cos_sin"
+    if name == "model.normalizer" or name.endswith(".normalizer"):
+        return "normalizer"
+    return None
 
 
 @dataclass(frozen=True)
@@ -395,8 +407,6 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Site], lis
             legal.append(Site("registered_input", module, "weight", "n/a", "a weight of record: hashed once at registration"))
         else:
             refuse("registered_input", module, "weight", f"neither the weight's owning module {owner!r} nor a buffer of that name is in the runtime tree")
-        from verity_vllm.check.root_policy import analytic_table_of_buffer
-
         table = analytic_table_of_buffer(module)
         if table is not None:
             legal.append(Site("analytic_table", module, table, "n/a", f"a derived table the Match stage dumps and checks analytically ({table})"))
@@ -451,8 +461,6 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
         if hits and t[table]:
             out.append(Residual(table, "*", "*", f"the gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
-    from verity_vllm.check.root_policy import analytic_table_of_buffer
-
     for b in sorted(rt.buffers):
         table = analytic_table_of_buffer(b)
         if table is not None and b not in weights:

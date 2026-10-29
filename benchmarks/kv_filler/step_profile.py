@@ -2,7 +2,7 @@
 batch × context of `--shapes`, its kernels timed by torch's profiler, and the step's own fraction of R split by kernel
 class: the GEMMs (the four linears in FP8 and the LM head) against the weights' bytes, attention against the KV it
 reads (each request's context, 128 KiB a token), and the rest (norms, rotary, activation quantization, sampling,
-copies) against nothing registered. `native` re-times the step with the GEMMs at `--native-R` of R (ra-tag-fast's
+copies) against nothing registered. `native` re-times the step with the GEMMs at `--native-R` of R (the fast tagger's
 native linears: 6.98 GB in 4.71 ms at M = 1, 0.96 R) and the rest as measured; `native_all` puts attention at that
 rate too. Writes `step_profile.json` and `step_profile.log` under `--out`. `--stack stack|pstack` profiles the encoded
 stack's step instead (`stack_hook.py`): its fused decode + GEMM + receipts and its lm_head's decode are GEMMs against its
@@ -186,7 +186,7 @@ def main() -> int:
     import torch
     import vllm
     from torch.profiler import ProfilerActivity, profile
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
@@ -202,7 +202,7 @@ def main() -> int:
               enforce_eager=False, gpu_memory_utilization=a.mem,
               compilation_config={"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes": capture})
     eng = llm.llm_engine
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
                        if "embed_tokens" not in n)
     if stack:

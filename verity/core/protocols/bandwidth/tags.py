@@ -1,4 +1,4 @@
-"""The bandwidth audit's tags: `y_j = Tag(σ, j, E_j)` for every block `j` of the store, and the tree that commits them.
+"""The bandwidth audit's tags: `y_j = Tag(σ, j, E_j)` for every label `j` of the store, and the tree that commits them.
 
 ~~~text
 Z(x)           x zero-padded to whole 128-byte blocks (one SHA-512 block here, so a device starts from its midstate)
@@ -6,7 +6,7 @@ prefix(D, σ)   Z(D ‖ frame(name) ‖ frame(σ)),  D = "verity/bandwidth/tag/v
 ro-blake3/v1   y_j = BLAKE3-keyed(K, u64be j ‖ E_j),  K = SHA512(prefix)[0:32]            32 bytes
 ro-sha512/v1   y_j = SHA512(prefix ‖ u64be j ‖ E_j)                                   64 bytes
 gf31-poly/v1   y_j = Σ_i (w_i mod p) g_j^(W−1−i) mod p,  p = 2^31 − 1                   4 bytes, u32be
-               w_0 … w_(W−1) the block's little-endian u32 words, evaluated by Horner (`benchmarks/pous/hbm_audit/digest.py`)
+               w_0 … w_(W−1) the label's little-endian u32 words, evaluated by Horner (`benchmarks/pous/hbm_audit/digest.py`)
                g_j = 2 + x, x the first 31-bit value below p − 2 among the u32be words of
                      SHA512(prefix ‖ u64be j ‖ u32be c) shifted right by one, for c = 0, 1, …
 leaf_c         SHA512(prefix(leaf) ‖ u64be c ‖ y_(cL) ‖ … ‖ y_(cL+L−1)),  L = `per_leaf` (1 for ro-sha512/v1, else 16);
@@ -15,15 +15,15 @@ root           the RFC 6962 SHA-512 tree over the leaves (`pous.verifier`: node 
 ~~~
 
 `frame` is `verity.ml.randomness.frame`.  Every tag is seed-first, `H(σ, j, E_j)`: σ is in the first SHA-512 block,
-or in the BLAKE3 key every compression starts from, before `j` and any byte of `E_j`, so no state over a block can be
+or in the BLAKE3 key every compression starts from, before `j` and any byte of `E_j`, so no state over a label can be
 computed before σ is known.
 
 `ro-blake3/v1` and `ro-sha512/v1` are certified: modeled as a random oracle at the fresh seed, they are the tag of
 `Bandwidth.Guarantees.AuditRO`, and a tag is right without `E_j` with probability `2^-h`.  `ro-blake3/v1` is the one
 that fits the deadline on the RTX PRO 6000.  `gf31-poly/v1` (`hbm_audit`'s polynomial hash with a fresh point per
-block) is an uncertified fast check: a polynomial evaluated at a point is not unpredictable per block, and a device
-with spare memory can keep a structure per block that evaluates it at any point without reading the block's words
-(Kedlaya–Umans), so no ingress bound holds for it.  Two blocks whose words differ mod p collide with probability at
+label) is an uncertified fast check: a polynomial evaluated at a point is not unpredictable per label, and a device
+with spare memory can keep a structure per label that evaluates it at any point without reading the label's words
+(Kedlaya–Umans), so no ingress bound holds for it.  Two labels whose words differ mod p collide with probability at
 most (W − 1) / (p − 2) over `g_j`, and its word map binds only the words mod p, `⌈W·log2 p⌉` bits (`info_bits`).
 """
 
@@ -70,16 +70,16 @@ class Tag(Protocol):
     def keyed(self, seed: bytes) -> Keyed: ...
 
     def check_block(self, block_bytes: int) -> None:
-        """Raise `ValueError` if the construction is not defined on blocks of `block_bytes` bytes."""
+        """Raise `ValueError` if the construction is not defined on labels of `block_bytes` bytes."""
         ...
 
     def guess(self, block_bytes: int) -> Fraction:
-        """γ: the most a tag computed without the block (or from a block that differs where the tag binds it) is
+        """γ: the most a tag computed without the label (or from a label that differs where the tag binds it) is
         right with, over the window's seed."""
         ...
 
     def info_bits(self, block_bytes: int) -> int:
-        """The bits of a block the tag binds: what a prover must hold of `E_j` to compute `y_j` for a fresh seed."""
+        """The bits of a label the tag binds: what a prover must hold of `E_j` to compute `y_j` for a fresh seed."""
         ...
 
 
@@ -196,7 +196,7 @@ def _point(head, p: int, j: int) -> int:
 
 
 def horner(block: bytes, g: int, p: int = MERSENNE31) -> int:
-    """`Σ_i (w_i mod p) g^(W−1−i) mod p` over the block's little-endian u32 words."""
+    """`Σ_i (w_i mod p) g^(W−1−i) mod p` over the label's little-endian u32 words."""
     if len(block) % 4:
         raise ValueError("a block is whole u32 words")
     acc = 0
@@ -238,6 +238,6 @@ def leaf_hash(head, c: int, ys: Sequence[bytes]) -> bytes:
 
 
 def leaves(tag: Tag, seed: bytes, ys: Sequence[bytes]) -> list[bytes]:
-    """The tag tree's leaves over every `y_j`, in block order."""
+    """The tag tree's leaves over every `y_j`, in label order."""
     head, per = leaf_head(tag, seed), tags_per_leaf(tag)
     return [leaf_hash(head, c, ys[c * per:(c + 1) * per]) for c in range(leaf_count(tag, len(ys)))]

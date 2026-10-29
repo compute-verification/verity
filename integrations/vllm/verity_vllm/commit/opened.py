@@ -10,15 +10,15 @@ import time
 from collections import Counter
 from typing import Any, Callable, Iterable
 
-ORDINAL_SEP = "#ord"      # [moe F-moe-r17-06] `<member name>#ord<tensor_ordinal>`: the reader's exact meta of a shared module's k-th invocation
+ORDINAL_SEP = "#ord"      # `<member name>#ord<tensor_ordinal>`: the reader's exact meta of a shared module's k-th invocation
 
 
 def meta_by_name(metas: list, name: str) -> Any:
     """The committed meta a reader is asked for by member name, or None.
-    [moe F-moe-r17-06] a SHARED module (vLLM's one RotaryEmbedding, called once per layer) publishes one meta per INVOCATION under the SAME
+    A SHARED module (vLLM's one RotaryEmbedding, called once per layer) publishes one meta per INVOCATION under the SAME
     member name; the binding map binds each as its own identity (invocation k, tensor_ordinal = that meta's ordinal).  A reader asked by name
-    alone can only return the FIRST meta's bytes (layer 0's words for every layer: the OLMoE mixedstop record, layers 1..15 RoPE_v1 /
-    Attention_v3 rows all unequal, layer 0 equal).  `<name>#ord<ordinal>` selects the meta EXACTLY.  [revb S-r17b-19 n3] a BARE name with
+    alone can only return the FIRST meta's bytes (layer 0's words for every layer: on OLMoE every RoPE_v1 / Attention_v3 row past
+    layer 0 is unequal).  `<name>#ord<ordinal>` selects the meta EXACTLY.  A BARE name with
     more than one meta at the step is a shared member asked without its ordinal: there is no first-meta answer to give (that read IS the
     alias class) -- None by name, so a third caller cannot regress silently."""
     base, _sep, ordinal = name.partition(ORDINAL_SEP)

@@ -1,4 +1,4 @@
-"""The vocabulary-range source (`acquire.sources.vocab_range_source`) on CPU tensors with a recording committer: its values are the IR's
+"""The vocabulary-range source (`acquire.sources.vocab_range_source`) on CPU tensors with a recording committer: its values are the circuit's
 arithmetic on int32 and int64 ids, it commits `<site>/vocab_range` only inside the manifest site during a committed step, refuses a launch of
 another range or a padded shard, and `attach` refuses a manifest without the family."""
 from __future__ import annotations

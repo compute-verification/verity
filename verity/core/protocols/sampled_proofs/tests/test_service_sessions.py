@@ -1,6 +1,6 @@
 """One proof session over several rounds (`Stream.session`): a stream of `rounds` R holds up to R registrations open, a
 session opens once after its last covered draw, the first covered round's proof deadline spans it, every covered draw's
-outcome binds the same delivered session, and each round's audit record reads only its own units and roots."""
+outcome binds the same delivered session, and each round's audit record reads only its own proof blocks and roots."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ N = 6
 
 
 def _units(*draws):
-    """A sampler that draws `draws[i]` at its i-th call: each round its own units."""
+    """A sampler that samples `draws[i]` at its i-th call: each round its own proof blocks."""
     it = iter(draws)
     return lambda law, n: next(it)
 
@@ -114,7 +114,7 @@ def test_a_session_opened_before_the_last_rounds_coin_is_refused():
 
 
 def test_a_session_past_the_first_rounds_deadline_is_a_reject():
-    """The session's deadline is its first round's: a proof 61 s after round 0's draw is `late` for both rounds, though
+    """The session's deadline is its first round's: a proof 61 s after round 0's sample is `late` for both rounds, though
     it is 21 s after round 1's; one delivered by round 0's deadline is accepted."""
     for deliver_at, symbols in ((59.5, ("accept", "accept")), (61.0, ("late", "late"))):
         clock = Clock()

@@ -7,16 +7,8 @@ ends) and the PR's newest `ready` label at the head that landed:
   queue     ready mark -> the first check of a train with the PR in it, at that head
   rework    that first check -> the check the PR landed with (trains thrown away by rebuilds, failures, ejections)
   machine   that check's launch -> its check slot
-  check     its slot -> the last of its steps that ended before the landing (a deferred step, `--defer`, ends after it)
-  land      that verdict -> the tick that landed it
-
-`--per-pr` reads drive's per-PR shadow instead (`research.drive`, `--per-pr-shadow N`), from its records in drive's state file:
-each PR it sampled in the window (its first check launched there), when its landing commit would have landed and how, and when
-the trains landed it (`shadow_rows`).  Its `first check's slot -> would land` is the per-PR landing's own path from the moment a
-check slot took its first check (`slot.json`'s `took`).  What comes before it isn't a per-PR drive's: `mark -> first launch` is the
-shadow's queue for its N checks, and `first launch -> its slot` the wait of an ordinary job behind every priority check and in
-turn with lane checks (the shadow never takes a priority slot, ci 21 Oct), where a per-PR drive's checks would have the trains'
-priority."""
+  check     its slot -> the last of its steps that ended before the landing (a deferred step ends after it)
+  land      that verdict -> the tick that landed it"""
 from __future__ import annotations
 
 import concurrent.futures
@@ -173,89 +165,6 @@ def render(s: dict, start: datetime, end: datetime) -> str:
     if s["prs"]:
         lines.append(f"trains checked with each landed PR: median {s['trains_median']:g}; {s['rechecked']} PR(s) in more than one")
     return "\n".join(lines)
-
-
-def _at(t: float | None) -> datetime | None:
-    return datetime.fromtimestamp(t, timezone.utc) if t is not None else None
-
-
-def shadow_rows(state: dict, start: datetime, end: datetime) -> list[dict]:
-    """One row per PR the per-PR shadow sampled in [start, end] (`drive["per_pr"]`, ended or not): its times, what it ended in
-    (`outcome`: would-land, failed, conflict or still going, and why its record ended), its checks and plans."""
-    sh = (state.get("drive") or {}).get("per_pr") or {}
-    out = []
-    for rec in [*sh.get("done", []), *(sh.get("prs") or {}).values()]:
-        sampled = _at(rec.get("sampled"))
-        if sampled is None or not start <= sampled <= end:
-            continue
-        wl, ended = rec.get("would_land") or {}, rec.get("ended") or {}
-        out.append({"pr": rec["pr"], "head": rec["head"], "outcome": rec["phase"], "ended": ended.get("why"),
-                    "marked": _at(rec.get("marked")), "sampled": sampled, "took": _at(rec.get("took")),
-                    "would_land": _at(wl.get("at")),
-                    "full": _at(wl.get("full_at")), "via": wl.get("via"), "revert": wl.get("revert") or rec.get("revert"),
-                    "landed": _at(ended.get("at")) if ended.get("why") == "landed" else None,
-                    "checks": len(rec.get("checks") or []), "plans": [p.get("result") for p in rec.get("plans") or []],
-                    "plan_whys": [p.get("why") for p in rec.get("plans") or [] if p.get("why")]})
-    return out
-
-
-SHADOW_SPANS = {"would_land": ("marked", "would_land", "ready mark -> would land"),
-                "path": ("took", "would_land", "  first check's slot -> would land (drive's rule)"),
-                "whole": ("took", "full", "  first check's slot -> whole check passed"),
-                "queue": ("marked", "sampled", "  mark -> first launch (the shadow's own N checks)"),
-                "slot": ("sampled", "took", "  first launch -> its slot (an ordinary job's wait)"),
-                "trains": ("marked", "landed", "the same PRs: ready mark -> landed by the trains")}
-
-
-def shadow_summary(rs: list[dict]) -> dict:
-    out: dict = {"sampled": len(rs), "spans": {}}
-    for k, (a, b, _) in SHADOW_SPANS.items():
-        vals = [h for r in rs if (h := _hours(r[a], r[b])) is not None and r["would_land"] is not None]
-        out["spans"][k] = {"n": len(vals), "median_h": statistics.median(vals), "p90_h": p90(vals)} if vals else {"n": 0}
-    for k in ("would-land", "failed", "conflict", "queued", "checking", "planning"):
-        out[k] = sum(r["outcome"] == k for r in rs)
-    out["under_1h"] = sum(1 for r in rs if (h := _hours(r["took"], r["would_land"])) is not None and h < 1)
-    out["rechecked"] = sum(r["checks"] > 1 for r in rs)
-    out["would_revert"] = sum(bool(r["revert"]) for r in rs)
-    plans = [x for r in rs for x in r["plans"]]
-    out["plans"] = {x: plans.count(x) for x in ("passed", "refused", "error") if x in plans}
-    out["plan_refusals_naming_lean_audit"] = sum("lean-audit" in w for r in rs for w in r["plan_whys"])
-    return out
-
-
-def shadow_render(s: dict, rs: list[dict], start: datetime, end: datetime) -> str:
-    lines = [f"{start:%Y-%m-%d %H:%MZ} to {end:%Y-%m-%d %H:%MZ}: the per-PR shadow sampled {s['sampled']} PR(s): "
-             f"{s['would-land']} would land, {s['failed']} failed, {s['conflict']} conflict with `main`, "
-             f"{s['queued'] + s['checking'] + s['planning']} still going"]
-    for k, (_, _, name) in SHADOW_SPANS.items():
-        v = s["spans"][k]
-        lines.append(f"{name:52} " + (f"median {v['median_h']:5.2f} h  p90 {v['p90_h']:5.2f} h  (n={v['n']})" if v["n"] else
-                                      "no data"))
-    lines.append(f"would land within 1 h of its first check's slot: {s['under_1h']}; checked more than once: {s['rechecked']}; a "
-                 f"deferred step failed after it passed drive's rule (a revert): {s['would_revert']}")
-    if s["plans"]:
-        lines.append("plans on a moved `main`: " + ", ".join(f"{n} {k}" for k, n in s["plans"].items())
-                     + f" ({s['plan_refusals_naming_lean_audit']} refusal(s) name a lean-audit part)")
-    for r in sorted(rs, key=lambda r: r["sampled"]):
-        h = _hours(r["took"], r["would_land"])
-        lines.append(f"  #{r['pr']} {r['head'][:8]} {r['outcome']:10} " + (f"{h:5.2f} h " if h is not None else "      ")
-                     + f"checks {r['checks']} plans {len(r['plans'])}" + (f" ended {r['ended']}" if r["ended"] else "")
-                     + (f": {r['via']}" if r["via"] else ""))
-    return "\n".join(lines)
-
-
-def shadow_main(state_path: Path, hours: float, until: str | None, as_json: bool) -> int:
-    end = ts(until) if until else datetime.now(timezone.utc)
-    start = end - timedelta(hours=hours)
-    try:
-        state = json.loads(state_path.read_text())
-    except (OSError, ValueError) as e:
-        print(f"research queue stats --per-pr: {state_path}: {e}")
-        return 1
-    rs = shadow_rows(state, start, end)
-    s = shadow_summary(rs)
-    print(json.dumps({**s, "rows": rs}, indent=1, default=str) if as_json else shadow_render(s, rs, start, end))
-    return 0
 
 
 def main(log: Path, hours: float, until: str | None, marked: Callable[[int], datetime | None], run_dir: Callable[[str], Path],

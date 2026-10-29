@@ -22,27 +22,27 @@ def splits_for(batch_size: int, num_sm: int) -> int:
     return s
 
 
-SPLITS_FOR_V1_WIDTH = 6   # the result S in {1, 2, 4, 8, 16, 32} is a Value<6> (LIFTING-SPEC [D4]: `LTopPMask_v1{V}` takes S_t as an operand)
+SPLITS_FOR_V1_WIDTH = 6   # the result S in {1, 2, 4, 8, 16, 32} is a Value<6> (`LTopPMask_v1{V}` takes S_t as an operand)
 
 
 def splits_for_v1(n_live: int, num_sms: int) -> int:
-    """`SplitsFor_v1(n_live, num_SMs)` -- the split count S of vLLM d9105ea80 `_apply_topp_split` as a VALUE of the live sampler batch
-    (RULING M-0571 (3); LIFTING-SPEC v0.4 [D4]; pad M-0070): `S_t = SplitsFor_v1(n_live_t, num_SMs)` with `n_live_t` = the number of
+    """`SplitsFor_v1(n_live, num_SMs)` -- the split count S of vLLM d9105ea80 `_apply_topp_split` as a VALUE of the live sampler batch:
+    `S_t = SplitsFor_v1(n_live_t, num_SMs)` with `n_live_t` = the number of
     rows in the sampler batch at engine step t = #{r : arrive_r <= t <= arrive_r + n_r - 1}, n_r the SERVED length (a prefill row is
     sampled; the step that samples a request's last token -- its EOS or its cap -- is live; the step after it is not: vLLM drops a
-    finished request before the next step).  As activity values (padrev F-pad-10, M-0102): live_{r,t} = 1 at t = arrive_r and
+    finished request before the next step).  As activity values: live_{r,t} = 1 at t = arrive_r and
     LStepLive(out_r[t-1], E) for t > arrive_r -- under GUARD=in exactly LIsActive(tok_in_{r,t}), the step's INPUT token -- and
     n_live_t = sum_r live_{r,t}.  NOT sum_r LIsActive(out_r[t-1]): the committed EOS is an Active token, so that form counts one phantom
     row per stopped request at its a_r and moves every batch-mate's S there.  `num_SMs` is a target-profile constant.  Request r's local
     event e reads S at engine step arrive_r + e.  Value: the largest power of two S <= SPLIT_MAX_SPLITS (32) with S * n_live <= num_SMs, at least 1 -- the
     verbatim doubling loop `splits_for` (doubles while the NEXT S still satisfies it); the thresholds are a function of num_SMs and are never tabled per device class
     (142 SMs: 1..4 -> 32, 5..8 -> 16, 9..17 -> 8, 18..35 -> 4, 36..71 -> 2, 72+ -> 1; 132 SMs: 1..4 -> 32, 5..8 -> 16, 9..16 -> 8,
-    17..33 -> 4, 34..66 -> 2, 67+ -> 1).  Measured against the real kernel: the R15 B8 staggered record, 157 engine steps, 526 sampled
+    17..33 -> 4, 34..66 -> 2, 67+ -> 1).  Measured against the real kernel: the B8 staggered record, 157 engine steps, 526 sampled
     rows -- the mask kernel's constexpr S == SplitsFor_v1(live, 142) at every step (tests/data/topp_split_fixture/b8_s_schedule_*.json).
 
     DOMAIN (total on it, refuses outside -- never a number that names no launch): 1 <= n_live <= SPLIT_MAX_BATCH (64) and num_SMs >= 1.
     n_live == 0: no sampler launch, no sampling event -- the lifted form `LSplitsFor_v1` emits bot (the sixth member of the specified
-    class, pad M-0070); n_live > 64: vLLM does not run `_apply_topp_split` (the sort path serves the batch), so TopPMask_v1 is not the
+    class); n_live > 64: vLLM does not run `_apply_topp_split` (the sort path serves the batch), so TopPMask_v1 is not the
     Definition of that step and no S exists for it."""
     n, m = int(n_live), int(num_sms)
     if n < 1 or n > SPLIT_MAX_BATCH:
@@ -88,7 +88,7 @@ def z_group(lane: np.ndarray, S: int) -> np.ndarray:
     whose bit S/2 is CLEAR (group 0) and SET (group 1) end with values up to 1 ulp apart, and everything downstream that a thread
     derives from Z (pr = exp(x - M) / Z, min_prob / max_prob, the pivot ladder, pivot_logit, dup, numkeep, num_preceding) is a
     per-thread value of its group.  S = 32: group = lane >= 16 (the "warp half" the S=32 model was fitted with); S = 16: group =
-    (lane % 16) >= 8 -- NOT lane >= 16 (F-stoch-01: the four differing lanes of the B8 record's S=16 rows are exactly the tie lanes
+    (lane % 16) >= 8 -- NOT lane >= 16 (the four differing lanes of the B8 record's S=16 rows are exactly the tie lanes
     the wrong grouping assigned to the other group's Z / dup / quota); S = 1: a single value."""
     lane = np.asarray(lane, dtype=np.int64)
     if S < 2:

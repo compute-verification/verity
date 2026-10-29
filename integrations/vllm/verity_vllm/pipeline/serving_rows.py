@@ -3,8 +3,9 @@ through an opened reader, registered weights for weight slices), committed in M0
 :mod:`verity.ml.windows.rows`, with core's one-stage registration over them.  Three ways in, one window, two kinds:
 
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
-  "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``).
-  The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
+  "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
+  a Commit whose replay is deferred to its bundle (``--replay-deferred``, not slim) commits it at its C2 site, before the bundle is
+  sealed and any draw (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
   hold the values under the Commit's roots.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
@@ -29,7 +30,7 @@ to those steps of each request.  A chunked template's units (``CHUNKED``: a ``Sc
 a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk or a ``SPLITS`` split part or combine; and a row template or
 whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
-it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
+it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
@@ -135,7 +136,7 @@ from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, 
                                                     Template, _bind, part, template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
 
-#: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
+#: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "split")
 #: the chunked layouts read by a module of their own: a row's unit count, and the reader of a member's rows
 READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "split": (SP.units, SP.read)}

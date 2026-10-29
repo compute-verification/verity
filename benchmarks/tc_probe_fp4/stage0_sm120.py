@@ -1,11 +1,11 @@
-"""Stage 0 on sm_120: which FP4-path ``mma`` mnemonics ptxas accepts for ``sm_120a`` and what each lowers to, before any semantics.
+"""Phase 0 on sm_120: which FP4-path ``mma`` mnemonics ptxas accepts for ``sm_120a`` and what each lowers to, before any semantics.
 
     python benchmarks/tc_probe_fp4/stage0_sm120.py --out DIR [--arch sm_120a]
 
 For every row below, one ``.entry`` holding that single instruction is assembled with ``ptxas -arch=<arch>``; the return code and
 diagnostic are recorded and, when it assembles, the SASS opcodes (``cuobjdump -sass``) and their count.  Record-only: nothing
-executes, nothing is gated except that the dense rows ``probe.py`` issues must assemble.  The sparse rows (2:4 ``mma.sp``) are
-for the FP4 attacker (GPU 7): whether a 2:4 sparse FP4 instruction exists on this part, and at what shape.
+executes, nothing is gated except that the dense rows ``probe.py`` issues must assemble.  The sparse rows (2:4 ``mma.sp``) say
+whether a 2:4 sparse FP4 instruction exists on this part, and at what shape.
 """
 from __future__ import annotations
 

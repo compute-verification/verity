@@ -1,4 +1,4 @@
-"""The memory-bandwidth half of the filler climb (lane ra-fill-bandwidth): which reader comes closest to the card's read
+"""The memory-bandwidth half of the filler climb: which reader comes closest to the card's read
 capacity, and so what R is. Writes `fill-<cmd>.json` and `fill.log` under `--out`.
 
   read   every reader of `readers.cu` over a buffer far larger than the L2, at several grids: GB/s, best and median of

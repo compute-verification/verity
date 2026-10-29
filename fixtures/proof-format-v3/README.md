@@ -10,8 +10,8 @@ authenticated.
 
 `vectors.json` (schema `veritor/proof-format-v3/vectors/v1`) was **generated** by veritor's
 `test_format3_equivalence.py::test_write_vectors` (the Python reference, which decided every
-vector; `expected` is its verdict) and is frozen; it is **replayed** by
-`archive/sp1/common/tests/format3_equivalence.rs` on the guest kernel. Gate set
+vector; `expected` is its verdict) and is frozen. D-SP1's guest kernel replayed it
+(`format3_equivalence.rs`, deleted with the archive in `2091252fe3`). Gate set
 `veritor.word-arithmetic@2` at width 16; packed leaves of 8 `u16le` words under
 `verity-vllm/leaf/v1` framing; frame-v3 (`u16`) leaves for the multiproof family.
 
@@ -20,8 +20,6 @@ vector; `expected` is its verdict) and is frozen; it is **replayed** by
 ~~~sh
 # Python, in a veritor checkout (the reference; regenerates vectors.json and asserts it is unchanged)
 .venv/bin/python -m pytest -q -p no:cacheprovider tests/veritor/protocol/proofs/test_format3_equivalence.py
-# Rust (the guest kernel; every path that can take a vector must agree exactly)
-cd archive/sp1 && CARGO_BUILD_JOBS=2 cargo test -p veritor-zk-common --test format3_equivalence -- --nocapture
 ~~~
 
 ## Fields

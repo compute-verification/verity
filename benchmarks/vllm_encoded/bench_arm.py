@@ -192,7 +192,7 @@ class _Installed:
         import torch
 
         from benchmarks.kv_filler.bench import FILL_WARPS, RUN_SEED, Topup, mode_of
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
 
         if self.install.stack is None:
             raise RuntimeError("bandwidth benchmark arm did not install during model loading")
@@ -202,7 +202,7 @@ class _Installed:
             self.green["spread"] = green.spread_checks(self.green_lib, torch, self.step_stream, self.new_stream,
                                                        self.green)
         if self.use_topup:
-            runner = get_model_runner(target.engine.vllm)
+            runner = handle.model_runner(target.engine.vllm)
             tensors = []
             for cache in runner.kv_caches:
                 tensors.extend(cache if isinstance(cache, (list, tuple)) else (cache,))

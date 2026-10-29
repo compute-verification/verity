@@ -4,12 +4,10 @@ A unit's values are the gates the placement puts at its leaves, in canonical ord
 values [i·k, (i + 1)·k) packed least significant first, each in a slot of the model's widest value (`value_bits`: 1 for a
 Boolean Program, 32 for the served Program's words), k = `ROW_BITS` / width, under
 `verity.ml.commitments.advice` (hm96-sha512 leaves in a frame-v3-sha512 tree) with the binding SHA-512(`LABEL` ‖ the unit's name).
-The root is public; the rows and salts are the unit's. A crossing value is opened at its source unit's commitment
-(`UnitValues.open`, checked by `verify`): refinement puts every crossing value in the committed set.
+The root is public; the rows and salts are the unit's.
 """
 from __future__ import annotations
 
-import bisect
 import hashlib
 from dataclasses import dataclass
 from typing import Sequence
@@ -32,27 +30,8 @@ class UnitValues:
     registration: advice.Registration
 
     @property
-    def per_row(self) -> int:
-        return ROW_BITS // self.width
-
-    @property
     def root(self) -> bytes:
         return self.registration.root
-
-    def locate(self, gate: int) -> tuple[int, int]:
-        """(row, bit offset) of a value the unit holds."""
-        i = _index(self.gates, gate)
-        return i // self.per_row, (i % self.per_row) * self.width
-
-    def open(self, gate: int) -> advice.Opening:
-        return self.registration.open(self.locate(gate)[0])
-
-
-def _index(gates: Sequence[int], gate: int) -> int:
-    i = bisect.bisect_left(gates, gate)
-    if i == len(gates) or gates[i] != gate:
-        raise KeyError(f"gate {gate} is not one of the unit's values")
-    return i
 
 
 def rows(gates: Sequence[int], value: dict[int, int], width: int) -> list[bytes]:
@@ -72,12 +51,3 @@ def commit(unit: str, gates: Sequence[int], value: dict[int, int], width: int = 
     if not gates:
         raise ValueError(f"unit {unit} holds no values")
     return UnitValues(unit, gates, width, advice.register(rows(gates, value, width), ROW_BITS, binding(unit), salts))
-
-
-def verify(root: bytes, unit: str, count: int, width: int, opening: advice.Opening, row: int, offset: int) -> int | None:
-    """The value at (row, offset) of `opening`, when the opening is row `row` of the `count` values `unit` committed under
-    `root`; else None."""
-    n_rows = -(-count // (ROW_BITS // width))
-    if opening.index != row or not advice.verify(root, n_rows, ROW_BITS, binding(unit), opening):
-        return None
-    return (int.from_bytes(opening.row, "little") >> offset) & ((1 << width) - 1)

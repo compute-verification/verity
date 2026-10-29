@@ -1,5 +1,4 @@
-"""`eps1-sm120-h1fx1` on words: a non-registered reference for the first EPS1 design, sm_120's H1 + fx1 (decision 102, the
-POUW-SPEC spec note:compute-accounting/20261018T0309Z-draft-pouw-spec).
+"""`eps1-sm120-h1fx1` on words: a non-registered reference for the first EPS1 design, sm_120's H1 + fx1 (decision 102).
 
 The one registered `eps1-sm120-h1fx1` is `h1tile`'s compile-pass scheme (`compile.SCHEMES`); decision 102 is one design across
 schemes, so there is one registration.  This module is kept only as that design on words and on sampled proofs' primitives
@@ -9,7 +8,7 @@ reach it.
 
 Under decision 101 PoUW is a compile pass over the served Program, not an executor: a matmul `A·Bᵀ` keeps serving its exact
 s8 product, and PoUW adds, around it, a per-call seed, the noise the seed derives, a committed receipt and one spot check.
-Everything else is sampled proofs': hm96 leaves, the live draw coin, one audit, one ε.
+Everything else is sampled proofs': hm96 leaves, the live sampling coin, one audit, one ε.
 
 **The seed** (decision 101, with §5 item 10's call-index binding):
 
@@ -199,7 +198,7 @@ def check(ks: int):
 
 
 def templates(shape: Shape) -> dict[str, Any]:
-    """The scheme's Definitions by role: the served arm, the fold and the spot check (the drawn unit)."""
+    """The scheme's Definitions by role: the served arm, the fold and the spot check (the sampled proof block)."""
     shape.check()
     return {"arm": arm(shape.k), "fold": SG.PouwFx1Absorb, "check": check(shape.ks)}
 
@@ -214,7 +213,7 @@ def unit(shape: Shape):
 
 def work_ref(shape: Shape) -> dict[str, int]:
     """`W_ref` per dot product: `K` served MACs a output coordinate (`ops.s8.counts`), and the call's and the window's totals.
-    The draw law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
+    The sample law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
     shape.check()
     per_dot = OS8.counts({"N": 1, "K": shape.k, "TAIL": _TAIL})["served_macs"]  # = K
     entries = 4 * 8  # 32 accumulator words a thread (4 row slots × 8 column slots)
@@ -273,7 +272,7 @@ def _onehot(n: int, i: int) -> list[int]:
 @dataclass(frozen=True)
 class Eps1Traced:
     """What sampled proofs traces for one H1 + fx1 call of a shape (the EPS1 analogue of `circuit.Traced`): the served arm,
-    the spot check that is the drawn unit, the work table and the empty closure, each from the shape alone.  The verifier
+    the spot check that is the sampled proof block, the work table and the empty closure, each from the shape alone.  The verifier
     builds these itself and never takes the prover's."""
 
     scheme: str

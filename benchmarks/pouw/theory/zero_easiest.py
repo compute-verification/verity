@@ -1,6 +1,6 @@
 """ZERO-EASIEST's exact check: how the cost of Dither's transcript depends on the instance (A, B) fixed before the draw.
 
-Dither (note:20261017T0013Z-report-epsilon-program): A is m×k, B is k×n, R ∈ {0,1}^{m×k} and U ∈ {±1..±64}^{n×L} are
+Dither: A is m×k, B is k×n, R ∈ {0,1}^{m×k} and U ∈ {±1..±64}^{n×L} are
 drawn after, S_{tj} = U_{j, t mod L} (S = ΠUᵀ, U shared by every segment), and the transcript is every L-step prefix
 sum T_{A,B}[i, j, ℓ] = Σ_{t < L(ℓ+1)} (A+R)_{it} (B+S)_{tj} in Z/2³². U's bits are planes, U = −64 + Σ_p w_p β_p with
 w = (1, 2, 4, 8, 16, 32, 65). X♭ Y is the prefix-summed product, and A♯[i, ℓ, q] = Σ_{ℓ' ≤ ℓ} A[i, Lℓ' + q] the fold.

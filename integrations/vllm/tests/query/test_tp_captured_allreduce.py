@@ -1,7 +1,7 @@
 """GLM-5.3's world-8 all-reduces are the captured routes (`AllReduceMultimem_v1`, the fused `AllReduceRmsNormMnnvl_v1`), not
 `AllReduce_v2`.  The population did not know them as collectives, so their received `peers_<k>` inputs counted as the prompt's token
 ids: the manifest of record required `input_token_ids` at every decoder layer (2,496 identities per rank) and at the model, and no
-all-reduce had its rank-local partial or a peer binding.  Each is a TP-04 collective: the peers are received partials, bound to each
+all-reduce had its rank-local partial or a peer binding.  Each is a rank-policy collective: the peers are received partials, bound to each
 peer's own `part_rank<peer>`, and the fused route's rank-local partial is its `parts` operand, not the residual it also reads.
 At M > 1 tokens the routes are flat (`AllReduceRule`: one Call over the M rows, each rank's part the M row Values it reshapes), and the
 partial source commits the whole [M, N] input once per call as `<site>/part_rank<r>`: the rank-local partial is one identity over the M

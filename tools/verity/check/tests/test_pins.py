@@ -92,6 +92,41 @@ def test_a_tracked_file_recording_a_lean_sources_digest_must_be_listed(repo, mon
                                 "vec.json": ["pkg/A.lean"]}
 
 
+FOUND = "Regenerate:\n\nsha256sum lean-toolchain A.lean \\\n  $(find Defs -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256\n"
+
+
+def test_a_file_in_a_pins_scope_that_it_doesnt_list_makes_it_stale_and_its_command_lists_it(repo):
+    """The pin's command finds the `.lean` files of a tree: one added there after the pin was written (in a new directory)
+    makes the pin stale while every file it lists is unchanged, `--stale` names it with the command, and `--regen` writes
+    the pin that lists it and passes."""
+    (repo / "pkg" / "README.md").write_text(FOUND)
+    (repo / "pkg" / "Defs").mkdir()
+    (repo / "pkg" / "Defs" / "B.lean").write_text("def b := 1\n")
+    assert P.main(["--regen", "--root", str(repo)]) == 0 and P.stale(repo) == []
+    (repo / "pkg" / "Defs" / "Claims").mkdir()
+    (repo / "pkg" / "Defs" / "Claims" / "C.lean").write_text("def c := 1\n")
+    assert P.PINS[0].gap(repo) == (["pkg/Defs/Claims/C.lean"], [])
+    assert [(pin.path, s) for pin, s in P.stale(repo)] == [("pkg/TRUSTED.sha256", ["pkg/Defs/Claims/C.lean"])]
+    assert P.main(["--stale", "--root", str(repo)]) == 1
+    assert P.report(P.stale(repo), repo) == (
+        "pkg/TRUSTED.sha256 is stale (its command hashes 1 file it doesn't list: pkg/Defs/Claims/C.lean): run `cd pkg && "
+        "sha256sum lean-toolchain A.lean $(find Defs -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256`")
+    assert P.main(["--regen", "--root", str(repo)]) == 0
+    assert P.stale(repo) == [] and P.main(["--stale", "--root", str(repo)]) == 0
+    assert (repo / "pkg" / "TRUSTED.sha256").read_text().splitlines()[2:] == [
+        f"{sha(b'def b := 1' + bytes([10]))}  Defs/B.lean", f"{sha(b'def c := 1' + bytes([10]))}  Defs/Claims/C.lean"]
+
+
+def test_a_file_the_pin_lists_that_its_command_no_longer_hashes_makes_it_stale(repo):
+    (repo / "pkg" / "README.md").write_text(FOUND)
+    (repo / "pkg" / "Defs").mkdir()
+    (repo / "pkg" / "Defs" / "B.lean").write_text("def b := 1\n")
+    assert P.main(["--regen", "--root", str(repo)]) == 0
+    (repo / "pkg" / "README.md").write_text(FOUND.replace("Defs", "Other"))
+    assert [s for _, s in P.stale(repo)] == [["pkg/Defs/B.lean"]]
+    assert "(it lists 1 file its command doesn't hash: pkg/Defs/B.lean)" in P.report(P.stale(repo), repo)
+
+
 def test_a_readme_without_the_command_is_refused(repo):
     (repo / "pkg" / "README.md").write_text("no command here\n")
     with pytest.raises(SystemExit, match="no `sha256sum ... > TRUSTED.sha256` command"):
@@ -173,8 +208,8 @@ def _side(root: Path, base: str, name: str, before: bool, top: bool = True) -> s
 
 
 def test_a_merge_of_two_branches_each_adding_a_lake_dependency_gets_the_manifests_lake_writes_and_fresh_pins(lake_repo):
-    """0fcc (top, 8 Oct): #1524 and #1497 each added a path dependency to `security_properties`, git merged the manifests' text,
-    and `security_proofs`' manifest held neither. The merge reruns `lake update` in both packages, `base` first, takes OURS for
+    """Two branches that each add a path dependency to `security_properties` merge the manifests' text, and a dependent
+    package's manifest would hold neither. The merge reruns `lake update` in both packages, `base` first, takes OURS for
     the conflicted manifests before it, and the pin of top's manifest is rewritten by its command, not found stale later."""
     root, base = lake_repo
     x, y = _side(root, base, "x", True), _side(root, base, "y", False, top=False)

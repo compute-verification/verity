@@ -7,7 +7,7 @@ import Definitions.Pouw.Game.Params
 /-!
 # Obligations B1 and B4, and PoUW's row, stated (trusted)
 
-Section 8 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4). None is proved here.
+Stated in the actual-circuit model; none is proved here.
 
 * `B1` (conjecture, TT on arbitrary circuits): PoUW's named assumption `Pouw.Assumptions.TT` at the cost model of `A`'s
   provers, `CM_A`, whose cost is the prover's work between the salt's arrival and the last tick from which a value
@@ -18,7 +18,7 @@ Section 8 of `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.4). No
   most `T` at every oracle and salt is accepted while `T < (1 − γ)(1 − ε_s)·W` with probability at most
   `(1 − ε_s)^t + ε(q, N)`.
 * `B4` (egress factoring, reduced to the assumptions), across `X`'s secret inputs: under the named physical premises
-  `CausalStrategy`, `DeclaredLinks`, `TrustedUnits` and `Secrets` (v2.8: each certifier's sends during `[a, b)` a
+  `CausalStrategy`, `DeclaredLinks`, `TrustedUnits` and `Secrets` (each certifier's sends during `[a, b)` a
   function of its own record before `b`, its gates in declared record cells, and of its own jitter word; the strategy
   varies only `X`'s secrets), what the outside does during `I` takes at most (the number of records placed in `I`) ×
   `2^{res_out}` values, `res_out` being `log₂ χ` bits a bucket and certifier plus `β°_X |I|`. Per run, a width bound
@@ -29,19 +29,19 @@ namespace Accounting.Guarantees
 
 open Finset
 
-/-- **B1** (v2.4): PoUW's assumption TT(γ₀) at `CM_A`, the cost model of `A`'s provers (`Actual.costModel`: the
-verifier at `V` releases the salt at `tₛ` and decodes the transcript with `read` from what it receives before `t_d`;
-a program is a prover, a strategy with runs in `𝓕` causal from every tick whose oracle calls are the hash's gates
-`hash`; its cost is the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)`). With `HonestClock` at `CM_A`
-(`Accounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the
-work between the salt and the deadline. -/
+/-- **B1**: PoUW's assumption TT(γ₀) at `CM_A`, the cost model of `A`'s provers (`Actual.costModel`: the verifier at `V`
+releases the salt at `tₛ` and decodes the transcript with `read` from what it receives before `t_d`; a program is a
+prover, a strategy with runs in `𝓕` causal from every tick whose oracle calls are the hash's gates `hash`; its cost is
+the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)`). With `HonestClock` at `CM_A`
+(`Accounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the work
+between the salt and the deadline. -/
 def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
     (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
     (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   Pouw.Assumptions.TT (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) P D γ₀ ε
 
-/-- **PoUW's row, from B1** (v2.4): `Pouw.Guarantees.WorkBetweenSaltAndDeadline` at `CM_A`, its terms and names as
+/-- **PoUW's row, from B1**: `Pouw.Guarantees.WorkBetweenSaltAndDeadline` at `CM_A`, its terms and names as
 there. Under B1 and the `Ω_max` bound, for every in-domain workload and adversary of `CM_A` whose prover's work at `π`
 in `[tₛ + ℓ, t_d − ℓ)` is at most `T` and whose oracle calls are at most `q` at every oracle and salt
 (`Adversary.Bounded` at `CM_A`), the audit with `t` work-weighted samples accepts the transcript the verifier receives
@@ -69,10 +69,10 @@ capacity), with the trusted devices trusted across it (`TrustedUnits`, record ce
 inputs of a location `X` apart from the certifiers `cert` (`Secrets`: what the certifiers and the outside
 `O = (X ∪ cert)ᶜ` can tell at `a` doesn't depend on the coins; the certifiers' record placed before `a` is part of the
 former): what `O` does during `I = [a, b)` takes at most (the number of records placed in `I`) × `2^{res_out}` values,
-with `res_out = jitter · (buckets of I) · #cert + β°_X (b − a)`, a jitter word per certifier (v2.8). A wire from `X` to
-a certifier runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. v2.8 ranges the secrets
-over those whose runs accept every window and meet integrity: that is `B4` at the strategy restricted to them (`Ω` a
-subtype), whose premises restrict (`CausalFrom` by `Accounting.SecurityProofs.Actual.causalFrom_comp`, the others
+with `res_out = jitter · (buckets of I) · #cert + β°_X (b − a)`, a jitter word per certifier. A wire from `X` to a
+certifier runs on a certified link and one from `X` to `O` on an uncertified one, by `Links`. The model ranges the
+secrets over those whose runs accept every window and meet integrity: that is `B4` at the strategy restricted to them
+(`Ω` a subtype), whose premises restrict (`CausalFrom` by `Accounting.SecurityProofs.Actual.causalFrom_comp`, the others
 pointwise or by shrinking a range), so it needs no statement of its own. -/
 def B4 : Prop :=
   ∀ {L E Ω : Type*} [LinearOrder L] [Fintype L] [Fintype E] (S : Ω → Actual.Run L) (ℓ : L → L → ℕ) (ends : E → L × L)

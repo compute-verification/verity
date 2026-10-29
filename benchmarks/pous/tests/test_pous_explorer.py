@@ -166,7 +166,7 @@ def test_the_file_is_the_contract(doc):
 
 
 def _soak() -> dict:
-    """A small `pous-soak/v1`: per block, two loaded 1000 Hz cells of 3,000 and 1,000 answers, a loaded 10 Hz cell of 1,000,
+    """A small `pous-soak/v1`: per label, two loaded 1000 Hz cells of 3,000 and 1,000 answers, a loaded 10 Hz cell of 1,000,
     an idle cell and a timestamping-off row that the presets must leave out."""
     grid = [10 ** (k / 40) for k in range(201)]
     params = {"link_bps": 4e11, "setting": "tuned", "nic": "mlx5_core", "mtu": 1500, "mss_bytes": 1448,

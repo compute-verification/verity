@@ -2,10 +2,10 @@
 """FOLD-R: the same-word R-fold's whole all-state kernel K_R by commuting, and K_R = K_1 = P/X/N under the scaled KJ19.
 
 `fold_root_kernel.c` finds K_R from the fact that F_{w'}^R = F_w^R forces F_{w'} to commute with F_w^R, a meet in the
-middle with 2^(2n) half-round maps a side (REFEREE's `fold_kernel.c` enumerates all 2^(4n) words). This checks:
+middle with 2^(2n) half-round maps a side (`fold_kernel.c` enumerates all 2^(4n) words). This checks:
   (1) at n = 6 it finds exactly what fold_kernel.c finds, at every (key, R), over every odd key pair (--quick: a sample)
       and two words, apart from the near-±1 keys where Φ^R is so structured that the join is cut (it says so);
-  (2) it reproduces REFEREE's three counterexamples (note:20261017T0642Z-draft-referee, F1(b));
+  (2) it reproduces the three known counterexamples at n = 8 and 10;
   (3) `fold_root_sweep.kj_scaled` read at n = 32 with r2 = 19 is receipt_folds.kj19, the 32-bit rule of record, and
       `kj_last` is egemm_depthr_check.key_ok_r11_32's KJ19 clause;
   (4) at n = 8 over every odd key pair (--quick: a sample), one random word each, every pair where K_R = K_1 = P/X/N fails
@@ -129,7 +129,7 @@ def main() -> int:
                 checks.mutation(f"n6 word {word}: compared against the brute force at another word",
                                 agree(root, ref2, word, keys[:24], rmax, degen))
 
-        # (2) REFEREE's counterexamples
+        # (2) the three known counterexamples
         s8, _ = root_kernels(exe, 8, 3, 5, 6, [(97, 179, 255, 48, 87, 75), (83, 225, 144, 166, 44, 160)])
         big, even = s8[(97, 179, 255, 48, 87, 75)], s8[(83, 225, 144, 166, 44, 160)]
         checks.check("n8 (97, 179), word (255, 48, 87, 75): |K_R| = 64 at every R <= 6, 48 elements break (G3), K_1 isn't P/X/N",
@@ -157,7 +157,7 @@ def main() -> int:
         checks.check("kj_last at r1 = 13 is egemm_depthr_check.key_ok_r11_32's KJ19 clause (a ≢ ±1 mod 2^13)",
                      all(sw.kj_last(a, 13) == ((a & 0x1FFF) not in (1, 0x1FFF)) for a in sample))
         checks.check("kj19 implies kj_last at 32 bits", all(sw.kj_last(a, 13) for a in sample if rf.kj19(a)))
-        checks.check("FOLD's reduced near-inverse clause has no 32-bit counterpart in key_ok_r11: a pair with "
+        checks.check("egemm_depthr_check's reduced near-inverse clause has no 32-bit counterpart in key_ok_r11: a pair with "
                      "a0 a1 ≡ 1 mod 2^27 passes key_ok_r11 at both keys",
                      any(rf.key_ok_r11(a) and rf.key_ok_r11(pow(a, -1, 1 << 32)) for a in sample[:2000]))
 
@@ -233,7 +233,7 @@ def main() -> int:
                    if elems[(j, r)] | {j[2:]} != chain_group_orbit(n, j[0], j[1], j[2:], r, drop_n=True)]
         checks.check(f"n10, {len(jobs)} words (half NOT-symmetric) at pairs passing the scaled KJ: K_R for R = 1, 2, 3 is "
                      "exactly the set of words w' whose R-fold repetition is w's under an element of the 2R-pair chain "
-                     "group (P_p, X_p, N_p: pfill-fold §2.1)", not bad, f"mismatches {bad[:2]}")
+                     "group (P_p, X_p, N_p)", not bad, f"mismatches {bad[:2]}")
         if checks.mutations:
             checks.mutation("the chain group without its N_p generators", off, f"{len(off)} mismatches")
 

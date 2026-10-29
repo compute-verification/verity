@@ -2,7 +2,7 @@ schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-1gpu-pouw-protocol-served-b32"
 # `llama31-8b-1gpu-pouw-protocol-served` at b32 only, with 6 reps: there, at 3 reps, Pearl-C's eager arm drifted with
-# host load from rep to rep (r20261024-010807-94d3: 2.88, 3.12, 3.80 ms per output token), and an odd rep count doesn't
+# host load from rep to rep, and an odd rep count doesn't
 # cancel drift in the means. Arms, arm settings, setup and preset are that spec's (see its comment for what each arm
 # shares and what differs).
 arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]

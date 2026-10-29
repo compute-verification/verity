@@ -29,9 +29,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+settings = of(__file__)
 
 
 def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: str, control: bool = False) -> dict:
@@ -40,8 +42,8 @@ def verify(v: dict, run_dir: Path, run_id: str, commit: str, arm: str, label: st
     path = run_dir / v["transcript"].format(arm=arm, shape=label)
     values = {"python": sys.executable, "run_dir": str(run_dir), "run_id": run_id, "commit": commit, "arm": arm,
               "shape": label, "transcript": str(path), "dir": str(path.parent)}
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join(
-        [str(ROOT / "verity" / "core" / "protocols" / "pouw"), str(ROOT), os.environ.get("PYTHONPATH", "")]))
+    env = dict(settings.environ(), PYTHONPATH=os.pathsep.join(
+        [str(ROOT / "verity" / "core" / "protocols" / "pouw"), str(ROOT), *settings.PYTHONPATH]))
     exits, lines = [], []
     for cmd in v["commands"]:
         p = subprocess.run([x.format(**values) for x in cmd], capture_output=True, text=True, env=env)
@@ -87,7 +89,7 @@ def main(argv: list[str]) -> int:
                     help="no GPU: run the reference replays a --run-dir pass recorded; an ACCEPT is replay-verified "
                          "(development shortcut; the protocol's check is a ZK proof, PROTOCOL.md)")
     ap.add_argument("--run-id", default="arm-smoke")
-    ap.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA", "unknown"))
+    ap.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA or "unknown")
     a = ap.parse_args(argv)
     ok = True
 

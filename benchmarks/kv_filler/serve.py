@@ -103,7 +103,7 @@ LOGF = None
 
 def trace(seed: int, seconds: float, burst_gap_s: float, burst_mean: int, prompts, outputs) -> list[dict]:
     """Bursts at exponential gaps (mean `burst_gap_s`), each of 1 + Poisson(`burst_mean` − 1) requests arriving
-    together, prompt and output lengths drawn from the lists."""
+    together, prompt and output lengths sampled from the lists."""
     rng = random.Random(seed)
     t, out = rng.expovariate(1 / burst_gap_s) * 0.25, []
     while t < seconds:
@@ -284,7 +284,7 @@ def main() -> int:
 
     import torch
     import vllm
-    from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
+    from verity_vllm.engine import handle
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
@@ -315,8 +315,8 @@ def main() -> int:
     llm = LLM(**kw)
     log(f"engine up in {time.perf_counter() - t:.1f} s ({a.pool})")
     eng = llm.llm_engine
-    runner = get_model_runner(llm)
-    sched = get_scheduler(llm)
+    runner = handle.model_runner(llm)
+    sched = handle.scheduler(llm)
     cache = eng.vllm_config.cache_config
     weight_bytes = sum(p.numel() * p.element_size() for n, p in runner.model.named_parameters()
                        if "embed_tokens" not in n)

@@ -1,10 +1,10 @@
 # The encoded stack in vLLM, and its benchmark arms
 
 Llama-3.1-8B FP8 decode in vLLM with every linear weight, the lm_head and the paged KV cache held only as codec words,
-receipted by the remote bandwidth audit's sketches (`stack.py`, whose docstring lays out each part), and the plain stack,
-the same engine over the same kernels' plain forms. `bench_arm.py` makes them arms of the shared `verity-bench vllm`
-driver (`benchmarks/harness/README.md`); `benchmarks/harness/setup/vllm_encoded.sh` builds their GPU libraries from the
-dispatched commit.
+receipted by proof of useful bandwidth's (PoUB's) sketches (`stack.py`, whose docstring lays out each part), and the
+plain stack, the same engine over the same kernels' plain forms. `bench_arm.py` makes them arms of the shared
+`verity-bench vllm` driver (`benchmarks/harness/README.md`); `benchmarks/harness/setup/vllm_encoded.sh` builds their GPU
+libraries from the dispatched commit.
 
 ## Arms
 
@@ -43,9 +43,8 @@ the stack's grids, and the attention's splits with them). The gate fails unless 
 its SMs (`partition.spread`) and every run's current stream was the step's. Set F for the token control too (the
 environment does both): the splits change the attention's rounding, so a partitioned audit is gated against a
 partitioned plain run. F rounds up to the driver's smallest partition, 8 SMs on the RTX PRO 6000. The default stays 0
-because no F measured wins at both batches (note:20261024T2340Z-report-topup-part): F = 8 cuts the audit's TPOT 5–7%
-at b8 but its top-up reads 12–13% less there, and F = 16 reads more at both but costs b32 2–3%, the prefill's KV encode
-running on 172 SMs.
+because no F measured wins at both batch sizes: a partition that cuts the audit's time per output token also cuts the
+top-up's reads, and one that raises the reads slows the engine, whose prefill KV encode then runs on fewer SMs.
 
 **Credit.** The arm's gate carries `credit`: `credited` is true only for a credited id with the top-up on, the top-up
 having read bytes in every measured run, and spans off; `refused` lists why not. A credited id refused fails its gate,
@@ -85,10 +84,8 @@ the other parts' stretch, which `*_NO_TOPUP` separates.
 A decode step's codec decode is fused with its MMA and sketches, so no mark splits them. The audit's `linear`,
 `attention` and `lm_head` over the plain arm's are its decode and sketch cost. `kv_receipts=False` takes the KV sketches
 out of `attention`. Each mark's own time is in the part it ends, and `span_per_step.<kind>.marks` counts them. The
-overhead is the spans arm's time per output token over its spans-off twin's: on one RTX PRO 6000 a mark costs about
-2 µs, a decode step's 358 marks 0.7 to 0.9 ms, which is 1.3 to 1.5% of the audit's time per output token and 4 to 6% of
-the plain arm's at b8 and b32 (r20261024-200111-2eb6). So read a spans arm's parts, and the cost from the spans-off
-lines.
+marks' overhead is the spans arm's time per output token over its spans-off twin's, and it is a larger share of the
+plain arm's time than of the audit's. So read a spans arm's parts, and the cost from the spans-off lines.
 
 ## Switching an ablation to these hooks
 

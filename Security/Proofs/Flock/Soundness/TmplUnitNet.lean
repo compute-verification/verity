@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.ExecCircuit
 import Flock.HmRow
 
 /-!
-# A templated file's unit, at its committed net (PRF-133)
+# A templated file's unit, at its committed net
 
 A templated statement's circuit is `HmOut.parseTmpl`'s: its template read as a unit (`TmplUnit.read`), whose committed
 net `tu.net` is `HmRow.parse`'s first net, named `unit`, where a flat file's `CIRCUIT unit` section is, then

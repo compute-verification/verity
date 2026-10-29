@@ -3,7 +3,7 @@ import Mathlib.Tactic
 import Definitions.Pouw.TileBound.AlignedExactDefs
 
 /-!
-# Aligned exactness: from one row to a whole region (the TT_OUT restatements lane)
+# Aligned exactness: from one row to a whole region
 
 `no-aligned-exact-region/sm120-unpromoted` says no `a × b` block of a unit's output words is exact on every step of a
 window, except with negligible probability over E_A. This file proves the step that handles the dependence through

@@ -1,0 +1,32 @@
+{
+ "definitions": {
+  "LmsChainStep_v1{N=8,W=1}": {
+   "and": 77193,
+   "type": "4578f242f59f02bd6099a66810fb1f7d0c7dd28db521b709c782b44c23d37a3c8c25cf2612535faed9928c9525c93b62e78fd8c453ddc9ab4910ab29fe9c4b7a"
+  },
+  "LmsEqual_v1{N=64}": {
+   "and": 511,
+   "type": "92d1389128dab6fe00cc6b0415cc5b33a75b31633c84ac5947822471ac6242abf6047946daf5040a7bca6d59b844e795a011e64a9a9d50a2a0ac7f96032f9849"
+  },
+  "LmsEqual_v1{N=8}": {
+   "and": 63,
+   "type": "76eca98b8c93f60717ddb23335653901bbc636a28e34383fc6846667f25294aa8944bd1a3541e443d8b9baabd816f80177ec423cd184ca47015d349cb9ddf6b0"
+  },
+  "LmsLeaf_v1{N=8}": {
+   "and": 77096,
+   "type": "4ee26ee111e6f67d21ce4dafa96ef5be2ec4ceea8d794b0b348a3933b99d8b09a9ee8361935be391f39f2cf754f3162b752fe8162293e771f116c32fec21b9fb"
+  },
+  "LmsMessage_v1{N=8,W=1}": {
+   "and": 79165,
+   "type": "3bee26cc8812f45b2e9b7ba56556dd9686e9a8e09d927b3b5914838a79c0b66fda9e338a852831fdc470658eeea5a540e420ebb64236c29ff7d3f7a6b6af5d04"
+  },
+  "LmsNode_v1{N=8}": {
+   "and": 77383,
+   "type": "f6378cfa8687e2b45aaa87caca2f319a3ef5206458850bf8b118cbc120046f0ab97af01b601bc220c84d9863144d6709ecce5d2a8b7c47970e5f720b2f291439"
+  },
+  "Sha512Compress_v1": {
+   "and": 81402,
+   "type": "f004e89187484a24e2955cc1ca0a3854fe0b9618117948ccd191b942a337955ec1b03bcbb85ba1daddd24fb153687f596e10d081976d0a0b5e0a97082c9d1d2b"
+  }
+ }
+}

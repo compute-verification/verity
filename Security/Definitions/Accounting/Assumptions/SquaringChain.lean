@@ -6,7 +6,7 @@ import Definitions.Accounting.Gates.Codec
 
 What the encode bound (`Definitions/Accounting/Guarantees/Gates.lean`, `EncodeBudget`) assumes in place of the
 falsified `EncodeChainHardness`: two named `Prop`s, each taken as a hypothesis, never an `axiom`. Both are genuine math,
-conjectures (Daniel, 8 Oct): each sits under `shape.conjectures` with a falsification test that runs, and every claim
+conjectures: each sits under `shape.conjectures` with a falsification test that runs, and every claim
 resting on them is conditional. Both are priced in the model's nonlinear units (`Gates.nonlinear`: its budgeted units
 and its data products, every operation but a linear map whose coefficients are fixed before the coins), the units the
 stacking property caps (`Gates.Property`), so `E` is the encoder's multiplicative complexity in the gate model.
@@ -52,14 +52,14 @@ s8-family steps, folded mod `p`), which refute every fixed `d₀` (`Renormalizat
 `ε ≈ 2^−922`); none reaches `2^−64`, since a non-carrying `a` has digits below 16, `ε ≤ 16^L/p ≈ 2^−512`.
 
 **Why it should hold.** Two floors on two kinds of unit, each sketched. *Products*: `a²`'s column sums
-`Σ_{i+j=k} a_i a_j` (`k < 2L − 1`) are `2L − 1` linearly independent quadratic forms in `a`'s bytes, and a circuit
-whose only free operations are linear maps with fixed coefficients needs a product for each (their multiplicative
-complexity is `2L − 1`, met by evaluating at `2L − 1` points, whose wide operands the model's s8 lanes take only after
-narrowing). The sketch doesn't cover outputs that are limbs mod `p` rather than column sums, nor gathers, which a
-circuit pays for by fresh index bits. *Carries*: the limbs out are byte-format values, which interval analysis proves a
-free gate makes only from narrow values; a square's column sums are wide, so its carries pass through budgeted gates,
-`L − d(ε)` of them by the red team's Lemma R (`Guarantees.Gates.Renormalization`, unproved;
-note:20261017T1859Z-report-property-redteam R3.3, R4.1). Every known construction pays far more: the column sums alone
+`Σ_{i+j=k} a_i a_j` (`k < 2L − 1`) are `2L − 1` linearly independent quadratic forms in `a`'s bytes, and a circuit whose
+only free operations are linear maps with fixed coefficients needs a product for each (their multiplicative complexity
+is `2L − 1`, met by evaluating at `2L − 1` points, whose wide operands the model's s8 lanes take only after narrowing).
+The sketch doesn't cover outputs that are limbs mod `p` rather than column sums, nor gathers, which a circuit pays for
+by fresh index bits. *Carries*: the limbs out are byte-format values, which interval analysis proves a free gate makes
+only from narrow values; a square's column sums are wide, so its carries pass through budgeted gates, `L − d(ε)` of them
+by Lemma R (`Guarantees.Gates.Renormalization`, unproved).
+Every known construction pays far more: the column sums alone
 are `L² = 16,384` data products, so ripple carries cost 16,896 nonlinear units and look-ahead carries 16,726, and a
 bitwise squaring about `n² ≈ 10^6`.
 
@@ -99,8 +99,8 @@ makes a squaring cheaper than `e` on average, and none is shared across words.
 **What would falsify it.** A codec circuit whose nonlinear units a word fall below `k · S · e`: a chain amortizing its
 renormalizations or its products across squarings, or a block sharing work across words. The falsification test
 (`test_chain_sum_known_chains`) prices the known chains: the byte-limb chain (each squaring a known construction,
-measured over chained squarings at p1024) and the bitwise codec, whose data products the red team's port measures at
-toy fields (`benchmarks/property_redteam/tests/test_bitwise_codec.py`). -/
+measured over chained squarings at p1024) and the bitwise codec, whose data products are measured at toy fields
+(`benchmarks/property_redteam/tests/test_bitwise_codec.py`). -/
 def ChainSum (F : Field) (k B e εnum εden : ℕ) : Prop :=
   εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
     SquaringFloor F e εnum εden → EncodeBound F k B (k * F.squarings * e) εnum εden

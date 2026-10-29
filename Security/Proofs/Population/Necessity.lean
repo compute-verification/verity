@@ -13,7 +13,7 @@ The counterexamples, each a choice of Boolean unit functions:
 * a slot no unit writes: two correct assignments, differing there;
 * a cycle: every unit of the cycle's strongly connected component computes the OR of what it reads, and every other
   unit `false`; then "all `false`" and "`true` on the component's writes" are both correct (`cycle_two_fixed_points`):
-  a self-consistent wrong fixed point, with no wrong unit.
+  a self-consistent wrong fixed point, with no faulty proof block.
 -/
 
 namespace Population.Dataflow

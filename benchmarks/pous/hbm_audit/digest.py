@@ -1,18 +1,18 @@
-"""The bulk-bandwidth audit's digest: a keyed universal hash over a random set of 64 KiB blocks of the PoUS store `C`.
+"""The bulk-bandwidth audit's digest: a keyed universal hash over a random set of 64 KiB labels of the PoUS store `C`.
 
-The verifier names a random set of `R` block indices of `C` and a fresh key; the server must return a digest that depends
-on every byte of those blocks within the deadline. An honest GPU reads `R * 64 KiB` from HBM and folds it; a server that
-keeps a fraction `f` of the blocks in host DRAM must move `f * R * 64 KiB` over PCIe first, which a deadline tuned to HBM
+The verifier names a random set of `R` label indices of `C` and a fresh key; the server must return a digest that depends
+on every byte of those labels within the deadline. An honest GPU reads `R * 64 KiB` from HBM and folds it; a server that
+keeps a fraction `f` of the labels in host DRAM must move `f * R * 64 KiB` over PCIe first, which a deadline tuned to HBM
 speed does not allow.
 
 The digest is a two-level polynomial (Toeplitz / Carter--Wegman) hash over `GF(p)` with the Mersenne prime `p = 2^31 - 1`:
 
-- each 64 KiB block is 16,384 little-endian `uint32` words `w[0..W-1]`; its block hash is `P_g(block) = sum_j w[j] g^{W-1-j}`
+- each 64 KiB label is 16,384 little-endian `uint32` words `w[0..W-1]`; its label hash is `P_g(block) = sum_j w[j] g^{W-1-j}`
   evaluated at a verifier point `g` (Horner), so changing any word changes the value except with probability `W/p ~ 2^-17`;
-- the block hashes are folded with a second verifier point `z`: `D = sum_r h[r] z^r mod p`, so changing, dropping or
-  reordering any block changes `D` except with probability `R/p`.
+- the label hashes are folded with a second verifier point `z`: `D = sum_r h[r] z^r mod p`, so changing, dropping or
+  reordering any label changes `D` except with probability `R/p`.
 
-One lane gives per-block almost-universality `~2^-17`; a deployment runs `HL` independent lanes with fresh `(g, z)` for
+One lane gives per-label almost-universality `~2^-17`; a deployment runs `HL` independent lanes with fresh `(g, z)` for
 `~2^-17*HL` (the prototype measures `HL = 1` and `2` to show the digest stays HBM-bound either way). The field fits every
 intermediate product in `int64` (`acc, g < 2^31`, so `acc*g < 2^62`), which is why the GPU kernel needs no 128-bit
 arithmetic and runs at memory speed. The constants here are the audit's wire format, mirrored by the Triton kernel in
@@ -24,9 +24,9 @@ from __future__ import annotations
 import numpy as np
 
 BLOCK_BYTES = 65536
-WORDS = BLOCK_BYTES // 4  # 16384 uint32 words per 64 KiB block
+WORDS = BLOCK_BYTES // 4  # 16384 uint32 words per 64 KiB label
 MOD = (1 << 31) - 1  # the Mersenne prime 2^31 - 1
-INTERLEAVE = 1024  # the Triton kernel's SIMD width; a block is N_STEPS interleaved Horner passes
+INTERLEAVE = 1024  # the Triton kernel's SIMD width; a label is N_STEPS interleaved Horner passes
 N_STEPS = WORDS // INTERLEAVE  # 16
 assert INTERLEAVE * N_STEPS == WORDS
 
@@ -118,10 +118,10 @@ def _build():
 
     @triton.jit
     def block_hash_kernel(
-        c_ptr,  # int32 [N, WORDS], a block per row
+        c_ptr,  # int32 [N, WORDS], a label per row
         idx_ptr,  # int64 [R], the challenged rows
         combine_ptr,  # int64 [INTERLEAVE], g^{INTERLEAVE-1-l}
-        out_ptr,  # int64 [R], the per-block hashes
+        out_ptr,  # int64 [R], the per-label hashes
         gp,  # int64 scalar, g^INTERLEAVE mod p
         p,  # int64 scalar, the modulus
         INTERLEAVE: tl.constexpr,
@@ -162,17 +162,18 @@ def _build():
 
 
 def _kernel():
-    """The one-lane block-hash kernel (built lazily so the module imports without torch/triton for the CPU reference)."""
+    """The one-lane kernel that hashes labels (built lazily so the module imports without torch/triton for the CPU
+    reference)."""
     return _build()[0]
 
 
 def _kernel2():
-    """Two independent hash lanes in one read of each block, to show a stronger digest stays HBM-bound."""
+    """Two independent hash lanes in one read of each label, to show a stronger digest stays HBM-bound."""
     return _build()[1]
 
 
 def block_hashes2(C, idx, g0: int, g1: int):
-    """Two lanes' per-block hashes from one read of each challenged block. Outputs live on `idx`'s device (the CUDA
+    """Two lanes' per-label hashes from one read of each challenged label. Outputs live on `idx`'s device (the CUDA
     device), so `C` may be a pinned host tensor read over PCIe (UVA zero-copy)."""
     import torch
 
@@ -191,7 +192,7 @@ def block_hashes2(C, idx, g0: int, g1: int):
 
 
 def block_hashes(C, idx, g: int, out=None):
-    """Run the kernel: per-block hashes `P_g(C[idx[r]])` as an `int64 [R]` device tensor. `C` is `int32 [N, WORDS]`; it
+    """Run the kernel: per-label hashes `P_g(C[idx[r]])` as an `int64 [R]` device tensor. `C` is `int32 [N, WORDS]`; it
     may be a pinned host tensor (UVA zero-copy) since the outputs are keyed off `idx`'s (CUDA) device."""
     import torch
 
@@ -210,7 +211,7 @@ def block_hashes(C, idx, g: int, out=None):
 
 
 def fold(hashes, z: int) -> int:
-    """Fold per-block hashes into the digest `sum_r h[r] z^r mod p` (tiny; reads only the `[R]` hash array)."""
+    """Fold per-label hashes into the digest `sum_r h[r] z^r mod p` (tiny; reads only the `[R]` hash array)."""
     import torch
 
     r = hashes.numel()
@@ -238,7 +239,7 @@ def z_powers_dev(z: int, r: int, device):
 
 
 def block_hashes_pre(C, idx, combine, gp: int, out):
-    """One lane's per-block hashes with a precomputed `combine` table and `gp = g^INTERLEAVE mod p` into a reused `out`."""
+    """One lane's per-label hashes with a precomputed `combine` table and `gp = g^INTERLEAVE mod p` into a reused `out`."""
     _kernel()[(idx.numel(),)](C, idx, combine, out, gp, MOD, INTERLEAVE, N_STEPS)
     return out
 

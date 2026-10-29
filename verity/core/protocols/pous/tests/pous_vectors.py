@@ -3,7 +3,7 @@
 `python tests/pous_vectors.py` rewrites the file, including P3's and the band's 64 KB-label segments (about a minute);
 the tests recompute
 everything but the two whole 64 KB segments by default and compare.  The dense scheme's 64 KB entry is the first 16
-blocks of a segment (136 calls of `Π₂`; the whole segment is 131,328); the band's are the first 16 blocks and the whole
+labels of a segment (136 calls of `Π₂`; the whole segment is 131,328); the band's are the first 16 labels and the whole
 secure-first segment (6,578 calls).
 """
 

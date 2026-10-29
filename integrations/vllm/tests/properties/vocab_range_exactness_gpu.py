@@ -1,5 +1,5 @@
 """GPU run of the vocabulary-range exactness property (`verity_vllm.properties.vocab_range_exactness`) on a TP2 engine: in every rank's
-worker, the vocabulary-range source's committed values against the IR's `EmbeddingShard_v1` values and the fused kernel's own output, on
+worker, the vocabulary-range source's committed values against the circuit's `EmbeddingShard_v1` values and the fused kernel's own output, on
 edge ids and live; write the sealed record `<out>/vocab_range_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a
 record's digest and verdict without a GPU.
 
@@ -92,7 +92,7 @@ def _w_install(worker) -> dict[str, Any]:
 
 
 def _check(pairs: list[tuple[Any, Any]], vals: list[Any], emb: Any, start: int, vs: int) -> dict[str, Any]:
-    """Every committed row against the IR's values of its id, and the kernel's partial against the committed range bits."""
+    """Every committed row against the circuit's values of its id, and the kernel's partial against the committed range bits."""
     import torch
 
     cache: dict[int, tuple[int, int, int]] = {}

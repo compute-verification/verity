@@ -34,10 +34,10 @@ program `p` and query:
   `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 
 It is stated, not proved: nothing builds a `Declared` from a compiled Program yet, which is the composed statement's
-faithfulness gap (note:compute-accounting/20261018T1758Z-draft-compose-r6, Open). The extractor that builds one, with
-this property proved of it, closes it; tying each value to its leaf under the weights' or the transcript's root is the
-extractor's too. The draw conjunct is over the code alone and could be proved first (`Select.select`'s subset draw from
-bytes, `Draw.drawUnits`), beside `Properties.SampledProofs.DrawMisses`.
+open faithfulness gap. The extractor that builds one, with this property proved of it, closes it; tying each value to
+its leaf under the weights' or the transcript's root is the extractor's too. The draw conjunct is over the code alone
+and could be proved first (`Select.select`'s subset draw from bytes, `Draw.drawUnits`), beside
+`Properties.SampledProofs.DrawMisses`.
 -/
 
 open Lean (Json)

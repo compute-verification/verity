@@ -1,5 +1,5 @@
-"""CMP-92's row ops as Boolean Definitions split so that each outputs at most 16 bits (a proof unit's outputs, the 16-bit forms
-of CIR-100's fallback): a bf16 row's softmax, the embedding's coordinate, and the 16-bit halves of RMSNorm's f32 parts.
+"""The e2e demo's row ops as Boolean Definitions split so that each outputs at most 16 bits (a proof block's outputs, the
+16-bit fallback forms): a bf16 row's softmax, the embedding's coordinate, and the 16-bit halves of RMSNorm's f32 parts.
 
     SoftmaxMax_v1{N}                   (x: Array<N, Array<16, Value<1>>>) -> Array<16, Value<1>>
     SoftmaxRecip_v1{N, HALF}           (x: Array<N, Array<16, Value<1>>>, m: Array<16, Value<1>>) -> Array<16, Value<1>>
@@ -30,7 +30,7 @@ row gives. col and pos are registered reads at public positions (j and t), and t
 inside the proof. The select is `MoeSelectBf16x{E}_v2`'s: the multiplexer tree (`boolean.gather`) over tok's low
 b = ceil(log2 V) bits, with a word past V standing for 0x7FFF, then 0x7FFF wherever any of tok's other 16 - b bits is set.
 
-**RMSNorm** is `ops.boolean.rmsnorm`'s two-level form. Its f32 parts each become two units, one for each 16-bit half: the low
+**RMSNorm** is `ops.boolean.rmsnorm`'s two-level form. Its f32 parts each become two proof blocks, one for each 16-bit half: the low
 16 bits (HALF = 0) or the high 16 bits (HALF = 1) of `RmsSumSqPart_v1{C}`, `F32SumPart_v1{G}` or `RmsNormRecip_v1{N, G, EPS}`.
 Each half is traced from that part's builder, so a half's circuit holds only the gates its own bits read. Each takes the part's
 statics and refuses what the part's signature refuses. A later part, or `RmsNormOut_v1{C}` (C = 1 is its 16-bit form), reads

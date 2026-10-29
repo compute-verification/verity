@@ -4,13 +4,13 @@ import Proofs.Flock.Soundness.ExecTemplateSetup
 # A typed flat class's unit, placed (1e for flat classes)
 
 A typed statement whose unit has no placed parts, no reads and no Δ but its constant's copy of `one` (`Typed.isFlat`) is
-a flat class (#307): `parseTyped` parses the file with the unit's net first (`HmRow.parse`'s `pre`), the net
+a flat class: `parseTyped` parses the file with the unit's net first (`HmRow.parse`'s `pre`), the net
 `Typed.netOfD` builds from `derive`'s rows, where an untyped statement has its `CIRCUIT unit` section.
 
 - `setupH_flatLayout`: the statement `Stmt.setupH` accepted has the layout an untyped one has (`Layout`), its unit net
   the class's.
 - `netRows_flat`: the unit's composed rows (`ofBlock`) are its net's rows (`NetRows`), given `PastInputs`: the order's
-  columns after the unit's inputs are at or past the net's input rows, which `Typed.read` checks (`Typed.flatNet`, #434).
+  columns after the unit's inputs are at or past the net's input rows, which `Typed.read` checks (`Typed.flatNet`).
 - `setupH_flatRealizes`, `setupH_flatPlacement`: so at each unit slot, the accepted statement realizes the unit's composed
   rows (`Layout.realizes`) and places them (`Realizes.placement`), the table class's `placed` there.
 -/
@@ -32,7 +32,7 @@ def PastInputs (done : Array D) (u : D) (net : Net) : Prop :=
   ∀ c ∈ (order done u).drop u.inCols.size, net.inWords * Flock.WORD ≤ c
 
 /-- A flat class read: its unit is flat, its net is built from the class's own unit rows, its order's computed columns
-are past the net's input rows, and its input columns are the net's input port bits in order (`Typed.flatNet`, #434). -/
+are past the net's input rows, and its input columns are the net's input port bits in order (`Typed.flatNet`). -/
 theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {k : Typed.Class} {net : Net}
     (h : Typed.read tags bytes tables = .ok (k, .inl net)) :
     Typed.isFlat (k.done.getD k.unit default) = true ∧ ∃ name, Typed.netOfD (k.done.getD k.unit default) name = .ok net ∧
@@ -200,8 +200,8 @@ theorem setupH_flatRealizes (ht : tags.typed = true)
   rw [hunit]
   exact netRows_flat k.hd hflat hnet hlog hpast
 
-/-- **A flat class's placement at each unit slot of the accepted statement**: the unit's composed rows, as #256 and #287
-state them, placed at `composePlace` in the model of the statement `Stmt.setupH` accepted. -/
+/-- **A flat class's placement at each unit slot of the accepted statement**: the unit's composed rows, placed
+at `composePlace` in the model of the statement `Stmt.setupH` accepted. -/
 theorem setupH_flatPlacement (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {net : Net}
     (hr : Typed.read tags cf tables = .ok (k, .inl net))

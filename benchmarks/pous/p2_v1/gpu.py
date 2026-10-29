@@ -1,4 +1,4 @@
-"""P2's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every block's `K` and `t` expanded on the
+"""P2's GPU backend: `libp2v1.so` (`p2v1.cu`) through ctypes on torch tensors, with every label's `K` and `t` expanded on the
 device by the library's `p2v1_keys` with v4's framing (`p2keys4.cuh`: counter-mode SHA-512 over the setup's key prefix,
 whole 128-byte SHA-512 blocks that the library compresses once into a midstate: `reference.expand_prefix`'s 256 bytes, or
 the registered scheme's `schemes.p2.expand_prefix`; `reference.keys_after`) just before the kernel that uses them, and
@@ -55,7 +55,7 @@ class Kernels:
         self.flags = torch.zeros(1, dtype=torch.int32, device=self.device)
 
     def keys(self, first: int, count: int) -> tuple[Any, Any]:
-        """`K` and `t` of blocks `first .. first + count − 1`, as `[count, W/8]` big-endian rows (`t`'s first candidate; a
+        """`K` and `t` of labels `first .. first + count − 1`, as `[count, W/8]` big-endian rows (`t`'s first candidate; a
         second is needed with probability `c0 / 2^W`, which the kernels flag)."""
         torch = self.torch
         k, t = (torch.empty(count, self.params.width_bytes, dtype=torch.uint8, device=self.device) for _ in range(2))
@@ -78,7 +78,7 @@ class Kernels:
         return m
 
     def decode(self, c: Any, first: int = 0) -> Any:
-        """`m` rows of the `c` rows of blocks `first ..`, keys expanded for them."""
+        """`m` rows of the `c` rows of labels `first ..`, keys expanded for them."""
         if self.fused:
             return self.decode_fused(c, first)
         k, t = self.keys(first, c.shape[0])

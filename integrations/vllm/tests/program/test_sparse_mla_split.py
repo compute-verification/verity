@@ -45,7 +45,7 @@ def _lg2_word(x: int) -> int:
 
 @pytest.mark.parametrize("c0", ["C0", "C0_max"])
 def test_lg2_reproduces_the_sm120_measurement(c0: str) -> None:
-    """Every mantissa at [1, 2) and the 2^20-word sweep of run r20261004-060203-ba52, by the digests the table records, at
+    """Every mantissa at [1, 2) and the 2^20-word sweep, by the digests the table records, at
     either end of C0's measured range."""
     mant, sweep_in, sweep_out = _digests()
     h = hashlib.sha256()
@@ -72,7 +72,7 @@ def test_lg2_known_words(x: int, want: int) -> None:
 
 def test_lg2_is_log2_within_its_accuracy() -> None:
     """|lg2(x) - log2(x)| <= 2^-21.5 max(1, |log2 x|) on random positive normals: the worst over seeds 0..19 of 2^18 words each
-    (this draw) is 2^-22.1."""
+    (this sample) is 2^-22.1."""
     worst = 0.0
     for seed in range(4):
         rng = np.random.default_rng(seed)

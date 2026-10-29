@@ -45,7 +45,7 @@ TOP = E.TOP
 MAX_KEYS = E.MAX_K
 #: cuBLASLt (sm_120) refuses an s8 product whose k is an odd multiple of 8 up to 120 at n = 128 and m not a multiple of 64
 K_ALIGN = 16
-#: and, for every k below 128 and every m, one whose n is an odd multiple of 8 from 40 (r20261019-230516-524d): a head dim 64
+#: and, for every k below 128 and every m, one whose n is an odd multiple of 8 from 40: a head dim 64
 #: window of 33..40 keys
 N_ALIGN = 16
 LUT_SIZE = 256

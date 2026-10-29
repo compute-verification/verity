@@ -9,8 +9,8 @@ product, and each layer's int8 attention as two, its batch's KV quantization and
         (`registry.int8_exact.ScaledMmS8_v1{K,N}` per row)
     verity_int8::scaled_mm_zy(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int rows) -> (Tensor y, Tensor zy)
         scaled_mm's y, and from the same product (on CUDA the same accumulator) the call's z/y records over `rows` slots
-        (T), zy uint8 [units, `int8_exact.ZY_BYTES`]: a 32 x 32 unit's exact s32 z, then its y = dq(z) (`int8_exact.zy_records`,
-        CA's layout of 21 Oct 04:32Z), what H1 commits as one hiding leaf a unit
+        (T), zy uint8 [units, `int8_exact.ZY_BYTES`]: a 32 x 32 unit's exact s32 z, then its y = dq(z) (`int8_exact.zy_records`),
+        what H1 commits as one hiding leaf a unit
 
 The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
 values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.

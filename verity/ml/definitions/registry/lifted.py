@@ -1,29 +1,28 @@
-"""The ⊥-lifted, fully padded Definitions — **lifted-padded** (R17: `out/gen/r17/LIFTING-SPEC-v0.5.md`), lane `pad` (BRIEF §7).
+"""The ⊥-lifted, fully padded Definitions — **lifted-padded**.
 
-Specification: LIFTING-SPEC v0.5 (R17), on v0.4 (`out/gen/r15/LIFTING-SPEC.md`, stoch; identity review global M-0472, soundness
-pass rev-pm M-0548) with `out/gen/r16/LIFTING-STATUS.md`'s AGREED/PROPOSED split.  R17 RULED the two R16 candidates: R17-6
+Two rules hold for them:
 (a) total relation behaviour for noncanonical `1‖nonzero` words per operation class (PAD-01 CLOSED: `INV_w`, never normalized
 before commitment) and (b) TRUE widened widths (PAD-02 CLOSED: no activity/payload split, real widths in admissibility and summaries);
-R17-1 ruled DP-pad-02 (PAD-05 CLOSED: `LAG` a declared specialization parameter, one rule with moe/GP-01, never inferred from a trace).
+and DP-pad-02 holds (PAD-05 CLOSED: `LAG` a declared specialization parameter, one rule with moe/GP-01, never inferred from a trace).
 Nothing here edits a frozen Definition: every lifted Definition is registered under a **new** id (`Lifted[<id>]_v1`,
-`LSelect<w>_v1`, …) with its own spec string and digest (DECISIONS-2 §8); the originals are untouched and are what the lifted
-evaluators call for the payload arithmetic.  Every lifted result carries `LIFTED_RULES_VERSION` (SPEC v0.5 A5).
+`LSelect<w>_v1`, …) with its own spec string and digest; the originals are untouched and are what the lifted
+evaluators call for the payload arithmetic.  Every lifted result carries `LIFTED_RULES_VERSION`.
 
-Encodings (SPEC §2; AGREED A3): a `w`-bit domain is represented in `w+1` bits, the tag is bit `w`:
+Encodings (AGREED A3): a `w`-bit domain is represented in `w+1` bits, the tag is bit `w`:
 
     enc(Active(v)) = v          (tag 0, payload v)        v ∈ [0, 2^w)
     enc(⊥)         = 2^w        (tag 1, payload 0)
     valid_w(x)     = tag(x) = 0 ∨ payload(x) = 0          the 2^w + 1 canonical patterns
-    INV_w          = 2^w + 1    (tag 1, payload 0…01)     AGREED (R17-6(a), SPEC v0.5 A3): the one noncanonical word every lifted
+    INV_w          = 2^w + 1    (tag 1, payload 0…01)     AGREED: the one noncanonical word every lifted
                                                            primitive maps any noncanonical operand to; never an honest value
 
-Three classes of lifted primitive (SPEC §3):
+Three classes of lifted primitive:
 
 * **strict** (§3.1, the default; AGREED A5 "ordinary arithmetic"): `lifted_prim(F)` wraps the frozen evaluator mechanically —
   any invalid operand → `INV`, else any ⊥ operand → ⊥, else `0‖F(payloads)` bit for bit.  No hand-written semantics per primitive.
 * **specified** (§3.2, the closed list; AGREED A5 "selection, indexing, batching, state"): `LSelect<w>`, `LIsActive<w>`,
-  `LBot<w>`, `LGatherRow<w>x<N>`, `LStepLive<E>`, the Continuation_v1 members `LIsEOS<E>` / `LEmitNext[H]` (R17-32, SPEC B6) and
-  `LFixedSelect<E>x<w>` (R17-42 §3 FixedSelect among computed slot outputs; MOE-PAD-SPEC §2) — hand-authored relations below, each with
+  `LBot<w>`, `LGatherRow<w>x<N>`, `LStepLive<E>`, the Continuation_v1 members `LIsEOS<E>` / `LEmitNext[H]`  and
+  `LFixedSelect<E>x<w>` (FixedSelect among computed slot outputs) — hand-authored relations below, each with
   the reason it is not strict.  Nothing else is lifted non-strictly (`test_lifted_tiny.py::test_specified_list_is_closed`).
 * **constants / inputs** (§2): `Const<w>[bits]` lifts to the existing `Const<w+1>[0‖bits]` (`b1.const(w+1, bits)`, tag 0 by
   construction); `Input<w>` lifts to `Input<w+1>` (the Program lowers it from the lifted parameter type); prescribed inputs are
@@ -31,20 +30,20 @@ Three classes of lifted primitive (SPEC §3):
 
 Composites (§3.3) are lifted by **node replay** (`lift_def`): the lifted body is the original body with every callee replaced by
 its lifted Definition and every type lifted — same node indices, same operand runs, same gate count, so canonical references
-are unchanged modulo spec ids (global M-0472 R1 address stability holds by construction, and is tested).  The evaluator never
+are unchanged modulo spec ids (address stability holds by construction, and is tested).  The evaluator never
 shortcuts: it evaluates the denoted circuit gate by gate, so the §3.3 strictness/payload-agreement theorems are *measured* on
 each lifted composite of the fixture rather than assumed.
 
 `LServe_v1` (§4) is the lifted padded serving Program on the `Serve_v2` skeleton: no live array; the activity guard sits on each
 step's **input** token (`GUARD = "in"`: `tok_in_s = LSelect(LStepLive(out[s−1], eos_set), out[s−1], LBot<32>)`, `out[s] = y_s`) —
 DP-pad-01 option (a), a labelled candidate: the spec's letter (§4.2, output guard) leaves step `a_r` half-Active and contradicts its
-own §4.3/§6/§7 (LIFTING-REVIEW F-pad-01); the cache append is unguarded (an inactive step's new K/V row is ⊥ by strictness).  The
+own §4.3/§6/§7; the cache append is unguarded (an inactive step's new K/V row is ⊥ by strictness).  The
 guard is two root-body nodes per step (`s=<s>/live`, `s=<s>/tok_in`) plus one `LBot32` and `|EOS|` constants — extra nodes the
-unlifted skeleton does not have; how [R1] address stability reads across them is DECISIONS-PENDING PAD-03, not a silent fix.
+unlifted skeleton does not have; how address stability reads across them is PAD-03, an open question, not a silent fix.
 `activity_prefix` / `served_count` / `check_served_prefix` / `assign_inactive` are §7's rule as pure functions on committed token
-arrays (AGREED of record, F-pad-04).  Widths (R17-6(b), SPEC v0.5 A4): `lifted_width_summary` / `lifted_width_admissibility` report
-the TRUE lifted width `Σ (w+1)` and run the untouched `partition.validate_width` at the lifted parameter `W_MAX_LIFTED`; the R16
-`validate_width_lifted` (payload rule + `n_max`) is WITHDRAWN.  `LAG` (R17-1, SPEC v0.5 A2): `lag_from_header` (the attestation) and
+arrays (AGREED of record).  Widths: `lifted_width_summary` / `lifted_width_admissibility` report
+the TRUE lifted width `Σ (w+1)` and run the untouched `partition.validate_width` at the lifted parameter `W_MAX_LIFTED`; the earlier
+`validate_width_lifted` (payload rule + `n_max`) is WITHDRAWN.  `LAG`: `lag_from_header` (the attestation) and
 `declared_lag_of_row` (the Build's declaration) both go through GP-01's one rule (`_lag_rule`); the lifted tool's R0 needs both, equal.
 """
 
@@ -57,10 +56,11 @@ from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, Fun
                     composite)
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
 from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1, operand_widths
 
-LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names (SPEC §7)
-LABEL = "lifted-padded"  # R17 BRIEF §7: every result of this lane is labelled so, never a panel / active-reference row
+LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names
+LABEL = "lifted-padded"  # every result of this lane is labelled so, never a panel / active-reference row
 
 # ---------------------------------------------------------------------------------------------------------
 # encodings (§2) and the PAD-01 candidate (§9a)
@@ -92,7 +92,7 @@ def in_width(w: int, x: int) -> bool:
 
 
 def valid(w: int, x: int) -> bool:
-    """`valid_w(x) := tag(x) = 0 ∨ payload(x) = 0` — the `2^w + 1` canonical patterns (SPEC §2)."""
+    """`valid_w(x) := tag(x) = 0 ∨ payload(x) = 0` — the `2^w + 1` canonical patterns."""
     return in_width(w, x) and (tag(w, x) == 0 or payload(w, x) == 0)
 
 
@@ -119,9 +119,9 @@ class BoundaryFailure(ValueError):
 
 
 def check_boundary(w: int, x: int, *, what: str = "value", prescribed: bool = False, index_range: int | None = None) -> int:
-    """The validity check every observable boundary performs (PAD-01 rule 1; SPEC §9a): a `1‖nonzero` word is rejected by
-    name; a **prescribed** input must additionally be Active (SPEC §2); an index-valued input is range-checked here
-    (SPEC [P3]: range is a boundary fact).  Returns `x` unchanged when it passes."""
+    """The validity check every observable boundary performs (PAD-01 rule 1): a `1‖nonzero` word is rejected by
+    name; a **prescribed** input must additionally be Active; an index-valued input is range-checked here
+    (range is a boundary fact).  Returns `x` unchanged when it passes."""
     if not in_width(w, x):
         raise BoundaryFailure(what, w, x, f"not a {w + 1}-bit word")
     if not valid(w, x):
@@ -187,7 +187,7 @@ def bot_words(t: Type) -> list[int]:
 
 _LIFTED_PRIMS: dict[str, PrimitiveDefinition] = {}
 _SPECIFIED_IDS: set[str] = set()  # ids of the specified-class primitives (the closed list, §3.2)
-# F-pad-07: the indexing FAMILY, not one name — every registered `Gather<T>x<N>_v1` with the shape
+#: the indexing FAMILY, not one name — every registered `Gather<T>x<N>_v1` with the shape
 # `(token: Value<32>, column: Array<N, Value<w>>) -> Value<w>` is a gather; its out-of-range extension is read from ITS original.
 _GATHER_RE = re.compile(r"^Gather([A-Za-z0-9]+?)x(\d+)_v1$")
 _OOR_PROBES = (None, 1, 0xFFFFFFFF, 0x80000000, 0x7FFFFFFF)  # N (filled in), N+1, −1, i32 min, i32 max — all out of range for N ≤ 2^31−1
@@ -206,7 +206,7 @@ def _gather_shape(p: PrimitiveDefinition) -> tuple[int, int] | None:
 def registered_oor_extension(p: PrimitiveDefinition) -> int:
     """The original gather's **registered total extension** on an Active out-of-range index, read from the original itself
     (its `evaluate_lazy` on five out-of-range probes: `N`, `N+1`, `−1`, i32 min, i32 max — no column word is touched): one
-    constant, else `TypeError` by name.  Nothing is invented and nothing is keyed on a payload width (F-pad-05/07/08)."""
+    constant, else `TypeError` by name.  Nothing is invented and nothing is keyed on a payload width."""
     shape = _gather_shape(p)
     if shape is None:
         raise TypeError(f"{p.id} is not a registered gather family (shape (Value<32>, Array<N, Value<w>>) -> Value<w>)")
@@ -270,10 +270,10 @@ def _strict_wrapper(p: PrimitiveDefinition) -> PrimitiveDefinition:
 
 
 def lifted_prim_v1(p: PrimitiveDefinition) -> PrimitiveDefinition:
-    """LEGACY `lifted-v1` (LIFTING-SPEC v0.5.2, propagation semantics): the lifted Definition of a registered primitive WITHOUT an
+    """LEGACY `lifted-v1` (propagation semantics): the lifted Definition of a registered primitive WITHOUT an
     enable operand — constants → `Const<w+1>[0‖bits]`; inputs → `Input<w+1>`; the selects and gathers → their specified-class
     member; everything else → the strict wrapper.  Kept so a `lifted-v1` descriptor (`Lifted[<id>]_v1`) still cold-decodes; new
-    lifts use `lifted_prim` (v2, R17-43 explicit enablement).  Cached by id."""
+    lifts use `lifted_prim` (v2 explicit enablement).  Cached by id."""
     lp = _LIFTED_PRIMS.get(p.id)
     if lp is not None:
         return lp
@@ -291,7 +291,7 @@ def lifted_prim_v1(p: PrimitiveDefinition) -> PrimitiveDefinition:
     elif p.id == "SelectBf16_v1":
         lp = l_select(16)
     elif _gather_shape(p) is not None:
-        lp = l_gather_row_of(p)  # F-pad-07: any registered gather family, extension read from this original
+        lp = l_gather_row_of(p)  # any registered gather family, extension read from this original
     else:
         lp = _strict_wrapper(p)
     _LIFTED_PRIMS[p.id] = lp
@@ -299,7 +299,7 @@ def lifted_prim_v1(p: PrimitiveDefinition) -> PrimitiveDefinition:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# R17-43 explicit enablement (LIFTING-SPEC v0.6 A9 / B7): the enable is the LAST operand of every lifted computed gate
+# explicit enablement: the enable is the LAST operand of every lifted computed gate
 # ---------------------------------------------------------------------------------------------------------
 
 LIFT_VERSION = 2  # `Lifted[<id>]_v2`: the enable-threaded lift (padded-v1 rules); `_v1` = the propagation lift (lifted-v1, legacy)
@@ -344,7 +344,7 @@ def _enable_wrap(lp: PrimitiveDefinition, original_id: str, *, reason: str) -> P
 
 
 def lifted_prim(p: PrimitiveDefinition) -> PrimitiveDefinition:
-    """The lifted Definition OF RECORD of a registered primitive (padded-v1, LIFTING-SPEC v0.6 B7): `Lifted[<id>]_v2` = the lifted-v1
+    """The lifted Definition OF RECORD of a registered primitive (padded-v1): `Lifted[<id>]_v2` = the lifted-v1
     relation (`lifted_prim_v1`: strict wrapper / specified member / lifted constant) with the enable as its LAST operand, so that a
     constant produced inside a disabled body is ⊥ (`Lifted[Const<w>[k]_v1]_v2(enable)`) and a select/gather inside a disabled body is ⊥
     whatever it would have selected.  `Input<w>` lifts to `Input<w+1>` unchanged — an input is the Program's boundary, produced by no
@@ -394,8 +394,8 @@ def _register_specified(p: PrimitiveDefinition, reason: str) -> PrimitiveDefinit
 
 def l_select(w: int) -> PrimitiveDefinition:
     """`LSelect<w>_v1(c: Value<2>, a, b: Value<w+1>) -> Value<w+1>`: `c = Active(1) → a`; `c = Active(0) → b`; `c = ⊥ → ⊥`;
-    any invalid operand (including the **untaken** branch) → `INV_w` (PAD-01 rule 2, "untaken branch poisons" — conservative,
-    rev-pm M-0548 (3)).  Not strict because `Select(true, 7, ⊥) = 7` is the intended relation (AGREED A5)."""
+    any invalid operand (including the **untaken** branch) → `INV_w` (PAD-01 rule 2, "untaken branch poisons" —
+    conservative).  Not strict because `Select(true, 7, ⊥) = 7` is the intended relation (AGREED A5)."""
     p = _SELECTS.get(w)
     if p is None:
         bot_w, inv_w = enc_bot(w), inv(w)
@@ -415,7 +415,7 @@ def l_select(w: int) -> PrimitiveDefinition:
 
 def l_is_active(w: int) -> PrimitiveDefinition:
     """`LIsActive<w>_v1(x: Value<w+1>) -> Value<2>`: `Active(1)` iff `tag(x) = 0`, `Active(0)` for ⊥; never ⊥; `INV → INV_1`
-    (= `0b11`).  The only primitive that reads the tag into a payload — how activity becomes a value (SPEC §5, the
+    (= `0b11`).  The only primitive that reads the tag into a payload — how activity becomes a value (the
     S-migration hook `n_live_t = Σ_r LIsActive(out_r[t−1])`)."""
     p = _IS_ACTIVE.get(w)
     if p is None:
@@ -434,8 +434,8 @@ _ENABLE_PRIM: list[PrimitiveDefinition] = []
 
 
 def l_enable() -> PrimitiveDefinition:
-    """`LEnable_v1(parent: Value<2>, local: Value<2>) -> Value<2>` -- the enable of a CONDITIONAL call (LIFTING-SPEC v0.6 A9.1 / B7):
-    `a_child = a_parent ∧ a_local`, TOTAL and never ⊥ (N2 of S-r17b-40: an enable is `Active(0)` or `Active(1)`, whatever its operands):
+    """`LEnable_v1(parent: Value<2>, local: Value<2>) -> Value<2>` -- the enable of a CONDITIONAL call:
+    `a_child = a_parent ∧ a_local`, TOTAL and never ⊥ (an enable is `Active(0)` or `Active(1)`, whatever its operands):
     `parent = Active(0)` → `Active(0)` unconditionally (a disabled parent disables every child, whatever the local condition -- the local
     condition may be ⊥ because its own gate is disabled); `parent = Active(1)` → `local` when `local ∈ {Active(0), Active(1)}`; any other
     word (`⊥`/`INV_1` in the parent, or in the local under an enabled parent) → `INV_1` (a noncanonical/ill-formed enable NAMED, so that
@@ -485,16 +485,16 @@ def l_gather_row_of(original: PrimitiveDefinition) -> PrimitiveDefinition:
 
 
 def l_gather_row(w: int, N: int, oor_payload: int | None = None) -> PrimitiveDefinition:
-    """`LGatherRow<w>x<N>_v1(idx: Value<33>, rows: Array<N, Value<w+1>>) -> Value<w+1>` (SPEC §3.2): `idx` ⊥ → ⊥; `idx`
+    """`LGatherRow<w>x<N>_v1(idx: Value<33>, rows: Array<N, Value<w+1>>) -> Value<w+1>`: `idx` ⊥ → ⊥; `idx`
     Active (in range) → `rows[idx]` — which may itself be ⊥ (a read of an inactive row is that row's ⊥, not an error, and a ⊥
     row elsewhere does **not** poison the read: this is why it is not strict); any invalid operand anywhere (index or any
     row, PAD-01 rule 2 taken literally) → `INV_w`.  Total extension on an Active **out-of-range** index: `0‖oor` — the
     original gather's registered total extension, **read from the original** (`GatherBf16x{N}`: 0x7FFF; `GatherF32x{N}`:
-    0x7FC00000), lifted — never `INV` (SPEC [P3]: range is a boundary fact, checked by `check_boundary(index_range=N)`; no
+    0x7FC00000), lifted — never `INV` (range is a boundary fact, checked by `check_boundary(index_range=N)`; no
     valid operand maps to INV).  This id-only entry (the codec's lazy resolver, tests) constructs the registered original
     family of payload width `w` and defers to `l_gather_row_of`; a width with no registered family is refused (`TypeError`),
     and an explicit `oor_payload` may only *confirm* the original's extension (`ValueError` otherwise) — no constant can be
-    invented through this API (F-pad-05/07/08)."""
+    invented through this API."""
     fam = _gather_families().get(w)
     if fam is None:
         raise TypeError(f"LGatherRow{w}: no registered original gather family for payload width {w} — nothing is invented")
@@ -554,14 +554,13 @@ _FIXED_SELECTS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 def l_fixed_select(E: int, w: int) -> PrimitiveDefinition:
     """`LFixedSelect<E>x<w>_v1(r: Value<33>, z: Array<E, Value<w+1>>) -> Value<w+1>` — PADDING-DECISION §3 `FixedSelect(r_j, z_0..z_{E-1})`
-    (MOE-PAD-SPEC v0.1 §2; STAGE1-GAPS G2): the fixed selection among **computed** lifted values (the E expert slots' outputs) by a
+    : the fixed selection among **computed** lifted values (the E expert slots' outputs) by a
     **computed** route id.  `r` ⊥ → ⊥ (an inactive token selects nothing); `r` Active with `0 ≤ r < E` → `z_r` bit for bit, INCLUDING `z_r = ⊥`
     (selecting an inactive slot yields that slot's ⊥ — the check that then fails is the slot's, not a wrap); an unselected ⊥ row has no
-    effect (why it is not strict); `r` Active OUT OF RANGE → `INV_w`, a NAMED relation failure (revb PADDED-ACCEPTANCE Stage 1 item 3(c):
-    never a silent wrap, never a default slot — unlike `LGatherRow`, which reads the ORIGINAL gather family's registered total extension
+    effect (why it is not strict); `r` Active OUT OF RANGE → `INV_w`, a NAMED relation failure (never a silent wrap, never a default slot — unlike `LGatherRow`, which reads the ORIGINAL gather family's registered total extension
     (`GatherBf16xN`: 0x7FFF) because a weight-bank / vocabulary read has one; a selection among computed outputs has no original to inherit
     from, so its extension is authored here, as a failure); any noncanonical operand anywhere → `INV_w` (A3: INV beats ⊥).  One object per
-    `(E, w)`: the same Definition, identities and interfaces for every route (item 3(a))."""
+    `(E, w)`: the same Definition, identities and interfaces for every route."""
     key = (E, w)
     p = _FIXED_SELECTS.get(key)
     if p is None:
@@ -607,7 +606,7 @@ def l_fixed_select(E: int, w: int) -> PrimitiveDefinition:
 
 
 def l_step_live(E: int) -> PrimitiveDefinition:
-    """`LStepLive<E>_v1(prev_tok: Value<33>, eos_set: Array<E, Value<33>>) -> Value<2>` (SPEC §3.2 [P2]): `Active(1)` iff
+    """`LStepLive<E>_v1(prev_tok: Value<33>, eos_set: Array<E, Value<33>>) -> Value<2>`: `Active(1)` iff
     `tag(prev_tok) = 0 ∧ payload(prev_tok) ∉ eos_set`; `Active(0)` otherwise (including `prev_tok = ⊥`); never ⊥; any
     invalid operand → `INV_1`.  The continuation relation: activity of step `s+1` is a function of the **value** sampled at
     step `s`.  `eos_set` is a structural Const array (always Active in any Program built here); the total extension for a ⊥
@@ -628,19 +627,19 @@ def l_step_live(E: int) -> PrimitiveDefinition:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Continuation_v1 (COORD R17-32; CONTINUATION-SPEC v0.1; revb S-r17b-16): the controller family -- `b_t`, `e_t`, `o_t` as REGISTERED gates
-# beside the R17-1 unit's `r_{t+1}` (`s=<s>/live` = LStepLive) and `u_{t+1}` (`s=<s>/tok_in` = LSelect), which compute exactly `run` / `in`
-# of the rule (verity.ir/continuation.py `chain_bits`, exhaustively tested).  Slot `t` <-> event `s = t - 1`.
+# Continuation_v1: the controller family -- `b_t`, `e_t`, `o_t` as REGISTERED gates
+# beside the unit's `r_{t+1}` (`s=<s>/live` = LStepLive) and `u_{t+1}` (`s=<s>/tok_in` = LSelect), which compute exactly `run` / `in`
+# of the rule (`verity_vllm/program/lifting/continuation.py` `chain_bits`, exhaustively tested).  Slot `t` <-> event `s = t - 1`.
 # ---------------------------------------------------------------------------------------------------------
 
 CONTINUATION_VERSION = "continuation-v1"
-CONTINUATION_FAMILIES = ("is_eos", "emit", "out")  # the gates this chain ADDS per slot (`live` / `tok_in` are `run` / `in`, R17-1's names kept)
+CONTINUATION_FAMILIES = ("is_eos", "emit", "out")  # the gates this chain ADDS per slot (`live` / `tok_in` are `run` / `in`)
 _IS_EOS: dict[int, PrimitiveDefinition] = {}
 _EMIT_NEXT: dict[int, PrimitiveDefinition] = {}
 
 
 def l_is_eos(E: int) -> PrimitiveDefinition:
-    """`LIsEOS<E>_v1(tok: Value<33>, eos_set: Array<E, Value<33>>) -> Value<2>` (spec s3; revb R2): `b_t = [tag(tok) = 0] AND [payload(tok) in
+    """`LIsEOS<E>_v1(tok: Value<33>, eos_set: Array<E, Value<33>>) -> Value<2>`: `b_t = [tag(tok) = 0] AND [payload(tok) in
     EOS_pinned]` -- TOTAL over the lifted encoding: `Active(1)` iff the token is an Active member of the pinned set, `Active(0)` otherwise
     (`IsEOS(bot) = 0` by the tag GATE, not a convention; a noncanonical `1||nonzero` token is invalid -> `INV_1`).  Never bot.  The EOS set is
     the Program's pinned constant array, never a tokenizer read at check time."""
@@ -660,7 +659,7 @@ def l_is_eos(E: int) -> PrimitiveDefinition:
 
 
 def l_emit_next(H: int = 1) -> PrimitiveDefinition:
-    """`LEmitNext[H=<h>]_v1(emit: Value<2>, is_eos: Value<2>) -> Value<2>` (spec s3): `e_{t+1} = h_t AND e_t AND NOT b_t` with the cap term
+    """`LEmitNext[H=<h>]_v1(emit: Value<2>, is_eos: Value<2>) -> Value<2>`: `e_{t+1} = h_t AND e_t AND NOT b_t` with the cap term
     `h_t = [t < C]` a construction-time STATIC of the gate (built with `H = 1` at every slot that has a successor; the `H = 0` member exists so
     the final transition can be replayed -- both next bits false -- and is never fitted).  Never bot; an invalid bit -> `INV_1`."""
     if H not in (0, 1):
@@ -670,7 +669,7 @@ def l_emit_next(H: int = 1) -> PrimitiveDefinition:
         def ev(e: int, b: int, _H=H) -> int:
             if _classify((e, b), (1, 1)) == 2:
                 return 0b11
-            if e == 2 or b == 2:  # a bot controller bit is not honest computation: the controller bits are always Active (spec s3)
+            if e == 2 or b == 2:  # a bot controller bit is not honest computation: the controller bits are always Active
                 return 0b11
             return 1 if (_H and e == 1 and b == 0) else 0
 
@@ -681,14 +680,14 @@ def l_emit_next(H: int = 1) -> PrimitiveDefinition:
 
 
 def continuation_gate_count(cap: int, n_eos: int, lag: int) -> int:
-    """Gates the Continuation_v1 chain adds to the unlifted Program: the R17-1 guard (`guard_gate_count`, which includes the root enable
+    """Gates the Continuation_v1 chain adds to the unlifted Program: the guard (`guard_gate_count`, which includes the root enable
     constant `enable/one` = `enable_gate_count`) + per slot `t = 1..cap` one `is_eos` and one `out`, per slot `t = 1..cap-1` one `emit`
-    transition, plus the `emit_1` constant: `3·cap` more.  `state_select_count(...)` = 0 for this chain (v0.6 B10)."""
+    transition, plus the `emit_1` constant: `3·cap` more.  `state_select_count(...)` = 0 for this chain."""
     return guard_gate_count(cap, n_eos, lag) + 3 * cap
 
 
 def enable_gate_count(cap: int, n_eos: int, lag: int) -> int:
-    """v0.6 B10 (S-r17b-40 N3): the NEW enable gates of a Continuation_v1 request = 1, the root's constant `enable/one` (`Const2[0x1]`).
+    """The NEW enable gates of a Continuation_v1 request = 1, the root's constant `enable/one` (`Const2[0x1]`).
     The step enables ARE the guard's `s=<s>/live` gates (counted in `guard_gate_count`, one value in two roles: `run_t` and the enable of
     step t's body) and the enable operand of every lifted gate is WIRING (an operand, not a gate) -- so no `LEnable` gate is added under a
     root whose own enable is the constant 1.  Conditional calls under a conditional parent (A12's expert slots) add one `LEnable` each."""
@@ -696,7 +695,7 @@ def enable_gate_count(cap: int, n_eos: int, lag: int) -> int:
 
 
 def state_select_count(cap: int, n_eos: int, lag: int) -> int:
-    """v0.6 B10 (A10): explicit state-update sites the padded dense request adds = 0.  Every K/V row `t` of the unrolled Program is produced
+    """Explicit state-update sites the padded dense request adds = 0.  Every K/V row `t` of the unrolled Program is produced
     ONCE, by step t's own gates, whose enable is `run_t`: a disabled step's rows are ⊥ by A9.3 (their identities exist and are committed,
     A14) with no separate `LSelect` site -- the enable is the selection.  A preallocated cache with rows rewritten in place (A10.1 `cap`
     rows initialised ⊥) would add one `LSelect` per (row, writer); the Continuation_v1 dense chain has none."""
@@ -704,10 +703,10 @@ def state_select_count(cap: int, n_eos: int, lag: int) -> int:
 
 
 class ContinuationChain:
-    """The builder-side Continuation_v1 controller of ONE request (spec s6: one versioned, builder-owned component): call `slot(t, y)` once per
+    """The builder-side Continuation_v1 controller of ONE request (one versioned, builder-owned component): call `slot(t, y)` once per
     token-generation slot in order with the slot's RAW sampled token `y` (`Value<33>`); it appends `slot=<t>/is_eos = LIsEOS(y, eos_set)`,
     `slot=<t>/out = LSelect32(emit_t, y, bot)` (the DESIGNATED output: emit, never run) and, when `t < cap`, `slot=<t+1>/emit = LEmitNext(emit_t,
-    is_eos_t)`; `slot=1/emit` is the constant `Active(1)`.  `run` / `in` are the R17-1 guard's `live` / `tok_in` (the caller builds them; they
+    is_eos_t)`; `slot=1/emit` is the constant `Active(1)`.  `run` / `in` are the guard's `live` / `tok_in` (the caller builds them; they
     are the same values as the rule's, `continuation.chain_bits`).  `outputs()` is `o[1..cap]` in slot order -- the request's return.
     Nothing here reads a served length: `cap` slots, always."""
 
@@ -743,7 +742,7 @@ class ContinuationChain:
         return Coll(Array(self.cap, Value(33)), concat([o.refs for o in self.outs]))
 
 
-# --- CANDIDATE PAD-04 (F-pad-11; stoch M-0093; padrev M-0102): the S-migration operand -----------------------------------------
+# --- CANDIDATE PAD-04: the S-migration operand -----------------------------------------
 
 SPLITS_MAX_BATCH = 64  # `topp_geometry.SPLIT_MAX_BATCH`: above it vLLM serves the sampler batch by the sort path (no `_apply_topp_split`)
 N_LIVE_BITS = 7  # the unlifted count `n_live_t ∈ [0, 64]` as a `Value<7>` (a CANDIDATE width — PAD-04)
@@ -770,10 +769,10 @@ def _splits_for_v1(n_live: int, num_sms: int) -> int:
 
 
 def splits_for_prim(num_sms: int) -> PrimitiveDefinition:
-    """`SplitsForSMS<SMS>_v1(n_live: Value<7>) -> Value<6>` — the UNLIFTED primitive form of stoch's `SplitsFor_v1` (SPEC §5 [D4]:
-    `S_t = SplitsFor_v1(n_live_t, num_SMs)`, `num_SMs` a target-profile static).  Total on `1 ≤ n_live ≤ 64`; `n_live = 0`
-    and `n_live > 64` are refused by name (stoch M-0093: no launch exists there).  Built here so the lifted form has an
-    original to be measured against; registering it as the operand of `TopPMask_v1` is stoch's Program-side change (M-0579)."""
+    """`SplitsForSMS<SMS>_v1(n_live: Value<7>) -> Value<6>` — the UNLIFTED primitive form of `SplitsFor_v1`
+    (`S_t = SplitsFor_v1(n_live_t, num_SMs)`, `num_SMs` a target-profile static).  Total on `1 ≤ n_live ≤ 64`; `n_live = 0`
+    and `n_live > 64` are refused by name (no launch exists there).  Built here so the lifted form has an
+    original to be measured against; registering it as the operand of `TopPMask_v1` is a Program-side change."""
     if int(num_sms) < 1:
         raise ValueError(f"SplitsFor_v1: num_SMs={num_sms} is not a target profile")
     p = _SPLITS_FOR.get(int(num_sms))
@@ -787,14 +786,14 @@ def splits_for_prim(num_sms: int) -> PrimitiveDefinition:
 
 def l_splits_for(num_sms: int) -> PrimitiveDefinition:
     """CANDIDATE PAD-04 — `LSplitsForSMS<SMS>_v1(n_live: Value<8>) -> Value<7>`, proposed SIXTH member of the closed specified
-    class (SPEC §3.2; F-pad-11).  Rule: `INV` operand → `INV_6`; `⊥` operand → `⊥` (strictness; an honest Program never
+    class.  Rule: `INV` operand → `INV_6`; `⊥` operand → `⊥` (strictness; an honest Program never
     produces a ⊥ count — `n_live_t = Σ_r LIsActive(tok_in_{r,t})` is Active by construction); **`Active(0)` → `⊥`** — the
     specified exception and a new KIND of rule (an Active operand mapped to ⊥): no live row ⇒ no sampler launch ⇒ no sampling
-    event ⇒ the split count is not a value of any execution (state/batching, stoch M-0093 / pad M-0070); `Active(n)`,
+    event ⇒ the split count is not a value of any execution (state/batching); `Active(n)`,
     `1 ≤ n ≤ 64` → `0‖SplitsFor_v1(n, SMS)` (payload agreement with the original, measured); `Active(n > 64)` is **refused by
     name** — the total behaviour is a STRUCTURAL refusal: a lifted Program binding this primitive must have at most 64
     requests (`n_live_t ≤ #requests` by construction), asserted where the Program is built (`assert_splits_domain`), never
-    INV and never an invented S.  Hook (F-pad-10, padrev M-0102): the operand is the sum of the steps' INPUT-token activity
+    INV and never an invented S.  Hook: the operand is the sum of the steps' INPUT-token activity
     `LIsActive(tok_in_{r,t})`, never of `out_r[t−1]` (which over-counts the EOS-stopped request at `a_r`)."""
     orig = splits_for_prim(num_sms)
     p = _L_SPLITS_FOR.get(int(num_sms))
@@ -832,12 +831,12 @@ def assert_splits_domain(n_requests: int) -> int:
 
 
 def specified_ids() -> frozenset[str]:
-    """The closed list of specified-class primitive ids materialised so far (SPEC §3.2; `LSplitsForSMS<SMS>_v1` is the PAD-04 candidate)."""
+    """The closed list of specified-class primitive ids materialised so far (`LSplitsForSMS<SMS>_v1` is the PAD-04 candidate)."""
     return frozenset(_SPECIFIED_IDS)
 
 
 # ---------------------------------------------------------------------------------------------------------
-# G1 — the ORDINARY class (LIFTING-SPEC v0.7 A11 / v0.5.2 A8; SCOPE-NOTE §6: "weights and other values that never become inactive keep
+# G1 — the ORDINARY class (SCOPE-NOTE §6: "weights and other values that never become inactive keep
 # their ordinary representations"): a PRESCRIBED input of the Program (a weight, the prompt, the EOS set, an `Input<w>` gate -- a value
 # produced by no body) keeps `Value<w>`; every COMPUTED node of a padded Program is lifted (`Value<w+1>`; its tag is identically 0 when the
 # producing call is always enabled).  A lifted gate reads an ordinary operand through the SAME relation with that operand declared at its
@@ -923,7 +922,7 @@ _ORD_KEY_RE = re.compile(r",?ORD=\d+")
 
 def unlifted_id(spec: str) -> str:
     """The unlifted spec id of a padded-v1 id: `Lifted[X_vN]_v2{K=1,ORD=2}` -> `X_vN{K=1}`, `Lifted[F_v1]_v2{ORD=1}` -> `F_v1`,
-    `LStepLive1_v1{ORD=2}` -> `LStepLive1_v1`; anything else unchanged (the one rule for reqval's `unlift`, PAD-03 and Lift(Q))."""
+    `LStepLive1_v1{ORD=2}` -> `LStepLive1_v1`; anything else unchanged (the one rule for `unlift`, PAD-03 and Lift(Q))."""
     m = re.match(r"^Lifted\[(.+)\]_v\d+(\{.*)?$", spec, re.S)
     inner, rest = (m.group(1), m.group(2) or "") if m else (spec.split("{", 1)[0], ("{" + spec.split("{", 1)[1]) if "{" in spec else "")
     rest = _ORD_KEY_RE.sub("", rest)
@@ -1077,11 +1076,11 @@ def lifted_param_classes(lsp: FunctionDefinition) -> tuple[str, ...]:
 
 _LIFTED_COMPOSITES: dict[str, CompositeDefinition] = {}
 _UNLIFTED_OF: dict[str, CompositeDefinition] = {}
-_HAND_LIFTS: dict[str, CompositeDefinition] = {}  # unlifted composite id (Name_vN) -> its HAND-AUTHORED padded-v1 lift (moe M-1063)
+_HAND_LIFTS: dict[str, CompositeDefinition] = {}  # unlifted composite id (Name_vN) -> its HAND-AUTHORED padded-v1 lift
 
 
 def register_hand_lift(original: CompositeDefinition, lifted: CompositeDefinition) -> CompositeDefinition:
-    """MOE-PAD route A (moe M-1063): declare `lifted` as THE padded-v1 lift of the composite `original` — honoured on BOTH paths,
+    """MOE-PAD route A: declare `lifted` as THE padded-v1 lift of the composite `original` — honoured on BOTH paths,
     `lift_composite`/`lift_callee` (registry composites, the python-body path) and `_lift_decoded`/`lift_def` (descriptor-decoded
     specializations: GP-01 `request_component`, `codec.decode_program`) — instead of the node replay `Lifted[original]_v2`.  Use: a fixed-slot
     twin `MoeFfnFixed_v1{E,TOPK,VPT,H,I}` (router -> ALL E expert bodies -> select by the router ids -> MoeSum; value-equal to MOE-01 on Active
@@ -1091,7 +1090,7 @@ def register_hand_lift(original: CompositeDefinition, lifted: CompositeDefinitio
     `lift_def`/`lift_composite`-bind time (`_check_hand_lift`): the lift's signature == `lift_type` of the twin's params + `("enable",
     Value<2>)` LAST (B7) and `lift_type` of the twin's return — a lift whose interface is not the twin's lifted interface is refused by name
     (it could not stand where `Lifted[twin]_v2` stands: PAD-03 correspondence, `Lift(Q)` id matching modulo the wrapper).  The lift's BODY
-    is the author's (reviewed as MOE-PAD-SPEC's construction; `rev`'s N-pad negatives run on it) — this hook does not check it."""
+    is the author's (the padded MoE's construction, with its N-pad negatives) — this hook does not check it."""
     if not isinstance(original, CompositeDefinition) or not isinstance(lifted, CompositeDefinition):
         raise TypeError(f"register_hand_lift: composites only ({type(original).__name__}, {type(lifted).__name__})")
     oid, lid = f"{original.name}_v{original.version}", f"{lifted.name}_v{lifted.version}"
@@ -1393,7 +1392,7 @@ def _row_type(C: dict) -> Array:
 def StepBody(B, S, tok, kc, vc, weights):
     """One decode step of `Serve_v2` at attention length `T` (position `T−1`) as a registered composite, **unguarded**:
     exactly `PadDecodeStep_v1`'s part (a) — `(y, k_new[NL][KVH][D], v_new[NL][KVH][D])`.  The lifted Program guards the
-    *token* with `LStepLive`/`LSelect` and appends the rows as they are (SPEC §4 (3))."""
+    *token* with `LStepLive`/`LSelect` and appends the rows as they are ."""
     C, T = S.C, S.T
     NL = C["NL"]
     caches = [(kc[L], vc[L]) for L in range(NL)]
@@ -1415,7 +1414,7 @@ LAGS_IMPLEMENTED = (0, 1)  # DP-pad-02: the engine's post-EOS placeholder rows (
 
 
 def check_lag(lag: int) -> int:
-    """DP-pad-02 (padrev F-pad-16, exec M-0140): the serving profile's post-EOS lag is a declared static of the padded Program —
+    """DP-pad-02: the serving profile's post-EOS lag is a declared static of the padded Program —
     `LAG = 0` (the step after the EOS is never executed) or `LAG = 1` (vLLM async scheduling: the EOS-stopped request is fed forward
     once more on its EOS token, its sample discarded).  Neither is a default; anything else is refused by name."""
     if lag not in LAGS_IMPLEMENTED:
@@ -1423,23 +1422,23 @@ def check_lag(lag: int) -> int:
     return int(lag)
 
 
-DP_PAD_02 = "DP-pad-02(b), RULED R17-1"  # coord R17-1 (COORD.md; LIFTING-SPEC v0.5 A2): LAG is a declared specialization parameter, no default
+DP_PAD_02 = f"DP-pad-02(b), RULED {EVIDENCE['lifted_post_eos_lag']['ruling']}"  # LAG is a declared specialization parameter, no default
 
 
 def guard_gate_count(cap: int, n_eos: int, lag: int) -> int:
-    """Gates the guard adds to the unlifted Program: `|E|` EOS constants + `bot` + the root's enable constant `enable/one` (v0.6 B7) +
+    """Gates the guard adds to the unlifted Program: `|E|` EOS constants + `bot` + the root's enable constant `enable/one`  +
     `(live, tok_in)` per guarded step; steps `1..lag` are unguarded (unconditionally live): `2·(cap − 1 − lag) + |E| + 2`."""
     return 2 * max(cap - 1 - check_lag(lag), 0) + n_eos + 2
 
 
 def enable_one() -> PrimitiveDefinition:
-    """The root's enable, `Const2[0x1]`: the constant Active(1) Boolean word (v0.6 A9.1 "the root's enable is the constant 1"); an
+    """The root's enable, `Const2[0x1]`: the constant Active(1) Boolean word ("the root's enable is the constant 1"); an
     ORDINARY constant of the Program (owned by the always-enabled root), so it is `b1.const`, not a lifted constant."""
     return b1.const(2, 1)
 
 
 def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str, lag: int) -> tuple[int, ...]:
-    """LServe_v1's validity, by name, callable BEFORE the (lazy) specialization is built (F-pad-13: `lserve()` calls it eagerly;
+    """LServe_v1's validity, by name, callable BEFORE the (lazy) specialization is built (`lserve()` calls it eagerly;
     the body calls it again so a direct `bind(LServe, …)` is validated at `Program()` at the latest).  Returns the EOS tuple."""
     if guard not in GUARDS_IMPLEMENTED:
         raise ValueError(f"LServe_v1: GUARD={guard!r} is not implemented — only {GUARD_IN!r} (DP-pad-01 option (a)) is; "
@@ -1455,16 +1454,16 @@ def lserve_validate(C: dict, LP: int, STEPS: int, eos: Sequence[int], guard: str
     return eos_ids
 
 
-@composite("LServe", 2, ["C", "LP", "STEPS", "EOS", "GUARD", "LAG", "GEMM", "ATTENTION", "NORM"],  # v2 = padded-v1 (LIFTING-SPEC v0.6 B8: the enables are in the body)
+@composite("LServe", 2, ["C", "LP", "STEPS", "EOS", "GUARD", "LAG", "GEMM", "ATTENTION", "NORM"],  # v2 = padded-v1 (the enables are in the body)
            lambda S: ((("prompt", Array(S.LP, Value(32))), ("weights", b1.weights_type(S.C))), Array(S.STEPS + 1, Value(33))),
            conformance="protocol-defined")
 def LServe(B, S, prompt, weights):
-    """The ⊥-lifted padded serving Program (SPEC §4, §5) for one request, **guard on the input** (`GUARD = "in"`, DP-pad-01
-    option (a), padrev's recommendation — the spec's §4.2 letter puts the guard on the event's output and is inconsistent with
-    its own §4.3/§6/§7 at step `a_r`, LIFTING-REVIEW F-pad-01/F-pad-03; the choice is a labelled candidate, not a ruling):
-    `Lifted[Prefill_v1]` emits `out[0]` unguarded (event 0 unconditionally live, M-0472 R2); for each of the `STEPS`
+    """The ⊥-lifted padded serving Program (§5) for one request, **guard on the input** (`GUARD = "in"`, DP-pad-01
+    option (a) — the spec's §4.2 letter puts the guard on the event's output and is inconsistent with its own §4.3/§6/§7 at
+    step `a_r`; the choice is a labelled candidate, not a settled rule):
+    `Lifted[Prefill_v1]` emits `out[0]` unguarded (event 0 unconditionally live); for each of the `STEPS`
     structurally present decode steps `s ≥ 1` (`STEPS = cap − 1` under the Build's convention, as `Serve_v2{STEPS}`; the event
-    population is `STEPS + 1 = cap = D_MAX_r` of SPEC [R3] — F-pad-12: the static is named for what it counts)
+    population is `STEPS + 1 = cap = D_MAX_r`: the static is named for what it counts)
 
         live_s   = LStepLive(g_{s}, eos_set)                -- Active(1) iff the gating token is an Active non-EOS token
         tok_in_s = LSelect(live_s, out[s−1], LBot<32>)      -- the step's input token, ⊥ once the request has stopped
@@ -1478,14 +1477,14 @@ def LServe(B, S, prompt, weights):
     step; a guard reading `out[s−2]` alone would revive the request at `a_r + 2` (the discarded sample is an ordinary token).
 
     so step `a_r` (the first step after the committed EOS) is ⊥ from its embedding on, "every value of a ⊥ step is ⊥" and
-    Commit's `enc(⊥) iff s ≥ a_r` are theorems, and the K/V append is unguarded — an inactive step's rows are ⊥ (SPEC §4 (3)).
-    `EOS` is the declared EOS **set** (SPEC [P2]).  `GUARD = "out"` (option (b)) is refused by name: not implemented, not
-    chosen.  Output: `out[0..STEPS]`; its Active prefix is the transcript, its first ⊥ is step `a_r` (SPEC §5)."""
+    Commit's `enc(⊥) iff s ≥ a_r` are theorems, and the K/V append is unguarded — an inactive step's rows are ⊥ .
+    `EOS` is the declared EOS **set**.  `GUARD = "out"` (option (b)) is refused by name: not implemented, not
+    chosen.  Output: `out[0..STEPS]`; its Active prefix is the transcript, its first ⊥ is step `a_r`."""
     C, LP, D_MAX, LAG = S.C, S.LP, S.STEPS, S.LAG
     eos_ids = lserve_validate(C, LP, D_MAX, S.EOS, S.GUARD, LAG)
     NL = C["NL"]
     one = B.call(enable_one(), name="enable/one")  # the root's enable: the constant Active(1) (A9.1: the root is always enabled)
-    # G1 (v0.7 A11): the prompt and the weights are PRESCRIBED inputs -- ordinary `Value<w>`; the prefill reads them unwidened
+    # G1: the prompt and the weights are PRESCRIBED inputs -- ordinary `Value<w>`; the prefill reads them unwidened
     pre = B.call(lift_def(bind(Prefill, C=C, LP=LP, GEMM=S.GEMM, ATTENTION=S.ATTENTION, NORM=S.NORM), (ORDINARY, ORDINARY)), prompt, weights, one,
                  name="prefill")
     prev, kc, vc = pre[0], pre[1], pre[2]
@@ -1493,7 +1492,7 @@ def LServe(B, S, prompt, weights):
     eos_set = Coll(Array(len(eos_ids), Value(32)), concat([c.refs for c in eos_consts]))
     step_live = with_ordinary(l_step_live(len(eos_ids)), 0b10)
     sel, bot = l_select(32), B.call(l_bot(32), name="bot32")
-    # Continuation_v1 (R17-32): the controller family beside the guard -- `slot=<t>/is_eos`, `slot=<t>/emit`, `slot=<t>/out` per slot t = s + 1; the
+    # Continuation_v1: the controller family beside the guard -- `slot=<t>/is_eos`, `slot=<t>/emit`, `slot=<t>/out` per slot t = s + 1; the
     # request's RETURN is the designated outputs o_t = Select(emit_t, y_t, bot) (the discarded async token never leaves the output interface)
     cont = ContinuationChain(B, cap=D_MAX + 1, eos_set=eos_set, bot=bot)
     cont.slot(1, prev)
@@ -1506,11 +1505,11 @@ def LServe(B, S, prompt, weights):
         else:
             live = B.call(step_live, gate, eos_set, name=f"s={s}/live")
             tok_in = B.call(sel, live, prev, bot, name=f"s={s}/tok_in")
-            en = live  # R17-43 / v0.6 A13.1: `run_{s+1} = live_s` IS the step's enable; its body is ⊥ by A9.3 whatever it reads
+            en = live  # `run_{s+1} = live_s` IS the step's enable; its body is ⊥ by A9.3 whatever it reads
         r = B.call(body, tok_in, kc, vc, weights, en, name=f"s={s}/step")
         gate = tok_in if LAG else r[0]
         prev = r[0]
-        # structural, unguarded append (SPEC §4 (3)): every step, every layer
+        # structural, unguarded append : every step, every layer
         kc = Coll(Array(NL, lift_type(b1.kv_type(C, T))), concat([concat([kc[L].refs, r[1][L].refs]) for L in range(NL)]))
         vc = Coll(Array(NL, lift_type(b1.kv_type(C, T))), concat([concat([vc[L].refs, r[2][L].refs]) for L in range(NL)]))
         cont.slot(s + 1, prev)
@@ -1520,9 +1519,9 @@ def LServe(B, S, prompt, weights):
 def lserve(C: dict, LP: int, STEPS: int, eos: Sequence[int], *, lag: int, gemm: dict | None = None, attention: dict | None = None,
            norm: dict | None = None, guard: str = GUARD_IN) -> SpecializedDefinition:
     """`LServe_v1` bound for one profile (default: the Ampere eager profile, as `b1.serve_v2`), the input guard and the DECLARED
-    post-EOS lag; validated EAGERLY (F-pad-13): every refusal fires here, by name, before the lazy specialization exists."""
+    post-EOS lag; validated EAGERLY: every refusal fires here, by name, before the lazy specialization exists."""
     eos_t = lserve_validate(C, LP, STEPS, eos, guard, lag)
-    # RULING 21 (coord M-0213): LAG is bound as a LABELLED candidate — `DP-pad-02(b), pending` — never rendered as an agreed baseline
+    # LAG is bound as a LABELLED candidate — `DP-pad-02(b), pending` — never rendered as an agreed baseline
     return bind(LServe, C=C, LP=LP, STEPS=STEPS, EOS=eos_t, GUARD=guard, LAG=int(lag), GEMM=gemm if gemm is not None else b1.GEMM_AMPERE,
                 ATTENTION=attention if attention is not None else b1.ATTENTION_FA2, NORM=norm if norm is not None else b1.norm_bundle(C))
 
@@ -1539,9 +1538,9 @@ class ServedPrefixFailure(ValueError):
 
 
 def activity_prefix(tokens: Sequence[int], eos_set: Sequence[int], n_events: int, *, w: int = 32) -> int:
-    """`a_r` (SPEC §7): the least event `s ∈ [1, n_events)` with `tokens[s−1]` an Active member of `eos_set`, else `n_events`
+    """`a_r`: the least event `s ∈ [1, n_events)` with `tokens[s−1]` an Active member of `eos_set`, else `n_events`
     (the cap: every event Active).  `tokens` are lifted words (`0‖id` or ⊥) or plain ids; `tokens[0]` is the prefill's event,
-    which is unconditionally live (M-0472 R2) — the scan therefore reads `tokens[s−1]` for `s ≥ 1` only.  A function of the
+    which is unconditionally live  — the scan therefore reads `tokens[s−1]` for `s ≥ 1` only.  A function of the
     committed values, never of a flag or of `n_r`."""
     eos = set(int(e) for e in eos_set)
     for s in range(1, n_events):
@@ -1572,7 +1571,7 @@ def expected_served(a_r: int, n_events: int, lag: int) -> int:
 
 
 def check_served_prefix(request: Any, n_r: int, a_r: int, *, lag: int, n_events: int | None = None) -> None:
-    """The two-directional rule `n_r = a_r + LAG` (SPEC §7 [P1] under DP-pad-02): (i) `n_r >` expected → FAIL "execution past EOS";
+    """The two-directional rule `n_r = a_r + LAG` (under DP-pad-02): (i) `n_r >` expected → FAIL "execution past EOS";
     (ii) `n_r <` expected → FAIL "declared activity not executed" (under `LAG = 1` the placeholder step is declared activity)."""
     want = expected_served(a_r, n_events, lag) if n_events is not None else a_r + check_lag(lag)
     if n_r > want:
@@ -1582,14 +1581,14 @@ def check_served_prefix(request: Any, n_r: int, a_r: int, *, lag: int, n_events:
 
 
 def assign_inactive(request: Any, served: Sequence[int], eos_set: Sequence[int], n_events: int, *, lag: int, w: int = 32) -> list[int]:
-    """The pre-challenge ⊥ assignment rule (SPEC §7, AGREED A7): from the **served** Active tokens `served[0..n_r−1]` (the
+    """The pre-challenge ⊥ assignment rule (AGREED A7): from the **served** Active tokens `served[0..n_r−1]` (the
     prefill's event plus `n_r − 1` decode events), the full fixed `out[0..n_events−1]` is `0‖served[s]` for `s < n_r` and
     `enc(⊥)` for `s ≥ n_r` — admissible only if `n_r = a_r` with `a_r` derived from the served tokens themselves (the event
     after the committed EOS, or the cap).  A shortfall or excess is a named failure; nothing is filled with ⊥ silently."""
     n_r = len(served)
     if n_r < 1 or n_r > n_events:
         raise ServedPrefixFailure(request, n_r, n_events, f"served count outside [1, {n_events}]")
-    # F-pad-09: every served token is a committed Active word — checked by name at this boundary BEFORE the prefix scan
+    # every served token is a committed Active word — checked by name at this boundary BEFORE the prefix scan
     # (a ⊥ / INV / over-width word inside the served prefix is a BoundaryFailure, not a bare ValueError, and never an EOS).
     served = [check_boundary(w, int(t), what=f"request {request!r}: served token {i}", prescribed=True) for i, t in enumerate(served)]
     a_r = activity_prefix(served, eos_set, n_events, w=w)
@@ -1598,24 +1597,24 @@ def assign_inactive(request: Any, served: Sequence[int], eos_set: Sequence[int],
 
 
 # ---------------------------------------------------------------------------------------------------------
-# R17-6(b) — TRUE widened widths (SPEC v0.5 A4; PAD-02 CLOSED): the width of a lifted VU set is Σ (w+1) over its escaping
+# TRUE widened widths (PAD-02 CLOSED): the width of a lifted proof-block set is Σ (w+1) over its escaping
 # leaves, nothing is split to fit 32 bits, and admissibility is the UNCHANGED validator at the lifted protocol parameter
 # ---------------------------------------------------------------------------------------------------------
 
-LIFTED_RULES_VERSION = "lifted-v1"  # SPEC v0.5 A5: every lifted result carries its own rules version, never the active-reference one
-PADDED_RULES_VERSION = "padded-v1"  # SPEC v0.6 B8: a Program built with B7's enables (Lifted[.]_v2, LIFT_VERSION 2) and a record read by R4' (B9)
-USE_KIND_LIFTED = "vu-partition-lifted"  # SPEC v0.5 A5: the use.kind of a lifted admissibility document (G8 refuses it by name)
+LIFTED_RULES_VERSION = "lifted-v1"  # every lifted result carries its own rules version, never the active-reference one
+PADDED_RULES_VERSION = "padded-v1"  # a Program built with B7's enables (Lifted[.]_v2, LIFT_VERSION 2) and a record read by R4' (B9)
+USE_KIND_LIFTED = "vu-partition-lifted"  # the use.kind of a lifted admissibility document (G8 refuses it by name)
 W_MAX = 32  # the ACTIVE-REFERENCE protocol parameter of `partition.validate_width` (unchanged; not the lifted one)
-W_MAX_LIFTED = 2 * W_MAX  # SPEC v0.5 B1 (PROPOSED value, AGREED that the parameter exists — A4.3): the tight universal admitting value
+W_MAX_LIFTED = 2 * W_MAX  # (PROPOSED value, AGREED that the parameter exists — A4.3): the tight universal admitting value
 W_MAX_LIFTED_STATUS = ("accepted-revb-M-0042 (LIFTING-SPEC v0.5.1 B1: w_max_lifted = 2*w_max = 64, the declared constant of lifted-v1; the "
                        "parameter's existence is AGREED, A4.3; B1's condition met on the first real-row lifted use document -- OLMoE B2 "
                        "r17_1653 r0, out/gen/sweep/evidence/pad/olmoe-1b-7b__…b2…/r17_1653_lane9c1e1f79f_mech_lifted/use_document_r0: "
                        "w_max_lifted 64, max_seen 33, n_out histogram (exact walk 50,000 sets = 1; structural bound complete over "
-                       "7,004,686,199 sets <= 1); coord ruling on the constant pending)")
+                       "7,004,686,199 sets <= 1); the constant's value itself is proposed, its confirmation pending)")
 
 
 def lifted_width_summary(out_widths_payload: Sequence[int], *, w_max_lifted: int = W_MAX_LIFTED) -> dict:
-    """R17-6(b) (SPEC v0.5 A4): for a VU set whose escaping leaves have **payload** widths `out_widths_payload`, the width of the
+    """For a proof-block set whose escaping leaves have **payload** widths `out_widths_payload`, the width of the
     lifted set is the TRUE lifted width `w_out_lifted = Σ (w+1)` and admissibility is `w_out_lifted <= w_max_lifted` — the unlifted
     rule at the lifted parameter, no activity/payload split, no `n_max`, no re-tiling.  Reported beside it, for information only
     (A4.4 "summaries report real widths"): the payload width, `n_out` (how many bits the set grew by), and the verdict of the
@@ -1633,7 +1632,7 @@ def lifted_width_summary(out_widths_payload: Sequence[int], *, w_max_lifted: int
         "ok": w_lifted <= int(w_max_lifted),
         "active_reference_rule_on_lifted_width_ok": w_lifted <= W_MAX,  # information: the 32-bit rule on the true width
         "violations": [f"w_out_lifted {w_lifted} > w_max_lifted {int(w_max_lifted)}"] if w_lifted > int(w_max_lifted) else [],
-        "rule": "w_out_lifted = sum(w+1) over escaping leaves <= w_max_lifted (R17-6(b); no activity/payload split; no n_max)",
+        "rule": f"w_out_lifted = sum(w+1) over escaping leaves <= w_max_lifted ({EVIDENCE['lifted_width']['ruling']}; no activity/payload split; no n_max)",
     }
 
 
@@ -1641,10 +1640,10 @@ N_OUT_HISTOGRAM_MAX_SETS = 50_000  # the exact per-set walk is bounded; the summ
 
 
 def n_out_histogram(fam: Any, *, max_sets: int = N_OUT_HISTOGRAM_MAX_SETS, program: Any = None) -> dict:
-    """SPEC v0.5.1 A4.4 (revb M-0042 B1 condition, M-0071 N5): the histogram of `n_out(S) = |out(S)|` — escaping leaves per VU set — over
+    """The histogram of `n_out(S) = |out(S)|` — escaping leaves per proof-block set — over
     the family, computed by the SAME boundary module the validator uses (`boundary.out_gates`, exact; `Unsupported` sets counted apart),
     and with `program` the per-set TRUE lifted width `w_out^⊥(S) = Σ_{g ∈ out(S)} width(g)` (`boundary.gate_width`): `w_out_lifted_max`,
-    `n_out_max`, `growth_max` (the tag bits of a set: one per escaping LIFTED leaf -- under G1 (v0.7 A11) an escaping ORDINARY leaf, a
+    `n_out_max`, `growth_max` (the tag bits of a set: one per escaping LIFTED leaf -- under G1  an escaping ORDINARY leaf, a
     weight or the prompt read across the cut, carries no tag and grows nothing; `n_out_lifted_max` is that count) and, for information
     only, `w_out_payload_max` (= max over sets of `w_out^⊥ − tag bits`, the unlifted width; never the rule).  Bounded by `max_sets`;
     `complete` says whether every set was visited."""
@@ -1686,7 +1685,7 @@ def n_out_histogram(fam: Any, *, max_sets: int = N_OUT_HISTOGRAM_MAX_SETS, progr
 
 def lifted_width_admissibility(program: Any, fam: Any, *, w_max_lifted: int = W_MAX_LIFTED, limits: Any = None,
                                histogram_max_sets: int = N_OUT_HISTOGRAM_MAX_SETS) -> dict:
-    """R17-6(b) admissibility of a LIFTED Program's VU family: `partition.validate_width` — the one validator, UNCHANGED — run at the
+    """Admissibility of a LIFTED Program's proof-block family: `partition.validate_width` — the one validator, UNCHANGED — run at the
     lifted parameter `w_max_lifted` on the lifted (w+1) widths the Program's types carry.  Returns the verdict's JSON with the lifted
     labels (A5) and the A4.4 width summary (`max_seen` from the validator, the `n_out` histogram from the boundary module); beside it,
     for information, the same validator's verdict at the active-reference `W_MAX` (fails on any set holding a 32-bit leaf, by design)."""
@@ -1706,8 +1705,7 @@ WIDTH_SUMMARY_FIELDS = ("w_max_lifted", "max_seen", "w_out_lifted_max", "n_out_m
 
 
 def width_summary_a44(program: Any, fam: Any, width_verdict: Any, *, w_max_lifted: int = W_MAX_LIFTED, histogram_max_sets: int = N_OUT_HISTOGRAM_MAX_SETS) -> dict:
-    """SPEC v0.5.1 A4.4 / A7 (iii) — the `width_summary` EVERY lifted use document and admissibility report carries (revb M-0042 B1's
-    acceptance condition; M-0071 N5 names the four): `w_max_lifted`, the validator's `max_seen` (a true lifted width), `w_out_lifted_max`
+    """The `width_summary` EVERY lifted use document and admissibility report carries: `w_max_lifted`, the validator's `max_seen` (a true lifted width), `w_out_lifted_max`
     (the boundary module's per-set Σ(w+1), equal to `max_seen` when the validator certified every set), `n_out_max`, `growth_max`
     (= `n_out_max`), the `n_out` histogram, `w_out_payload_max` (information, never the rule), and `readiness_at_32` (the 32-bit gate
     readiness of the lifted Program, information beside the verdict at `w_max_lifted`)."""
@@ -1778,7 +1776,7 @@ def n_out_structural_bound(program: Any, fam: Any) -> dict:
 
 
 def word_class(w: int, x: int) -> str:
-    """The name of a `w+1`-bit word (SPEC v0.5 A1): `"active"` (tag 0), `"bot"` (`1‖0^w`), `"noncanonical"` (`1‖nonzero`, `INV_w`
+    """The name of a `w+1`-bit word: `"active"` (tag 0), `"bot"` (`1‖0^w`), `"noncanonical"` (`1‖nonzero`, `INV_w`
     included).  A word outside the width is refused.  Naming, never rewriting."""
     if not in_width(w, x):
         raise ValueError(f"not a {w + 1}-bit word: {x:#x}")
@@ -1788,7 +1786,7 @@ def word_class(w: int, x: int) -> str:
 
 
 def commit_leaf(w: int, x: int) -> dict:
-    """R17-6(a) / SPEC v0.5 A3.4 — the COMMITMENT layer's treatment of one lifted leaf: the raw `w+1`-bit word `x` as held, laid out in
+    """The COMMITMENT layer's treatment of one lifted leaf: the raw `w+1`-bit word `x` as held, laid out in
     `leaf_words(w)` machine words (`pack_leaf`, total on the representation) and NAMED (`word_class`).  A noncanonical word is
     committed as the distinct raw bitstring it is and reported by name; it is never normalized to ⊥, to `INV_w`, to `0‖payload`, or
     dropped.  `unpack_leaf(w, words) == x` for every word, canonical or not."""
@@ -1804,7 +1802,7 @@ class LiftedLayoutError(ValueError):
 
 
 def leaf_words(w: int) -> int:
-    """Machine words of one lifted leaf of payload width `w` (PAD-02 layout rule, SPEC §9(b)): `⌈(w+1)/32⌉` — 1 for `w ≤ 31`
+    """Machine words of one lifted leaf of payload width `w` (PAD-02 layout rule): `⌈(w+1)/32⌉` — 1 for `w ≤ 31`
     (bf16 → 17 bits, the activity bit → 2 bits), 2 for `w = 32` (an i32/f32 leaf needs its 33rd bit)."""
     if w < 1:
         raise ValueError(w)
@@ -1838,7 +1836,7 @@ def unpack_leaf(w: int, words: Sequence[int]) -> int:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# DENSE B1, the Program OF RECORD (F-pad-14): the Build's derived flat request component, lifted by node replay + the guard
+# DENSE B1, the Program OF RECORD: the Build's derived flat request component, lifted by node replay + the guard
 # ---------------------------------------------------------------------------------------------------------
 
 def replay_body(B: Builder, body, args: Sequence[Coll]) -> Coll:
@@ -1895,7 +1893,7 @@ _LREQUEST_DEF = CompositeDefinition("LiftedRequest", 2, ("program_digest", "prog
                                         "the unlifted component's digest + program function + the declared EOS set + the guard placement",
                                     conformance="protocol-defined", register=False)
 _LREQUEST_CACHE: dict[tuple, SpecializedDefinition] = {}
-BOUNDARY_PREFIX = "TokenSelect_v1"  # the sampling event of the derived flat body (reqval M-0082: the step boundary; GP-01's X-09 segmentation)
+BOUNDARY_PREFIX = "TokenSelect_v1"  # the sampling event of the derived flat body (the step boundary; GP-01's X-09 segmentation)
 
 
 def _reads(r: Refs) -> set[int]:
@@ -1966,7 +1964,7 @@ def request_boundaries(body, boundary_prefix: str = BOUNDARY_PREFIX) -> list[int
 
 def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max_tokens: int, lag: int, guard: str = GUARD_IN,
                            boundary_prefix: str = BOUNDARY_PREFIX) -> SpecializedDefinition:
-    """The lifted fixed Program of ONE derived request (F-pad-14): `fn` is GP-01's request component (`workload.request_component(
+    """The lifted fixed Program of ONE derived request: `fn` is GP-01's request component (`workload.request_component(
     descriptor).fn` — the Build's derived flat body with the prescribed inputs as parameters, built from the manifest at `T = cap−1`),
     `eos` the declared EOS set.  Result: `LiftedRequest_v2{program_digest, program_fn, EOS, GUARD, LAG}` (v2 = padded-v1, B8) whose body is
 
@@ -1978,7 +1976,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
     PAD-03 (address stability modulo the guard nodes) holds by construction: original node `k` ↦ node `nidx[k]` with the same
     gate count and operand runs; the other nodes are exactly the named guard nodes.  Nothing about a served length enters: the
     guards are placed by dataflow (who reads the token), and the component's boundary count MUST equal the manifest's declared
-    `max_tokens` (F-pad-15, padrev M-0157): a component derived at a SERVED shape (`build_request_LP<lp>_T<served>`, the MOE-05
+    `max_tokens`: a component derived at a SERVED shape (`build_request_LP<lp>_T<served>`, the MOE-05
     eos-truncated derivation) has fewer events than the declaration and is refused by name — it is the post-hoc deletion (A3)
     disguised as a Program of record, never the fixed population."""
     if guard != GUARD_IN:
@@ -2000,7 +1998,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
         raise ValueError(f"no {boundary_prefix} node in the body: not a request Program")
     if int(max_tokens) != cap:
         raise ValueError(f"the component has {cap} sampling events but the manifest declares max_tokens={max_tokens}: a Program derived at a served "
-                         f"shape is not the fixed population (F-pad-15; refuse, never lift the served length)")
+                         f"shape is not the fixed population ({EVIDENCE['lifted_served_shape']['finding']}; refuse, never lift the served length)")
     cached = _LREQUEST_CACHE.get(key)
     if cached is not None:
         if tuple(cached.boundaries) != tuple(bounds):  # type: ignore[attr-defined]  # one identity, one segmentation
@@ -2023,12 +2021,12 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
         if first_reader[b] > bounds[s]:
             raise ValueError(f"the token of event {s - 1} is first read after event {s}'s node: the steps are not in body order")
         if s > lag:  # steps 1..LAG are unconditionally live: no guard, their token is read as is
-            # v0.6 B7: the guard is spliced in at the START of step s's segment (right after event s−1's node and its controller), so
+            # the guard is spliced in at the START of step s's segment (right after event s−1's node and its controller), so
             # `s=<s>/live` precedes EVERY node the step owns — it is their enable operand, not only the token's selector
             guard_at[b + 1] = s
     if bounds[-1] in first_reader:
         raise ValueError("the last event's token is read by a node: the body has steps beyond its last boundary")
-    # G1 (v0.7 A11): the component's parameters are the Build's PRESCRIBED inputs (weights, prompt tokens, ...) -- ordinary `Value<w>`, unless
+    # G1: the component's parameters are the Build's PRESCRIBED inputs (weights, prompt tokens,...) -- ordinary `Value<w>`, unless
     # the body itself needs one lifted (accept_classes: a parameter sharing an operand or the return with lifted leaves)
     pcls, ncls = infer_classes(body, (ORDINARY,) * len(body.params))
     params_l = tuple((n, class_type(t, c)) for (n, t), c in zip(body.params, pcls))
@@ -2038,7 +2036,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
     eos_set = Coll(Array(len(eos_t), Value(32)), concat([c.refs for c in eos_cols]))
     bot = B.call(l_bot(32), name="bot32")
     one = B.call(enable_one(), name="enable/one")  # the root's enable (A9.1): prefill and the unguarded steps 1..LAG are owned by it
-    # Continuation_v1 (R17-32): the controller family -- `slot=1/emit` here, then `slot=<t>/is_eos`, `slot=<t>/out`, `slot=<t+1>/emit` right after the
+    # Continuation_v1: the controller family -- `slot=1/emit` here, then `slot=<t>/is_eos`, `slot=<t>/out`, `slot=<t+1>/emit` right after the
     # sampling-event node of slot t (y_t = the committed token of event t-1); the request's return reads the designated outputs `slot=<t>/out`
     cont = ContinuationChain(B, cap=cap, eos_set=eos_set, bot=bot)
     slot_of_bound = {b: t for t, b in enumerate(bounds, start=1)}
@@ -2046,7 +2044,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
     nidx: list[int] = []
     redirect: dict[int, int] = {}
     gate_node: int | None = None  # LAG=1: the previous step's tok_in (or out[0] for step 2)
-    enable = one  # v0.6 A9/B7: the enable every replayed node of the CURRENT segment receives — `one` until the first guarded step
+    enable = one  # B7: the enable every replayed node of the CURRENT segment receives — `one` until the first guarded step
     for k, node in enumerate(body.nodes):
         s = guard_at.get(k)
         if s is not None:
@@ -2073,7 +2071,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
     if [B.nodes[v].name for v in out_node.values()] != [f"slot={t}/out" for t in range(1, cap + 1)]:
         raise AssertionError("the designated-output nodes are not where the chain put them")  # a construction invariant, never silent
     # the return: every reader of a committed token in the ORIGINAL return reads the slot's designated output o_t = Select(emit_t, y_t, bot)
-    # instead (spec s5 C: the output interface uses emit, never run); the raw tokens stay committed body values (required values)
+    # instead (C: the output interface uses emit, never run); the raw tokens stay committed body values (required values)
     ret = Coll(lift_type(body.ret_type), _remap_nodes(body.ret, args, nidx, out_node))
     sp = SpecializedDefinition(_LREQUEST_DEF, {**bindings, "EOS": eos_t, "GUARD": guard, "LAG": lag}, key)
     sp.set_body(B.finish(ret))
@@ -2084,9 +2082,9 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
     sp.boundaries = tuple(bounds)  # type: ignore[attr-defined]
     sp.cap = cap  # type: ignore[attr-defined]
     sp.lag = lag  # type: ignore[attr-defined]
-    sp.continuation = CONTINUATION_VERSION  # type: ignore[attr-defined]  # R17-32: the controller family is part of the Program
+    sp.continuation = CONTINUATION_VERSION  # type: ignore[attr-defined]  # the controller family is part of the Program
     sp.output_nodes = tuple(out_node[b] for b in bounds)  # type: ignore[attr-defined]  # slot=<t>/out per slot, in order
-    sp.candidate = DP_PAD_02  # type: ignore[attr-defined]  # RULING 21: bound as a labelled candidate, pending Daniel
+    sp.candidate = DP_PAD_02  # type: ignore[attr-defined]  # bound as a labelled candidate, not an agreed baseline
     _LREQUEST_CACHE[key] = sp
     return sp
 
@@ -2115,7 +2113,7 @@ def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, 
 def lifted_request(C: dict, prompt_len: int, cap: int, eos: Sequence[int], *, lag: int, T: int | None = None, gemm: dict | None = None,
                    attention: dict | None = None, norm: dict | None = None) -> SpecializedDefinition:
     """The lifted padded serving Program of ONE declared request `(prompt_len, max_tokens = cap, eos_set)` under the Build's
-    `T = cap − 1` decode-step convention (SPEC §4 [R3]; REL-01/R-16: prefill emits `out[0]`, decode steps `1..cap−1` emit
+    `T = cap − 1` decode-step convention (REL-01/R-16: prefill emits `out[0]`, decode steps `1..cap−1` emit
     `out[1..cap−1]`, so `STEPS = cap − 1` and the event population is exactly `cap = D_MAX_r`).  Inputs: the manifest's declared numbers
     and the registered Definitions — nothing from an execution.  `T`, when a caller passes one, must equal `cap − 1`: a builder
     fed a served length is refused by name (the unlifted `WorkloadProgram` rule, kept verbatim)."""
@@ -2162,14 +2160,14 @@ def live_count_prim(R: int) -> PrimitiveDefinition:
 
 def live_count_hook(B: Builder, outs: Sequence[Coll], arrivals: Sequence[int], cap: int | Sequence[int], eos_set: Coll, bot: Coll, lag: int, *,
                     num_sms: int | None = None, name: str = "S") -> tuple[list[Coll], list[Coll]]:
-    """P9's hook as Program nodes at the WORKLOAD root (CANDIDATE PAD-04 wiring; stoch/global own GP-01's, M-0169): for every engine step
+    """P9's hook as Program nodes at the WORKLOAD root (CANDIDATE PAD-04 wiring): for every engine step
     `t` of the programmed horizon, `n_live_t = LiveCount(live_{r,t} : r programmed for t)` where `live_{r,t}` is recomputed from request
     `r`'s committed tokens exactly as its own guard computes it — `LAG = 0`: `1` at `t = a_r`, `LStepLive(out_r[s−1], E)` for `s = t − a_r ≥ 1`;
     `LAG = 1`: `1` at `s ∈ {0, 1}`, `LStepLive(tok_in_{r,s−1}, E)` for `s ≥ 2` with `tok_in_{r,1} = out_r[0]`, `tok_in_{r,s} = LSelect(live_{r,s},
     out_r[s−1], ⊥)` — so `n_live_t = Σ_r LIsActive(tok_in_{r,t})` (LIFTING-STATUS P9) as a value of the Program, never of an observation.
     With `num_sms` the split count `S_t = LSplitsForSMS<SMS>(n_live_t)` is appended (⊥ when no request is live: no sampler launch).
     Returns `(n_live[t], S[t])` per engine step (`S` empty without `num_sms`).  Rows outside a request's window are not members (structural).
-    `cap` is per request (F-pad-19, padrev M-0245: GP-01's populations have UNEQUAL caps — its standard B2 fixture is cap 3 / cap 2): one int
+    `cap` is per request (GP-01's populations have UNEQUAL caps — its standard B2 fixture is cap 3 / cap 2): one int
     for all or one per request; request `r` is a member of engine steps `a_r <= t < a_r + cap_r`, and `len(out_r) != cap_r` is refused by
     name (a served-length `out_r` is not the fixed population)."""
     check_lag(lag)
@@ -2184,7 +2182,7 @@ def live_count_hook(B: Builder, outs: Sequence[Coll], arrivals: Sequence[int], c
             raise ValueError(f"request {r}: cap {c} < 1")
         if out.type.leaves != c:
             raise ValueError(f"request {r}: out has {out.type.leaves} events but its declared cap is {c}: the hook takes the FIXED population "
-                             f"(cap_r events per request), never a served length (F-pad-19)")
+                             f"(cap_r events per request), never a served length ({EVIDENCE['lifted_per_request_cap']['finding']})")
     assert_splits_domain(R)
     horizon = max(a + c for a, c in zip(arrivals, caps))
     live: list[list[Coll]] = [[] for _ in range(R)]

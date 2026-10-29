@@ -1,7 +1,7 @@
-"""Negative and adversarial tests for the automatic importer (lane XFER, GUIDANCE §43.1; the derive
-mandate's "Test generality and failure behavior").
+"""Negative and adversarial tests for the automatic importer (the derive mandate's "Test generality and failure
+behavior").
 
-Contract under test (frontend design §4.3 / GUIDANCE §43.3): `derive(...)` returns a complete `Program` or
+Contract under test (frontend design §4.3): `derive(...)` returns a complete `Program` or
 `Unsupported(reason, node, module_path, hint)` (returned or raised) / a `FrontendError` code — never a partial
 program, never an opaque gate, never a specialisation on observed values. Every negative here asserts BOTH that
 no `Program` is returned AND that the refusal names the right class of reason. A refusal for the *wrong* reason
@@ -29,7 +29,7 @@ torch = pytest.importorskip("torch")
 
 from verity.ml.circuits import Program, bind, program_digest  # noqa: E402
 from verity_vllm.correspondence.capture_identities import LazyTranscript, Segments, check_call  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluation import evaluate_region  # noqa: E402
 from verity_vllm.program.frontend import FrontendError, export, function, Arr, batch, ops  # noqa: E402
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402

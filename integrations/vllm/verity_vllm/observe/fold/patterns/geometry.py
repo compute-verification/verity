@@ -2,9 +2,9 @@
 
 Geometry helpers
 ----------------
-`views.py` (L2) is a skeleton at the time of writing, so the few view manipulations the patterns need
+The few view manipulations the patterns need
 (`sub_rows`, `rows_operand`, `split_heads`, `as_weight_view`, `as_slot_rows`) live here; they are pure functions on
-`ViewDesc` and can move to `views.py` once L2 lands.
+`ViewDesc`.
 """
 
 from __future__ import annotations

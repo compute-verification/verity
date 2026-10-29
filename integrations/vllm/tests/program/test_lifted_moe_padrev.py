@@ -1,8 +1,8 @@
-"""padrev — adversarial tests for pad's MoE stage (`Lifted[TinyMoeFfn]` over the registered fused-MoE block; lane/r16-pad 8c2d7d628), from
-LIFTING-REVIEW §3 A19 (per-expert batch composition), A20 (router argmax on encoded words), A7/R5 (Active numerics unchanged, incl. the
+"""Adversarial tests for the MoE stage (`Lifted[TinyMoeFfn]` over the registered fused-MoE block), from the attack list:
+A19 (per-expert batch composition), A20 (router argmax on encoded words), A7/R5 (Active numerics unchanged, incl. the
 special f32/bf16 values the router compares), the INV-laundering rule (a garbage token must not look legitimately inactive), and the
-LIFTING-STATUS §4 (i) closure claim (P3's specified list does not grow for MoE).  Padded baseline (experimental).  The circuit and the
-fixture data are pad's (`test_lifted_moe`); the properties, vectors and expected values are padrev's."""
+closure claim (P3's specified list does not grow for MoE).  Padded baseline (experimental).  The circuit and the
+fixture data are `test_lifted_moe`'s; the properties, vectors and expected values are this module's own."""
 
 from __future__ import annotations
 
@@ -26,13 +26,13 @@ def data():
 def _run(sp, inputs):
     prog = Program(sp)
     if L.has_enable(sp) and len(inputs) == len(sp.signature()[0]) - 1:
-        inputs = list(inputs) + [[1]]  # v0.6 B7: a lifted composite takes its enable LAST; the tests run it enabled (Active(1))
+        inputs = list(inputs) + [[1]]  # a lifted composite takes its enable LAST; the tests run it enabled (Active(1))
     t = ref.materialize(prog, inputs)
     return prog, t, [t[g] for g in prog.circuit.root_outputs()]
 
 
 def _gate_for_gate(pl, tl, pu, tu):
-    """v0.6 B7: the lifted Program has ONE more gate -- the enable Input (its LAST prescribed input); every other gate, in order,
+    """The lifted Program has ONE more gate -- the enable Input (its LAST prescribed input); every other gate, in order,
     carries the unlifted word (an Active word is its payload; G1 keeps the weights unwidened)."""
     from verity.ml.circuits.layout import resolve
     last = pl.input_coll(len(pl.root.signature()[0]) - 1)
@@ -147,7 +147,7 @@ def _call_range(prog, name):
 
 
 def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_whatever_its_batch_mate_is(data):
-    """pad's TWO test: token 0 ⊥, token 1 Active.  The reviewer runs every composition — (⊥, A), (A, ⊥), (A, A'), (⊥, ⊥) — and compares
+    """`test_lifted_moe`'s TWO test: token 0 ⊥, token 1 Active.  This runs every composition — (⊥, A), (A, ⊥), (A, A'), (⊥, ⊥) — and compares
     the Active token's ENTIRE call (every gate under `tok0`/`tok1`, not the outputs alone) with its single-token unlifted run; a per-expert
     count, a routed-sum denominator or a block-schedule value that depended on the batch-mate would show as a differing gate."""
     x, wr, w13, w2 = data
@@ -186,7 +186,7 @@ def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_w
 
 
 # ---------------------------------------------------------------------------------------------------------
-# The renormalising router (Qwen3-MoE / Mixtral `norm_topk_prob`, R13 MOE-04) — the moe lane's Qwen3-30B-A3B row uses it; pad tested the
+# The renormalising router (Qwen3-MoE / Mixtral `norm_topk_prob`) — the Qwen3-30B-A3B workload uses it; `test_lifted_moe` tests the
 # raw router only.  Under ⊥ the epilogue's `denom = acc > 0 ? acc : 1` must not resurrect an Active weight (a `SelectF32(⊥, ·, 1.f)` that
 # picked the constant 1.f would give an Active normalised weight on a ⊥ route).
 # ---------------------------------------------------------------------------------------------------------
@@ -216,7 +216,7 @@ def test_the_renormalising_router_keeps_a_bot_row_bot_and_an_active_row_bit_exac
 
 
 # ---------------------------------------------------------------------------------------------------------
-# LIFTING-STATUS §4 (i)/(ii) — the specified list does not grow for MoE; the gather population is the fixed TOPK·(2N+K)·K
+# the specified list does not grow for MoE; the gather population is the fixed TOPK·(2N+K)·K
 # ---------------------------------------------------------------------------------------------------------
 
 

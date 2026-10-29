@@ -1,4 +1,4 @@
-"""J10-R's units under a profiler (HASH-22): what bounds an h1u build's call on the H200.
+"""J10-R's proof blocks under a profiler: what bounds an h1u build's call on the H200.
 
     python prof.py run --fixtures DIR --scratch S --h1u NAME=PATH [--sm] [--ms 16384] [--linears q,kv,o,up,down]
                        --out OUT
@@ -7,7 +7,7 @@
 `run`: one call a linear and M on bench.py's operands (`shape.whole`, every row live), once warm and then once between
 cudaProfilerStart and cudaProfilerStop, each in an NVTX range LINEAR-M, so `ncu --profile-from-start off` profiles that
 one call's kernels (kh_seeds_j10r's, then kh_units_multi_j10r's or with --sm _sm's: h1jr_rows, h1jr_x, h1umj or
-h1umj_sm). OUT/order.json lists the calls in launch order with their units and unit-segments.
+h1umj_sm). OUT/order.json lists the calls in launch order with their proof blocks and proof-block segments.
 
 `summary`: ncu's raw page (`--page raw --csv`) as one record a kernel: its duration, cycles, the pipes' utilisation (every
 `*pipe*pct_of_peak_sustained_active` column), issue activity, occupancy and its limits, registers, memory throughput, the

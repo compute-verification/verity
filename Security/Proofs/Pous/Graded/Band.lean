@@ -60,8 +60,7 @@ least `R(5) = 3,057`.
 **This rationale holds in the ideal-permutation model only.** Every count above is of whole `Π₂` calls, and the
 conversions to wall-clock time take a call to be at least 241.5 µs. At the reference Feistel-SHAKE256 `Π₂` this does
 not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, less than one call, by keeping five 200-byte
-round states per block, so it never re-encodes a segment (red team, 4 Oct 2026, art:7617c8017e80). The theorem is
-about the ideal model and is unaffected.
+round states per block, so it never re-encodes a segment. The theorem is about the ideal model and is unaffected.
 -/
 
 namespace PousGraded
