@@ -142,4 +142,6 @@ def test_the_command_checks_and_renders(capsys):
     out = capsys.readouterr().out
     assert "## sm_120" in out and "| QMMA | `QMMA\\.SF\\..*`" in out and "Holes (each a gap" in out
     assert "sm_120 on Accel.Op alone" in out and "Rows resting on a proposed entry:" in out
+    assert out.startswith("The ACCEL ops: ") and "| Mark | ACCEL op |" in out and "the card premise" in out
+    assert "envelope ISA" not in out and "coverage premise" not in out
     assert "## sm_90" not in out
