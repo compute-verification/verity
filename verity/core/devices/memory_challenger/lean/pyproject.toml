@@ -15,8 +15,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: `lake` builds this package and, through its path requires, C-Flock's verifier's Lean, core's randomness, LMS,
-# the protocol interface and the difftest server; the sessions are signed by the PoUS tests' test signer, read by path.
+# the auditor parties' period checks, the protocol interface and the difftest server; the sessions are signed by the PoUS
+# tests' test signer, read by path.
 inputs = ["verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
-          "verity/core/primitives/randomness", "verity/core/primitives/lms/lean", "verity/core/protocols/interface",
+          "verity/core/primitives/randomness", "verity/core/primitives/lms/lean", "verity/core/attest/lean",
+          "verity/core/protocols/interface",
           "verity/core/difftest/lean", "verity/core/protocols/pous/tests/pous_test_signer.py"]
