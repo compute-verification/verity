@@ -82,7 +82,7 @@ def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
-    (w : Claims.Flock.Wit) (st : Claims.Recursion.Stmt)
+    (w : Claims.Flock.Wit) (st : Claims.Recursion.CompiledStatement)
     (ω : Tape (bLAt mask (IrDep x) b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask (IrDep x) b0 x aux nOf hd recRest).V.k x) → Coin),
     HonestRunAccepted mask (IrDep x) b0 x aux nOf hd recRest decI w st ω r ∧

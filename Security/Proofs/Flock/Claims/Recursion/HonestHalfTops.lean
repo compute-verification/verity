@@ -54,7 +54,7 @@ theorem honest_half_tops (mask : ℕ → ℕ → Bool) (b0 : Brings) (x : Msg)
     let bL := bLAt mask (IrDep x) b0 x aux nOf hd recRest
     let I := IAt decI
     let D := DAt mask (IrDep x) b0 x aux nOf hd recRest
-    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt} (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
+    ∀ {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement} (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
     HonestRunAccepted mask (IrDep x) b0 x aux nOf hd recRest decI w st ω r →
     HonestWitSatisfies FlockDeploy.sha512 I.V bL x w ω r →
     NoCollAt mask (IrDep x) b0 x aux nOf hd recRest decI w ω r →

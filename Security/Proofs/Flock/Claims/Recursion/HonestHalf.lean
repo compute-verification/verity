@@ -90,7 +90,7 @@ that read it refused.
 
 Only Python joins the 10 per-part verdicts, so what the run witnesses is that every part's session accepted, not that
 one compiled verifier accepted the whole outer statement. -/
-def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.Stmt)
+def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.CompiledStatement)
     (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin) : Prop :=
   Claims.Recursion.R (DAt mask Ir b0 x aux nOf hd recRest) (IAt decI) x w ∧
@@ -116,7 +116,7 @@ def NoCollAt (w : Claims.Flock.Wit) (ω : Tape (bLAt mask Ir b0 x aux nOf hd rec
 /-- **The honest run's staging sets up** (`StagedSetsUp` at the honest run's statement `x`), from
 `HonestRunAccepted`: the compiled verifier accepting the reference prover's run means each part's recursive setup passed
 (`stagedSetsUp_run`). -/
-theorem stagedSetsUp_accepted {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}
+theorem stagedSetsUp_accepted {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement}
     {ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest)} {r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin}
     (h : HonestRunAccepted mask Ir b0 x aux nOf hd recRest decI w st ω r) :
     ∀ s < nS x, (setupO (staged (bLAt mask Ir b0 x aux nOf hd recRest).st x
