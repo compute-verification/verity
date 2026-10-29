@@ -1,17 +1,21 @@
 """The review landing onto `checked` (drive.toml's `land_into`: `main` holds only tested commits).  A
 landing fast-forwards `checked`, never `main`; `main` is fast-forwarded only to a commit of `checked` whose after-landing run
-passed every step; a red run moves nothing on `main`, and its culprit is reverted on `checked`."""
+passed every step on the merge gate; a red run moves nothing on `main`, and its culprit is reverted on `checked`.  A job off
+the gate (ci.toml's `gate = false`: circuit-check) runs in that run and reverts its culprit, but holds no promotion."""
 from __future__ import annotations
 
 import json
 
 import pytest
 
-from research.drive import FIX_WINDOW_S
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, TAIL
 from research.queue import DriveFlags, QueueError
-from test_drive_review import Review, _main, _move_main, _owning, _subject
+from test_drive_review import CI_TOML, Review, _main, _move_main, _owning, _subject
 from test_queue import World, _git
 from test_queue_drive import _failed_run, _steps_run
+
+#: the steps `main` waits for under `CI_TOML`
+GATED = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and s != "circuit-check"]
 
 
 @pytest.fixture
@@ -104,6 +108,104 @@ def test_main_follows_no_baseline_that_passed_fewer_steps(world, monkeypatch):
     assert Q.baseline(h.q, tip, "ci") == 0
     h.tick()
     assert _main(world) == tip
+
+
+def _gated(world: World, monkeypatch) -> Review:
+    """A review landing onto `checked` in a tree whose ci.toml takes circuit-check off the merge gate."""
+    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    return Review(world, monkeypatch, land_into="checked")
+
+
+def _landed(h: Review, files: dict[str, str]) -> str:
+    h.world.gh.put(1, h.world.change(files))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), h.world.logs
+    return _checked(h.world)
+
+
+def test_main_follows_once_every_step_on_the_gate_passed_while_circuit_check_still_runs(world, monkeypatch, tmp_path):
+    h = _gated(world, monkeypatch)
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    h.tick()
+    assert _main(world) == main                                 # nothing passed yet
+    h.evidence = [_steps_run(tmp_path, "r-post-0", {s: "passed" for s in GATED[:-1]})]
+    h.tick()
+    assert _main(world) == main                                 # one step on the gate hasn't passed
+    h.evidence = [_steps_run(tmp_path / "all", "r-post-0", {s: "passed" for s in GATED})]
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == tip and pl["gated"] == tip and pl["run"]["ids"] == ["r-post-0"] and h.cancelled == []
+    assert pl["verified"] != tip                                # the run, circuit-check in it, goes on
+    assert h.after == [(main, {tip: "r-post-0"})]
+
+
+def test_a_red_circuit_check_reverts_its_culprit_on_checked_and_holds_no_promotion(world, monkeypatch, tmp_path):
+    h = _gated(world, monkeypatch)
+    tip = _landed(h, {"pkg/x.circuit-check.py": "X = 1\n"})
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_steps_run(tmp_path, "r-post-0", {**{s: "passed" for s in GATED}, "circuit-check": "failed"})]
+    h.tick()
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert "step circuit-check is red on `checked`" in ring and "Culprit: #1" in ring, ring
+    assert _main(world) == tip
+    h.clock += FIX_WINDOW_S + 1
+    h.tick()
+    reverted = _checked(world)
+    assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and h.posted[-1][0] == reverted
+    assert "pkg/x.circuit-check.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
+    h.evidence = []
+    h.tick()
+    assert _main(world) == tip                                  # the revert's own run hasn't passed yet
+    _pass(h)
+    h.tick()
+    assert _main(world) == reverted and not h.postland()["red"]
+
+
+def test_a_red_circuit_check_cancels_no_step_on_the_gate_still_running(world, monkeypatch, tmp_path):
+    """A red run is cancelled once only its tail (circuit-check, flock-rust-tests) is left; when only circuit-check, off the
+    gate, is red, flock-rust-tests runs to its end first, so its pass can still move `main`."""
+    h = _gated(world, monkeypatch)
+    tip = _landed(h, {"a.txt": "1\n"})
+    steps = {**{s: "passed" for s in AFTER_LANDING if s not in TAIL}, "circuit-check": "failed"}
+    h.run_state["r-post-0"] = ("running", None, None, "step circuit-check")
+    h.evidence = [_steps_run(tmp_path, "r-post-0", steps)]
+    h.tick()
+    assert h.cancelled == [] and h.postland()["run"]["ids"] == ["r-post-0"] and _main(world) != tip
+    h.evidence = [_steps_run(tmp_path / "2", "r-post-0", {**steps, "flock-rust-tests": "passed"})]
+    h.tick()
+    assert h.cancelled == ["r-post-0"] and h.postland()["run"] is None and _main(world) == tip
+
+
+@pytest.mark.parametrize("red", ["pytest", "lean-audit"])
+def test_main_stays_while_a_step_on_the_gate_is_red_whatever_circuit_check_did(world, monkeypatch, tmp_path, red):
+    h = _gated(world, monkeypatch)
+    main = _main(world)
+    _landed(h, {"a.txt": "1\n"})
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_steps_run(tmp_path, "r-post-0", {**{s: "passed" for s in AFTER_LANDING}, red: "failed"})]
+    h.tick()
+    h.tick()
+    assert _main(world) == main and "gated" not in h.postland()
+    assert any(f"step {red} is red on `checked`" in p for p in h.posts), h.posts
+
+
+def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
+    """ci's `--steps` baseline counts once it names every step on the merge gate: circuit-check, off it, needn't be among them."""
+    from research import queue as Q
+
+    h = _gated(world, monkeypatch)
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    state = h.q.load_state()
+    state["drive"]["postland"]["run"] = None
+    h.q.save_state(state)
+    assert Q.baseline(h.q, tip, "ci", ",".join(GATED[:-1])) == 0
+    h.tick()
+    assert _main(world) == main
+    assert Q.baseline(h.q, tip, "ci", ",".join(GATED)) == 0
+    h.tick()
+    assert _main(world) == tip and any("(ci baseline)" in x for x in world.logs), world.logs
 
 
 def test_a_main_pushed_outside_drive_is_merged_into_checked_and_main_follows_once_that_is_checked(world, monkeypatch):

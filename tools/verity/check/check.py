@@ -1,5 +1,5 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs ci.toml takes off
-the merge gate (`gate = false`: circuit-check), which run after landing, in drive's after-landing run on `main`'s tip.
+the merge gate (`gate = false`: circuit-check), which run after landing, in drive's after-landing run on `checked`'s tip.
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -7,7 +7,7 @@ the merge gate (`gate = false`: circuit-check), which run after landing, in driv
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
-                                                            post-landing run drive launches on `main`'s tip (`train.sh
+                                                            post-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)

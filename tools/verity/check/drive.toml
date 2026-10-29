@@ -22,9 +22,9 @@ landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
 # passed; the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
 land = "review"
 # the branch the review landing fast-forwards and `next` is built on: "checked", whose tip drive's full check (`train.sh TIP
-# MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every step, and
-# a red step's culprit is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App
-# pushes `checked`
+# MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every
+# step on the merge gate (not circuit-check, `gate = false` in ci.toml), and a red step's culprit is reverted on `checked`,
+# never on `main`. "main" lands on `main` and checks it after. Only drive's App pushes `checked`
 land_into = "checked"
 # the after-landing run reuses no suite, Lean or step pass (`check.py --no-cache`), until a suite's reuse is per test; circuit-check
 # alone reuses its per-target passes (`--circuit-cache`), each keyed by everything that target read, since a cold `--all` (~4 h,

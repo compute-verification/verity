@@ -25,9 +25,9 @@ owner = "circuits"
 part = "circuits"
 group = 2
 # Off the merge gate: a recorded check (whole or a shard) and every plan leave it out, and `research merge` requires it of no
-# check. It runs after landing, in drive's after-landing run on `main`'s tip (`--deferred`, every job), where a red reverts its
-# culprit as any after-landing red does. It returns to the gate once `circuit-check --all` fits inside the rest of the check
-# (under 30 minutes).
+# check, and drive moves `main` without it. It runs after landing, in drive's after-landing run on `checked`'s tip (`--deferred`,
+# every job), where a red reverts its culprit as any after-landing red does. It returns to the gate once `circuit-check --all`
+# fits inside the rest of the check (under 30 minutes).
 gate = false
 
 [[job]]

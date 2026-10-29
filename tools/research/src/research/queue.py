@@ -1,7 +1,8 @@
 """`research queue`: the merge queue (infra plan change 5).  `next` is `checked` (drive.toml's `land_into`: `Queue.into`) plus every
 admitted PR, one merge commit each, in the order they were admitted.  Drive (`research.drive`) fast-forwards `checked` to the top
 of the longest prefix of `next` whose every member has a reviewer's land verdict at its head, and `main` to a commit of `checked`
-only once that commit's after-landing run, the full check, passed every step: `main` holds only tested commits.
+only once that commit's after-landing run, the full check, passed every step on the merge gate (not circuit-check, ci.toml's
+`gate = false`): `main` holds only tested commits.
 
     research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
                                                    `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
@@ -41,7 +42,7 @@ only once that commit's after-landing run, the full check, passed every step: `m
                                                    one tick of the landing automation (`research.drive`): sync and land the
                                                    reviewed prefix of `next` on `checked`, a Lean change once its Lean check
                                                    passed, then check `checked` (--after-landing-no-cache: reusing no pass but
-                                                   circuit-check's) and move `main` to what passed every step; tell @ci the rest.
+                                                   circuit-check's) and move `main` to what passed every gated step; tell @ci the rest.
                                                    --config reads the flags (`DriveFlags`) from PATH at `main` in the queue's clone,
                                                    fresh each tick, so a change to them is a reviewed commit (drive's of record:
                                                    tools/verity/check/drive.toml); a flag given here overrides the file's, the
@@ -157,7 +158,7 @@ names the PR it contains and why that one is out, judging each PR after those it
 
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 once its Lean check passed, by a fast-forward of `checked` (no new merge commit), and checks `checked` after each landing,
-reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step; it tells
+reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
 `@ci` what it refuses.  A push refused because `checked` moved leaves it alone; the next sync rebuilds `next` on the new
 `checked`.  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
@@ -388,7 +389,7 @@ class DriveFlags:
     #: how `next` lands: "review", each member on a reviewer's verdict, onto `land_into`, whose tip the full check checks (`Driver`)
     land: str = "review"
     #: the branch a review landing fast-forwards and `next` is built on (`Queue.into`): `checked`, which `main` follows only to
-    #: a commit whose after-landing run passed every step (`Driver._promote`), or `main` itself
+    #: a commit whose after-landing run passed every step on the merge gate (`Driver._promote`), or `main` itself
     land_into: str = "main"
     #: the after-landing run reuses no pass but circuit-check's per-target ones (`check.py --no-cache --circuit-cache`)
     after_landing_no_cache: bool = False
@@ -1000,7 +1001,7 @@ class Queue:
     def into(self) -> str:
         """The branch drive's review landing fast-forwards and `next` is built on: `land_into`, else drive.toml's at `main` as
         last fetched.  `checked`: `main` follows it only to each commit
-        whose after-landing run passed every step (`Driver._promote`)."""
+        whose after-landing run passed every step on the merge gate (`Driver._promote`)."""
         if self.land_into is not None:
             return self.land_into
         if self._into is None:
@@ -1520,7 +1521,7 @@ class Queue:
                 if e.state == "ready" and not _git(self.workdir, "merge-base", "--is-ancestor", e.pr.head, self.base,
                                                    check=False).returncode:
                     e.state, e.why = "queued", (f"landed on `{self.into}`: it reaches `main` when drive's full check of a "
-                                                f"`{self.into}` commit at or above it passes every step")
+                                                f"`{self.into}` commit at or above it passes every step on the merge gate")
         conflicts, waits = state.get("conflicts", {}), state.get("waiting", {})
         main = _out(self.workdir, "rev-parse", "refs/remotes/origin/main")
         for n in contained_first(entries):
@@ -3550,7 +3551,8 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     """`research queue baseline SHA --by ci [--steps STEP,...]`: record the landed branch (`checked`, `Queue.into`) at SHA as verified by the after-landing run
     (`drive["postland"]`), on the steps ci knows are green there (every after-landing step by default; with --steps, only those,
     as a red baseline run records: a later failure of another step reverts nothing), so the review landing lands without first running the after-landing run on that branch itself
-    (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  It drops a bisection still open (it reverted
+    (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  When those steps cover every step on the merge
+    gate there (not circuit-check: `Driver._gating`), drive moves `main` to SHA (`Driver._promote`).  It drops a bisection still open (it reverted
     nothing), and is refused while a post-landing run runs, for a SHA the branch doesn't hold, and off drive (`/data/infra/drive.sh
     queue baseline SHA --by ci` on the control pod)."""
     from .drive import AFTER_LANDING
@@ -3574,6 +3576,7 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
         print(f"research queue: dropped the bisection of `{q.into}` {b['tip'][:12]}'s failed after-landing run; it reverted nothing")
     on = lambda a, b: not _git(q.workdir, "merge-base", "--is-ancestor", a, b, check=False).returncode  # noqa: E731
     pl["verified"] = full
+    pl.pop("verified_run", None)
     pl["verified_as"] = {"steps": green, "no_cache": None, "by": by,
                          "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     pl["pending"] = [p for p in pl.get("pending", []) if not on(p, full)]
@@ -3731,7 +3734,7 @@ def main(argv: list[str]) -> int:
                     "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
-                    "another step reverts nothing")
+                    "another step reverts nothing; `main` moves to SHA once they cover every step on the merge gate")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
