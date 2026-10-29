@@ -38,7 +38,7 @@ max_lean_checks = 10
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)
 nonlean_first = false
 # while no Lean check of `next` runs, members with a land verdict go below those waiting for one, so a member waiting for its
-# review holds only itself (never past a held member, nor below a running Lean check's commit)
+# review holds only itself (nor below a running Lean check's commit); a held member goes to `next`'s top every sync, this on or not
 reviewed_first = false
 # off, as nonlean_first: next lands as one checked commit, and a reorder rebuilds what its check covers
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
