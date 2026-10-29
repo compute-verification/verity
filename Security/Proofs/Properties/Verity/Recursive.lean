@@ -585,11 +585,12 @@ noncomputable def R : Claims.Rel Claims.Flock.Wit := Claims.Recursion.R q.D q.I
 noncomputable def E : Claims.Extractor Coin Claims.Flock.Wit q.D.V :=
   Claims.Recursion.E FlockDeploy.sha512 q.D q.I (deployZkRec _root_.Flock.Readable.relation) q.decO
 
-/-- **The extractor's reruns at `x`**, at most (`Claims.Recursion.Efficient`'s worst-case count): `1 + waits · cap` for
-the inner protocol, times `1 + Σ waits · cap` over the outer sessions. -/
+/-- **The extractor's expected reruns at `x`** (`Claims.Recursion.Efficient`'s expected count, which
+`Claims.Recursion.efficient` proves): `N_I = 1 + waits · k` for the inner protocol, times `1 + Σ waits · k` over the
+outer sessions. The worst case (`cap = 2^256` reruns a wait) would put the binding budget past `2^256` and the error
+past one at every circuit. -/
 noncomputable def runs (x : Msg) : ℕ :=
-  (1 + q.I.waits (Claims.Recursion.xI q.D x) * q.I.cap (Claims.Recursion.xI q.D x)) *
-    (1 + ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).cap)
+  Claims.Recursion.NI q.D q.I x * (1 + ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).k)
 
 end Dep
 
@@ -708,8 +709,9 @@ Every finder budget below is a defined function of it and of public counts. -/
 def tCost (_ : SessionIn V q θ F c σ) : ℕ := max 1 (V.cost θ F c σ)
 
 /-- **The binding finder's budget at the draws `ξ₁`, `ξ₂`**, a defined function of the strategy's cost `t'`: two runs,
-and two extractions of at most `runs` reruns each (every rerun a run of the session, so at most `t'` calls), plus each
-extraction's rerun count and `collOf`'s `dColl`: `(2 + r₁ + r₂) · t' + r₁ + r₂ + dColl`. -/
+and two extractions of `runs` reruns each in expectation (every rerun a run of the session, so at most `t'` calls),
+plus each extraction's rerun count and `collOf`'s `dColl`: `(2 + r₁ + r₂) · t' + r₁ + r₂ + dColl`, the expected calls
+`ecr/sha-512` reads. -/
 noncomputable def bindBudget (S : SessionIn V q θ F c σ) (dColl : ℕ) (ξ₁ ξ₂ : S.Ξ) : ℕ :=
   (2 + q.runs (S.x ξ₁) + q.runs (S.x ξ₂)) * q.tCost V S + q.runs (S.x ξ₁) + q.runs (S.x ξ₂) + dColl
 
