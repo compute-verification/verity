@@ -128,7 +128,8 @@ def lead_words(rng, layout: str, m: int, n: int, S: int, base: str) -> dict:
     """COUNTER's zero-data form of the lead's words (N-RED's lead_instance as COUNTER reads it): c_t(i, j) =
     b_t(i) + Σ_l U_l(class i)·v_{t,l}(j), three odd s8 coin lanes, weights (127, 1, 1) / (1, 127, 1) by row parity at
     rot and 1 at e7, and a per-cell d0 in ±2S. `tag` takes d0 as the lead's own step-0 term (`tag_d0`), which makes
-    every row distinct. `offset` adds a constant the prover's data reaches in its first steps (s8 data on 27 lanes adds
+    every row distinct; `wide` adds to it a rank-2 step-0 coin term U(i)·V(j) (16- and 15-bit coins, removed exactly
+    at the end), so rows sit about 2^29 apart. `offset` adds a constant the prover's data reaches in its first steps (s8 data on 27 lanes adds
     up to 2^18.75 a step), so every word stays positive with constant high bytes; `uniform` adds a uniform 32-bit base
     a cell."""
     b = rng.integers(0, 2, (S, m), dtype=np.int64)
@@ -138,8 +139,10 @@ def lead_words(rng, layout: str, m: int, n: int, S: int, base: str) -> dict:
     cls = np.arange(m) % 2 if layout == "rot" else np.zeros(m, np.int64)
     col = np.einsum("pl,tjl->tpj", np.array([U[0], U[1 % m]]), v)
     c = b[:, :, None] + col[:, cls, :]
-    d0 = (tag_d0(rng, m, n, S) if base == "tag"
+    d0 = (tag_d0(rng, m, n, S) if base in ("tag", "wide")
           else rng.integers(-2 * S, 2 * S + 1, (m, n), dtype=np.int64))
+    if base == "wide":
+        d0 = d0 + rng.integers(-(1 << 15), 1 << 15, (m, 2)) @ rng.integers(-(1 << 14), 1 << 14, (2, n))
     if base == "offset":
         d0 = d0 + OFFSET[layout]
     elif base == "uniform":
@@ -321,7 +324,7 @@ def part_l(checks: Checks, rng) -> dict:
 
 def part_k(checks: Checks, rng) -> dict:
     out = {}
-    for base in ("small", "tag", "offset", "uniform"):
+    for base in ("small", "tag", "wide", "offset", "uniform"):
         d = lead_words(rng, "rot", ROWS, BN, STEPS["k2048"], base)
         t = d["w"].shape[0] - 1
         cb = cell_bytes(d["w"][t])
@@ -329,15 +332,21 @@ def part_k(checks: Checks, rng) -> dict:
         full = rank_mod_p(cb.reshape(ROWS, -1))
         lin = rank_mod_p(d["wint"][t] - d["d0"])
         partner = []
-        for b in range(2):
+        for b in range(4):
             x = cb[:, :, b]
             dif = np.mean(x[:, None, :] != x[None, :, :], axis=2) + np.eye(ROWS)
             partner.append(float(np.mean(dif.min(axis=1))))
+        allb = cell_bytes(d["w"])
+        S = allb.shape[0]
+        reg_change = (allb[1:] != allb[:-1]).reshape(S - 1, ROWS, BN // 4, 4, 4).any(axis=3).mean(axis=(0, 1, 2))
+        per_byte = [min(8 * partner[b], 0.25 + 0.25 * float(reg_change[b])) for b in range(4)]
         out[base] = {"bytes": full, "per_byte": ranks, "words_minus_d0": lin, "d0": rank_mod_p(d["d0"]),
                      "words": rank_mod_p(d["wint"][t]), "distinct_rows": int(len(np.unique(d["w"][t], axis=0))),
-                     "partner_differs": partner}
-    sm, of, tg = out["small"], out["offset"], out["tag"]
-    out["counting_floor"] = 0.25 + 0.25 + 8 * tg["partner_differs"][1] + 2 / ROWS + honest_fold_writes() - 1.0
+                     "partner_differs": partner, "register_changes": reg_change.tolist(),
+                     "floor_per_byte": per_byte,
+                     "counting_floor": sum(per_byte) + 2 / ROWS + honest_fold_writes() - 1.0}
+    sm, of, tg, wd = out["small"], out["offset"], out["tag"], out["wide"]
+    out["counting_floor"] = tg["counting_floor"]
     checks.check("K: at the lead's own zero data (its step-0 tag) the words are rank <= 13 as integers (the tag's 9, "
                  "the row term and two classes' column terms) and every row is distinct; bytes 2 and 3 are one "
                  "pattern a row class (rank 2), which the class-sharing prover (part P) takes; byte 0 can't be "
@@ -350,6 +359,16 @@ def part_k(checks: Checks, rng) -> dict:
                  f"per byte {tg['per_byte']}; the best partner row differs on "
                  + ", ".join(f"{x:.1%} (byte {b}, {8 * x:.2f} reg)" for b, x in enumerate(tg["partner_differs"]))
                  + f"; counting floor {out['counting_floor']:.3f} registers a word")
+    checks.check("K: a wide step-0 coin term (rows about 2^29 apart) makes every byte full rank and leaves no byte "
+                 "worth sharing with a partner row, so the count rises well above stock: every byte pays its MMA slot "
+                 "and its A register's changes",
+                 min(wd["per_byte"]) == ROWS and min(wd["partner_differs"]) * 8 > 0.25
+                 and wd["counting_floor"] > 1.5,
+                 f"per byte {wd['per_byte']}; the best partner row differs on "
+                 + ", ".join(f"{x:.1%}" for x in wd["partner_differs"]) + "; A registers change on "
+                 + ", ".join(f"{x:.1%}" for x in wd["register_changes"])
+                 + f"; counting floor {wd['counting_floor']:.3f} registers a word (the lead's tag: "
+                 f"{tg['counting_floor']:.3f})")
     checks.check("K: the zero-data words less d0 are rank <= 3 (a row term and a column term a class), but their byte "
                  "matrices are full rank at bytes 0 and 1, the bytes that move every step; bytes 2 and 3 are low rank",
                  sm["words_minus_d0"] <= 3 and sm["bytes"] == ROWS and min(sm["per_byte"][:2]) == ROWS
@@ -604,6 +623,16 @@ def part_p(checks: Checks, rng) -> dict:
                  all(v["same"] and v["lanes_ok"] for v in sh),
                  "; ".join(f"{k}: fixes {v['fixes']:.4f}, corrections {v['corrections']:.4f}, checks "
                            f"{v['checks']:.4f} a word, {v['free']:.3f} registers a word" for k, v in zip(STEPS, sh)))
+    d = lead_words(rng, "rot", ROWS, BN, STEPS["k2048"], "wide")
+    R, Q = draw_coins(rng, BN)
+    Zw, mw = pack_share(d, R, Q)
+    out["rot/k2048/share-wide"] = {"same": bool(np.array_equal(Zw, chain(d["w"], R, Q))), **mw}
+    sw = out["rot/k2048/share-wide"]
+    checks.check("P: with the wide step-0 coin term the class-sharing prover still matches honest, but pays more than "
+                 "honest: nearly every cell straddles its representative",
+                 sw["same"] and sw["lanes_ok"] and sw["free"] > 1.0 + honest_fold_writes(),
+                 f"fixes {sw['fixes']:.3f}, corrections {sw['corrections']:.3f}, checks {sw['checks']:.3f} a word; "
+                 f"{sw['free']:.3f} registers a word")
     ro = [v for k, v in out.items() if k.startswith("rot/") and k.endswith("/offset")]
     eo = [v for k, v in out.items() if k.startswith("e7/")]
     zr = [v for k, v in out.items() if k.endswith("/zero")]
