@@ -118,15 +118,15 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS and network certification (onsite's subprotocols), and the bandwidth audit over PoUS's store and memory wipes (subprotocols of neither composite yet). | `verity example h200` | `demos/h200/README.md`, `demos/h200/interfaces/README.md` |
-| vLLM | Llama-3.2-1B INT8, served by vLLM on one H200 through the committing endpoint. It runs the remote protocol's two subprotocols: live coins sample proof blocks, which C-Flock `--zk` proves and the Lean verifier checks, and PoUW runs on the served model as a development run that credits nothing. Onsite's subprotocols run on the same served run where each has its piece. | `verity example vllm` | `demos/vllm/README.md` |
-| Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only example that steps through the whole remote composite. It runs; nothing about it is proved. | `verity example lifecycle` | `demos/lifecycle/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS and network certification (onsite's subprotocols), and the bandwidth audit over PoUS's store and memory wipes (subprotocols of neither composite yet). | `verity demo h200` | `demos/h200/README.md`, `demos/h200/interfaces/README.md` |
+| vLLM | Llama-3.2-1B INT8, served by vLLM on one H200 through the committing endpoint. It runs the remote protocol's two subprotocols: live coins sample proof blocks, which C-Flock `--zk` proves and the Lean verifier checks, and PoUW runs on the served model as a development run that credits nothing. Onsite's subprotocols run on the same served run where each has its piece. | `verity demo vllm` | `demos/vllm/README.md` |
+| Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only demo that steps through the whole remote composite. It runs; nothing about it is proved. | `verity demo lifecycle` | `demos/lifecycle/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `demos/dither_full_util/README.md` |
 
 The remote protocol's verifier, `remote check`, has no run of record yet; its first is due Wed 28 Oct, 11 AM PDT.
-`verity example lifecycle` is the only example that steps through the whole remote composite, with a stand-in prover.
-The remote protocol's demo is the vLLM demo (`verity example vllm`): sampled proofs and PoUW on one served run, with
-PoUW's verdict a development run that credits nothing, while `verity example h200` runs remote's sampled-proofs half
+`verity demo lifecycle` is the only demo that steps through the whole remote composite, with a stand-in prover.
+The remote protocol's demo is the vLLM demo (`verity demo vllm`): sampled proofs and PoUW on one served run, with
+PoUW's verdict a development run that credits nothing, while `verity demo h200` runs remote's sampled-proofs half
 ([the remote protocol's demo](verity/core/protocols/remote/README.md#the-demo)).
 
 The prover's side serves and proves. The auditor's side runs the verifier, the challenger that draws the live coins,
