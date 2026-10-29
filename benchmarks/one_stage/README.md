@@ -176,6 +176,7 @@ negatives.
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
   `served_util.py` takes Tensor Active's mean over the longest run of full steps, each step from the previous step's end
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
+  With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

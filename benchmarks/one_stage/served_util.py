@@ -21,7 +21,8 @@ that clock's mean over the window, and ``tensor_active_pct_at_ref`` the tensor-b
 hold at ``--ref-mhz`` (1,830): the mean over samples of Tensor Active times the sample's clock over the reference.
 
 ``served_stack`` is false for the arms that override serve-openai's engine options and drop the bench row (NOT_SERVED),
-and their UTIL lines say so, so a table can't file them as the served step.
+and for a Commit arm served async (``<arm>-async``, whose bench row declares sync scheduling), and their UTIL lines say so,
+so a table can't file them as the served step.
 """
 from __future__ import annotations
 
@@ -374,7 +375,8 @@ def main() -> int:
     ap.add_argument("--ref-mhz", type=float, default=1830.0)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    doc: dict[str, Any] = {"arm": a.arm, "served_stack": a.arm not in NOT_SERVED, "T": a.T, "N": a.N,
+    served = a.arm not in NOT_SERVED and not str(a.arm).endswith("-async")
+    doc: dict[str, Any] = {"arm": a.arm, "served_stack": served, "T": a.T, "N": a.N,
                            **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
