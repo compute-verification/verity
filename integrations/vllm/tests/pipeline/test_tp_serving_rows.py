@@ -1,9 +1,9 @@
 """A TP Commit's serving rows (`pipeline.tp.serving_rows`, ``tp-commit --serving-rows``), on CPU.
 
 * Ordering: `tp.commit.main` over a stand-in LLM of two ranks writes every rank's window after the ranks' finalize and before the
-  challenge is drawn or any opening is asked for, and binds them to the TP run root of the ranks' roots.
+  challenge is sampled or any opening is asked for, and binds them to the TP run root of the ranks' roots.
 * Fail closed: a rank without a window, a rank outside the world or a missing rank exits the Commit before its challenge; a Commit
-  whose windows could not come before every draw is refused.
+  whose windows could not come before every sample is refused.
 * A rank's window over real committed values: `write` on the served toy Commit (`tests.pipeline.served_rope`, its SiluMul rows: the
   "row's own Definition" port rule) is ``served``, its run the TP run root and the rank, its domains core's served domains over that
   run, and its hidden rows the single-GPU hook's (whose window, run the rank's own root, is unchanged); two ranks' domains differ.

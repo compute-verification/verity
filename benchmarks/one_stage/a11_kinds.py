@@ -1,5 +1,5 @@
 """Run A11's census and lowering probe: a served Program's root Calls by Definition kind (family), and for each kind one unit
-lowered through C-Flock's circuit prover (M0's `UnitStager`, the path `a11.py` stages on), its outcome one of
+lowered through Flock's circuit prover (M0's `UnitStager`, the path `a11.py` stages on), its outcome one of
 
 * ``lowers``: the unit's circuit composed; its ANDs, k_log, and how many instances a statement holds (`a6.chunk_cap`);
 * ``no-piece``: M0's lowering has no piece for a primitive the unit reads (`ir_lower.NoPiece`, the piece named), with the

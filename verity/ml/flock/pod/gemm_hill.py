@@ -848,7 +848,7 @@ def _points(src: str, research: list[str]) -> list[dict]:
 def plot(a) -> None:
     """Per subcircuit, the console's three panels over the steps: overhead (log, best-so-far over byte-identical points) with
     the prove-only overhead beside it, throughput, and GPU utilization with GPU-held and prove-only seconds per VU on their own
-    axis; a point that fails its preflight check is hollow. Only the points under the last point's coins and session are drawn."""
+    axis; a point that fails its preflight check is hollow. Only the points under the last point's coins and session are sampled."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -861,7 +861,7 @@ def plot(a) -> None:
     (out / "points.json").write_text(json.dumps(pts, indent=1))
     for sid in sorted({p["subcircuit"]["id"] for p in pts}, key=lambda s: (len(s), s)):
         ps = sorted((p for p in pts if p["subcircuit"]["id"] == sid), key=lambda p: (p.get("time_utc") or ""))
-        # a point whose session never ran (refused, failed before a verdict) has no coins: it is drawn under any mode
+        # a point whose session never ran (refused, failed before a verdict) has no coins: it is sampled under any mode
         ran = [p for p in ps if p.get("coins")]
         mode = (ran[-1].get("coins"), ran[-1].get("session")) if ran else (None, None)
         other = len([p for p in ran if (p.get("coins"), p.get("session")) != mode])
