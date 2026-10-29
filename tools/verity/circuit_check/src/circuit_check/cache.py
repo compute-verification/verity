@@ -1767,20 +1767,16 @@ def version() -> str:
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 
 
-_PLATFORM: list[str] = []
-
-
 def key(request: dict) -> dict:
     _INTERNAL.append(True)                             # the tracer's own work (`platform` runs `uname`): no input of a check
     try:
         # the system, the CPU and the C library, not `platform.platform()`: that names the host's kernel release, which differs
         # between pods and would keep one pod's reports from ever counting on another (`tools/verity/check/verdicts.py`)
-        if not _PLATFORM:
-            _PLATFORM.append("-".join([platform.system(), platform.machine(), *platform.libc_ver()]))
+        plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
     finally:
         _INTERNAL.pop()
     return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
-            "platform": _PLATFORM[0],
+            "platform": plat,
             "registries": hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest(),
             "environment": {k: v for k, v in sorted(os.environ.items())
                             if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
