@@ -124,7 +124,7 @@ def write_target(name: str, scratch: Path) -> list[dict]:
         stem = f"{name}.{k}"
         (scratch / f"{stem}.types.json").write_text(json.dumps({"types": [t.content()]}))
         (scratch / f"{stem}.netlist").write_text(IL.netlist(IL.layout(C, ins, outs), f"moe/{name}"))
-        lay = LY.Layout(t.digest(), None, (), (), ("derive",), (), ())
+        lay = LY.BlockLayout(t.digest(), None, (), (), ("derive",), (), ())
         (scratch / f"{stem}.archive.json").write_text(json.dumps(
             {"types": [t.content()], "tables": {}, "layouts": [lay.to_json()], "unit_layout": 0}))
         out.append({"unit": stem, "definition": U.definition, "ands": c.counts["ands"], "in_ports": len(U.in_widths),
@@ -140,7 +140,7 @@ def write_fanout(m: int, scratch: Path) -> dict:
     from verity_flock import layouts as LY
 
     def lay(t, rl, calls=(), reads=(), own=("derive",)):
-        return LY.Layout(t.digest() if t is not None else None, rl, (), (), own, tuple(calls), tuple(reads))
+        return LY.BlockLayout(t.digest() if t is not None else None, rl, (), (), own, tuple(calls), tuple(reads))
 
     callee = CT.CircuitType(library.PROGRAM, ((1, 1),), ((1, 1),), (), (), ((CT.AND, ((0,), 0), ((0,), 1)),), (((1,), 0),))
     ws = [(i * 7 + 3) & 0xF for i in range(16)]

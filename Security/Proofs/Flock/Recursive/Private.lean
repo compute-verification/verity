@@ -5,7 +5,7 @@ import Proofs.Flock.Verifier.Registered
 /-!
 # Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
 
-* `recursiveCircuitPrivate_le` is `circuit_private_of_zk`'s argument with `RecursiveZK` as the step: at each
+* `recursiveCircuitPrivate_le`, with `RecursiveZK` as the step: at each
   registration salt `r`, `RecursiveZK` at an hm96 hiding bound `δ` (`recursiveZK_le`; and, for the other way, the same
   on the event's complement) moves
   the firewall's commitments and V*'s sessions to the ideal leaves and V*'s simulator, which read `r` only through the
