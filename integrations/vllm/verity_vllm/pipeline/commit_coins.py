@@ -193,16 +193,16 @@ _DRAWN = object()
 
 
 def positions(rc: Any, session: Any = _DRAWN) -> dict[str, Any]:
-    """`challenge.challenge_positions`' keywords for run `rc`: off legacy, from its `POSITIONS` coin; given `session`
-    (None without a gate), the run's coins are drawn first (`draw`)."""
+    """`challenge.challenge_positions`' keywords for run `rc`: its `POSITIONS` coin; given `session` (None without a
+    gate), the run's coins are drawn first (`draw`)."""
     if session is not _DRAWN:
         draw(session, rc)
-    return {"legacy": False, "source": _key(rc, POSITIONS)}
+    return {"source": _key(rc, POSITIONS)}
 
 
 def identities(rc: Any) -> dict[str, Any]:
-    """`binding.challenge_identities`' keywords for run `rc`: off legacy, from its `IDENTITIES` coin."""
-    return {"legacy": False, "source": _key(rc, IDENTITIES)}
+    """`binding.challenge_identities`' keywords for run `rc`: its `IDENTITIES` coin."""
+    return {"source": _key(rc, IDENTITIES)}
 
 
 def replay_challenge(rc: Any, given: str | None) -> tuple[str, dict[str, Any]]:
