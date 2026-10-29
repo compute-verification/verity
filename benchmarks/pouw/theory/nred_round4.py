@@ -10,7 +10,10 @@ Two readings of model P (shares of stock, Llama-weighted, chosen data):
   free, but every instruction that steers work costs at least `price` units a lane, 32 at the floor and 327 measured
   (divergent, if-converted). One decision may merge many words, so the adversary decides a group at once: one decision
   a tile-column-step to read the coins, and one a merging group (the rows that copy the same source). Paying only for
-  productive groups makes this a lower bound on the adversary's cost.
+  productive groups makes this a lower bound on the adversary's cost. The prices include N-FLOOR's measured 61.8 and
+  71.7 a lane (note 20261029T1037Z-report-np-floor).
+- **M** (measured, for N-ADAPT's masked prover only): every copied word also pays N-FLOOR's measured selection and
+  on-SM copy. A lag-1 revisit copies nothing, so it pays only the decision prices above.
 
 The lead's words (`lead_instance`) on chosen data: step 1 carries 24 zero data lanes, the tags T(i) against G_j and the
 coin bits a₁(i) against the column code C_j, from −β_j. A later step carries a cancel lane (A = 1, B = −c_t; c_t = 1 for
@@ -66,7 +69,8 @@ H32 = ns.H32
 LAYOUTS = {"blc4a-t64-e7": (64, 7, 3), "blc4a-t32-e7": (32, 7, 3), "blc7a-t64-e7": (64, 7, 6),
            "blc1a-t128-e4": (128, 4, 1), "blc4a-t64-e7-w127": (64, 7, 3)}
 LANE_WEIGHTS = {"blc4a-t64-e7-w127": (1, 127, 1)}
-PRICES = (32.0, 327.0)
+PRICES = (32.0, 61.8, 71.7, 327.0)
+SELECT_A_WORD, COPY_A_WORD = 71.7, 48.7
 SHAPES = {"llama": ns.LLAMA, "v4_dense": ns.V4_DENSE}
 STEP1_DATA = ns.DATA_PER_STEP - na.TAG_LANES
 
@@ -186,30 +190,42 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
             entry_groups += int(new.reshape(ntiles, tile, s - d, n).any(axis=1).sum())
     assert abs(float(covered.sum()) / per - entry) < 1e-9
 
+    span = int(d0.max() - d0.min()) + 1
+    key = (rpos[:, :, None] * span + (d0 - d0.min())[:, None, :]).reshape(ntiles, tile, s, n)
+    masked = float((tile - _distinct(key, 1)).sum()) / per
+    with_source = int(((tile - _distinct(rpos.reshape(ntiles, tile, s), 1))).sum())
+    assert masked <= xrow + 1e-12
+
     return {"equal_to_honest": bool(np.array_equal(w, honest)), "steps": s, "tile": tile,
-            "d0_range": [int(d0.min()), int(d0.max())],
-            "saved": {"entry": entry, "xrow": xrow, "tilecol": tilecol, "column": column, "lag1": lag1},
+            "d0_range": [int(d0.min()), int(d0.max())], "masked_sources_a_row": with_source / m,
+            "saved": {"entry": entry, "xrow": xrow, "tilecol": tilecol, "column": column, "lag1": lag1,
+                      "masked": masked},
             "groups": {"entry": entry_groups / per, "xrow": xrow_groups, "tilecol": tc_groups / per,
                        "column": col_groups / per},
             "c_track": (s - 1) / tile}
 
 
 def shares(inst: dict, k: int, big_n: int) -> dict:
-    """Shares of one linear's stock under literal P and P′ at each price."""
+    """Shares of one linear's stock under literal P and P′ at each price. `masked` is N-ADAPT's masked cross-row
+    prover (note 20261029T1124Z-report-np-adapt §2): a word is copied from an earlier row of its tile at the same
+    walk level whose step-1 word agrees in that column, at one source address a row-step. `M/masked` prices each
+    copied word at N-FLOOR's measured selection and on-SM copy (71.7 and 48.7 units beside honest)."""
     s, tile, sv, gr = inst["steps"], inst["tile"], inst["saved"], inst["groups"]
     ptr = (s - 1) / big_n
     out = {}
     for grain in ("entry", "xrow", "tilecol", "column"):
         out[f"P/{grain}"] = H32 * (sv[grain] - inst["c_track"] - ptr) / k
     out["P/lag1"] = H32 * (sv["lag1"] - ptr) / k
+    src = inst["masked_sources_a_row"] / big_n
+    out["P/masked"] = H32 * (sv["masked"] - src) / k
+    out["M/masked"] = H32 * (sv["masked"] * (1 - (SELECT_A_WORD + COPY_A_WORD) / H32) - src) / k
     for price in PRICES:
         q = price / H32
         decide = (s - 1) / tile
-        out[f"P'{int(price)}/lag1"] = H32 * (sv["lag1"] - decide - q * decide - ptr) / k
-        out[f"P'{int(price)}/entry"] = H32 * (sv["entry"] - inst["c_track"] - ptr - q * (decide + gr["entry"])) / k
+        out[f"P'{price:g}/lag1"] = H32 * (sv["lag1"] - decide - q * decide - ptr) / k
+        out[f"P'{price:g}/entry"] = H32 * (sv["entry"] - inst["c_track"] - ptr - q * (decide + gr["entry"])) / k
         for grain in ("xrow", "tilecol", "column"):
-            out[f"P'{int(price)}/{grain}"] = H32 * (sv[grain] - inst["c_track"] - ptr
-                                                    - q * (decide + gr[grain])) / k
+            out[f"P'{price:g}/{grain}"] = H32 * (sv[grain] - inst["c_track"] - ptr - q * (decide + gr[grain])) / k
     return out
 
 
@@ -373,7 +389,7 @@ def mirror_shares(inst: dict, k: int, big_n: int, m: int) -> dict:
             base = sv[key] - nsteps / rows - nsteps / big_n
             out[f"P/{key}"] = H32 * base / k
             for price in PRICES:
-                out[f"P'{int(price)}/{key}"] = H32 * (base - price / H32 * (gr[key] + nsteps / rows)) / k
+                out[f"P'{price:g}/{key}"] = H32 * (base - price / H32 * (gr[key] + nsteps / rows)) / k
     out["P/a2r_entry"] = H32 * (inst["a2r_revisits"] - (s - 1) / big_n) / k
     return out
 
@@ -454,6 +470,20 @@ def check(rep: dict) -> list[dict]:
     ok("wide tag + weighted lane, literal P: lag-1, within-entry and cross-row close; the free-search tile-column "
        "pool still pays > 1% (N-LEAN §4)", max(v[f"P/{g}"] for v in ww for g in ("lag1", "entry", "xrow")) < 0.001
        and min(v["P/tilecol"] for v in ww) > 0.01, [[v["P/tilecol"], v["P/column"]] for v in ww])
+    lead_m = [r[f"blc4a-t64-e7/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
+    wide_m = [r[f"blc4a-t64-e7+wide/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
+    ok("N-ADAPT's masked cross-row prover in this harness: > 5% of stock under bare P on the lead (its ≈ 8.9%), "
+       "< 0 at N-FLOOR's measured selection and copy prices, < 0.1% under bare P with the wide tag",
+       min(v["P/masked"] for v in lead_m) > 0.05 and max(v["M/masked"] for v in lead_m) < 0
+       and max(v["P/masked"] for v in wide_m) < 0.001,
+       [[v["P/masked"], v["M/masked"]] for v in lead_m] + [v["P/masked"] for v in wide_m])
+    e4s = [r[f"blc1a-t128-e4/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
+    e7s = [r[f"blc4a-t64-e7/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
+    ok("measured decision prices (61.8, 71.7 a lane): e4's lag-1 pays under 1% but above 0.1%; e7's pays at no "
+       "measured price", 0.001 < min(v[f"P'{q}/lag1"] for v in e4s for q in ("61.8", "71.7"))
+       and max(v[f"P'{q}/lag1"] for v in e4s for q in ("61.8", "71.7")) < 0.01
+       and max(v[f"P'{q}/lag1"] for v in e7s for q in ("61.8", "71.7")) < 0,
+       [[v["P'61.8/lag1"], v["P'71.7/lag1"]] for v in e4s])
     e4 = r["blc1a-t128-e4/a2c/llama"]["shares"]
     ok("P′ at the floor: blc1a-t128-e4's lag-1 still pays (> 1%), so e7 is what closes lag-1",
        e4["P'32/lag1"] > 0.01, e4["P'32/lag1"])
@@ -526,7 +556,7 @@ def main() -> None:
         print(f"{key:32s} eq={v['equal_to_honest']}  " + "  ".join(
             f"{g}={100 * sh[g]:.2f}%" for g in ("P/lag1", "P/entry", "P/xrow", "P/tilecol", "P/column",
                                                 "P'32/lag1", "P'32/entry", "P'32/xrow", "P'32/tilecol",
-                                                "P'32/column", "P'327/entry")))
+                                                "P'32/column", "P'71.7/lag1", "P/masked", "M/masked")))
     for key, v in rep["mirror"].items():
         sh = v["shares"]
         print(f"mirror {key:16s} " + "  ".join(
