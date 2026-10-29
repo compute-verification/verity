@@ -36,6 +36,7 @@ import os
 import random
 import sys
 import time
+import zlib
 
 import z3
 
@@ -154,27 +155,66 @@ class Program:
             vals.append(self.step(i, *srcs))
         return vals
 
-    def describe(self, model) -> list[str]:
+    def unknowns(self) -> list:
+        return [v for rows in (self.src, self.imm, self.neg, self.pidx, self.psgn) for row in rows for v in row] + \
+            self.lut + self.sh + self.mode
+
+    def describe(self, cand: dict) -> list[str]:
         out = []
         for i, op in enumerate(self.ops):
             names = ["lo", "hi"] + [f"r{n}" for n in range(i)]
             srcs = []
             for j in range(3):
-                s = model.eval(self.src[i][j], model_completion=True).as_long()
-                srcs.append(names[s] if s < len(names) else
-                            hex(model.eval(self.imm[i][j], model_completion=True).as_long()))
-            out.append(f"r{i} = {op}({', '.join(srcs)}; lut {model.eval(self.lut[i], model_completion=True)}, "
-                       f"sh {model.eval(self.sh[i], model_completion=True)})")
+                s = cand[str(self.src[i][j])].as_long()
+                srcs.append(names[s] if s < len(names) else hex(cand[str(self.imm[i][j])].as_long()))
+            out.append(f"r{i} = {op}({', '.join(srcs)}; lut {cand[str(self.lut[i])]}, sh {cand[str(self.sh[i])]})")
         return out
+
+
+def z3_synth(syn, prog: Program, left_s: float):
+    """The synthesis query by z3: (z3 result, the unknowns' values when sat)."""
+    syn.set(timeout=int(left_s * 1000))
+    r = syn.check()
+    if r != z3.sat:
+        return r, None
+    m = syn.model()
+    return r, {str(v): m.eval(v, model_completion=True) for v in prog.unknowns()}
+
+
+def bitwuzla_synth(syn, prog: Program, left_s: float):
+    """The same query, z3's assertions handed to Bitwuzla as SMT-LIB2."""
+    import bitwuzla as bz
+    tm, opts = bz.TermManager(), bz.Options()
+    opts.set(bz.Option.PRODUCE_MODELS, True)
+    opts.set(bz.Option.TIME_LIMIT_PER, max(1, int(left_s * 1000)))
+    parser = bz.Parser(tm, opts)
+    parser.parse("(set-logic QF_BV)\n" + syn.sexpr(), True, False)
+    solver = parser.bitwuzla()
+    r = solver.check_sat()
+    if r == bz.Result.UNSAT:
+        return z3.unsat, None
+    if r != bz.Result.SAT:
+        return z3.unknown, None
+    got = {t.symbol(): solver.get_value(t).value(10) for t in parser.get_declared_funs()}
+    cand = {}
+    for v in prog.unknowns():
+        g = got.get(str(v))
+        if z3.is_bool(v):
+            cand[str(v)] = z3.BoolVal(g is True or g == "true")
+        else:
+            cand[str(v)] = z3.BitVecVal(int(g) if g is not None else 0, v.size())
+    return z3.sat, cand
+
+
+SOLVERS = {"z3": z3_synth, "bitwuzla": bitwuzla_synth}
 
 
 def search(task) -> dict:
     """Whether a program with opcodes `ops` computes half `half` (0 lo, 1 hi) of FUNCS[name]."""
-    name, half, ops, timeout_s = task
-    rng = random.Random(hash((name, half, ops)) & M32)
+    name, half, ops, timeout_s, solver = task
+    rng = random.Random(zlib.crc32(repr((name, half, ops)).encode()))
     prog = Program(ops)
     syn = z3.Tactic("qfbv").solver()
-    syn.set(timeout=timeout_s * 1000)
     syn.add(prog.wellformed())
     xs = [1 << b for b in (0, 7, 31, 32, 45, 63)] + [rng.getrandbits(64) for _ in range(2)]
     t0, rounds = time.monotonic(), 0
@@ -185,29 +225,28 @@ def search(task) -> dict:
 
     for x in xs:
         constrain(x)
-    base = {"function": name, "half": "lo" if half == 0 else "hi", "ops": list(ops)}
+    base = {"function": name, "half": "lo" if half == 0 else "hi", "ops": list(ops), "solver": solver}
     while True:
         rounds += 1
         left = timeout_s - (time.monotonic() - t0)
         if left <= 0:
             return base | {"verdict": "unknown", "samples": len(xs), "rounds": rounds,
                            "seconds": round(time.monotonic() - t0, 2)}
-        syn.set(timeout=int(left * 1000))
-        r = syn.check()
+        r, cand = SOLVERS[solver](syn, prog, left)
         if r != z3.sat:
             verdict = "none" if r == z3.unsat else "unknown"
             return base | {"verdict": verdict, "samples": len(xs), "rounds": rounds,
                            "seconds": round(time.monotonic() - t0, 2)}
-        model = syn.model()
         lo, hi = z3.BitVec("lo", 32), z3.BitVec("hi", 32)
-        out = prog.run(lo, hi)[-1]
+        out = z3.substitute(prog.run(lo, hi)[-1], *[(v, cand[str(v)]) for v in prog.unknowns()])
         ver = z3.Tactic("qfbv").solver()
         ver.set(timeout=timeout_s * 1000)
-        ver.add(model.eval(out, model_completion=True) != z3.Extract(32 * half + 31, 32 * half,
-                                                                      zfunc(name, z3.Concat(hi, lo))))
-        if ver.check() == z3.unsat:
-            return base | {"verdict": "found", "program": prog.describe(model), "samples": len(xs), "rounds": rounds,
-                           "seconds": round(time.monotonic() - t0, 2)}
+        ver.add(out != z3.Extract(32 * half + 31, 32 * half, zfunc(name, z3.Concat(hi, lo))))
+        v = ver.check()
+        if v != z3.sat:
+            return base | {"verdict": "found" if v == z3.unsat else "unknown", "samples": len(xs), "rounds": rounds,
+                           "seconds": round(time.monotonic() - t0, 2)} | \
+                ({"program": prog.describe(cand)} if v == z3.unsat else {})
         cm = ver.model()
         xs.append(cm.eval(hi, model_completion=True).as_long() << 32 | cm.eval(lo, model_completion=True).as_long())
         constrain(xs[-1])
@@ -220,7 +259,7 @@ def summarize(names, k, rs) -> list[dict]:
             mine = [r for r in rs if r["function"] == n and r["half"] == h]
             v = {f"n_{x}": sum(r["verdict"] == x for r in mine) for x in ("none", "unknown", "found")}
             out.append({"function": n, "half": h, "k": k, "opcode_tuples": len(mine), **v,
-                        "max_seconds": max(r["seconds"] for r in mine),
+                        "max_seconds": max((r["seconds"] for r in mine), default=0),
                         "found": [r["program"] for r in mine if r["verdict"] == "found"][:3],
                         "unknown": [r["ops"] for r in mine if r["verdict"] == "unknown"]})
     return out
@@ -236,10 +275,20 @@ def main() -> int:
     ap.add_argument("--only", default="", help="comma-separated function names")
     ap.add_argument("--json", default="", help="the summary, rewritten after each k")
     ap.add_argument("--jsonl", default="", help="every query's result as it finishes")
+    ap.add_argument("--solver", choices=sorted(SOLVERS), default="z3", help="the synthesis queries' solver")
+    ap.add_argument("--redo", default="", help="a --jsonl stream: rerun only its unknown queries, by k")
+    ap.add_argument("--no-controls", action="store_true")
     args = ap.parse_args()
     names = [n for n in FUNCS if not args.only or n in args.only.split(",")]
     summary: list[dict] = []
     stream = open(args.jsonl, "a") if args.jsonl else None
+    redo: dict[int, list] = {}
+    if args.redo:
+        for line in open(args.redo):
+            r = json.loads(line)
+            if r["verdict"] == "unknown" and r["function"] in names:
+                redo.setdefault(len(r["ops"]), []).append(
+                    (r["function"], 0 if r["half"] == "lo" else 1, tuple(r["ops"]), args.timeout, args.solver))
 
     def dump():
         if args.json:
@@ -247,11 +296,12 @@ def main() -> int:
                 json.dump({"summary": summary}, f, indent=1, ensure_ascii=False)
 
     with mp.Pool(args.jobs) as pool:
-        controls = pool.map_async(search, [(n, h, ("FSHR", "FSHR", "SHR" if n.startswith("σ") and h else "FSHR",
-                                                   "LOP3"), args.control_timeout) for n in names for h in (0, 1)])
-        for k in range(args.min_k, args.max_k + 1):
-            tasks = [(n, h, ops, args.timeout) for n in names for h in (0, 1)
-                     for ops in itertools.product(OPS, repeat=k)]
+        controls = pool.map_async(search, [] if args.no_controls else [
+            (n, h, ("FSHR", "FSHR", "SHR" if n.startswith("σ") and h else "FSHR", "LOP3"), args.control_timeout,
+             args.solver) for n in names for h in (0, 1)])
+        for k in sorted(redo) if args.redo else range(args.min_k, args.max_k + 1):
+            tasks = redo[k] if args.redo else [(n, h, ops, args.timeout, args.solver) for n in names for h in (0, 1)
+                                               for ops in itertools.product(OPS, repeat=k)]
             t0, rs = time.monotonic(), []
             for r in pool.imap_unordered(search, tasks, chunksize=1):
                 rs.append(r)
