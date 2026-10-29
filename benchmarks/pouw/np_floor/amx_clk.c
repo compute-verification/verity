@@ -1,7 +1,7 @@
 // AMX's int8 rate a core with the core's clock read beside it, for HostsCounted's AMX row. On each core under test one
 // hardware thread runs TDPBSSD (host.c's k64 loop: four accumulators, 16,384 MACs each) and its sibling a chain of
-// dependent scalar adds (latency 1 cycle on Golden Cove), so the sibling's adds a second are the core's clock while the
-// tile unit runs. The tile unit's peak is 1,024 int8 MACs a cycle (a 16x16x64 TDPBSSD every 16 cycles). Phases, each
+// dependent 64-bit IMUL (latency 3 cycles; Golden Cove folds a chain of immediate adds at rename, so an add chain is no
+// clock), so 3 x the sibling's IMULs a second is the core's clock while the tile unit runs, at one uop every 3 cycles. The tile unit's peak is 1,024 int8 MACs a cycle (a 16x16x64 TDPBSSD every 16 cycles). Phases, each
 // SECONDS long, one JSON line each:
 //   one     one core: AMX on one thread, the chain on its sibling
 //   idle    the same core: the chain alone
@@ -104,11 +104,11 @@ static void* run(void* p) {
     }
     const double t0 = now();
     do {
-      __asm__ volatile(".rept 1000\n\tadd $1, %0\n\t.endr" : "+r"(x));
+      __asm__ volatile(".rept 1000\n\timul %0, %0\n\t.endr" : "+r"(x));
       n += 1000;
     } while (!stop);
     j->t = now() - t0;
-    j->n = n;
+    j->n = 3 * n;
     j->sink = (uint32_t)x;
   }
   return NULL;
