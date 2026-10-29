@@ -21,6 +21,9 @@ theorem AdaptiveChunks : Pouw.Guarantees.Adaptive.AdaptiveChunks := fun _ _ _ _ 
 theorem AdaptiveBall : Pouw.Guarantees.Adaptive.AdaptiveBall := fun _ _ _ _ _ _ Ω _ m₀ Y r hI hYY =>
   adaptiveDW_ball Ω m₀ Y r hI hYY
 
+theorem AdaptiveBallTable : Pouw.Guarantees.Adaptive.AdaptiveBallTable :=
+  fun _ _ _ _ _ _ _ Ω _ m₀ Y r R hR hYY => adaptiveDW_ball_table Ω m₀ Y r R hR hYY
+
 theorem LevelsObstruction : Pouw.Guarantees.Adaptive.LevelsObstruction :=
   fun _ _ _ _ _ _ _ _ Ω _ _ m₀ rows steps base c B hB =>
     not_adaptiveDW_levels (Classical.arbitrary _) Ω m₀ rows steps base c B hB

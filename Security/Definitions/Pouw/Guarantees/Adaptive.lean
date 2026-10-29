@@ -12,6 +12,8 @@ Each statement is over the chunk model (`Pouw.Dimension.Pointwise`, draft) with 
   new target chunk values.
 * `AdaptiveBall`: the balls' lift. Over any finite set of coin draws, adaptive-dw holds at `Σ_g Σ_y (r y + 1)` when
   each draw's targets are further than `r y` from every initial chunk and pairwise further than the sum of radii.
+* `AdaptiveBallTable`: the same without the hypothesis on the initial memory, less `R + 1` a slot a draw: a table
+  fixed before the coins buys at most one target's ball a slot.
 * `LevelsObstruction`: when each draw's targets are row-step chunks `base i + c i t · 1` (a column-free increment),
   adaptive-dw fails above `w · Σ_g Σ_i |{c i t}|`, whatever the initial memory.
 * `OnesObstruction`: when each row's chunk repeats at every step whose coin bit is `false`, adaptive-dw fails above
@@ -47,6 +49,17 @@ def AdaptiveBall : Prop :=
     (∀ g, ∀ y ∈ Y g, ∀ a, r g y < hammingDist (m₀ a) y) →
     (∀ g, ∀ y ∈ Y g, ∀ y' ∈ Y g, y ≠ y' → r g y + r g y' < hammingDist y y') →
     AdaptiveDW Ω m₀ Y (∑ g, ∑ y ∈ Y g, (r g y + 1))
+
+/-- **The balls' lift against any initial memory** (chunk model; draft model, pending review): when draw `g`'s
+targets are pairwise further apart in Hamming distance than the sum of their radii, each radius at most `R`, every
+family of runs, the run at `g` holding `Y g`, writes in total at least `Σ_g Σ_y (r g y + 1)` less `R + 1` for each
+slot of memory at each draw, whatever the initial memory holds. -/
+def AdaptiveBallTable : Prop :=
+  ∀ (A V : Type) [DecidableEq A] [Fintype A] [DecidableEq V] [Inhabited V] (w : ℕ) (Ω : Type) [Fintype Ω]
+    (m₀ : A → Fin w → V) (Y : Ω → Finset (Fin w → V)) (r : Ω → (Fin w → V) → ℕ) (R : ℕ),
+    (∀ g, ∀ y ∈ Y g, r g y ≤ R) →
+    (∀ g, ∀ y ∈ Y g, ∀ y' ∈ Y g, y ≠ y' → r g y + r g y' < hammingDist y y') →
+    AdaptiveDW Ω m₀ Y (∑ g, ∑ y ∈ Y g, (r g y + 1) - Fintype.card Ω * (Fintype.card A * (R + 1)))
 
 /-- **Column-free increments refute adaptive-dw** (chunk model; draft model, pending review): when draw `g`'s targets
 are the row-step chunks `base g i + c g i t · 1` over rows and steps, adaptive-dw fails at every bound above

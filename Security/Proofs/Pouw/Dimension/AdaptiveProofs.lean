@@ -8,6 +8,8 @@ import Proofs.Pouw.Dimension.PointwiseProofs
   or one of `writes P` new ones; so the target chunk values no initial chunk holds number at most `writes P`.
 * **The lifts** (`adaptiveDW_chunks`, `adaptiveDW_ball`): the pointwise bounds (`run_chunks_le`, `run_ball_le`),
   summed over the draws.
+* **Tables** (`run_ball_table_le`, `adaptiveDW_ball_table`). An initial chunk within `r y` of a target is within it of
+  no other, so any initial memory costs the balls at most `R + 1` a slot.
 * **The obstruction** (`holds_flat`, `not_adaptiveDW`, `card_levels_le`, `not_adaptiveDW_levels`). Writing each
   distinct target value once into one slot (`fill`) holds them all at `w` writes a value. Row-step chunks
   `base i + c i t · 1` number at most `Σ_i |{c i t}|`, so adaptive-dw fails above `w` times that.
@@ -67,6 +69,59 @@ theorem adaptiveDW_ball [DecidableEq V] [Inhabited V] (Ω : Type) [Fintype Ω] (
     (hYY : ∀ g, ∀ y ∈ Y g, ∀ y' ∈ Y g, y ≠ y' → r g y + r g y' < hammingDist y y') :
     AdaptiveDW Ω m₀ Y (∑ g, ∑ y ∈ Y g, (r g y + 1)) :=
   fun P hP => sum_le_sum fun g _ => run_ball_le m₀ (P g) (Y g) (hP g) (r g) (hI g) (hYY g)
+
+/-- **Balls against any initial memory**: targets pairwise further apart than the sum of their radii, each radius at
+most `R`, need `Σ_y (r y + 1)` writes less `R + 1` a slot. An initial chunk lies within `r y` of at most one target,
+so dropping those targets leaves `run_ball_le`'s hypotheses. -/
+theorem run_ball_table_le [Fintype A] [DecidableEq V] [Inhabited V] (m₀ : A → Fin w → V) (P : List (Step A V w))
+    (Y : Finset (Fin w → V)) (hY : ∀ y ∈ Y, ∃ i a, run m₀ (P.take i) a = y) (r : (Fin w → V) → ℕ) (R : ℕ)
+    (hR : ∀ y ∈ Y, r y ≤ R) (hYY : ∀ y ∈ Y, ∀ y' ∈ Y, y ≠ y' → r y + r y' < hammingDist y y') :
+    ∑ y ∈ Y, (r y + 1) ≤ writes P + Fintype.card A * (R + 1) := by
+  classical
+  let far : (Fin w → V) → Prop := fun y => ∀ a, r y < hammingDist (m₀ a) y
+  have h1 : ∑ y ∈ Y.filter far, (r y + 1) ≤ writes P :=
+    run_ball_le m₀ P _ (fun y hy => hY y (mem_filter.1 hy).1) r (fun y hy => (mem_filter.1 hy).2)
+      fun y hy y' hy' => hYY y (mem_filter.1 hy).1 y' (mem_filter.1 hy').1
+  have hnear : ∀ y ∈ Y.filter (¬ far ·), ∃ a, hammingDist (m₀ a) y ≤ r y := fun y hy => by
+    have := (mem_filter.1 hy).2
+    simp only [far, not_forall, not_lt] at this
+    exact this
+  have hcard : (Y.filter (¬ far ·)).card ≤ Fintype.card A :=
+    calc _ ≤ (univ.biUnion fun a => Y.filter fun y => hammingDist (m₀ a) y ≤ r y).card := by
+          apply card_le_card
+          intro y hy
+          obtain ⟨a, ha⟩ := hnear y hy
+          exact mem_biUnion.2 ⟨a, mem_univ _, mem_filter.2 ⟨(mem_filter.1 hy).1, ha⟩⟩
+      _ ≤ ∑ a, (Y.filter fun y => hammingDist (m₀ a) y ≤ r y).card := card_biUnion_le
+      _ ≤ ∑ _a : A, 1 := sum_le_sum fun a _ => card_le_one.2 fun y hy y' hy' => by
+          by_contra hne
+          rw [mem_filter] at hy hy'
+          have := hammingDist_triangle y (m₀ a) y'
+          rw [hammingDist_comm y (m₀ a)] at this
+          have := hYY y hy.1 y' hy'.1 hne
+          omega
+      _ = Fintype.card A := by simp
+  have h2 : ∑ y ∈ Y.filter (¬ far ·), (r y + 1) ≤ Fintype.card A * (R + 1) :=
+    calc _ ≤ ∑ _y ∈ Y.filter (¬ far ·), (R + 1) := sum_le_sum fun y hy => by
+          have := hR y (mem_filter.1 hy).1
+          omega
+      _ = (Y.filter (¬ far ·)).card * (R + 1) := by rw [sum_const, smul_eq_mul]
+      _ ≤ _ := Nat.mul_le_mul_right _ hcard
+  calc ∑ y ∈ Y, (r y + 1) = ∑ y ∈ Y.filter far, (r y + 1) + ∑ y ∈ Y.filter (¬ far ·), (r y + 1) :=
+        (sum_filter_add_sum_filter_not Y far _).symm
+    _ ≤ _ := Nat.add_le_add h1 h2
+
+/-- **The tables' lift**: over the draws, adaptive-dw holds at `Σ_g Σ_y (r g y + 1)` less `R + 1` a slot a draw, for
+any initial memory. -/
+theorem adaptiveDW_ball_table [Fintype A] [DecidableEq V] [Inhabited V] (Ω : Type) [Fintype Ω]
+    (m₀ : A → Fin w → V) (Y : Ω → Finset (Fin w → V)) (r : Ω → (Fin w → V) → ℕ) (R : ℕ)
+    (hR : ∀ g, ∀ y ∈ Y g, r g y ≤ R)
+    (hYY : ∀ g, ∀ y ∈ Y g, ∀ y' ∈ Y g, y ≠ y' → r g y + r g y' < hammingDist y y') :
+    AdaptiveDW Ω m₀ Y (∑ g, ∑ y ∈ Y g, (r g y + 1) - Fintype.card Ω * (Fintype.card A * (R + 1))) := by
+  intro P hP
+  have h := sum_le_sum fun g (_ : g ∈ univ) => run_ball_table_le m₀ (P g) (Y g) (hP g) (r g) R (hR g) (hYY g)
+  rw [sum_add_distrib, sum_const, card_univ, smul_eq_mul] at h
+  omega
 
 theorem fill_aux (a₀ : A) (y : Fin w → V) (ps : List (Fin w)) (m : A → Fin w → V) (p : Fin w) :
     ((ps.map fun q => (Step.write a₀ q (y q) : Step A V w)).foldl (fun m st => st.apply m) m) a₀ p =
