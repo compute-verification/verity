@@ -45,7 +45,7 @@ def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
     assert b._entries[0].outcome.verdict.detail == {"halted": cause} and b._entries[0].outcome.profile is None
     assert _refused(lambda: b.outcome(db, _lean(), {"statement": "stub"})) == ("halted",)
     for s, d in ((a, da), (b, db)):
-        for call in (s.ready, s.salt, lambda: _open(s), lambda: s.select(d.registration), lambda: s.session([d]),
+        for call in (s.ready, lambda: s.salt_released(b"\x01", 0.0), lambda: _open(s), lambda: s.select(d.registration), lambda: s.session([d]),
                      lambda: s.deliver(d, [SESSION]), lambda: s.outcome(d, _lean(), {})):
             assert _refused(call) == ("halted",)
     assert _refused(lambda: fleet.attach(_stream(), "o")) == ("halted",)
