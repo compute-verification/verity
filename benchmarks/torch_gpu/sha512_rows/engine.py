@@ -16,7 +16,7 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
 
 ``tensors`` are (slots, ...) arrays whose slot rows are contiguous bytes (any dtype); a part reads ``nbytes`` at a byte offset
 of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` draws row ``salt_row``'s y in slot s as ChaCha20
-chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (C-Flock's ``hm96_salt``, commit_slots'
+chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
 
 The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 chunks), so the
