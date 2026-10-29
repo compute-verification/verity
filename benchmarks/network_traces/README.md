@@ -8,10 +8,10 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 ## Running it
 
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
-  (`record.py`), as a `research run` job whose command is in the script's header.
-- Every other `.sh` here is a `research run` job, its command in its header. The proving jobs build C-Flock's
+  (`record.py`), as a job whose resources are in the script's header.
+- Every other `.sh` here is a job on a node, its command and resources in its header. The proving jobs build C-Flock's
   `flock-circuit`, the Lean `flock-verify` and the Lean firewall with `benchmarks/pouw/hidden_zk/job.sh`.
-- `research run` publishes every run, with its report and outputs, as an Attempt in the evidence store
+- Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
 - The tests: `uv run tools/verity/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
 
@@ -50,7 +50,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 
 The H200 demo serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
 (`e2e_h200.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
-two gate verbs on the auditor's machine (vy-challenger-1):
+two gate verbs on the auditor's machine:
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
   (`/var/lib/vy-challenger/store`) once. It keeps the stream only when its tensors' SHA-256 fold to the pinned manifest
@@ -68,7 +68,7 @@ two gate verbs on the auditor's machine (vy-challenger-1):
 
 Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over
 its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
-(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
+(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
 record from what the gate published. Each sampling block whose sampling period meets [t0 − 1 s, t1 + 1 s) counts at the
@@ -81,7 +81,7 @@ record and keeps the wipe uncounted otherwise.
 `served_session.py` is the runbook of the served session of record, the network certifier in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
 the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
-vy-dc-h200-2's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
+the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
 `examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors. Its records are
@@ -93,7 +93,7 @@ fetch, so the endpoint step checks the endpoint's trace against the certified I/
 session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
 the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
-runs on (vy-nebius-cpu-2), which the challenger's coin link reaches through that node's own line of
+runs on, which the challenger's coin link reaches through that node's own line of
 `/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the draw's peer, since the gate key and the
 warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
 (`--coins verifier`, the default).
@@ -113,8 +113,7 @@ certifier missing.
 
 The run of record takes the network chain end to end on the gate's machines:
 
-1. The network certifier signs every record with its LMS key, on an auditor machine (vy-challenger-1), never on the
-   prover's node.
+1. The network certifier signs every record with its LMS key, on an auditor machine, never on the prover's node.
 2. It certifies each sampling block's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
 4. The consistency proof blocks are proved by sampled C-Flock `--zk` and decided by the Lean verifier of record: N2's
@@ -122,17 +121,17 @@ The run of record takes the network chain end to end on the gate's machines:
    reads.
 5. The verdict is the per-sampling-block acceptance that the certification period's leak bound reads.
 
-**How it runs.** The gate runs on vy-challenger-1: `sudo vy-challenger-gate certifier-rehearse --peer HOST --port PORT
---minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20` (or `warden-rehearse
---scan`, the network certifier as a relay), then `status` and `fetch`. A prompt range shorter than the chat turn's tail
-(`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an endpoint takes its prompts
-on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate certifier-rehearse …
---traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4` (`--prompts`: request j sends
-the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job,
-`chain_record.sh`, with the endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`,
-`requests.jsonl`, `windows.jsonl` and `serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs
-`chain_record.py`'s steps, network-e2e's binding and the two provers, and writes `out/report/report.json` and
-`report.md`:
+**How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate certifier-rehearse --peer HOST --port
+PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20` (or
+`warden-rehearse --scan`, the network certifier as a relay), then `status` and `fetch`. A prompt range shorter than the
+chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an endpoint
+takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
+certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
+(`--prompts`: request j sends the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The
+fetched tarballs go to one job, `chain_record.sh`, with the endpoint's records (`benchmarks/network_e2e/chain.py`'s
+`ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and `serve.json` from the endpoint's serve
+directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's binding and the two provers, and writes
+`out/report/report.json` and `report.md`:
 
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
@@ -204,7 +203,7 @@ The terms, in the generator reading of the scan's statement (each unit's registe
 - log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
   connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
   schedule: it enters the compute audit's terms, which go into JointPeriodLive.
-- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
+- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a sampling block as registered, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
@@ -224,7 +223,7 @@ The scale:
 - Each machine has one network certifier in front of all its compute, serving at the run's rate.
 - The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
 
-**`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
+**`prog` as registered (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
@@ -235,7 +234,7 @@ The scale:
 | year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
 | year | 1,000 | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 143,368 |
 
-As registered today, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
+As registered, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
 monitoring period.
 
 **`prog` only at its anchored entries (conditional on the generator-form lowering)**, bits, and the share of
@@ -257,12 +256,12 @@ K also rests on these conditions:
 - The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
   reading is a claim, with lean and Daniel.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
-  can't move an admission. Neither holds today.
+  can't move an admission. Neither holds.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
 - The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
   receiver no more than an idle one.
 - At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
-  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
+  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered it is 1.37×
   a machine-week either way.
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
 

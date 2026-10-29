@@ -1,4 +1,4 @@
-"""served-session: the session of record, the network certifier in front of a served model, as `research run` steps
+"""served-session: the session of record, the network certifier in front of a served model, as jobs on the nodes
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
 `benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default vy-dc-h200-2's
 `verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
@@ -126,11 +126,14 @@ PROMPT_IDS = 256
 #: the session's requests: what vy-dc-h200-2's free disk seals, within 72 GB even if every request runs all KO ids
 #: (the endpoint's sizing: 636.5 MB a full-length request)
 REQUESTS = 113
-PEER, PORT, GATE, LANE = "vy-dc-h200-2", 18782, "research@204.12.178.84", "network-accounting"
+#: where the sessions run, kept as data (``site.json``): the served peer, the gate (USER@HOST) and the lane whose key it
+#: takes, the auditor's node, the gate key's file under ~/.ssh and the lane's gate directory there
+SITE: dict[str, str] = json.loads((HERE / "site.json").read_text())
+PEER, PORT, GATE, LANE = SITE["peer"], 18782, SITE["gate"], SITE["lane"]
 #: the auditor's side, where the chain runs and the gate's coins for its draw arrive
-AUDITOR = "vy-nebius-cpu-2"
-KEY = Path.home() / ".ssh" / "vy-gate-network-accounting"
-KEEP = Path("/workspace/research/lanes/network-accounting/gate")
+AUDITOR = SITE["auditor"]
+KEY = Path.home() / ".ssh" / SITE["gate_key"]
+KEEP = Path(SITE["keep"])
 #: Llama 3's regular token ids; 128,000 and up are its special tokens
 VOCAB = 128_000
 #: the minutes past `auditor.warden_minutes` a session asks for
