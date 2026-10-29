@@ -125,7 +125,7 @@ def _nonzero(C, x):
 
 
 class _Cse:
-    """``C`` whose AND of two forms already ANDed (in either order) reuses that bit, as the trace's does: C-Flock lowers a word
+    """``C`` whose AND of two forms already ANDed (in either order) reuses that bit, as the trace's does: Flock lowers a word
     primitive through its Boolean Definition's builder (`ir_lower._boolean_build`) on a circuit without CSE, and these builders
     take some products twice (an OR's AND is an AND's, the square's and the monomials' are the mantissa OR's)."""
 
