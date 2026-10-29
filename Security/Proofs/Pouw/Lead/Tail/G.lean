@@ -15,7 +15,6 @@ second within `coinTail` (its supremum over the data).
 
 `tailAt`: `tableTail` at `2^30` tiles is `2^−41` and a term under `2^−100`, and `coinTail` at most `2^−42`
 (`Tail.coinTail_le`).
-`gapFixedAt`: `Statement.leadVars`'s variables with `gapFixed` in place of `gapRegs`.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Tail
@@ -89,10 +88,6 @@ theorem G_tail : Pouw.Guarantees.Lead.G_tail := by
 
 /-- **The tail at the three points and decode** (`Pouw.Guarantees.Lead.TailAt`). -/
 theorem tailAt : Pouw.Guarantees.Lead.TailAt := by
-  sorry
-
-/-- **The tail's fixed gap at the three points and decode** (`Pouw.Guarantees.Lead.GapFixedAt`). -/
-theorem gapFixedAt : Pouw.Guarantees.Lead.GapFixedAt := by
   sorry
 
 end Pouw.SecurityProofs.Lead.Tail
