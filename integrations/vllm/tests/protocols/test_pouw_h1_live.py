@@ -4,10 +4,14 @@ each round's ``live@<s>`` (`PouwLiveSlots_v2{T}`) accepts its slot table at m_s,
 other m. Under CUDA graphs m_s is the scheduler's rows, not the graph's padded size."""
 from __future__ import annotations
 
+import json
+
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
 from verity.core.protocols.pouw.circuit import live_reads as LR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
@@ -156,16 +160,60 @@ def test_core_credit_ties_the_slot_table_under_the_auditors_coins(periodic):
     assert out["window"][0] == "missing" and out["credit"] is None, out
 
 
+def _np_savez_dump(run, out):
+    """The live dump's files as ``np.savez`` wrote them from each round's `statement`, every port's salt, value, position
+    and path read one row at a time and each round its own known tables: the bytes the live prover read before
+    `prover.savez`."""
+    served, T = run.served, run.rows
+    prefix, prog, window = served.program.fn.bindings["PREFIX"], served.program_digest, served.root
+    req = served.live[LV.value(served, LR.REQUESTS)]
+    pub = {"T": T, "S": run.steps, "prefix": prefix, "program": prog, "window": window, "session": req.session,
+           "roots": {v: r.root.hex() for v, r in served.live.items()},
+           "served": [LV.m_of(run, s) for s in range(len(run.round_log))], "max_tokens": LV.caps(run.admitted.get(0, []))}
+    cap = LR.caps_table(prog, prefix, window, T, pub["max_tokens"])[2]
+    out.mkdir(parents=True)
+    (out / "window.json").write_text(json.dumps(pub, indent=1))
+    for s, m in enumerate(pub["served"]):
+        rows, _doc = LV.statement(run, s)
+        reads = {f"slot_{i}": (served.live[LV.value(served, LR.SLOTS, s)], i) for i in range(T)}
+        reads |= {f"req_{i}": (req, i) for i in range(T)} | {f"cap_{i}": (cap, i) for i in range(T)}
+        reads |= {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0),
+                  LR.OK_PORT: (LR.ok_table(prog, prefix, window, run.steps)[2], s)}
+        rows[LR.OK_PORT] = np.asarray([CC.OK_ROW], np.uint16)
+        z = {"units": np.array([s])}
+        for p, (reg, i) in reads.items():
+            z |= {f"w_{p}": rows[p], f"s_{p}": np.frombuffer(reg.salts[i], np.uint8).reshape(1, -1),
+                  f"v_{p}": np.array([reg.value]), f"r_{p}": np.array([i], np.int64), f"p_{p}": np.array([reg.path(i).hex()])}
+        (out / str(s)).mkdir()
+        np.savez(out / str(s) / "rows.npz", **z)
+        (out / str(s) / "opening.json").write_text(json.dumps({p: {"value": reg.value, "index": i, "bc": reg.bcs[i].hex(),
+                                                                   "path": reg.path(i).hex()} for p, (reg, i) in reads.items()}))
+
+
+def assert_dumped_as_np_savez(run, live, before):
+    """Every file of the dump in ``live`` is byte for byte `_np_savez_dump`'s of ``run``, written to ``before``."""
+    _np_savez_dump(run, before)
+    files = sorted(p.relative_to(live) for p in live.rglob("*") if p.is_file())
+    assert files == sorted(p.relative_to(before) for p in before.rglob("*") if p.is_file())
+    assert len(files) == 1 + 2 * len(run.round_log), files
+    for p in files:
+        assert (live / p).read_bytes() == (before / p).read_bytes(), p
+
+
+def test_the_live_dump_writes_the_files_np_savez_wrote(tmp_path):
+    """`pouw_h1_live.dump`'s window.json and each round's rows.npz and opening.json are the bytes the dump wrote with
+    ``np.savez``, every row read one at a time (`_np_savez_dump`), so the live prover reads what it read."""
+    run = _window()
+    LV.dump(run, tmp_path / "live")
+    assert_dumped_as_np_savez(run, tmp_path / "live", tmp_path / "before")
+
+
 def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
     """`pouw_h1_live.dump`: window.json holds only what the verifier may read (T, S, the prefix, the window Program's
     digest, the open root, the challenge phase, the live roots, m_s and the public max_tokens), and each round's rows.npz and
     opening.json give every port's words, salt, value, position and path, each opening its registered root
     (`registered.verify_read`) under the row format its reads file names; ``m``, ``s``, ``cap_<i>`` and ``o0`` are the
     known ``m@<s>``, ``round@<s>``, ``caps`` and ``live-ok`` rows."""
-    import json
-
-    import numpy as np
-
     run = _window()
     got = LV.dump(run, tmp_path / "live")
     pub = json.loads((tmp_path / "live" / "window.json").read_text())
