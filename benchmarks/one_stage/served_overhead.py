@@ -5,8 +5,14 @@ stock control, the same endpoint, engine and load with no protocol and no Commit
     python benchmarks/one_stage/served_overhead.py table --composed DIR... --stock DIR... [--served-table FILE] [--allow KEY]
         [--out DIR]
 
+A serve dir's traces and the load's records hold request values and stay on the node, so `metrics` runs there, over each
+serve dir, and prints one aggregate a line (`aggregate`): each load's counts and metrics, the Commit windows' parts, the
+engine's identity and scheduler, and no step's or request's own times or values. That line is what leaves the node
+(`served_verdicts.sh`'s ``$OUT/serve/overhead.json``, `served_stock.sh`'s ``$OUT/<lifetime>/overhead.json``), and
+`table`'s RUN is such a file, or a serve dir when it runs on the node.
+
 Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py --varied`'s timings file
-(``load.timings.json`` beside its record; `served_verdicts.sh` copies the composed run's to ``$OUT/timings/``): each request's
+(``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 
 - ``client_time_per_output_token_s``: the first send to the last done, over the output ids the requests streamed;

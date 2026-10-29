@@ -37,7 +37,7 @@ def test_the_read_takes_the_entry_at_the_index_low_bits_its_words_low_first():
 
 
 def test_a_read_has_its_boolean_form_up_to_max_words():
-    """`table_read` makes `TableRead{IB}x{EW}_v2` with the read (`verity.ml.circuits.boolean.table`, by which C-Flock lowers it) up
+    """`table_read` makes `TableRead{IB}x{EW}_v2` with the read (`verity.ml.circuits.boolean.table`, by which Flock lowers it) up
     to `BT.MAX_WORDS` table words, and `gelu_tanh_bf16`'s and `tanh_rn`'s reads, past it, have none."""
     from verity.ml.circuits.boolean import table as BT
     from verity.ml.circuits.defs import REGISTRY

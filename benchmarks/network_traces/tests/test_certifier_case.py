@@ -1,8 +1,8 @@
 """`certifier_case`: certifier/v0's case of a run and its compute audits, held to the period check's Python mirror
 (`period_case`, which ``network-period`` is held to):
 
-* a compute audit the integrity check accepted is re-decided at δ (one-stage's bound on wrong units), and its refusal
-  kept as it is; an audit record missing, refused or for another registration is an error;
+* a compute audit the integrity check accepted is re-decided at δ (one-stage's bound on incorrect proof blocks), and
+  its refusal kept as it is; an audit record missing, refused or for another registration is an error;
 * `case_of`'s case of signed link-windows and the period's audit is the clock form's: the mirror runs one-stage v2 on
   each link-window's proof (undecided with no session's proof), refuses a link-window v2 refuses, a case naming another
   first window and an audit registered over another Program, and once v2 accepts the proofs accepts with K and eps at
@@ -11,8 +11,8 @@
   names off N2's verifier directory, with the link's v2 parameters and circuit file; a link-window's clock is the
   client's certificate without the session or the sync;
 * `rows_case_of`'s case is the rows form's: a signed rows period of the mirror's (`period_case.build`), taken apart into
-  a warden run's windows and scans and rebuilt, is the same commitment and evidence, and the mirror refuses it by name
-  at the scan's answer (one-stage v2 can't run the scan's proof);
+  a warden run's windows and scans and rebuilt, is the same commitment and evidence, and the mirror accepts it, its
+  scan's prog wired from the audits' slot entries and its state tied;
 * each term of a case is decided at its share of the δ (`term_delta`): a signed clock case of two audits, its
   link-windows' proofs accepted, is accepted with eps that δ, an unsplit one with eps their sum, which `holds_at`
   refuses.
@@ -322,8 +322,8 @@ def mirror_rows_run(monkeypatch, seed: int) -> tuple[dict, dict, dict, dict, lis
     return case, c, e, rw, ws
 
 
-def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_the_mirrors_and_refused_at_the_scans_answer(monkeypatch):
-    case, c, e, rw, ws = mirror_rows_run(monkeypatch, 19)
+def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_the_mirrors_and_accepted(monkeypatch):
+    case, c, e, rw, ws = mirror_rows_run(monkeypatch, 380)
     p = case["params"]
     assert not p["lms"]["toy"] and len(c["audits"]) == 2 and p["first"] == 3
     scans = {w: (reg, x["answer"], p["scan"]) for w, reg, x in zip(ws, c["windows"], e["windows"])}
@@ -335,8 +335,7 @@ def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_the_mirrors_and_refused
     assert got["params"]["scan"] == p["scan"]
     assert got["params"]["audits"] == [{"free": f, "program": q, "steps": len(ws) * T} for f, q in zip(free, programs)]
     a = PERIOD.reference(got)
-    assert a["verdict"] == "reject" and a["reason"].startswith(
-        f"window {ws[0]}: the scan's answer: the check takes no answer for a link-window"), a
+    assert (a["verdict"], a["public"]["windows"], len(a["public"]["scans"])) == ("accept", len(ws), len(ws)), a
 
 
 @pytest.mark.parametrize("delta", BC.BLOCK_DELTAS)

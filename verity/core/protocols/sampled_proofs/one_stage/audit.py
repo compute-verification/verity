@@ -1,7 +1,7 @@
 """What a one-stage audit established: its integrity profile, and the audit record that cites what it is about.
 
 The profile (`profile`) is core's `IntegrityProfile` of one level `unit`, the partition's proof blocks (`sizes = (population,)`),
-drawn by the verifier's sampling design (`Subset`, `Bernoulli`, or a `Stratified` sampling design with one stratum per template), with the count
+sampled by the verifier's sampling design (`Subset`, `Bernoulli`, or a `Stratified` sampling design with one stratum per template), with the count
 drawn and delta. It bounds faulty proof blocks and weights nothing: under `Subset(k)` a trace with m faulty proof blocks passes with
 probability C(N - m, k) / C(N, k), and under the stratified sampling design with prod_s C(n_s - m_s, k_s) / C(n_s, k_s). Except with
 probability delta, an accepted trace has at most `bound()` faulty proof blocks, and at most `stratum_bounds()[t]` in template
@@ -10,10 +10,10 @@ t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. A
 The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
 sampling design's in its v0 form: the sampling design's JSON with delta and the count drawn per template); `wrong_units`, its bounds; and
 `integrity_profile`, `verity/integrity-profile/v1` (README "The audit record and the profile"): the partition, the registration it
-counts against, the sampling design and which proof blocks were drawn and proved, and the evidence by digest. The v1 form's non-sampling
+counts against, the sampling design and which proof blocks were sampled and proved, and the evidence by digest. The v1 form's non-sampling
 terms (ε) come from the soundness analysis, not from the run, so the run leaves them null.
 
-The audit record carries the registration and its receipt, the draw, the proved proof blocks, the statement's digests and each
+The audit record carries the registration and its receipt, the sample, the proved proof blocks, the statement's digests and each
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
 the record incomplete. The record is accepted, and the profiles are present, only when there is a verdict of
 record (`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the draw, the proved
@@ -28,7 +28,8 @@ from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.partition import Level
-from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
+from verity.core.protocols.profile import (Bernoulli, IntegrityProfile, SamplingDesign, Stratified, Stratum, Subset, Work,
+                                          WorkStratum)
 
 from .draw import check_draw, check_proved, law_of
 from .registration import digest as registration_digest
@@ -44,7 +45,7 @@ def _sha512(obj: Any) -> str:
 
 def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> IntegrityProfile:
     """The audit's integrity profile under any of the four sampling designs. The work sampling design is the stratified sampling design at its sizes (Lean
-    `Law.work`), so its profile is the same `Stratified` one, counting the drawn proof blocks (a closure proves more, and only
+    `Law.work`), so its profile is the same `Stratified` one, counting the sampled proof blocks (a closure proves more, and only
     helps)."""
     if draw["law"] == "subset":
         law = Subset(draw["k"])
@@ -67,6 +68,21 @@ def core_law(law: Mapping[str, Any], population: int) -> Stratified | None:
     if law.get("law") in ("stratified", "work"):
         return Stratified(tuple(Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in law["strata"]))
     return None
+
+
+def design(law: Mapping[str, Any]) -> SamplingDesign:
+    """The sampling design of a well-formed law or draw (`check_draw`'s), as the profile writes it (Lean
+    `Core.SamplingDesign.ofFlock`): each stratum named by its template, its size its ranges' total, and a work sampling design's
+    `Work` with its works and floors."""
+    if law["law"] == "subset":
+        return Subset(law["k"])
+    if law["law"] == "bernoulli":
+        return Bernoulli(Fraction(law["p"]))
+    sizes = [sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]]
+    if law["law"] == "work":
+        return Work(law["k"], tuple(WorkStratum(s["template"], n, s["k"], s["work"], s["floor"])
+                                    for s, n in zip(law["strata"], sizes)))
+    return Stratified(tuple(Stratum(s["template"], n, s["k"]) for s, n in zip(law["strata"], sizes)))
 
 
 def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
@@ -168,5 +184,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "integrity_profile", "profile", "session_registered",
-           "wrong_units"]
+__all__ = ["FORMAT", "LEVEL", "PROFILE", "audit_record", "core_law", "design", "integrity_profile", "profile",
+           "session_registered", "wrong_units"]

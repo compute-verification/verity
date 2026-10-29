@@ -68,7 +68,7 @@ structure Params where
   own : Own
   members : Array (String × Own) := #[]
 
-structure Session where
+structure RunFiles where
   name : String
   record : String
   reps : Array (String × String)
@@ -77,13 +77,13 @@ structure Session where
 structure Member where
   name : String
   pub : String
-  sessions : Array Session
+  sessions : Array RunFiles
 
 /-- The evidence: v1's, and the single form's public file and sessions, or the group form's members. -/
 structure Evidence where
   base : OneStage.Evidence
   pub : String
-  sessions : Array Session
+  sessions : Array RunFiles
   members : Array Member := #[]
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
@@ -159,7 +159,7 @@ def ownOfJson (j : Json) : V Own := do
     | throw "the program and the partition are not objects"
   pure { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, registered }
 
-private def sessionOf (j : Json) : V Session := do
+private def sessionOf (j : Json) : V RunFiles := do
   exactly j #["name", "record", "reps"] "a session of the proofs"
   let (.str name, .str record, .obj _) := (getD j "name", getD j "record", getD j "reps")
     | throw "a session of the proofs is not a name, its record's digest and its rep files' digests"
@@ -169,7 +169,7 @@ private def sessionOf (j : Json) : V Session := do
   pure { name, record, reps }
 
 /-- The evidence's `proofs`: the public file's digest and the sessions. -/
-def proofsOf (pr : Json) : V (String × Array Session) := do
+def proofsOf (pr : Json) : V (String × Array RunFiles) := do
   exactly pr #["public", "sessions"] "the evidence's proofs"
   let .str pub := getD pr "public" | throw "proofs: public is not a SHA-512 digest"
   let .arr ss := getD pr "sessions" | throw "proofs: sessions is not a list"
@@ -329,7 +329,7 @@ structure Run where
 abbrev SetUp := V (Flock.SessionSpec × Array Flock.Setup × Json × Json)
 
 /-- The session's proof files: per rep stream of its setup, the blob its `reps` name for it. -/
-def filesOf (bs : Core.Blobs) (s : Session) (st : SetUp) : V (Array ByteArray) := do
+def filesOf (bs : Core.Blobs) (s : RunFiles) (st : SetUp) : V (Array ByteArray) := do
   let (spec, _, _) ← st
   spec.repStreams.mapM fun (_, _, w) => do
     let n := s!"{w.replace "/" "."}.bin"
@@ -367,7 +367,7 @@ def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles : V Unit) (coinKeys : Ar
   Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags I.publicFile I.count draw
 
 /-- A session's verdict as `verify` writes it (`flock-verify/<name>`, of record). -/
-def verdictJson (rd : Reads) (programSha : Option String) (s : Session) (st : SetUp) (ok : Bool) (why : String)
+def verdictJson (rd : Reads) (programSha : Option String) (s : RunFiles) (st : SetUp) (ok : Bool) (why : String)
     (units : Array Nat) : String × Json :=
   let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Json.null, Json.null)
   (s!"flock-verify/{s.name}", Json.mkObj ([("accepted", Json.bool ok),
@@ -379,7 +379,7 @@ def verdictJson (rd : Reads) (programSha : Option String) (s : Session) (st : Se
 
 /-- `r` with one more session's verdict `verdict`: a session that did not accept fails the run; one that did proves the
 units its record drew, once it names the partition object's program (`programSha` against `want`, else a refusal). -/
-def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (want : Json) (r : Run) (s : Session)
+def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (want : Json) (r : Run) (s : RunFiles)
     (record : String) (st : SetUp) (coinKey : Option String) (verdict : V Unit) : V Run := do
   let coinKeys := match coinKey with | some k => r.coinKeys.push k | none => r.coinKeys
   match verdict with
@@ -398,7 +398,7 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
 makes after it (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in no blob or not UTF-8, or it
 accepted naming another program than the partition object's. -/
 def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles : V Unit) (programSha : Option String)
-    (want : Json) (r : Run) (s : Session) : V Run := do
+    (want : Json) (r : Run) (s : RunFiles) : V Run := do
   let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
     | throw s!"session {s.name}'s record is not UTF-8"
   let draw := Flock.Witness.recordDraw record
@@ -412,7 +412,7 @@ session set up at its own record's draw: every session's verdict, the units the 
 accepted. A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
 the evidence's. `runFrom` folds from the run `r0` of the sessions before (a group's earlier members'), `run` from none. -/
-def runFrom (r0 : Run) (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat))
+def runFrom (r0 : Run) (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat))
     (bs : Core.Blobs) : V Run := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
@@ -436,12 +436,12 @@ def runFrom (r0 : Run) (p : Own) (pub : String) (sessions : Array Session) (prov
     else pure r
   | none => pure r
 
-def run (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
+def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
     V Run :=
   runFrom ⟨#[], #[], #[], true⟩ p pub sessions provedUnits? bs
 
 /-- The sessions' verdicts in order (`run`'s). -/
-def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
+def verdicts (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
     V (Array (String × Json)) :=
   (·.out) <$> run p pub sessions provedUnits? bs
 

@@ -5,12 +5,12 @@ record's s8 binding and refuses a contraction outside the record's domain.
 * **The step.** Each record names the s8 tensor-core step its kernels' MMAs compute (a `silicon.integer.IntegerMma`, PINNED
   in `silicon.instructions`) and binds it with `ops.boolean.gemm.s8_gemm`, which gives the registered
   `BlackwellS8ImmaDot32_v2` for every card whose step is that function and refuses any other. sm_90's step,
-  `HOPPER_SM90_S8_K32`, is sm_120's under Hopper's name (the H200's ``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32, run
-  r20261019-043020-f267, 0 mismatches), so an sm_90 window's Program is the sm_120 one's, byte for byte, and a served
+  `HOPPER_SM90_S8_K32`, is sm_120's under Hopper's name (the H200's ``wgmma`` m64nNk32 and ``mma.sync`` m16n8k32 agree
+  with it word for word on the H200), so an sm_90 window's Program is the sm_120 one's, byte for byte, and a served
   path registers the same trees on either card.
 * **The domain** is the contractions the record's kernels serve, beyond what the Definitions refuse themselves (32 | K and
   K < 2^17, `ops.gemm.S8_K_LIMIT`). sm_90's is Dither's h1u units (`benchmarks/hash/dither/h1u.cu`, gated on an H200 at
-  GLM-5.3 int8 v3's shapes in run r20261023-195535-8920): 512 | K, as h1u reads each noise block as 16 segments' bits
+  GLM-5.3 int8 v3's shapes): 512 | K, as h1u reads each noise block as 16 segments' bits
   (``kh_unit``: ``K % 512`` refused), and K >= 384, `h1zy.LEAST_K`, the least K whose leaf's combine is proved, so the least
   K served is 512. On that domain m = `segment.n_digits`(K / 32) is 2 or 3, the digits h1u's one stream recombines. h1u
   issues ``mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32`` without ``.satfinite``; below 2^17 no partial sum of s8 x s8
@@ -18,8 +18,9 @@ record's s8 binding and refuses a contraction outside the record's domain.
   sm_120's record states no domain: its windows keep the Definitions' own refusals, as before records existed.
 * **The sheet.** Each record holds the device's data-sheet facts with their sources: SMs, the clock its tensor peaks are
   quoted at, f_max, the dense s8 MACs an SM clock, and the data sheet's dense INT8 figure (None where no data sheet states
-  one). sm_90's are the machine model's DS-90 sheet (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose
-  Lean is `Security/Definitions/Accounting/Sheets/H200.lean`), sm_120's its DS-120 (`Accounting.TS.Headline.Sm120.ds120`).
+  one). sm_90's are the machine model's H200 sheet (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose
+  Lean is `Security/Definitions/Accounting/Sheets/H200.lean`), sm_120's its RTX PRO 6000 sheet
+  (`Accounting.TS.Headline.Sm120.ds120`).
 """
 from __future__ import annotations
 
@@ -76,23 +77,23 @@ SM120 = Device(
     arch="sm_120", gpu="RTX PRO 6000 Blackwell Server Edition", step=BLACKWELL_SM120_S8_M16N8K32,
     instruction="sm120.mma.m16n8k32.s8", domain=None,
     sms=188, tensor_mhz=2430, fmax_mhz=2430, s8_macs=1024, sheet_s8_tops=None,
-    source="DS-120 (Accounting.TS.Headline.Sm120.ds120): f_max 2430 MHz, the driver's reported maximum (SPEC's P1: no data "
-           "sheet states it), at which DS-120 quotes every peak; IMMA16832 at 1024 dense MACs an SM clock (census "
-           "r20261015-062626-f65b: 1,023.6 measured); 188 SMs, as the device reports (machine model table.toml); no RTX PRO "
-           "6000 data sheet figure for INT8 is on file",
+    source="the machine model's RTX PRO 6000 sheet (Accounting.TS.Headline.Sm120.ds120): f_max 2430 MHz, the driver's "
+           "reported maximum (no data sheet states it), at which the sheet quotes every peak; IMMA16832 at 1024 dense MACs "
+           "an SM clock (the opcode census measures 1,023.6); 188 SMs, as the device reports (machine model table.toml); "
+           "no RTX PRO 6000 data sheet figure for INT8 is on file",
 )
 
 SM90 = Device(
     arch="sm_90", gpu="H200 SXM (sm_90a)", step=HOPPER_SM90_S8_K32,
     instruction="sm90.mma.m16n8k32.s8", domain=(Z.LEAST_K, 512),
     sms=132, tensor_mhz=1830, fmax_mhz=1980, s8_macs=4096, sheet_s8_tops=1979,
-    source="DS-90 (benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml): H200 data sheet "
+    source="the machine model's H200 sheet (benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml): H200 data sheet "
            "(nvidia.com/en-us/data-center/h200, Technical Specifications, H200 SXM): 'INT8 Tensor Core 3,958' TOPS, footnote "
            "2 'With sparsity', so 1,979 dense; H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5 (the H200 "
            "data sheet states no clock or SM count, its peaks equal H100 SXM5's): 'Peak INT8 Tensor TOPS 1978.9/3957.8', "
            "'GPU Boost Clock for FP8, FP16, BF16, TF32 Tensor Core Ops: 1830 MHz', 'GPU Boost Clock for FP64 Tensor Core Ops, "
            "FP32 and FP64 non Tensor Core Ops: 1980 MHz', 'SMs 132'; so 4096 dense s8 MACs an SM clock "
-           "(2 x 4096 x 132 x 1830 MHz = 1,979 TOPS); the device reports 132 SMs and a 1980 MHz maximum (vy-dc-h200)",
+           "(2 x 4096 x 132 x 1830 MHz = 1,979 TOPS); an H200 reports 132 SMs and a 1980 MHz maximum",
 )
 
 DEVICES = {d.arch: d for d in (SM120, SM90)}

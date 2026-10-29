@@ -2,12 +2,12 @@ import Flock.Hash
 import Flock.Draw
 
 /-!
-# `verity.randomness` v2, as a Lean spec
+# `verity.ml.randomness` v2, as a Lean spec
 
-The byte formats and samplers of `verity/primitives/randomness/__init__.py`, executable, on the verifier's
+The byte formats and samplers of `verity/ml/randomness/__init__.py`, executable, on the verifier's
 FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors: the spec reproduces the pinned
-`verity/primitives/randomness/tests/vectors.json`, and Python must match the spec's own vectors
-(`backends/flock/tests/lean/RandomnessVectors.lean`).
+`verity/ml/randomness/tests/vectors.json`, and Python must match the spec's own vectors
+(`verity/ml/flock/tests/lean/RandomnessVectors.lean`).
 
 * `frame`, `frames`: a part framed as `tag || len(body) as 8 bytes big-endian || body`; an index frames each part,
   concatenates them, and frames the result as bytes.
@@ -20,6 +20,8 @@ FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors:
   out, which the Python's unbounded stream never does.
 * `subsetOn k n streams`, `subset`: `Key.subset`'s sparse partial Fisher–Yates, swap `i` drawing `uniformOn (n − i)` on
   its own stream, index `("s", *index, i)`, and the values sorted.
+* `uniform`, `subset` and `bernoulli` read each stream to a fixed length `L`; `uniformExact` and `subsetExact` are
+  `Key.uniform` and `Key.subset` exactly, the read doubling until it lands, as the Python's unbounded stream does.
 -/
 
 namespace FlockSoundness.Randomness
@@ -98,5 +100,28 @@ def uniform (key : ByteArray) (n : Nat) (index : List Part) (L : Nat) : Option N
 def bernoulli (key : ByteArray) (num den : Nat) (index : List Part) (L : Nat) : Option Bool :=
   if num = 0 then some false else if num = den then some true else
     (uniformOn den (stream key (.str "b" :: index) L)).map (· < num)
+
+/-- `Key.uniform(n, index)` exactly: the stream at `("u", *index)` read in doubling prefixes, from one block, until a word
+is accepted. Every prefix of the stream is the Python's, so the first accepted word is; a word is refused with probability
+below `2^-64`, so a prefix holding one word decides in practice. `none` only for `n = 0` or after 64 doublings. -/
+def uniformExact (key : ByteArray) (n : Nat) (index : List Part) : Option Nat :=
+  if n = 0 then none else go 64 ((Flock.Draw.width n + 63) / 64)
+where
+  go : Nat → Nat → Option Nat
+    | 0, _ => none
+    | fuel + 1, blocks =>
+      match uniformOn n (stream key (.str "u" :: index) (64 * blocks)) with
+      | some x => some x
+      | none => go fuel (2 * blocks)
+
+/-- `Key.subset(k, n, index)` exactly: each swap's stream read far enough (a draw fails to land in 64 bytes with
+probability below 2^-256, and the read doubles until it does). -/
+def subsetExact (key : ByteArray) (k n : Nat) (index : List Part) : Option (Array Nat) :=
+  Id.run do
+  let mut len := 64
+  for _ in [0:24] do
+    if let some out := subset key k n index len then return some out
+    len := 2 * len
+  return none
 
 end FlockSoundness.Randomness

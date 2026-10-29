@@ -1,18 +1,18 @@
 """Conformance of the Lean verifier's `Q_word` v1 over programs (`flock-verify qword-program`: `Flock.Program` decodes
-#120's `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
+the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
 (`verity.ml.circuits.codec.decode_program`, `verity.ml.circuits.cut`, `verity.ml.circuits.partition_object`).
 
     python qword_program_agree.py --lean BIN --out DIR [--vectors partition_vectors.json] [--format format_vectors.json]
         [--program DESCRIPTOR]... [--registry MODULE]
 
-- `--vectors` (#111): the program's SHA-512, the population, every Call's units, owners, derived committed set and graph
+- `--vectors`: the program's SHA-512, the population, every Call's units, owners, derived committed set and graph
   (every field core pins), and every unit's `locate`.
-- `--format` (#120): the wide-gate Call's graph, the forward reference Q_word refuses (word for word), and every decoder
+- `--format`: the wide-gate Call's graph, the forward reference Q_word refuses (word for word), and every decoder
   refusal of `test_format_spec.REJECT` (the Lean decoder must refuse each; it holds no registry, so an unknown primitive is
   refused by the query instead).
-- `--qword-vectors` (#111): every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
+- `--qword-vectors`: every evaluation, the order refusals, the verify refusals (the query's, and the cuts'), and
   every descriptor's cuts at several (X, W) against core's `verify`.
-- `--program` (a real descriptor, e.g. a #101 Build's): per Call its units; per Definition a Call names, its units, the
+- `--program` (a real descriptor, e.g. a served Build's): per Call its units; per Definition a Call names, its units, the
   SHA-512 of its owners and, for a flat cut, of its graph. `--registry` names the module that registers its primitives.
   With `--cuts`, per Definition its cut on its Call's whole graph against core's `check_cut` (`--core-skip PREFIX`: one core
   can't hold here, checked by Lean only).
@@ -114,7 +114,7 @@ def _text(x):
 
 
 def check_qword_vectors(a, out, bad):
-    """`qword_vectors.json` (#111): every evaluation (population, owners digest, every Call's graph, owners, kinds, units and
+    """`qword_vectors.json`: every evaluation (population, owners digest, every Call's graph, owners, kinds, units and
     committed set), every order refusal (the `order_violation` detail), and the verify refusals that are the query's
     (`query-inapplicable`); the cut refusals are the width rule and the invariant, which `qword-program` does not check."""
     v = json.loads(Path(a.qword_vectors).read_text())
@@ -260,7 +260,7 @@ def check_vector_cuts(a, v, out, bad):
 
 def check_program(a, path, out, bad):
     from verity.ml.circuits import partition_object as po
-    from verity.ml.circuits.codec import _spec_id, decode_program, program_digest
+    from verity.ml.circuits.codec import descriptor_id, decode_program, program_digest
     from verity.ml.circuits.cut import CallGraph
     from verity.ml.circuits.defs import REGISTRY
     raw = gzip.open(path).read() if str(path).endswith(".gz") else Path(path).read_bytes()
@@ -272,12 +272,12 @@ def check_program(a, path, out, bad):
     part = po.evaluate(P, po.query(16, 32))
     if got["program_sha512"] != program_digest(json.loads(raw)) or got["population"] != part.population:
         bad.append(("program", str(path), "program_digest or population"))
-    want_calls = [[k, _spec_id(c.fn), c.units] for k, c in part.calls]
+    want_calls = [[k, descriptor_id(c.fn), c.units] for k, c in part.calls]
     if got["calls"] != want_calls:
         bad.append(("program", str(path), "calls"))
     defs = {}
     for _k, c in part.calls:
-        key = _spec_id(c.fn)
+        key = descriptor_id(c.fn)
         if key in defs:
             continue
         e = {"units": c.units, "owner_sha512": sha512(c.owner())}
@@ -296,12 +296,12 @@ def check_program_cuts(a, P, part, out, bad):
     against core's `cut.check_cut` on `Partition.graph` and `owner`, as `verify` runs it: the codes, the too-wide units, and
     the graph's computing gates, recomputed pairs, derived committed set, widest boundary and boundary gates. Definitions
     named by `--core-skip` (too large for core here) are checked by Lean only, and listed."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.cut import boundary_widths, check_cut, derived_committed
     lean_runs = {W: lean(a, out / "program.json", "16", str(W), "--digests", "--cuts") for W in (32, 16)}
     compared, lean_only, done = [], [], set()
     for p, (_k, c) in enumerate(part.calls):
-        key = _spec_id(c.fn)
+        key = descriptor_id(c.fn)
         if key in done:
             continue
         done.add(key)
@@ -321,7 +321,7 @@ def check_program_cuts(a, P, part, out, bad):
         part._graphs.clear()
         gc.collect()
     for W, r in lean_runs.items():
-        want = [[k, cc["codes"]] for k, cc in ((k, r["cuts"][_spec_id(c.fn)]) for k, c in part.calls) if cc["codes"]]
+        want = [[k, cc["codes"]] for k, cc in ((k, r["cuts"][descriptor_id(c.fn)]) for k, c in part.calls) if cc["codes"]]
         if r["cut"] != want:
             bad.append(("program cut", W, r["cut"][:8], want[:8]))
     return {"compared": compared, "lean_only": lean_only,

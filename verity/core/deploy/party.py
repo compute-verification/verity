@@ -1,4 +1,4 @@
-"""A party: a next-message machine, sans-IO (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §1).
+"""A party: a next-message machine, sans-IO.
 
 `Security/Definitions/Claims.lean` states parties this way: `Prover.next` gives the next message from the messages so far
 and the prover's tape, `Verifier.next` the next from the prover's messages and its coins. A `Party` is that function as an
@@ -8,7 +8,7 @@ returning the actions it takes:
 - `Send(channel, message)`: a message to the party at the other end of `channel` (a peer's name, or a source's:
   `clock`, `coins`);
 - `Timer(at)`: wake me when my clock reads `at` (its clock source answers with `ClockTimer`);
-- `Record(entry, kind)`: an entry of one of the public kinds for the record, or `private`, kept in the transcript only;
+- `LogEntry(entry, kind)`: an entry of one of the public kinds for the record, or `private`, kept in the transcript only;
 - `Finish(outcome, refused, kind)`: the party's conclusion, or its refusal by name; it receives nothing after. A
   refusal's name is public; the outcome is of `kind`.
 
@@ -18,7 +18,7 @@ runtime takes for it and its transcript keeps.
 Besides its peers' messages and its sources', the runtime tells a party that a channel closed (`Closed`) or that a frame
 on it was refused (`Refused {name, detail}`, after which the party is finished refused by that name unless it finishes
 first). A party does no I/O and reads no ambient clock or randomness: its coins and clock readings are messages from its sources,
-so its transcript (`transcript.Transcript`) replays it exactly, and the same code runs live, simulated or replayed. What
+so its transcript (`transcript.PartyLog`) replays it exactly, and the same code runs live, simulated or replayed. What
 the runtime gives it in `Identity` is its own device: its name, the configuration's hash, its key and its state directory.
 """
 
@@ -75,7 +75,7 @@ class Timer:
 
 
 @dataclass(frozen=True)
-class Record:
+class LogEntry:
     entry: Mapping[str, Any]
     kind: str
 
@@ -97,7 +97,7 @@ class Finish:
             raise ValueError(f"an outcome's kind is one of {KINDS}, not {self.kind!r}")
 
 
-type Action = Send | Timer | Record | Finish
+type Action = Send | Timer | LogEntry | Finish
 
 
 class Party(Protocol):
@@ -106,4 +106,4 @@ class Party(Protocol):
     def on(self, msg: Received) -> list[Action]: ...
 
 
-__all__ = ["Action", "Finish", "Identity", "Params", "Party", "Received", "Record", "Send", "Timer"]
+__all__ = ["Action", "Finish", "Identity", "Params", "Party", "Received", "LogEntry", "Send", "Timer"]
