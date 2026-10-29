@@ -4,7 +4,7 @@ a suite's (`suites.key`, and its test modules' `module_key` and `traced_key`), c
 two nodes differ in everything that names a node: the tree's absolute path, the host, the home, the PATH, the temporary and runtime
 directories, the check slot's test cache, the kernel release, a GPU node whose GPUs the runner hides against a node with none,
 rustup's `cargo` on the PATH against only installed, and a Lean build output one node built and the other didn't. circuit-check's
-key is held to the same in its own suite (`tools/verity/circuit_check/tests/test_cache.py`)."""
+key is held to the same in its own suite (`tools/verity/circuit_check/tests/test_circuit_check.py`)."""
 from __future__ import annotations
 
 import importlib.util
