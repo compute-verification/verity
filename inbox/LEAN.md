@@ -157,6 +157,15 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
   - Decode T2 is 15.6× / 23.3× at 1 row and 14.3× / 20.4× at 16 rows against graphs, or 3.2× against eager.
   - Freeze 3, the keyed-leaf bytes, waits on N-SALT.
 
+- **20:16Z, T2 on the graphs basis, all five points** (note 20261029T2015Z-report-lean-kernel, which supersedes
+  every earlier T2), sync / async:
+  - decode at 1 row: 15.6× / 23.3×;
+  - decode at 16 rows: 14.3× / 20.4×;
+  - 64 rows: 11.3× / 15.8×;
+  - 512 rows: 13.2× / 18.5×;
+  - **T 8,192: 80.2× / 89.8×.** Last night's 62× / 75× used a serve-openai stock step with an 8.7 ms host gap.
+  - The 8,192 point has 10–20% headroom under T2's 100×.
+
 ## Owners' answers on landing the code (18:32Z)
 
 - **compute-accounting (CMP-295):** the lead is a new protocol id, `verity/pouw/v2`, in the `PouwCheck` package beside
