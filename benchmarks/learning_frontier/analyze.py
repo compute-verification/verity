@@ -36,15 +36,22 @@ from pathlib import Path
 import numpy as np
 
 from model import SIZES, matrix_shapes
+from train import OUTER_LR, OUTER_MOMENTUM
 
 FIT_FROM = 0.1
 QUARTER = 0.25
-GROUPS = {"lowrank": ("dense", "lowrank"), "localsgd": ("dense", "localsgd")}
+#: each comparison with dense: the configurations in it (a local-SGD run with other outer settings than train.py's is an anchor,
+#: compared on its own so it moves no target of the main comparison)
+GROUPS = {"lowrank": lambda r: r["family"] == "lowrank",
+          "localsgd": lambda r: r["family"] == "localsgd" and " outer " not in r["label"],
+          "localsgd-outer": lambda r: r["family"] == "localsgd" and " outer " in r["label"]}
 RULES = ("dense at a quarter", "midpoint", "worst final")
 
 
 def label(args: dict, tpp: float) -> str:
     base = {"dense": "dense", "lowrank": f"r{args['rank']}", "localsgd": f"H{args['sync']}"}[args["family"]]
+    if args["family"] == "localsgd" and (args["outer_lr"], args["outer_momentum"]) != (OUTER_LR, OUTER_MOMENTUM):
+        base += f" outer {args['outer_lr']:g}/{args['outer_momentum']:g}"
     return base if args["tokens_per_param"] == tpp else f"{base}@{args['tokens_per_param']:g}tpp"
 
 
@@ -259,8 +266,8 @@ def main(argv: list[str] | None = None) -> int:
         if "dense" not in ser:
             continue
         envelope = [s for lab, s in ser.items() if lab.startswith("dense@")]
-        for group, families in GROUPS.items():
-            members = {lab: ser[lab] for lab, r in labels.items() if r["family"] in families and "@" not in lab}
+        for group, member in GROUPS.items():
+            members = {"dense": ser["dense"]} | {lab: ser[lab] for lab, r in labels.items() if "@" not in lab and member(r)}
             if len(members) < 2:
                 continue
             tgts = targets(ser["dense"], members)

@@ -48,6 +48,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CENSUS = ROOT / "benchmarks/census/hardware.json"
 PEAK_ID = "rtx-pro-6000-server/bf16"
 BITS = 32
+OUTER_LR, OUTER_MOMENTUM = 0.7, 0.9  # DiLoCo's outer Nesterov settings
 EXIT_CHUNK, EXIT_TERM = 3, 143
 TIMED_AFTER = 10  # steps after each start before the throughput clock runs (compilation, warm caches)
 
@@ -65,8 +66,8 @@ def parse(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--rewarm", type=int, default=20)
     ap.add_argument("--replicas", type=int, default=4)
     ap.add_argument("--sync", type=int, default=0)
-    ap.add_argument("--outer-lr", type=float, default=0.7)
-    ap.add_argument("--outer-momentum", type=float, default=0.9)
+    ap.add_argument("--outer-lr", type=float, default=OUTER_LR)
+    ap.add_argument("--outer-momentum", type=float, default=OUTER_MOMENTUM)
     ap.add_argument("--tokens-per-param", type=float, default=8.0, help="training tokens per non-embedding parameter")
     ap.add_argument("--batch", type=int, default=64, help="sequences per optimizer step")
     ap.add_argument("--micro", type=int, default=0, help="sequences per forward pass (default: the whole batch)")
