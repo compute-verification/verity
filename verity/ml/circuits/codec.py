@@ -17,7 +17,7 @@ descriptor is held to (strings ASCII without DEL, integers of magnitude at most 
 
 Schemas (`schema` field): `verity-ir/descriptor/v0` writes every body verbatim; `verity-ir/descriptor/v1`
 (the default) writes the same program with flat concatenations, the reference-sequence alias
-and interned callee ids / types (see `SCHEMA_V1` below). Both decode. The digest is a function of the
+and interned callee ids / types (PROTOCOL.md §4.5–§4.7). Both decode. The digest is a function of the
 encoding, so it differs between the schemas for one program; `descriptor_equivalence` is the test that two
 descriptors denote the same circuit.
 """
@@ -41,15 +41,6 @@ SCHEMA_V0 = "verity-ir/descriptor/v0"
 SCHEMA_V1 = "verity-ir/descriptor/v1"
 SCHEMA = SCHEMA_V1
 SCHEMAS = (SCHEMA_V0, SCHEMA_V1)
-
-# v1 differs from v0 only in how the *same* program is written down (what a descriptor denotes — gates,
-# producers, ordered reference sequences, definitions — is identical; `descriptor_equivalence` checks that):
-#   * nested `concat`s are written flat, and a node argument whose leading parts repeat the whole reference
-#     sequence of an earlier node's argument is written as `{"alias": [node, arg]}` followed by the remaining
-#     parts — a pass-through reference to the sequence already in the body instead of a re-materialised copy
-#     (the root's KV cache: position T's `kc` is position T-1's `kc` plus one row);
-#   * a node's callee id (`fn`), argument types (`args[].type`) and output type (`out`) are interned: integers
-#     into the top-level `callees` and `types` tables (first-seen order of the deterministic dependency walk).
 ALIAS_WINDOW = 8  # how many trailing parts an alias search may leave as the explicit suffix
 
 
@@ -165,7 +156,7 @@ def _flat_keys(r: Concat) -> tuple[list[Refs], tuple]:
 
 class _BodyEncoder:
     """Reference encoding within one body. v0: `Refs.to_json` verbatim. v1: flat `concat`s and the alias rule
-    (see `SCHEMA_V1`): the whole reference sequence of every encoded node argument is remembered, and a later
+    (PROTOCOL.md §4.5): the whole reference sequence of every encoded node argument is remembered, and a later
     concatenation whose first `m` parts equal one of them (`m` down to `len - ALIAS_WINDOW`, longest first) is
     written as that argument's alias plus its remaining parts. Aliases point backwards only (to an earlier node
     of the same body, or from `ret` to any node), so decoding is one forward pass: a node's later argument never
@@ -254,7 +245,7 @@ def _encode_definition(fn: FunctionDefinition, schema: str = SCHEMA_V0, tables: 
 
 
 def definition_entry(fn: FunctionDefinition) -> dict:
-    """The self-contained (v0) descriptor entry of one definition, callees named by id: what a digest of the definition alone hashes."""
+    """The self-contained (v0) descriptor entry of one definition (PROTOCOL.md §4.7): what a digest of the definition alone hashes."""
     return _encode_definition(fn)
 
 
