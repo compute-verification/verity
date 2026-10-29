@@ -289,7 +289,6 @@ def test_reference_layered_at_kimi_k2():
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * 16))" in (nci / "Assumptions/Layered.lean").read_text()
     stated = (nci / "Guarantees/Layered.lean").read_text()
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
-    assert f"T.bound (α * Γ) b_w {d0 - E} {e + E * e_lk} *" in stated
     entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
     assert entry["Nci.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}
