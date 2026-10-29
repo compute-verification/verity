@@ -11,7 +11,7 @@
 //! - every leaf input bit of every unit a copy of the message bit it hashes (the plan's wiring);
 //! - every sub-circuit's constant a copy of the pinned column (compression slot 0's).
 //!
-//! Public regions, each opened at two verifier points drawn after the commitment (both reps), all values the verifier's:
+//! Public regions, each opened at two verifier points sampled after the commitment (both reps), all values the verifier's:
 //! - every compression's counter, block_len and flags (bits 1024..1152: the chunk's index in its row, 64, KEYED_HASH |
 //!   CHUNK_START at the chunk's first block | CHUNK_END and, for a row of one chunk, ROOT at its last);
 //! - every run's chaining input (the x-row key for a chunk's first run, else the previous run's output value);
