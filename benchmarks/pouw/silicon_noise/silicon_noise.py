@@ -45,7 +45,7 @@ SHA512_AND = 57947
 TOKEN_MACS = 16 * 60.82e6
 SEED_BITS = 128
 CAPS = (32, 320)
-LEAD_COIN_BYTES = (1.4e6, 13.2e6)
+LEAD_COIN_BYTES = (2.24e6, 13.2e6)
 ROW = 64
 KS = (2048, 8192)
 
@@ -388,10 +388,10 @@ def designs(h_rest=None):
             {"K": K, "design": "noise in acc + software nh2:8", "h": round(0.5 + 32 * WB * UNITS_A_WRITE / (16 * K)
                                                                             + rest, 3),
              "cheapest": f"{T} + 0.5·{T} (honest; decomp needs rank ≤ 16)", "gap": 0.0,
-             "premise": "PRF margin 4a + the IMAD a pair is optimal (5)"},
+             "premise": "PRF margin 4a (the fold's optimality moves only h)"},
             {"K": K, "design": "noise in acc + software thin fold", "h": round(0.5 + 64 * WB * UNITS_A_WRITE / K + rest, 3),
              "cheapest": f"{T} + 0.5·{T} (pack needs separable words)", "gap": 0.0,
-             "premise": "PRF margin 4a + ThinFoldOpt (5)"},
+             "premise": "PRF margin 4a (the fold's optimality moves only h)"},
             {"K": K, "design": "noise in acc, exact denoise (nacc readable), outputs only",
              "h": round(32 * WB * UNITS_A_WRITE / K + rest, 3),
              "cheapest": "2 a declared zero-data cell beside hidden work (read nacc, commit)",
@@ -404,13 +404,14 @@ def designs(h_rest=None):
 
 
 def egress(h):
-    """N-EGRESS's obstruction, coin bits a token ≥ 100·W_mac·cap, at W_mac = 1 + h, as 128-bit seeds delivered raw."""
+    """N-EGRESS's obstruction, coin bits a token ≥ 100·W_mac·cap, at W_mac = 1 + h, as 128-bit seeds delivered raw, beside
+    the lead's stream (N-EGRESS: 2.24 MB a token at 64 rows, 13.2 MB at decode with one row)."""
     out = []
     for cap in CAPS:
         bits = 100 * (1 + h) * cap
         seeds = math.ceil(bits / SEED_BITS)
         out.append({"cap": cap, "bits_a_token": round(bits), "seeds_a_token": seeds, "bytes": seeds * SEED_BITS // 8,
-                    "macs_a_seed": round(TOKEN_MACS / seeds), "vs_lead_prefill": round(LEAD_COIN_BYTES[0] / (seeds * 16)),
+                    "macs_a_seed": round(TOKEN_MACS / seeds), "vs_lead_64rows": round(LEAD_COIN_BYTES[0] / (seeds * 16)),
                     "vs_lead_decode": round(LEAD_COIN_BYTES[1] / (seeds * 16))})
     return out
 
@@ -515,7 +516,7 @@ def main() -> int:
         print(f"K {d['K']:5d}  h {d['h']:>9}  gap {d['gap']!s:>7}  {d['design']}  [{d['premise']}]")
     for e in res["egress"]:
         print(f"cap {e['cap']:3d}: {e['bits_a_token']} bits, {e['seeds_a_token']} seeds ({e['bytes']} B) a token, "
-              f"one per {e['macs_a_seed']:.3g} MACs; {e['vs_lead_prefill']}x / {e['vs_lead_decode']}x under the lead")
+              f"one per {e['macs_a_seed']:.3g} MACs; {e['vs_lead_64rows']}x / {e['vs_lead_decode']}x under the lead")
     for p in res["area"]["prf"]:
         print(f"{p['prf']:9s} b {p['b']:2d} M {p['M']:6.2f}  {p['ge_a_mac']:7.2f} GE/MAC  +sketch {p['with_sketch']:7.2f}"
               f"  {p['pct_s8']:5.2f}% s8  {p['pct_fp8']:5.2f}% fp8")

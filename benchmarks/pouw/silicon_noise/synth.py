@@ -9,7 +9,7 @@ Each block in `BLOCKS` is a top module of `rtl/*.v` (with parameters). Two mappi
 
 `per` divides a block's figures to the unit it is quoted in (a noise bit, a MAC, an accumulator step). Output: one JSON
 with the raw cell counts and the derived GE / ANDs per unit. Usage: `python3 synth.py OUT.json [--only=a,b] [--jobs=N]`,
-with `yosys` or `yowasp-yosys` (`pip install yowasp-yosys`) on PATH.
+with a native `yosys` on PATH (yowasp-yosys's ABC pass doesn't run).
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 RTL = sorted((HERE / "rtl").glob("*.v"))
-YOSYS = shutil.which("yosys") or shutil.which("yowasp-yosys") or "yosys"
+YOSYS = shutil.which("yosys") or "yosys"
 
 GE = {"$_NAND_": 1.0, "$_NOR_": 1.0, "$_AND_": 1.33, "$_OR_": 1.33, "$_ANDNOT_": 1.33, "$_ORNOT_": 1.33,
       "$_XOR_": 2.33, "$_XNOR_": 2.33, "$_MUX_": 2.33, "$_NOT_": 0.67, "$_BUF_": 0.0}
@@ -63,6 +63,9 @@ def run_yosys(top: str, params: dict, gates: str) -> dict:
     cells = {m.group(2): int(m.group(1)) for m in re.finditer(r"^\s+(\d+)\s+(\$_\w+_)\s*$", tail, re.M)}
     if not cells:
         cells = {m.group(1): int(m.group(2)) for m in re.finditer(r"^\s+(\$_\w+_)\s+(\d+)\s*$", tail, re.M)}
+    if not cells:
+        raise SystemExit(f"{top}: no cells in {YOSYS}'s stat. yowasp-yosys's ABC doesn't run (WASI has no subprocess); "
+                         "use a native yosys (apt install yosys)")
     return cells
 
 
