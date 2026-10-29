@@ -48,7 +48,9 @@ The held-out set is evaluated 20 times, at equal step intervals. The families:
   take a quarter of every global batch; every H steps their mean delta from the global model is the outer gradient of SGD
   with Nesterov momentum (learning rate 0.7, momentum 0.9, the same at every H), and every replica restarts from the new
   global model. Bits communicated per sync: each replica's delta, every parameter at fp32; dense's are data parallel over 4
-  workers, each sending its full fp32 gradient every step. The global model is evaluated at syncs.
+  workers, each sending its full fp32 gradient every step. The global model is evaluated at syncs. When the step count is
+  not a multiple of H, the last outer step follows a partial period and still applies the full outer momentum, so the last
+  evaluation can sit above the one before it; `analyze.py` reads each curve's running minimum.
 
 **Cost.** Analytic FLOPs per token: dense, 6 per matrix entry (the tied head counted once as a matrix, the lookup a gather)
 plus causal attention, 6 · layers · context · d_model; per-window low rank, 4 per frozen matrix entry (no weight gradient)
@@ -58,7 +60,8 @@ training steps only (evaluation and the first 10 steps after each start excluded
 another on one GPU, so its measured time is the global batch's compute with no communication.
 
 **Tuning parity.** Every family at the two smaller sizes sweeps the same three peak learning rates, and the largest size
-takes each configuration's best at `m`. The outer optimizer of local SGD and the low-rank re-warm are not tuned.
+takes each configuration's best at `m`; where that rate is unstable at `l`, the configuration takes the next value down the
+grid's factor-2 ladder. The outer optimizer of local SGD and the low-rank re-warm are not tuned.
 
 **Envelopes.** A checkpoint inside a cosine schedule has not annealed, so a configuration can also have shorter-horizon runs
 (`--tokens-per-param` below the main budget) at its main run's learning rate. `analyze.py` then reports κ and α between
