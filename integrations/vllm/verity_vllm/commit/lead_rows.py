@@ -17,22 +17,29 @@ leaf at its own position, rank = position, ``dom.leaf(r, r, schema, value)``: it
 two positions share no compression.  An instance's leaves are core's ``tree_levels`` under ``instance_domain``.  A forward's
 calls concatenate their chunks into one words instance, chunks never spanning calls (``words_values``).
 
-**The keyed root** replaces the subtree's root as the instance's public digest; :func:`keyed_root` is its stub.
+**The keyed root.**  An instance's public digest is its keyed root d = SHA-512(ks_w || salt_w || M_top)
+(``verity.ml.commitments.keyed``), in the subtree root's place.  A window's instances are A_j at f calls + j, one a call, and the
+forward's words at 2^63 + f, one a forward.  :class:`Window` keys them in the order d's hiding needs.  The window's call count
+is fixed when it is made.  keyLeaf (ks_w's hm96 leaf) and the weights' root are recorded before salt_w arrives.  Each position
+then gets one d.  It refuses everything else (:class:`Refused`).
 """
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
 
+from verity.ml.commitments import hm96, keyed
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 
-__all__ = ["A_SCHEMA", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "ROW_TILE", "TILE_COLS", "TILE_ROWS", "TILE_WORDS",
-           "WORDS_SCHEMA", "WORDS_POSITION", "Subtree", "a_position", "a_segments", "chunks", "committed_tiles",
-           "instance_domain", "keyed_root", "pad_cols", "pad_rows", "stream", "subtree", "words_position", "words_values"]
+__all__ = ["A_SCHEMA", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
+           "TILE_WORDS", "WORDS_SCHEMA", "WORDS_POSITION", "Refused", "Subtree", "Window", "a_position", "a_segments", "chunks",
+           "committed_tiles", "instance_domain", "key_leaf", "keyed_root", "pad_cols", "pad_rows", "stream", "subtree",
+           "words_position", "words_values"]
 
 TILE_ROWS, TILE_COLS = 16, 8
 TILE_WORDS = TILE_ROWS * TILE_COLS
@@ -43,6 +50,11 @@ WORDS_SCHEMA = "pouw/lead/words/v1"
 A_SCHEMA = "pouw/lead/a/v1"
 BINDING_TAG = b"pouw/lead/instance/v1"
 WORDS_POSITION = 1 << 63
+KEY_SALT_BYTES = hm96.SHA512.salt_bytes
+
+
+class Refused(ValueError):
+    """A committer step that the window's order or its positions forbid: a visible failure, never retried."""
 
 
 def pad_rows(m: int) -> int:
@@ -95,15 +107,16 @@ def a_segments(a: bytes) -> list[bytes]:
 
 
 def a_position(forward: int, calls: int, call: int) -> int:
-    """A_j's instance position: the call's position in the window."""
+    """A_j's instance position, f calls + j: injective over the window's calls and below every words position."""
     if not 0 <= call < calls or forward < 0 or forward * calls + call >= WORDS_POSITION:
-        raise ValueError(f"call {call} of {calls} in forward {forward}")
+        raise Refused(f"call {call} of {calls} in forward {forward}")
     return forward * calls + call
 
 
 def words_position(forward: int) -> int:
+    """The forward's words instance position, 2^63 + f."""
     if not 0 <= forward < WORDS_POSITION:
-        raise ValueError(f"forward {forward}")
+        raise Refused(f"forward {forward}")
     return WORDS_POSITION + forward
 
 
@@ -142,5 +155,74 @@ def subtree(dom: CommitmentDomain, schema: str, values: Sequence[bytes]) -> Subt
 
 
 def keyed_root(ks_w: bytes, salt_w: bytes, sub: Subtree) -> bytes:
-    """STUB: the instance's keyed root d = SHA-512(ks_w || salt_w || M_top), M_top the subtree root's frame-v3 message."""
-    raise NotImplementedError("the keyed root waits on its byte layout (verity.ml.commitments.keyed)")
+    """The instance's public digest d = SHA-512(ks_w || salt_w || M_top), M_top the subtree root's frame-v3 message."""
+    return keyed.digest(ks_w, salt_w, keyed.top_message(sub.dom, sub.schema, sub.values, sub.levels))
+
+
+def key_leaf(ks_w: bytes, y0: bytes) -> bytes:
+    """keyLeaf: ks_w's hm96-sha512 tree leaf under the salt y0 (``KEY_SALT_BYTES`` OS bytes)."""
+    H = hm96.SHA512
+    return H.tree_leaf(H.default_key, H.commit_string(H.default_key, ks_w, y0))
+
+
+class Window:
+    """One window's keyed digests.  ``calls`` (calls a forward) is fixed here.  :meth:`register` gives what the challenger
+    records: the weights' root, keyLeaf and ``calls``.  :meth:`open` then takes salt_w.  Then :meth:`a_root` and
+    :meth:`words_root` key one digest at each position.  ks_w and y0 are fresh OS bytes unless given, and ks_w is never
+    published."""
+
+    def __init__(self, calls: int, *, ks_w: bytes | None = None, y0: bytes | None = None) -> None:
+        if type(calls) is not int or not 1 <= calls < WORDS_POSITION:
+            raise Refused(f"a window of {calls} calls a forward")
+        ks_w = os.urandom(keyed.KEY_BYTES) if ks_w is None else bytes(ks_w)
+        y0 = os.urandom(KEY_SALT_BYTES) if y0 is None else bytes(y0)
+        if len(ks_w) != keyed.KEY_BYTES or len(y0) != KEY_SALT_BYTES:
+            raise Refused(f"ks_w is {keyed.KEY_BYTES} bytes and y0 {KEY_SALT_BYTES}")
+        self._calls, self._ks_w, self._key_leaf = calls, ks_w, key_leaf(ks_w, y0)
+        self._weights: bytes | None = None
+        self._salt_w: bytes | None = None
+        self._digests: dict[int, bytes] = {}
+
+    @property
+    def calls(self) -> int:
+        return self._calls
+
+    @property
+    def key_leaf(self) -> bytes:
+        return self._key_leaf
+
+    def register(self, weights_root: bytes) -> tuple[bytes, bytes, int]:
+        """The window's registration, recorded with the challenger before it draws salt_w."""
+        if self._weights is not None:
+            raise Refused("a window is registered once")
+        self._weights = bytes(weights_root)
+        return self._weights, self._key_leaf, self._calls
+
+    def open(self, salt_w: bytes) -> None:
+        """Take the window's live salt, drawn after its registration was recorded."""
+        if self._weights is None:
+            raise Refused("salt_w before keyLeaf, the weights' root and the call count are recorded")
+        if self._salt_w is not None:
+            raise Refused("a second salt_w in the window")
+        if len(salt_w) != keyed.KEY_BYTES:
+            raise Refused(f"salt_w is {keyed.KEY_BYTES} bytes")
+        self._salt_w = bytes(salt_w)
+
+    def a_root(self, forward: int, call: int, a: bytes) -> bytes:
+        """root(A_j): the keyed digest of the call's A, in ``A_SEGMENT``-byte segments, at f calls + j."""
+        return self._keyed(a_position(forward, self._calls, call), A_SCHEMA, a_segments(a))
+
+    def words_root(self, forward: int, calls: Sequence[bytes]) -> bytes:
+        """The forward's words root: the keyed digest of its calls' committed streams, in call order, at 2^63 + f."""
+        if len(calls) > self._calls:
+            raise Refused(f"{len(calls)} calls' words in a window of {self._calls} calls a forward")
+        return self._keyed(words_position(forward), WORDS_SCHEMA, words_values(calls))
+
+    def _keyed(self, position: int, schema: str, values: list[bytes]) -> bytes:
+        if self._salt_w is None:
+            raise Refused("a keyed digest before salt_w")
+        if position in self._digests:
+            raise Refused(f"a second keyed digest at position {position} in the window")
+        d = keyed_root(self._ks_w, self._salt_w, subtree(instance_domain(self._salt_w, position, len(values)), schema, values))
+        self._digests[position] = d
+        return d

@@ -193,6 +193,122 @@ def test_hashing_meets_commit_l1w_credit():
         assert sum((len(x) + 17 + 127) // 128 for x in msgs) >= floor
 
 
+def test_a_leafs_message_holds_its_rank_and_position():
+    """Each leaf of ``subtree`` is SHA-512 of its frame-v3 message, built here byte by byte: the frame, the tag, the domain id
+    and then u64be-length-framed uint(rank), uint(position), the schema and the value, at ranks of one and two bytes."""
+    n = 300
+    dom = L.instance_domain(SALT, L.a_position(1, 64, 2), n)
+    values = [r.to_bytes(2, "big") * 4 for r in range(n)]
+    sub = L.subtree(dom, L.A_SCHEMA, values)
+    frame = b"veritor/protocol/merkle/frame/v3\0" + (4).to_bytes(4, "big") + b"leaf"
+    for r in (0, 1, 7, 255, 256, 299):
+        u = r.to_bytes(max(1, (r.bit_length() + 7) // 8), "big")
+        parts = (dom.domain_id, u, u, L.A_SCHEMA.encode(), values[r])
+        message = frame + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
+        assert sub.levels[0][r] == hashlib.sha512(message).digest()
+        assert message[121:121 + len(u)] == u == message[129 + len(u):129 + 2 * len(u)]
+
+
+def _label(name: str, n: int) -> bytes:
+    label = f"lead/keyed/vector/{name}".encode()
+    return b"".join(hashlib.sha512(label + i.to_bytes(8, "big")).digest() for i in range(-(-n // 64)))[:n]
+
+
+KS_W, SALT_W = hashlib.sha512(b"lead/keyed/vector/ks_w").digest(), hashlib.sha512(b"lead/keyed/vector/salt_w").digest()
+WEIGHTS = hashlib.sha512(b"lead/keyed/vector/weights").digest()
+
+
+def _window(calls: int = 64) -> L.Window:
+    return L.Window(calls, ks_w=KS_W, y0=_label("y0", L.KEY_SALT_BYTES))
+
+
+def test_window_reproduces_the_keyed_vectors():
+    """``verity.ml.commitments.keyed``'s vectors through the committer: keyLeaf, d(A_j) at f 3, calls 64, j 5 over 2 rows of K
+    2048 (4 segments), the forward's words over two calls (chunks of 65,536, 65,536, 32,768 and 1,024 words), and a one-leaf
+    A at j 7."""
+    w = _window()
+    reg = w.register(WEIGHTS)
+    assert reg == (WEIGHTS, w.key_leaf, 64)
+    assert w.key_leaf.hex() == ("e121d1ae87e74b21ddb3585cff79d9c21aac50281d5e3a77fa18453007ae3f8d1315a9b3c0dda315ed6e199f57f62a9dee19a9fa4fcd25ac"
+                                "67be7c612672c095")
+    w.open(SALT_W)
+    a = _label("a", 4096)
+    assert w.a_root(3, 5, a).hex() == ("3bf65c529446a801fb137bc9eae0bae2c005c7d79fc48cd7b1a33b48e4dbf64a059f7100b300cb6f52d1d8ad39278e800c9"
+                                       "4f2d0c5b010af31d49817ec11f4c1")
+    words = [_label("words/0", 655360), _label("words/1", 4096)]
+    assert w.words_root(3, words).hex() == ("d6776c42b1346f3ace17242764e08fcb23621d8adc544d190e197266a069f51d933b859b783b990cba2a1d3ee4226a"
+                                            "92f8298acb94ec3caa003e4dbaae93b9d3")
+    assert w.a_root(3, 7, a[:1024]).hex() == ("21ea90132419867d07995334c4021454dfcfe7ca594854e590049bca06089ed7618b6b94bd53c5c0cabdf425308480"
+                                              "f464f1a22b8919e6e6a062514c74ecc12e")
+
+
+def test_window_refuses_a_second_digest_at_a_position():
+    w = _window()
+    w.register(WEIGHTS)
+    w.open(SALT_W)
+    first = w.a_root(0, 1, b"\x01" * 2048)
+    for again in (lambda: w.a_root(0, 1, b"\x01" * 2048), lambda: w.a_root(0, 1, b"\x02" * 64)):
+        with pytest.raises(L.Refused):
+            again()
+    w.words_root(0, [b"\x03" * 512])
+    with pytest.raises(L.Refused):
+        w.words_root(0, [b"\x04" * 512])
+    assert w.a_root(0, 2, b"\x01" * 2048) != first
+
+
+def test_window_refuses_positions_outside_its_injective_map():
+    """Positions f calls + j with j < calls and f calls + j < 2^63 are distinct and below every words position 2^63 + f; the
+    window refuses a call count, a call or a forward outside them."""
+    for calls in (0, -1, 1 << 63, 2.0):
+        with pytest.raises(L.Refused):
+            L.Window(calls)
+    calls = 5
+    positions = {L.a_position(f, calls, j) for f in range(7) for j in range(calls)}
+    assert positions == set(range(7 * calls)) and max(positions) < L.words_position(0)
+    w = _window(calls)
+    w.register(WEIGHTS)
+    w.open(SALT_W)
+    for f, j in ((0, calls), (0, -1), (-1, 0), (((1 << 63) - 1) // calls, calls - 1), ((1 << 63) // calls + 1, 0)):
+        with pytest.raises(L.Refused):
+            w.a_root(f, j, b"\x05" * 64)
+    for f in (-1, 1 << 63):
+        with pytest.raises(L.Refused):
+            w.words_root(f, [b"\x06" * 64])
+    with pytest.raises(L.Refused):
+        w.words_root(0, [b"\x06" * 64] * (calls + 1))
+    assert w.a_root(((1 << 63) - 1) // calls - 1, calls - 1, b"\x05" * 64)
+    assert w.words_root(0, [b"\x06" * 64] * calls)
+
+
+def test_window_refuses_salt_w_before_its_registration():
+    w = _window()
+    with pytest.raises(L.Refused):
+        w.open(SALT_W)
+    with pytest.raises(L.Refused):
+        w.a_root(0, 0, b"\x07" * 64)
+    w.register(WEIGHTS)
+    with pytest.raises(L.Refused):
+        w.a_root(0, 0, b"\x07" * 64)
+    with pytest.raises(L.Refused):
+        w.open(SALT_W[:32])
+    w.open(SALT_W)
+    for late in (lambda: w.open(SALT_W), lambda: w.register(WEIGHTS)):
+        with pytest.raises(L.Refused):
+            late()
+    with pytest.raises(AttributeError):
+        w.calls = 65
+    assert w.a_root(0, 0, b"\x07" * 64)
+
+
+def test_windows_with_fresh_keys_differ():
+    a, b = L.Window(4), L.Window(4)
+    assert a.key_leaf != b.key_leaf
+    for w in (a, b):
+        w.register(WEIGHTS)
+        w.open(SALT_W)
+    assert a.a_root(0, 0, b"\x08" * 1024) != b.a_root(0, 0, b"\x08" * 1024)
+
+
 def test_instance_domains():
     dom = L.instance_domain(SALT, L.a_position(3, 64, 63), 5)
     assert dom == CommitmentDomain(hashlib.sha512(L.BINDING_TAG + SALT + (3 * 64 + 63).to_bytes(8, "big")).digest(), -1,
