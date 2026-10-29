@@ -1,13 +1,9 @@
-"""`sketch-sha512`: the remote bandwidth driver's second receipt kind, a pass-keyed ±1 sketch of each chunk and SHA-512
-over the sketch, in place of SHA-512 over the chunk (`receipts.Receipter`). Leaves, salts and the tree are the
-driver's own (`hm96-sha512/row/v2`, frame-v3-sha512): a `SketchReceipter` drops in where a `Receipter` goes, and
-`receipts.tree` and `receipts.verify_leaf` take its receipts unchanged.
+"""sketch-sha512 on the device: how the weight GEMM's sketch warps (wt.cu) and attention's form 13 (kv.cu) lay out the
+remote bandwidth driver's signs over the store's chunks. The receipt, its signs, σ and y, is
+`receipts.SketchReceipter`'s: `sign_bits` and `signs` are its signs as arrays, and `sketches` and `receipts_of` its σ
+and its y over many chunks.
 
 ~~~text
-S_i      k_s × 4096 signs of pass i (k_s = 16, or 64 for a chunk's 2^−64): K = derive(seed_i, SIGN_DOMAIN, {"tag":
-         KIND, "k": k_s, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB
-         first) 1 → −1, 0 → +1; re-keyed every pass by the chained seed, so no sketch exists before the previous
-         pass's root
 E_j      the store's chunk j, its 4096 bytes 4096 j … in store order, whole codec words (the registration's layout,
          store-order/v0). A weight GEMM's store (wt.cu's fused decode GEMM, SB = 8192 bytes a task at p1024 and p512)
          is two chunks a task, task q's halves chunks 2 q and 2 q + 1 (`gemm_blocks`), so a launch receipts its own
@@ -16,19 +12,10 @@ E_j      the store's chunk j, its 4096 bytes 4096 j … in store order, whole co
          token-layer (kv.cu at 128-byte words: 32 words, 4 KiB, whole), and attention (kv_attn form 13) sketches it
          a KV head's 4 words at a time, a token a B column, A the signs at those words' positions
          (`kv_fragment_sketch`), the 8 heads' shares summed before the hash
-e_j      E_j ⊕ spread(z_(i,j)), its 4096 bytes as int8
-σ_j      S_i · e_j over the integers (|σ_j[c]| ≤ 2^19), k_s int32 little-endian: 64 bytes at 16 rows
-y_(i,p)  SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_j),  j = plan_i[p]: one compression after the
-         seed's block at 16 rows (72 bytes, 200 in all), three at 64 (264 bytes),
-         SKETCH_RECEIPT_DOMAIN = "verity/remote-bandwidth/sketch-receipt/v0\0"
 ~~~
-
-Its soundness rests on the sketch (`RateAuditSketch`), which the full-block receipt does not need: a chunk that
-differs from E_j ⊕ spread(z) passes a row with probability at most 1/2 over S_i, all k_s with at most 2^−k_s.
 """
 from __future__ import annotations
 
-import hashlib
 import sys
 from pathlib import Path
 
@@ -37,16 +24,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity.ml.randomness import derive, frame
 
-KIND = "sketch-sha512"
-SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
-SKETCH_RECEIPT_DOMAIN = b"verity/remote-bandwidth/sketch-receipt/v0\0"
-ROWS = 16
-BLOCK = 4096
+ROWS, ROWS64 = rb.ROWS                    # k_s: the 16-row kernels' and the 64-row ones'
+BLOCK = rb.BLOCK_BYTES
 LANES = 32
 SK_G = 4                                  # receipt_warp's tasks a group: 2 SK_G chunks, mma.m16n8k32's B columns
-ROWS64 = 64
 SIGN_WORDS = ROWS * BLOCK // 32           # a WT_RECEIPT pass's signs (`sign_words`)
 FRAG_WORDS = 2 * SIGN_WORDS               # receipt_warp's selectors (`sign_frags`)
 PLANE_WORDS = ROWS64 * BLOCK // 32        # receipt_warp's bit planes at 64 rows (`sign_planes`)
@@ -56,10 +38,8 @@ KV_STEPS = KV_WORD // 8                   # its k-steps a tile: 8 bytes of each 
 
 
 def sign_bits(seed: bytes, rows: int = ROWS) -> np.ndarray:
-    """S_i's sign bits, rows × 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where S_i[c][u] = −1. A sketch
-    of k_s = rows (16, or 64 for a chunk's 2^−64) derives its own matrix, the key binding k."""
-    key = derive(rb._digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": KIND, "k": rows, "n": BLOCK})
-    return np.stack([np.frombuffer(key.stream(("row", c), BLOCK // 8), np.uint8) for c in range(rows)])
+    """`receipts.sign_bits` as rows × 512 bytes: bit u of row c (byte u // 8, LSB first) is 1 where S_i[c][u] = −1."""
+    return np.array([np.frombuffer(r, np.uint8) for r in rb.sign_bits(seed, rows)])
 
 
 def signs(seed: bytes, rows: int = ROWS) -> np.ndarray:
@@ -68,18 +48,12 @@ def signs(seed: bytes, rows: int = ROWS) -> np.ndarray:
     return (1 - 2 * bits.astype(np.int8)).astype(np.int8)
 
 
-def sketch(s: np.ndarray, block: bytes, z: bytes) -> bytes:
-    """σ_j's 4 k_s bytes: S_i (`signs`) times E_j ⊕ spread(z) as int8, k_s int32 little-endian."""
-    if type(block) is not bytes or len(block) != BLOCK:
-        raise ValueError(f"a block is {BLOCK} bytes")
-    e = np.frombuffer(rb._xor(block, rb.spread(z)), np.int8).astype(np.int64)
-    return (s.astype(np.int64) @ e).astype("<i4").tobytes()
-
-
-def sketches(s: np.ndarray, blocks: np.ndarray) -> np.ndarray:
-    """σ of many already-masked chunks at once (n × 4096 uint8 or int8): n × k_s int32."""
-    e = np.asarray(blocks).view(np.int8).reshape(-1, BLOCK).astype(np.int64)
-    return (e @ s.astype(np.int64).T).astype("<i4")
+def sketches(seed: bytes, blocks: np.ndarray, rows: int = ROWS) -> np.ndarray:
+    """σ of already-masked chunks (n × 4096 bytes) under pass `seed`'s signs at k_s = `rows`, n × k_s int32:
+    `receipts.SketchReceipter.sketch` of each."""
+    r = rb.SketchReceipter(seed, rows)
+    e = np.ascontiguousarray(blocks).view(np.uint8).reshape(-1, BLOCK)
+    return np.frombuffer(b"".join(r.sketch(x.tobytes()) for x in e), "<i4").reshape(-1, rows)
 
 
 def sign_words(bits: np.ndarray) -> np.ndarray:
@@ -322,33 +296,9 @@ def kv_vectors(slots: int, layers: int, w0: int = 0) -> np.ndarray:
     return out
 
 
-def prefix(seed: bytes) -> bytes:
-    """`Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed))`, one SHA-512 block."""
-    body = SKETCH_RECEIPT_DOMAIN + frame(rb._digest(seed, "a pass seed"))
-    return body + bytes(-len(body) % 128)
-
-
-def receipt_of(head, j: int, sigma: bytes) -> bytes:
-    """y from the seed block's hash state `head` (`hashlib.sha512(prefix(seed))`), index j and σ_j's bytes."""
-    if type(j) is not int or not 0 <= j < 1 << 64:
-        raise ValueError("a block index is a u64")
-    h = head.copy()
-    h.update(j.to_bytes(8, "big") + sigma)
-    return h.digest()
-
-
 def receipts_of(seed: bytes, sk: np.ndarray, j0: int) -> list[bytes]:
-    """y of chunks j0, j0 + 1, … from their sketches (n × k_s integers)."""
-    head, w = hashlib.sha512(prefix(seed)), np.asarray(sk).astype("<i4")
-    return [receipt_of(head, j0 + v, w[v].tobytes()) for v in range(w.shape[0])]
-
-
-class SketchReceipter:
-    """Sketch receipts under one pass's seed: `receipter(j, block, z)` is `y_(i,j)`, as `receipts.Receipter`'s."""
-
-    def __init__(self, seed: bytes, rows: int = ROWS) -> None:
-        self.signs = signs(seed, rows)
-        self.head = hashlib.sha512(prefix(seed))
-
-    def __call__(self, j: int, block: bytes, z: bytes) -> bytes:
-        return receipt_of(self.head, j, sketch(self.signs, block, z))
+    """y of chunks j0, j0 + 1, … from their sketches (n × k_s integers, a device's): `receipts.SketchReceipter.receipt`
+    of each."""
+    w = np.asarray(sk).astype("<i4")
+    r = rb.SketchReceipter(seed, w.shape[1])
+    return [r.receipt(j0 + v, w[v].tobytes()) for v in range(w.shape[0])]
