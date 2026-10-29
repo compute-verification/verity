@@ -411,11 +411,11 @@ RULES = [Rule(p, b, a) for p, b, a in itertools.product(
 
 
 def instances(quick: bool):
-    S_set = [64] if quick else [64, 256]
+    S_set = [64] if quick else [64, 256, 1024]
     q_set = [1, 4] if quick else [1, 2, 4, 8]
-    seeds = [0] if quick else [0, 1]
-    for S, q, data, rec, seed in itertools.product(S_set, q_set, ["zero", "random"], ["add", "mul"], seeds):
-        yield Inst(64, 16, S, q, data, rec, seed)
+    for S, q, data, rec, seed in itertools.product(S_set, q_set, ["zero", "random"], ["add", "mul"], [0, 1]):
+        if not (quick and seed) and not (S == 1024 and seed):
+            yield Inst(64, 16, S, q, data, rec, seed)
 
 
 def mutations(checks: Checks):
