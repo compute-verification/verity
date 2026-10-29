@@ -7,9 +7,9 @@ import Proofs.Hash.Bytes
 
 The honest strategy writes each committed tile once with one `other` instruction a word, hashes the commitment's
 messages with one `other` instruction a credited register, registers the commitment's root and exchanges nothing. For
-every coin stream and every commitment format it meets every premise of `G` but `CommitL1w` and is accepted at every
-coin value (`honestAt`): the stream enters only the memory the run starts from, and the honest run writes every
-committed tile. So the honest lemma holds at every stream and every commitment meeting `CommitL1w` (`honestOfCommit`),
+every coin stream and every commitment format it meets every premise of `G` but `CommitL1w`, and at an admitted call
+(`Layout.Admits`) it is accepted at every coin value (`honestAt`): the stream enters only the memory the run starts
+from, and the honest run writes every committed tile. So the honest lemma holds at every stream and every commitment meeting `CommitL1w` (`honestOfCommit`),
 and at a deployed instance it is `CommitL1w` at the deployed commitment. That holds where the commitment's messages
 include frame-v3 leaves, at ranks below `2^64`, over the words' bytes in the lead's chunks and over A's rows
 (`commitL1w_of_leaves`): a frame leaf carries its domain's id and its rank (`leafMsg_id_inj`, `leafMsg_rank_inj`), so
@@ -28,11 +28,6 @@ theorem regCount_other {G : Type} (P : List (Op100 G)) (h : ∀ o ∈ P, ∃ f, 
   unfold regCount
   rw [List.map_congr_left fun o ho => show Pouw.Lead.Op100.regs o = 1 by obtain ⟨f, rfl⟩ := h o ho; rfl]
   simp
-
-/-- A run's last write is what its slot holds. -/
-theorem run_write_last {A V : Type} [DecidableEq A] {w : ℕ} (m₀ : A → Fin w → V) (P : List (Step A V w)) (a : A)
-    (p : Fin w) (v : V) : run m₀ (P ++ [.write a p v]) a p = v := by
-  simp [run, List.foldl_append, Step.apply]
 
 /-- The committed tiles at `ω`, in `tileIdx`'s order. -/
 noncomputable def tilesAt (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) :
@@ -75,9 +70,10 @@ theorem honest_trace_other (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest)
 /-- **The honest strategy meets `G`'s premises but `CommitL1w`**, at every layout, hash, data, coin stream,
 commitment format and form classifier: with `Real` the honest strategy alone, the nominal W1 table meets `H32`
 (`h32Sat`), the strategy meets `W1`, `TileGrain`, `OneInstructionMinimal`, `CardWithinAccelW1`, `ShaWrites`,
-`HonestHashRuled` and `OutsourceWithinEgressLead` (it is its own twin), and it is accepted at every coin value. -/
+`HonestHashRuled` and `OutsourceWithinEgressLead` (it is its own twin), and at an admitted call it is accepted at every
+coin value. -/
 theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
-    (stream : CoinStream L) (C : Pouw.Lead.Commit L) (isA : Hash.Msg → Bool) :
+    (stream : CoinStream L) (C : Pouw.Lead.Commit L) (isA : Hash.Msg → Bool) (hadm : L.Admits) :
     H32 h100Nominal ∧ W1 h100Nominal (· = honestStrategy L H C isA κ) ∧
       TileGrain H C κ stream (· = honestStrategy L H C isA κ) ∧ OneInstructionMinimal (· = honestStrategy L H C isA κ) ∧
       CardWithinAccelW1 (· = honestStrategy L H C isA κ) (· = honestStrategy L H C isA κ) ∧
@@ -91,12 +87,7 @@ theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin
     trivial
   · rintro σ rfl ω - - rb hrb cb hcb t
     have hy : tileOf L κ ω rb cb t ∈ tilesAt L κ ω := List.mem_map.2 ⟨(rb, cb, t), by simp [tileIdx, hrb, hcb], rfl⟩
-    obtain ⟨i, hi, hiy⟩ := List.getElem_of_mem hy
-    refine ⟨i + 1, .inl 0, ?_⟩
-    rw [← hiy]
-    simp only [honestStrategy]
-    rw [← List.map_take, List.take_add_one, List.getElem?_eq_getElem hi, Option.toList_some, List.map_append,
-      List.map_singleton, run_write_last]
+    exact Or.inl ⟨.inl 0, 0, List.mem_map.2 ⟨_, hy, rfl⟩⟩
   · rintro σ rfl ω
     rw [regCount_other _ (honest_trace_other L H C isA κ ω)]
     simp only [honestStrategy, writes, List.map_map, Function.comp_def, Step.cost, List.length_append,
@@ -112,7 +103,7 @@ theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin
     have : ((honestStrategy L H C isA κ).exec ω).egress = 0 := rfl
     rw [this, Nat.cast_zero, mul_zero, add_zero]
   · intro ω
-    refine ⟨rfl, ?_⟩
+    refine ⟨hadm, rfl, ?_⟩
     show ((0 : ℕ) : ℚ) ≤ _
     unfold Layout.callBits
     push_cast
@@ -281,20 +272,20 @@ theorem commitL1w_of_leaves {L : Pouw.Lead.Layout} (H : Hash.Msg → Hash.Digest
     have : (0 : ℚ) ≤ ka := Nat.cast_nonneg _
     linarith
 
-/-- **The honest lemma at every coin stream and every commitment meeting `CommitL1w`**: at every call, for every coin
-stream, commitment format and form classifier meeting `CommitL1w`, some set of strategies meets every premise of `G`
-and holds an honest strategy accepted at every coin value. At the protocol's stream and commitment it is the honest
-lemma at the deployed instance, given `CommitL1w` there. -/
+/-- **The honest lemma at every coin stream and every commitment meeting `CommitL1w`**: at every admitted call, for
+every coin stream, commitment format and form classifier meeting `CommitL1w`, some set of strategies meets every
+premise of `G` and holds an honest strategy accepted at every coin value. At the protocol's stream and commitment it is
+the honest lemma at the deployed instance, given `CommitL1w` there. -/
 theorem honestOfCommit (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
-    (hC : CommitL1w H C isA κ) :
+    (hC : CommitL1w H C isA κ) (hadm : (lead T m n K).Admits) :
     ∃ (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
       CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain H C κ stream Real ∧
       OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧ HonestHashRuled H C κ Real ∧
       OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) C) H C κ Real ∧ Real σ ∧
       ∀ ω, Accepted (lead T m n K) H C κ σ ω :=
-  ⟨_, _, hC, honestAt (lead T m n K) H κ stream C isA⟩
+  ⟨_, _, hC, honestAt (lead T m n K) H κ stream C isA hadm⟩
 
 /-! ## At a stand-in commitment -/
 
@@ -336,9 +327,9 @@ theorem commitL1w_oneMsg (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (
   linarith
 
 /-- **The honest lemma** (`Pouw.Guarantees.Lead.Honest`): `honestAt` at the one-message commitment, which meets
-`CommitL1w` (`commitL1w_oneMsg`), and the empty stream. -/
-theorem honest : Pouw.Guarantees.Lead.Honest := fun T m n K H κ =>
+`CommitL1w` (`commitL1w_oneMsg`), and the empty stream, at every admitted call. -/
+theorem honest : Pouw.Guarantees.Lead.Honest := fun T m n K H κ hadm =>
   ⟨noStream _, oneMsgCommit _, fun _ => false,
-    honestOfCommit T m n K H κ (noStream _) (oneMsgCommit _) (fun _ => false) (commitL1w_oneMsg _ H κ)⟩
+    honestOfCommit T m n K H κ (noStream _) (oneMsgCommit _) (fun _ => false) (commitL1w_oneMsg _ H κ) hadm⟩
 
 end Pouw.SecurityProofs.Lead.Compose

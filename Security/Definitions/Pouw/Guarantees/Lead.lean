@@ -11,17 +11,20 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   or one of those values' executions hashed a SHA-512 collision with the honest commitment. With `O` every coin value,
   it is the average: `E_ω[work] ≥ honest − gap`. The gap is `gapRegs`, a defined function of the layout. An
   accepted call exchanges at most its share of its forward's egress cap (`Layout.callBits`), so a forward's network
-  terms sum to at most its cap's. Acceptance is what the verifier sees, the honest root registered within the call's
-  bits, so `G` is conditional on the registered root being the honest one.
+  terms sum to at most its cap's. Acceptance is what the verifier sees: a call it admits (`Layout.Admits`: an inner
+  dimension of at least 1 and at most `2^40` MMA tiles; it refuses every other call), the honest root registered
+  within the call's bits. So `G` is conditional on the registered root being the honest one.
 * `GapAt`: the gap's share of stock at T 512 × 64, T 512 × 512 and T 8,192, for every call of `n, K ≥ 4,096`, at cap
   32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.513%, 0.491% and 0.488%. At these points
   every row is served, and stock and served compute differ only by the padding of `n` to a multiple of 8.
 * `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), the gap is at most 3.71% of served compute (the unpadded
   MACs, `servedRegs`) at cap 32 and 4.03% at cap 320. Served compute is what credit counts, so this is decode's
   figure; the share of the padded stock, 0.231% and 0.252%, counts 15 padding rows as compute and is secondary.
-* `Honest`: the hypotheses are jointly satisfiable at every call: the nominal W1 table, and some coin stream,
-  commitment format and set of strategies meeting every premise, with an honest strategy accepted at every coin value.
-  The commitment format is existential, so `Honest` does not say the served format meets `CommitL1w`.
+* `Honest`: the hypotheses are jointly satisfiable at every call the verifier admits: the nominal W1 table, and some
+  coin stream, commitment format and set of strategies meeting every premise, with an honest strategy accepted at
+  every coin value. The commitment format is existential, so `Honest` does not say the served format meets
+  `CommitL1w`. Every call of at most `2^15` rows, `2^20` columns and an inner dimension from 1 to `2^16` is admitted
+  (`Statement.admits_of_caps`), Llama-3.2-1B's included.
 * `Nontrivial`: the conclusion fails for a verifier that accepts everything: at the three points the honest work
   exceeds the gap, and a strategy that does nothing does no work and hashes nothing.
 -/
@@ -34,7 +37,8 @@ open Pouw.Lead Pouw.Assumptions.Lead Pouw.Dimension.H100
 `m × K × n` at `T` tokens (every call, decode included: `lead` commits it over whole MMA tiles), data `κ`, certifier's
 coin stream `stream`, commitment format `C` with its form classifier `isA` and set `Real` of the strategies the node
 can run, under the named premises (an exchanged bit replacing at most `betaLead`), every strategy `σ` the node's
-processors run (`can`) and every set `O` of coin values on which its call is accepted (within the call's bits) has
+processors run (`can`) and every set `O` of coin values on which its call is accepted (a call the verifier admits,
+within its bits) has
 `Σ_{ω ∈ O} work(ω) ≥ 32 · (|O| · honestRegs − |Ω| · gapRegs)`, or at some `ω ∈ O` its execution hashed a SHA-512
 collision with the honest commitment's messages. -/
 def G : Prop :=
@@ -80,12 +84,13 @@ def GapAtDecode : Prop :=
     (∀ C : Pouw.Lead.Commit (lead320 T 1 n K), ChunksOf _ C →
       gapServed _ C ≤ 403 / 10000 ∧ gapShare _ C ≤ 252 / 100000)
 
-/-- **The honest lemma**: at every call of the lead, the hypotheses are jointly satisfiable: the nominal W1 table meets
-`H32`, and for some coin stream, commitment format and set of strategies every premise of `G` holds, with an honest
-strategy accepted at every coin value. The stream and the format are existential, not the protocol's. -/
+/-- **The honest lemma**: at every call of the lead the verifier admits (`Layout.Admits`), the hypotheses are jointly
+satisfiable: the nominal W1 table meets `H32`, and for some coin stream, commitment format and set of strategies every
+premise of `G` holds, with an honest strategy accepted at every coin value. The stream and the format are existential,
+not the protocol's. -/
 def Honest : Prop :=
   ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
-    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ), (lead T m n K).Admits →
     ∃ (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
       (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
       CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain H C κ stream Real ∧

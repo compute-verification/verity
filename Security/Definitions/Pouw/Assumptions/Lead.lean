@@ -11,9 +11,10 @@ with its claim id; a `(proposed)` id is not yet in `verity.core.claims`.
 
 The device and model premises:
 * `W1`: the node's instructions are `MH100w`'s, priced by the W1 table, with no free value at a coin value.
-* `TileGrain` (CopyGrain at the tile width, under model W): an execution that hashes the honest words produces every
-  committed tile in its run at tile grain. Acceptance is only what the verifier sees (`Accepted`), so the copy model
-  is carried here alone.
+* `TileGrain` (CopyGrain at the tile width, under model W): an execution that hashes the honest words writes each
+  committed tile it doesn't start with as one whole-tile write, its words at any points of the execution (they need
+  never be in memory together). Acceptance is only what the verifier sees (`Accepted`), so the copy model is carried
+  here alone.
 * `OneInstructionMinimal`: each word written and each compression register is its own register of the trace.
 * `CardWithinAccelW1`: every strategy the node's processors run, hosts counted, is in `Real`.
 * `ShaWrites`: a SHA-512 compression writes about 3,500 registers, credited per form.
@@ -49,21 +50,32 @@ def W1 (pr : Prices100) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, ∀ o ∈ (σ.exec ω).trace, o.WFw pr ∅
 
 /-- `pouw-tile-grain` (proposed; CopyGrain at the tile width, under model W). **An execution that hashes the honest
-words produces every committed tile at tile grain**: at a coin value where a realizable strategy exchanges nothing and
-hashes every message of the honest commitment of the call's words, its run (`Exec.steps`, from the pre-coin tables
-and the coin stream) holds each committed MMA tile (`tileOf`) at some point. The run is the premise's account of the
-work, not the node's memory: SHA-512 reads 128-byte blocks, so an execution can hash every word without holding a
-whole tile at once, and the run counts the tile's words as its write. The run's only free step is a whole MMA tile's
-copy (`tileWords` words); writing any word of a tile writes the tile (model W at the tile's width).
+words writes each committed tile it doesn't start with, as a whole tile**: at a coin value where a realizable strategy
+exchanges nothing and hashes every message of the honest commitment of the call's words, each committed MMA tile
+(`tileOf`, 16 rows × 8 columns) is the value of one of its run's write steps (`Exec.steps`), or a tile of the pre-coin
+tables or the coin stream it starts from (`Strategy.init`).
 
-Rationale: the messages carry every committed word, so with no link out the node computed them; on the measured
-kernels a reuse saves time only where a whole MMA tile (16 rows × 8 columns) repeats. This is the copy model, one
-line to change. -/
+* No tile need ever be in memory whole. A write step is the execution's writing of the tile's `tileWords` words, at
+  any points of the execution and in any order (SHA-512 reads 128-byte blocks, so it can hash the words as it writes
+  them), and `OneInstructionMinimal` charges it `tileWords` registers. That the run holds the tile in some slot at some
+  point says exactly the same (`CoinBranch.holds_iff`): copies create no value.
+* It says more than "each committed word is written at some point". A tile is free only as a copy of one whole tile
+  the execution already wrote or started with; a tile with any other word is charged whole (model W at the tile's
+  width), so patching an earlier tile costs the tile. With words written one at a time and tiles copied free, a run
+  need write only the call's new (position, value) pairs (`Pouw.Dimension.Pointwise.run_pairs_le`, which patching
+  attains): a tile that agrees with an earlier one in most positions would be mostly free, and the copy argument
+  (`CoinBranch.distinct_le_writes`) would not follow.
+
+Rationale: the messages carry every committed word, so with no link out the node computed them. A whole-tile copy is
+the reuse the premise leaves free. Partial reuse is charged whole because on the lead's words it doesn't pay once the
+choice of the words to keep is priced: that backs the charge in effect, not to the letter, since at W1 one IADD
+patching one word writes one register. This is the copy model, one line to change. -/
 def TileGrain (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (stream : CoinStream L) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, (σ.exec ω).egress = 0 → (∀ y ∈ C.msgs H (word L κ ω), y ∈ (σ.exec ω).hashed) →
     ∀ rb < L.rowBlocks, ∀ cb < L.colBlocks, ∀ t : Fin L.S,
-      ∃ k a, run (σ.init stream ω) ((σ.exec ω).steps.take k) a 0 = tileOf L κ ω rb cb t
+      (∃ a p, Step.write a p (tileOf L κ ω rb cb t) ∈ (σ.exec ω).steps) ∨
+        ∃ a, σ.init stream ω a 0 = tileOf L κ ω rb cb t
 
 /-- `pouw-one-instruction-minimal` (proposed). **Each word written and each compression register is its own register
 of the trace**: at every coin value, a realizable strategy's run's tile writes (`tileWords` registers each) and its

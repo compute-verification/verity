@@ -12,17 +12,17 @@ import Proofs.Pouw.Lead.Network.Term
 `G`'s proof, at each accepted coin value with no break, on the egress-free twin (`OutsourceWithinEgressLead`), which
 is accepted where the original is (it registers its root and exchanges nothing) and hashed no collision where the
 original hashed none (beyond the original's, it hashes only the honest commitment's messages):
-1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so its run holds every committed
-   tile (`TileGrain`) and its whole-tile writes are at least the distinct
-   committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the committed
-   tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
+1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so each committed tile is one of
+   its run's whole-tile writes or a tile it starts with (`TileGrain`), and its whole-tile writes are at least the
+   distinct committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the
+   committed tiles less the repeats; the lead commits whole tiles, so their words are `m n S` (`perCoin`);
 2. its hashing credit is at least the honest commitment's (`HonestHashRuled` at egress 0, `Commit.hashed_credit_ge`),
    at least the honest compressions' (`CommitL1w`), and its compressions write that many registers (`ShaWrites`);
 3. `OneInstructionMinimal` and `MH100W.cost_ge_regs` (`W1`, `H32`) price those registers at 32 each (`perCoin`);
 4. summed over `O`, the repeats and table hits are at most `|Ω|` times `coinBranchGap` and `tableGap`
-   (`Tags.repeats_le`, `PStar.table_le`); the twin's saving is at most `betaLead` a bit the original exchanged, at
-   most `callBits` at an accepted value (`Accepted`), so `|O|` times `32 · networkGap`; and the head, hiding and `p*`
-   terms are nonnegative.
+   (`Tags.repeats_le` at the call `Accepted` admits, when `O` is nonempty; `PStar.table_le`); the twin's saving is at
+   most `betaLead` a bit the original exchanged, at most `callBits` at an accepted value (`Accepted`), so `|O|` times
+   `32 · networkGap`; and the head, hiding and `p*` terms are nonnegative.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -87,8 +87,8 @@ theorem G : Pouw.Guarantees.Lead.G := by
   obtain ⟨σ', hσ', -, htwin⟩ := hout σ (hcard σ hcan)
   have hacc' : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ' ω := fun ω hω => by
     obtain ⟨he, hr, -, -⟩ := htwin ω
-    obtain ⟨hroot, hbits⟩ := hacc ω hω
-    refine ⟨hr.trans hroot, ?_⟩
+    obtain ⟨hadm, hroot, hbits⟩ := hacc ω hω
+    refine ⟨hadm, hr.trans hroot, ?_⟩
     rw [he]
     exact (Nat.cast_nonneg _).trans hbits
   have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω hb => by
@@ -120,15 +120,18 @@ theorem G : Pouw.Guarantees.Lead.G := by
     have h1 := perCoin pr H T m n K κ stream C isA Real hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
       (hacc' ω hω) (hnb' ω hω)
     have h2 := (htwin ω).2.2.2
-    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2 hβ
+    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2.2 hβ
     rw [htw] at h1 ⊢
     linarith
   have hsum := Finset.sum_le_sum hstep
   simp only [Finset.sum_sub_distrib, ← Finset.mul_sum, Finset.sum_const, nsmul_eq_mul] at hsum
   have hrep : ∑ ω ∈ O, (tileWords * repeats (lead T m n K) κ ω : ℚ) ≤
-      Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) :=
-    (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
-      (Tags.repeats_le T m n K κ)
+      Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) := by
+    rcases O.eq_empty_or_nonempty with rfl | ⟨ω₀, hω₀⟩
+    · rw [Finset.sum_empty]
+      exact mul_nonneg (Nat.cast_nonneg _) (by unfold coinBranchGap stockRegs; positivity)
+    · exact (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
+        (Tags.repeats_le T m n K κ (hacc ω₀ hω₀).1)
   have htab : ∑ ω ∈ O, (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) ≤
       Fintype.card (Coins (lead T m n K)) * tableGap (lead T m n K) :=
     (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans

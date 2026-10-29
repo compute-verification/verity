@@ -1,27 +1,30 @@
 import Definitions.Pouw.Lead.Gap
 import Proofs.Pouw.Lead.Tags.Exact
+import Proofs.Pouw.Lead.Tags.Repeats
 
 /-!
 # Tag distinctness at tile grain, and the words' exactness
 
-`repeats_le`: committed tiles repeat rarely, so copying whole tiles saves at most the coin-branch term. `word_exact`:
-the served 32-bit register holds each committed word exactly (the served layout's completeness; `G` doesn't read it).
+`repeats_le`: at a call the verifier admits, committed tiles repeat rarely, so copying whole tiles saves at most the
+coin-branch term (`repeats_le_of`). `word_exact`: the served 32-bit register holds each committed word exactly (the
+served layout's completeness; `G` doesn't read it).
 
-`not_repeats_le`: as stated, `repeats_le` is false at `K = 0`, where stock and so `coinBranchGap` are zero while a
-32 × 8 call's two step-0 tiles agree at some coins.
+`not_repeats_le`: without the cap the bound is false at `K = 0`, where stock and so `coinBranchGap` are zero while a
+32 × 8 call's two step-0 tiles agree at some coins. So `Accepted` refuses such calls (`Layout.Admits`).
 -/
 
 namespace Pouw.SecurityProofs.Lead.Tags
 
 open Pouw.Lead
 
-/-- **Tiles repeat rarely**: for any data, the committed tiles less their distinct values, in words
-and averaged over the coins, are at most `coinBranchGap`. Reads `word`, `rowTag`, `colCode`, `rotWeight` and
-`tileOf`. -/
-theorem repeats_le (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ) :
+/-- **Tiles repeat rarely** at a call the verifier admits (`Layout.Admits`: an inner dimension of at least 1 and at
+most `2^40` tiles): for any data, the committed tiles less their distinct values, in words and averaged over the coins,
+are at most `coinBranchGap` (`repeats_le_of`). -/
+theorem repeats_le (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
+    (hadm : (lead T m n K).Admits) :
     ∑ ω : Coins (lead T m n K), (tileWords * repeats (lead T m n K) κ ω : ℚ) ≤
-      Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) := by
-  sorry
+      Fintype.card (Coins (lead T m n K)) * coinBranchGap (lead T m n K) :=
+  repeats_le_of T m n K κ hadm.1 (tileIdx_card _ ▸ hadm.2)
 
 /-- The coins with every tag weight and step-1 bit zero. -/
 def zeroTagCoins (L : Pouw.Lead.Layout) : Coins L := (fun _ _ => 0, fun _ _ => 0, fun _ _ => 3, fun _ _ _ _ => 0)
@@ -53,7 +56,7 @@ theorem word_zeroTagCoins (L : Pouw.Lead.Layout) (hS : L.S = 1) (i : Fin L.m) (h
   rw [Finset.sum_congr rfl fun τ _ => hterm τ, Finset.sum_const, Finset.card_univ, Fintype.card_fin, hS]
   ring
 
-/-- **`repeats_le` is false at `K = 0`**: stock and so `coinBranchGap` are zero, but at zero data and
+/-- **Without the cap, `repeats_le` is false at `K = 0`**: stock and so `coinBranchGap` are zero, but at zero data and
 `zeroTagCoins` the call's two step-0 tiles of a 32 × 8 call are both `−β − 16,383`. -/
 theorem not_repeats_le : ¬ ∀ (T m n K : ℕ)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),

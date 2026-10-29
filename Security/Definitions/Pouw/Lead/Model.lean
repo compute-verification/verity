@@ -12,19 +12,21 @@ an execution (`Exec`), so it may branch on the coins anywhere.
 * **An execution** carries
   - `trace`: the instructions it executes, in `MH100w`'s classes (`Op100 Unit`: at one coin value a register is a
     value), each at its W1 price. Its **priced W1 work** is `cost100 pr trace` (`Strategy.work`);
-  - `steps`: its effect on memory at the grain of an MMA tile (`tileWords` words, 16 rows × 8 columns), a run of the
-    chunk model (`Pouw.Dimension.Pointwise`) whose slots hold one tile: a write sets a whole tile and a copy moves one
-    free, from the pre-coin tables (within the node's memory) and the certifier's coin stream (`init`);
+  - `steps`: its account at the grain of an MMA tile (`tileWords` words, 16 rows × 8 columns), a run of the chunk
+    model (`Pouw.Dimension.Pointwise`) whose slots hold one tile, from the pre-coin tables (within the node's memory)
+    and the certifier's coin stream (`init`). A write step is the execution's writing of one tile's words, at any points
+    of the execution and in any order, so the words need never be in memory together; a copy moves a tile whole, free;
   - `shaRegs`: the registers its SHA-512 compressions write, and `hashed`, the messages it hashes;
   - `egress`: the bits it exchanges with machines outside the node, other than the certifier's coin stream;
   - `root`: the words' commitment it registers.
 * **The certifier's coin stream** (`CoinStream`): raw coins in a fixed arrangement, each coin once at most.
 * **The commitment format** (`Commit`): the messages the honest commitment of a call's words hashes (leaves and
   nodes), its root, and their SHA-512 compressions.
-* **Accepted** (`Accepted`): what the verifier sees. The execution registers the honest commitment's root and
-  exchanges at most the call's bits (`Layout.callBits`), which the network certifier counts and refuses past. How it
-  computed the words is not part of acceptance: that its run produces each committed tile is the copy model's premise
-  (`Pouw.Assumptions.Lead.TileGrain`).
+* **Accepted** (`Accepted`): what the verifier sees. The call is one it admits (`Layout.Admits`: an inner dimension of
+  at least 1 and at most `2^40` MMA tiles, by the call's public shape), and the execution registers the honest
+  commitment's root and exchanges at most the call's bits (`Layout.callBits`), which the network certifier counts and
+  refuses past. How it computed the words is not part of acceptance: that it writes each committed tile it doesn't
+  start with is the copy model's premise (`Pouw.Assumptions.Lead.TileGrain`).
 * **The break** (`Break`): a SHA-512 collision among what the execution hashed and what the honest commitment hashes.
 -/
 
@@ -42,7 +44,8 @@ abbrev Addr : Type := ℕ ⊕ ℕ
 structure Exec where
   /-- The instructions it executes, in `MH100w`'s classes, one value a register. -/
   trace : List (Op100 Unit)
-  /-- Its effect on memory at tile grain: a slot holds one MMA tile, a write sets a whole tile. -/
+  /-- Its account at tile grain: a write step is its writing of one MMA tile's words, at any points of the execution;
+  a copy moves a whole tile free. -/
   steps : List (Step Addr (Fin tileWords → ℤ) 1)
   /-- Registers its SHA-512 compressions write. -/
   shaRegs : ℕ
@@ -160,11 +163,18 @@ noncomputable def tableHits (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n �
   ((tileIdx L).filter fun x =>
     (∃ a, σ.pre a = tileOf L κ ω x.1 x.2.1 x.2.2) ∨ ∃ c, stream.val ω c = tileOf L κ ω x.1 x.2.1 x.2.2).card
 
-/-- **The execution at `ω` is accepted**: it registers the honest root and exchanges at most the call's bits (the
-network certifier refuses a call past them). Both are what the verifier sees. -/
+/-- **The calls the verifier admits**: an inner dimension of at least 1 and at most `2^40` MMA tiles of words
+(`rowBlocks · colBlocks · S`), read off the call's public shape. `Accepted` refuses every other call. At `K = 0` stock
+is zero while tiles still repeat, and past `2^40` tiles the call's pairs of tiles are too many for their chance of
+agreeing (`2^−56` a pair) to stay within `coinBranchGap`. -/
+def Layout.Admits (L : Layout) : Prop := 1 ≤ L.K ∧ L.rowBlocks * L.colBlocks * L.S ≤ 2 ^ 40
+
+/-- **The execution at `ω` is accepted**: the verifier admits the call (`Layout.Admits`), and the execution registers
+the honest root and exchanges at most the call's bits (the network certifier refuses a call past them). All three are
+what the verifier sees. -/
 def Accepted (L : Layout) (H : Hash.Msg → Hash.Digest) (C : Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (σ : Strategy L) (ω : Coins L) : Prop :=
-  (σ.exec ω).root = C.root H (word L κ ω) ∧ ((σ.exec ω).egress : ℚ) ≤ L.callBits
+  L.Admits ∧ (σ.exec ω).root = C.root H (word L κ ω) ∧ ((σ.exec ω).egress : ℚ) ≤ L.callBits
 
 /-- The break a statement ends in: two different messages with one SHA-512 digest, both among what the execution at
 `ω` hashed and what the honest commitment of its words hashes (the verifier's check hashes those). -/
