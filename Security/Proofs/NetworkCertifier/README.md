@@ -410,8 +410,8 @@ The constant-rate Program adds these:
     Every guarantee holds for every such function, so it covers any way the Program fixes send ticks. Advice that moves
     a send tick is counted in its block's `k` bits.
 15. **One clock per spatial unit.** Every egress link reads the same execution block's advice (decision A's default),
-    and the audit enforces one sync per window across the links (danielreuter/verity#956). Advice per link is a
-    different advice type, covered by `EncardAccSeqsLeAdvice` directly.
+    and the audit enforces one sync per window across the links (`Audit.syncs`). Advice per link is a different advice
+    type, covered by `EncardAccSeqsLeAdvice` directly.
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
 17. **In-set advice.** The check's advice ranges over `SyncValue`, the values of Σ_sync: a run whose declared sync is
     outside the set is an `advice` violation and rejected, so its advice is never counted. That an earlier window's
