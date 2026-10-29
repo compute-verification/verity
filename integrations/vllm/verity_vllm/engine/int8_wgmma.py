@@ -8,6 +8,9 @@ are kernel parameters, encoded on the host each call).  A config (`WgCfg`, text 
 ping-pong with a consumer tile of 128 x 128, or cooperative on 128 x 256; `m2` for clusters of two CTAs sharing W's boxes
 by multicast), the raster group (tile rows, or pairs of them, a group) and at most how many CTAs (0: one an SM).
 
+`scaled_mm_zy(xq, s_a, w, s_w, y, zy, rows, cfg)` is `int8_fused.scaled_mm_zy`'s product the same way: the same y, and from
+the same accumulators the call's z/y records over `rows` slots (`int8_exact.zy_records`), byte for byte `_zy_epilogue`'s.
+
 The library is built by the nvcc on the path, else torch's CUDA_HOME's (`-fmad=false`, no FTZ or fast-math flag), for
 `int8_gemm_configs.WGMMA_ARCH`, and kept under ``~/.cache/verity/int8_wgmma``, keyed by its sources, flags and nvcc's
 version, as `commit.row_tables_device` builds its kernels.  `available()` says whether the current device can run it;
@@ -25,7 +28,8 @@ from pathlib import Path
 
 import torch
 
-from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA, WGMMA_ARCH
+from verity_vllm.engine.int8_exact import ZY_BYTES, zy_units
+from verity_vllm.engine.profiles.int8_gemm_configs import WGMMA, WGMMA_ARCH, WGMMA_ZY
 
 HERE = Path(__file__).resolve().parent
 SOURCES = ("int8_wgmma_acc.h", "int8_wgmma.cu")
@@ -60,10 +64,11 @@ class WgCfg(tuple):
         return f"{kernel}:g{group}" + (f":c{ctas}" if ctas else "")
 
 
-def row(m: int, n: int, k: int, sm: str) -> WgCfg | None:
-    """`int8_gemm_configs.WGMMA`'s config for one call on `sm`: the last (m_min, cfg) row for (n, k) with m >= m_min."""
+def row(m: int, n: int, k: int, sm: str, zy: bool = False) -> WgCfg | None:
+    """`int8_gemm_configs.WGMMA`'s config for one call on `sm` (`WGMMA_ZY`'s for the zy kernels): the last (m_min, cfg)
+    row for (n, k) with m >= m_min."""
     text = None
-    for m_min, cfg in WGMMA.get(sm, {}).get((n, k), ()):
+    for m_min, cfg in (WGMMA_ZY if zy else WGMMA).get(sm, {}).get((n, k), ()):
         if m >= m_min:
             text = cfg
     return None if text is None else WgCfg.parse(text)
@@ -109,7 +114,9 @@ def lib() -> ctypes.CDLL:
     dll = ctypes.CDLL(str(build(tool)))
     dll.int8_wgmma_layout.argtypes = [ctypes.POINTER(_i)]
     dll.int8_wgmma_launch.argtypes = [_i, _vp, _vp, _vp, _vp, _vp, _i, _i, _i, _i, _i, _i, _vp, ctypes.POINTER(_i)]
-    dll.int8_wgmma_layout.restype = dll.int8_wgmma_launch.restype = _i
+    dll.int8_wgmma_launch_zy.argtypes = [_i, _vp, _vp, _vp, _vp, _vp, _vp, _i, _i, _i, _i, _i, _i, _i, _vp,
+                                         ctypes.POINTER(_i)]
+    dll.int8_wgmma_layout.restype = dll.int8_wgmma_launch.restype = dll.int8_wgmma_launch_zy.restype = _i
     out = (_i * 40)()
     n = dll.int8_wgmma_layout(out)
     got = {name: tuple(out[5 * v: 5 * v + 3]) for v, name in enumerate(VARIANTS)} if n == len(VARIANTS) else None
@@ -160,10 +167,39 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
     return grid.value
 
 
-def fits(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor) -> bool:
-    """Whether `scaled_mm` takes these operands (else `int8_fused` runs its Triton plan, with the same values)."""
+def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+                 zy: torch.Tensor, rows: int, cfg: WgCfg, flags: int = 0) -> int:
+    """`scaled_mm` into y, and zy [units, ZY_BYTES] uint8, the call's records over `rows` slots (`int8_exact.zy_records`),
+    in place; returns the grid.  y and zy are 16-byte aligned, and y and the records go out by TMA stores; `flags` 2 and 64
+    are timing probes (no epilogue; no record stores, which leave what they skip unwritten)."""
+    m, k = xq.shape
+    n = w.shape[0]
+    assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.is_contiguous() and w.is_contiguous()
+    assert s_a.dtype == torch.float32 and s_a.numel() == m and s_a.is_contiguous()
+    assert s_w.dtype == torch.float32 and s_w.numel() == n and s_w.is_contiguous()
+    assert y.dtype == torch.bfloat16 and y.shape == (m, n) and y.is_contiguous()
+    assert zy.dtype == torch.uint8 and zy.shape == (zy_units(m, n, rows), ZY_BYTES) and zy.is_contiguous(), zy.shape
+    assert m >= 1 and k % 16 == 0, (m, n, k)
+    assert xq.data_ptr() % 16 == 0 and w.data_ptr() % 16 == 0 and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0
+    assert zy.data_ptr() % 16 == 0 and y.data_ptr() % 16 == 0 and not flags & 16, flags
+    kernel, group, ctas = cfg
+    grid = _i()
+    rc = lib().int8_wgmma_launch_zy(list(VARIANTS).index(kernel), xq.data_ptr(), w.data_ptr(), s_a.data_ptr(),
+                                    s_w.data_ptr(), y.data_ptr(), zy.data_ptr(), m, n, k, rows, group, ctas, flags,
+                                    torch.cuda.current_stream().cuda_stream, ctypes.byref(grid))
+    if rc:
+        raise RuntimeError(f"int8_wgmma_launch_zy({cfg}, M={m}, N={n}, K={k}, T={rows}) failed at step {rc}")
+    return grid.value
+
+
+def fits(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
+         zy: torch.Tensor | None = None) -> bool:
+    """Whether `scaled_mm` (with zy, `scaled_mm_zy`) takes these operands (else `int8_fused` runs its Triton plan, with the
+    same values)."""
     m, k = xq.shape
     n = w.shape[0]
     return (xq.is_contiguous() and w.is_contiguous() and s_a.is_contiguous() and s_w.is_contiguous() and y.is_contiguous()
             and m >= 1 and k % 16 == 0 and n % 2 == 0 and xq.data_ptr() % 16 == 0 and w.data_ptr() % 16 == 0
-            and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0)
+            and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0
+            and (zy is None or (zy.is_contiguous() and zy.data_ptr() % 16 == 0 and y.data_ptr() % 16 == 0
+                                and zy.shape[0] * (ZY_BYTES // 64) < 1 << 31)))
