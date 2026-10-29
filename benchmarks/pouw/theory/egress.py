@@ -8,7 +8,8 @@ n_max W_mac E / MACs. Each layout is priced on Llama-3.2-1B's linears at each po
 term at each cap and hashing price, the outsourcing provers that realize it (a call set when the served path is
 coin-free, a prefix of the forward when it is noisy), the coins' forming on the GPU, the certifier's stream, T2 and the
 served noise for T3, with whether N-EXACT's epilogue fold serves it exactly, and N-RED's A2c / A8 (one chosen data lane
-cancelling a step's likeliest coin increment) under model P at each point. Inputs: ``egress_inputs.json`` beside
+cancelling a step's likeliest coin increment) under model P at each point, with N-ADAPT's walk on a small tile's runs
+of steps without lane coins. Inputs: ``egress_inputs.json`` beside
 ``alt_roads_inputs.json``.
 Writes ``egress.json`` and ``table.txt`` to ``--out``; exits non-zero if a self-check fails.
 """
@@ -16,6 +17,7 @@ Writes ``egress.json`` and ``table.txt`` to ``--out``; exits non-zero if a self-
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import random
@@ -81,8 +83,10 @@ def call(design: dict, m: int, k: int, n: int, lead: dict, lay: dict, reg: float
         return {"bits": m * rba + cells * la * design["e"], "bytes": m * rba / 8.0 + lane_bytes + corr,
                 "forming": m * rba / 32.0 * reg + (cells / 4.0 * reg if kind == "blc1a" else 0.0),
                 "words": sa / s, "entries": lane_bytes, "later": sa - 1, "coin_steps": coin_steps, "fill": fill,
-                "noise_rms": 0.0, "word_noise_rms": math.sqrt(la * coin_steps * odd_mean_square(design["e"])
-                                                               + (fill * uniform_mean_square(ef) if ef else 0.0))}
+                "noise_rms": 0.0,
+                "word_noise_rms": math.sqrt(la * coin_steps * odd_mean_square(design["e"]) + (
+                    fill * (uniform_mean_square(ef) + odd_mean_square(lay["lane_add"]["fill_window_coin_bits"]))
+                    if ef else 0.0))}
     if kind == "blc4":
         l4, d4 = lay["lanes4"]["lanes"], lay["lanes4"]["data_lanes"]
         s4 = steps4(k, d4)
@@ -154,7 +158,8 @@ def step_dists(design: dict, lay: dict, w: int) -> dict | None:
     B = -v*) so that a word repeats its previous step's whenever the step's coin increment is v*, the likeliest value
     of the step's type. The increments' laws: "coin", a step carrying the layout's lane coins (uniform odd in
     +-(2^e - 1)) beside the row lane (1 + b) w, b a uniform row bit and w public; "fill", a step of a tile with fewer
-    rows than T that carries none (the lead's lane, or blc1a / blc4a's uniform row coin r_t(i) w)."""
+    rows than T that carries none (the lead's lane, or blc1a / blc4a's uniform row coin r_t(i) w plus the window coin
+    c_t[j])."""
     kind, e = design["kind"], design.get("e", 1)
     if kind not in ("rows", "blc1", "blc1a", "blc4a"):
         return None
@@ -168,7 +173,10 @@ def step_dists(design: dict, lay: dict, w: int) -> dict | None:
     ef = lay["lane_add"]["fill_row_coin_bits"]
     if kind in ("blc1a", "blc4a") and ef:
         h = 2 ** (ef - 1)
-        fill = {r * w: 1.0 / (2 * h) for r in range(-h, h)}
+        fill = {}
+        for c, q in lane_sum(1, lay["lane_add"]["fill_window_coin_bits"]).items():
+            for r in range(-h, h):
+                fill[r * w + c] = fill.get(r * w + c, 0.0) + q / (2 * h)
     else:
         fill = lead
     return {"coin": coin, "fill": fill}
@@ -196,8 +204,57 @@ def a2c_point(design: dict, lay: dict, w: int, calls: list, m: int, reg: float) 
             if cnt:
                 seen.add(t)
         macs += m * k * n
-    return {"pstar": max(ps[t] for t in seen), "pstar_by_type": ps, "types": sorted(seen),
-            "model_p_share": saved / macs}
+    out = {"pstar": max(ps[t] for t in seen), "pstar_by_type": ps, "types": sorted(seen),
+           "model_p_share": saved / macs}
+    if design["kind"] in ("blc1a", "blc4a") and lay["lane_add"]["fill_row_coin_bits"]:
+        out["walk_share"] = walk_share(design, lay, calls, m, reg, window=True)
+        out["walk_share_without_window_coin"] = walk_share(design, lay, calls, m, reg, window=False)
+    return out
+
+
+def fill_runs(later: int, coin_steps: int) -> list[int]:
+    runs, cur = [], 0
+    for coined in coin_plan(later, coin_steps):
+        if coined:
+            if cur:
+                runs.append(cur)
+            cur = 0
+        else:
+            cur += 1
+    return runs + [cur] if cur else runs
+
+
+@functools.lru_cache(maxsize=None)
+def walk_revisits(length: int, bits: int, trials: int = 3000, seed: int = 79) -> float:
+    """N-ADAPT's walk on a run of row-coined steps: each step adds the row coin r (uniform over the signed bits-bit
+    integers) and the adversary's data a constant alternating 0 / 1 that cancels r's mean, so a row's run is a
+    driftless walk W. Returns the expected count of steps whose W equals an earlier one (the run's start included)."""
+    rng = random.Random(seed + length)
+    h = 2 ** (bits - 1)
+    tot = 0
+    for _ in range(trials):
+        x, seen = 0, {0}
+        for u in range(length):
+            x += rng.randrange(-h, h) + (u & 1)
+            tot += x in seen
+            seen.add(x)
+    return tot / trials
+
+
+def walk_share(design: dict, lay: dict, calls: list, m: int, reg: float, window: bool) -> float:
+    """The walk's words as a share of stock: on a revisiting row-step a row's vector repeats an earlier one on every
+    column whose increment is row-constant, and those words are copied, not written (free at CopyGrain's chunks). With
+    the window coin only the aligned chunks inside the columns the call's data cancels (a data lane's worth a step,
+    the data chosen after the window coin) are row-constant; without it every column is."""
+    dl = lay["lane_add"]["data_lanes"] if design["kind"] == "blc1a" else lay["lanes4"]["data_lanes"]
+    g = lay["lane_add"]["copy_grain_words"]
+    saved = macs = 0.0
+    for k, n, c in calls:
+        cols = (dl // g) * g if window else n
+        saved += reg * m * cols * sum(walk_revisits(L, lay["lane_add"]["fill_row_coin_bits"])
+                                      for L in fill_runs(c["later"], c["coin_steps"]))
+        macs += m * k * n
+    return saved / macs
 
 
 def a8_words(design: dict, lay: dict, w: int, m: int, n: int, later: int, seed: int, plan_shift: int = 0) -> dict:
@@ -229,11 +286,13 @@ def a8_words(design: dict, lay: dict, w: int, m: int, n: int, later: int, seed: 
          for _ in range(math.ceil(m / tile))]
     bt = [[rng.randint(0, 1) for _ in range(later)] for _ in range(m)]
     r = [[rng.randrange(-h, h) for _ in range(later)] for _ in range(m)]
+    wodd = list(lane_sum(1, lay["lane_add"]["fill_window_coin_bits"]))
+    cw = [[rng.choice(wodd) for _ in range(n)] for _ in range(later)]
 
     def coin(i: int, j: int, u: int, pl: list[bool]) -> int:
         if pl[u]:
             return (1 + bt[i][u]) * w + s[i // tile][u][j]
-        return r[i][u] * w if ef else (1 + bt[i][u]) * w
+        return r[i][u] * w + cw[u][j] if ef else (1 + bt[i][u]) * w
 
     adv_plan = plan[plan_shift:] + plan[:plan_shift]
     equal, kept = True, 0
@@ -263,9 +322,16 @@ def a8_words(design: dict, lay: dict, w: int, m: int, n: int, later: int, seed: 
             mean += cells * rows_tile * eq
             var += cells * (rows_tile * eq + rows_tile * (rows_tile - 1) * eq2 - (rows_tile * eq) ** 2)
         else:
-            p = dists["fill"][vstar["fill"]]
+            v = vstar["fill"]
+            p = dists["fill"][v]
+            pr = {x * w: 1.0 / (2 * h) for x in range(-h, h)}
+            pc = lane_sum(1, lay["lane_add"]["fill_window_coin_bits"])
+            same_row = sum(q * pc.get(v - x, 0.0) ** 2 for x, q in pr.items())
+            same_col = sum(q * pr.get(v - c, 0.0) ** 2 for c, q in pc.items())
+            e2 = (m * n * p + m * n * (n - 1) * same_row + n * m * (m - 1) * same_col
+                  + m * (m - 1) * n * (n - 1) * p * p)
             mean += m * n * p
-            var += m * n * n * p * (1 - p)
+            var += e2 - (m * n * p) ** 2
     return {"equal": equal, "kept": kept, "mean": mean, "sd": math.sqrt(var), "entry_steps": m * n * later,
             "coin_steps": sum(plan), "later": later}
 
@@ -347,9 +413,12 @@ def price_design(design: dict, inp: dict, einp: dict, ll: dict) -> dict:
         pts[key] = row
     a2c = None
     if all(p["a2c"] for p in pts.values()):
-        worst = max(pts, key=lambda q: pts[q]["a2c"]["model_p_share"])
+        def resid(q: str) -> float:
+            return pts[q]["a2c"]["model_p_share"] + pts[q]["a2c"].get("walk_share", 0.0)
+        worst = max(pts, key=resid)
         a2c = {"pstar": max(p["a2c"]["pstar"] for p in pts.values()),
-               "model_p_share": pts[worst]["a2c"]["model_p_share"], "worst_point": worst}
+               "model_p_share": max(p["a2c"]["model_p_share"] for p in pts.values()),
+               "residual": resid(worst), "worst_point": worst}
     return {"id": design["id"], "title": design["title"], "points": pts, "a2c": a2c}
 
 
@@ -465,6 +534,7 @@ def fold_check(kind: str, seed: int) -> bool:
     rowc = [[rng.randrange(-128, 128) for _ in range(st)] for _ in range(m)]
     w = [rng.randint(-127, 127) for _ in range(st)]
     s = [[rng.choice([v for v in range(-15, 16, 2)]) for _ in range(n)] for _ in range(st)]
+    cw = [[rng.choice([v for v in range(-127, 128, 2)]) for _ in range(n)] for _ in range(st)]
     coined = [t % 2 == 0 or kind == "blc1" for t in range(st)]
     exact = [[sum(a[i][x] * b[x][j] for x in range(k)) for j in range(n)] for i in range(m)]
     def a31(i: int, t: int) -> int:
@@ -473,14 +543,40 @@ def fold_check(kind: str, seed: int) -> bool:
     def lane(i: int, j: int, t: int) -> int:
         if kind == "blc1":
             return (1 + bits[i][t]) * s[t][j]
-        return a31(i, t) * w[t] + (s[t][j] if coined[t] else 0)
+        return a31(i, t) * w[t] + (s[t][j] if coined[t] else cw[t][j])
     acc = [[exact[i][j] + sum(lane(i, j, t) for t in range(st)) for j in range(n)] for i in range(m)]
     noise = [[acc[i][j] - exact[i][j] for j in range(n)] for i in range(m)]
     if any(noise[i][j] - noise[i][0] - noise[0][j] + noise[0][0] for i in range(m) for j in range(n)):
         return False
     r = [sum(a31(i, t) * w[t] for t in range(st)) for i in range(m)]
-    c = [sum(s[t][j] for t in range(st) if coined[t]) for j in range(n)]
+    c = [sum(s[t][j] if coined[t] else cw[t][j] for t in range(st)) for j in range(n)]
     return all(acc[i][j] - r[i] - c[j] == exact[i][j] for i in range(m) for j in range(n))
+
+
+def walk_words(n: int, length: int, dl: int, grain: int, window: bool, seed: int) -> dict:
+    """N-ADAPT's walk word for word on a one-row tile's run of row-coined steps: each step adds r_u (the row coin), the
+    window coin c_u[j] when the layout has one, and the call's data, which is chosen after the window coin and so
+    cancels it on (dl // grain) aligned chunks, plus the walk's alternating 0 / 1. A chunk-step whose words equal that
+    chunk's at an earlier step is a copy. Returns the copied words, all words, and the row-steps on which the scalar
+    walk revisited."""
+    rng = random.Random(seed)
+    cols = (dl // grain) * grain
+    vec = [0] * n
+    seen = [{tuple(vec[q:q + grain])} for q in range(0, n, grain)]
+    walk, wseen, copied, revisits = 0, {0}, 0, 0
+    for u in range(length):
+        r = rng.randrange(-128, 128)
+        cw = [rng.choice(range(-127, 128, 2)) if window else 0 for _ in range(n)]
+        data = [(-cw[j] if j < cols else 0) + (u & 1) for j in range(n)]
+        vec = [vec[j] + r + cw[j] + data[j] for j in range(n)]
+        walk += r + (u & 1)
+        revisits += walk in wseen
+        wseen.add(walk)
+        for q in range(0, n, grain):
+            key = tuple(vec[q:q + grain])
+            copied += grain * (key in seen[q // grain])
+            seen[q // grain].add(key)
+    return {"copied": copied, "words": n * length, "revisits": revisits, "cols": cols}
 
 
 def noise_mc(e: int, s_count: int, trials: int, seed: int) -> float:
@@ -519,6 +615,11 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
         a8[f"{des['id']} m {t // 2}"] = a8_words(des, lay, w, t // 2, 32, 128, 73)
     half = by_id[res["closing"]["id"]]
     a8_bad = a8_words(half, lay, w, half["tile"] // 2, 32, 128, 73, plan_shift=1)
+    g = lay["lane_add"]["copy_grain_words"]
+    ww0 = walk_words(64, 128, lay["lane_add"]["data_lanes"], g, False, 83)
+    ww1 = walk_words(64, 128, lay["lane_add"]["data_lanes"], g, True, 83)
+    clo = [(res[c]["id"], k_, p["a2c"]) for c in ("closing", "closing_320")
+           for k_, p in d[res[c]["id"]]["points"].items()]
     return [
         ("The lead's coins: 9,216 bits a token and n_max gate-up's 2,048 x 16,384 / 96, as alt_roads",
          rows8["coin_bits_per_token"] == ar["coin_bits_per_token"] and abs(rows8["n_max"] - ar["n_max"]) < 1e-6,
@@ -563,16 +664,25 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
         ("The lead's A2c by N-RED's count: p* = 1/2 and model P 51.6% at T 8,192, as N-RED measured",
          lead_a2c["pstar"] == nred_pt[0] and abs(lead_a2c["model_p_share"] - nred_pt[1]) < 0.001,
          f"{lead_a2c['pstar']}, {lead_a2c['model_p_share']:.4f}"),
-        ("Both closing layouts' A2c / A8 (model P, N-RED's count) is at most 1% of stock at every point",
-         all(p["a2c"]["model_p_share"] <= 0.01 for c in ("closing", "closing_320")
-             for p in d[res[c]["id"]]["points"].values()),
-         ", ".join(f"{res[c]['id']} " + "/".join(f"{p['a2c']['model_p_share']:.4f}"
-                                                 for p in d[res[c]["id"]]["points"].values())
-                   for c in ("closing", "closing_320"))),
+        ("Both closing layouts' A2c / A8 (model P, N-RED's count) plus N-ADAPT's walk is at most 1% of stock at every "
+         "point",
+         all(a["model_p_share"] + a["walk_share"] <= 0.01 for _, _, a in clo),
+         ", ".join(f"{i} {k_} {a['model_p_share']:.4f}+{a['walk_share']:.4f}" for i, k_, a in clo)),
+        ("N-ADAPT's walk on a small tile's row-coined runs: without the window coin it exceeds 1% of stock at decode "
+         "for both closing layouts, so the window coin is needed",
+         all(a["walk_share_without_window_coin"] > 0.01 for _, k_, a in clo if k_ == "decode1"),
+         ", ".join(f"{i} {a['walk_share_without_window_coin']:.4f}" for i, k_, a in clo if k_ == "decode1")),
+        ("The walk word for word on a one-row run of 128 row-coined steps, 64 columns: without the window coin every "
+         "4-word chunk repeats exactly when the row's walk revisits; with it only the 28 columns the data cancels do",
+         ww0["copied"] == 64 * ww0["revisits"] and ww1["copied"] == ww1["cols"] * ww1["revisits"]
+         and ww0["revisits"] > 0 and ww1["revisits"] > 0,
+         f"{ww0['revisits']} / {ww1['revisits']} revisits; copied {ww0['copied']} / {ww1['copied']} of "
+         f"{ww0['words']}"),
         ("Interim 2's blc1a-t128-e7 (the lead's public lane on a small tile's coin-less steps) leaves A2c above 25% "
          "at T 512 with 64 rows and above 50% at decode",
          old["t64"] > 0.25 and old["decode1"] > 0.5, f"{old['t64']:.4f}, {old['decode1']:.4f}"),
-        ("A8 word for word on both closing layouts, two tiles of T rows and one of T/2 (half its steps row-coined): "
+        ("A8 word for word on both closing layouts, two tiles of T rows and one of T/2 (half its steps with the row and "
+         "window coins in place of lane coins): "
          "the adversary's words equal the honest words, its kept entry-steps within 4 sd of the expectation",
          all(v["equal"] and abs(v["kept"] - v["mean"]) <= 4 * v["sd"] for v in a8.values()),
          "; ".join(f"{name} kept {v['kept']} (mean {v['mean']:.0f}, sd {v['sd']:.0f}) of {v['entry_steps']:,}"
@@ -643,7 +753,8 @@ def closing_lines(res: dict, label: str, cl: dict) -> list[str]:
              + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["noise_rms_lsb_by_k"].items())
              + "; committed words' coin rms "
              + ", ".join(f"K {k_}: {v:.1f}" for k_, v in p["word_noise_rms_lsb_by_k"].items())
-             + f"; A2c model P {p['a2c']['model_p_share']:.3%} (p* {p['a2c']['pstar']:.5f})")
+             + f"; A2c model P {p['a2c']['model_p_share']:.3%} (p* {p['a2c']['pstar']:.5f}), walk "
+             f"{p['a2c']['walk_share']:.3%} ({p['a2c']['walk_share_without_window_coin']:.3%} without the window coin)")
         if t2:
             s += (f"; T2 {t2['gpu_400g']['t2']:.2f} (lead {t2['lead_judged']:.2f}), arrival 400G "
                   f"{t2['gpu_400g']['t2_arrival'][0]:.2f}-{t2['gpu_400g']['t2_arrival'][1]:.2f}, 100G "
@@ -669,7 +780,7 @@ def main() -> int:
     closing = [x for x in res["designs"] if x["id"].startswith(("blc1-t", "blc1a-t"))
                and all(p["caps"]["32"]["stated"]["bar"] <= 0.01 for p in x["points"].values())]
     def a2c_open(x: dict) -> bool:
-        return x["a2c"] is None or x["a2c"]["model_p_share"] > 0.01
+        return x["a2c"] is None or x["a2c"]["residual"] > 0.01
 
     best = min(closing, key=lambda x: (x["points"]["t8192"]["served"] != "exact", a2c_open(x),
                                        x["points"]["t8192"]["stream_bytes_per_token"],
@@ -695,10 +806,10 @@ def main() -> int:
         (f"{best['id']}'s network term, cap 32, floor", p8["32"]["stated"]["floor"]),
         (f"{best['id']}'s network term, cap 32, bar", p8["32"]["stated"]["bar"]),
         (f"{best['id']}'s lane forming, uncredited", best["points"]["t8192"]["forming_share_of_stock"]),
-        (f"{best['id']}'s A2c / A8 residual, model P, at its worst point ({best['a2c']['worst_point']})",
-         best["a2c"]["model_p_share"]),
-        (f"{best320['id']}'s A2c / A8 residual, model P, at its worst point ({best320['a2c']['worst_point']})",
-         best320["a2c"]["model_p_share"]),
+        (f"{best['id']}'s A2c / A8 (model P) and walk residual at its worst point ({best['a2c']['worst_point']})",
+         best["a2c"]["residual"]),
+        (f"{best320['id']}'s A2c / A8 (model P) and walk residual at its worst point "
+         f"({best320['a2c']['worst_point']})", best320["a2c"]["residual"]),
         (f"{best320['id']}'s network term, cap 320, floor", best320["points"]["t8192"]["caps"]["320"]["stated"]["floor"]),
         (f"{best320['id']}'s network term, cap 320, bar", best320["points"]["t8192"]["caps"]["320"]["stated"]["bar"]),
         ("1% allowance", 0.01)])
