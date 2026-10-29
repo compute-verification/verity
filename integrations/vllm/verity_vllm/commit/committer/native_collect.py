@@ -46,6 +46,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 import torch
@@ -53,12 +54,14 @@ import torch
 from verity.ml.commitments.merkle import merkle_depth
 from verity_vllm import settings
 from verity_vllm.commit import step_rows
+from verity_vllm.commit.committer.device_pool import DevicePool, pool_key, release
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
                                                          _HostRanges, _HostWindows, outside, retain_exclude_families)
 from verity_vllm.commit.committer.native_ext import ext
 from verity_vllm.commit.committer.native_hidden import NativeHiddenM1Source, NativeHiddenM1SourceFA3
 from verity_vllm.commit.committer.native_host import (
+    GPU_CHUNK_BYTES,
     NativeHostCommitter,
     TensorMeta,
     _StepJob,
@@ -236,6 +239,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.transient_peak_bytes = 0                            # largest learning-step transient host copy (given back after the re-hash)
         self.excluded_bytes = 0                                  # retain=host + exclude: bytes NOT copied to host over the run
         self.plan_mismatches = 0
+        self.device_pool: DevicePool | None = None               # --retain device (`enable_device_pool`): hit steps' windows held here
         # the model step runs on a HIGH-priority CUDA stream (VERITY_HI_PRIO, default on; 0 keeps the caller's) so the worker's SHA kernels
         # (side stream, default priority) yield SM slots to the serving kernels and the gather; fenced both ways with wait_stream at the
         # step boundary (the FA2 tap, the gather flushes and the step event all follow the current stream, so nothing else changes)
@@ -843,7 +847,14 @@ class NativeCollectCommitter(NativeHostCommitter):
             finally:
                 if getattr(self._nc, "win_dead", False):
                     self._nc.progress()                    # dead-watchdog liveness: the worker finished (or failed by name) a step
-        raise RuntimeError(f"{step_rows.NAME}: step {job.step} was not staged through the window ring (enable_windows before the run)")
+        if self.rows:
+            raise RuntimeError(f"{step_rows.NAME}: step {job.step} was not staged through the window ring (enable_windows before the run)")
+        job.metas = self._metas_for(job)
+        if self.fault == "release_before_keep":
+            return self._commit_step_gpu_faulty(job)
+        if self.native_worker and job.arena is not None and not job.overflow:
+            return self._commit_step_native(job)
+        return super()._commit_step(job)
 
     # ------------------------------------------------------------------ windowed absorb / release
     def enable_windows(self, rec: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -899,6 +910,43 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.window_info = info
         return info
 
+    # ------------------------------------------------------------------ --retain device (`device_pool`)
+    def enable_device_pool(self, capacity: int) -> dict[str, Any]:
+        """Hold each hit step's retained windows in a device pool of ``capacity`` bytes until its window's `release_drawn`, rather
+        than in the pinned host pool (learning steps still retain on host). Windowed staging retaining on host only, after
+        `enable_windows`; the pool is allocated here, beside the ring, or refused by name."""
+        if not self.windowed or getattr(self, "win_tensors", None) is None or self.retain != "host":
+            raise ValueError(f"--retain device holds the windowed collector's host retention on the device: it needs windowed staging "
+                             f"(enable_windows) and retain=host, not windowed={self.windowed} retain={self.retain}")
+        free, _total = torch.cuda.mem_get_info()
+        if capacity > free - (512 << 20):
+            raise RuntimeError(f"--retain device: a pool of {capacity >> 20} MiB does not fit beside the engine and the window ring "
+                               f"({free >> 20} MiB free); lower --retain-device-gb or gpu_memory_utilization")
+        self.device_pool = DevicePool(capacity)
+        memtrace("device pool allocated")
+        return {"retain": "device", "capacity_bytes": self.device_pool.capacity}
+
+    def _keep_take(self, n: int, job: _StepJob) -> Any:
+        """Worker: where a hit step's retained bytes go: the device pool under --retain device (a wait for an earlier window's release
+        is spanned in the step), else the pinned pool."""
+        if self.device_pool is None:
+            return self.pool.take(n)
+        try:
+            v, waited = self.device_pool.take(n, pool_key(self))
+        except RuntimeError as e:
+            raise RuntimeError(f"step {job.step}: {e}") from None
+        if waited:
+            self.spans.add("device_pool_wait", waited, step=job.step)
+        job.on_device = True  # type: ignore[attr-defined]
+        return v
+
+    def release_drawn(self, drawn: Mapping[int, Iterable[int]]) -> dict[str, Any]:
+        """The window's draw-gated release, once every subprotocol's draw over it is drawn: ``drawn`` names by step the leaves any of
+        them drew (with every leaf a drawn unit opens, its inputs included). Exactly those leaves' bytes are copied to host
+        (`device_pool.gather`), every other retained byte of the window is dropped and its device pool pieces freed; the tree levels
+        and salt keys stay. A later read of a dropped leaf is refused by name. Once only; waits for the window's steps first."""
+        return release(self, drawn)
+
     # ------------------------------------------------------------------ rows-sha512 (step_rows)
     def _window_levels(self, n: int, j: int) -> tuple[list[int], int]:
         """Node counts of a step's levels 0 .. min(j, height) for n leaves, and the digest size."""
@@ -917,12 +965,12 @@ class NativeCollectCommitter(NativeHostCommitter):
     def _window_root(self, step: int, state: dict[str, Any], padded: int, side: Any) -> tuple[list[Any], bytes, float]:
         """The step's tree levels, Merkle root and tree ms from its absorbed windows (`state`, cleared): the upper tree over the per-window
         top nodes (level n_levels-1 of the step), its levels to pinned host too when the step keeps levels."""
-        H = self._hasher
+        H, rows = self._hasher, self.rows
         if not padded:
             return [], self._row_domain(step, 0).empty_root(), 0.0
         top_span = 1 << (state["n_levels"] - 1)
         n_tops = state["width"] // top_span
-        if state.get("leaves"):
+        if rows and state.get("leaves"):
             self._fold_leaves(state, side)
         if sum(int(t.shape[0]) for t in state["tops"]) != n_tops:
             raise RuntimeError(f"windowed absorb: {len(state['tops'])} window subtrees for {state['n_total']} leaves (expected {n_tops})")
@@ -1010,10 +1058,12 @@ class NativeCollectCommitter(NativeHostCommitter):
         t0 = time.perf_counter()
         plan_used = int(getattr(job, "plan_used", -1))
         inplace = plan_used >= 0
+        m_words = (-(-plan_used // C) * C) // 4
         host_wins: list[tuple[int, Any, int]] = []                              # (k, pinned host view, bytes)
         transient: list[int] = []                                               # windows on host only for the re-hash (retain none|sample)
         j = self.win_log2_chunks                                                # W = C * 2^j: window k holds leaves [k 2^j, (k+1) 2^j)
         state: dict[str, Any] = {}                                              # per-step subtree state (reset when the plan length was wrong)
+        rows = self.rows
         ks = self._row_key(job.step)
         tn = self._row_table()
 
@@ -1047,14 +1097,24 @@ class NativeCollectCommitter(NativeHostCommitter):
             """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device."""
             n_k = int(lv_k.shape[0])
             views, n_levels = state["views"], state["n_levels"]
-            state["absorbed"].append(k)
-            if views is None:
-                # no levels kept: the window's leaves (64 B a row) wait on the device for its tree (_window_root) up to rows_hold_bytes;
-                # a window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
-                self._hold_leaves(state, lv_k, side)
+            if rows:
+                state["absorbed"].append(k)
+                if views is None:
+                    # no levels kept: the window's leaves (64 B a row) wait on the device for its tree (_window_root) up to rows_hold_bytes;
+                    # a window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
+                    self._hold_leaves(state, lv_k, side)
+                    return
+                dsts = [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
+                state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
                 return
-            dsts = [views[L][k << (j - L):(k << (j - L)) + (n_k >> L)] for L in range(n_levels)]
-            state["tops"].append(H.rows_tree_window(state["rs"], lv_k, n_levels, k << j, side.cuda_stream, dsts))
+            if views is None:
+                state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
+                return
+            dsts = []
+            for L in range(n_levels):
+                s0 = k << (j - L)
+                dsts.append(views[L][s0:s0 + -(-n_k // (1 << L))])
+            state["tops"].append(H.tree_window(lv_k, n_levels, side.cuda_stream, dsts))
 
         # host copy of the raw window: retention (retain=host) and/or the re-upload source for learning steps
         keep_set = self.retain_windows if self.retain == "sample" else None     # retain=sample: only these (step, k) windows are kept
@@ -1159,8 +1219,8 @@ class NativeCollectCommitter(NativeHostCommitter):
                         base = k * W
                         kept_b = 0
                         for a, b in outside(excl, base, base + padded_k):
-                            rv = self.pool.take(b - a)
-                            rv.copy_(st[a - base:b - base], non_blocking=True)  # D2H pinned, side stream (only the retained chunks)
+                            rv = self._keep_take(b - a, job)
+                            rv.copy_(st[a - base:b - base], non_blocking=True)  # D2H pinned (D2D under --retain device), side stream
                             ranges.append((a, b, rv))
                             kept_b += b - a
                         excl_bytes += padded_k - kept_b
@@ -1177,12 +1237,15 @@ class NativeCollectCommitter(NativeHostCommitter):
                             hv = self.pool.take(padded_k)
                             hv.copy_(st[:padded_k], non_blocking=True)
                 elif not fault_lifetime:                                        # unbounded: every window, the learning-step re-hash source
-                    hv = self.pool.take(padded_k)
-                    hv.copy_(st[:padded_k], non_blocking=True)                  # D2H pinned, side stream
+                    hv = self._keep_take(padded_k, job) if keep_win and not learning else self.pool.take(padded_k)
+                    hv.copy_(st[:padded_k], non_blocking=True)                  # D2H pinned (D2D under --retain device), side stream
                 # in-place hashing only while the step stays inside the plan's length: a window running past it means the plan changed
                 # mid-step (learning) -> the frame domain (the step's row count) is wrong -> the step is re-hashed from the host windows below
                 if inplace and padded_k and state and (k << j) + padded_k // C <= state["n_total"]:
-                    lv_k = row_leaves(st, padded_k, k)
+                    if rows:
+                        lv_k = row_leaves(st, padded_k, k)
+                    else:
+                        lv_k = H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream)
                     absorb(k, lv_k)                                             # syncs the side stream: the slot's reads are done here
                     del lv_k
             if fault_lifetime:
@@ -1319,6 +1382,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         else:
             kept = [(kk, hv, n) for kk, hv, n in host_wins if kk not in transient] if self.retain in ("host", "sample") else []
             keep = _HostWindows(kept, used, W, C) if kept else None
+        if keep is not None and getattr(job, "on_device", False):
+            keep.on_device = True                                               # its views are the device pool's until the release
         self._footprint_absorbed(job, padded, levels, keep)
         self._gpu_t["leaf_ms"] += leaf_ms
         self._gpu_t["tree_ms"] += tree_ms
@@ -1337,6 +1402,110 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._gpu_blocks[job.step] = (keep, used)
         self._layouts[job.step] = metas
         self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(metas), layout_dig, job.t_step_end, t2, job.backlog,
+                                              hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
+
+    def _commit_step_native(self, job: _StepJob) -> None:
+        """Candidate B worker step: `StepHasher.commit` (C++, GIL released) does wait-event, zero pad, chunk leaves, tree levels, retained
+        copy, root D2H and the done-synchronisation -- the same sequence as `_commit_step_gpu`; Python only binds the root."""
+        from verity_vllm.commit import scheme
+        from verity_vllm.acquire.committer_api import StepCommitment
+
+        self._gpu_ext_load()                                       # openings use HG.gpu_open on the levels (loaded once)
+        side = self._side_stream()
+        t0 = time.perf_counter()
+        keep_mode = {"device": 0, "host": 1, "none": 2, "sample": 2}[self.retain]   # retention policy (see native_host.RETAIN_MODES)
+        keep_dst = None
+        levels_dst = torch.empty(0, dtype=torch.uint8)
+        if self.retain != "device" and self.retain_pinned:
+            # P0: pinned pool buffer for the step's tree levels (leaves n0 = padded/256 digests of 32 B, then ceil(n/2) per level)
+            n0 = -(-int(job.cursor) // GPU_CHUNK_BYTES)
+            tot, n = 0, n0
+            while True:
+                tot += n
+                if n <= 1:
+                    break
+                n = (n + 1) // 2
+            levels_dst = self.pool.take(tot * 32)
+        if keep_mode == 1:
+            # P0: host retention lands in PINNED memory (pool blocks, recycled per run) so the D2H runs at PCIe rate; pageable D2H measured
+            # ~1 GB/s and made every decode step wait on the side stream (Llama 1024/128 B=1: hashing 7.1 s of an 8.6 s run)
+            padded0 = -(-int(job.cursor) // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
+            keep_dst = self.pool.take(padded0) if self.retain_pinned else None
+        levels, keep, mr, _padded, leaf_ms, tree_ms = self._hasher.commit(job.arena, job.cursor, job.step, self.GPU_TREE_SRC, GPU_CHUNK_BYTES,
+                                                                          side.cuda_stream, job.event.cuda_event, keep_mode,
+                                                                          keep_dst if keep_dst is not None else torch.empty(0, dtype=torch.uint8),
+                                                                          self.retain != "device", levels_dst)     # levels -> pinned host inside the hasher
+        if keep_mode == 2:
+            keep = None
+        if self.retain != "device" and levels and levels[0].is_cuda:
+            levels = [lv.cpu() for lv in levels]                   # (fallback) authentication state to host; the device keeps only arena blocks
+        self._footprint_absorbed(job, int(_padded), levels, keep)
+        self.arena.release(job.arena)                              # after the done-event synchronisation inside commit()
+        self._gpu_t["leaf_ms"] += leaf_ms
+        self._gpu_t["tree_ms"] += tree_ms
+        t1 = time.perf_counter()
+        metas = job.metas
+        nbytes = metas.nbytes
+        n = int(levels[0].shape[0])
+        layout_dig = self.layout_digest(metas)
+        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
+        t2 = time.perf_counter()
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
+        self.spans.add("root_finalisation", t2 - t1, step=job.step)
+        self._gpu_levels[job.step] = levels
+        self._gpu_blocks[job.step] = (keep, job.cursor)
+        self._layouts[job.step] = metas
+        job.arena = None
+        self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(metas), layout_dig, job.t_step_end, t2, job.backlog,
+                                              hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
+
+    def _commit_step_gpu_faulty(self, job: _StepJob) -> None:
+        """DELIBERATE ordering bug (negative test only): the arena block is handed back for reuse before the retained copy is taken; the
+        worker then waits until the serving thread has reused it.  The tree was computed over the step's bytes; the retained copy holds the
+        next step's bytes -> openings must fail against the (correct) root.  Same code as `_commit_step_gpu` otherwise."""
+        e = self._gpu_ext_load()
+        side = self._side_stream()
+        t0 = time.perf_counter()
+        with torch.inference_mode(), torch.cuda.stream(side):
+            side.wait_event(job.event)
+            used = job.cursor
+            padded = -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
+            if padded > used:
+                job.arena[used:padded].zero_()
+            for m in job.metas:
+                m.stream_off = m.dev_off
+                m.dev_block = None
+            stream_i32 = job.arena[:padded].view(torch.int32)
+            leaves = e.chunk_leaves(stream_i32, GPU_CHUNK_BYTES // 4, job.step, self.GPU_TREE_SRC, job.step, padded // 4, 0)
+            levels = e.tree_levels(leaves)
+            mr_t = levels[-1].to("cpu", non_blocking=True)
+            torch.cuda.current_stream().synchronize()
+            blk = job.arena
+            self.arena.release(blk)                                # BUG: released before the retained copy exists
+            deadline = time.perf_counter() + 2.0
+            while time.perf_counter() < deadline and any(b is blk for b in self.arena.free):
+                time.sleep(0.001)                                  # wait until the serving thread has taken (and is overwriting) the block
+            time.sleep(0.05)
+            keep = torch.empty(padded, dtype=torch.uint8, device=blk.device)
+            keep.copy_(blk[:padded])                               # retained copy taken AFTER the block was reused
+            torch.cuda.current_stream().synchronize()
+        mr = mr_t.numpy().astype("uint32").tobytes()
+        t1 = time.perf_counter()
+        from verity_vllm.commit import scheme
+        from verity_vllm.acquire.committer_api import StepCommitment
+
+        n = int(leaves.shape[0])
+        nbytes = sum(m.nbytes for m in job.metas)
+        layout_dig = self.layout_digest(job.metas)
+        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
+        t2 = time.perf_counter()
+        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
+        self.spans.add("root_finalisation", t2 - t1, step=job.step)
+        self._gpu_levels[job.step] = levels
+        self._gpu_blocks[job.step] = (keep, used)
+        self._layouts[job.step] = job.metas
+        job.arena = None
+        self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(job.metas), layout_dig, job.t_step_end, t2, job.backlog,
                                               hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
 
     # ------------------------------------------------------------------ reporting
@@ -1417,7 +1586,8 @@ class NativeCollectCommitter(NativeHostCommitter):
                                        "plan_key_mode": getattr(self, "_plan_key_mode", "counts"),
                                        "retain_exclude": sorted(self.retain_exclude), "excluded_bytes": int(self.excluded_bytes),
                                        "host_retained_raw_bytes": sum(int(getattr(b, "retained_bytes", b.numel() if b is not None else 0))
-                                                                      for b, _u in self._gpu_blocks.values() if b is not None and not getattr(b, "is_cuda", False)),
+                                                                      for b, _u in self._gpu_blocks.values() if b is not None and not getattr(b, "is_cuda", False)
+                                                                      and not getattr(b, "on_device", False)),
                                        # the admission this run was launched under (commit_delta's host bound + the DECLARED schedule it came
                                        # from; None = no admission computed) -- on the record, not only in host_admission_<kind>.json
                                        "host_admission": getattr(self, "host_admission", None)}

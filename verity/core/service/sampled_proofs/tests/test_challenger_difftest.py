@@ -1,4 +1,4 @@
-"""The proof service's challenger in Lean (`SampledProofs.Challenger`, the verifier of record) against its Python mirror
+"""The proof system's challenger in Lean (`SampledProofs.Challenger`, the verifier of record) against its Python mirror
 (`verity.core.protocols.sampled_proofs.challenger`), through `sampled-proofs-difftest`'s challenger pieces: a coin
 commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`; and the challenger's signed record
 (`SampledProofs.ChallengerRecord`): the verifier's key and a record as `from_json` reads them, with `record_message`, and
