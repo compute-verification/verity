@@ -1,6 +1,6 @@
 """machine-model solve [NAME] [--json]       re-solve NAME (default: model.toml's `current`): τ, τ at 600 W, U/F_low and
                                           margin against what was published, θ, the cheapest attacks, the check,
-                                          then whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold
+                                          then whether (π₃₂), its load half and π_c ≥ 16 hold
                                           (data/floors.csv), and every copy route's price and measured cost a word"""
 from __future__ import annotations
 
