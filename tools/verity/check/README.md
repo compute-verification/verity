@@ -37,13 +37,6 @@ part reads something it doesn't declare, and the fix goes in the check.
 `suites.py`'s docstring is the full contract. The testing skill (`.agents/skills/testing/SKILL.md`) has the rules every test
 follows.
 
-## Settings
-
-Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
-into the run's `result.json` under `settings`), `where` (telemetry there, with the reason it changes no verdict) or `debug`
-(refused in a recorded run, and by `train.sh`). `check.py` and `suites.py` refuse to start with a `CHECK_*` or `LEAN_SLOT*`
-variable it doesn't declare. Reads outside it are held by `tools/verity/check/tests/test_settings.py` to a list that only shrinks.
-
 ## Running it
 
 Builds and tests run on the cluster's nodes, not on an agent VM. Ship the checkout with `research run` and sync its tree first:
@@ -70,3 +63,10 @@ with every job, those off the gate too (`train.sh --deferred`), and `main` moves
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
 but doesn't hold `main`. The team skill's "Landing" is the procedure. A pure move that `move_check.py` certifies
 (`verity check move BASE HEAD`) lands ahead of the queue.
+
+## Settings
+
+Every environment variable check reads is declared once in `settings.py`, with its type, default, doc and role: `value` (hashed
+into the run's `result.json` under `settings`), `where` (telemetry there, with the reason it changes no verdict) or `debug`
+(refused in a recorded run, and by `train.sh`). `check.py` and `suites.py` refuse to start with a `CHECK_*` or `LEAN_SLOT*`
+variable it doesn't declare. Reads outside it are held by `tools/verity/check/tests/test_settings.py` to a list that only shrinks.
