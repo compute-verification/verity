@@ -42,19 +42,17 @@ def main() -> None:
     salt, ks, root_b = (sha(t + u64(seed)) for t in (b"np-kernel/salt", b"np-kernel/ks", b"np-kernel/root-b"))
     a = bytes(mix64(seed * 1000003 + i) & 0xFF for i in range(rows * k))
     n = len(a) // SEG
-    binding = sha(b"verity/pouw/a-domain/v1\0" + salt + u64(forward) + u64(call))
-    dom = CommitmentDomain(binding, -1, RangeU64Domain(0, n), hash="sha512")
+    dom = CommitmentDomain(sha(salt + u64(forward) + u64(call)), -1, RangeU64Domain(0, n), hash="sha512")
     leaves = [dom.leaf(r, r, "pouw/a-seg/v1", a[SEG * r:SEG * (r + 1)]) for r in range(n)]
     x = tree_levels(dom, leaves)[-1][0]
-    y = b"".join(sha(ks + salt + u64(forward * calls + call) + u64(r)) for r in range(3))
+    kw = sha(ks + salt)
+    y = b"".join(sha(kw + u64(forward) + u64(call) + u64(r)) for r in range(3))
     inst = hm96.SHA512
     key = inst.default_key
     bc = inst.commit_string(key, x, y)
     h = inst.tree_leaf(key, bc)
-    idom = CommitmentDomain(sha(b"verity/pouw/a-instances/v1\0" + salt + u64(forward)), -1, RangeU64Domain(0, calls),
-                            hash="sha512")
-    root_a = idom.leaf(call, call, "hm96-sha512/subtree/v1", h)
-    s = seeds.call_seed(salt, call, root_a, root_b)
+    root_a = h
+    s = seeds.call_seed(salt, forward * calls + call, root_a, root_b)
     print(json.dumps({"leaves": n, "dom": dom.domain_id.hex(), "leaf0": leaves[0].hex(), "leaf_last": leaves[-1].hex(),
                       "x": x.hex(), "y": y.hex(), "bc": bc.hex(), "h": h.hex(), "root_a": root_a.hex(), "seed": s.hex(),
                       "noise0": seeds.noise_block(s, 0).hex(), "noise1": seeds.noise_block(s, 1).hex()}))

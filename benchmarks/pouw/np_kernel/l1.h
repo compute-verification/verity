@@ -3,18 +3,18 @@
 // Python (verity.ml.commitments' frame-v3-sha512 and hm96-sha512, pouw's call seed and noise blocks); l1_check.cpp
 // prints this header's.
 //
-// A call's seed path, everything SHA-512:
+// A call's seed path (N-HIDE's L1 + (a)), everything SHA-512, call j of forward f in a window with salt and ks:
 //   A_j's leaves   leaf(D_j, r, r, "pouw/a-seg/v1", A_j[1024 r, 1024 r + 1024)), D_j the range-u64 domain over the call's
-//                  leaves under binding SHA-512("verity/pouw/a-domain/v1\0" || salt || u64be(forward) || u64be(call))
+//                  leaves under binding SHA-512(salt || u64be(f) || u64be(j)) (the tree's domains take a 64-byte binding)
 //   x              the frame-v3-sha512 root over them (pads to a power of two)
-//   y              (a)'s PRF: y_r = SHA-512(ks || salt || u64be(pos) || u64be(r)), r = 0, 1, 2, pos = forward · calls + call
-//                  the instance's position in the window (a y used twice would leak x ^ x')
+//   y              (a)'s PRF: y_r = SHA-512(k_w || u64be(f) || u64be(j) || u64be(r)), r = 0, 1, 2, k_w = SHA-512(ks || salt);
+//                  (f, j) is the instance's position in the window (a y used twice would leak x ^ x')
 //   b || c         hm96-sha512: b = x ^ M_key y, c = SHA-512(salt_prefix || y); h = SHA-512(leaf_prefix(key) || b || c)
-//   root(A_j)      leaf(I, call, call, "hm96-sha512/subtree/v1", h), I the range-u64 domain over the forward's calls under
-//                  SHA-512("verity/pouw/a-instances/v1\0" || salt || u64be(forward))
-//   seed           pouw's call seed: SHA-512(u64(c) || (CALL_SEED_TAG || salt || root(A_j) || root(B_j)) ^ u64(c)*)
+//   root(A_j)      h, the instance's hm96 leaf
+//   seed           pouw's call seed at the call's window position c = f · calls + j:
+//                  SHA-512(u64(c) || (CALL_SEED_TAG || salt || root(A_j) || root(B_j)) ^ u64(c)*)
 //   noise block t  SHA-512(NOISE_TAG || seed || u64be(t))
-// The two bindings and A's schema are this benchmark's stand-ins of the formats' lengths; nothing else is.
+// A's schema is this benchmark's stand-in of the format's length; nothing else is.
 #pragma once
 #include <cstdint>
 #include <cstring>
@@ -71,7 +71,6 @@ using Bytes = std::vector<uint8_t>;
 
 constexpr int SEG = 1024, LEVELS = 24;
 static const char* const A_SCHEMA = "pouw/a-seg/v1";
-static const char* const I_SCHEMA = "hm96-sha512/subtree/v1";
 
 inline u64 be64(const uint8_t* p) {
   u64 v = 0;
@@ -219,26 +218,23 @@ inline Bytes call_seed(const Bytes& salt, u64 call, const Bytes& ra, const Bytes
 }
 inline Bytes noise_block(const Bytes& seed, u64 t) { return sha512(cat({noise_tag(), seed, u64be(t)})); }
 
-// (a)'s PRF and this benchmark's bindings
-inline Bytes prf_y(const Bytes& ks, const Bytes& salt, u64 pos) {
+// (a)'s PRF and A_j's domain binding
+inline Bytes prf_y(const Bytes& kw, u64 forward, u64 call) {
   Bytes y;
   for (u64 r = 0; r < 3; r++) {
-    const Bytes d = sha512(cat({ks, salt, u64be(pos), u64be(r)}));
+    const Bytes d = sha512(cat({kw, u64be(forward), u64be(call), u64be(r)}));
     y.insert(y.end(), d.begin(), d.end());
   }
   return y;
 }
-inline Bytes a_binding(const Bytes& salt, u64 forward, u64 call) {
-  return sha512(cat({str("verity/pouw/a-domain/v1", 24), salt, u64be(forward), u64be(call)}));
-}
-inline Bytes i_binding(const Bytes& salt, u64 forward) {
-  return sha512(cat({str("verity/pouw/a-instances/v1", 27), salt, u64be(forward)}));
-}
+inline Bytes a_binding(const Bytes& salt, u64 forward, u64 call) { return sha512(cat({salt, u64be(forward), u64be(call)})); }
 
 struct Window {
   Bytes salt, ks, key, root_b;
   u64 forward;
   u64 calls;
+  Bytes kw() const { return sha512(cat({ks, salt})); }
+  u64 position(u64 call) const { return forward * calls + call; }
 };
 inline Window window_of(u64 seed, u64 forward, u64 calls) {
   return Window{sha512(cat({str("np-kernel/salt"), u64be(seed)})), sha512(cat({str("np-kernel/ks"), u64be(seed)})), hm96_key(),
@@ -256,14 +252,14 @@ inline Ref reference(const Window& w, u64 call, const uint8_t* a, size_t bytes) 
   r.dom = range_u64_domain(a_binding(w.salt, w.forward, call), -1, 0, n);
   for (u64 i = 0; i < n; i++) r.leaves.push_back(leaf(r.dom, i, i, A_SCHEMA, Bytes(a + SEG * i, a + SEG * (i + 1))));
   r.x = root(r.dom, r.leaves);
-  r.y = prf_y(w.ks, w.salt, w.forward * w.calls + call);
+  r.y = prf_y(w.kw(), w.forward, call);
   const Bytes m = mask(w.key, r.y), c = sha512(cat({salt_prefix(), r.y}));
   Bytes b(64);
   for (int i = 0; i < 64; i++) b[i] = r.x[i] ^ m[i];
   r.bc = cat({b, c});
   r.h = sha512(cat({leaf_prefix(w.key), r.bc}));
-  r.root_a = leaf(range_u64_domain(i_binding(w.salt, w.forward), -1, 0, w.calls), call, call, I_SCHEMA, r.h);
-  r.seed = call_seed(w.salt, call, r.root_a, w.root_b);
+  r.root_a = r.h;
+  r.seed = call_seed(w.salt, w.position(call), r.root_a, w.root_b);
   return r;
 }
 
@@ -275,14 +271,13 @@ struct Call {
   u64 node_tpl[3][32];      // a node message's blocks 2 and 3 with index, left and right zero, by ni = 1, 2, 3
   u64 my[8], c[8];          // M_key y and c
   u64 hmid[8];              // leaf_prefix(key)'s state
-  u64 fmid[8], ftpl[16];    // root(A_j)'s frame leaf: its first block's state, its second block with h zero
   u64 sb[32];               // the seed message's blocks with root(A_j)'s words zero
   u64 ntag[3];              // NOISE_TAG's words
-  u64 call, n;              // the call's position and its leaves
+  u64 call, n;              // the call's window position and its leaves
 };
 inline Call call_of(const Window& w, u64 call, u64 n) {
   Call k{};
-  k.call = call;
+  k.call = w.position(call);
   k.n = n;
   const Bytes dom = range_u64_domain(a_binding(w.salt, w.forward, call), -1, 0, n);
   for (int nb = 1; nb <= 3; nb++) {
@@ -300,7 +295,7 @@ inline Call call_of(const Window& w, u64 call, u64 n) {
     const auto pw = padded(frame_message("node", {dom, Bytes(1, 0), Bytes(ni, 0), Bytes(64, 0), Bytes(64, 0)}));
     for (int i = 0; i < 32; i++) k.node_tpl[ni - 1][i] = pw[16 + i];
   }
-  const Bytes y = prf_y(w.ks, w.salt, w.forward * w.calls + call);
+  const Bytes y = prf_y(w.kw(), w.forward, call);
   words(mask(w.key, y), k.my, 8);
   words(sha512(cat({salt_prefix(), y})), k.c, 8);
   {
@@ -309,13 +304,7 @@ inline Call call_of(const Window& w, u64 call, u64 n) {
     midstate(blk, k.hmid);
   }
   {
-    const Bytes idom = range_u64_domain(i_binding(w.salt, w.forward), -1, 0, w.calls);
-    const auto pw = padded(frame_message("leaf", {idom, uintb(call), uintb(call), str(I_SCHEMA), Bytes(64, 0)}));
-    midstate(&pw[0], k.fmid);
-    for (int i = 0; i < 16; i++) k.ftpl[i] = pw[16 + i];
-  }
-  {
-    const Bytes p = u64be(call), data = cat({call_seed_tag(), w.salt, Bytes(64, 0), w.root_b});
+    const Bytes p = u64be(k.call), data = cat({call_seed_tag(), w.salt, Bytes(64, 0), w.root_b});
     Bytes m = p;
     for (size_t i = 0; i < data.size(); i++) m.push_back(data[i] ^ p[i % 8]);
     const auto pw = padded(m);
@@ -434,8 +423,7 @@ L1_HD void node_of(const Call& k, int level, u64 index, const u64* Lc, const u64
   else node_ni<3>(k, level, index, Lc, Rc, out);
 }
 
-// x to root(A_j): b = x ^ M_key y, h = SHA-512(leaf_prefix(key) || b || c), then root(A_j)'s frame leaf (h at byte 169,
-// a call below 256)
+// x to root(A_j): b = x ^ M_key y, and root(A_j) = h = SHA-512(leaf_prefix(key) || b || c)
 L1_HD void instance(const Call& k, const u64* x, u64 h[8], u64 ra[8]) {
   u64 W[16];
 #pragma unroll
@@ -450,10 +438,7 @@ L1_HD void instance(const Call& k, const u64* x, u64 h[8], u64 ra[8]) {
   W[0] = 0x80ull << 56;
   W[15] = 256 * 8;
   compress(h, W);
-  cpy8(ra, k.fmid);
-#pragma unroll
-  for (int q = 0; q < 16; q++) W[q] = k.ftpl[q] | dig<169 - 128>(h, q);
-  compress(ra, W);
+  cpy8(ra, h);
 }
 L1_HD void seed_of(const Call& k, const u64* ra, u64 seed[8]) {
   u64 W[16];

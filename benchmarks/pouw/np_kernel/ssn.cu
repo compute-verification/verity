@@ -588,8 +588,8 @@ struct L1Dev {
 static int g_l1_cta = 64;  // L1_CTA: l1_root2_k's least CTA size, 64 or 128
 static L1Dev l1_dev(const l1::Window& w, u64 call, u64 bytes) {
   const u64 n = bytes / l1::SEG;
-  if (bytes % l1::SEG || n < 128 || (n & (n - 1)) || n > 65536 || call >= 256) {
-    fprintf(stderr, "ERR the L1 seed path takes a power-of-two count of 1 KiB leaves from 128 to 65,536 and a call below 256\n");
+  if (bytes % l1::SEG || n < 128 || (n & (n - 1)) || n > 65536) {
+    fprintf(stderr, "ERR the L1 seed path takes a power-of-two count of 1 KiB leaves from 128 to 65,536\n");
     exit(2);
   }
   L1Dev d{};
