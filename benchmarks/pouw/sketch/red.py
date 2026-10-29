@@ -552,7 +552,7 @@ DESIGNS = {
     "hw_add": dict(fn=d_add, hw=True, coins={}, Ts=(16, 64), what="sketch unit: Σ of the words mod 2³² (thin, IADD3)"),
     "hw_poly": dict(fn=d_poly, hw=True, coins={"tau": (M32, odd32)}, Ts=(16, 64),
                     what="MAC: acc ← τ·acc + c a k-step (linear ρ), on increments"),
-    "hw_rho_rot": dict(fn=d_rho("rot"), hw=True, coins={"s0": (M32, u32coin)}, Ts=(16, 64),
+    "hw_rho_rot": dict(fn=d_rho("rot"), hw=True, rot=13, coins={"s0": (M32, u32coin)}, Ts=(16, 64),
                        what="MAC: acc ← rotl(acc, 13) + c a k-step, on increments"),
     "hw_rho_xs": dict(fn=d_rho("xs"), hw=True, coins={"s0": (M32, u32coin)}, Ts=(16, 64),
                       what="MAC: acc ← (acc ⊕ acc ≫ 15) + c a k-step, on increments"),
@@ -959,6 +959,23 @@ def mix(design, coins, parts, T, rpc, exact):
     return exact, cost(steps, once=False), cost(steps), steps
 
 
+def carry_guess(design, coins, W, T):
+    """acc ← rotl(acc, r) + c is linear mod 2³² − 1 but for the add's carry out, since rotl(a, r) ≡ 2^r·a there and
+    u32(c) ≡ c + [c < 0]. Guessing each carry as [c < 0] gives acc_T ≡ 2^(rT)·s0 + Σ_t 2^(r(T−1−t))·c_t, a linear sum of
+    signed increments that `decomp` splits into row and column sums. Returns the fraction of cells it gets exactly."""
+    M = M32 - 1
+    r, s0 = design["rot"], coins["s0"][1]
+    Wi = signed32(W)
+    hits = []
+    for t0 in range(0, W.shape[2] - T + 1, T):
+        acc = np.full(W.shape[:2], (pow(2, r * T, M) * s0) % M, dtype=object)
+        for t in range(T):
+            acc = (acc + pow(2, r * (T - 1 - t), M) * Wi[:, :, t0 + t].astype(object)) % M
+        ref = design["fn"]([Val(W[:, :, t0 + t], M32) for t in range(T)], coin_vals(coins)).a
+        hits.append(np.mean(acc.astype(np.uint64) == ref))
+    return float(np.mean(hits))
+
+
 def pack(design, coins, W, T, narrow_by=0):
     """A lane-wise design on b-bit lanes, L = ⌊32g/b⌋ cells in g registers, and the bits above b bitsliced from the
     sign bits, 32 cells a register, once a distinct column of coin bits. A lane's word is formed biased by 2^(b−1), so
@@ -1071,6 +1088,16 @@ def evaluate(name, design, parts, seed=0, rng=None):
                 cands.append(pk[1]), cands_once.append(pk[1])
         if st["tfunc"]:
             row["tfunc_verified"] = tfunc_check(design, coins, parts["W"], T)
+        if "rot" in design:
+            hit = carry_guess(design, coins, parts["W"], T)
+            row["carry_guess_exact_cells"] = hit
+            row["carry_guess_miss_bound"] = T * int(np.abs(signed32(parts["W"])).max()) / M32
+            if parts.get("separable") and hit == 1.0:
+                est = 2 + 2 * T / rpc + 2 * T / CALL_N
+                row["attacks"]["carry"] = {"exact": True, "every": round(est, 3), "once": round(est, 3),
+                                           "price": "estimate: an end-around add a cell, T scaled sums a column"
+                                                    " class and a row"}
+                cands.append(est), cands_once.append(est)
         row["cheapest"] = round(min(cands), 3)
         row["cheapest_once"] = round(min(cands_once), 3)
         row.update(gaps(honest, min(cands), stock))
@@ -1216,6 +1243,10 @@ def main() -> int:
         sz = DESIGNS["sha512"]
         ok = fuse(sz, draw_coins(sz, 0), dict(p, d0=np.zeros_like(p["d0"])), 4, p["rows_a_class"])[0]
         checks.mutation("fuse on the lead's words with the per-cell offset x dropped", not ok)
+        rz = DESIGNS["hw_rho_rot"]
+        q = increments(p)
+        checks.mutation("the carry guess with the rotation off by one",
+                        carry_guess(dict(rz, rot=rz["rot"] - 1), draw_coins(rz, 0), q["W"], 16) < 0.5)
 
     json.dump({"schema": "si-red/v1", "steps": S, "rows": rows, "frontier": summary}, open(out_path, "w"), indent=1,
               default=str)
