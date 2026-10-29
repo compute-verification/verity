@@ -597,6 +597,12 @@ PLANS = [
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_nkd with P rounded against its own block's (strided) max, rescaled to the running max at the "
               "block's end"),
+    Plan("best_p4_nkd_bmax_pad64", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, small_m="wgmma64",
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_nkd_bmax with every matmul below 64 rows padded to wgmma's 64, whose padding words are forced "
+              "at the floor whatever they hold"),
     Plan("best_p4_exact", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
          static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
          noise_dither=True, block_max=True, exact=True,
@@ -1579,7 +1585,7 @@ def report(lookup: bool = False) -> dict:
 
 
 PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
-                "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_exact", "best_p4_exact_sep")
+                "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_nkd_bmax_pad64", "best_p4_exact", "best_p4_exact_sep")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
