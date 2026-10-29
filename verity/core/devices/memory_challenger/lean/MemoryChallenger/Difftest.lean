@@ -11,9 +11,9 @@ The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` th
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
 `MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the streamed wipe's
 signed message and egress count, and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
-period tree's root, the verifier's acceptance of a period and the liveness check). `memory-challenger-difftest` serves them
-(`Difftest.serve`). Each verdict's own difftest drives the executable its callers run, `memory-challenger-verdict` and
-`streamed-wipe-verdict`.
+`range-u64` domain id, the period tree's root, the verifier's acceptance of a period and the liveness check).
+`memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own difftest drives the executable its callers
+run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
 -/
 
 namespace MemoryChallenger.Difftest
@@ -120,6 +120,17 @@ def hssVerifyFn (j : Json) : V Json := do
   pure (.bool (← Lms.hssVerify p (← hex j "identity") (← hex j "deployment") (← J.str j "party" "input") s
     (← hex j "message")))
 
+/-- `merkle.CommitmentDomain(binding, owner, RangeU64Domain(0, count), "sha512").domain_id` (`Domain.makeU64`), refused
+where `merkle` refuses: a binding not 64 bytes, `owner < −2`, or `owner + 2` or `count` past a u64. -/
+def domainU64Fn (j : Json) : V Json := do
+  let binding ← hex j "binding"
+  let owner ← J.asInt (← J.get j "owner" "input") "owner"
+  let count ← J.nat j "count" "input"
+  if binding.size ≠ 64 then throw "a range-u64 domain's binding is 64 bytes"
+  if owner < -2 ∨ owner + 2 ≥ 2 ^ 64 then throw "owner is at least -2 and owner + 2 a u64"
+  if count ≥ 2 ^ 64 then throw "a range-u64 domain's count is a u64"
+  pure (hexJ (FrameV3Sha512.Domain.makeU64 binding owner count).id)
+
 /-- `attest.root(records)`. -/
 def attestRootFn (j : Json) : V Json := do pure (hexJ (Attest.root (← hexes j "records")))
 
@@ -148,6 +159,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
   ("wipe_egress_units", wipeEgressUnitsFn), ("party_key_message", partyKeyMessageFn),
   ("period_root_message", periodRootMessageFn), ("liveness_message", livenessMessageFn), ("hss_verify", hssVerifyFn),
-  ("attest_root", attestRootFn), ("attest_check", attestCheckFn), ("attest_liveness", attestLivenessFn)]
+  ("domain_u64", domainU64Fn), ("attest_root", attestRootFn), ("attest_check", attestCheckFn),
+  ("attest_liveness", attestLivenessFn)]
 
 end MemoryChallenger.Difftest
