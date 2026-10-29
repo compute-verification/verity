@@ -9,8 +9,8 @@
 # without that file runs no shell hook. When the branch doesn't track `.cursor/hooks.json` it first writes one that runs DEST's hook, fail-closed, and excludes it in
 # `.git/info/exclude` (git overwrites an excluded file when a branch that tracks it is checked out): Cursor reads hooks once,
 # early in the session, so the file comes before the fetch, and until DEST's copy is there every command is refused. Then it
-# copies origin/main's `tools/agent-guard` to DEST (default /opt/agent-guard), or keeps an earlier copy when origin/main can't
-# be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
+# copies the files of origin/main's `tools/agent-guard` (not its tests) to DEST (default /opt/agent-guard), or keeps an
+# earlier copy when origin/main can't be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
 # /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
 # and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
 # names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone
@@ -48,7 +48,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 if git -C "$ws" fetch -q origin main && git -C "$ws" archive origin/main tools/agent-guard | tar -x -C "$tmp"; then
   $sudo mkdir -p "$dest"
-  $sudo cp "$tmp"/tools/agent-guard/* "$dest"/
+  $sudo find "$tmp/tools/agent-guard" -maxdepth 1 -type f -exec cp -t "$dest" {} +
   $sudo chmod 755 "$dest"/*
 elif [ -f "$dest/shell_hook.py" ]; then
   echo "agent-guard: origin/main unreadable; using the copy already in $dest" >&2
