@@ -1,0 +1,9 @@
+description = "two-sided served bits (SSN2): stock int8 on ±127, then the integer product plus a b - ceil(k / 28), a fresh bits m x ceil(k / 28) x 4 and b fresh bits ceil(k / 28) x 4 x n every call, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn2"

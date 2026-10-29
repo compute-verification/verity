@@ -1,0 +1,9 @@
+description = "raw coin bytes served (a stress point for the perplexity rise): stock int8 on ±127, then every column of row i of the integer product plus sum_s r_is, r fresh bytes uniform on {-128, ..., 127}, m x ceil(k / 28) every call, uncentred and served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "raw_byte"

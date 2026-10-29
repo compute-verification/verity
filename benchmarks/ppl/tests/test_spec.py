@@ -77,7 +77,9 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[name] = ("all", stock, False)
     for name in ("ncp-qk-rot", "ncp-attn-fix", "ncp-linears-attn-fix"):
         want[name] = ("all", stock, True)
-    for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both"):
+    want["int8-act124-v1"] = ("linears", stock, False)
+    for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
+                 "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1"):
         want[name] = ("linears", stock, True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
@@ -307,6 +309,8 @@ def test_defaults_are_filled_and_typed():
     ('[[attention]]\nstep = "int8"\nv = "dither"\nqk_bits = 2', "widens a dither"),
     ('[[linear]]\nstep = "int8"\n[mlp]\nx = 1', "unknown keys ['mlp']"),
     ('plain = "int8-stock"\n[[linear]]\nstep = "int8"', "names no arm in specs/"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "dense"', "served.rule is one of"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn2"\nbits = 4', "widens only ssn_a"),
 ])
 def test_rejections_name_the_problem(text, message):
     with pytest.raises(ValueError, match=message.replace("[", r"\[").replace("]", r"\]")):

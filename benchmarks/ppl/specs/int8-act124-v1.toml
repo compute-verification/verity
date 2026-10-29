@@ -1,0 +1,6 @@
+description = "the served values of the per2, os2 and lowrank1 noise designs: activations one scale per token rounded to ±124, weights one per output row to ±127, no rotation, the exact product, no noise; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act_top = 124

@@ -1,0 +1,10 @@
+description = "served sparse noise (SSN-A, 4-bit mask): ssn-a-b1-v1 with a uniform on {0, ..., 15} (the nibble mask) and the bias rint(7.5 sum W0) per column, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_a"
+bits = 4

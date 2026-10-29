@@ -967,6 +967,66 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
     return acc
 
 
+#: the noise rules `served` adds to the integer product and serves
+SERVED_RULES = ("ssn_a", "ssn2", "raw_byte")
+#: data entries in a k32 step (the other 4 are noise)
+SSN_DATA = 28
+
+
+def fused_offset(name: str, k: int, n: int) -> int:
+    """Where this projection's columns start in its fused linear (qkv, gate_up), for Llama's shapes: q's rows the
+    hidden size k, k's and v's alike, gate's and up's alike."""
+    return {"self_attn.k_proj": k, "self_attn.v_proj": k + n, "mlp.up_proj": n}.get(name, 0)
+
+
+def ssn_a_w0(n: int, k: int, offset: int = 0) -> torch.Tensor:
+    """SSN-A's public pattern W0, steps x 4 x n, for columns offset .. offset + n - 1 of the fused linear: step 0 the
+    base-13 digits less 6 of c = j + 1 (j + 2 from the all-zero code on), an injective code into [-6, 6]^4 \\ {0};
+    step s >= 1 one-hot at q = (j + s) mod 4."""
+    s = -(-k // SSN_DATA)
+    j = torch.arange(offset, offset + n, dtype=torch.int64)
+    zero = sum(6 * 13 ** e for e in range(4))
+    c = torch.where(j + 1 < zero, j + 1, j + 2)
+    if int(c.max()) >= 13 ** 4:
+        raise ValueError(f"ssn_a: {offset + n} columns outrun the 4-digit base-13 code")
+    w0 = torch.zeros((s, 4, n), dtype=torch.float64)
+    for e in range(4):
+        w0[0, e] = ((c // 13 ** e) % 13 - 6).double()
+    st = torch.arange(1, s)
+    w0[st[:, None], (j[None, :] + st[:, None]) % 4, torch.arange(n)[None, :]] = 1
+    return w0
+
+
+def _check_served(p):
+    if p["rule"] not in SERVED_RULES:
+        raise ValueError(f"served.rule is one of {SERVED_RULES}")
+    if p["bits"] not in (1, 2, 4) or (p["rule"] != "ssn_a" and p["bits"] != 1):
+        raise ValueError("served.bits is 1, 2 or 4, and widens only ssn_a's mask")
+
+
+@linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
+def served_linear(mm, nxt, *, rule: str, bits: int = 1):
+    """Noise added to the exact integer product and served, never subtracted, fresh every call, over S = ceil(k / 28)
+    k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
+    {0, ..., 2^bits - 1}^(m x S x 4); `ssn2` adds a b - S, a and b bits (m x S x 4 and S x 4 x n); `raw_byte` adds
+    sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred."""
+    acc = nxt(mm).double()
+    (m, k), n = mm.x.shape, acc.shape[1]
+    s = -(-k // SSN_DATA)
+    if rule == "raw_byte":
+        noise = (mm.coins((m, s), 256) - 128).double().sum(1, keepdim=True).expand(m, n)
+    elif rule == "ssn2":
+        noise = mm.coins((m, 4 * s), 2).double() @ mm.coins((4 * s, n), 2).double() - s
+    else:
+        off = fused_offset(mm.name, k, n)
+        w0 = mm.shared(("ssn_a_w0", k, n, off, str(acc.device)),
+                       lambda: ssn_a_w0(n, k, off).reshape(4 * s, n).to(acc.device))
+        noise = mm.coins((m, 4 * s), 2 ** bits).double() @ w0 - torch.round((2 ** bits - 1) / 2 * w0.sum(0))
+    bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + G.absmax(noise)
+    mm.gate("accumulator", bound <= G.S32, bound)
+    return acc + noise
+
+
 @attention_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
                 check=lambda p: _check_grid(p, ("q", "k", "p", "v")), source="D4-LOWBIT")
 def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", p: str = "dither", v: str = "dither",
