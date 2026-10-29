@@ -21,7 +21,7 @@ challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}
 
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
-bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
+bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never resamples).  It appends each
 release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
 monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
 is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener, RT4-INT-29)
@@ -239,7 +239,7 @@ def _hello_reason(head: dict, secret: bytes | None) -> str | None:
 def greet(sock: socket.socket, secret: bytes | None = None) -> str | None:
     """Read the client's hello on `sock`: None when it is the session's (`serve(..., greeted=True)` then serves the
     stream), else why it is refused, which is sent before the stream is hung up.  It releases nothing, so a server may
-    take another connection after a refused hello without redrawing anything."""
+    take another connection after a refused hello without resampling anything."""
     try:
         why = _hello_reason(_Wire(sock).recv(), secret)
     except CoinError as e:
@@ -357,7 +357,7 @@ class RemoteChallenger:
         """`open` of each (label, index, after) of `requests` in one round trip: every open frame written back to back,
         then the replies read in order, each checked as `open` checks its own (`live_reason` against its request).  A
         refusal, a reply of another form, or a coin that isn't its request's, opened after its `after`, ends the session
-        and raises: none of the batch's openings is returned, and a retry never redraws.  The challenger answers frames
+        and raises: none of the batch's openings is returned, and a retry never resamples.  The challenger answers frames
         in order (`serve`), so its release log is the one the same coins opened one at a time would have written.  At
         most `MAX_BATCH` coins: their frames are written before any reply is read."""
         asked = [(label, index, bytes(after)) for label, index, after in requests]

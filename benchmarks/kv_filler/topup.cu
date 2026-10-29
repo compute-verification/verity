@@ -8,12 +8,12 @@
 //   mode  3  sk16: the cost of a sketch-then-hash receipt over the same blocks (the sketch tag's shape, not its format):
 //            each block's 2,056 bytes as int8 against 16 rows of ±1 signs (dp4a), the 16 int32 sums hashed by one keyed
 //            BLAKE3 compression under the block's index, then ro-blake3/v1's leaves and tree over those 32-byte digests;
-//            the signs are drawn once a run from its seed (a deployment draws them a pass, F29: the cost is the same)
+//            the signs are sampled once a run from its seed (a deployment draws them a pass, F29: the cost is the same)
 //   mode  4  fill-sk16/v0 (`fill.cu`): 4,096-byte blocks sketched on the tensor cores against 16 rows of ±1 signs, each
 //            block's sums hashed by one keyed BLAKE3 compression and each 32 blocks' leaves into a unit root; a chunk is
 //            whole units, read by a fixed grid (`ctas`, default one CTA an SM) of 4 warps a CTA, a unit a warp at a time,
 //            the chunk's check word the XOR of its units' first root words. Chunks alternate between two streams so that
-//            one chunk's tail overlaps the next one's start. Signs drawn once a run, as sk16's
+//            one chunk's tail overlaps the next one's start. Signs sampled once a run, as sk16's
 //
 // The receipts are the bandwidth audit's own kernels (`../bandwidth/tagger.cu`, included here): a chunk is one tag pass
 // over `chunk_bytes / 2056` blocks of a region under the chunk's seed (the run's seed with its first 8 bytes XORed with

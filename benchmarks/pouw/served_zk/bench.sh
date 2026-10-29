@@ -2,7 +2,7 @@
 # served_zk's row-commitment microbenchmark on node 2 (rows_bench.py), untimed: GPU 1's pearl_c_sm120.cubin (build.sh's nvcc
 # line) and hm96_rows.cubin built on the node's CPUs, then rows_bench.py in a one-GPU preemptible lease.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
-#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/served_zk/bench.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/served_zk/bench.sh
 # env: CALLS, REPS, PREFILL (rows_bench.py's), MAX_MIN (the lease's minutes, default 20)
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$OUT"

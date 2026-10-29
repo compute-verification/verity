@@ -255,7 +255,7 @@ theorem flatMapRP_mem {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f 
 
 /-- **What `checkRevealed` returns passes its check**: each pair is one of `rs`, its opening passes the commitment's
 check under its roots, and that check's calls are among `checkRevealed`'s own. -/
-theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     ∀ p ∈ ((checkRevealed (R := R) Cm rs).eval H run).1, p ∈ rs ∧ Cm.Opens H p.1 p.2 = true ∧
       ∀ q ∈ ((Cm.opens p.1 p.2).eval H).2, q ∈ ownLog H run (checkRevealed (R := R) Cm rs) := by
@@ -269,7 +269,7 @@ theorem checkRevealed_mem {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm :
     exact ⟨hp', hok, fun q h => hq q (List.mem_append_left _ h)⟩
   · simp at hc
 
-theorem checkRevealed_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : Commitment Bool)
+theorem checkRevealed_runs {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) : ((checkRevealed (R := R) Cm rs).eval H run).2.2 = 0 := by
   unfold checkRevealed
   rw [flatMapRP_runs]

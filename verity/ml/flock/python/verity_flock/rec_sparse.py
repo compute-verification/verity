@@ -16,7 +16,7 @@ eq(y_hi, u)``, and with the lincheck's α, the row point ``x = (ζ_r, ρ_in)`` a
 
     Φ(q) = (α q_{2 ELL} + q_{2 ELL + 1}) · ∏_{j < ELL} (1 + x_j + q_j) · ∏_{j < ELL} (1 + y_j + q_{ELL + j}).
 
-**The checks** (one rep; a coin is drawn after the message before it, and every sumcheck binds its lowest variable first and
+**The checks** (one rep; a coin is flipped after the message before it, and every sumcheck binds its lowest variable first and
 sends a round's coefficients without ``c_1 = claim + Σ_{i >= 2} c_i``, characteristic 2):
 
 * H1: ``claim = Σ_{s < 64} eq(ζ_c, s) h[s]``, ``h`` the 64 folded hidden comb values the lincheck's L4′ sent.
@@ -32,7 +32,7 @@ sends a round's coefficients without ``c_1 = claim + Σ_{i >= 2} c_i``, characte
 **Ports.** Every port is u16 words, an F element 8 of them (``lo || hi``) as `rec_residuals` has it, and a port of n elements
 ``P(n) = 64 ⌈n / 8⌉`` words (whole M0 rows), its words past the elements unread.
 
-* ``h``, ``pre<j>``, ``v2``, ``sc<j>``, ``u``, ``vt``: the rep's sparse-phase messages, one port each, as the firewall committed
+* ``h``, ``pre<j>``, ``v2``, ``sc<j>``, ``u``, ``vt``: the rep's sparse-phase messages, one port each, as the ZK server committed
   them (each a row the statement reads under the coin server's record, as `rec_residuals`' ``m<i>``). ``h`` is the inner
   session's h round (`rec_algebra.h_round`, absorbed before r′ and ζ_c), which the rep's algebra (`rec_residuals.InnerRepCheck`)
   reads at the same row for its lincheck check L4′.
@@ -50,7 +50,7 @@ phase accepts at a τ inside the bucket.
 **Cost.** One Gf128Mul (2,187 ANDs) for each product with a message or a computed value in it (`products`): 64 (H1), 2 a round
 (H2), 1 (``ŵ · v2``), deg a round (H3), d + 1 (``α u_a``, Φ's 2 ELL factors and ``Ũ(r_s)``), P' and with T > 1 2T (H4), and
 ``128 (T - 1)`` ANDs a slot for the selects (a demultiplexer of ``eq(r_s, σ)`` by τ_σ's bits). Everything that only coins
-decide is the verifier's (`verifier_row`), so no product has two public operands. The firewall commitments of the messages and
+decide is the verifier's (`verifier_row`), so no product has two public operands. The ZK server commitments of the messages and
 the reads of ``claim`` and ``tau`` are the statement's row reads, outside this Definition.
 
 `sparse_ref` is the reference on words. The body computes the products of a message by a verifier value as one
@@ -62,7 +62,7 @@ of u16 words per port, one output row. Its ANDs are ``ands`` and `copy_rows`' (l
 InnerRepCheck's parts (`rec_residuals.write_rows`).
 
 **The prover** (`prove`, T = 1: one hidden circuit, the slots' factor ``Ũ`` its range's layout) runs a rep's phase on coins it
-draws one round at a time (``draw``: the coin server's, through the proxy), from the circuit's `entries`, which `table` lays
+flips one round at a time (``draw``: the coin server's, through the proxy), from the circuit's `entries`, which `table` lays
 out as R's cells (cell ``k + 2^NU p``, byte ``i >> 3``, bit ``i & 7``, zero cells to fast100's least m). It checks every sum it
 sends against the claim before it, and its registered claim is R's value at the coins' point (`table_value`).
 """
