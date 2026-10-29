@@ -19,11 +19,11 @@ namespace MemoryChallenger.StreamedWipe
 
 open Flock
 
-def PROTOCOL : String := Domains.POUS_STREAMED_WIPE
-def SESSION_TAG : ByteArray := Domains.POUS_STREAMED_WIPE_SESSION.toUTF8.push 0
-def RECORD_BINDING : ByteArray := Domains.POUS_STREAMED_WIPE_BATCH_RECORDS.toUTF8.push 0
-def RECORDS_TREE : String := Domains.POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512
-def RECORD_SCHEMA : String := Domains.POUS_STREAMED_WIPE_BATCH_RECORD
+def PROTOCOL : String := "verity-pous/streamed-wipe/v1"
+def SESSION_TAG : ByteArray := "verity-pous/streamed-wipe/session/v1".toUTF8.push 0
+def RECORD_BINDING : ByteArray := "verity-pous/streamed-wipe/batch-records/v1".toUTF8.push 0
+def RECORDS_TREE : String := "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
+def RECORD_SCHEMA : String := "pous/streamed-wipe/batch-record/v1"
 def LABEL_BYTES : Nat := 64
 def COMPLETE : String := "complete"
 
@@ -179,5 +179,13 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (s : Signed) (c : Com
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
   return ⟨reasons.isEmpty, reasons, egressUnits s.egressBits⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : PROTOCOL = Domains.POUS_STREAMED_WIPE := rfl
+example : SESSION_TAG = Domains.POUS_STREAMED_WIPE_SESSION.toUTF8.push 0 := rfl
+example : RECORD_BINDING = Domains.POUS_STREAMED_WIPE_BATCH_RECORDS.toUTF8.push 0 := rfl
+example : RECORDS_TREE = Domains.POUS_STREAMED_WIPE_BATCH_RECORDS_FRAME_V3_SHA512 := rfl
+example : RECORD_SCHEMA = Domains.POUS_STREAMED_WIPE_BATCH_RECORD := rfl
 
 end MemoryChallenger.StreamedWipe
