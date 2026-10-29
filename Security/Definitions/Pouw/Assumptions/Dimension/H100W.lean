@@ -23,9 +23,11 @@ instructions at `pr.tc` or more per register, FFMA, FADD and FMUL at `pr.ffma`, 
   maximum over resources.
 * **One program, fixed before the coins.** A program is straight-line and its addresses are oblivious: it has no
   branch on data and no store to a computed address, and a load from a computed address is `other`. Its registers are
-  functions on the grid, and its cost does not depend on the grid point. So a bound here is about a prover that runs
-  one program for every coin value. A prover that branches on the coins, or stores to addresses it computed from them,
-  is outside `MH100w`, and reaching it needs a premise that carries its runs to a model that counts per run.
+  functions on the grid, and its cost does not depend on the grid point.
+  - A prover that branches on the coins is reached cell by cell, because the bounds hold on every set `S`. On the grid
+    points where it chooses the same straight-line program, that program is an `MH100w` program (`adaptive_floor`).
+  - A store to an address computed from the coins is outside `MH100w`. A free `move` can't stand for it, since its
+    location differs from one grid point to the next.
 
 * **Every salt-independent function of the committed input is free** (the corrected §0 rule). The committed input is X_q
   (the model's own FP8 quantization of the activations: E4M3 codes and a per-row scale), s, and the offline weight codes
@@ -106,7 +108,7 @@ The verdicts:
   - The operand rule is by definition.
 * **`Op100.CheapIn`**: **matches**, vacuously. No H200 tensor form costs under 32 a register, so at `a = 32` no
   instruction is cheap.
-* **`DistinctOn` and `OutputsOn`**: **match** the per-word credit for one program fixed before the coins (above).
+* **`DistinctOn` and `OutputsOn`**: **match** the per-word credit for a program with oblivious addresses (above).
   - A target is one 32-bit word, as every lane form writes them.
   - An instruction guarded on the coins writes the guarded function at its full price, whatever the guard. That is
     model W, as measured.
