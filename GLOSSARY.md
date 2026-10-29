@@ -288,7 +288,7 @@ Some words keep a different, narrower sense:
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`). It is not a period.
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).
-- Five words still carry two senses in the code:
+- Five words still carry two senses in the code; each entry says which sense keeps the word and what the other is called:
   - **Row**: a commitment row, the bits one leaf hashes (hm96 rows, the `*/row/*` leaf schemes, the row-form statements).
     A matrix's row (a slot is one row of a step's activations) stays plain English. A workload or a server block is
     never a row (Older names).
