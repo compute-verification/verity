@@ -193,7 +193,7 @@ def lead(**kw):
 def test_the_lead_is_a_variant_of_its_own_scheme_named_by_its_sources():
     v = lead()
     assert v.id == "pouw-lead-h200/5e1d0c7a9b42" and v.schemes == {POUW_V2} == {"verity/pouw/v2"}
-    assert v.schedules == {"serial"} and v.fold_bound == LEAD_FOLD_BOUND == 4194304
+    assert v.schedules == {SERIAL.name} == {"serial"} and v.fold_bound == LEAD_FOLD_BOUND == 4194304
     assert LEAD_CONFIG == {"BLC": "2", "ROT": "1", "FOLD": "1"}
     assert variant_refusals(v, POUW_V2, "serial", LLAMA_1B, gate(v, shapes=LLAMA_1B, prices=None,
                                                                    fold_bound=LEAD_FOLD_BOUND)) == []
