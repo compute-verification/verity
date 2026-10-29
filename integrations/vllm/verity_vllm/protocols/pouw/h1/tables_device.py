@@ -16,7 +16,9 @@ step's roots at its round's close, so a call's tables hash beside the forward ra
 machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
-says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
+says, and `settle` records the roots of the calls the GPU has finished hashing, in call order. With a prover directory it
+keeps each served call's rows, scales and records there (`pouw_h1_prover.keep_call`), off the serving thread when the
+directory is open on a `pouw_h1_prover.Writer` (serve-openai's ``--h1-prover``).
 """
 from __future__ import annotations
 
@@ -320,6 +322,21 @@ def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -
         run._roots[call.index].update(zip(("a", "z"), (r.hex() for r in host_roots(laid, run._key))))
 
 
+def _dtype(x: Any) -> str:
+    return str(x.dtype).removeprefix("torch.")
+
+
+def _keep(run: Any, call: Any, a: Any, s_a: Any, records: Any) -> None:
+    """The served call's prover state (`pouw_h1_prover.keep_call`): by the `pouw_h1_prover.Writer` its directory is open
+    on, off this thread, when its rows, scales and records are the int8, f32 and uint8 the file keeps; else here."""
+    writer = PV.writer_of(run.prover)
+    if writer is not None and _dtype(a) == "int8" and _dtype(s_a) == "float32" and \
+            (records is None or _dtype(records) == "uint8"):
+        writer.keep(run.prover, call.index, a, s_a, records)
+        return
+    PV.keep_call(run.prover, call.index, row_words(a, call.m, "i1"), row_words(s_a, call.m, "<f4"), ZR.host(records))
+
+
 def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
     """``run``'s (a `pouw_h1.H1Run`'s) commit of the call's A table (`table_leaves`) and its z table, leaf u proof block u's z/y
     record (`pouw_h1_records`; an empty call's all zero), none for a served call whose arm handed over no records. Hashed
@@ -333,7 +350,7 @@ def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | N
     if where != "python":
         _kernel_tables(run, call, a, s_a, zy if m and records is not None else None, where)
         if run.prover is not None and m:
-            PV.keep_call(run.prover, call.index, row_words(a, m, "i1"), row_words(s_a, m, "<f4"), ZR.host(records))
+            _keep(run, call, a, s_a, records)
         return
     if a is not None and m:
         av, sv = row_words(a, m, "i1"), row_words(s_a, m, "<f4")
@@ -345,4 +362,4 @@ def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | N
     out["z"] = None if leaves is None else _table(run, call, "z", leaves)
     run._roots[call.index] = out
     if run.prover is not None and m:
-        PV.keep_call(run.prover, call.index, av, sv, held)
+        _keep(run, call, av, sv, held)
