@@ -29,14 +29,15 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
-  1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check passed (its
-     ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go through the
-     front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request late past the
-     network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to reject (`rehearsed`).
+  1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
+     passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
+     through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
+     late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
+     reject (`rehearsed`).
   2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
-  3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan) on the
-     kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
+  3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
+     on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
      reject with its why.

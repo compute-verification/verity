@@ -1,12 +1,12 @@
 """Adversarial cases against the relay's `PublisherProcess`:
-the spawned process that alone holds the network certifier's key, rebuilds each record from the rows the network certifier releases a tick
-at a time, and keeps, certifies and commits it. Every case runs the network certifier on a `VirtualClock`, with no sleeps and no
-wall clock: the files the process writes are byte for byte the ones the thread publisher writes on the same run
-and key, a faulted window's status included; a process killed mid-window fails the run at that window's close with
-its exit code, and the check refuses the window; a process a window behind moves no tick and keeps every record whole;
-a truncated file never makes the check accept. And the close marker carries the record's grid's SHA-512: a row lost,
-doubled or changed between the processes is refused by the process, and a released row that isn't the record's by
-the network certifier's side, so neither is signed."""
+the spawned process that alone holds the network certifier's key, rebuilds each record from the rows the network
+certifier releases a tick at a time, and keeps, certifies and commits it. Every case runs the network certifier on a
+`VirtualClock`, with no sleeps and no wall clock: the files the process writes are byte for byte the ones the thread
+publisher writes on the same run and key, a faulted window's status included; a process killed mid-window fails the run
+at that window's close with its exit code, and the check refuses the window; a process a window behind moves no tick and
+keeps every record whole; a truncated file never makes the check accept. And the close marker carries the record's
+grid's SHA-512: a row lost, doubled or changed between the processes is refused by the process, and a released row that
+isn't the record's by the network certifier's side, so neither is signed."""
 
 from __future__ import annotations
 
@@ -87,12 +87,12 @@ def _key(tmp_path: Path, *names: str) -> list[Path]:
 
 def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: dict | None = None,
            kill_at: int | None = None, before_close=None, release_edit=None, transport=None) -> dict:
-    """The network certifier for `WINDOWS` windows on a `VirtualClock` over `REQUESTS`, published by `PublisherProcess` (or by
-    `ThreadPublisher`), written as `serve` and `client` write a run; `late[t]` puts tick t that late, `kill_at` kills
-    the process (by its pid) before tick t, `before_close(warden)` runs once every tick is done, before the
-    publisher's `close`, `release_edit(release)` stands in for the release the network certifier calls, and `transport(put)` for
-    the put of every message to the process. Returns the network certifier, the records it closed, and what the run and `close`
-    raised."""
+    """The network certifier for `WINDOWS` windows on a `VirtualClock` over `REQUESTS`, published by `PublisherProcess`
+    (or by `ThreadPublisher`), written as `serve` and `client` write a run; `late[t]` puts tick t that late, `kill_at`
+    kills the process (by its pid) before tick t, `before_close(warden)` runs once every tick is done, before the
+    publisher's `close`, `release_edit(release)` stands in for the release the network certifier calls, and
+    `transport(put)` for the put of every message to the process. Returns the network certifier, the records it closed,
+    and what the run and `close` raised."""
     out.mkdir()
     tau, late = PARAMS.bucket_ms / 1000, late or {}
     if process:
@@ -242,10 +242,10 @@ def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_pa
 
 
 def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_window(tmp_path):
-    """The process killed (SIGKILL, by its pid) ten ticks into window 1: no tick runs late, the network certifier's run raises at
-    window 1's close, before publishing it, and `close` raises too, without waiting on the dead process. Nothing of
-    window 1 is on disk, the check refuses it on every link, and every head it does find certified is that of the
-    record the relay closed. Both raise the process's exit code (rather than a bare `EOFError`, the dead
+    """The process killed (SIGKILL, by its pid) ten ticks into window 1: no tick runs late, the network certifier's run
+    raises at window 1's close, before publishing it, and `close` raises too, without waiting on the dead process.
+    Nothing of window 1 is on disk, the check refuses it on every link, and every head it does find certified is that of
+    the record the relay closed. Both raise the process's exit code (rather than a bare `EOFError`, the dead
     process's end of the pipe reading as a message to `_receive`'s `poll` and `recv` hitting its EOF)."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, kill_at=PARAMS.window + 10)
@@ -342,8 +342,8 @@ def _altered():
 
 
 def test_the_close_marker_carries_the_records_grid_digest(tmp_path):
-    """Each close marker the process gets is (window, status, the SHA-512 of the grid of the record the network certifier closed),
-    in the order the network certifier closed them, and the run is accepted."""
+    """Each close marker the process gets is (window, status, the SHA-512 of the grid of the record the network
+    certifier closed), in the order the network certifier closed them, and the run is accepted."""
     sent = []
 
     def transport(put):
@@ -382,9 +382,9 @@ def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path
 
 
 def test_a_release_that_isnt_the_records_grid_is_refused_at_its_close(tmp_path):
-    """The network certifier's side holds the record it closes to the rows it released: window 0's first egress row released
-    twice and its last not at all fails the run at that close, before any marker for it, and the check refuses the
-    record."""
+    """The network certifier's side holds the record it closes to the rows it released: window 0's first egress row
+    released twice and its last not at all fails the run at that close, before any marker for it, and the check refuses
+    the record."""
     def release_edit(release):
         count = [0]
 

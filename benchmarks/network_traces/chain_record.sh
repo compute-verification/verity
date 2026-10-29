@@ -21,8 +21,8 @@
 #            holding a gate run's witness moved to the quarantine, the run refused by name (exit 3; $OUT/leak-guard.json)
 # CR_PATH=warden is the warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
-# --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the network certifier's cells),
-# n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
+# --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the network certifier's
+# cells), n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
@@ -36,12 +36,13 @@
 #      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
 #      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the verifier's own coins)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
-#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
-#      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
-#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no active network certifier's rows: the scan isn't run
-#      or required, and the report names what that path stubs, chain_record.STUBBED)
-#      CR_PATH=warden (above)  CR_EOS_IDS (the network certifier path's endpoint step: the model's EOS token ids, comma-separated,
-#      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's execution phases, the run's all
+#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
+# scan_zk.py      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
+#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no active network certifier's rows:
+# the scan isn't run      or required, and the report names what that path stubs, chain_record.STUBBED)
+#      CR_PATH=warden (above)  CR_EOS_IDS (the network certifier path's endpoint step: the model's EOS token ids,
+# comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
+# execution phases, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
 #      --draw K: N2's period sampled, K of the link-windows drawn on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
@@ -57,8 +58,8 @@
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
-# state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only) nor a
-# rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
+# state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
+# nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness: a gate sent under inputs/ is moved to the quarantine once unpacked,
 # and on every exit leak_guard.py moves out whatever else holds a piece of it. On a signal (a timeout's SIGTERM leaves

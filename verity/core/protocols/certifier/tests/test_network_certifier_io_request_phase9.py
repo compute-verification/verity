@@ -1,5 +1,6 @@
-"""IoTieRequest's adversarial cases as regressions, on the proof block a bucket row of the network certifier's own ingress: what a
-bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its buckets.
+"""IoTieRequest's adversarial cases as regressions, on the proof block a bucket row of the network certifier's own
+ingress: what a bucket's verdict holds alone, and what rests on the verifier's lanes chaining each connection over its
+buckets.
 
   a. The public inputs are the lanes (each lane's ordinal and its request's carry-in and carry-out) and still no
      advice digest or Commit: `advised.IoTieVerdict` keys the verdicts to the advice's digest, built only

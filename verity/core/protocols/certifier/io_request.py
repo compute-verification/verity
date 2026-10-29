@@ -1,37 +1,38 @@
-"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the network certifier's own ingress: the proof
-block a bucket row that binds each request's prompt_len and arrival ordinal to the network certifier's certified ingress cells, its
-reference in the clear and the Boolean Definitions it is built from. Nothing here is in a Spec or proved.
+"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the network certifier's own ingress:
+the proof block a bucket row that binds each request's prompt_len and arrival ordinal to the network certifier's
+certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
+Spec or proved.
 
-**The cells are the network certifier's** (`warden.Warden._ingress`, its rows as `warden_rows` registers them, a row a bucket).
-An execution phase's ingress is T rows, row t bucket t's L·R slots of B bytes, R the network certifier's r. A bucket's live
-connections, admitted and not past their ingress `END`, hold R slots each, ranked by ordinal (lane ρ: slots ρ·R …
-ρ·R + R − 1), and a slot no connection holds is B zero bytes. Connection q's cells are its client's bytes cut as
-`warden.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more follow,
-then an `END` with the last 1 … P; and a `PAD` on q (no payload) where fewer than P of its bytes wait and its client
-hasn't ended, and after its `END`. So a bucket's R cells on q are `DATA` cells, then its `END` or none, then `PAD`s.
-The bytes are a canonical id request (`active.id_request` at offset 0: the cells carry the bytes alone, no LENGTH),
-whose every field is at a place fixed by the prompt's length and B alone, and whose length is its content-length plus
-`BODY_AT`. Each cell is parsed without its request's prompt length (`parse_frame`): the head and the fixed fields at
-their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10 characters), the gap spaces only where the next
-piece would straddle a cell, and `]}` then zero fill at the request's last byte. So each request's prompt_len is its
-count of prompt fields, read from the certified bytes. A name (`model`, `user`) is printable ASCII but `"` and `\\`
-in quotes, so a request whose name needs a JSON escape is refused.
+**The cells are the network certifier's** (`warden.Warden._ingress`, its rows as `warden_rows` registers them, a row a
+bucket). An execution phase's ingress is T rows, row t bucket t's L·R slots of B bytes, R the network certifier's r. A
+bucket's live connections, admitted and not past their ingress `END`, hold R slots each, ranked by ordinal (lane ρ:
+slots ρ·R … ρ·R + R − 1), and a slot no connection holds is B zero bytes. Connection q's cells are its client's bytes
+cut as `warden.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more
+follow, then an `END` with the last 1 … P; and a `PAD` on q (no payload) where fewer than P of its bytes wait and its
+client hasn't ended, and after its `END`. So a bucket's R cells on q are `DATA` cells, then its `END` or none, then
+`PAD`s. The bytes are a canonical id request (`active.id_request` at offset 0: the cells carry the bytes alone, no
+LENGTH), whose every field is at a place fixed by the prompt's length and B alone, and whose length is its
+content-length plus `BODY_AT`. Each cell is parsed without its request's prompt length (`parse_frame`): the head and the
+fixed fields at their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10 characters), the gap spaces only where
+the next piece would straddle a cell, and `]}` then zero fill at the request's last byte. So each request's prompt_len
+is its count of prompt fields, read from the certified bytes. A name (`model`, `user`) is printable ASCII but `"` and
+`\\` in quotes, so a request whose name needs a JSON escape is refused.
 
 **The lanes** (`Lane`, public in the named gap): each lane's connection, its ordinal q (0 for a lane no connection
 holds), and its request's carry-in and carry-out, (bytes left, prompt fields so far) before and after the bucket's
 cells: (0, 0) before its first cell and (0, n) after its `END`, n its prompt_len. The verifier computes them (`lanes`)
 from the advice's prompt lengths, advice request i on ordinal order[i] + 1 (advice v1's order permutation; v0's is
-the identity), and the network certifier's ingress release (`Release`: each connection's first bucket and its request cells a
-bucket), which it takes in the clear for now as it takes the ingress record's wiring (the named gap). So connection
-q's lanes chain by construction: (0, 0) into its first bucket, each bucket's carry-out the next one's carry-in, and
-(0, n_q) out of its last, and the link's bucket verdicts hold every request's prompt_len to its cells, whatever
-buckets it spans (a carry checked alone would accept any added count).
+the identity), and the network certifier's ingress release (`Release`: each connection's first bucket and its request
+cells a bucket), which it takes in the clear for now as it takes the ingress record's wiring (the named gap). So
+connection q's lanes chain by construction: (0, 0) into its first bucket, each bucket's carry-out the next one's
+carry-in, and (0, n_q) out of its last, and the link's bucket verdicts hold every request's prompt_len to its cells,
+whatever buckets it spans (a carry checked alone would accept any added count).
 
 **What 1 means** (`reference`): in each lane, the R cells read from the carry-in are pads and request cells on its
 ordinal, no request cell after a pad or after the request's `END`, each request cell that cell of a canonical id
 request with its header's length (P for a `DATA`, the bytes left for the `END`), leaving the carry-out with no count
-past 2^32; a lane of ordinal 0 is B zero bytes a slot. That the row is row t of the network certifier's registered root is the
-proof system's registered read, outside the proof block (`warden_rows.bucket_port`).
+past 2^32; a lane of ordinal 0 is B zero bytes a slot. That the row is row t of the network certifier's registered root
+is the proof system's registered read, outside the proof block (`warden_rows.bucket_port`).
 
     IoTieRequestFrame{B}(cell: Array<B, Byte>, left, q: Array<32>) -> Array<68>
         pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
@@ -308,8 +309,8 @@ def carries(prompt_len: int, B: int) -> tuple[tuple[int, int], ...]:
 
 
 class Release(NamedTuple):
-    """Connection q's ingress in the network certifier's record: admitted at bucket `first` (the session's), its request cells
-    (`DATA` and its `END`) in each bucket from it on, its `END` in the last."""
+    """Connection q's ingress in the network certifier's record: admitted at bucket `first` (the session's), its request
+    cells (`DATA` and its `END`) in each bucket from it on, its `END` in the last."""
 
     q: int
     first: int
@@ -320,9 +321,9 @@ def lanes(shape: Shape, prompt_lens: Sequence[int], releases: Sequence[Release],
           order: Sequence[int] | None = None) -> tuple[Lane, ...]:
     """The verifier's lanes of session bucket `bucket` (the module docstring, "The lanes"): its live connections by
     ordinal, connection q = order[i] + 1 carrying advice request i's prompt_lens[i], then unheld lanes. Raises
-    `ValueError` where the releases aren't the network certifier's schedule (ordinals 1, 2, … admitted in order, at most L live, R
-    request cells a bucket), the connections aren't the advice's requests one to one, or a connection's cells aren't
-    its request's, ending in its last bucket."""
+    `ValueError` where the releases aren't the network certifier's schedule (ordinals 1, 2, … admitted in order, at most
+    L live, R request cells a bucket), the connections aren't the advice's requests one to one, or a connection's cells
+    aren't its request's, ending in its last bucket."""
     order = list(range(len(prompt_lens))) if order is None else list(order)
     if sorted(order) != list(range(len(prompt_lens))):
         raise ValueError("the order is a permutation of the advice's requests")

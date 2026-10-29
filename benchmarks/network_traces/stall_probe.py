@@ -5,9 +5,9 @@ the kernel function it slept in at each of its samples (`wchan`), its kernel sta
 the page faults the thread took during it, and its memory cgroup's state at its start: a charge past the cgroup's
 limit reclaims in the charging thread, which sleeps in D while it does.
 
-It is a process of its own because a thread of the network certifier's process can't run while the ticker holds the interpreter
-in the kernel (a page fault holds the GIL), which is when it is needed. Times are seconds after T, the network certifier's origin
-on the monotonic clock, which every process of the host shares.
+It is a process of its own because a thread of the network certifier's process can't run while the ticker holds the
+interpreter in the kernel (a page fault holds the GIL), which is when it is needed. Times are seconds after T, the
+network certifier's origin on the monotonic clock, which every process of the host shares.
 
 FILE has `threads` (each sampled thread: its process, label, samples by state, and its minor and major page faults
 from the origin to its last sample), `episodes`, the sampler's own `interval_ms` quantiles and every `gap` of

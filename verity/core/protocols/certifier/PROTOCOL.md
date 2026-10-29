@@ -73,8 +73,8 @@ On each link:
 
 - **Constant rate, with a cap, left-packed (W4).**
   - Every bucket emits exactly r frames: `n_t = min(queue, r)` real frames in slots 0 … n_t − 1, in queue order, then
-    padding. The I/O tie reads the active network certifier's grid instead, each live connection's r slots of a bucket by
-    ordinal ("The I/O tie", (c)).
+    padding. The I/O tie reads the active network certifier's grid instead, each live connection's r slots of a bucket
+    by ordinal ("The I/O tie", (c)).
   - The **occupancy** is (n_0, …, n_{T−1}), the number of real frames per bucket.
   - A colluding receiver can tell padding from a real frame, so occupancy is the timing channel.
 - **FIFO, with the queue carried across windows.** The release count is Lean's `released`, and the grid Lean's `fill`.
@@ -498,8 +498,8 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   change in vLLM) makes it the identity and the charge zero.
 - **The order within a bucket.** W4 releases a bucket's frames in queue order, a channel of up to log2 n_t! bits a
   bucket that neither advice v0 nor the timing term charges. The active
-  network certifier (`warden`) instead gives each live connection r slots of every bucket, ranked by ordinal, its cells in
-  order, and a `PAD` on its stream where it has none. The map pins every slot, its stream, its kind and a data cell's
+  network certifier (`warden`) instead gives each live connection r slots of every bucket, ranked by ordinal, its cells
+  in order, and a `PAD` on its stream where it has none. The map pins every slot, its stream, its kind and a data cell's
   entry: of every order of a bucket's cells the tie accepts the network certifier's, so the order is a function of the
   admissions and the release buckets, which the advice already says and charges. The only orders the map leaves
   free swap byte-identical cells (a connection's pads, one request's repeated id in a bucket, the zero cells of
@@ -1349,8 +1349,8 @@ ReplayStep_v1's state input and next-state output, bit for bit, at the shape's A
 with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It adds
 the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at most
 Q) and the decisions ``dec`` (at most D) with ``left``. With AS an arrival carries its cap (O = max_tokens): `q_cap
-Q×1` after `q_O`, as the step's `arr_cap` and the network certifier slots' `a_cap`. In every row the valid elements of each
-group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
+Q×1` after `q_O`, as the step's `arr_cap` and the network certifier slots' `a_cap`. In every row the valid elements of
+each group are a prefix and the rest are zero bits, and `decode` and `decode_window` refuse any other row.
 
 **A window** is the state rows S_0 … S_{P+1}, with P the public cap on its steps, and two window rows: the last
 window's and its own. Proof block 0, `ReplayLoad`, reads state rows 0 and 1 and both window rows. Proof block u ≥ 1 is
@@ -2205,8 +2205,8 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   wiring refused; (4) the consuming proof blocks read V′, the wiring is no longer opened, and this gap closes. The I/O
   tie, which reads every row of the window in order, needs no wiring.
 - A record's certificate signs certificate v2's SHA-512 frame leaves, one per cell. The same cells are also committed
-  as v3's hm96 rows, a row a bucket (8·B transfer gates a cell), under a root the network certifier signs ("The network certifier's cells as
-  rows").
+  as v3's hm96 rows, a row a bucket (8·B transfer gates a cell), under a root the network certifier signs ("The network
+  certifier's cells as rows").
 
 ## The network certifier's cells as rows (`warden_rows`)
 

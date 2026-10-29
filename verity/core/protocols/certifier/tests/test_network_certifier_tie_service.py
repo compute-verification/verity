@@ -1,4 +1,5 @@
-"""The ingress tie through the proof system (`tie_service`): each bucket row of an ingress execution phase of the network certifier's
+"""The ingress tie through the proof system (`tie_service`): each bucket row of an ingress execution phase of the
+network certifier's
 cells proved as IoTieRequest (a stand-in proof, `standin.prove_tie`, its rows read off the warden's root and decided by
 the verifier of record on its own lanes), and `advised.IoTieVerdict` built from the stream's outcomes of record alone.
 An honest link is tied, `advised.ends` reads the tie, and the advised link takes it only from `Ties`, the tie, its
@@ -306,9 +307,9 @@ def test_an_advice_whose_received_isnt_the_release_refuses_every_window(tmp_path
 
 
 def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
-    """Each proof block's witness row is read off the network certifier's root at its own bucket (`warden_rows.bucket_port`): a
-    proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own lanes) or on the window's rows read
-    by swapped proof blocks fails the registered read, and so do its sessions."""
+    """Each proof block's witness row is read off the network certifier's root at its own bucket
+    (`warden_rows.bucket_port`): a proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own
+    lanes) or on the window's rows read by swapped proof blocks fails the registered read, and so do its sessions."""
     advice = _advice(SPAN)
     run = Run(tmp_path / "row")
     lanes = run.tie.lanes(advice, SERVED.releases, 0)

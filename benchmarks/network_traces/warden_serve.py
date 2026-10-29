@@ -1,25 +1,26 @@
-"""warden-serve: the active network certifier (`verity.core.protocols.certifier.warden`) on one host, a relay that knows bytes
-only, in front of any TCP server, and the offline check of what it published.
+"""warden-serve: the active network certifier (`verity.core.protocols.certifier.warden`) on one host, a relay that knows
+bytes only, in front of any TCP server, and the offline check of what it published.
 
-**Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one connection to the server
-(`--upstream HOST:PORT`) for it and forwards each direction's bytes unchanged in content, on its schedule, in B-byte
-cells; the client speaks cells through the thin, workload-blind shim (`warden.cells` sending, `warden.Shim` reading):
+**Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
+connection to the server (`--upstream HOST:PORT`) for it and forwards each direction's bytes unchanged in content, on
+its schedule, in B-byte cells; the client speaks cells through the thin, workload-blind shim (`warden.cells` sending,
+`warden.Shim` reading):
 
     client ──cells──▶ network certifier ──bytes──▶ server ──bytes──▶ network certifier ──cells──▶ client
 
-Nothing here is the network certifier's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed `/v1/completions`
-with `Connection: close`, so the server's end of stream ends egress (the network certifier never half-closes toward a server).
-The server gets each request whole at its release, with its place in the network certifier's release order and the network certifier's run
-id (`release`), which `deployment.json` names (`run_id`).
+Nothing here is the network certifier's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed
+`/v1/completions` with `Connection: close`, so the server's end of stream ends egress (the network certifier never
+half-closes toward a server). The server gets each request whole at its release, with its place in the network
+certifier's release order and the network certifier's run id (`release`), which `deployment.json` names (`run_id`).
 
 **What it can't enforce here.**
-- Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The gate's
-  `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server reached
-  through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other route,
-  which nothing here sees.
+- Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
+  gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+  reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
+  route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
-- The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network certifier's
-  host clock (`origin_unix`).
+- The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
+  certifier's host clock (`origin_unix`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
 
@@ -51,30 +52,32 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
 
-- `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their digest,
-  the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its pacer `--paced-ms`
-  after its boundary (`warden`'s "The pacer"; 0: written on the network certifier's loop), and writes `warden.json` (each
-  connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their windows, and each
-  bucket's pacer report, `paced`). Each window's records go to `requests.records`,
+- `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
+  digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
+  pacer `--paced-ms` after its boundary (`warden`'s "The pacer"; 0: written on the network certifier's loop), and writes
+  `warden.json` (each connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their
+  windows, and each bucket's pacer report, `paced`). Each window's records go to `requests.records`,
   `responses.records` and `fails.records` (each failed connection's reason, witness), and each is certified
-  (`certificate.Issuer`, with the network certifier's parameters digest) into `certified.jsonl`, except a window in which the
-  network certifier refused a connection, whose records and rows it certifies and signs none of (`warden`'s "Admission"). Each window of the wire's two records is also committed as
-  rows, a row a bucket, with its wiring (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the
-  cost (rows, row bytes, commit and sign ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's,
-  who holds the records the rows and the wiring are read off). All of that is done by a spawned process
-  (`PublisherProcess`), which alone holds the key and gets each tick's rows as the network certifier releases them: a window's
-  commit can take seconds of CPU, and in the network certifier's own process, even on another thread, it holds the ticker's GIL and
-  puts ticks past their slack. Before the origin `serve` runs on the C allocator (it re-executes itself with
-  `PYTHONMALLOC=malloc`) and makes its process ready for the run's growth (`prepare_process`: its descriptor table, its
-  heap, its pages locked where permitted), and from it to the end a process of its own (`stall_probe`, unless
-  `--no-stall-probe`) samples every thread of both processes each millisecond into `stalls.json`, every episode in
-  uninterruptible sleep with the kernel function it slept in; `warden.json` keeps what was prepared (`process`) and
-  each thread's episodes and page faults (`stalls`).
+  (`certificate.Issuer`, with the network certifier's parameters digest) into `certified.jsonl`, except a window in
+  which the network certifier refused a connection, whose records and rows it certifies and signs none of (`warden`'s
+  "Admission"). Each window of the wire's two records is also committed as rows, a row a bucket, with its wiring
+  (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, row bytes, commit and sign
+  ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
+  wiring are read off). All of that is done by a spawned process (`PublisherProcess`), which alone holds the key and
+  gets each tick's rows as the network certifier releases them: a window's commit can take seconds of CPU, and in the
+  network certifier's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
+  Before the origin `serve` runs on the C allocator (it re-executes itself with `PYTHONMALLOC=malloc`) and makes its
+  process ready for the run's growth (`prepare_process`: its descriptor table, its heap, its pages locked where
+  permitted), and from it to the end a process of its own (`stall_probe`, unless `--no-stall-probe`) samples every
+  thread of both processes each millisecond into `stalls.json`, every episode in uninterruptible sleep with the kernel
+  function it slept in; `warden.json` keeps what was prepared (`process`) and each thread's episodes and page faults
+  (`stalls`).
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
-  to the network certifier's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
-  the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them. Its descriptor table holds
-  every connection before it sends (`reserve_fds`): its process has numpy's threads too, and a table grown mid-run
-  put cells that left the network certifier on time a bucket late (168 ms, every connection open as the client passed 256).
+  to the network certifier's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and
+  arrival, the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them. Its descriptor
+  table holds every connection before it sends (`reserve_fds`): its process has numpy's threads too, and a table grown
+  mid-run put cells that left the network certifier on time a bucket late (168 ms, every connection open as the client
+  passed 256).
 - `check` (`check`): every window of the three records has a certificate that verifies and whose head is the
   record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
   their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
@@ -145,8 +148,8 @@ RESERVE_PER_LANE, RESERVE_MIN = 256 << 10, 64 << 20
 FD_MARGIN = 256
 #: in the environment of a `serve` that re-executed itself on the C allocator, so that it does so once
 C_ALLOCATOR = "WARDEN_SERVE_C_ALLOCATOR"
-#: what a finite RLIMIT_MEMLOCK must leave beyond the process's mapping for `_memlock` to lock it: the network certifier's heap
-#: grows tens of MB in a run
+#: what a finite RLIMIT_MEMLOCK must leave beyond the process's mapping for `_memlock` to lock it: the network
+#: certifier's heap grows tens of MB in a run
 LOCK_HEADROOM = 4 << 30
 M_TRIM_THRESHOLD, M_MMAP_THRESHOLD, MCL_CURRENT, MCL_FUTURE, CAP_IPC_LOCK = -1, -3, 1, 2, 14
 #: the schedule's defaults here, where they differ from `WardenParams`'s: r·P = 494 bytes a bucket each way stays
@@ -418,9 +421,9 @@ async def fake_endpoint(reader: asyncio.StreamReader, writer, *, sleep=asyncio.s
 
 
 async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int = 4, clock=time.monotonic) -> dict:
-    """Each request of `traffic` straight to the server, `in_flight` at a time, no network certifier: per request the seconds to
-    its first byte and to the server's close, its bytes, and the bytes a second between them (what r·P a bucket and
-    D must stay under and cover)."""
+    """Each request of `traffic` straight to the server, `in_flight` at a time, no network certifier: per request the
+    seconds to its first byte and to the server's close, its bytes, and the bytes a second between them (what r·P a
+    bucket and D must stay under and cover)."""
     host, gate = "%s:%d" % upstream, asyncio.Semaphore(in_flight)
 
     async def one(item: dict) -> dict:
@@ -448,11 +451,12 @@ async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int =
 # The network certifier's run.
 
 class Publisher:
-    """The network certifier's `publish`, inline: each record packed to its file (`requests.records`, `responses.records`,
-    `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`) with the schedule's
-    parameters digest, one line of `certified.jsonl` each, or the execution phase under `refused`; the wire's two also
-    committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
-    thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
+    """The network certifier's `publish`, inline: each record packed to its file (`requests.records`,
+    `responses.records`, `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`)
+    with the schedule's parameters digest, one line of `certified.jsonl` each, or the execution phase under `refused`;
+    the wire's two also committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's
+    thread, or on any thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the
+    issuer's refusals."""
 
     def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
@@ -519,9 +523,10 @@ def grid_digest(grid) -> bytes:
 
 
 def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
-    """The load's heads (`heads`, the relay's ``load-heads.json``) signed by the network certifier's `issuer` in its session, before
-    it serves: ``load.json`` in `out` (`load_relay.load_doc`), the load's registrations the block record pins, under
-    the key and session that then certify the run's windows. Raises `load_relay.Refused` when the signer refuses."""
+    """The load's heads (`heads`, the relay's ``load-heads.json``) signed by the network certifier's `issuer` in its
+    session, before it serves: ``load.json`` in `out` (`load_relay.load_doc`), the load's registrations the block record
+    pins, under the key and session that then certify the run's windows. Raises `load_relay.Refused` when the signer
+    refuses."""
     shape, heads_ = lr.heads_of(json.loads(heads.read_text()))
     doc = lr.load_doc(shape, heads_, lr.sign_heads(issuer, heads_), cs.public_json(key), issuer.session)
     (out / "load.json").write_text(json.dumps(doc, indent=1) + "\n")
@@ -530,10 +535,10 @@ def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
 
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit,
                     load_heads: Path | None = None) -> None:
-    """`PublisherProcess`'s process: the network certifier's key and its leaf state are this process's alone. It signs the load's
-    heads first when there are any (`sign_load`), sends the public key, rebuilds each record from its released rows,
-    keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end
-    sends the issuer's refusals and its own usage."""
+    """`PublisherProcess`'s process: the network certifier's key and its leaf state are this process's alone. It signs
+    the load's heads first when there are any (`sign_load`), sends the public key, rebuilds each record from its
+    released rows, keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and
+    at the end sends the issuer's refusals and its own usage."""
     try:
         own = cs.signer(key)
         issuer = Issuer(own, session)
@@ -567,16 +572,16 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
 
 
 class PublisherProcess:
-    """`serve`'s `publish` and `release`: `Publisher` in one spawned process, which alone holds the network certifier's key.
-    `release` hands it each grid's row as the network certifier ticks (its frames as one bytes object), and `__call__` the
-    record's close with its grid's SHA-512 (`grid_digest`), hashed a row at a time as each is released and held to the
-    record's grid at its close: the ticker only queues them, and the queue's own thread pickles each tick's few
-    kilobytes, never a whole window. The process rebuilds each record from its rows, refuses one whose grid isn't the
-    marker's, and keeps, certifies and commits it, so neither a commit nor a signature takes the ticker's GIL. `key`
-    is the network certifier's public key; `close` waits for every record and gives the issuer's refusals; `usage` is then the
-    process's own. A process that exits early, killed or failed, raises at the next close or at `close`. `commit`
-    stands in for `Cells.of` (a test's). With `load_heads` the process signs the load's heads before anything else
-    (`sign_load`), so construction returns once ``load.json`` is written. The queue's thread is started at
+    """`serve`'s `publish` and `release`: `Publisher` in one spawned process, which alone holds the network certifier's
+    key. `release` hands it each grid's row as the network certifier ticks (its frames as one bytes object), and
+    `__call__` the record's close with its grid's SHA-512 (`grid_digest`), hashed a row at a time as each is released
+    and held to the record's grid at its close: the ticker only queues them, and the queue's own thread pickles each
+    tick's few kilobytes, never a whole window. The process rebuilds each record from its rows, refuses one whose grid
+    isn't the marker's, and keeps, certifies and commits it, so neither a commit nor a signature takes the ticker's GIL.
+    `key` is the network certifier's public key; `close` waits for every record and gives the issuer's refusals; `usage`
+    is then the process's own. A process that exits early, killed or failed, raises at the next close or at `close`.
+    `commit` stands in for `Cells.of` (a test's). With `load_heads` the process signs the load's heads before anything
+    else (`sign_load`), so construction returns once ``load.json`` is written. The queue's thread is started at
     construction, with a row of the grid's size that the process drops, so that the first tick starts no thread and
     the thread's buffers have grown to a row's; `feeder` is its thread id."""
 
@@ -700,8 +705,8 @@ def reserve_fds(n: int) -> int:
 
 
 def prepare_process(params: WardenParams) -> dict:
-    """The network certifier's process made ready before its origin, so that no tick waits in the kernel (state D) on what the
-    run's growth would otherwise ask of it then:
+    """The network certifier's process made ready before its origin, so that no tick waits in the kernel (state D) on
+    what the run's growth would otherwise ask of it then:
     - descriptors: its table holds every connection's two and every queued one's (`reserve_fds`): the opening burst of
       the trace corpus's heavy trace grew it past 256, 512 and 1024 descriptors, and the ticker waited a grace period at
       each (`stall_probe` found every D episode of the ticker in `__wait_rcu_gp` there, 14-28 ms on CPU);
@@ -868,8 +873,8 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
 
 def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]]) -> tuple[dict, list]:
     """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
-    under the network certifier's key and session, whose head is the record's rows and wiring under their salts; the per-window
-    cost."""
+    under the network certifier's key and session, whose head is the record's rows and wiring under their salts; the
+    per-window cost."""
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     got = {}
     for doc, salts, wiring_salt in read_cells(run):

@@ -23,13 +23,13 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   first's slot past its egress). Each link-window of each link is committed by the warden and its head signed by a
   test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
   (`warden_rows.check_registration`).
-* **A network certifier's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory (``serve``'s, or
-  the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule (w63's:
-  ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads ``deployment.json`` (the
-  network certifier's public key, the session, the schedule and its digest) and each link's registration of each execution phase of
-  the group in ``cells.jsonl``, its head's signature verified under that key; the prover's rows are the records under
-  ``cells.salts``, held to that head. Each is refused by name where it doesn't hold, as is a schedule the class doesn't
-  serve and a response that isn't id-form.
+* **A network certifier's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory
+  (``serve``'s, or the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
+  (w63's: ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads
+  ``deployment.json`` (the network certifier's public key, the session, the schedule and its digest) and each link's
+  registration of each execution phase of the group in ``cells.jsonl``, its head's signature verified under that key;
+  the prover's rows are the records under ``cells.salts``, held to that head. Each is refused by name where it doesn't
+  hold, as is a schedule the class doesn't serve and a response that isn't id-form.
 * **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
   link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
 * **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
@@ -50,8 +50,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden
   port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
-  group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
-  W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
+  group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
+  for every W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
   certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
   reject naming the members Lean refused.
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
@@ -133,10 +133,10 @@ _spec.loader.exec_module(traffic)
 
 
 class Setup(NamedTuple):
-    """A class the scan is proved at, the network certifier's schedule it serves and the synthetic run's traffic: request i's
-    prompt ``prompts[i]`` (max_tokens ``max_tokens`` + i, seed ``seed``·i) arrives at bucket ``arrivals[i]`` and is
-    answered ``responses[i]``, and the network certifier serves ``windows`` execution phases, every connection ended by the last's
-    end; the chain round swaps S_A and S_{A+1}."""
+    """A class the scan is proved at, the network certifier's schedule it serves and the synthetic run's traffic:
+    request i's prompt ``prompts[i]`` (max_tokens ``max_tokens`` + i, seed ``seed``·i) arrives at bucket ``arrivals[i]``
+    and is answered ``responses[i]``, and the network certifier serves ``windows`` execution phases, every connection
+    ended by the last's end; the chain round swaps S_A and S_{A+1}."""
 
     name: str
     cls: IS.Class
@@ -292,9 +292,9 @@ def tree_refusal(port: dict, reg: ADV.Registration, entry: dict, bcs: list[bytes
 # --- the run --------------------------------------------------------------------------------------------------------
 
 def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
-    """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the network certifier
-    and its head signed by the driver's test-size LMS key (`warden_rows.attest`), each registration read back by the
-    verifier."""
+    """The synthetic run (`scan_traffic.serve`), each execution phase of `windows` of each link committed by the network
+    certifier and its head signed by the driver's test-size LMS key (`warden_rows.attest`), each registration read back
+    by the verifier."""
     setup.cls.serves(setup.params)
     reqs = [_request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses,
@@ -326,8 +326,8 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
 
 
 def _found(run: Path, name: str) -> Path:
-    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/`` (the gate's
-    `warden-rehearse --scan`)."""
+    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/``
+    (the gate's `warden-rehearse --scan`)."""
     for d in (run, run / "witness"):
         if (d / name).is_file():
             return d / name
@@ -337,7 +337,8 @@ def _found(run: Path, name: str) -> Path:
 def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
     """A warden_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
-    each execution phase in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the network certifier's
+    each execution phase in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the
+    network certifier's
     signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`warden_rows.Cells.of`)
     that head. The units read those rows. The Programs' outputs (the ``prog`` row's stand-in) are each connection's ids
     as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
@@ -501,8 +502,8 @@ def header_refusal(ports: dict, entries: dict) -> str | None:
 
 def registered_file(mr: SimpleNamespace) -> dict:
     """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
-    verdict's `registered` reports its roots): each network certifier port at the head `warden_rows.check_registration` read
-    under the deployment's key, never a root of the prover's."""
+    verdict's `registered` reports its roots): each network certifier port at the head `warden_rows.check_registration`
+    read under the deployment's key, never a root of the prover's."""
     return WR.reads_file(mr.ports)
 
 
@@ -842,10 +843,11 @@ def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: 
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
 def warden_roots(members) -> list[dict]:
-    """The registration's ``rows/<direction>/<w>`` roots: each network certifier row registration its members' network certifier ports read
-    (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the network certifier registered
-    them (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A period check
-    (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and domain.
+    """The registration's ``rows/<direction>/<w>`` roots: each network certifier row registration its members' network
+    certifier ports read (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the
+    network certifier registered them (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A
+    period check (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and
+    domain.
 
     A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):
     the audit takes a root port named as a value for a registered value of the record (`audit.session_registered`),

@@ -42,17 +42,17 @@
   ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
-* **The network certifier path** (``--job``'s ``path``, `WARDEN`): every step reads an active network certifier's own run (the gate's
-  ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's, whose input is
-  refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own offline check on its witness
-  and holds the public ``certificates.jsonl`` to the certified lines (`warden_chain.certificates`; no clock
-  certificate: the network certifier signs none). ``endpoint`` binds the endpoint's own advice to the certified I/O read off the
-  network certifier's cells (`warden_endpoint`); where the endpoint's records stay on the served node, that node runs it
-  (`served_endpoint`, `served_session.py endpoint`) and the chain reads its report. N2 is `n2_zk.py prove
-  --warden-run`'s, on the network certifier link; the I/O tie is
+* **The network certifier path** (``--job``'s ``path``, `WARDEN`): every step reads an active network certifier's own
+  run (the gate's ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's,
+  whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
+  offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
+  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). ``endpoint`` binds the
+  endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
+  endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
+  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
-  --warden-run`'s. Each is held to the network certifier run the certificates step read (`on_warden`), every one is required,
-  and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
+  --warden-run`'s. Each is held to the network certifier run the certificates step read (`on_warden`), every one is
+  required, and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
   endpoint report).
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`).
@@ -118,7 +118,8 @@ STUBBED = (
     "network certifier's own cells as one device, so there are no warden rows and the scan isn't run",
     "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
-#: the network certifier path (``--job``'s ``path``): every step reads an active network certifier's own run (`warden_chain`)
+#: the network certifier path (``--job``'s ``path``): every step reads an active network certifier's own run
+#: (`warden_chain`)
 WARDEN = "warden"
 #: what a report on the network certifier path stands on that isn't the chain's own
 WARDEN_STUBBED = (
@@ -330,8 +331,8 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 
 
 def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for a network certifier run (`served_endpoint`), on the certified I/O read off its cells
-    (`warden_chain.io`)."""
+    """The endpoint's own advice for a network certifier run (`served_endpoint`), on the certified I/O read off its
+    cells (`warden_chain.io`)."""
     import warden_chain as WC
 
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
@@ -340,9 +341,9 @@ def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
 def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for the network certifier run of ``dep`` (its ``deployment.json``), as network-e2e's
     `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
-    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network certifier's bucket unless an index is there, then
-    ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the network certifier's execution phases, with
-    the model's EOS ids ``eos`` (a network certifier run records none)."""
+    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network certifier's bucket unless an index is there,
+    then ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the network certifier's
+    execution phases, with the model's EOS ids ``eos`` (a network certifier run records none)."""
     import subprocess
 
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
@@ -409,8 +410,8 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
     """A warden-path step held to the network certifier run the certificates step read (``run_id``): refused by name
-    (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run), and when it is another
-    network certifier run's."""
+    (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run), and
+    when it is another network certifier run's."""
     from warden_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):

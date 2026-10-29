@@ -1,18 +1,18 @@
-"""The active network certifier: the network certifier as a relay that knows bytes only and retransmits everything on a fixed
-schedule, so it rebuilds the framing of every connection it carries.
+"""The active network certifier: the network certifier as a relay that knows bytes only and retransmits everything on a
+fixed schedule, so it rebuilds the framing of every connection it carries.
 
 The network certifier runs on an auditor host (`trusted-host`; co-located with the server for the demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
-bytes unchanged in content: no tokenizer, API, request or stop string is the network certifier's. The one addition is the release
-order on the server's copy of an HTTP request (`release`): what the network certifier decides is the framing and the timing, both
-public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the certifier's grid
-(`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
+bytes unchanged in content: no tokenizer, API, request or stop string is the network certifier's. The one addition is
+the release order on the server's copy of an HTTP request (`release`): what the network certifier decides is the framing
+and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the
+certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
 exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked padding), `FAIL` none (the connection failed
-closed, for whatever reason), and `REFUSED` none (a connection the network certifier doesn't take). Both directions are cut
-the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's content is fixed by the bytes and never by how
+closed, for whatever reason), and `REFUSED` none (a connection the network certifier doesn't take). Both directions are
+cut the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's content is fixed by the bytes and never by how
 they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
 gets the ingress payloads as bytes (co-located in the demo; deployed, its own shim strips the cells as the client's
 does).
@@ -23,20 +23,20 @@ taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell,
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
 can hold (`every`: a slot stride of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
-`ingress_scan.Class`), so the network certifier certifies no record of a window in which it refused a connection: `withhold`
-gets that window's three records in place of `publish`, and the period check refuses an execution phase missing any
-record's certificate.
+`ingress_scan.Class`), so the network certifier certifies no record of a window in which it refused a connection:
+`withhold` gets that window's three records in place of `publish`, and the period check refuses an execution phase
+missing any record's certificate.
 
-**The schedule.** Connection q, admitted at bucket s on the network certifier's own schedule, carries r = `slots` cells a bucket
-each way from s on:
+**The schedule.** Connection q, admitted at bucket s on the network certifier's own schedule, carries r = `slots` cells
+a bucket each way from s on:
 - ingress: the client's bytes as `DATA` cells, as soon as a whole cell's bytes have arrived, then `END` once the
   client's `END` cell (or its end of stream) has arrived, `PAD` in a slot with neither; the bucket of the `END` is a,
   and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells. Its
   release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
-  `release.with_release` puts it, N the count of `END`s the network certifier released before (so the order of the `END` cells
-  in the ingress records) and the run the network certifier's `run_id`; what it releases before then, or before the server's
-  connection opens, is held for the server (at most the `ingress_cells` cells' bytes the ingress bound allows; past
-  them the connection fails closed, and the server gets none of it);
+  `release.with_release` puts it, N the count of `END`s the network certifier released before (so the order of the `END`
+  cells in the ingress records) and the run the network certifier's `run_id`; what it releases before then, or before
+  the server's connection opens, is held for the server (at most the `ingress_cells` cells' bytes the ingress bound
+  allows; past them the connection fails closed, and the server gets none of it);
 - egress: `PAD` in every slot of the buckets before s + D, D = `delay`; then egress cell i is in bucket
   s + D + ⌊i/r⌋, slot i mod r: `DATA` with the server's bytes iP … (i+1)P − 1 if it has sent them, else `END` with its
   remaining 0 … P bytes if it has ended, else `FAIL` (late): the cell's deadline passed. The rest of the bucket of
@@ -50,9 +50,9 @@ rule; the ingress cells are a function of s and the client's bytes.
 a server that hasn't ended by the last of `egress_cells` cells (limit), the server's connection failing (upstream),
 ingress past its bounds (ingress), a client cell of another kind than `DATA` or `END` (malformed). Its `FAIL` cell is
 in the slot of the next egress cell, and it is in the egress record. Every `FAIL` is the same bytes: the reason is a
-frame of the network certifier's `fails` record (`reason_frame`), witness the client never sees. The server's three reasons show
-only at an egress slot, so the server, which controls whether and where a connection fails, chooses one of at most
-(cells + 1) outcomes; the client's two fail at once, and are the client's own doing. A tick that runs more than
+frame of the network certifier's `fails` record (`reason_frame`), witness the client never sees. The server's three
+reasons show only at an egress slot, so the server, which controls whether and where a connection fails, chooses one of
+at most (cells + 1) outcomes; the client's two fail at once, and are the client's own doing. A tick that runs more than
 `slack` past its boundary faults every grid's window (`monitor-unavailable`), as the active certifier's do.
 
 **The pacer** (`Warden(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
@@ -67,13 +67,14 @@ next window's first tick, faulted `monitor-unavailable` if one isn't by then. A 
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
-cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included. So the
-records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The third,
-`fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
+cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
+So the records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The
+third, `fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
 (`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
 schedule's, every `FAIL` has its one reason, and no connection failed.
 
-`PROTOCOL.md`'s "The active network certifier" has the leak bound. The module imports only the standard library and `verity`.
+`PROTOCOL.md`'s "The active network certifier" has the leak bound. The module imports only the standard library and
+`verity`.
 """
 
 from __future__ import annotations
@@ -171,7 +172,8 @@ def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
 
 
 def read_cell(data: bytes, cell_bytes: int) -> tuple[int, int, bytes]:
-    """(kind, ordinal, payload) of a cell the network certifier makes, or ValueError: its kind, length and zero fill exact."""
+    """(kind, ordinal, payload) of a cell the network certifier makes, or ValueError: its kind, length and zero fill
+    exact."""
     if len(data) != cell_bytes:
         raise ValueError(f"a cell is {cell_bytes} bytes, not {len(data)}")
     kind, ordinal, payload = decode_frame(data)
@@ -211,9 +213,9 @@ def cells(data: bytes, cell_bytes: int, ordinal: int = 0) -> bytes:
 
 @dataclass
 class Shim:
-    """The client's thin shim, reading half: every cell the network certifier sends on one connection, until it closes, each kept
-    with the time it arrived; `data` is the `DATA` and `END` payloads, `outcome` "end", "fail" or "refused", or "cut"
-    when the connection closed before any of those, or inside a cell."""
+    """The client's thin shim, reading half: every cell the network certifier sends on one connection, until it closes,
+    each kept with the time it arrived; `data` is the `DATA` and `END` payloads, `outcome` "end", "fail" or "refused",
+    or "cut" when the connection closed before any of those, or inside a cell."""
 
     cell_bytes: int
     clock: Callable[[], float] = time.monotonic
@@ -281,9 +283,9 @@ def _pad(c: _Connection, cell_bytes: int) -> bytes:
 
 
 class Warden:
-    """The active network certifier (the module docstring): `handle(reader, writer)` serves one client connection, `run()` ticks
-    the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts whatever is still
-    served or queued. `connect()` opens a server connection, a (reader, writer) pair.
+    """The active network certifier (the module docstring): `handle(reader, writer)` serves one client connection,
+    `run()` ticks the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts
+    whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair.
 
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
       default they are kept in `records`), and `withhold(record, params)` in its place those of a window in which a

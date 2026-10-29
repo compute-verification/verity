@@ -1,20 +1,21 @@
-"""warden-chain: the network chain's reads of an active network certifier's run (`warden_serve.py`'s directory, or the gate's
-``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
+"""warden-chain: the network chain's reads of an active network certifier's run (`warden_serve.py`'s directory, or the
+gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (`certifier_serve.py`, whose records come through `active.Proxy` in front of
-the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network certifier path
-none of its records enters the chain.
+the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network
+certifier path none of its records enters the chain.
 
-* `deployment`: ``deployment.json``, a network certifier's (its link, its schedule and their digest, its key and session), never a
-  certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file (`CERTIFIER_FILES`).
-* `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the network certifier's link name, its
-  one grid both ends', its key and session, its windows and parameters digest, and no sync (the network certifier runs no shaper
-  clock and signs none, so no clock certificate enters N2 here).
+* `deployment`: ``deployment.json``, a network certifier's (its link, its schedule and their digest, its key and
+  session), never a certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
+  (`CERTIFIER_FILES`).
+* `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the network certifier's link
+  name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
+  certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
   first window missing one.
-* `certificates`: the network certifier's own offline check (`warden_serve.check`: every execution phase of the three records
-  certified under the network certifier's key and session with its head the record's, its rows' registration, the audit, and the
-  client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's, `auditor.warden_outcome`)
-  exactly the certified lines' certificates and refusals, in order.
+* `certificates`: the network certifier's own offline check (`warden_serve.check`: every execution phase of the three
+  records certified under the network certifier's key and session with its head the record's, its rows' registration,
+  the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
+  `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a warden-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
@@ -48,8 +49,8 @@ PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through a
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`active.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
-#: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one value for the
-#: field
+#: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
+#: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 
 
