@@ -226,6 +226,30 @@ def test_a_tree_in_use_is_kept_and_the_pass_goes_on(node, setup, why):
     assert (node.src / node.a / EV.READY_FILE).exists() and [d["tree"] for d in rep["deleted"]] == [node.b]
 
 
+def test_a_run_marked_running_whose_runner_is_gone_keeps_no_tree(node):
+    """A node restart leaves status.json at running with no runner; such records weeks old kept 40 of a node's 79 trees."""
+    def marked(name, pid, ticks):
+        rd = write_run(node, name, state="running", source=node.a)
+        tr = [{"state": "running", "pid": pid, "starttime_ticks": ticks}]
+        (rd / "status.json").write_text(json.dumps({"state": "running", "pid": pid, "starttime_ticks": ticks, "transitions": tr}))
+
+    marked("r9", 4242, 7)                                                    # no /proc/4242: the runner is gone
+    rep = run(node)
+    assert node.a not in kept(rep) and node.a in [d["tree"] for d in rep["deleted"]]
+
+
+def test_a_run_whose_runner_lives_or_whose_pid_was_reused_is_told_apart(node):
+    fake_proc(node.proc, 4343)
+    stat = node.proc / "4343" / "stat"
+    stat.write_text("4343 (p 4343) S " + " ".join(["0"] * 18) + " 555 0\n")    # field 22, the start time, is 555
+    rd = write_run(node, "r10", state="running", source=node.a)
+    (rd / "status.json").write_text(json.dumps({"state": "running", "transitions": [{"state": "running", "pid": 4343,
+                                                                                      "starttime_ticks": 555}]}))
+    assert any(w.startswith("2: run r10 is running") for w in kept(run(node))[node.a]), "its runner lives"
+    stat.write_text("4343 (p 4343) S " + " ".join(["0"] * 18) + " 556 0\n")
+    assert node.a not in kept(run(node)), "pid 4343 now belongs to a process started later"
+
+
 def test_a_job_queued_for_the_fill_that_names_a_tree_keeps_it(node):
     q = node.tmp / "fill" / "queue"
     q.mkdir(parents=True)
