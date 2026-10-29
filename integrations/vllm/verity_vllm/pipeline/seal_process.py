@@ -18,8 +18,6 @@ have written.
 from __future__ import annotations
 
 import dataclasses
-import multiprocessing
-import multiprocessing.connection
 import os
 import time
 from collections.abc import Callable
@@ -29,6 +27,7 @@ from typing import Any
 
 from verity_vllm.config import option
 from verity_vllm.pipeline import serve_seal as SS
+from verity_vllm.pipeline import window_records as WR
 
 #: the keys of an execution block's line in windows.jsonl that its seal reads
 REC_KEYS = ("window", "run_id", "steps", "passed", "served_rows")
@@ -43,8 +42,10 @@ class SealingOptions:
                                       "stops serving for them")
     seal_process: bool = option("--seal-process", action="boolean_optional", default=True,
                                 help="with --seal-off-loop: seal each execution block in a spawned process (seal_process.SealProcess; "
-                                     "default on), the sealer's second thread writing only its store's files, so no seal's Python takes "
-                                     "the engine's GIL; --no-seal-process seals on that thread")
+                                     "default on), the sealer's second thread writing only its store's files, and run each window's "
+                                     "records (its readback, served rows, step trace and requests' checks) in another "
+                                     "(window_records.RecordProcess), so no seal's or record's Python takes the engine's GIL; "
+                                     "--no-seal-process runs both on the sealer's threads")
 
 
 def sealer_of(opts: Any) -> SS.Sealer | None:
@@ -56,19 +57,21 @@ def sealer_of(opts: Any) -> SS.Sealer | None:
 
 
 class ProcessSealer(SS.Sealer):
-    """A `serve_seal.Sealer` whose thread seals each execution block through ``process``, a `SealProcess` it spawns before its thread
-    starts and closes after it ends; its summary names the process, and once closed how it ended."""
+    """A `seal_stages.Sealer` whose second thread seals each execution block through ``process``, a `SealProcess`, and whose
+    first runs each window's records (`serve_commit.CommitWindows.recorder`) through ``records``, a `window_records.RecordProcess`:
+    both spawned before its threads start and closed after they end. Its summary names the processes, and once closed how
+    they ended."""
 
     def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
-        self.process, self.ended = SealProcess(), None
+        self.process, self.records, self.ended = SealProcess(), WR.RecordProcess(), None
         super().__init__(hold_bytes, clock)
 
     def close(self) -> None:
         super().close()
-        self.ended = self.process.close()
+        self.ended = {"process": self.process.close(), "records": self.records.close()}
 
     def summary(self) -> dict[str, Any]:
-        return {**super().summary(), "process": self.ended or {"pid": self.process.pid}}
+        return {**super().summary(), **(self.ended or {"process": {"pid": self.process.pid}, "records": {"pid": self.records.pid}})}
 
 
 class SealFailed(RuntimeError):
@@ -79,18 +82,13 @@ class _Unstored(Exception):
     pass
 
 
-class SealProcess:
-    """One spawned process that seals execution blocks one at a time (`seal`), called from one thread (`serve_seal.Sealer`'s second). A process
+class SealProcess(WR.Spawned):
+    """One spawned process that seals execution blocks one at a time (`seal`), called from one thread (`seal_stages.Sealer`'s second). A process
     that has exited, killed or failed, raises at the next seal by name, and every seal after it fails the same way."""
 
     def __init__(self) -> None:
-        ctx = multiprocessing.get_context("spawn")
-        self.conn, child = ctx.Pipe()
-        self.process = ctx.Process(target=_main, args=(child,), name="serve-seal", daemon=True)
-        self.process.start()
-        child.close()
         self._manifests: dict[int, Any] = {}             # each manifest sent, by id (held, so no other object takes its id)
-        self.pid = self._receive("ready")[1]
+        super().__init__(_main, "serve-seal")
 
     def seal(self, com: Any, rc: Any, d: str | os.PathLike, *, extras: Any = None, written: Callable[[], Any] | None = None,
              **kw: Any) -> dict[str, Any]:
@@ -158,27 +156,6 @@ class SealProcess:
             msgs.append(("layout", s, lay, committed_raw(com, s, PORT_NAMES[1]) if port is not None else None))
         msgs.append(("go",))
         return msgs
-
-    def _receive(self, kind: str) -> tuple:
-        multiprocessing.connection.wait([self.conn, self.process.sentinel])
-        try:
-            msg = self.conn.recv() if self.conn.poll() else None
-        except EOFError:
-            msg = None
-        if msg is None:
-            self.process.join()
-            raise RuntimeError(f"the seal process exited ({self.process.exitcode}) before its {kind}")
-        return msg
-
-    def close(self) -> dict[str, Any]:
-        """The process ended once its seals are done: its pid and exit code."""
-        try:
-            self.conn.send(("close",))
-        except OSError:
-            pass
-        self.process.join()
-        self.conn.close()
-        return {"pid": self.pid, "exitcode": self.process.exitcode}
 
 
 def _main(conn: Any) -> None:

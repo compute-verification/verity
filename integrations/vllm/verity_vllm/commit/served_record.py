@@ -198,6 +198,23 @@ def served_rows(committer: Any) -> dict[int, list[tuple]]:
     return src.rows if src is not None else {}
 
 
+def window_read(committer: Any) -> dict[str, Any]:
+    """What `Record.absorb` reads of a finalized window's committer, as plain data (`Record.absorb_read` takes it where the
+    committer isn't, `pipeline.window_records`): whether it committed a step, the name its input ids are committed under, its
+    rows by step (`served_rows`), and at each step with rows the bytes and dtype of its ids, samples and sampler inputs
+    (`committed_raw`)."""
+    from verity_vllm.commit.committer.plan_cache import PlanMetas
+
+    layouts = getattr(committer, "_layouts", {}) or {}
+    names = {n for metas in layouts.values() for n in (metas.names if isinstance(metas, PlanMetas) else (m.name for m in metas))}
+    ids_name = next((n for n in IDS_NAMES if n in names), None)
+    rows_of = served_rows(committer)
+    want = [n for n in (ids_name, SAMPLED, *SAMPLER_INPUTS) if n is not None]
+    return {"layouts": bool(layouts), "steps": sorted(set(layouts) | set(rows_of)), "ids_name": ids_name,
+            "rows": {s: list(r) for s, r in rows_of.items()},
+            "raw": {s: {n: committed_raw(committer, s, n) for n in want} for s, r in rows_of.items() if r}}
+
+
 def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
     """The integer tensor ``name`` as committed at ``step``, read back from the bytes the committer retains (the retained
     GPU-tree block, its host copy, or the packed step stream); None when the step committed no such tensor."""
@@ -390,28 +407,26 @@ class Record:
 
     def absorb(self, committer: Any, window: int) -> dict[str, Any]:
         """The window just finalized by ``committer`` into the requests' records; returns the window's readback record."""
-        from verity_vllm.commit.committer.plan_cache import PlanMetas
+        return self.absorb_read(window, window_read(committer))
 
-        layouts = getattr(committer, "_layouts", {}) or {}
-        names = {n for metas in layouts.values() for n in (metas.names if isinstance(metas, PlanMetas) else (m.name for m in metas))}
-        ids_name = next((n for n in IDS_NAMES if n in names), None)
+    def absorb_read(self, window: int, read: Mapping[str, Any]) -> dict[str, Any]:
+        """`absorb` from what `window_read` read of the window's committer."""
+        ids_name, rows_of, raw = read["ids_name"], read["rows"], read["raw"]
         errors: list[str] = []
-        rows_of = served_rows(committer)
-        if layouts and not rows_of:
+        if read["layouts"] and not rows_of:
             errors.append("the committer kept no rows (no SamplerInputsSource attached)")
         if ids_name is None and rows_of:
             errors.append(f"no committed input ids under any of {list(IDS_NAMES)}")
         held: list[str] = []
-        steps = sorted(set(layouts) | set(rows_of))
+        steps = read["steps"]
         for s in steps:
             rows = [Row(*r) for r in rows_of.get(s, ())]
             if not rows:
                 errors.append(f"step {s}: committed with no rows")
                 continue
-            ids = committed_ints(committer, s, ids_name) if ids_name else None
-            sampled = committed_ints(committer, s, SAMPLED)
-            seeds = committed_ints(committer, s, SAMPLER_INPUTS[0])
-            pos = committed_ints(committer, s, SAMPLER_INPUTS[1])
+            got = raw.get(s, {})
+            ids, sampled, seeds, pos = (None if n is None or got.get(n) is None else ints_of(*got[n])
+                                        for n in (ids_name, SAMPLED, *SAMPLER_INPUTS))
             gone = [n for n, v in ((ids_name, ids), (SAMPLED, sampled), *zip(SAMPLER_INPUTS, (seeds, pos))) if v is None]
             if gone:
                 errors.append(f"step {s}: nothing committed under {gone}")
@@ -454,7 +469,8 @@ def finish_problems(out: Sequence[int], finish: Mapping[str, Any], decode: Calla
     ``max_tokens`` and ``eos_ids``. A ``length`` finish streamed ``max_tokens`` ids; a client's ``abort`` streamed the ``k``
     it records, fewer than ``max_tokens`` (at its cap vLLM has finished it on length); a ``stop`` on the model's EOS
     (``stop_reason`` None) ends on one of ``eos_ids``, on a stop token (an int) ends on it, and on a stop string ends on
-    the id whose text first holds it (with ``decode``; vLLM keeps every id of a stop-string finish and cuts the text)."""
+    the id whose text first holds it (with ``decode``, or the finish's ``stop_end``, `stop_string_end` found where the
+    tokenizer is; vLLM keeps every id of a stop-string finish and cuts the text)."""
     reason, why, cap = finish.get("reason"), finish.get("stop_reason"), finish.get("max_tokens")
     if reason == "length":
         return [] if cap is None or len(out) == int(cap) else [f"finish: length after {len(out)} ids, max_tokens {cap}"]
@@ -470,9 +486,10 @@ def finish_problems(out: Sequence[int], finish: Mapping[str, Any], decode: Calla
         return [] if not eos or out[-1] in eos else [f"finish: stopped on EOS, the last streamed id {out[-1]} is none of {sorted(eos)}"]
     if isinstance(why, int):
         return [] if out[-1] == why else [f"finish: stopped on token {why}, the last streamed id is {out[-1]}"]
-    if decode is not None and stop_string_end(out, str(why), int(finish.get("min_tokens") or 0), decode) != len(out):
-        return [f"finish: stop string {why!r} is not first matched at the last streamed id"]
-    return []
+    if "stop_end" not in finish and decode is None:
+        return []
+    end = finish["stop_end"] if "stop_end" in finish else stop_string_end(out, str(why), int(finish.get("min_tokens") or 0), decode)
+    return [] if end == len(out) else [f"finish: stop string {why!r} is not first matched at the last streamed id"]
 
 
 def stop_string_end(out: Sequence[int], stop: str, min_tokens: int, decode: Callable[[Sequence[int]], str]) -> int | None:
