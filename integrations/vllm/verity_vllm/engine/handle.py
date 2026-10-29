@@ -27,7 +27,7 @@ __all__ = ["engine_of", "model_runner", "scheduler"]
 
 
 def engine_of(llm: Engine) -> LLMEngine:
-    """The engine's ``LLMEngine``: what ``add_request``, ``step`` and ``has_unfinished_requests`` drive."""
+    """The engine's ``LLMEngine``, which takes its requests and steps it."""
     eng = getattr(llm, "vllm", llm)
     return getattr(eng, "llm_engine", eng)
 

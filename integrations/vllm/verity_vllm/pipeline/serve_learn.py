@@ -10,7 +10,7 @@ learn-only pass); `warm_up` is serve-openai's, run as soon as `warmed` gets the 
 It serves the declared static shape (`shape_of`) the way ``examples/vllm/serve_load.py --fixed`` sends it: ``--max-num-seqs``
 requests (at most ``--window-requests``) that share ``--max-num-batched-tokens`` (T) prompt ids among them, all prefilled at an
 execution block's first step and run through its last (``--window-steps``), greedy, with ``ignore_eos``. They are throwaway
-requests of ids drawn from a fixed ChaCha20 stream (`ids_of`), parsed by the server's own protocol, and the committer runs learn-only around them
+requests of random ids, parsed by the server's own protocol, and the committer runs learn-only around them
 (`acquire.sources.taps.warmup`): a step over the budget records its plan and commits a placeholder. The pass is never a record:
 it opens no execution block, no step trace sees it, and the committer is reset after it. A plan stays learned while each
 execution block uses it (``native_plans.h``: a reset drops the plans the run before it didn't use), so at a static shape no
@@ -23,12 +23,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-import numpy as np
-
 from verity_vllm.config import option
 
-#: the throwaway prompts' ids: ChaCha20's stream under this key, read as little-endian u32s, drawn above the special ids
-WARMUP_KEY, FIRST_ID = b"verity-vllm/serve-learn/warmup/1", 3
+#: the throwaway prompts' ids, drawn above the special ids
+WARMUP_SEED, FIRST_ID = 200, 3
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -63,17 +61,6 @@ def shape_of(opts: Any) -> dict[str, int]:
     return {"requests": n, "prompt_ids": ids, "steps": max(1, min(int(opts.window_steps), int(opts.max_model_len) - ids))}
 
 
-def ids_of(requests: int, ids: int, top: int) -> list[list[int]]:
-    """The warm-up's ``requests`` prompts of ``ids`` ids each in [`FIRST_ID`, ``top``), drawn (`WARMUP_KEY`) so that no two,
-    and none with a served prompt, are likely to share a prefix-cache block."""
-    from verity.ml.crypto import chacha20
-
-    n = requests * ids
-    words = np.frombuffer(chacha20.keystream(WARMUP_KEY, 0, 0, -(-4 * n // chacha20.BLOCK_BYTES)), dtype="<u4")[:n]
-    got = (FIRST_ID + words.astype(np.int64) % (int(top) - FIRST_ID)).tolist()
-    return [got[i * ids:(i + 1) * ids] for i in range(requests)]
-
-
 def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str, Any] | None = None, *, vocab: int | None = None,
             clock: Callable[[], float] = time.perf_counter) -> dict[str, Any] | None:
     """The learn-only pass (module docstring) over ``engine`` (vLLM's ``LLMEngine``) and its committer ``com``, each request
@@ -82,16 +69,16 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
     if com is None or not getattr(com, "bounded", False) or not opts.learning.learn_warmup:
         return None
     from verity_vllm.acquire.sources import taps as TAPS
+    from verity_vllm.commit import challenge
 
-    shape, t0 = shape_of(opts), clock()
+    shape, t0, rng = shape_of(opts), clock(), challenge.generator(WARMUP_SEED)
     top = int(vocab if vocab is not None else engine.vllm_config.model_config.get_vocab_size())
     body = {"max_tokens": shape["steps"], "min_tokens": shape["steps"], "ignore_eos": True, "temperature": 0, "stream": True}
-    prompts = ids_of(shape["requests"], shape["prompt_ids"], top)
     TAPS.warmup(com, True)
     com.install()
     try:
         for i in range(shape["requests"]):
-            req = proto.parse({**body, "prompt": prompts[i]})
+            req = proto.parse({**body, "prompt": rng.integers(FIRST_ID, top, size=shape["prompt_ids"]).tolist()})
             engine.add_request(request_id=f"learn-warmup-{i}", prompt={"prompt_token_ids": list(req.prompt)},
                                params=proto.seeded(proto.sampling_params(req, shape["steps"], dict(defaults or {}))))
         steps = 0
@@ -119,9 +106,9 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
 def warmed(com: Any, llm: Any, opts: Any) -> Any:
     """The server's committer ``com`` over ``llm`` (a `verity_vllm.LLM`) once its plans are learned (`warm_up`, its requests
     parsed as ``--protocol`` parses a completion), what the pass learned in its ``learn_warmup``."""
-    from verity_vllm.engine import handle
+    from verity_vllm.engine.handle import engine_of
     from verity_vllm.pipeline.serve_protocol import PROTOCOLS
 
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
-    com.learn_warmup = warm_up(handle.engine_of(llm), com, opts, getattr(proto, "base", proto))
+    com.learn_warmup = warm_up(engine_of(llm), com, opts, getattr(proto, "base", proto))
     return com
