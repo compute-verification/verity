@@ -9,6 +9,7 @@ import json
 import pytest
 
 from test_appends import N, NODE, P512, SOURCE, Run, payload, salts
+from verity.core import site as S
 from verity.core.protocols import registration as log
 from verity.core.protocols.remote_bandwidth import audit
 from verity.core.protocols.remote_bandwidth.codec import BLOCK_BYTES
@@ -143,13 +144,13 @@ def logged(node: bytes, root: bytes, item: dict | None = None, store_bytes: int 
            device: bool = False) -> log.View:
     """The view of a remote site's registration log holding the node's store, `store`: a memory leaf in the node (or
     in a device of it), and θ's value for its payload (`audit.payload_item`, or `item`)."""
-    n, card = node.decode(), log.Card("a card", 1, (1, 1, 1, 1, 1), 1, 1, 1 << 40)
-    parent = [log.Loc("gpu", "device", n, card=card.digest())] if device else []
-    site = log.Hardware(cards=(card,), locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"), *parent,
-                                             log.Loc("store", "memory", "gpu" if device else n, tier="hbm" if device else
-                                                     "dram", bytes=store_bytes)))
+    n, sheet = node.decode(), S.Sheet(S.DeviceFigures("a card", 1, (1, 1, 1, 1, 1)), 1, 1, 1 << 40)
+    parent = [S.Loc("gpu", "device", n, sheet=sheet.digest())] if device else []
+    site = log.site(sheets=(sheet,), locs=(S.Loc("site", "site"), S.Loc(n, "host", "site"), *parent,
+                                           S.Loc("store", "memory", "gpu" if device else n, tier="hbm" if device else
+                                                 "dram", bytes=store_bytes)))
     theta = log.Information((audit.payload_item("store", node, N, root) if item is None else item,))
-    return log.check(log.Auditor(sheets=(card,)), "remote", log.chain("remote", [site, theta])).view()
+    return log.check(log.Auditor(sheets=(sheet,)), "remote", log.chain("remote", [site, theta])).view()
 
 
 def test_a_store_drawn_from_the_registration_log_is_the_registration_of_its_node_size_and_payload() -> None:

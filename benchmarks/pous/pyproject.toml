@@ -20,7 +20,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # Lean verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/profile.py",
           # the registration log a store is read from (`audit.stored`), and the canonical JSON it imports
-          "verity/core/protocols/registration.py", "verity/core/wire/__init__.py",
+          "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/circuits",
           # p2_v1/bandwidth.py serves the store through kernels' staging decode, whose modules it imports

@@ -19,7 +19,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/remote_bandwidth/pooled.py", "verity/core/protocols/remote_bandwidth/schedule.py",
           "verity/core/protocols/remote_bandwidth/period.py", "verity/core/protocols/interface",
           # the registration log `register_stored` reads (`audit.stored`), and the canonical JSON it imports
-          "verity/core/protocols/registration.py", "verity/core/wire/__init__.py",
+          "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire/__init__.py",
           "verity/core/protocols/pouw/lean/check/models.json",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
