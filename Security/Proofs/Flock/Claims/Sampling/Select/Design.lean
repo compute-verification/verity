@@ -41,8 +41,17 @@ theorem parseLaw_k (t : String) (named : Json) (h : Select.parseLaw t = .ok name
        subst h
        first
          | (rw [getD_p] at hk; simp [nat?, int?] at hk)
-         | (rw [getD_k, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all)
-         | (rw [getD_kw, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all))
+         | (rw [getD_k, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all))
+    | (revert h
+       split
+       · intro h
+         simp only [pure, Except.pure, Except.ok.injEq] at h
+         subst h
+         rw [getD_kw, nat_toJson, Option.some.injEq] at hk
+         subst hk
+         simp_all
+       · intro h
+         exact absurd h (throw_ne _ _))
 
 /-- **`Flock.Draw.derive`'s bounds**: `1 ≤ k ≤ N`. -/
 theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
@@ -406,7 +415,7 @@ theorem stratified_wf (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (kf :
   split
   · exact ⟨hk1, hkn, hpos⟩
   · simp only [OneStage.WellFormed, Array.toList_map, List.map_map, List.length_map, Function.comp_def]
-    refine ⟨rfl, rfl, fun x hx => ?_, ?_, hpos⟩
+    refine ⟨by simp, by simp, fun x hx => ?_, ?_, hpos⟩
     · obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hx
       exact hkf p (Array.mem_def.2 hp)
     · have h0 : 0 < strataSize S := by omega
