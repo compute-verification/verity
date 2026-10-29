@@ -12,6 +12,9 @@ import statistics
 import sys
 from pathlib import Path
 
+#: a decimal number as ``float`` reads one; a sampler's other fields (``[N/A]``, units, headers) aren't samples
+NUM = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
+
 
 def text(p: Path) -> str:
     return p.read_text(errors="replace") if p.exists() else ""
@@ -39,10 +42,8 @@ def stamped(p: Path) -> list[tuple[float, str]]:
     out = []
     for line in text(p).splitlines():
         t, _, rest = line.partition("\t")
-        try:
+        if NUM.fullmatch(t):
             out.append((float(t), rest))
-        except ValueError:
-            pass
     return out
 
 
@@ -54,13 +55,7 @@ def window_mean(rows: list[tuple[float, list[float]]], t0: float, t1: float) -> 
 
 
 def floats(s: str) -> list[float]:
-    out = []
-    for x in re.split(r"[,\s]+", s.strip()):
-        try:
-            out.append(float(x))
-        except ValueError:
-            pass
-    return out
+    return [float(x) for x in re.split(r"[,\s]+", s.strip()) if NUM.fullmatch(x)]
 
 
 def session_set(d: Path, gpu: bool = True) -> dict:
@@ -70,7 +65,10 @@ def session_set(d: Path, gpu: bool = True) -> dict:
         return {"error": text(d / "prove.err")[-1500:]}
     warm = [(t, v) for t, v in live if v.get("warm")]
     timed = [(t, v) for t, v in live if not v.get("warm")]
-    med = lambda f: statistics.median(f(v) for _, v in timed) if timed else None
+
+    def med(f):
+        return statistics.median(f(v) for _, v in timed) if timed else None
+
     t0 = warm[-1][0] if warm else None
     t1 = timed[-1][0] if timed else None
     s = {"sessions": len(live), "timed": len(timed), "accepted": [v.get("accepted") for _, v in live],
