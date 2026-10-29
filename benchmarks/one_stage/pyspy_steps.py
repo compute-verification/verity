@@ -47,7 +47,7 @@ def main() -> int:
         raise SystemExit(f"no full step of {a.T} tokens after the main load's start")
     lo, hi = (st[idx[0] - 1]["t"] - t0) * 1e6, (st[idx[-1]]["t"] - t0) * 1e6
     n = len(idx)
-    events = json.loads(a.trace_json.read_text())
+    events = json.loads(a.trace_json.read_bytes().decode("utf-8", "replace"))
     events.sort(key=lambda e: e["ts"])
     stack: dict[tuple, list[str]] = defaultdict(list)
     last: dict[tuple, float] = {}
