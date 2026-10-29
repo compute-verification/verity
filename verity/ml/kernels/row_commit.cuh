@@ -213,6 +213,20 @@ RC_HD void frame_leaf(const FrameK& K, u64 pos, const u64* v, u64* out) {
   frame_first<C>(K, pos, out);
   frame_second<SX, C>(K, pos, v, out);
 }
+// frame_leaf with nb fixed: both blocks are formed before the first compression, so the second block's template loads
+// don't wait behind it
+template <int SX, int NB, class C = Sha>
+RC_HD void frame_leaf_nb(const FrameK& K, u64 pos, const u64* v, u64* out) {
+  u64 W[32];
+  RC_UNROLL
+  for (int i = 0; i < 32; ++i) W[i] = K.fl_tpl[NB - 1][i];
+  or_be<121, NB>(W, pos);
+  or_be<129 + NB, NB>(W, pos);
+  or_digest<163 + 2 * NB + SX>(W, v);
+  sha::iv(out);
+  C::template compress_from<15>(out, K.fl_m15, W);
+  C::compress(out, W + 16);
+}
 
 template <int NB, class C = Sha>
 RC_HD void pad_nb(const FrameK& K, u64 rank, u64* out) {
