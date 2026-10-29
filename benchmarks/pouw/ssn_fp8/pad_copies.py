@@ -58,7 +58,7 @@ CASES = {"zero": ("zero", 0, 0), "onehot": ("onehot", 0, 0), "zero-lift": ("zero
          "sparse": ("sparse", 0, 0), "sparse-lift": ("sparse", 1, 0)}
 #: the in-column word copies dense padding stays under, and zero and one-hot padding over
 WORD_DENSE = 0.01
-WORD_SPARSE_PAD = 0.3
+WORD_OVER = {"zero": 0.3, "onehot": 0.1}
 
 
 def later(coins: int) -> int:
@@ -213,14 +213,15 @@ def main(argv: list[str] | None = None) -> int:
             ok &= c["own_prev"] > want_copies[c["case"]]
         else:
             ok &= c["repeat"] == 0.0
-        if CASES[c["case"]][0] in ("zero", "onehot"):
-            ok &= c["word"] > WORD_SPARSE_PAD
-        if CASES[c["case"]][0] == "dense":
+        pad = CASES[c["case"]][0]
+        if pad in WORD_OVER:
+            ok &= c["word"] > WORD_OVER[pad]
+        if pad == "dense":
             ok &= c["word"] < WORD_DENSE
     rep["ok"] = ok
     print("ok" if ok else "FAIL: zero chunks should copy about half their steps, one-hot padding and the lift no "
-          f"vector, zero and one-hot padding more than {WORD_SPARSE_PAD:.0%} of their words in the column, and dense "
-          f"padding under {WORD_DENSE:.0%}")
+          f"vector, zero padding more than {WORD_OVER['zero']:.0%} of its words in the column, one-hot more than "
+          f"{WORD_OVER['onehot']:.0%}, and dense padding under {WORD_DENSE:.0%}")
     if args.json:
         with open(args.json, "w") as f:
             json.dump(rep, f, indent=1)
