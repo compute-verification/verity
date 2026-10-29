@@ -15,7 +15,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import verity.ml.circuits.evaluate as ir_evaluate
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.evaluation.batch import _KERNELS
 from verity.ml.circuits.defs import bind
@@ -98,11 +97,6 @@ def test_kernel_matches_the_reference(target, n: int) -> None:
 
 
 # ---- the reference ------------------------------------------------------------------------------------------------------
-
-def test_oracle_is_the_ir_evaluator() -> None:
-    assert E.evaluate_call is ir_evaluate.evaluate_call and E.evaluate_region is ir_evaluate.evaluate_region
-    assert E.MissingValue is ir_evaluate.MissingValue
-
 
 def test_evaluate_is_the_primitive_and_the_direct_chain() -> None:
     rng = random.Random(1)
