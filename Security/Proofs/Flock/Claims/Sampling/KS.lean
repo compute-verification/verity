@@ -113,7 +113,7 @@ theorem agree_of_passes {H : Msg → Msg} {Cm : Commitment Bool} (hb : Cm.Binds 
 
 /-- A kept opening under the statement's roots is what the assembled witness opens there, when the kept openings
 agree. -/
-theorem val_assemble {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {found : List (List Msg × Opening Bool)}
+theorem val_assemble {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
     (hagree : ∀ q ∈ found, ∀ q' ∈ found, q.1 = q'.1 → q.2.pos = q'.2.pos → q.2.val = q'.2.val)
     {q : List Msg × Opening Bool} (hq : q ∈ found) (hr : q.1 = s.roots) (hok : Cm.Opens H s.roots q.2 = true) :
     (assemble s found).val H Cm s q.2.pos = some q.2.val := by
@@ -190,14 +190,14 @@ noncomputable def unitWit (H : Msg → Msg) (D : Deploy Coin Col T) (decode : Li
           (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j))).eval H run').1
 
 /-- The extractor at one accepted inner run `li`, under the outer run `j`: every checked unit's extraction. -/
-noncomputable def innerBody (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : Stmt)
+noncomputable def innerBody (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : AuditStatement)
     (c : ECoins D x) (j : Fin (D.k x)) (li : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen)) :
     RP (Fin (D.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   flatMapRP (fun iu : Fin (nPU D x) × (ℕ × ℕ) => unitExt D decode x s iu.2 li.2.1 li.2.2 (c.2.2 (j, li.1, iu.1)))
     ((List.finRange (nPU D x)).zip (D.checked x li.2.1))
 
 /-- The extractor at one accepted outer run `jo`: the inner wait on the second stage, and `innerBody` at each. -/
-noncomputable def outerBody (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : Stmt)
+noncomputable def outerBody (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : AuditStatement)
     (c : ECoins D x) (jo : Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen)) :
     RP (Fin (D.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   (waitAccC (D.k x) ((List.finRange (D.cap x)).map fun l => forkOn (D.stage2 x) jo.2.1 (c.2.1 jo.1 l)) []).bind
@@ -211,20 +211,20 @@ noncomputable def outerList (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) 
 /-- **What the extractor keeps** at the outer runs `Z`: at an accepted judged run, `Z = outerList`. The list is a
 parameter so that unfolding `found` never asks the kernel to evaluate the outer wait over `List.finRange (D.k x)`. -/
 noncomputable def found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x)
+    (s : AuditStatement) (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x)
     (Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
   ((flatMapRP (outerBody D decode x s c) Z).eval H run').1
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem found_eq (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : Stmt) (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x)
+    (s : AuditStatement) (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x)
     (Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))) :
     found H D decode x s run' c Z = ((flatMapRP (outerBody D decode x s c) Z).eval H run').1 :=
   rfl
 
 /-- **The extractor at an accepted run** assembles what it keeps. -/
 theorem E_eval (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω)
-    (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) {s : Stmt} (hs : D.parse x = some s)
+    (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) {s : AuditStatement} (hs : D.parse x = some s)
     (hacc : (run H P D.V x ω r₀).out = .acc) :
     ((E D decode).eval H P x ω r₀ c).1 =
       some (assemble s (found H D decode x s (run H P D.V x ω) c (outerList H D x (run H P D.V x ω) c))) := by
@@ -236,7 +236,7 @@ theorem E_eval (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × 
 
 /-- The kept openings' checks are the extractor's own calls. -/
 theorem ownLog_E (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {Ω : Type}
-    (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) {s : Stmt}
+    (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) {s : AuditStatement}
     (hs : D.parse x = some s) (hacc : (run H P D.V x ω r₀).out = .acc) :
     ∀ t ∈ ownLog H (run H P D.V x ω) (flatMapRP (outerBody D decode x s c) (outerList H D x (run H P D.V x ω) c)),
       t ∈ ownLog H (run H P D.V x ω) ((E D decode).ext x r₀ c) := by
@@ -248,7 +248,7 @@ theorem ownLog_E (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ �
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem Passes.unitExt (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : Stmt) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen)
     (ρ : D.UnitCoins x) : Passes H run' D.commit (Sampling.unitExt D decode x s u r v ρ) := by
   unfold Sampling.unitExt
   split
@@ -260,7 +260,7 @@ theorem Passes.unitExt (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem Passes.found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : Stmt) (c : ECoins D x)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (c : ECoins D x)
     (Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))) :
     Passes H run' D.commit (Sampling.flatMapRP (outerBody D decode x s c) Z) :=
   Passes.flatMapRP fun _ _ => Passes.bind _ fun _ => Passes.flatMapRP fun _ _ =>
@@ -269,7 +269,7 @@ theorem Passes.found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- A revealed opening that passes, from a unit whose `E^rep` found a witness, is among the unit's extraction's. -/
 theorem unitExt_mem (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : Stmt) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x)
+    (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x)
     {xS : Msg} {vS : Seen} (hs : D.session x u (run' r).seen = some (xS, vS)) {wF : Flock.Wit}
     (hw : unitWit H D decode x run' u r ρ = some wF) {q : List Msg × Opening Bool}
     (hq : q ∈ D.reveal s u (run' r).seen wF) (hok : D.commit.Opens H q.1 q.2 = true) :
@@ -291,7 +291,7 @@ theorem mem_outerList (H : Msg → Msg) (D : Deploy Coin Col T) (x : Msg) (run' 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **A unit's extraction at a kept inner run, under a kept outer run, is kept.** -/
-theorem mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : Stmt)
+theorem mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg) (s : AuditStatement)
     (run' : (Fin (D.V.k x) → Coin) → Trace) (c : ECoins D x) {Z : List (Fin (D.k x) × ((Fin (D.V.k x) → Coin) × Seen))}
     {j : Fin (D.k x)} {r : Fin (D.V.k x) → Coin} (hj : (j, (r, (run' r).seen)) ∈ Z)
     {l : Fin (D.k x)} {d : Fin (D.V.k x) → Coin}
@@ -325,7 +325,7 @@ end Extractor
 
 /-- **A faulty unit has a wrong proof unit at any interior values**: at slot `v` of the faulty set, whatever interior
 values `ι`, some proof unit `ab` of its replay unit, at index `i`, is not correct on `ref_ι`. -/
-theorem faulty_choice {H : Msg → Msg} {Cm : Commitment Bool} {s : Stmt} {P : Partition} {w : Wit} {v : ℕ}
+theorem faulty_choice {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
     (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
     ∃ rv, P.rus[v]? = some rv ∧ ∃ i : Fin (P.sizes.getD v 0), ∃ ab, rv[i.val]? = some ab ∧
       ¬ s.prog.Correct (RU.ref s.prog rv (w.val H Cm s) ι) ab := by
@@ -760,12 +760,12 @@ theorem rpow_k_le_slack (D : Deploy Coin Col T) (x : Msg) {N m : ℕ} (hN : N �
   exact card_rpow_le_slack hN hm
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem nRU_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
+theorem nRU_eq {D : Deploy Coin Col T} {x : Msg} {s : AuditStatement} {Pt : Partition} (hs : D.parse x = some s)
     (hPt : D.partition s = some Pt) : nRU D x = Pt.rus.length := by
   simp only [nRU, hs, Deploy.part, hPt, Option.getD_some]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem nPU_eq {D : Deploy Coin Col T} {x : Msg} {s : Stmt} {Pt : Partition} (hs : D.parse x = some s)
+theorem nPU_eq {D : Deploy Coin Col T} {x : Msg} {s : AuditStatement} {Pt : Partition} (hs : D.parse x = some s)
     (hPt : D.partition s = some Pt) : nPU D x = Pt.sizes.sum := by
   simp only [nPU, hs, Deploy.part, hPt, Option.getD_some]
 
@@ -857,7 +857,7 @@ selection picks at first-stage coins `r` finds no witness with probability at mo
 acceptance) comes up short or, for some refused `B`, keeps only runs bad for `B`, with probability at most
 `T + c·(T + c·(δ + E[κs]))`, `T = 2k/K + e^{−k/8}`. -/
 theorem outer_bad_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) {δ : ℝ} (hδ : 0 ≤ δ)
-    (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (s : Stmt) (Pt : Partition) (hPU : nPU D x = Pt.sizes.sum)
+    (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (s : AuditStatement) (Pt : Partition) (hPU : nPU D x = Pt.sizes.sum)
     (hRU : nRU D x = Pt.rus.length) (κs : (Fin (D.V.k x) → Coin) → ℝ) (hκs0 : ∀ r, 0 ≤ κs r)
     (hdraw : ∀ B ⊆ range Pt.rus.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r (f : ℕ → ℕ), (∀ v ∈ B, f v < Pt.sizes.getD v 0) →
