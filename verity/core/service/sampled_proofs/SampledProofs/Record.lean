@@ -18,6 +18,7 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 import SampledProofs.Bound
 import SampledProofs.Draw
 import SampledProofs.PyJson
+import Flock.WindowRecord
 import CoreProtocol.Profile
 
 namespace SampledProofs.Record
@@ -148,10 +149,12 @@ def floatJson (r : Core.Ratio) : V Json := do
 /-- `SHA-512` of Python's `canonical_json`, hex. -/
 def pySha512 (j : Json) : V String := do return sha512Hex (← PyJson.canonical j).toUTF8
 
-/-- `registration.digest`: `SHA-512(format || 0 || canonical_json(record))`. -/
-def registrationDigest (rec : Json) : V String := do
-  let tag := if jeq (getD rec "format") (.str "verity/registration/v2") then "verity/registration/v2" else "verity/registration/v1"
-  return sha512Hex (tag.toUTF8 ++ ByteArray.mk #[0] ++ (← PyJson.canonical rec).toUTF8)
+/-- A record's canonical JSON is Python's `canonical_json`: `Flock.canon` writes it, and it holds only characters below
+0x7f, where the two write every string alike. -/
+def pyCanonical (rec : Json) : Bool :=
+  match Flock.canon rec with
+  | .ok s => s.toList.all fun c => c.toNat < 0x7f
+  | .error _ => false
 
 structure Input where
   registration : Json
@@ -177,8 +180,8 @@ private def ints? (j : Json) : Option (Array Int) := match j with
 private def INPUT_KEYS : Array String := sortStrings #["registration", "receipt", "draw", "law", "proved_units", "instances",
   "statement", "verdicts", "delta", "sessions", "served", "session_roots"]
 
-/-- `audit_record`'s arguments, on the inputs it reads without raising and the drivers give it: a registration that has
-every field the record reads (its roots and registered entries objects with a string port or value), a draw object whose
+/-- `audit_record`'s arguments, on the inputs it reads without raising and the drivers give it: a registration whose
+canonical JSON is Python's (`pyCanonical`, so its digest is `registration.digest`'s) and that has every field the record reads (its roots and registered entries objects with a string port or value), a draw object whose
 units (and closure) are integers, its population an integer and a subset's `k` present, integer proved units and
 instances, verdicts objects (a verifier of record that accepted reporting its registered reads as objects with a string
 `value` and a `root`), session digests as strings, served units integers, and δ an exact ratio in (0, 1). -/
@@ -186,6 +189,7 @@ def inputOf (j : Json) : V Input := do
   need (keys? j == some INPUT_KEYS) s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}"
   let reg := getD j "registration"
   need (reg matches .obj _) "the registration is not an object"
+  need (pyCanonical reg) "the registration holds a number that is not an integer, or a character from 0x7f on"
   for k in ["anchors", "law", "partition", "population", "program", "protocol", "query", "roots", "scheme"] do
     need (field? reg k).isSome s!"the registration has no {k}"
   need (int? (getD reg "population")).isSome "the registration's population is not an integer"
@@ -246,7 +250,7 @@ private def strataDrawn (draw : Json) (units : Array Int) : Json :=
 def record (i : Input) : V Json := do
   let reg := i.registration
   let get := getD reg
-  let digest ← registrationDigest reg
+  let digest ← Flock.WindowRecord.digestHex reg
   let cs := checks reg i.receipt i.draw i.law i.units i.provedUnits i.instances digest i.served i.sessionRoots
     (ownRegistered reg (sessionRegistered i.verdicts))
   let accepted' := fun (v : Json) => jeq (getD v "accepted") (.bool true)
@@ -303,5 +307,26 @@ def record (i : Input) : V Json := do
     ("statement", i.statement), ("checks", obj (cs.toList.map fun (n, c) => (n, c.toJson))),
     ("verdicts", obj i.verdicts.toList), ("accepted", Json.bool accepted), ("complete", Json.bool (ran.size == i.verdicts.size)),
     ("profile", profile), ("integrity_profile", integrity), ("wrong_units", wrongUnits)]
+
+/-! ## `Flock.canon` is `canonical_json` on records `pyCanonical` admits
+
+On such a record the two encoders write the same bytes, so the window record's digest is `SHA-512(format || 0 ||
+canonical_json(record))`; a character from 0x7f on, or a fraction, is where they part. -/
+
+private def sameCanon (j : Json) : Bool :=
+  let py := (PyJson.canonical j).toOption
+  pyCanonical j && (Flock.canon j).toOption == py && (Flock.WindowRecord.digestHex j).toOption ==
+    py.map fun t => sha512Hex ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0] ++ t.toUTF8)
+
+private def parsed (s : String) : Json := (Json.parse s).toOption.getD .null
+
+private def PRINTABLE : String := String.ofList ((List.range 0x7f).map Char.ofNat)
+
+#guard sameCanon (parsed "{\"format\":\"verity/registration/v2\",\"protocol\":\"verity/sampled-proofs/one-stage/v1\",\"program\":\"ab01\",\"roots\":[{\"port\":\"x\",\"root\":\"00ff\",\"leaves\":4,\"domain\":\"11\"}],\"window\":{\"kind\":\"served\",\"stream\":\"aa\",\"prover\":\"bb\"},\"previous\":null,\"law\":{\"law\":\"bernoulli\",\"p\":\"1/3\"},\"population\":12,\"anchors\":[],\"registered\":[{\"value\":\"W\",\"root\":\"cc\",\"leaves\":2,\"words\":4,\"domain\":\"dd\",\"word_bits\":32}],\"leaf_layer\":null,\"neg\":-5,\"t\":true,\"e\":{}}")
+#guard sameCanon (parsed "{\"format\":\"verity/registration/v1\",\"b\":1,\"B\":2,\"ab\":3,\"a\":4,\"_\":[[],[{}],0]}")
+#guard sameCanon (Json.mkObj [("format", Json.str "verity/registration/v1"), (PRINTABLE, Json.str PRINTABLE)])
+#guard !pyCanonical (Json.str "\x7f") && (Flock.canon (Json.str "\x7f")).toOption != (PyJson.canonical (Json.str "\x7f")).toOption
+#guard !pyCanonical (Json.str "dé")
+#guard !pyCanonical (parsed "{\"p\":0.5}")
 
 end SampledProofs.Record

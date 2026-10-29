@@ -276,7 +276,7 @@ def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
         c = json.loads(bytes.fromhex(case["commitment"]))
         out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)
-        audits, windows = ([PC.Registration(x, b"") for x in c[k]] for k in ("audits", "windows"))
+        audits, windows = c["audits"], c["windows"]
         for i, f in enumerate(out["public"]["audits"]):
             assert f["drawn"] == f["units"] or not PC._tied_in(audits, windows, i), (n, i, f)
         if any(f["drawn"] < f["units"] for f in out["public"]["audits"]):
@@ -315,7 +315,7 @@ def test_the_scan_is_read_off_its_program(server):
     another Program's, one
     in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
     and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
-    check of what `NetTiming.Layout.Fits` asks."""
+    check of what `NetTiming.BoundaryGates.Fits` asks."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
@@ -330,7 +330,7 @@ def test_the_scan_is_read_off_its_program(server):
 
 
 def test_each_fits_check_refuses_its_negative(server):
-    """Each of the scan's checks of what `NetTiming.Layout.Fits` asks refuses, in Lean and in the mirror, a scan that
+    """Each of the scan's checks of what `NetTiming.BoundaryGates.Fits` asks refuses, in Lean and in the mirror, a scan that
     passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
     an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
     gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, and
@@ -347,7 +347,7 @@ def test_each_fits_check_refuses_its_negative(server):
 def test_a_scan_in_the_checker_form_is_refused_by_name(server):
     """A scan in the checker form, whose egress template takes the row its units compare as an input, is refused at the
     parameters by Lean and the mirror, by name, though its terms would read: no egress gate is an input
-    (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows leaves free."""
+    (`NetTiming.BoundaryGates.Fits`), so `K` counts only what a Program that computes its egress rows leaves free."""
     for n in range(2):
         case = build("rows-honest", n, small=True)
         s = PC.params(case["params"]).schedule
