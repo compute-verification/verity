@@ -104,6 +104,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
+from verity.core import site as S
 from verity.core.protocols import registration as log
 from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
@@ -483,8 +484,8 @@ def site_chain(node: bytes, blocks: int, payload_root: bytes, store: str = STORE
     receipts.store_blocks(blocks)
     if type(payload_root) is not bytes or len(payload_root) != DIGEST_BYTES:
         raise ValueError(f"the payload root is {DIGEST_BYTES} bytes")
-    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"),
-                              log.Loc(store, "memory", n, tier="dram", bytes=blocks * BLOCK_BYTES)))
+    site = log.site(locs=(S.Loc("site", "site"), S.Loc(n, "host", "site"),
+                          S.Loc(store, "memory", n, tier="dram", bytes=blocks * BLOCK_BYTES)))
     return log.chain(COMPOSITE, [site, log.Information((payload_item(store, node, blocks, payload_root),))])
 
 
