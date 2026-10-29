@@ -172,8 +172,8 @@ def forward(norm: Norm, silu: Silu, fused: bool):
     from verity_vllm.engine import int8_fused as F
     x0, x1, r = norm.xs[0], norm.xs[-1], norm.rs[0]
     gu = silu.gus[0]
-    fuse_norm = fused and F.producer_warps("norm", H) is not None
-    fuse_silu = fused and F.producer_warps("silu", I) is not None
+    fuse_norm = fused and F.producer_warps("norm", norm.m, H) is not None
+    fuse_silu = fused and F.producer_warps("silu", silu.m, I) is not None
 
     def f():
         for layer in range(LAYERS):
@@ -288,7 +288,7 @@ def main() -> int:
         d_norm = launch["norm_unfused"]["us"] - launch["norm_fused"]["us"]
         d_silu = launch["silu_unfused"]["us"] - launch["silu_fused"]["us"]
         row = {"m": m, "gates": gates, "norm_copies": norm.n, "silu_copies": silu.n, "norm_warps": nw, "silu_warps": sw,
-               "engine_warps": {"norm": F.producer_warps("norm", H), "silu": F.producer_warps("silu", I)},
+               "engine_warps": {"norm": F.producer_warps("norm", m, H), "silu": F.producer_warps("silu", m, I)},
                "sweep": {**sweep_n, **sweep_s}, "launch": launch, "forward": fwd,
                "saving_per_launch_us": {"norm": d_norm, "silu": d_silu},
                "saving_per_forward_us_modelled": NORMS * d_norm + SILUS * d_silu,
