@@ -1,8 +1,8 @@
 """sw_gpu's measurements in MH100 units (one dense int8 MAC = 1; the H200's ruler 4,096 MACs an SM-clock x 132 SMs).
 
-    python units.py [--bench OUT] [--k32 OUT] [--denoise OUT] [--hash OUT] [--json FILE]   markdown on stdout
+    python units.py [--bench OUT] [--k32 OUT] [--dgemm OUT] [--denoise OUT] [--hash OUT] [--json FILE]   markdown on stdout
 
-Each OUT is a run's out/ directory: run.sh's (bench.jsonl, k32.jsonl and their SASS gates), denoise.sh's (denoise.jsonl) and
+Each OUT is a run's out/ directory: run.sh's (bench.jsonl, k32.jsonl, dgemm.jsonl), denoise.sh's (denoise.jsonl) and
 hash_cost.sh's (one directory an arm, each with hash_cost.json). A time t at SM clock f is t f x 540,672 MAC-times: the
 work the H200's tensor cores could have done in it (time-equivalent units). Priced work is the H32 floor: 32 units a
 register a thread writes, from the gated SASS loops (every instruction but stores, branches, compares and barriers).
@@ -204,6 +204,41 @@ def smi_clock(out: Path) -> list[tuple[float, float]]:
     return got
 
 
+def dgemm(out: Path, res: dict) -> list[str]:
+    busy = []
+    path = out / "smi.csv"
+    if path.exists():
+        for line in path.read_text().splitlines()[1:]:
+            f = [x.strip() for x in line.split(",")]
+            try:
+                if float(f[3].split()[0]) >= 50:
+                    busy.append(float(f[1].split()[0]))
+            except (ValueError, IndexError):
+                continue
+    mhz = sorted(busy)[len(busy) // 2] if busy else 1980.0
+    md = ["### A whole GEMM with every k32 word folded (CORE-H32's dgemm, sm_90a): fold, no fold, cuBLASLt", "",
+          f"dg90: one warpgroup a 64 x 128 tile, single-stage (load, fence, wgmma m64n128k32, fold), every k32 word absorbed by "
+          f"duo; interleaved with the same kernel without the fold and cuBLASLt int8. Units at the busy SM clock nvidia-smi "
+          f"sampled over the leg ({mhz:.0f} MHz); a word is one s32 accumulator word a k32 step (m n k / 32).", "",
+          "| m | n | k | fold TMAC/s | no fold TMAC/s | cuBLASLt TMAC/s | fold / no fold | fold / cuBLASLt | "
+          "fold's extra units a word | fold units a MAC | cuBLASLt units a MAC |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    rows = jl(out / "dgemm.jsonl")
+    for r in rows:
+        macs = r["m"] * r["n"] * r["k"]
+        u = {a: r[f"{a}_ms"] * 1e-3 * mhz * 1e6 * RULER for a in ("fold", "nofold", "cublaslt") if f"{a}_ms" in r}
+        r["mhz"] = mhz
+        r["tmacs"] = {a: macs / (r[f"{a}_ms"] * 1e-3) / 1e12 for a in u}
+        r["units_per_mac"] = {a: v / macs for a, v in u.items()}
+        r["fold_extra_per_word"] = (u["fold"] - u["nofold"]) / (macs / 32)
+        lt = r["tmacs"].get("cublaslt")
+        md.append(f"| {r['m']} | {r['n']} | {r['k']} | {r['tmacs']['fold']:.0f} | {r['tmacs']['nofold']:.0f} | "
+                  + (f"{lt:.0f}" if lt else "") + f" | {u['fold'] / u['nofold']:.3f} | "
+                  + (f"{u['fold'] / u['cublaslt']:.2f}" if lt else "") + f" | {r['fold_extra_per_word']:.1f} | "
+                  f"{r['units_per_mac']['fold']:.3f} | " + (f"{r['units_per_mac']['cublaslt']:.3f}" if lt else "") + " |")
+    res["dgemm"] = rows
+    return md
+
+
 def hashing(out: Path, res: dict) -> list[str]:
     md = ["### hm96-sha512 rows (the served committer's leaves): alone and beside the served int8 GEMM", "",
           "Alone at the data sheet's f_max (1,980 MHz), and at the SM clock nvidia-smi sampled over the alone leg; beside from the "
@@ -243,7 +278,7 @@ def hashing(out: Path, res: dict) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    for a in ("bench", "k32", "denoise", "hash", "json"):
+    for a in ("bench", "k32", "dgemm", "denoise", "hash", "json"):
         ap.add_argument(f"--{a}")
     ns = ap.parse_args()
     res: dict = {}
@@ -258,6 +293,8 @@ def main() -> int:
             md += per_call_bench(res, plain) + [""]
     if ns.k32:
         md += k32(Path(ns.k32), res) + [""]
+    if ns.dgemm:
+        md += dgemm(Path(ns.dgemm), res) + [""]
     if ns.hash:
         md += hashing(Path(ns.hash), res) + [""]
     print("\n".join(md))
