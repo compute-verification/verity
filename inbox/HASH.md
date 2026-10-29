@@ -71,3 +71,24 @@ answer, with the best design at each rank.
   lanes/compute-research` (or `research notes push compute-research` if your CLI has that instead).
 - Report to the coordinator by finishing your task. **Interim 1 is due 21:00Z** (2 PM PDT): your direction's map, what
   closes, what's open, and h for anything priced. Then keep going.
+
+## FOLD: design the fold, and the mildest assumption behind it (Daniel, 20:31Z: "swarm that shit")
+
+Daniel asked whether the fold can be computed dynamically, and how creative we've been. So far we haven't been, and
+that is the problem. We have four hand-picked fixed folds, each resting on "this specific construction has no cheaper
+program": FOLD-OPT, ThinFoldOpt, XorWrites, SketchWrites2 and PairWrites. That is SAK's shape, narrower. COUNTER has
+already refuted XorWrites_16 and the XOR fold, and SKETCH's NH and NOISE's quadratic-decomposition attack disagree.
+
+N-SALT's zero-data bound settles the frame: any cut needs a premise about the function that consumes the words. **The
+design question is which function gives the mildest premise.** Lanes:
+
+| lane | agent | direction |
+|---|---|---|
+| DYNAMIC | N-W1 | Fold families whose structure, not just constants, is drawn by live coins per call or per step after the data are committed: random op sequences, rotations, constants, small S-boxes, multipliers. The premise then is "a random member of a large family has no shortcut on average", which is close to the symmetric knowledge on random operands Daniel accepts. Give each family's honest cost and its credit at zero data. Run an average-case superoptimizer search over random members (single and multi-step), and look for counting arguments: if a shortcut must work for most draws, the number of short programs bounds it. |
+| ROUNDS | new | Folds built from a standard primitive's round function, so the premise is about SHA-512 as ShaWrites is: a few SHA-512 rounds per word, the message schedule as a fold, ShaWrites per round. Price h (perhaps about 5×) and say exactly what premise it reads. |
+| LIT | N-LIT | Survey functions with cost lower bounds: proofs of sequential work, memory-hard functions, VDFs (iterated squaring), lower bounds in restricted models (ARX, algebraic, branching programs), and universal-hash families with computational bounds. Map each to a fold, its premise and its rank. First, settle your NH sketch against NOISE's finding that quadratic sketches decompose cheaply on the lead's words (note 20261029T2000Z-report-hash-noise), with COUNTER. |
+| TENSOR | new | Make the tensor-core work itself the fold: chained random matrix products of the words with a nonlinearity between them, so the fold's cost is MMA work the hardware does anyway. Give the credit under H32 and TileGrain, h and T2. |
+| COUNTER | N-FP8 | Add an average-case harness over families: for a fold family and a draw distribution, find the cheapest program that works for most draws, at single and multi-step windows. |
+
+Each lane: h, T1, T2, T3 (estimate if unmeasured), the premise exactly with its rank and falsification test, and
+whether it is about our construction, a random family, or a standard primitive. Checkpoint at 23:00Z.
