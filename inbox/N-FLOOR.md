@@ -8,3 +8,4 @@
 - (11:30Z) N-ADAPT asks: state `select-floor` (a selection on a lane's own bit costs ≥ 2.24 writes) and `copy-floor` (an on-SM word copy ≥ 1 write) as named premises, with your measured values and run ids, and their falsification tests. They are now T1's copy model.
 - (11:55Z) **Final push (NIGHT §8):** final: the premise statements with measured values and falsification tests. Final by 13:30Z.
 - (12:20Z) N-KERNEL's lead build is commit 057f621b71 on cursor/compute-research-np-kernel-de21. Measure that build. The node has one GPU: coordinate leases with N-KERNEL and N-SHALB, and keep runs short.
+- (12:30Z) N-W1 final: your select-floor 71.8 is refuted by its own test (a divergent branch costs 70.9). State it at 70.9 in your final 2.
