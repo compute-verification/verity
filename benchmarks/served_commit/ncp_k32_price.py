@@ -8,7 +8,10 @@ ncp-v1 and ncp-v2 today: 0.75). The words go into hm96 SHA-512 rows of 16 KiB. A
 (B h_x − h_leaf min(B, G)) / (540,672 f) seconds for B bytes (GD-HASH's model, its inputs measured on vy-dc-h200-5), and
 NCP's GEMMs cost what GD-DENOISE measured for a 3K-wide cuBLASLt call and fresh noise on both operands. t_H / t_S is the
 stock step plus both, over the stock step; "at the bar" hashes at HASH-38's bar, the public best SHA-512 on the H200
-(leaves only), instead; "matmuls alone" reads t_S as the plain GEMMs only, without the rest of the step. Every input is a
+(leaves only), instead; "measured hash" takes the hashing from hash_cost.py's own run of these rows (a forward's whole
+volume where it fits on the GPU, else that run's rate), with no gap credit; "without hashing" is the stock step and the
+GEMMs alone; "weight noise once" drops forming the weight side every call; "matmuls alone" reads t_S as the plain GEMMs
+only, without the rest of the step. Every input is a
 measurement (its art and run) or an estimate (its source), and the output says which. Coverage: each matmul's final-word
 gap d/(3K), against 1%, and its share of the MACs.
 """
@@ -30,6 +33,9 @@ U_RULE = 0.258                                      # GD-HASH's stock utilizatio
 # HASH-38's bar, the public best SHA-512 on the H200 (sx0000 against hashcat, r20261027-044217-d499, r20261027-062350-7163):
 # 0.01803 compressions of 128 B a SM-clock, as MAC-times a byte, leaves only (no tree)
 H_BAR = 4096 / (128 * 0.01803)
+# measured: r20261029-013634-94e5 (vy-dc-h200-5), hash_cost.py at c047146cd9, 16 KiB rows, 256 threads, the whole grid: the leaves
+# and the level-form tree alone, (bytes, ms). T 512's 64-row forward was hashed whole; every other volume at 64 GiB's rate
+HASHED = {"64 GiB": (64 << 30, 132.2461), "T 512, 64 real rows": (int(21.75 * (1 << 30)), 45.7495)}
 
 LAYERS = 16
 LINEARS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)}
@@ -71,6 +77,13 @@ def per_token(d: int, head: bool = False) -> dict:
     return {"bytes": sum(lin.values()), "by_linear": lin, "macs": macs}
 
 
+def hashed_ms(B: float, pname: str) -> float:
+    whole = HASHED.get(pname)
+    if whole and whole[0] == B:
+        return whole[1]
+    return B / (HASHED["64 GiB"][0] / HASHED["64 GiB"][1])
+
+
 def hash_ms(B: float, rb: int, gap_ms: float) -> tuple[float, float]:
     r = ROWS[rb]
     eta = r["h_leaf"] * r["G"] / (RULER * F) / GAP_MEASURED
@@ -102,18 +115,27 @@ def main() -> None:
         rule = t["bytes"] / t["macs"] * ROWS[16384]["h_x"] * U_RULE
         for pname, (real, m) in POINTS.items():
             B, g = t["bytes"] * real, GEMM[min(GEMM, key=lambda x: abs(x - m))]
-            gemm_ms = g["plain_us"] * (g["a_side"] + g["noised"] + g["wide"] + g["w_side"]) * 1e-3
+            parts = {p: g["plain_us"] * g[p] * 1e-3 for p in ("wide", "a_side", "noised", "w_side")}
+            gemm_ms = sum(parts.values())
             excl, _ = hash_ms(B, 16384, 0.0)
+            meas = hashed_ms(B, pname)
             plain_ms = g["plain_us"] * 1e-3
             row = {"bytes_token": t["bytes"], "GB_forward": B / 1e9, "rows_16k": B / 16384, "exclusive_ms": excl,
-                   "hbm_write_ms_unfused": B / HBM * 1e3, "gemm_extra_ms": gemm_ms, "plain_gemm_ms": plain_ms,
+                   "hashed_ms_measured": meas, "hashed_whole": HASHED.get(pname, (None,))[0] == B,
+                   "hbm_write_ms_unfused": B / HBM * 1e3, "gemm_extra_ms": gemm_ms, "gemm_extra_parts_ms": parts,
+                   "plain_gemm_ms": plain_ms,
                    "tH_tS_matmuls": None if head else (plain_ms + gemm_ms + excl) / plain_ms, "engines": {}}
             for e, (stock, gap, src) in ENGINES[pname].items():
                 _, gapfirst = hash_ms(B, 16384, gap)
                 row["engines"][e] = {"stock_ms": stock, "hash_ms_gap_first": gapfirst, "src": src,
                                      "tH_tS": (stock + gapfirst + gemm_ms) / stock,
                                      "tH_tS_no_gap": (stock + excl + gemm_ms) / stock,
-                                     "tH_tS_at_bar_no_gap": (stock + excl * H_BAR / ROWS[16384]["h_x"] + gemm_ms) / stock}
+                                     "tH_tS_at_bar_no_gap": (stock + excl * H_BAR / ROWS[16384]["h_x"] + gemm_ms) / stock,
+                                     "tH_ms_measured_hash": stock + gemm_ms + meas,
+                                     "tH_tS_measured_hash": (stock + gemm_ms + meas) / stock,
+                                     "hash_share_of_tH": meas / (stock + gemm_ms + meas),
+                                     "tH_tS_without_hash": (stock + gemm_ms) / stock,
+                                     "tH_tS_weight_noise_once": (stock + gemm_ms - parts["w_side"] + meas) / stock}
             out["points"].setdefault(f"d {d}{', head too' if head else ''}",
                                      {"bytes_mac": t["bytes"] / t["macs"], "J_rule_T8192": rule})[pname] = row
     for ctx, decode in ((144, True), (288, True), (2048, True), (8192, True), (2048, False), (8192, False)):
@@ -124,13 +146,17 @@ def main() -> None:
         for pname, r in p.items():
             if not isinstance(r, dict):
                 continue
-            eng = "  ".join(f"{e} {x['tH_tS']:.1f}x (no gap {x['tH_tS_no_gap']:.1f}x, at the bar {x['tH_tS_at_bar_no_gap']:.1f}x)"
+            eng = "  ".join(f"{e} {x['tH_tS']:.1f}x (no gap {x['tH_tS_no_gap']:.1f}x, at the bar {x['tH_tS_at_bar_no_gap']:.1f}x, "
+                            f"measured hash {x['tH_tS_measured_hash']:.1f}x, without hashing {x['tH_tS_without_hash']:.2f}x, "
+                            f"weight noise once {x['tH_tS_weight_noise_once']:.1f}x)"
                             for e, x in r["engines"].items())
             if r["tH_tS_matmuls"] is not None:
                 eng += f"  matmuls alone {r['tH_tS_matmuls']:.0f}x"
             print(f"  {pname:<20} {r['bytes_token'] / 1e6:6.1f} MB/token {r['GB_forward']:8.1f} GB/fwd "
-                  f"{r['rows_16k'] / 1e6:7.2f} M rows  hash {r['exclusive_ms']:8.1f} ms  HBM write {r['hbm_write_ms_unfused']:6.1f} ms  "
-                  f"GEMM +{r['gemm_extra_ms']:5.1f} ms  t_H/t_S {eng}")
+                  f"{r['rows_16k'] / 1e6:7.2f} M rows  hash {r['exclusive_ms']:8.1f} ms (measured "
+                  f"{'whole' if r['hashed_whole'] else 'at the rate'} {r['hashed_ms_measured']:8.1f} ms)  "
+                  f"HBM write {r['hbm_write_ms_unfused']:6.1f} ms  GEMM +{r['gemm_extra_ms']:5.1f} ms "
+                  f"({', '.join(f'{p} {v:.1f}' for p, v in r['gemm_extra_parts_ms'].items())})  t_H/t_S {eng}")
     for name, g in out["gaps"].items():
         print(f"gap {name:<13} K {g['K']:>5}: k32 {g['k32']:.2%}, d16 {g['d16']:.2%}")
     for c, v in out["coverage"].items():
