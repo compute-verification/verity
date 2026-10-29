@@ -573,7 +573,13 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
+  "Properties.NetworkPeriod.rowsProgWired": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad",
+  "Properties.NetworkPeriod.rowsProgWired_nontrivial": "4bddc27479aba4a1049243d85d661eb3081f1922e067d71e8783a5cdd77c6d1c",
+  "Properties.NetworkPeriod.rowsStateTied": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
+  "Properties.NetworkPeriod.rowsStateTied_nontrivial": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70",
+  "Properties.NetworkPeriod.rowsTiedDrawn": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb",
+  "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd"
  },
  "layers": {
   "Properties.Pouw": {
@@ -4598,19 +4604,21 @@
     "∀ (x : Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)), Not (P.Break { fst := o.fst, snd := { fst := o.snd, snd := x } })": "a negation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
+    "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.RateSketch.LifetimeCapped layout joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (v : Nat), instLTNat.lt v Aud.windows → instLENat.le (Aud.reads v) (instHMul.hMul (instHMul.hMul P N) 4096)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G), (p x).Deadlines (bind x) τ": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.StoreMatches W (p x).toExecution (ℓ x) (σ x) 32768 (bind x w j)": "Accounting.Requirement.StoreMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.StoreMatches W (p x).toExecution (ℓ x) (σ x) 32768 (bind x w j)": "Accounting.Requirement.StoreMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G), (p x).Deadlines (bind x) τ": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
