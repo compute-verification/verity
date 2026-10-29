@@ -9,7 +9,8 @@
 // shalb_words_check.py to hold to verity.ml.commitments bit for bit; each kernel is then timed (CUDA events, median of
 // REPS launches).
 //
-//   nvcc -O3 --use_fast_math -std=c++17 -arch=sm_90a -DSHA_ROLL=1 [-DWORDS_MINB=3] -I<committer> sha512_words_gpu.cu -o g
+//   nvcc -O3 --use_fast_math -std=c++17 -arch=sm_90a -DSHA_ROLL=1 [-DWORDS_MINB=3] -I<committer>
+//     sha512_words_gpu.cu -o g
 //   ./g DOMAIN_ID_FILE OUT
 #include <cuda_runtime.h>
 

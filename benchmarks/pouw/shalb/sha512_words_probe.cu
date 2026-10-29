@@ -1,8 +1,9 @@
 // One item of the words committer a loop trip (sha512_words.cuh): a row/v2 chunk of WORDS_NB data blocks from its
-// prefix's constant midstate and its padding block, unrolled; its frame-v3 leaf; and a level-0 node over that leaf and a
-// loaded sibling. Count it with shalb_sass.py as NAME=SASS:N, N = WORDS_NB + 5 compressions a trip. The 16 KiB chunk
-// (WORDS_NB 128) is the same chain at 64 more pairs; shalb_words_gpu.sh extrapolates in pairs from WORDS_NB 16 and 32. Built
-// only to be disassembled; never launched.
+// prefix's constant midstate and its padding block, unrolled; its frame-v3 leaf; and a level-0 node over that leaf
+// and a loaded sibling. Count it with shalb_sass.py as NAME=SASS:N, N = WORDS_NB + 5 compressions a trip. The 16 KiB
+// chunk (WORDS_NB 128) is the same chain at 64 more pairs; shalb_words_gpu.sh extrapolates in pairs from WORDS_NB 16
+// and 32. Built only to be disassembled; never launched.
+
 #include <cstdint>
 
 #include "sha512_words.cuh"
