@@ -113,7 +113,7 @@ def test_a_name_ops_lists_is_read_from_research_each_time_so_a_patch_reaches_the
 def test_the_check_and_research_read_its_configuration_at_one_home():
     """ci.toml, drive.toml and queue.toml sit in one directory, named once in the check (`declaration.HOME`) and once in
     research (`queue.CHECK_HOME`): moving them is a change of those two constants."""
-    assert D.HOME == OPS.CHECK_HOME
+    assert D.HOME == OPS.queue.CHECK_HOME
     assert D.CI == OPS.CI_JOBS == f"{D.HOME}/ci.toml"
     assert OPS.DRIVE_FLAGS == f"{D.HOME}/drive.toml" and OPS.RULES_BEFORE_MOVE == f"{D.HOME}/queue.toml"
     assert all((D.ROOT / p).is_file() for p in (D.CI, OPS.DRIVE_FLAGS, OPS.RULES_BEFORE_MOVE))

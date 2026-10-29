@@ -57,7 +57,6 @@ TESTS = {
     "unlike": "research.merge:unlike",
     "DRIVE_FLAGS": "research.queue:DRIVE_FLAGS",
     "RULES_BEFORE_MOVE": "research.queue:RULES_BEFORE_MOVE",
-    "CHECK_HOME": "research.queue:CHECK_HOME",
     "CI_JOBS": "research.queue:CI_JOBS",
     "DriveFlags": "research.queue:DriveFlags",
     "Rules": "research.queue:Rules",
