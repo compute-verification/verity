@@ -1,5 +1,5 @@
 /-
-The link check's binding (PRF-282 G4). A link row of a recursive session's table that V*'s `RecLink_v1` accepts, its outputs
+The link check's binding. A link row of a recursive session's table that V*'s `RecLink_v1` accepts, its outputs
 the two rows trees' roots the verifier builds (`RecLinkTree.rowsRoot`), opens to the reader's input row and the writer's
 output row the inner statement publishes, and the two rows commit one digest, unless SHA-512 collides: `link_binding`
 gives the explicit colliding pair (`treePair`), as `climb_binding` does for a Flock opening. One way: it says what an
@@ -10,8 +10,9 @@ A leaf no row fills is `EMPTY = SHA-512("")`, no row leaf's input, and a root of
 refused, so neither a missing row nor a failed one opens without a collision: no assumption beyond SHA-512's collision
 resistance, which a reader of this lemma takes as the premise its pair refutes.
 
-What is proved is about the unit's reference (`RecLinkRef.linkRef`); the netlist (`VStar.linkUnit`) is held to it by the
-`link_unit` and `link_ref` difftests, not by a proof.
+What is proved is about the unit's reference (`RecLinkRef.linkRef`), whose output is `linkOut`'s (`linkRef_ok`).
+That the netlist (`VStar.linkUnit`) computes `linkOut` wherever its rows hold, on the bytes of its ports' words, is
+`Proofs.Flock.VBridge.RecLink` (`laid_linkUnit`, `linkB_words`); this file doesn't compose the two.
 -/
 import Proofs.Flock.Verifier.Merkle
 import Flock.RecLinkRef
