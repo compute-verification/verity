@@ -43,3 +43,6 @@ Do merge #5610's 3f7b6e310e. 1c2e66c39b now holds an outdated #5722 head (#5722 
 
 ## 20:46Z
 New capacity until Thu 06:00Z: vy-nebius-cpu-11 and -12, each 192 vCPU with 6 warm Lean build slots. Use `--on vy-nebius-cpu-11 --pool research` (r0-r4; there is no soundness pool there). Send NEW runs there first. Don't cancel a run that has already started elsewhere, but a queued, not-started run 8+ deep on cpu-7/8/9 may be cancelled and resent there.
+
+## 01:46Z
+#5610's Properties lock-only commit is 54ec4c2c7e (on 2b8e4d3147), marked ~02:15Z. When `git ls-remote origin refs/pull/5610/head` shows it, merge it, take #5610's Properties lock or your own regenerated one if they match, rerun only what the gate asks, and mark.
