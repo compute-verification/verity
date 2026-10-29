@@ -409,8 +409,8 @@ def lane_bounds(design: str) -> dict:
     sums = lanes @ np.unique(lane_weights(design, 2), axis=0).T
     word = max(np.unique(c, return_counts=True)[1].max() for c in sums.T) / len(lanes)
     joint = np.unique(sums, axis=0, return_counts=True)[1].max() / len(lanes)
-    return {"design": design, "point_mass": word, "joint_point_mass": joint, "kept_word_bound": word / 2,
-            "kept_word_zero_data": float((sums == -1).mean() / 2), "kept_tile_16x8_bound": 2.0 ** -16 * joint ** 7}
+    return {"design": design, "point_mass": float(word), "joint_point_mass": float(joint), "kept_word_bound": float(word / 2),
+            "kept_word_zero_data": float((sums == -1).mean() / 2), "kept_tile_16x8_bound": float(2.0 ** -16 * joint ** 7)}
 
 
 def kept_sweep(seed: int = 41, m: int = BLC_TILE, n: int = 2048, s: int = 265) -> list[dict]:
