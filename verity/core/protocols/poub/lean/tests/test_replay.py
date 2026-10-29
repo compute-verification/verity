@@ -14,7 +14,7 @@ import pytest
 
 import ra_cases as M
 import replay as R
-from verity.core.protocols.poub import audit, wire
+from verity.core.protocols.poub import audit, retired, wire
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -349,3 +349,66 @@ def test_case_of_reads_the_pace_the_pace_k_driver_wrote(server, tmp_path) -> Non
     path.write_text(json.dumps(v))
     row, = R.replay_record(path, server)
     assert row["agree"] and row["held"], row
+
+
+def before_the_move(v: dict) -> dict:
+    """`v` as a session of v0 recorded before MEM-152's move holds it: its registration's digest under v0's registration
+    tag then, and its accepted sessions' records naming v0's id then (`poub.retired`)."""
+    v = copy.deepcopy(v)
+    d = R.digest_under(R.registration_of(v["registration"]), retired.REGISTRATION_DOMAIN)
+    v["registration"]["digest"] = d
+    for session in v["sessions"]:
+        session["registration"] = d
+        if session.get("record"):
+            session["record"]["public"] |= {"protocol": retired.PROTOCOL_ID, "registration": d}
+    return v
+
+
+def test_the_digest_under_todays_tag_is_the_registrations() -> None:
+    reg = M.Run().store.registration
+    v = verifier_json(run("honest"))
+    assert R.digest_under(R.registration_of(v["registration"]), audit.REGISTRATION_DOMAIN) == reg.digest.hex()
+
+
+@pytest.mark.parametrize("name", ["honest", "few"])
+def test_a_record_of_v0_before_the_move_replays_with_its_digest_under_v0s_tag(server, tmp_path, name) -> None:
+    """A session recorded before the move replays to its recorded verdict, its digest held to v0's registration tag
+    then: by the id its record names (an accepted session), or by that digest where it names none (a rejected one)."""
+    if name == "few":
+        r = M.Run(windows=2)
+        zero_passes(r)
+    else:
+        r = run(name)
+    v = before_the_move(verifier_json(r))
+    assert ("record" in v["sessions"][0]) == (name == "honest")
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["protocol"] == retired.PROTOCOL_ID and row["agree"] and row["held"] and row["digest"], row
+    assert row["made"]["registration"].startswith(f"recorded under {retired.PROTOCOL_ID}")
+    v["registration"]["payload_root"] = "00" * 64
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["digest"] is False
+    assert R.main(["record", str(path)]) == 1
+
+
+def test_a_registry_of_v0_before_the_move_reads_back_under_todays_schema(server, tmp_path) -> None:
+    v = refused()
+    v["registry"]["schema"] = retired.REGISTRY_SCHEMA
+    path = tmp_path / "verifier.json"
+    path.write_text(json.dumps(v))
+    row, = R.replay_record(path, server)
+    assert row["protocol"] == retired.PROTOCOL_ID and row["agree"] and row["held"] and row["registry"], row
+    assert R.main(["record", str(path)]) == 0
+
+
+def test_a_transcript_its_verifier_json_names_v0_before_the_move_for_isnt_replayed(server, tmp_path) -> None:
+    """Its seeds, receipts and openings are under v0's tags then, which neither verifier takes: no verdict to replay."""
+    case, _ = M.recorded("honest")
+    path = tmp_path / "case.json"
+    path.write_text(json.dumps(case))
+    known = {"pace": None, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "outcome": "accepted",
+             "protocol": retired.PROTOCOL_ID}
+    row, = R.replay_transcript(path, server, {path.name: known})
+    assert row["agree"] is None and row["held"] is None and retired.PROTOCOL_ID in row["why"], row
