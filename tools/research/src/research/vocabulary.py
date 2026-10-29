@@ -12,7 +12,7 @@ from functools import cache
 from pathlib import Path
 
 TABLE = "tests/test_retired_terms.py"
-#: The table's names this reads, each an assignment of literals, `re` calls and the names before it.
+#: The table's names this reads, each an assignment of literals, f-strings, `re.compile` and the names before it.
 NAMES = ("TERMS", "_SEP", "_TERM", "DOC_TERMS", "_SPACE", "_DOC_TERM", "_CODE")
 
 
@@ -29,15 +29,34 @@ def table(path: Path | None = None) -> dict:
         tree = ast.parse(path.read_text()) if path else None
     except (OSError, SyntaxError, ValueError):
         return {}
-    ns: dict = {"re": re}
+    ns: dict = {}
     for node in tree.body if tree else []:
         target = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else getattr(node, "target", None)
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and isinstance(target, ast.Name) and target.id in NAMES and node.value:
             try:
-                exec(compile(ast.fix_missing_locations(ast.Module([ast.Assign([target], node.value)], [])), str(path), "exec"), ns)
-            except Exception:                                     # a form this reader doesn't know: skip that name
+                ns[target.id] = _value(node.value, ns)
+            except (ValueError, KeyError, TypeError, re.error):    # a form this reader doesn't know: skip that name
                 continue
-    return {k: ns[k] for k in NAMES if k in ns}
+    return ns
+
+
+_FLAGS = {"I": re.I, "M": re.M, "S": re.S, "X": re.X, "IGNORECASE": re.I, "MULTILINE": re.M, "DOTALL": re.S}
+
+
+def _value(e: ast.expr, ns: dict) -> object:
+    """An assignment's value: literals, f-strings over the names before it, `re.compile` and `re`'s flags joined by `|`."""
+    if isinstance(e, ast.Name):
+        return ns[e.id]
+    if isinstance(e, ast.JoinedStr):
+        return "".join(str(_value(v.value, ns)) if isinstance(v, ast.FormattedValue) else str(v.value) for v in e.values)
+    if isinstance(e, ast.Attribute) and isinstance(e.value, ast.Name) and e.value.id == "re" and e.attr in _FLAGS:
+        return _FLAGS[e.attr]
+    if isinstance(e, ast.BinOp) and isinstance(e.op, ast.BitOr):
+        return _value(e.left, ns) | _value(e.right, ns)
+    if (isinstance(e, ast.Call) and isinstance(e.func, ast.Attribute) and e.func.attr == "compile"
+            and isinstance(e.func.value, ast.Name) and e.func.value.id == "re" and not e.keywords):
+        return re.compile(*(_value(a, ns) for a in e.args))
+    return ast.literal_eval(e)
 
 
 def retired(text: str, t: dict | None = None) -> list[tuple[str, str]]:
