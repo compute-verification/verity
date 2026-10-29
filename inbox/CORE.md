@@ -163,3 +163,19 @@ Out:
 - **What would pass (coordinator, estimate):** final word + forming = 32/K + 24/n + 24/m ≤ 1%. That needs wide layers and
   big batches. At K = n ≈ 7,168 (DeepSeek-V4-like) and m ≥ 8,192 it is about 0.45 + 0.33 + 0.29 ≈ 1.1%, still marginal,
   so forming must be charged or shrunk.
+
+## 8. The definitive ranking (CORE-RANK final, 02:59Z; note:compute-research/20261029T0052Z-report-core-rank; art:ff2a652e593fac9a219ac1c4822bc3e1c1e70c52bd9c3dc58358e44e44075b83)
+
+- **Under §2a, no design is shown to meet T1 at both T 512 and T 8,192.** What decides it is forming the noised operands
+  every call: honest work nobody credits. At the floor price it is 0.37% of stock at T 8,192 and 1.83% at T 512 over
+  Llama-3.2-1B's linears, and 3× that for NCP.
+- **NCP + the rank bound is #7 (rank 3, the best proved design).** It fails at both points, even with the final-word fix:
+  2.34% → 1.10% at T 8,192 and 6.73% → 5.50% at T 512. T3 is met (+3.68% / +3.48%). T2 fails at T 8,192 (155× / 186×,
+  98% hashing, measured r20261029-013634-94e5) and is 81× / 130× at T 512 (estimate).
+- **Dither-2S LI-CP-W is #5 (rank 4).** It could hold at T 8,192 (≈ 0.37%, estimate) and fails at T 512 (≈ 1.83%).
+- **The top 3 by the order rule are Dither-C, Fresh-U and Accel D5 / D6, all rank 4.** They lead only because nobody has
+  priced their forming.
+- **What T 512 needs, for every design:**
+  - (a) a bound that charges forming, which needs the tensor's real semantics in the model plus a counting lemma; or
+  - (b) weight noise shared across a window's calls, which reverses Daniel's 4:30 PM ruling (fresh noise every call), so
+    it's his call.
