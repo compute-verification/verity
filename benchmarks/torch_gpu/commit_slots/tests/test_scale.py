@@ -19,19 +19,19 @@ needs_cxx = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "
 CTX = bytes(range(64))
 
 
-def families_like(layers: int, coords: int = 4, chunks: int = 1) -> S.Layout:
+def families_like(layers: int, coords: int = 4, chunks: int = 1) -> S.CommitShape:
     """A layout shaped like the families map's: one group a layer, all the same `Group`, of ``coords`` one-row units (a
     coordinate's 16-bit row) and ``chunks`` two-row units (a quantizer chunk's codes, then its f32 scale)."""
     units = [(S.Row((S.Part(0, 2 * i, 2),)),) for i in range(coords)]
     units += [(S.Row((S.Part(1, 64 * i, 64),)), S.Row((S.Part(2, 0, 4),))) for i in range(chunks)]
-    return S.Layout(f"families-like/{coords}x{chunks}", (S.Group((2 * coords, 64 * chunks, 4), tuple(units)),) * layers)
+    return S.CommitShape(f"families-like/{coords}x{chunks}", (S.Group((2 * coords, 64 * chunks, 4), tuple(units)),) * layers)
 
 
 LAYOUTS = {
     "edge": S.edge_layout(),
     "h200-3": S.h200_layout(layers=3),
     "h200-3-by-2": G.regroup(S.h200_layout(layers=3), 2),
-    "an-empty-group": S.Layout("units/v1 \"q\"\\", (S.Group((4,), ()), *S.edge_layout().groups)),
+    "an-empty-group": S.CommitShape("units/v1 \"q\"\\", (S.Group((4,), ()), *S.edge_layout().groups)),
     "families-like": families_like(5),
 }
 
@@ -50,7 +50,7 @@ def test_the_layout_digest_and_every_unit_domain_id_are_the_references(name: str
 TAGGED, SHAPE = S.tagged_sha512, G.Plan._shape
 
 
-def _plan_counts(layout: S.Layout) -> dict[str, int]:
+def _plan_counts(layout: S.CommitShape) -> dict[str, int]:
     """Build a host Plan and a step committer over ``layout``, counting SHA-512 calls in slots.py, layout digests, group
     layouts, and refusing the manifest (O(units) a call)."""
     n = {"sha512": 0, "layout": 0, "shape": 0}
@@ -63,7 +63,7 @@ def _plan_counts(layout: S.Layout) -> dict[str, int]:
         n["layout"] += tag == S.LAYOUT_TAG
         return TAGGED(tag, payload)
 
-    def manifest(self: S.Layout) -> None:
+    def manifest(self: S.CommitShape) -> None:
         raise AssertionError("planning builds no manifest")
 
     def shape(self: G.Plan, g: S.Group) -> object:
@@ -73,7 +73,7 @@ def _plan_counts(layout: S.Layout) -> dict[str, int]:
     with pytest.MonkeyPatch.context() as m:
         m.setattr(S, "hashlib", SimpleNamespace(sha512=sha512))
         m.setattr(S, "tagged_sha512", tagged)
-        m.setattr(S.Layout, "manifest", manifest)
+        m.setattr(S.CommitShape, "manifest", manifest)
         m.setattr(G.Plan, "_shape", shape)
         plan = G.Plan(CTX, layout, "host")
         G.StepCommitter(plan, 0, 2, bytes(32))
