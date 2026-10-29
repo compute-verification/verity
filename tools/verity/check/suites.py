@@ -19,8 +19,7 @@ resolves to in `uv.lock` (the lock's entry for each distribution it depends on, 
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
 and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the code that runs the suites (`RUNNER`: this runner and its guard,
-not the rest of check, so an edit to `check.py` reruns its own suite alone; each by its content where this runner is,
-`runner_ids`, so a runner in another checkout keys a tree as the same files inside it do). The cache key hashes all
+not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
