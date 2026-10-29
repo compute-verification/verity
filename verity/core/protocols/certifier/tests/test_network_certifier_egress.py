@@ -254,9 +254,8 @@ def test_a_request_not_yet_in_the_state_computes_another_row():
 def test_the_units_ands():
     """The unit's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
     request slots of 64 outputs, 17-bit ids, D = 22): what circuit-check pins and the status extrapolates."""
-    memo = {}
-    assert HC.ands(_fn(shape(PARAMS, NR, K)), memo) == ANDS_ZK
-    assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22)), memo) == ANDS_CLASS
+    assert HC.ands(_fn(shape(PARAMS, NR, K))) == ANDS_ZK
+    assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22))) == ANDS_CLASS
 
 
 #: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's unit
