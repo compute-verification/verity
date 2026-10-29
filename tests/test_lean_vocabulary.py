@@ -580,10 +580,12 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog":
         "homonym, relative security's proof-local program: rename (compute-accounting)",
     # Security/Properties/
-    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
+    "Security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
         "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
+    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
+        "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
@@ -815,6 +817,8 @@ KNOWN: dict[str, str] = {
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
     "tools/verity/lean/run_daily.py::Node": "homonym, node 1's paths for the daily Lean run: rename (lean)",
     # verity/core/
+    "verity/core/attest/__init__.py::Period":
+        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/core/deploy/manifest.py::Link":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it (proofs)",
     "verity/core/deploy/manifest.py::Machine":
