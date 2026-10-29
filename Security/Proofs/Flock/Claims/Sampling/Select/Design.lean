@@ -42,16 +42,16 @@ theorem parseLaw_k (t : String) (named : Json) (h : Select.parseLaw t = .ok name
        first
          | (rw [getD_p] at hk; simp [nat?, int?] at hk)
          | (rw [getD_k, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all))
-    | (revert h
-       split
-       · intro h
-         simp only [pure, Except.pure, Except.ok.injEq] at h
-         subst h
-         rw [getD_kw, nat_toJson, Option.some.injEq] at hk
-         subst hk
-         simp_all
-       · intro h
-         exact absurd h (throw_ne _ _))
+    | (dsimp only at h
+       repeat' split at h
+       all_goals first
+         | exact absurd h (throw_ne _ _)
+         | exact absurd h (throw_bind_ne _ _ _)
+         | (simp only [pure, Except.pure, Except.ok.injEq] at h
+            subst h
+            first
+              | (rw [getD_p] at hk; simp [nat?, int?] at hk)
+              | (rw [getD_kw, nat_toJson, Option.some.injEq] at hk; subst hk; simp_all)))
 
 /-- **`Flock.Draw.derive`'s bounds**: `1 ≤ k ≤ N`. -/
 theorem derive_bounds (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
