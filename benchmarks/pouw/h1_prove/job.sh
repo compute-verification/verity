@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# H1 tile units of one recorded int8 Llama-3.1-8B window through sampled proofs: drawn by the live coin, proved by C-Flock
+# H1 tile units of one recorded int8 Llama-3.1-8B window through sampled proofs: sampled by the live coin, proved by Flock
 # --zk and verified by the Lean verifier against the verifier's own public files (run.py's docstring has the protocol).
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --mem-gb G \
 #     --declared-output 'out/*' --env H1_MEM_GB=G [--env H1_K=64 --env H1_COLS=64] -- bash benchmarks/pouw/h1_prove/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean flock-verify, a venv)
 #   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
 #      quantizers; a second window from other tokens) and run.py prepare commits (each call's A table and z table of its
-#      tiles' z/y records, and the weights' B rows), serves, draws, opens, checks the openings and has the drawn units
+#      tiles' z/y records, and the weights' B rows), serves, draws, opens, checks the openings and has the sampled proof blocks
 #      staged, one statement a drawn call, while stage.py builds the unit's circuit (the long step at K = 4096), bound to
 #      the window's Program once the commitment gives its shape
-#   3. one loopback --zk session per statement (each drawn call's units, honest the first drawn unit's call; the other
+#   3. one loopback --zk session per statement (each drawn call's units, honest the first sampled proof block's call; the other
 #      window's unit; honest's units on a tampered A row, with their ok rows committed afresh, and on in-z's window
 #      computing ok = 0; the in-proof negatives on honest's units, each also as
-#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn, each prover under the firewall (FC_FIREWALL=1:
+#      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance drawn, each prover under the ZK server (FC_FIREWALL=1:
 #      the Lean session loop, its level-0 draw and Lean finish) unless H1_FIREWALL=0
 #   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and its call's registered
 #      reads, the ok port among them (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their
@@ -23,14 +23,14 @@
 #      in-y, in-z, in-swap, in-call, in-z-only (and in-xa under H1_TILE=v3) and their -skip runs REFUSED by some layer),
 #      as many at a time as 90% of H1_MEM_GB holds at 6x the circuit text each (two at K = 4096 and
 #      H1_MEM_GB=500), and the selftest build's controls on
-#      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
+#      the sampled proof blocks' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
 #   5. run.py summarize: out/summary.json, with window credit's registration step (credit._registration) on the honest
 #      checks' Lean findings under the window's open root, which every per-window registered value binds (PRF-127)
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
 #      H1_FIREWALL (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish and zk_worker_level0 on honest's
-#      statement, under the firewall, after the proofs, thirteen firewalled sessions, about 34 min at K = 64; a failure
+#      statement, under the ZK server, after the proofs, thirteen firewalled sessions, about 34 min at K = 64; a failure
 #      fails the job)  H1_ONLY (the plan's tags to prove and check, space-separated: "honest other-window-own" skips the negatives; all)
 #      HZ_RUNS (1): sessions a statement, all verified by one Lean process, which reads the circuit once
 #      H1_CONTROLS ("honest output_row_committed_false" below K = 4096, else none)  H1_SERVE_PCT (36) and H1_PROVE_PCT (32):
@@ -111,7 +111,7 @@ VLIMIT=$(declare -f vlimit)
 if [ "$FW" = 1 ]; then
   export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
   export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
-  # the firewall's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
+  # the ZK server's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
   # can't create its threads: a firewalled session is bounded by the run's cgroup (--mem-gb) alone
   vlimit() { :; }
 fi
@@ -127,7 +127,7 @@ while IFS=$'\t' read -r kind tag D n; do
   unset FC_ZK_SELF_CHECK
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
 done < "$WK/plan.tsv"
-# the wire's controls, under the same firewall: the prover's frames doctored on the wire to the session loop, each dropped
+# the wire's controls, under the same ZK server: the prover's frames doctored on the wire to the session loop, each dropped
 # or refused, the host's rep requests to the loop's finish doctored, each refused, and a second level-0 draw for a table,
 # refused (flock-circuit's zk_worker_wire, zk_worker_finish and zk_worker_level0, live PROTOCOL.md §10.4)
 WIRE=ok
@@ -145,7 +145,7 @@ fi
 unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
 eval "$VLIMIT"
 
-# ---- Lean: the plan's checks, then the selftest build's controls on the drawn units' statement ----------------------------
+# ---- Lean: the plan's checks, then the selftest build's controls on the sampled proof blocks' statement ----------------------------
 each=$(( $(stat -L -c %s "$SW/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))
 par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 6 ] && par=6
 cap=$(( STAGE_GB / par ))

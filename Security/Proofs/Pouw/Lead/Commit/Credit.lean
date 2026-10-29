@@ -20,6 +20,18 @@ theorem hashed_credit_ge {L : Pouw.Lead.Layout} (H : Hash.Msg → Hash.Digest) (
     (hnb : ¬ Break L H C κ σ ω) :
     (((C.msgs H (word L κ ω) ++ C.aMsgs).dedup).map (shaCredit isA)).sum ≤
       ((σ.exec ω).hashed.map (shaCredit isA)).sum := by
-  sorry
+  have hsub : (C.msgs H (word L κ ω) ++ C.aMsgs).dedup ⊆ (σ.exec ω).hashed := fun y hy => by
+    rw [List.mem_dedup] at hy
+    obtain ⟨x, hx, hxy⟩ := hhash y hy
+    by_cases hne : x = y
+    · exact hne ▸ hx
+    · exact absurd ⟨x, List.mem_append_left _ hx, y, List.mem_append_right _ hy, hne,
+        congrArg Verity.Digest.bytes hxy⟩ hnb
+  obtain ⟨l, hp, hl⟩ := (List.nodup_dedup _).subperm hsub
+  rw [← (hp.map (shaCredit isA)).sum_eq]
+  exact (hl.map (shaCredit isA)).sum_le_sum fun a ha => by
+    obtain ⟨b, -, rfl⟩ := List.mem_map.1 ha
+    unfold shaCredit shaARegs shaWordsRegs
+    split_ifs <;> positivity
 
 end Pouw.SecurityProofs.Lead.Commit

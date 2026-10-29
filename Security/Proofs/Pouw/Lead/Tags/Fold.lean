@@ -3,10 +3,11 @@ import Proofs.Core.Fp32.Round
 import Mathlib.Data.Int.ModEq
 
 /-!
-# The epilogue's fold is exact while `|A·Bᵀ| ≤ 2^22`
+# The epilogue's fold is exact while `|p| ≤ 2^22`
 
-The lead's int32 accumulator holds `D ≡ p + ρ + c (mod 2^32)`: the product `p = (A·Bᵀ)_ij`, the row source `ρ` and the
-column source `c` (the code, `κ·G_j` and the coin lanes' weighted sum), integers of any size. The epilogue folds both
+The lead's int32 accumulator holds `D ≡ p + ρ + c (mod 2^32)`: the row source `ρ`, the column source `c` (the code,
+`κ·G_j` and the coin lanes' weighted sum), integers of any size, and `p`, the rest: the product `(A·Bᵀ)_ij` served
+plain, and `(A·Bᵀ)_ij + n_ij` served noisy, `n` the noise. The window is on that `p`. The epilogue folds both
 sources out with one IADD3, `D + (MAGIC_BITS - ρ) - c` mod `2^32`, and reads the word as FP32. While `|p| ≤ 2^22` that
 word is `MAGIC_BITS + p` whatever the sources (`iadd3_fold`), the FP32 word of `MAGIC + p`, `MAGIC = 1.5 · 2^23`
 (`decode_fold`). The FFMA `v · s - MAGIC · s` then gives stock's word, FMUL of `I2F(p)` by `s`, for every positive finite

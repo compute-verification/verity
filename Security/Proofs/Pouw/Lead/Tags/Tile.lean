@@ -14,12 +14,12 @@ the first tile's columns (`colsOf`, 8 for a whole column block by `colsOf_card`)
 * **The columns differ, or the other tile is fixed** (`agreeG_card_le` against a target that reads no tag weight of
   `J`): the row tag is nonzero below 28,560 rows (`rowTag_ne_zero`), so each column's four tag weights meet the target
   on at most `7³` of their `7⁴` values.
-* **The rows differ, the columns don't**: the two row tags differ (`rowTag_inj`), and their difference against the
-  same weights does the same.
+* **The rows differ, the columns don't** (`tile_rows_card_le`): the two row tags differ (`rowTag_inj`), and their
+  difference against the same weights does the same.
 * **Only the step differs**: the step-0 tag term cancels, and the later step's coin lane `s` in each column moves one
   word under `-rot`'s weight and not the other (`agreeU_card_le`), a `2^−e` share a column.
 
-Each is a count through a block of coins (`Block.card_le`): rewriting the block leaves every other coin, so over each
+Each is a count through a block of coins (`TileBlock.card_le`): rewriting the block leaves every other coin, so over each
 value of the others the block's values meeting every column's condition are counted column by column.
 -/
 
@@ -31,7 +31,7 @@ open Finset Pouw.Lead Pouw.Dimension.Tag
 
 /-- A block `J` of coins on a finite space `X`: `get x j` reads the block's coin `j`, and `upd x v` sets the block to
 `v` and leaves every other coin. -/
-structure Block (X ι B : Type) (J : Finset ι) where
+structure TileBlock (X ι B : Type) (J : Finset ι) where
   get : X → ι → B
   upd : X → (ι → B) → X
   get_upd : ∀ x v, ∀ j ∈ J, get (upd x v) j = v j
@@ -39,13 +39,13 @@ structure Block (X ι B : Type) (J : Finset ι) where
   upd_get : ∀ x, upd x (get x) = x
   upd_congr : ∀ x v w, (∀ j ∈ J, v j = w j) → upd x v = upd x w
 
-section Block
+section TileBlock
 
 variable {X ι B : Type} [Fintype X] [DecidableEq X] [Fintype B] [DecidableEq ι] {J : Finset ι}
 
 /-- **A count through a block**: if, whatever the other coins, each coin `j` of the block meets its condition at at
 most `M` of its `|B|` values, the points meeting every condition are at most an `(M/|B|)^|J|` share. -/
-theorem Block.card_le (β : Block X ι B J) (b₀ : B) (P : ι → X → B → Prop) [∀ j r, DecidablePred (P j r)]
+theorem TileBlock.card_le (β : TileBlock X ι B J) (b₀ : B) (P : ι → X → B → Prop) [∀ j r, DecidablePred (P j r)]
     [DecidablePred fun x => ∀ j ∈ J, P j (β.upd x fun _ => b₀) (β.get x j)] {M : ℕ} (hP : ∀ j ∈ J, ∀ r, (univ.filter (P j r)).card ≤ M) :
     (univ.filter fun x => ∀ j ∈ J, P j (β.upd x fun _ => b₀) (β.get x j)).card * Fintype.card B ^ J.card ≤
       Fintype.card X * M ^ J.card := by
@@ -94,14 +94,14 @@ theorem Block.card_le (β : Block X ι B J) (b₀ : B) (P : ι → X → B → P
         ring
     _ ≤ Fintype.card X * M ^ J.card := Nat.mul_le_mul_right _ hX
 
-end Block
+end TileBlock
 
 /-! ## The lead's two blocks: a column block's tag weights and a coin lane -/
 
 variable {L : Pouw.Lead.Layout}
 
 /-- The tag weights of the columns `J`: column `j`'s four digits. -/
-def blockG (L : Pouw.Lead.Layout) (J : Finset (Fin L.n)) : Block (Coins L) (Fin L.n) (Fin 4 → Fin 7) J where
+def blockG (L : Pouw.Lead.Layout) (J : Finset (Fin L.n)) : TileBlock (Coins L) (Fin L.n) (Fin 4 → Fin 7) J where
   get ω j q := ω.2.2.1 q j
   upd ω v := (ω.1, ω.2.1, fun q j => if j ∈ J then v j q else ω.2.2.1 q j, ω.2.2.2)
   get_upd ω v j hj := by funext q; simp [hj]
@@ -115,7 +115,7 @@ def blockG (L : Pouw.Lead.Layout) (J : Finset (Fin L.n)) : Block (Coins L) (Fin 
 
 /-- The coin lane `ℓ₀` of step `t₀` in coin tile `k₀`, at the columns `J`. -/
 def blockU (L : Pouw.Lead.Layout) (t₀ : Fin L.S) (k₀ : Fin L.tiles) (ℓ₀ : Fin 3) (J : Finset (Fin L.n)) :
-    Block (Coins L) (Fin L.n) (Fin (2 ^ L.e)) J where
+    TileBlock (Coins L) (Fin L.n) (Fin (2 ^ L.e)) J where
   get ω j := ω.2.2.2 t₀ k₀ ℓ₀ j
   upd ω v := (ω.1, ω.2.1, ω.2.2.1,
     fun t k ℓ j => if t = t₀ ∧ k = k₀ ∧ ℓ = ℓ₀ ∧ j ∈ J then v j else ω.2.2.2 t k ℓ j)
@@ -147,28 +147,26 @@ theorem word_updG (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (J : Finset (Fi
       if j ∈ J then tagTerm 3 (rowTag i) (v j) - tagTerm 3 (rowTag i) ((blockG L J).get ω j) else 0 := by
   have hS : 0 < L.S := Nat.lt_of_le_of_lt (Nat.zero_le _) t.isLt
   rw [word_sub, Finset.sum_eq_single ⟨0, hS⟩]
-  · rw [ite_eq_left (Fin.le_def.2 (Nat.zero_le _))]
-    unfold coinTerm
+  · rw [ite_eq_left (Fin.le_def.2 (Nat.zero_le _)), coinTerm_sub_of_lanes ((blockG L J).upd ω v) ω rfl]
     by_cases hj : j ∈ J
     · simp [blockG, hj, tagTerm, Coins.G]
     · simp [blockG, hj, Coins.G]
   · intro τ _ hτ
-    unfold coinTerm
+    rw [coinTerm_sub_of_lanes ((blockG L J).upd ω v) ω rfl]
     have h : (τ : ℕ) ≠ 0 := fun h => hτ (Fin.ext h)
-    simp [h, blockG, Coins.s]
+    simp [h, blockG]
   · simp
 
-/-- Rewriting a later step's coin lane moves a word of that coin tile from that step on by its `-rot` weight against
-twice the change. -/
-theorem word_updU (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (htile : 0 < L.tile) {t₀ : Fin L.S} (h0 : (t₀ : ℕ) ≠ 0)
-    (k₀ : Fin L.tiles) (ℓ₀ : Fin 3) (J : Finset (Fin L.n)) (ω : Coins L) (v : Fin L.n → Fin (2 ^ L.e))
+/-- Rewriting a step's coin lane moves a word of that coin tile from that step on by its `-rot` weight against twice
+the change. -/
+theorem word_updU (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (htile : 0 < L.tile) (t₀ : Fin L.S) (k₀ : Fin L.tiles) (ℓ₀ : Fin 3) (J : Finset (Fin L.n)) (ω : Coins L) (v : Fin L.n → Fin (2 ^ L.e))
     (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) :
     word L κ ((blockU L t₀ k₀ ℓ₀ J).upd ω v) i t j - word L κ ω i t j =
       if j ∈ J ∧ rowTile htile i = k₀ ∧ t₀ ≤ t then
         rotWeight i ℓ₀ * (2 * ((v j : ℤ) - (ω.2.2.2 t₀ k₀ ℓ₀ j : ℤ))) else 0 := by
   rw [word_sub, Finset.sum_eq_single t₀]
-  · unfold coinTerm
-    rw [ite_eq_right h0, ite_eq_right h0]
+  · rw [coinTerm_sub_of_tags ((blockU L t₀ k₀ ℓ₀ J).upd ω v) ω rfl rfl rfl]
+    unfold laneTerm
     simp only [dite_eq_left (tile_lt htile i)]
     by_cases ht : t₀ ≤ t
     · rw [ite_eq_left ht]
@@ -177,8 +175,7 @@ theorem word_updU (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (htile : 0 < L.
         rw [ite_eq_left ⟨hj, hk, ht⟩]
         simp only [rowTile] at hk
         subst hk
-        have hb : ((blockU L t₀ ⟨(i : ℕ) / L.tile, tile_lt htile i⟩ ℓ₀ J).upd ω v).1 = ω.1 := rfl
-        rw [hb, add_sub_add_left_eq_sub, ← Finset.sum_sub_distrib, Finset.sum_eq_single ℓ₀]
+        rw [← Finset.sum_sub_distrib, Finset.sum_eq_single ℓ₀]
         · simp [blockU, Coins.s, hj]
           ring
         · intro ℓ _ hℓ
@@ -190,10 +187,8 @@ theorem word_updU (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (htile : 0 < L.
         simp [blockU, Coins.s, this]
     · rw [ite_eq_right ht, ite_eq_right (fun h => ht h.2.2)]
   · intro τ _ hτ
-    unfold coinTerm
-    by_cases h : (τ : ℕ) = 0
-    · simp [h, blockU, Coins.G]
-    · simp [h, blockU, Coins.s, hτ]
+    rw [coinTerm_sub_of_tags ((blockU L t₀ k₀ ℓ₀ J).upd ω v) ω rfl rfl rfl]
+    simp [laneTerm, blockU, Coins.s, hτ]
   · simp
 
 /-! ## Agreement through each block -/
@@ -316,6 +311,31 @@ theorem rowTag_sub_ne {i i' : ℕ} (hi : i < 28560) (hi' : i' < 28560) (h : i �
   push Not at hc
   exact h (rowTag_inj hi hi' (funext fun q => sub_eq_zero.1 (hc q)))
 
+/-- **Two tiles at one column block** whose first rows' tags differ agree on at most a `7^−|J|` share of the coins, `J`
+the block's columns: the difference of the two tags against each column's tag weights. -/
+theorem tile_rows_card_le (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) {rb rb' cb : ℕ} {t t' : Fin L.S}
+    (hrb : rb < L.rowBlocks) (hrb' : rb' < L.rowBlocks) (hd : ∃ q, (rowTag (16 * rb) - rowTag (16 * rb')) q ≠ 0) :
+    (univ.filter fun ω => tileOf L κ ω rb cb t = tileOf L κ ω rb' cb t').card * 7 ^ (colsOf L cb).card ≤
+      Fintype.card (Coins L) := by
+  classical
+  have hr := row_lt hrb
+  have hr' := row_lt hrb'
+  have hJ : ∀ j ∈ colsOf L cb, (j : ℕ) / 8 = cb := fun j hj => (mem_filter.1 hj).2
+  refine (Nat.mul_le_mul_right _ (card_le_card fun ω hω => ?_)).trans
+    (agreeG_card_le (colsOf L cb) (fun ω j => word L κ ω ⟨16 * rb, hr⟩ t j - word L κ ω ⟨16 * rb', hr'⟩ t' j)
+      (fun _ _ => 0) (fun _ => rowTag (16 * rb) - rowTag (16 * rb')) (fun _ _ => hd)
+      (fun ω v j hj => by
+        have a := word_updG κ (colsOf L cb) ω v ⟨16 * rb, hr⟩ t j
+        have b := word_updG κ (colsOf L cb) ω v ⟨16 * rb', hr'⟩ t' j
+        rw [ite_eq_left hj] at a b
+        rw [tagTerm_sub, tagTerm_sub]
+        linarith)
+      fun _ _ _ _ => rfl)
+  refine mem_filter.2 ⟨mem_univ _, fun j hj => ?_⟩
+  have := congrFun (mem_filter.1 hω).2 ⟨(j : ℕ) % 8, pos_lt j⟩
+  rw [tileOf_col κ ω hr t (hJ j hj), tileOf_col κ ω hr' t' (hJ j hj)] at this
+  simp only [this, sub_self]
+
 /-- **A tile and one fixed before the coins** agree on at most a `7^−|J|` share of the coins, `J` the tile's columns,
 below 28,560 rows. -/
 theorem tile_fixed_card_le (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : L.m ≤ 28560) {rb cb : ℕ}
@@ -360,12 +380,11 @@ theorem tile_agree_card_le (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : 
       refine (Nat.mul_le_mul_left _ hpow).trans ((Nat.mul_le_mul_right _ (card_le_card fun ω hω =>
         mem_filter.2 ⟨mem_univ _, hfirst ω hω⟩)).trans ?_)
       rcases lt_or_gt_of_ne htt with hlt | hlt
-      · have h0 : (t' : ℕ) ≠ 0 := by have := Fin.lt_def.1 hlt; omega
-        exact agreeU_card_le t' (rowTile htile ⟨16 * rb, hr⟩) 0 J _ (fun _ _ => 0)
+      · exact agreeU_card_le t' (rowTile htile ⟨16 * rb, hr⟩) 0 J _ (fun _ _ => 0)
           (fun _ => -(rotWeight (16 * rb) 0 * 2)) (fun _ _ => by have := rotWeight_ne_zero (16 * rb) 0; omega)
           (fun ω v j hj => by
-            have a := word_updU κ htile h0 (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t j
-            have b := word_updU κ htile h0 (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t' j
+            have a := word_updU κ htile t' (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t j
+            have b := word_updU κ htile t' (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t' j
             rw [ite_eq_right fun h => absurd h.2.2 (not_le.2 hlt)] at a
             rw [ite_eq_left ⟨hj, rfl, le_rfl⟩] at b
             have hg : (((blockU L t' (rowTile htile ⟨16 * rb, hr⟩) 0 J).get ω j : ℕ) : ℤ) =
@@ -373,12 +392,11 @@ theorem tile_agree_card_le (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : 
             rw [hg]
             linear_combination a - b)
           fun _ _ _ _ => rfl
-      · have h0 : (t : ℕ) ≠ 0 := by have := Fin.lt_def.1 hlt; omega
-        exact agreeU_card_le t (rowTile htile ⟨16 * rb, hr⟩) 0 J _ (fun _ _ => 0)
+      · exact agreeU_card_le t (rowTile htile ⟨16 * rb, hr⟩) 0 J _ (fun _ _ => 0)
           (fun _ => rotWeight (16 * rb) 0 * 2) (fun _ _ => by have := rotWeight_ne_zero (16 * rb) 0; omega)
           (fun ω v j hj => by
-            have a := word_updU κ htile h0 (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t j
-            have b := word_updU κ htile h0 (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t' j
+            have a := word_updU κ htile t (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t j
+            have b := word_updU κ htile t (rowTile htile ⟨16 * rb, hr⟩) 0 J ω v ⟨16 * rb, hr⟩ t' j
             rw [ite_eq_left ⟨hj, rfl, le_rfl⟩] at a
             rw [ite_eq_right fun h => absurd h.2.2 (not_le.2 hlt)] at b
             have hg : (((blockU L t (rowTile htile ⟨16 * rb, hr⟩) 0 J).get ω j : ℕ) : ℤ) =
@@ -387,22 +405,7 @@ theorem tile_agree_card_le (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : 
             linear_combination a - b)
           fun _ _ _ _ => rfl
     · -- the rows differ, the columns don't: the two row tags' difference
-      have hii : 16 * rb ≠ 16 * rb' := by omega
-      refine (Nat.mul_le_mul_right _ (card_le_card fun ω hω => ?_)).trans
-        (agreeG_card_le J (fun ω j => word L κ ω ⟨16 * rb, hr⟩ t j - word L κ ω ⟨16 * rb', hr'⟩ t' j)
-          (fun _ _ => 0) (fun _ => rowTag (16 * rb) - rowTag (16 * rb'))
-          (fun _ _ => rowTag_sub_ne (by omega) (by omega) hii)
-          (fun ω v j hj => by
-            have a := word_updG κ J ω v ⟨16 * rb, hr⟩ t j
-            have b := word_updG κ J ω v ⟨16 * rb', hr'⟩ t' j
-            rw [ite_eq_left hj] at a b
-            rw [tagTerm_sub, tagTerm_sub]
-            linarith)
-          fun _ _ _ _ => rfl)
-      refine mem_filter.2 ⟨mem_univ _, fun j hj => ?_⟩
-      have := congrFun (mem_filter.1 hω).2 ⟨(j : ℕ) % 8, pos_lt j⟩
-      rw [tileOf_col κ ω hr t (hJ j hj), tileOf_col κ ω hr' t' (hJ j hj)] at this
-      simp only [this, sub_self]
+      exact tile_rows_card_le κ hrb hrb' (rowTag_sub_ne (by omega) (by omega) (by omega))
   · -- the columns differ: the row tag against a target that reads no tag weight of the block
     refine (Nat.mul_le_mul_right _ (card_le_card fun ω hω => ?_)).trans
       (agreeG_card_le J (fun ω j => word L κ ω ⟨16 * rb, hr⟩ t j)

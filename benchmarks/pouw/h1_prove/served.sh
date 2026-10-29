@@ -12,7 +12,7 @@
 #   own `git rev-list --first-parent origin/main`, one commit a line (never read from the run); relative: the run dir's
 # H1_DESCRIPTOR: the window Program's descriptor (window-program.json.gz), whose SHA-512 the period-open signed; core
 #   draws at the K that period-open committed
-# Then three negatives, each refused: another key's pin, a draw root the coin didn't follow, and a main that doesn't
+# Then three negatives, each refused: another key's pin, a sample root the coin didn't follow, and a main that doesn't
 # hold the session's pin.
 set -uo pipefail
 export HZ_CONFIGS=served HZ_MEM_GB=16

@@ -1,4 +1,4 @@
-"""C-Flock's input files for a window's member (``serving_rows.write``'s window): the public file
+"""Flock's input files for a window's member (``serving_rows.write``'s window): the public file
 ``m<k>-pub-<n>.bin`` (``rows: false``) and the prover's ``m<k>-inst-<n>.bin``, each the window's bodies under the header
 ``verity_flock.circuit.write`` gives the circuit the verifier composed for the member's template.  A chunked template's chunks
 are all staged under one circuit, whose META, pin and class (`FlockCircuit`) are read off it once."""
@@ -14,7 +14,7 @@ from typing import Any
 
 from verity.ml.windows.rows import SCHEME, copy_private, registered_header
 
-#: C-Flock's circuit prover's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
+#: Flock's circuit prover's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
 M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")
 
 
@@ -49,7 +49,7 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     made from its window's files (`rows.copy_private`) and its header's paths read off the window's (`rows.registered_header`).
     ``circuit`` is the
     circuit's text or its `flock_circuit`, ``write`` the files to write (a member's ``inst`` is the prover's, wanted only once
-    it is drawn), and ``files`` the window's ``window.json`` and ``registration.json`` as read (else read here)."""
+    it is sampled), and ``files`` the window's ``window.json`` and ``registration.json`` as read (else read here)."""
     if not set(write) <= {"pub", "inst"}:
         raise ValueError(f"flock_input_files writes pub and inst, not {sorted(set(write) - {'pub', 'inst'})}")
     d, o = Path(window_dir), Path(out_dir)
