@@ -54,8 +54,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
                                monitoring period's good event (PooledGood)
 ../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean  trusted: the leak through the network certifier over a
-                               monitoring period of sampled audits, conditional on two per-window inputs
-                               (PooledLeakAccepted)
+                               monitoring period of sampled audits, conditional on two per-window inputs and
+                               the tied audits' pooled bound (PooledLeakAccepted)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -100,9 +100,11 @@ Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform d
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
                                          each window's error added (pr_adaptive_add_le, the monitoring-period step
                                          Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
-                                         under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
-                                         decode to at each draw, read back from the certifier's record
-                                         (encard_pooledGood_le, horizonLeak)
+                                         under `Fmax` units (exists_famOf_eq), the tied audits' pooled bound added
+                                         once, a returned value outside every incorrect tied proof block's cone being
+                                         the value its Program computes (TiedAudit.valOver_eq_of_notMem_reach), and the
+                                         secrets the client's cells decode to at each draw, read back from the
+                                         certifier's record (encard_pooledGood_le, horizonLeak, horizonLeak_untied)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -306,20 +308,27 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
   `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
-  the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the faulty set `W_i` of the
-  witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
+  the count `K_pooled`, conditional on three inputs taken as plain hypotheses, two per window at the faulty set `W_i`
+  of the witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
   `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `q` the design's per-window detection probability
   (no draw's form: a uniform `kd_i`-of-`n_i` draw meets it at `q = kd_i/n_i`), and the leak relation at that set
-  `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record. From them every window accepts
-  outside the monitoring period's good event (`PooledGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units and
-  every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
+  `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record with the scan inputs the tied
+  audits' incorrect proof blocks `Wt_i` reach unpinned (`tiedReach`); and sampled proofs' pooled bound at the tied
+  audits' samples, as it is (`hpool`): every audit accepts while the tied audits hold `F_t` or more incorrect proof
+  blocks with probability at most `ε_t`. From them every window accepts outside the monitoring period's good event
+  (`PooledGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units, the tied ones under `F_t`, and every window
+  meets its leak relation) with probability at most `δ + ε_t + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
   meeting it number at most
-  `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
-  faulty units cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof
-  unit's output limit. The network certifier is one device, as in the period's bound: on every schedule its record
-  format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live audits the two
-  inputs are `Flock.Guarantees.SampledKSLive` at each window's history and the live `SampledLeakAccepted` (P2),
-  neither discharged, so it is not the deployed system's bound over a monitoring period until they are.
+  `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` times the tied factor
+  `min((N_t + 1)^F_t · 2^(R · F_t), 2^(Σ_i #span_i))`, `N = Σ_i n_i`: the faulty units cost
+  `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof unit's output
+  limit, and the tied audits' the capacity term `κ_t = min(F_t · (R + log2 (N_t + 1)), Σ_i #span_i)` once too, `N_t`
+  their proof blocks, `R` the most scan inputs one reaches and `span_i` those any reaches in window `i`. The network
+  certifier is one device, as in the period's bound: on every schedule its record format holds, the cells the client
+  receives read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live
+  audits the inputs are `Flock.Guarantees.SampledKSLive` at each window's history, sampled proofs' pooled bound at the
+  tied audits' samples and the live `SampledLeakAccepted` (P2), none discharged, so it is not the deployed system's
+  bound over a monitoring period until they are.
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

@@ -118,8 +118,10 @@ stand-in partition rather than the whole window, its free inputs are its units' 
 declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
 
 Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the windows. It takes each window's
-conditional escape and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at the window's
-history would discharge, and doesn't discharge them yet.
+conditional escape and its leak relation, and sampled proofs' pooled bound at the tied audits' samples, as hypotheses,
+which `SampledKSLive` and `SampledLeakAccepted` at the window's history and `PooledIncorrectBlocksLe` at the tied
+audits' samples would discharge, and doesn't discharge them yet. The scan inputs the tied audits' incorrect proof
+blocks reach are charged once over the period, as the capacity term κ_t.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
 `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
