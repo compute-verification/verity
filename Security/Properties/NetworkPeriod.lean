@@ -26,11 +26,14 @@ supplies each of the statement's quantities as at most the check's number:
   (`faulty_bits`) and, when a tied audit is drawn in part with a bound of at least one wrong unit, every slot entry
   bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
 
-The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its wrong units
-only as the slot entries they can set; `RowsTiedDrawn` says the check accepts a tied audit only drawn whole or with its
-slot entries' and scan slots' templates each a stratum drawn whole (`StrataDrawnWhole`), so a wrong unit is in neither.
+The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its faulty proof
+blocks only as the slot entries they can set; `RowsTiedDrawn` says the check accepts a tied audit only sampled whole
+or with its slot entry templates and the templates its circuit record registers whole beside them each a stratum
+sampled whole, the record its registration's (`StrataDrawnWhole`), so a faulty proof block is in none of them.
 `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree
-the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
+the entries port of its chunk of an entry template of that audit's own Program at the closure digest its circuit record
+registers, a record its registration binds. Each reads the entry templates from what the integration registered, over
+any registration: no constant of the check names a model, a template or a binding. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. Each says its conclusion (`RowsTiedDrawnAt`,
 `RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition, its property of any
@@ -70,19 +73,21 @@ def RowsKBoundsCount : Prop :=
       2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
         charged).K
 
-/-- Audit `i`'s answer drew what `K` doesn't charge of audit `a`: one-stage accepted its window record with a profile
-of one level, drawn `subset:k` or stratified, whose `Σ k` is the level's size (`factsOf`'s `drawn` and `units`), or
-whose strata hold, for each of `a`'s slot entries' and scan slots' templates (`Audit.whole`, with a slot entries'
-template among them), one by its descriptor id drawn whole (`k = size`). -/
+/-- Audit `i`'s answer sampled what `K` doesn't charge of audit `a`: one-stage accepted its window record with a
+profile of one level, sampled `subset:k` or stratified, whose `Σ k` is the level's size (`factsOf`'s `drawn` and
+`units`), or, its registration `reg` binding its circuit record (`Audit.boundIn`), whose strata hold, for each of its
+slot entry templates and the templates the record registers whole beside them (`Audit.whole`, with an entry template
+among them), one by its descriptor id sampled whole (`k = size`). -/
 def StrataDrawnWhole (i : ℕ) (a : Audit) (reg : Lean.Json) (x : Core.Answer) : Prop :=
   ∃ (prof : Core.Integrity) (pub : Lean.Json) (f : Facts),
     answered s!"audit {i}" reg x = .ok (prof, pub) ∧ factsOf s!"audit {i}" prof pub = .ok f ∧
       (f.drawn = f.units ∨
-        0 < a.entries.size ∧ ∀ key ∈ a.whole, ∃ st ∈ strataOf prof, st.name = key ∧ st.k = st.size)
+        0 < a.entries.size ∧ a.boundIn reg = true ∧
+          ∀ key ∈ a.whole, ∃ st ∈ strataOf prof, st.name = key ∧ st.k = st.size)
 
 /-- What `RowsTiedDrawn` says of a period its check accepted: in the rows form, every audit some link-window's scan's
-`prog` is an output of (`tiedIn` over the commitment's window records) drew every unit or each of its slot entries' and
-scan slots' templates whole (`StrataDrawnWhole`). -/
+`prog` is an output of (`tiedIn` over the commitment's window records) sampled every proof block or each of its slot
+entry templates and those its registered circuit record names whole beside them whole (`StrataDrawnWhole`). -/
 def RowsTiedDrawnAt (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (a : Audit) (reg : Lean.Json) (x : Core.Answer), p.audits[i]? = some a →
@@ -94,11 +99,12 @@ def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome P
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsTiedDrawnAt p c e
 
-/-- **The rows form accepts a tied audit only with its slot entries and scan slots drawn whole.** If the check
+/-- **The rows form accepts a tied audit only with its registered slot entry templates sampled whole.** If the check
 accepts a period in the rows form, every audit some link-window's scan's `prog` is an output of (`tiedIn` over the
-commitment's window records) drew every unit or each of its slot entries' and scan slots' templates whole
-(`StrataDrawnWhole`), the rest sampled at its δ: `rowsTerms` charges such an audit's free inputs to its link-window,
-and its wrong units, in neither stratum, as the entries they can set (`faultyEntries`). -/
+commitment's window records) sampled every proof block or, its registration binding its circuit record, each of its
+slot entry templates and those the record registers whole beside them whole (`StrataDrawnWhole`), the rest sampled at
+its δ: `rowsTerms` charges such an audit's free inputs to its link-window, and its faulty proof blocks, in none of
+those strata, as the entries they can set (`faultyEntries`). -/
 def RowsTiedDrawn : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsTiedDrawnAt p c e
@@ -117,10 +123,11 @@ def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Outcome P
 /-- **The rows form accepts no link-window whose scan's `prog` is not a compute audit's slot entries.** If the check
 accepts a period in the rows form, each link-window's scan's registration has, for each lane `j`, its `scan/prog<j>`
 entry at the root and domain of one audit's entries port of chunk `j`, `<descriptor id>/c<j>/o0` of `T / every` leaves,
-of a template node of that audit's own Program calling `SlotEntry_v1` or `SelectEntry_v1` (whose select and collector
-end in `SlotEntry_v1`), a Definition the check pins by its closure digest (`entryPins`, so a template under either name
-with another body is refused), with one member a slot of the window (`wired`), so chunk `j` is lane `j`'s slots and each
-slot's entry, read bit included, is one its Program computed. -/
+of a template node of that audit's own Program that its circuit record registers as an entry template, at the closure
+digest the record registers for it (so a template under that id with another body is refused), a record the audit's
+registration binds before any coin (`Audit.boundIn`), with one member a slot of the window (`wired`), so chunk `j` is
+lane `j`'s slots and each slot's entry, read bit included, is one its Program computed. The statement holds for any
+registration: whatever entry templates, vocabulary size and stop ids the integration registers. -/
 def RowsProgWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsProgWiredAt p c
