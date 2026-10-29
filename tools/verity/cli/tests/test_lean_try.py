@@ -105,3 +105,12 @@ def test_local_try_elaborates_the_current_worktrees_file(checkouts, tmp_path, mo
     monkeypatch.chdir(wt / "tools")
     assert verity_cli.main(["lean", "try", "A.lean"]) == 0
     assert called.read_text().splitlines()[0] == str(wt.resolve())
+
+
+def test_on_refuses_a_file_outside_every_checkout_before_queueing(tmp_path, monkeypatch):
+    scratch = tmp_path / "scratch.lean"
+    scratch.write_text("")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(verity_cli, "_snapshot", lambda *a, **k: pytest.fail("shipped a tree to queue a run"))
+    with pytest.raises(SystemExit, match="put FILE in a checkout"):
+        verity_cli.main(["lean", "try", str(scratch), "--on", "vy-nebius-cpu-1"])
