@@ -157,7 +157,7 @@ namespace RecDeploy
 
 open _root_.Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout ZKmalAt SeqTape)
+open Claims.ZKMal (RunParts ZKmalAt SeqTape)
 open scoped NNReal
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
@@ -169,7 +169,7 @@ noncomputable def refPMCap (T₀ : SeqTape) (NB ΩB : Type) [Fintype NB] [Nonemp
     (wit : Claims.Flock.Wit → b.ref.TI × (ℕ → Salt) → List (Claims.Msg × Claims.Msg) → ℕ → Claims.Flock.Wit)
     (PS : Claims.Flock.Wit → Claims.Prover (NB × ΩB)) (w : Claims.Flock.Wit) :
     Claims.Prover ((T₀.iter 0 NB ΩB M).N × (T₀.iter 0 NB ΩB M).Ω) :=
-  ⟨fun x hist ω => ((refPM IV b pre wit PS w).comap (Layout.flatten T₀ 0 NB ΩB (nS x))).next x hist
+  ⟨fun x hist ω => ((refPM IV b pre wit PS w).comap (RunParts.flatten T₀ 0 NB ΩB (nS x))).next x hist
     (T₀.capN 0 NB ΩB M (nS x) ω.1, T₀.capΩ 0 NB ΩB M (nS x) ω.2)⟩
 
 /-- **`ZKBoundM` on one tape**: the masked recursion's zero knowledge at `ZKmalR`, on the nested tape of `M` V\*
