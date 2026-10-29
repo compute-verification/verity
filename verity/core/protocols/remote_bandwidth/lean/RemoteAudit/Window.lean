@@ -1,4 +1,5 @@
 import Std.Data.HashMap
+import CoreProtocol.Protocol
 import RemoteAudit.Receipts
 
 /-!
@@ -145,11 +146,27 @@ structure Opening where
   digest : ByteArray
 deriving Inhabited
 
-/-- A window's outcome: accepted, or the failure and the draw it failed at (`audit.Verdict`). -/
-inductive Verdict
-  | accept
-  | reject (failure : Failure) (at? : Option (Nat × Nat))
-deriving BEq, Repr
+/-- What rejected a window: its failure and the draw it failed at, `none` for the window as a whole. -/
+structure Rejection where
+  failure : Failure
+  at? : Option (Nat × Nat)
+deriving BEq, Repr, DecidableEq
+
+/-- What a window's check found besides its verdict, all witness: what rejected it, `none` when it accepts. -/
+abbrev Findings := Option Rejection
+
+/-- A window's outcome as `Core.Verdict`, with its findings (`audit.Verdict`): `accept` with none (`Verdict.accept`), or
+`reject` with the failure and the draw it failed at (`Verdict.reject`); never `undecided`. -/
+abbrev Verdict := Findings × Core.Verdict
+
+def Verdict.accept : Verdict := (none, Core.Verdict.accept)
+
+def Verdict.reject (failure : Failure) (at? : Option (Nat × Nat)) : Verdict :=
+  (some ⟨failure, at?⟩, Core.Verdict.reject)
+
+/-- What rejected the window, for a verdict other than `accept`: its findings' rejection, `malformed` when they hold
+none, which no check here gives. -/
+def Verdict.rejection (v : Verdict) : Rejection := v.1.getD ⟨.malformed, none⟩
 
 /-- `Session.close`'s draws: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
 its openings coin, in order. -/
@@ -218,7 +235,7 @@ def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (a
       checkWindow reg digest appends w (drawn.extract (c * size) ((c + 1) * size))
         (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
-    if let .reject f at? := t.get then return .reject f at?
+    if t.get ≠ .accept then return t.get
   return .accept
 
 /-- Window t's verdict: its draws from the openings coin, then each opening checked in the order drawn. `none` only if
