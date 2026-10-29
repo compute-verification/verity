@@ -331,6 +331,23 @@ def runs(seed: int = 97, m: int = 256, n: int = 64) -> dict:
     return out
 
 
+def tile_rows(seed: int = 113) -> dict:
+    """Tile grain against rows (A2r, Llama): a column's free-search pool fills as rows × steps approach the range its
+    words span, so a fix that holds at 256 rows can fail at more."""
+    rng = np.random.default_rng(seed)
+    stock = sum(nn * kk for nn, kk in ns.LLAMA.values())
+    out = {}
+    for cfg, tag, m, n in (("blc4a-t64-e7", "wide", 1024, 64), ("blc4a-t64-e7-w127", "narrow", 1024, 64),
+                           ("blc4a-t64-e7-w127", "wide", 1024, 64), ("blc4a-t64-e7-w127", "wide", 4096, 32)):
+        per = {}
+        for kk in sorted({kk for _, kk in ns.LLAMA.values()}):
+            tg = lead_instance(cfg, kk, m, n, rng, "a2r", tag)["tile_grain"]
+            per[f"k{kk}"] = {**tg, "W/whole": _whole_share(tg, kk), "W/tile": tg["units_an_entry"] / kk}
+        out[f"{cfg}+{tag}/m{m}"] = {"per_k": per, "W/whole": sum(
+            nn * kk * per[f"k{kk}"]["W/whole"] for nn, kk in ns.LLAMA.values()) / stock}
+    return out
+
+
 def scaling(seed: int = 98, m: int = 128, n: int = 32) -> dict:
     """The lead's per-K shares at one N (2,048) for growing K: the within-entry and cross-row terms grow with S."""
     rng = np.random.default_rng(seed)
@@ -677,6 +694,12 @@ def check(rep: dict) -> list[dict]:
        and max(v["shares"]["W/whole/interior"] for v in mr.values()) == 0
        and max(sal["W/whole/final"], big["W/whole/final"]) < 1e-4,
        [nar["W/whole/final"], wid["W/whole/final"], sal["W/whole/final"]])
+    tr = rep["tile_rows"]
+    ok("tile grain against rows (free search): at 1,024 rows the wide tag alone repeats whole tiles (> 1% on Llama) "
+       "and (1, 127, 1) with the narrow tag > 0.1%; wide + (1, 127, 1) stays < 0.01% at 1,024 and 4,096 rows",
+       tr["blc4a-t64-e7+wide/m1024"]["W/whole"] > 0.01 and tr["blc4a-t64-e7-w127+narrow/m1024"]["W/whole"] > 0.001
+       and max(tr[f"blc4a-t64-e7-w127+wide/m{m}"]["W/whole"] for m in (1024, 4096)) < 1e-4,
+       {key: v["W/whole"] for key, v in tr.items()})
     return res
 
 
@@ -686,7 +709,7 @@ def main() -> None:
     args = ap.parse_args()
     rep = {"runs": runs(), "scaling": scaling(), "ordering": ordering(),
            "identical_columns": {t: identical_columns(tag=t) for t in ("narrow", "wide")},
-           "mirror": mirror_runs(), "a5": a5_lead(), "mask": mask_blocks()}
+           "mirror": mirror_runs(), "a5": a5_lead(), "mask": mask_blocks(), "tile_rows": tile_rows()}
     lead = rep["runs"]["blc4a-t64-e7/a2r/llama"]["shares"]
     mir = rep["mirror"]["narrow/m8192"]["shares"]
     rep["periods"] = {"P/xrow": ne.periods(lead["P/xrow"]), "P'32/xrow": ne.periods(lead["P'32/xrow"]),
@@ -708,6 +731,9 @@ def main() -> None:
             f"{g}={100 * sh[g]:.3f}%" for g in ("P/column/final", "P'32/column/final", "P'32/tile/final",
                                                 "P/column/interior", "P'32/column/interior", "P/a2r_entry",
                                                 "W/tile/final", "W/whole/final", "W/whole/interior")))
+    for key, v in rep["tile_rows"].items():
+        print(f"tile rows {key}: W/whole={100 * v['W/whole']:.4f}%  " + "  ".join(
+            f"{kk}: {t['whole_repeats']}/{t['tiles']} held={t['held_words']:.3f}" for kk, t in v["per_k"].items()))
     print("A5: " + "  ".join(f"{k}={100 * v['gap_share_of_stock']:.2f}%"
                              for part in rep["a5"].values() for k, v in part.items()))
     for kk, v in rep["scaling"].items():
