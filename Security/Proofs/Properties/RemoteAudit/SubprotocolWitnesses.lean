@@ -1,13 +1,13 @@
-import Proofs.Accounting.RemoteHeld.Component
+import Proofs.Accounting.RemoteHeld.Subprotocol
 import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Pouw.Prob
 
 /-!
 # The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything
 
-Each of `Properties.RemoteAudit.Component`'s three properties, and the memory line
+Each of `Properties.RemoteAudit.Subprotocol`'s three properties, and the memory line
 `Properties.RemoteAudit.Line.LineHeld`, is its form over the verifier at the deployed one (`acceptIsVerified_iff`,
-`publishedEps_iff`, `lineHeldAtComponent_iff`, `lineHeld_iff`), and each form has its witnesses:
+`publishedEps_iff`, `lineHeldAtSubprotocol_iff`, `lineHeld_iff`), and each form has its witnesses:
 
 * **AcceptIsVerified** (`AcceptIsVerifiedFor`). Honest: the deployed period's parameters and log decode to its session
   at one window a draw, which the check leaves undecided until its windows verify (`acceptIsVerified_honest`), and the
@@ -18,22 +18,22 @@ Each of `Properties.RemoteAudit.Component`'s three properties, and the memory li
   `AcceptIsVerified`'s. Nontrivial: a check that accepts every log, certifying a byte read at eps 0, accepts the
   deployed period's log, and 0 is below the draw term at every node of positive δ (`drawTerm_pos`,
   `publishedEps_nontrivial`).
-* **LineHeld** (`LineHeldBy`) and **LineHeldAtComponent** (`LineHeldAtComponentBy`), which take the same premises.
+* **LineHeld** (`LineHeldBy`) and **LineHeldAtSubprotocol** (`LineHeldAtSubprotocolBy`), which take the same premises.
   Honest: every premise holds at a node that holds its whole store in memory throughout, every receipt correct, no
   outside device, nothing but the verifier's messages entering it as its certifiers count, and the sampler's fallbacks
   0, on a schedule that runs each pass inside its window with each draw's receipts fixed (`HonestSchedule`), and at its
-  correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtComponent_honest`); and there
+  correct receipts the distinguishers' advantage and the hiding terms are 0 (`lineHeldAtSubprotocol_honest`); and there
   the event is empty: the certifiers count nothing else entering and every line credits no more bits read than the
   passes read (`lineHeld_honest`). Nontrivial: at a verifier that accepts everything and records one summary for every
   record, the bound fails on a node whose four passes read its one block once (`lineHeld_nontrivial`,
-  `lineHeldAtComponent_nontrivial`); and the line credits only what the passes read: on one record and summary its
+  `lineHeldAtSubprotocol_nontrivial`); and the line credits only what the passes read: on one record and summary its
   claim holds of a trace with the store in memory and fails of the same trace with memory emptied at tick 10
-  (`lineHeldAtComponent_bites`).
+  (`lineHeldAtSubprotocol_bites`).
 
 At the deployed verifier the premises' acceptance is load-bearing and `Plays` is not: the line reads the record
 through `Record.summary`, which is some summary only where the Lean verifier accepts, so the event's failed read claim
 alone gives `Verified` (`verified_of_not_readBy`) and the bound holds at any acceptance in the event
-(`lineHeldAtComponentBy_record`). The nontrivial witnesses therefore replace the verdict and the record with an
+(`lineHeldAtSubprotocolBy_record`). The nontrivial witnesses therefore replace the verdict and the record with an
 accept-all's as well.
 
 The toy instance (`Toy`) is a node whose parameters have no window (`Node.windows` 0) at four windows a draw, so no
@@ -43,7 +43,7 @@ group, and a line that reads no wrong receipt, so it credits `8 · 1 · (4 · 1 
 
 deriving instance DecidableEq for RemoteAudit.Line.Group
 
-namespace Properties.RemoteAudit.Component
+namespace Properties.RemoteAudit.Subprotocol
 
 open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
   Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
@@ -52,7 +52,7 @@ theorem acceptIsVerified_iff : AcceptIsVerified ↔ AcceptIsVerifiedFor RemoteAu
 
 theorem publishedEps_iff : PublishedEps ↔ PublishedEpsFor RemoteAudit.Protocol.check := Iff.rfl
 
-theorem lineHeldAtComponent_iff : LineHeldAtComponent ↔ LineHeldAtComponentBy Plays Verified Record.summary :=
+theorem lineHeldAtSubprotocol_iff : LineHeldAtSubprotocol ↔ LineHeldAtSubprotocolBy Plays Verified Record.summary :=
   Iff.rfl
 
 theorem lineHeld_iff : LineHeld ↔ LineHeldBy Verified Record.summary := Iff.rfl
@@ -135,7 +135,7 @@ theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fi
     (offsets_zero_lt (prf t (ω.2 t)) hk (Accounting.SecurityProofs.Remote.Draw.draws_le D t ω)) q
     (lt_of_lt_of_le (mem_range.1 hq) hk))
 
-/-- **The premises of `LineHeld` and `LineHeldAtComponent` hold at the honest node.** On any node, at any records of
+/-- **The premises of `LineHeld` and `LineHeldAtSubprotocol` hold at the honest node.** On any node, at any records of
 the prover's whose schedule is honest (`HonestSchedule`), the honest trace (`honestTrace`: the whole store in node
 memory at every tick, nothing on a chip, rebuilt or read in, every receipt correct), no outside device (`noOutside`),
 nothing but the verifier's messages entering it as its certifiers count (`quietIngress`), correct receipts holding
@@ -143,7 +143,7 @@ every receipt a draw can have and the sampler's fallbacks 0, every premise holds
 `Covers`, `SketchBoundAt` at 0, `Covered`, `IngressCounted` at 0, the draw's `Live` at every commitment, `Refused`
 and `Counted`; and the bound's terms the prover could raise are 0: each draw's distinguisher has no advantage on its
 coin function and each hiding term is 0. -/
-theorem lineHeldAtComponent_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
+theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
     (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.draws κ X → Record)
     (com : DrawCoins node.draws κ X → Cm) (R : Receipts node.draws κ X) (passes : ℕ)
     (tick : DrawCoins node.draws κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
@@ -275,8 +275,8 @@ theorem verified_of_not_readBy {Ω : Type} {T : Trace Ω} {ω : Ω} {node : Node
       simpa using hc
 
 /-- **The bound holds at any acceptance in the event**: at the deployed verdict and record, whatever `acc` is. -/
-theorem lineHeldAtComponentBy_record (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop) :
-    LineHeldAtComponentBy acc Verified Record.summary := by
+theorem lineHeldAtSubprotocolBy_record (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop) :
+    LineHeldAtSubprotocolBy acc Verified Record.summary := by
   intro node κ X Cm _ prf rest recs correct com T R δs δnet a b e r F O I hP hCv hSk hCov hIc hLive hRef hCnt
   exact le_trans (Pouw.pr_mono fun ω h => ⟨verified_of_not_readBy h.2, h.2⟩)
     (Properties.RemoteAudit.Line.SecurityProofs.lineHeld node κ X Cm prf rest recs correct com T R δs δnet O I hP hCv
@@ -589,12 +589,12 @@ theorem lineHeld_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
   · norm_num [binding_empty, toy_delta]
   · exact fun ω => ⟨trivial, fun hq => toy_not_read _ ω (toy_reads_by _ ω) (hq fun _ _ _ _ _ => rfl)⟩
 
-/-- **`LineHeldAtComponent` fails at a verifier that accepts everything.** With an acceptance and a verdict that hold
+/-- **`LineHeldAtSubprotocol` fails at a verifier that accepts everything.** With an acceptance and a verdict that hold
 of every record and one summary recorded for every record, the toy node meets every premise at `δs = δnet = 0`, while
 its line credits `4 · 1` blocks read where its passes read one: the event has probability 1 and the bound is
 `δ = 1/2`. -/
-theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
-    ¬ LineHeldAtComponentBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some sm) := by
+theorem lineHeldAtSubprotocol_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
+    ¬ LineHeldAtSubprotocolBy (fun _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => some sm) := by
   refine ⟨Toy.sm, fun h => ?_⟩
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
     (fun _ _ _ => ∅) (fun _ => ()) Toy.trace Toy.receipts 0 0 (fun _ => .empty) (fun _ => .empty) (fun _ => .empty)
@@ -609,7 +609,7 @@ theorem lineHeldAtComponent_nontrivial : ∃ sm : RemoteAudit.Session.Summary,
 /-- **The line credits only what the passes read**: on one node, record and summary, the line's bits-read claim holds
 of a trace whose four passes each read the store in node memory, and fails of the same trace with node memory emptied
 at tick 10. -/
-theorem lineHeldAtComponent_bites : ∃ (node : Node) (r : Record) (sm : RemoteAudit.Session.Summary) (T : Trace Unit),
+theorem lineHeldAtSubprotocol_bites : ∃ (node : Node) (r : Record) (sm : RemoteAudit.Session.Summary) (T : Trace Unit),
     (∃ l, lineBy (fun _ _ => some sm) node r = .ok l) ∧ ReadBy (fun _ _ => some sm) T () node r ∧
     ¬ ReadBy (fun _ _ => some sm) { T with mem := fun _ t => if t < 10 then Finset.univ else ∅ } () node r := by
   obtain ⟨l, hl, hw⟩ := toy_line
@@ -721,4 +721,4 @@ theorem publishedEps_nontrivial : ¬ PublishedEpsFor (fun _ _ _ => .accept ⟨�
     have h0 := lt_of_lt_of_eq (drawTerm_pos node (by rw [hδ]; exact hpos)) (hn node hp hg hδ).symm
     norm_num at h0
 
-end Properties.RemoteAudit.Component
+end Properties.RemoteAudit.Subprotocol

@@ -21,7 +21,7 @@ the difftest's `session` reads (`Difftest.sessionFn`):
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
-  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
   session's parameters and g.
 
@@ -30,7 +30,7 @@ session's receipts U less the wrong ones its openings leave, W rounded up (`Pool
 draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
 openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledDraw`; its PRF
 advantages are a named assumption, not a number, and it has no hiding term, since the prover is sent the coin
-commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Component.LineHeldAtComponent`
+commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
 proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the draws a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the reads the session's openings certify. When the pooled bound refuses the windows,

@@ -22,7 +22,7 @@ the registration are the core case (`case`) that `RemoteAudit.Protocol` replays.
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
 `eps = (2^24 + ⌈W/g⌉·s)/2^64`, the session's openings coins at its `samples` s each, as the Lean's `certify` computes
-them: the bound `Properties.RemoteAudit.Component.LineHeldAtComponent` proves (`PublishedEps`), not the draws a session
+them: the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol` proves (`PublishedEps`), not the draws a session
 made, min(s, U) of a draw's U receipts, which can be fewer.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
