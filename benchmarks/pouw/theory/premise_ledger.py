@@ -54,7 +54,7 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   lookup a column predicts each equality) and over one held partner a row (its tile still in the thread's registers,
   stored again at no write), both constructive. Copy-floor prices reuse from memory, not a held tile, so it bounds
   the term by the held reading; select-floor puts c_a at 1 or more. The new lead, the tag with `blc4a-t64-e7`'s lanes,
-  is the tag within each 64-row tile (`ssn_1l_tag_t64`).
+  is the tag within each 64-row tile (`ssn_1l_tag_t64`), and with G as bytes `ssn_1l_tag8_t64`.
 
 Other sections: ShaSpeed's precision at each point and what Daniel's 02:01Z ruling covers, what rank ≤ 3 overall would
 take, G1 against advice, energy as a pricing (excluded by AGENTS.md; reported only as what it would change), per-period
@@ -621,8 +621,9 @@ def coin_branch_terms(data: dict) -> dict:
             if x == "aorb_a":
                 vals = {suffix: patch_terms(x, shapes, rows, steps_aorb, design("ssn_1l").alpha, w,
                                             side_a_only=suffix == "aorb") for suffix in ("aorb", "aorbA")}
-            elif x == "ssn_1l_tag_t64":
-                vals = {x: patch_terms("ssn_1l_tag", shapes, min(rows, BLC_TILE), steps, design(name).alpha, w)}
+            elif x.endswith("_t64"):
+                vals = {x: patch_terms(x.removesuffix("_t64"), shapes, min(rows, BLC_TILE), steps, design(name).alpha,
+                                       w)}
             else:
                 vals = {x: patch_terms(x, shapes, rows, steps, design(name).alpha, w)}
             for key, v in vals.items():
@@ -1110,7 +1111,7 @@ BLC_TILE = 64
 #: designs whose call of repeated rows is simulated for copy-and-patch; `ssn_1l_tag8` is the lead with G drawn as
 #: bytes, [−127, 127]⁴ (one coin byte a lane)
 PATCH_VARIANTS = ("ssn_1l_tag", "ssn_1l_tag8", "aorb_a", "ssn_1l_hw", "ssn_1l_fix2", "ssn_1l_fix2m", "ssn_1l_tele4m",
-                  "ssn_1l_tag_t64")
+                  "ssn_1l_tag_t64", "ssn_1l_tag8_t64")
 _SUBSETS = tuple(c for r in (4, 3, 2, 1) for c in itertools.combinations(range(4), r))
 
 
@@ -1747,6 +1748,13 @@ def checks(rep: dict) -> list[dict]:
        t8["patch_held_ca0_ssn_1l_tag_t64"] > ALLOW and t8["patch_held_ca1_ssn_1l_tag_t64"] < ALLOW
        and t8["patch_held_ca0_ssn_1l_tag8"] < ALLOW / 2,
        str({k: round(v, 5) for k, v in t8.items() if k.startswith("patch_held_")}))
+    ok("the new lead's tile with G as bytes: under 1% at c_a = 0 over neighbours within two coefficients and under "
+       "0.5% held at every point, under 0.1% at c_a = 1 on every reading; over any earlier row (the upper bound) it "
+       "exceeds 1% at c_a = 0",
+       all(e["patch_table_ca0_ssn_1l_tag8_t64"] < ALLOW and e["patch_held_ca0_ssn_1l_tag8_t64"] < ALLOW / 2
+           and all(e[f"patch_{r}_ca1_ssn_1l_tag8_t64"] < ALLOW / 10 for r in PATCH_READINGS) for e in cb.values())
+       and t8["patch_any_ca0_ssn_1l_tag8_t64"] > ALLOW,
+       str({k: round(v, 5) for k, v in t8.items() if k.endswith("_ssn_1l_tag8_t64")}))
     vca = rep["verdict_by_ca"]
     ok("with hashing on the prover the tag (G in [−3, 3]) passes again only once a copy costs 3 words: not at c_a = 2, "
        "at c_a = 3", not passes(vca["2"], "ssn_1l_tag") and passes(vca["3"], "ssn_1l_tag"))
@@ -2004,8 +2012,8 @@ def table(rep: dict) -> str:
                      "c_a: " + "; ".join(
                          f"{x} " + ", ".join(f"{c}: {rep['patch']['llama_T8192'][f'patch_{reading}_ca{c}_{x}']:.3%}"
                                              for c in PATCH_CAS)
-                         for x in ("ssn_1l_tag", "ssn_1l_tag_t64", "ssn_1l_tag8", "aorbA", "ssn_1l_hw",
-                                   "ssn_1l_tele4m")))
+                         for x in ("ssn_1l_tag", "ssn_1l_tag_t64", "ssn_1l_tag8", "ssn_1l_tag8_t64", "aorbA",
+                                   "ssn_1l_hw", "ssn_1l_tele4m")))
     for name, v in [*((f"c_a = {c}, {PATCH_READING} reading", v) for c, v in rep["verdict_by_ca"].items()),
                     (f"c_a = {PATCH_CA}, table reading", rep["verdict_table"]),
                     *((f"c_a = {c}, held reading", v) for c, v in rep["verdict_held"].items())]:
