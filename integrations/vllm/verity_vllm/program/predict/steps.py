@@ -76,6 +76,7 @@ from typing import Any
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.pipeline.advice_windows import CAP_BITS
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
 from verity.ml.definitions.registry import io_shell as IO
@@ -87,8 +88,6 @@ from .phi import Phi
 SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
 EGRESS = ("TokenSelect", "GumbelTopPTokenSelect")
-#: ℓ when a registration names none: 1 MiB of advice (PROVE-PATH's `CAP_BITS`), far above a session's few thousand rows
-CAP_BITS = 1 << 23
 #: vLLM's `_SAMPLING_EPS`: a temperature below it samples greedily; the Build's policy is greedy only at 0
 SAMPLING_EPS = 1e-5
 #: the sampling parameters (`engine.step_trace.SAMPLING`) that leave a request's Program unchanged at these values
