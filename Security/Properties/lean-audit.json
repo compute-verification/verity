@@ -61,7 +61,7 @@
   },
   "Accounting.Assumptions.CircuitCarriers": {
    "owner": "@compute-accounting",
-   "digest": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a"
+   "digest": "b4ac6e76e1a5b68c62eb112fe117ee673cd321dfd7423d4ad9ed6b8b3f8b97d8"
   },
   "Accounting.Assumptions.Compose.GuessLuckAt": {
    "owner": "@compute-accounting",
@@ -77,7 +77,7 @@
   },
   "Accounting.Assumptions.SketchHashBudget": {
    "owner": "@compute-accounting",
-   "digest": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77"
+   "digest": "7152c3bee14ef89d534145e9ca82a0933d6aee2891e6a7e1beaa5a973944558b"
   },
   "Accounting.Assumptions.SketchRank": {
    "owner": "@compute-accounting",
@@ -4400,9 +4400,9 @@
    ]
   },
   "Definitions.Accounting.Assumptions.RateAuditDeployed": {
-   "digest": "3a23048a457a705ec922e8366a4811242cf7e7b73ba37dd3170f928b70de9d8b",
+   "digest": "109ee4fe128b582cd11718706c30193ae2f83579b296054edc00f1e92eeb220b",
    "definitions": {
-    "Accounting.Assumptions.SketchHashBudget": "f3124bfd590b659120d11eac7d0a3f243c6fae7023c117bf8e6a9033d64f2f77",
+    "Accounting.Assumptions.SketchHashBudget": "7152c3bee14ef89d534145e9ca82a0933d6aee2891e6a7e1beaa5a973944558b",
     "Accounting.Assumptions.SketchRank": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
@@ -4459,9 +4459,9 @@
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
   "Definitions.Accounting.Assumptions.Stacking": {
-   "digest": "bf222b12845ea12e66df6757ffb2229d009250a6a0c3088d6910c2ad33c89027",
+   "digest": "103035a5fbb0ea87811c77a8616cb406a643936b692aa5084647aca3a54b9465",
    "definitions": {
-    "Accounting.Assumptions.CircuitCarriers": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a",
+    "Accounting.Assumptions.CircuitCarriers": "b4ac6e76e1a5b68c62eb112fe117ee673cd321dfd7423d4ad9ed6b8b3f8b97d8",
     "Accounting.Assumptions.KeyBinding": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996",
     "Accounting.Assumptions.SteeredLayout": "59b5d95e9b7c7cd129406e5bee6c1344016656a8e7085ba1ae577aff5e365228"
    },
@@ -4488,7 +4488,7 @@
    ]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "515fb74d991ec658d9da8799981ef071e41a1d31601f458632d4793c5fdb94a5",
+   "digest": "f94cc1b6d49f9d26c7b1a9f8729a4cbbcf2cfc61728d1ff355234cedd6d0537b",
    "definitions": {
     "Accounting.RateSketch.Carrier": "959c9fa52081612967bc475abfb0112b80743b558b7330254d408762e8e2fdfa",
     "Accounting.RateSketch.Carrier.carried": "10f81ebb2467e3794edeb76d3fed9cf3936e3dbc6e271b22f256dd8593daeaeb",
@@ -4508,8 +4508,8 @@
     "Accounting.RateSketch.Provenance.inputs": "6b30c8cf04bfbeceada1175d9d5886cff3f2b3605c1920a3881b4aa8699b083c",
     "Accounting.RateSketch.Provenance.rec": "29ef2b5e0697a74454072abd56c2e61301503db37e36fc206de6f1d1a32233df",
     "Accounting.RateSketch.Provenance.run": "f3927eefe53c708fe975d11873e6d296127a232b98f78b1746368901d89641bf",
-    "Accounting.RateSketch.SketchDeployedWindow.correctOn": "dc50e94282b5a9924e9bad4abf22c547b80cf436b8914c64a5c36f8360f2dbc9",
-    "Accounting.RateSketch.SketchDeployedWindow.readsIn": "6363e10290c0cea321ee3be9786639c485ed6dfabc15d41c1a09070234e64c8c",
+    "Accounting.RateSketch.SketchDeployedWindow.correctOn": "dac910aa25d5a22758baf1eacfde192cd505a5f75adf211a6d27f6bfa6cf7847",
+    "Accounting.RateSketch.SketchDeployedWindow.readsIn": "a9f8992d9f16fdaa1fc6ad7263a2c324c2417bb33b6dbe9dd73c70202602f8b7",
     "Accounting.RateSketch.SketchPrefix": "bc7d444025216fd652270044404eb72ef7443e4bb83aa38cc7b24fad18380e33",
     "Accounting.RateSketch.SketchPrefix.j": "015df25a1a55e0fbd4fece1f474eb8af2d59a501dc4964f9be238f69b99be5b5",
     "Accounting.RateSketch.SketchPrefix.of": "47c5593dde0b838373447a801b4641585b2b445fb5b4c6aa64e9c2185ae2acd7",
@@ -5075,7 +5075,7 @@
    "guarantees": ["Pous.Period.SecurityProofs.periodCapacity"]
   },
   "Definitions.Accounting.RateAuditSketch": {
-   "digest": "a8cc1b45198bdbccd12382446a5ad9343bbefbf5d292935633dd32f75bc26df9",
+   "digest": "d0cff98a24175bcd7e2f233ff7501f6460b37e0d9fbe7eefcc92c3c9ec97d40b",
    "definitions": {
     "Accounting.RateSketch.Chip": "6047f5e0c807b4fdf592c8f686397b220c07cb582ccd3649c93a99d61e15eb7a",
     "Accounting.RateSketch.Chip.below": "ef363861ca3259bc67f29ad0f9b3c5bb1f81986b1b7aeabc428ae8d968f564d8",
@@ -5095,14 +5095,14 @@
     "Accounting.RateSketch.Data": "09aa57c46961d9eca932b99435cc2a615481b00fbf69704f2ced78ae5e487182",
     "Accounting.RateSketch.Data.stream": "c5747e90b5e29b123ffd91cedb5ff1195bbc8c23727efea2dfbb8d163e0f886b",
     "Accounting.RateSketch.Data.tile": "de2dcb1a9ed4f8ec5971994018ca5bb6792e864ad3924d2b259c36a557169ed0",
-    "Accounting.RateSketch.Device": "842f9f3a88e1946cbff0750695308b8f12103fa8bc634c8415892aa276420e83",
-    "Accounting.RateSketch.Device.chip": "534c2eb274af7b70cfb87bb0b67685d4b73315a458ee6d2600696d23ff1daab2",
-    "Accounting.RateSketch.Device.correct": "99b74127e3bb13a8694856ab44b58a8dfaebe393a3a0e8622088304016ec62f3",
-    "Accounting.RateSketch.Device.held": "088789df71b9419dfa76bd42b30940079c201e0cb4e2b7530663ea8a983ecf64",
-    "Accounting.RateSketch.Device.prog": "205ff7418c8f94bb5e576d690ea0e072be00251efd687e60183d858885c022d1",
-    "Accounting.RateSketch.Device.tags": "2e50ba60bbe8901447b46cec00a249be36e58ea9fdd79945440ef9b19fecff5c",
     "Accounting.RateSketch.Oracle": "8971a55fb2807ec6e50b350ee6af4b317e86f349a9ffd7dbd0a4d3820b30782e",
     "Accounting.RateSketch.Pos": "d49a17a3f632dd05b170e607e49cc44488862ee3995f1d6e9beaf437b4b62ffb",
+    "Accounting.RateSketch.Prover": "35db249ecd07e4addf73c2dc20e5a3750e87f7227f0c64151e52bd6d81753acf",
+    "Accounting.RateSketch.Prover.chip": "a61da209d7c3ee9990996051435d91054ed18bcd2591126096059c88728187b8",
+    "Accounting.RateSketch.Prover.correct": "5ebc065c668d71b1648bd6231a324695c6f91de80298322fecd6ef0741a6baa0",
+    "Accounting.RateSketch.Prover.held": "579f801d51c7c4929b553c94bad7ec994fe15cf68c8830ba6bb1b0805883717d",
+    "Accounting.RateSketch.Prover.prog": "acba349f7104456b17247c2a94246ccbd2510488f0baeb9801f6556140482469",
+    "Accounting.RateSketch.Prover.tags": "6a72c52804c9b8fe71c5bd1d52df79bb2ddedc87aeb0834f12657ddeff294395",
     "Accounting.RateSketch.Sector": "89f64bd46420327e56848d324baf59541648256273e1d07ec6ba1b2c8c75cdd5",
     "Accounting.RateSketch.SketchSigns": "50235d71a50ee31ad22a4865029f445dc518e52b86bff4733d998251ff9405c0",
     "Accounting.RateSketch.SketchSigns.block": "2b3cdf614fbe1ed0513d823f69ef84bade69d122cc978ab143ec7bd9dc1000e3",
@@ -5112,15 +5112,15 @@
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
   "Definitions.Accounting.RateAuditSketchDeployed": {
-   "digest": "e236c6d749ede70ea3e3510264b28d6aaf43f6d5e7999384b130289464014c5d",
+   "digest": "318d3fb9fd1ef255fdf52d01028c40d2c4d655d15f962e31163eb9abe17f69e2",
    "definitions": {
     "Accounting.RateSketch.Data.ofParts": "a60b017a6780a68097308ef5ebf8e8f29470885faf50d90d39c9cd60471e390a",
     "Accounting.RateSketch.SketchDeployedSession": "a840924e954cd6cfc03b388148c9df8f4384e2814b1ef1e93f1f46bdd0eb53e5",
     "Accounting.RateSketch.SketchDeployedSession.win": "42ced0cac300e6968aa81375ebf78f5e1b400b8f51d80d9d3b8775309e0de629",
     "Accounting.RateSketch.SketchDeployedSession.window": "50e54c2c9e6cc7a8c40bb09890403aaac639b933d2273660bef56068924b8bac",
-    "Accounting.RateSketch.SketchDeployedWindow": "e428b18ba71475208d12e34d6d9d90fb43ad2aa7ac59d9ba6d8a290790237d44",
-    "Accounting.RateSketch.SketchDeployedWindow.dev": "c2e43acc01ec4ffde73f090411bd411d68adfb8ae9de35bee96dd00fb0cfe32a",
-    "Accounting.RateSketch.SketchDeployedWindow.device": "4feca61860aa84c3d883eda5e03d681a8bc4974b05f876d14d6b9bd80e51f5c7",
+    "Accounting.RateSketch.SketchDeployedWindow": "4c6c1a6462b2f8ab95c02f58893070e0f7163cbf956c3f9fc84019d51b34cb0b",
+    "Accounting.RateSketch.SketchDeployedWindow.dev": "8db66a39493ea3797daec4d26ba6e36c9484594fa7c326a4c8072c207ea96535",
+    "Accounting.RateSketch.SketchDeployedWindow.device": "d018fc0b915935f46706d5e223c6779d0b8a14abed9f67b60b6ee681aa6fd5fc",
     "Accounting.RateSketch.SketchDeployedWindow.kept": "42e0066b786f1cf50a419510691f8153b3585d4f81fad1d2ed688ae04a88a339",
     "Accounting.RateSketch.SketchDeployedWindow.oracle": "c6445828dc58b0f78acd44b5e3a6902e27bb7efd8151249e911765136ba53e96",
     "Accounting.RateSketch.SketchDeployedWindow.pick": "d5cbd850529c8a22424e53d52e3156ff97e041ff5680f9c2d50c33a480d3b3b2",
