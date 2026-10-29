@@ -15,7 +15,8 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32 (`engine.int8_exact`'s stat
 
 Triton's `/` on float32 is div.full.f32 (approximate) and its libdevice calls are flush-to-zero by default, so the kernels
 use tl.div_rn, an inline cvt.rni, enable_reflect_ftz=False and enable_fp_fusion=False; `ptx_check` reads the compiled PTX
-for exactly these instructions.  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
+for exactly these instructions.  The quantizer divides each element by its row's reciprocal and two explicit fma.rn
+corrections, div.rn's own fast path, which equals div.rn.f32 on every finite bf16 input (`test_int8_ops`' exhaustive test).  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
 bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is
 `engine.profiles.int8_gemm_configs.CONFIGS` (ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
 self-zeroing `Workspace`, and the last split applies the epilogue.  A TMA config runs `exactlin_scaled_mm_tma`, the same
@@ -67,16 +68,21 @@ def exactlin_quant_rows(x_ptr, q_ptr, s_ptr, M, K, stride_x, stride_q, BLOCK_M: 
     a = tl.max(tl.abs(x), axis=1)
     s = tl.div_rn(tl.maximum(a, 1e-30), 127.0)
     # x / s == (x * 2^e) / (s * 2^e) with s * 2^e in [1, 2): s is normal, so both products are exact (x * 2^e unless it is
-    # below 2^-126, where the quotient is too and X is 0 either way), and the rounded quotient is the same.  A |x * 2^e|
-    # under 0.25 has |quotient| < 0.25, so X = 0 without dividing; the divisions left never leave div.rn's fast path.
+    # below 2^-126, where the quotient is too and X is 0 either way), and the rounded quotient is the same.  It is divided
+    # as div.rn's fast path does, with the reciprocal taken once a row: y = RN(1/s1), q0 = x y, and two corrections
+    # q <- fma(fma(-s1, q, x), y, q); the first leaves q within an ulp, so the second is RN(x / s1) (Markstein's theorem),
+    # and a quotient too small to be exact rounds to X = 0 either way.
     sb = s.to(tl.int32, bitcast=True)
     s1 = ((sb & 0x7FFFFF) | 0x3F800000).to(tl.float32, bitcast=True)
     p = ((254 - (sb >> 23)) << 23).to(tl.float32, bitcast=True)
+    y = tl.div_rn(tl.full(s1.shape, 1.0, tl.float32), s1)
     xs = x * p[:, None]
-    small = tl.abs(xs) < 0.25
-    q = _rni_s32(tl.div_rn(tl.where(small, 1.0, xs), tl.broadcast_to(s1[:, None], (BLOCK_M, BLOCK_K))))
-    q = tl.where(small, 0, q)
-    q = tl.minimum(tl.maximum(q, -127), 127).to(tl.int8)
+    ns = tl.broadcast_to(-s1[:, None], (BLOCK_M, BLOCK_K))
+    yb = tl.broadcast_to(y[:, None], (BLOCK_M, BLOCK_K))
+    q = xs * yb
+    q = tl.fma(tl.fma(ns, q, xs), yb, q)
+    q = tl.fma(tl.fma(ns, q, xs), yb, q)
+    q = tl.minimum(tl.maximum(_rni_s32(q), -127), 127).to(tl.int8)
     tl.store(q_ptr + rows[:, None] * stride_q + offs[None, :], q, mask=mask)
     tl.store(s_ptr + rows, s, mask=live)
 
@@ -403,14 +409,17 @@ def ptx_check(compiled) -> dict:
     doc = {"kernel": name, "ftz": ptx.count(".ftz"), "div_rn_f32": ptx.count("div.rn.f32"),
            "div_approx_or_full": ptx.count("div.approx") + ptx.count("div.full"), "cvt_rni_s32_f32": ptx.count("cvt.rni.s32.f32"),
            "fma_f32": sum(ptx.count(f) for f in ("fma.rn.f32", "fma.rn.ftz.f32", "mad.f32", "mad.rn.f32")),
+           "mad_f32": ptx.count("mad.f32") + ptx.count("mad.rn.f32"),
            "cvt_rn_f32_s32": ptx.count("cvt.rn.f32.s32"), "cvt_rn_bf16": ptx.count("cvt.rn.bf16"),
            # mma.sync's .s32.s8.s8.s32 (sm_80, sm_120), wgmma's .s32.s8.s8 (sm_90), tcgen05's kind::i8 (sm_100)
            "mma_s8": ptx.count(".s8.s8") + ptx.count("kind::i8"),
            "global_scratch": int(getattr(compiled.metadata, "global_scratch_size", 0) or 0),
            "atom_global": ptx.count("atom.global"), "membar_gl": ptx.count("membar.gl")}
     if name.startswith("exactlin_quant_rows"):
+        # its fma.rn are the division's corrections, written out; nothing is contracted into a mad
         doc["ok"] = (doc["ftz"] == 0 and doc["div_rn_f32"] >= 2 and doc["div_approx_or_full"] == 0
-                     and doc["cvt_rni_s32_f32"] >= 1 and doc["fma_f32"] == 0 and doc["global_scratch"] == 0)
+                     and doc["cvt_rni_s32_f32"] >= 1 and doc["fma_f32"] >= 4 and doc["mad_f32"] == 0
+                     and doc["global_scratch"] == 0)
     else:
         doc["ok"] = (doc["ftz"] == 0 and doc["div_approx_or_full"] == 0 and doc["fma_f32"] == 0 and doc["cvt_rn_f32_s32"] >= 1
                      and doc["cvt_rn_bf16"] >= 1 and doc["mma_s8"] >= 1 and doc["global_scratch"] == 0
