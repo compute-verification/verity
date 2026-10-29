@@ -1,6 +1,6 @@
-"""`eps1-sm120-h1fx1` as a compile-pass scheme (`compile.SCHEMES`): sm_120's H1 + fx1 (decisions 82 and 83, E2E-120's
-`segment.PouwCallCheck_v1{FOLD "fx1"}`) as one self-contained r × c tile unit (decisions 105 and 106) with the warp
-checkpoint receipt CP-W (decision 104, #2438's `PouwWarpCheck_v2` body).
+"""`eps1-sm120-h1fx1` as a compile-pass scheme (`compile.SCHEMES`): sm_120's H1 + fx1
+(`segment.PouwCallCheck_v1{FOLD "fx1"}`) as one self-contained r × c tile unit with the warp checkpoint receipt CP-W
+(`segment.PouwWarpCheck_v2`'s body).
 
 The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, receipt}`` (`compile.Scheme`), on bits:
 
@@ -8,7 +8,7 @@ The unit is ``(a: r rows of X, b: c rows of W, salt, position, roots) -> {z, rec
   noise is seed_j's stream in counter mode, each row's and column's from blocks of its own (`Layout`): row i of X takes
   blocks ``[i RB, (i + 1) RB)``, its dither bits b (K) then its digit coins z (32 (m - 1)); column j of W blocks
   ``r RB + [j CB, (j + 1) CB)``, its coin bits c (K) then U's 32 bytes (`PouwU129`: -64 + byte mod 129, H1's keyed word in
-  ±64). Lane l's fold keys (duo's y_0..7, z_0..7), its chain's start, are block l of σ_R's stream (decision 121): no key
+  ±64). Lane l's fold keys (duo's y_0..7, z_0..7), its chain's start, are block l of σ_R's stream: no key
   is a function of seed_j. A kernel derives any row's or column's noise from seed_j alone, and any lane's keys from σ_R.
   In a live window the salt is round r's, `live_salt` (`window.round_key` of round r's coin and root, its stream's first
   64 bytes), and every unit computes its own noise from it in its own proof: no noise is a step that several units read.
@@ -62,7 +62,7 @@ receipt's cone reads.
 
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
-`SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` (E2E-120) is on the tree;
+`SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` is on the tree;
 `SCHEME_V3` (`scheme_v3`) and `PouwH1Tile3` the same. `PouwH1Tile4` is a Definition only: the compile pass has no admit
 input to give it. `reference` is the unit on words (``stream=True``: v3's; with ``gated``, the admit bits: v4's).
 """
@@ -78,6 +78,7 @@ from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from . import compile as C
 from . import seeds as SD
@@ -85,7 +86,7 @@ from .boolean import PouwXor32
 
 try:
     from . import segment as SG
-except ImportError:  # H1's receipts and their checks (E2E-120, `circuit.segment`) are not on this tree
+except ImportError:  # H1's receipts and their checks (`circuit.segment`) are not on this tree
     SG = None
 
 try:
@@ -110,7 +111,7 @@ H1_ROWS = C.RowNoise(a=(0, 1), b=(U_BITS, 1))
 #: a lane's fold keys: duo's y_0..7, z_0..7, one block
 KEY_BITS = 512
 #: the salt port's bytes, a SHA-512 digest
-SALT_BYTES = 64
+SALT_BYTES = DIGEST_BYTES["sha512"]
 
 
 @dataclass(frozen=True)

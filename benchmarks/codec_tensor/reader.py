@@ -30,6 +30,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
+from benchmarks.word_codec import cuda_lib  # noqa: E402  (after the root's path entry, which it needs)
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -45,6 +46,26 @@ LOADS = ("ldg", "l2_256", "prefetch", "warp", "hot", "none")
 EXACT = LOADS[:4]
 SEGMENTS = (2, 4, 16)
 ROWS64, MTS = 64, (1, 2, 4)   # rb_sketch64's rows and its m-tiles a warp
+_v, _u64, _i, _b = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int, ctypes.c_char_p
+ABI = {   # reader.cu's functions (`cuda_lib.load`), which session.cu includes
+    "rb_set": [_b, _b, _b, _b, _b, _b, _b, _b, _i, _b, _i, _u64, _v],
+    "rb_receipts": [_v, _v, _u64, _u64, _v, _i, _v],
+    "rb_leaves": [_v, _u64, _u64, _v, _v, _v],
+    "rb_pads": [_u64, _u64, _v, _v],
+    "rb_level": [_v, _v, _i, _u64, _u64, _v],
+    "rb_tree": [_v, _u64, _u64, _v, _v],
+    "rb_read": [_v, _u64, _v, _i, _v],
+    "rb_sketch_set": [_b, _v],
+    "rb_sketch": [_v, _v, _u64, _v, _v, _i, _v],
+    "rb_sketch_hash": [_v, _u64, _u64, _v, _v],
+    "rb_sketch64": [_v, _v, _u64, _v, _v, _i, _i, _v],
+    "rb_sketch64_hash": [_v, _u64, _u64, _v, _v],
+    "rb_sketch64_receipts": [_v, _v, _u64, _u64, _v, _v, _v, _i, _v],
+    "rb_chain_set": [_b, _i, _b, _b, _b, _b, _b, _b, _i, _i, _b, _i, _i, _b, _i, _b, _i, _i, _u64, _v],
+    "rb_chain": [_v, _v],
+    "rb_consts": [_v, _u64],
+    "rb_consts_bytes": ([], _u64),
+}
 
 
 def pack64(bits: np.ndarray) -> np.ndarray:
@@ -90,26 +111,7 @@ class Reader:
     """One GPU's reader of the driver's receipt tree: `begin` a pass, receipt and commit its `segment`s, `open` them."""
 
     def __init__(self, path: str, torch, load: str = "warp") -> None:
-        self.torch, self.so, self.load = torch, ctypes.CDLL(path), load
-        v, u64, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-        b = ctypes.c_char_p
-        self.so.rb_set.argtypes = [b, b, b, b, b, b, b, b, i, b, i, u64, v]
-        self.so.rb_receipts.argtypes = [v, v, u64, u64, v, i, v]
-        self.so.rb_leaves.argtypes = [v, u64, u64, v, v, v]
-        self.so.rb_pads.argtypes = [u64, u64, v, v]
-        self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
-        self.so.rb_tree.argtypes = [v, u64, u64, v, v]
-        self.so.rb_read.argtypes = [v, u64, v, i, v]
-        self.so.rb_sketch_set.argtypes = [b, v]
-        self.so.rb_sketch.argtypes = [v, v, u64, v, v, i, v]
-        self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
-        self.so.rb_sketch64.argtypes = [v, v, u64, v, v, i, i, v]
-        self.so.rb_sketch64_hash.argtypes = [v, u64, u64, v, v]
-        self.so.rb_sketch64_receipts.argtypes = [v, v, u64, u64, v, v, v, i, v]
-        self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
-        self.so.rb_chain.argtypes = [v, v]
-        self.so.rb_consts.argtypes = [v, u64]
-        self.so.rb_consts_bytes.restype = u64
+        self.torch, self.so, self.load = torch, cuda_lib.load(path, ABI), load
         self.kept: dict[int, tuple[int, object, list]] = {}
 
     def call(self, fn: str, *args) -> None:

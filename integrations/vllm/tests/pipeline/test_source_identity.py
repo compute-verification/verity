@@ -26,6 +26,7 @@ import pytest
 
 from research import pythonpath as rpp
 from research.telemetry import source_identity as gsid
+from verity import settings as core_settings
 from verity_vllm import config as vconfig, settings as vsettings
 from verity_vllm.pipeline import cli as vcli
 from verity_vllm.pipeline import research_tools
@@ -50,10 +51,12 @@ def _run(*args: str, cwd: Path = INTEGRATION, **env: str) -> subprocess.Complete
 
 
 def _other_tree(tmp_path: Path, name: str = "other", commit: str = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef") -> Path:
-    """A second tree carrying only the core package `verity` (+ EXPORT.json naming another commit) -- the default tree of tp's finding."""
+    """A second tree carrying only the core package `verity` (+ EXPORT.json naming another commit) -- the default tree of tp's finding --
+    with the settings machinery `verity_vllm.settings` imports from it."""
     other = tmp_path / name
     (other / "verity").mkdir(parents=True)
     (other / "verity" / "__init__.py").write_text("LEAKED = True\n")
+    shutil.copy(core_settings.__file__, other / "verity" / "settings.py")
     (other / "EXPORT.json").write_text(json.dumps({"commit": commit, "branch": "other", "dirty_patch_sha256": "0" * 64}))
     return other
 
@@ -251,7 +254,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
     """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers and the workspace declaration (every member's
     pyproject.toml), stub packages at Verity's locations, and the REAL source_identity modules (generic + project, with the verity_vllm.config
     it locates the tree through and the typed records that reads, the research.pythonpath that names core's directories, and the CLI with the
-    settings it reads) so the precheck under test runs from the shipped tree itself."""
+    settings it reads and core's settings machinery) so the precheck under test runs from the shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
     for rel in (*research_tools.CORE_DIRS, "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
                 "tools/research/src/research/telemetry"):
@@ -268,6 +271,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
     shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")
     shutil.copy(vcli.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "cli.py")
     shutil.copy(vsettings.__file__, t / "integrations" / "vllm" / "verity_vllm" / "settings.py")
+    shutil.copy(core_settings.__file__, t / "verity" / "settings.py")
     shutil.copytree(INTEGRATION / "verity_vllm" / "records", t / "integrations" / "vllm" / "verity_vllm" / "records",
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     assert not (t / ".git").exists() and not (t / "EXPORT.json").exists()
@@ -331,6 +335,7 @@ def test_a_shipped_tree_with_core_split_across_members_passes_and_a_foreign_port
         (t / member / "src" / "verity" / module).mkdir(parents=True)
         (t / member / "src" / "verity" / module / "__init__.py").write_text("")
         (t / member / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/verity"]\n')
+    shutil.copy(core_settings.__file__, t / "core" / "upper" / "src" / "verity" / "settings.py")
     integ = t / "integrations" / "vllm"
     entries = [os.path.realpath(t / m / "src") for m in ("core/upper", "core/lower")]
     pp = os.pathsep.join([str(integ), *entries, str(t / "tools" / "research" / "src")])

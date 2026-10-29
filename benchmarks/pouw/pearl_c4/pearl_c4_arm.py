@@ -31,7 +31,7 @@ and B's roots equal to `audit.commit_rows` over the rows on the host and both se
 context; and PEARLC4_GATE_TILES whole 64 x 64 tiles (the first and seeded random ones) against the CPU twin (`twin.tile`,
 itself held to the scalar reference): y, P_A's and P_B's rows, and with hashing the tile's leaf (hence its 128 C̃‖U
 digests).  `known_bad` is the plain mode under the hash flags.  Pearl's lottery tickets are not computed (no PoUW check
-reads them; the coordinator's 06:35Z ruling for pearl-c-sm120, taken for Pearl-C4).  Each gate reads its tiles' inputs
+reads them, in Pearl-C4 as in Pearl-C on sm_120).  Each gate reads its tiles' inputs
 (both seeds and the tiles' 64 A and B rows) from the device and reuses a twin tile made from the same ones, so a shape's
 roles, their flip controls and `known_bad` share its tiles; A's and B's host commitments are likewise recomputed only
 when the rows differ.  `prefetch` (arm interface v0.6, optional) starts the tiles in the harness's `refs.pool()` before
@@ -157,7 +157,7 @@ class _Call:
         """What the harness does with this call (`bench.poison_dump`), for arm_smoke.py, which runs without it: every
         buffer of `transcript_buffers` poisoned with 0xA5, the weight side and the call launched once more on its operands
         as they stand, then `write_dump`.  write=False leaves both launches out: the no-write negative control, which the
-        reference replay must reject (the panel rule, 11:50Z)."""
+        reference replay must reject (the panel rule)."""
         for b in self.transcript_buffers.values():
             self.d.write(b.ptr, bytes([POISON]) * b.nbytes)
         if write:

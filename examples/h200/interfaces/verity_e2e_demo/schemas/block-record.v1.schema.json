@@ -2,7 +2,7 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "verity/block-record/v1",
  "title": "The block record (verity_e2e_demo.block_record)",
- "description": "What each leg writes for one server-time block and what the composed verdict reads; extends verity/all-protocols-period/v1 (and -window/v1). Fractions are exact strings (\"1/100\", \"0\").",
+ "description": "What each leg writes for one server-time block and what the composed verdict reads; extends verity/all-protocols-period/v1 (and -window/v1, -window/v2). Fractions are exact strings (\"1/100\", \"0\").",
  "type": "object",
  "required": ["format", "extends", "run", "server", "server_time", "legs", "composed", "monitoring_period"],
  "additionalProperties": false,
@@ -47,7 +47,7 @@
  },
  "properties": {
   "format": {"const": "verity/block-record/v1"},
-  "extends": {"enum": ["verity/all-protocols-period/v1", "verity/all-protocols-window/v1"]},
+  "extends": {"enum": ["verity/all-protocols-period/v1", "verity/all-protocols-window/v1", "verity/all-protocols-window/v2"]},
   "run": {"type": "string"},
   "period": {"$ref": "#/$defs/nat"},
   "window": {"$ref": "#/$defs/nat"},

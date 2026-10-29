@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from verity import settings as verity_settings
 from verity_config import settings as ST
 from verity_config.settings import DEBUG, SHARED, VALUE, WHERE, Registry, Setting
 
@@ -61,6 +62,7 @@ def test_put_setdefault_and_unset_write_only_declared_variables(monkeypatch) -> 
 
 def test_every_registry_reads_the_shared_settings_and_declares_each_once() -> None:
     r = registry()
+    assert isinstance(r, verity_settings.Registry) and isinstance(SHARED, verity_settings.Registry)
     assert r.setting("RESEARCH_RUN_ID") is SHARED.setting("RESEARCH_RUN_ID")
     assert r.get("CUDA_VISIBLE_DEVICES", {"CUDA_VISIBLE_DEVICES": ""}) == ""
     with pytest.raises(ValueError, match="RESEARCH_RUN_ID is declared twice"):
@@ -78,7 +80,7 @@ def test_an_unknown_variable_with_an_owned_prefix_is_refused() -> None:
     r = registry(elsewhere=("PX_OTHER", "PX_FAM_"))
     assert r.unknown(["PX_N", "PX_TYPO", "PX_OTHER", "PX_FAM_1", "QX_TYPO", "PATH"]) == ["PX_TYPO"]
     r.validate_environ(["PX_N", "QX_TYPO"])
-    with pytest.raises(ST.UnknownSetting, match=r"unknown settings PX_A, PX_B: nothing reads them.*dist/settings.py"):
+    with pytest.raises(ST.UnknownSetting, match=r"unknown settings PX_A, PX_B: nothing in the tree reads them.*dist/settings.py"):
         r.validate_environ(["PX_B", "PX_A"])
 
 

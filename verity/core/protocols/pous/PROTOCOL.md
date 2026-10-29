@@ -534,7 +534,7 @@ about 4.965 GB). At `r = 58` the fill's share alone is 2.706 GB.
 
 `verity/wipe/v0` publishes this threshold at the session's `k`, which the memory challenger chooses (`wipe_party
 --reads`, 2152 by default) and its commitment names, at `r = ratio(k)`, the largest `r` the condition allows, with `R`
-every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; up to
+every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; from 1 to
 `MAX_READS = 2^17` reads). One 32 MiB segment at `k = 2152` (`r = 24`) is 11,709,069 bits plus the egress, under the
 family's `⌈M/19⌉ = 14,128,182`; the H200 at `k = 5231` is `StreamedWipeMeets141GB5`'s figure.
 
@@ -729,7 +729,7 @@ column storage, whole lower labels as separators, meet in the middle through `P�
   `chainBand` and `chainDense`), encode-after-decode on arbitrary `C`, negative controls, and the flag;
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
-  (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+  (`pous_state_game.py`) agrees on dense and band rows;
 - the continuous audit's memory challengers against the Lean model (`test_pous_continuous_difftest.py`).
   `pous_continuous_model.py` transcribes the memory challenger of
   `Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each one word for word
@@ -1009,7 +1009,12 @@ Two gaps stood between these statements and the deployed verifier:
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
-  audit has at most one session it can accept. The Lean states the check's side (`RunCheckAccepts`: an accepted session
+  audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
+  derived, not drawn: the memory challenger draws the setup's salt after the commitment to `W` and logs it under the
+  window's binding (`memory_challenger.SaltLog`, one salt an audit), derives the id from the binding, the commitment
+  and the salt (`challenger_party.session_id`), and refuses a session whose setup doesn't publish exactly that
+  commitment and salt. The verifier computes the same id from the binding and what setup published, never from the
+  report. The salt is in the id because the signed header binds only the root of `C*`. The Lean states the check's side (`RunCheckAccepts`: an accepted session
   carries the designated id); the device's refusal is its code and log, which the Lean does not model.
 - G-2, the composed setup-to-challenger check, fixed: `run.check` (`PousCheck.Run.check`, `pous-run TRUSTED.json
   SETUP.json DIGESTS.bin SESSION.json SESSION_ID`) refuses a run unless the setup published `2^19` blocks under a

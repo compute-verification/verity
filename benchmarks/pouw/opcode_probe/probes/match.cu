@@ -1,7 +1,7 @@
-// MATCH's rates on sm_120 and sm_90, for the coverage table's MATCH rows (machine_model/data/cover/rows.toml,
-// CMP-166). Joint points: rows.jsonl only, no census line. Each warp runs 8 independent chains v = match(v); the mask a
-// lane gets is the same for every lane of its class and differs between classes, so the lanes' partition into classes
-// holds every trip.
+// MATCH's rates on sm_120 and sm_90, for the coverage table's MATCH rows (machine_model/data/cover/rows.toml). Joint
+// points: rows.jsonl only, no census line. Each warp runs 8 independent chains v = match(v); the mask a lane gets is
+// the same for every lane of its class and differs between classes, so the lanes' partition into classes holds every
+// trip.
 //   match_any_d32, _q32, _c2, _u32   MATCH.ANY on 32-bit words, the lanes in 32 classes (all distinct), 4, 2, or 1
 //   match_any_d64, _u64              MATCH.ANY.U64, 32 classes or 1
 //   mix_u32_lop3_Q                   every warp 8 MATCH.ANY on uniform values, its fastest case, and Q LOP3 on chains of

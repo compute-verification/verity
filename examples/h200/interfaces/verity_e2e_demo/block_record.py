@@ -1,6 +1,6 @@
 """The block record: what each subprotocol writes for one server-time block and what the composed verdict reads,
 one document ``verity/block-record/v1``. It extends the all-protocols runner's per-period report
-(``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
+(``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1`` and ``/v2``) with the block's server and
 steps, every leg in one shape, the composed verdict with the JointHorizonLive error sum, and the monitoring period.
 
 **The record.**
@@ -40,7 +40,9 @@ from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
 from verity.core.protocols.profile import Stratified
 
 FORMAT = "verity/block-record/v1"
-EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
+EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1", "verity/all-protocols-window/v2")
+#: the window report whose rows are all core answers and whose ``verdict`` is the Lean check's
+WINDOW_V2 = "verity/all-protocols-window/v2"
 LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 #: the runner's protocol keys, by leg
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
@@ -108,8 +110,8 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
 
 def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
     """One leg of the record from its runner row (or, for the wipe, its leg document); None for a row the runner marks
-    ``missing``."""
-    if row.get("verdict") == "missing":
+    ``missing``, and for a ``-window/v2`` row that is ``undecided`` (its piece didn't run, or it credits nothing)."""
+    if row.get("verdict") in ("missing", "undecided"):
         return None
     if source not in ("real", "fixture"):
         raise ValueError(f"source {source!r}: real or fixture")
@@ -158,7 +160,8 @@ def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dic
 
 def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment: Mapping[str, Any],
                 extra: Mapping[str, Mapping[str, Any]] | None = None, source: str = "real") -> dict[str, Any]:
-    """The record of one runner report (``verity/all-protocols-period/v1`` or ``-window/v1``) whose loop served ``steps``
+    """The record of one runner report (``verity/all-protocols-period/v1``, ``-window/v1`` or ``-window/v2``, whose
+    ``verdict`` is the record's ``onsite``) whose loop served ``steps``
     ``[lo, hi)`` on its node. ``extra``: legs the runner doesn't run, by leg name, each ``{row, server, runs, source}`` with
     ``row`` the leg's document (``{answer, ...}``)."""
     if report.get("format") not in EXTENDS:
@@ -176,7 +179,7 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
     for name, x in (extra or {}).items():
         legs[name] = leg(name, x["row"], server=x["server"], runs=x["runs"], source=x.get("source", "real"))
     composed = compose(server, legs)
-    onsite = report.get("composed") or {}
+    onsite = report.get("verdict" if report["format"] == WINDOW_V2 else "composed") or {}
     composed["onsite"] = {k: onsite.get(k) for k in ("protocol", "verdict", "reason")} if onsite else None
     which = {"period": report["period"]} if "period" in report else {"window": report["window"]}
     return {"format": FORMAT, "extends": report["format"], "run": report["run"], **which, "server": server,

@@ -6,6 +6,10 @@ the protocol's own decoders and check passed in.
 a commitment or evidence that isn't lowercase hex) and parameters that don't decode are rejected with no commitment; a
 commitment that doesn't decode too; evidence that doesn't decode, and the check's own verdicts, carry the commitment's
 digest. A decoder refuses by raising `verity_difftest.Reject`.
+
+`verity.core.protocols.answer` is `Core.Answer` in Python, what the verifiers answer with. The harness keeps its own
+`outcome` and `canonical_json` (it imports nothing of `verity`), and `tests/test_protocol_port.py` holds the two to each
+other and to the Lean.
 """
 
 from __future__ import annotations

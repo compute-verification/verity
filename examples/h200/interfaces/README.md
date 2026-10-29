@@ -44,7 +44,9 @@ window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle ag
 
 `verity_e2e_demo/block_record.py`, schema `verity_e2e_demo/schemas/block-record.v1.schema.json`. What each subprotocol writes
 for one server-time block and what the composed verdict reads. It extends the all-protocols runner's report
-(`verity/all-protocols-period/v1` and `-window/v1`) with:
+(`verity/all-protocols-period/v1`, `-window/v1` and `-window/v2`, whose rows are all core answers and whose `verdict`,
+onsite's or remote's Lean verdict (its public outcome: protocol, verdict and refusal's name) or `undecided` naming what
+each lacks, is the record's `onsite`; an `undecided` row is no subprotocol entry) with:
 
 - the block's server and steps, `server_time: [{server, steps: [lo, hi)}]`;
 - the subprotocols, keyed `integrity` (sampled proofs), `pouw`, `pous`, `bandwidth`, `certifier` and `wipe`. Each is

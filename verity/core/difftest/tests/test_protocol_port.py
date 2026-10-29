@@ -1,9 +1,11 @@
 """The harness in protocol mode, against the core protocol interface's toy protocol (`CoreProtocol.Example`, its
 `core-protocol-example serve`): its Python reference agrees on every drawn case, valid and malformed, and a reference wrong
-in the verdict, the commitment or the profile is caught and shrunk, while one wrong only in the reason passes."""
+in the verdict, the commitment or the profile is caught and shrunk, while one wrong only in the reason passes; and the
+Python `Core.Answer` (`verity.core.protocols.answer`) writes and reads its outcomes byte for byte."""
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -11,6 +13,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
+from verity.core.protocols import answer as A
 from verity_difftest import protocol as P
 
 INTERFACE = Path(__file__).resolve().parents[2] / "protocols" / "interface"
@@ -106,6 +109,28 @@ def test_the_outcome_is_compared_field_by_field(server):
     case = {"commitment": root.hex(), "evidence": b'{"drawn":2,"passed":2}'.hex(), "params": {"k": 2}}
     kind, line = D.replay(port(), case, server)
     assert kind == "accept" and D.canonical(example(case)) == line
+
+
+def test_the_python_answer_is_the_lean_one_on_each_verdict(server):
+    """`verity.core.protocols.answer` writes the Lean's outcome byte for byte and reads it back, on each verdict and on a
+    case that never decodes, and the harness's `outcome` builds the same JSON."""
+    root = bytes(range(32))
+
+    def case(drawn: int, passed: int) -> dict:
+        return {"commitment": root.hex(), "evidence": D.canonical({"drawn": drawn, "passed": passed}).encode().hex(),
+                "params": {"k": 2}}
+
+    _, public, profile = _check(2, root, (2, 2))
+    cases = [(case(2, 2), A.Answer.accept(ID, root, public, profile)),
+             (case(2, 1), A.Answer.reject(ID, "1 of 2 drawn units failed", root)),
+             (case(1, 1), A.Answer.undecided(ID, "1 of the 2 units drawn", root)),
+             ({}, A.Answer.reject(ID, "case: the case: params missing"))]
+    for c, want in cases:
+        kind, line = D.replay(port(), c, server)
+        assert (kind, line) == (want.verdict.value, want.canonical())
+        assert A.of_json(json.loads(line)) == want
+        a = want.to_json()
+        assert P.outcome(ID, a["verdict"], a["reason"], want.digest, a["public"], a["profile"]) == a
 
 
 def test_the_reason_is_not_compared(server):

@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from verity import settings as verity_settings
 from verity_vllm import settings as S
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import research_result as RR
@@ -33,6 +34,10 @@ def test_settings_imports_nothing_from_the_package() -> None:
     mods = {a.name for n in nodes if isinstance(n, ast.Import) for a in n.names}
     mods |= {"." * n.level + (n.module or "") for n in nodes if isinstance(n, ast.ImportFrom)}
     assert not {m for m in mods if m.startswith((".", "verity_vllm"))}, sorted(mods)
+
+
+def test_the_registry_is_built_on_veritys_machinery() -> None:
+    assert type(S.REGISTRY) is verity_settings.Registry and S.SETTINGS is S.REGISTRY.settings
 
 
 def test_flag_reads_both_spellings_and_refuses_the_rest() -> None:

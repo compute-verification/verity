@@ -30,6 +30,7 @@ from typing import Any, Callable, Mapping
 
 import verity_difftest as D
 
+from verity.core.protocols import answer as CA
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import verifier as V
 from verity.ml.circuits import codec
@@ -101,12 +102,12 @@ def service_answer(accepted: bool, codes: list[str], profile: Mapping[str, Any] 
                    draw: Mapping[str, Any] | None, delta: str) -> dict:
     """The service's answer (`Core.Answer`) of a stream's outcome: on acceptance its profile (δ as the window's ratio when
     the float is it) and its sample."""
-    base = {"protocol": CC.ONE_STAGE, "commitment": registration}
+    digest = CA.unhex(registration)
     if accepted:
         d = profile["delta"]
         d = d if isinstance(d, str) else (delta if float(Fraction(delta)) == d else str(Fraction(d).limit_denominator(10**9)))
-        return {**base, "verdict": "accept", "reason": None, "public": {"draw": dict(draw)}, "profile": {**profile, "delta": d}}
-    return {**base, "verdict": "reject", "reason": ", ".join(codes or ["reject"]), "public": None, "profile": None}
+        return CA.Answer.accept(CC.ONE_STAGE, digest, {"draw": dict(draw)}, {**profile, "delta": d}).to_json()
+    return CA.Answer.reject(CC.ONE_STAGE, ", ".join(codes or ["reject"]), digest).to_json()
 
 
 # ---- the references ------------------------------------------------------------------------------------------------

@@ -135,7 +135,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. Onsite, remote and composition still read v1.
+  to `verify`'s. It is onsite's and remote's integrity component (`Core.Onsite`, `Core.Remote`, through
+  `Core.Composition.productB`), and v1 is no longer one.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
