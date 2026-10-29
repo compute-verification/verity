@@ -113,7 +113,7 @@ def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: 
     as holding tables two adds did (the third group's ran out)."""
     dev, width, slots, lag = torch.device("cuda"), 4 << 20, 64, 2
     group = S.Group((width,), tuple((S.Row((S.Part(0, a, 32 << 10),)),) for a in range(0, width, 32 << 10)))
-    plan = G.Plan(CTX, S.Layout("commit-slots/test-hbm-cap/v1", (group,) * 6))
+    plan = G.Plan(CTX, S.CommitShape("commit-slots/test-hbm-cap/v1", (group,) * 6))
     gen = torch.Generator(device=dev)
 
     def table(step: int, g: int) -> object:

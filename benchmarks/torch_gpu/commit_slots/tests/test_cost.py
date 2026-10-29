@@ -22,7 +22,7 @@ KEY = bytes(range(100, 132))
 def test_an_add_of_one_row_units_costs_nine_compressions_a_row_slot(temp_bytes: int) -> None:
     units, slots = 64, 4
     group = S.Group((2 * units,), tuple((S.Row((S.Part(0, 2 * i, 2),)),) for i in range(units)))
-    layout = S.Layout("coords-64", (group,))
+    layout = S.CommitShape("coords-64", (group,))
     plan = G.Plan(CTX, layout, "host", temp_bytes=temp_bytes)
     out = S.random_outputs(layout, slots, np.random.default_rng(5))
     sc = G.StepCommitter(plan, 0, slots, KEY)
