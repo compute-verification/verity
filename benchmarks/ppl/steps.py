@@ -1036,7 +1036,7 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 
 #: the noise rules `served` adds to the integer product and serves
-SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn2", "raw_byte")
+SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_pd", "ssn2", "raw_byte")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
@@ -1120,7 +1120,9 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
     {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn_1l5` the same with five step-0 lanes
     (S = 1 + ceil((k - 27) / 31), a1 bits m x 5, C `ssn_code5`); `ssn_1l_hw` is `ssn_1l` hardened: a1 uniform on
     {0, ..., 15}^(m x 4) and every later step t adds s_t[j] (1 + 2 b_t), b bits m x (S - 1) and s the public column
-    signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn2` adds a b - S, a and b bits (m x S x 4 and
+    signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn_pd` is `ssn_1l` with its later steps' row bits
+    folded out at the conversion (the same coins drawn, a1 C less rint(sum C / 2) served); `ssn2` adds a b - S, a and b
+    bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
     `fused`: the row coins are one draw per fused call (`FUSED`), shared by q, k and v and by gate and up, as served;
     otherwise each projection draws its own. torch.round rounds half to even, as rint does."""
@@ -1128,15 +1130,15 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
     (m, k), n = mm.x.shape, acc.shape[1]
     s = -(-k // SSN_DATA)
     stream = FUSED.get(mm.name) if fused else None
-    if rule in ("ssn_1l", "ssn_1l5"):
-        five = rule == "ssn_1l5"
+    if rule in ("ssn_1l", "ssn_1l5", "ssn_pd"):
+        five, pd = rule == "ssn_1l5", rule == "ssn_pd"
         s = 1 + -(-(k - (SSN_1L5_DATA if five else SSN_DATA)) // SSN_1L_DATA)
         off = fused_offset(mm.name, k, n)
         code = mm.shared(("ssn_code5" if five else "ssn_code", n, off, str(acc.device)),
                          lambda: (ssn_code5(n, off) if five else ssn_a_w0(n, SSN_DATA, off)[0]).to(acc.device))
-        lanes = mm.coins((m, s - 1), 2 ** bits, name=stream).double().sum(1, keepdim=True)
+        lanes = mm.coins((m, s - 1), 2 ** bits, name=stream).double().sum(1, keepdim=True) * (not pd)
         a1 = mm.coins((m, code.shape[0]), 2, name=stream).double()
-        bias = torch.round(code.sum(0) / 2 + (2 ** bits - 1) * (s - 1) / 2)
+        bias = torch.round(code.sum(0) / 2 + (not pd) * (2 ** bits - 1) * (s - 1) / 2)
         top = 0.0
         for i in range(0, m, NOISE_ROWS):
             noise = a1[i:i + NOISE_ROWS] @ code + lanes[i:i + NOISE_ROWS] - bias

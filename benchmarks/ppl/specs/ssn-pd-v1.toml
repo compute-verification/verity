@@ -1,0 +1,10 @@
+description = "ssn-1l-b1-fused-v1 with its later steps' row bits folded out at the conversion (SSN-PD): stock int8, then the integer product plus a1 C less rint(0.5 sum C) per column, a1 fresh bits m x 4 against C (SSN-A's step-0 column code on the fused linear's columns), row coins one draw per fused call, served; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_pd"
+fused = true
