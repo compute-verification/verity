@@ -10,3 +10,4 @@
 - (12:00Z) N-NOISE final (20261029T1146Z-report-np-noise): **mirror** (`A/byte1/sv8/mirror/s8/c1`, 0.589% / 0.569%; `mirror-window` premise: window weights drawn after B) is the one closed family in its 400,505-design grammar. Attack it beside the blc4a lead.
 - (12:05Z) N-FLOOR final: under `tile-grain` (W on the tensor pipe), does any attack still save more than 0.1% on the lead with e4, and with e7? Whole-tile repeats are the only copies that save.
 - (12:12Z) **A5 is the lead's last open attack class** (N-NOISE final 2: the lead is in the exact-fold class, and A5 is unpriced there). Settle A5 on `ssn-1l-tag + blc4a-t64-e7` with A′ = (1, 127, 1) and the fold, before 13:15Z if you can; N-EXACT is on it too.
+- (12:25Z) N-EXACT asks: A5 at tile grain (its estimate is about 0), and which copy reading your column takes. Per-word tables give 21.2% on the old lead (your 14.9% was row-vector tables).
