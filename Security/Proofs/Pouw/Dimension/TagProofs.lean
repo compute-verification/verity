@@ -16,6 +16,11 @@ equals their coin difference there.
   a `q^−|J|` share of the draws.
 * **At least `1/q` for a one-digit difference** (`col_card_single`): for `d = δ·e_k` and a target `δ·(s − h)`, exactly
   `q^(|ι|−1)`. Summed over the draws (`tile_sum_agree`), the expected number of agreeing columns in `J` is `|J|/q`.
+* **The success set** (`tag_success_set`): over any family of row pairs, tiles and tries fixed before the draw, the
+  draws on which some pair's tiles are equal are at most the sum of the members' `q^−|J|` shares.
+
+Exact tile equality is what these bound. A run that patches a tile from another word by word (the chunk model's
+`pathRun_attained`) saves the agreeing columns instead, `|J|/q` of them on average for a one-digit difference.
 -/
 
 namespace Pouw.Dimension.Tag
@@ -163,5 +168,22 @@ theorem tag_tile_le (h : ℤ) (d : ι → ℤ) {k : ι} (hk : d k ≠ 0) (J : Fi
         congr 2
         rw [filter_not, card_sdiff_of_subset (by simp), card_univ, Fintype.card_fin]
         simp
+
+/-- **The success set**: for any family `R` of (row pair, tile, try) fixed before the draw, each with tags differing
+(`d r (k r) ≠ 0`) and coin differences `c r`, the draws on which some member's tiles are equal number at most the sum
+of `tag_tile_le`'s bounds, a `Σ_r q^−|J r|` share. A prover that tries `T` inputs chosen before the draw is the family
+with `T` times the members. -/
+theorem tag_success_set {R : Type} (F : Finset R) (h : ℤ) (d : R → ι → ℤ) (k : R → ι)
+    (hk : ∀ r ∈ F, d r (k r) ≠ 0) (J : R → Finset (Fin n)) (c : R → Fin n → ℤ) :
+    (univ.filter fun G : Fin n → ι → Fin q => ∃ r ∈ F, ∀ j ∈ J r, tagTerm h (d r) (G j) = c r j).card ≤
+      ∑ r ∈ F, (q ^ (Fintype.card ι - 1)) ^ (J r).card * (q ^ Fintype.card ι) ^ (n - (J r).card) := by
+  calc _ ≤ (F.biUnion fun r => univ.filter fun G : Fin n → ι → Fin q =>
+          ∀ j ∈ J r, tagTerm h (d r) (G j) = c r j).card := by
+        refine card_le_card fun G hG => ?_
+        obtain ⟨r, hr, hG⟩ := (mem_filter.1 hG).2
+        exact mem_biUnion.2 ⟨r, hr, mem_filter.2 ⟨mem_univ _, hG⟩⟩
+    _ ≤ ∑ r ∈ F, (univ.filter fun G : Fin n → ι → Fin q => ∀ j ∈ J r, tagTerm h (d r) (G j) = c r j).card :=
+        card_biUnion_le
+    _ ≤ _ := sum_le_sum fun r hr => tag_tile_le h (d r) (hk r hr) (J r) (c r)
 
 end Pouw.Dimension.Tag
