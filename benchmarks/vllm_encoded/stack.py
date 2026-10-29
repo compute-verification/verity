@@ -106,7 +106,7 @@ class Stack:
         if encoded:
             self.key = BW.lib_key(wt, self.k)
             BW.set_key(wt, torch, self.key)
-        BW.set_sketch_tag(wt)
+        BW.set_receipt_prefix(wt)
         BW.set_pass(wt, T)
         sb = BW.sketch_bits(wt, BW.window_seed(wt), 16, SKT.vector_bytes(wt.sb, T))
         self.signs = torch.from_numpy(BW.pass_signs(wt, sb, T).view(np.int32)).cuda()
@@ -259,7 +259,7 @@ class StackLinear:
         """The launch at m and cfg, not run: its rc and CTA groups."""
         launched = ctypes.c_int(0)
         if self.st.encoded:
-            rc = self.fused(self.k, None, None, None, m, self.n, self.kd, 0, 0, cfg[0], cfg[1], 0, 0, None, None, 0,
+            rc = self.fused(self.k, None, None, None, m, self.n, self.kd, 0, 0, cfg[0], cfg[1], 0, None, None, 0,
                             16, None, None, T, 2, ctypes.byref(launched), stream())
         else:
             rc = self.st.wt.so.wt_gemm(3 if self.bf else 0, None, None, None, m, self.n, self.kd, 0, cfg[0], cfg[1],
@@ -299,7 +299,7 @@ class StackLinear:
         if st.encoded:
             tags = st.tags if tags is None else tags
             rc = self.fused(self.k, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n, self.kd,
-                            self.base, 1, cfg[0], cfg[1], gr, 0, steps.data_ptr(), tags.data_ptr() + wt.tag_bytes * at,
+                            self.base, 1, cfg[0], cfg[1], gr, steps.data_ptr(), tags.data_ptr() + wt.tag_bytes * at,
                             wt.jbase + at, 16, st.frags.data_ptr(), None, T, 2, None, stream())
         else:
             rc = wt.so.wt_gemm(3 if self.bf else 0, self.store.data_ptr(), x8.data_ptr(), part.data_ptr(), m, self.n,
