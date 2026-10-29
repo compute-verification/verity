@@ -353,11 +353,13 @@ def specs(width, timeout, quick, which="window"):
             add(target, 1, "plain", 3, width, phase=0)
         add("zero", 1, "basisrc", 3, width, phase=0)
         for start, Ls in (("zero", {1: (1,), 2: (3, 4)}), ("key", {1: (2, 3), 2: (5,)}), ("rowcol", {1: (2, 3), 2: (5,)})):
+            # at a start N_0 is fixed by (key group, row, column), so a group's outputs are one rows x columns matrix;
+            # 8 x 8 keeps it twice the bits the free row and column terms carry, where 4 x 4 lets them encode it
             for s, ls in Ls.items():
                 for L in ls:
-                    add("zero", s, "plain", L, width, grid=(3, 4, 4, 1), start=start)
+                    add("zero", s, "plain", L, width, grid=(2, 8, 8, 1), start=start)
                     if s == 2:
-                        add("zero", s, "plain", L, 6, grid=(3, 4, 4, 1), start=start)
+                        add("zero", s, "plain", L, 6, grid=(2, 8, 8, 1), start=start)
         return out
     for target in ("zero", "offset", "words"):
         for s in (1, 2, 3):
