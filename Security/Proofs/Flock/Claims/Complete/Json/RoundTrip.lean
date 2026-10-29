@@ -247,12 +247,10 @@ theorem str_esc (k : Nat) (acc : String) (cs rest : List Char) (o o' : Nat) (ch 
     (h : escapedChar cs (o + 1) = .ok rest o' ch) : str (k + 1) acc ('\\' :: cs) o = str k (acc.push ch) rest o' := by
   rw [str, if_neg (by decide), if_pos rfl, h]
 
-theorem escapedChar_high (cs rest : List Char) (o o' hi : Nat) (h : hexN 4 0 cs (o + 1) = .ok rest o' hi)
-    (h1 : 0xD800 ≤ hi) (h2 : hi < 0xDC00) :
-    escapedChar ('u' :: cs) o = match finishPair hi rest o' with
-      | some (cs', o', c) => .ok cs' o' c
-      | none => .ok rest o' '\ufffd' := by
-  simp only [escapedChar, h, show ¬ hi < 0xD800 by omega, show hi < 0xE000 by omega, h2, ↓reduceIte]
+theorem escapedChar_high (cs rest cs' : List Char) (o o' o'' hi : Nat) (c : Char)
+    (h : hexN 4 0 cs (o + 1) = .ok rest o' hi) (h1 : 0xD800 ≤ hi) (h2 : hi < 0xDC00)
+    (hf : finishPair hi rest o' = some (cs', o'', c)) : escapedChar ('u' :: cs) o = .ok cs' o'' c := by
+  simp only [escapedChar, h, show ¬ hi < 0xD800 by omega, show hi < 0xE000 by omega, h2, ↓reduceIte, hf]
 
 theorem finishPair_low (cs rest : List Char) (o o' hi v : Nat) (h : hexN 3 0 cs (o + 3) = .ok rest o' v)
     (hv : 0xC00 ≤ v) (hc : (hi % 0x400 * 0x400 + v % 0x400 + 0x10000).isValidChar) :
@@ -286,7 +284,7 @@ theorem escU_pair (c : Char) (hge : 0x10000 ≤ c.toNat) :
   rw [hcv', Char.ofNat_toNat] at hfp
   have hhi := hexN_hex4 (0xD800 + q) (by omega) ('\\' :: 'u' :: 'd' :: (t ++ tail)) (o + 1 + 1)
   rw [str_esc k acc _ tail o (o + 1 + 1 + 4 + 3 + 3) c]
-  rw [escapedChar_high _ _ _ _ _ hhi (by omega) (by omega), hfp]
+  exact escapedChar_high _ _ _ _ _ _ _ _ hhi (by omega) (by omega) hfp
 
 theorem escU_bmp (c : Char) (hlt : c.toNat < 0x10000) : EscC c ("\\u" ++ Flock.hex4 c.toNat).toList := by
   have hcv : c.toNat < 0xd800 ∨ (0xdfff < c.toNat ∧ c.toNat < 0x110000) := c.valid
