@@ -1,7 +1,7 @@
-# VF3j: The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes (RS-W′ round 9); the adopted vector.
+# VF3j: The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes; the adopted vector.
 name = "VF3j"
 epoch = "VF3j"
-summary = "The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes (RS-W′ round 9); the adopted vector."
+summary = "The strict VF3i with its untimed assumptions timed: a SHFL row, the TEX cap, TMA size classes and gather4 classes; the adopted vector."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

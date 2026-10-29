@@ -1,7 +1,7 @@
-# VF3n-16: VF3m-16 with the joint issue rows refit over every native MMA form (EPS1 TENSOR M1): JI3e_0..2, which IMMA m16n8k16 and TF32 k4 beat, close for JI3n_0..2 at the 2% noise margin and ÷ 1.07 for the schedule spread between builds, and each MMA form is its own kind on them.
+# VF3n-16: VF3m-16 with the joint issue rows refit over every native MMA form: JI3e_0..2, which IMMA m16n8k16 and TF32 k4 beat, close for JI3n_0..2 at the 2% noise margin and ÷ 1.07 for the schedule spread between builds, and each MMA form is its own kind on them.
 name = "VF3n-16"
 epoch = "VF3n-16"
-summary = "VF3m-16 with the joint issue rows refit over every native MMA form (EPS1 TENSOR M1): JI3e_0..2, which IMMA m16n8k16 and TF32 k4 beat, close for JI3n_0..2 at the 2% noise margin and ÷ 1.07 for the schedule spread between builds, and each MMA form is its own kind on them."
+summary = "VF3m-16 with the joint issue rows refit over every native MMA form: JI3e_0..2, which IMMA m16n8k16 and TF32 k4 beat, close for JI3n_0..2 at the 2% noise margin and ÷ 1.07 for the schedule spread between builds, and each MMA form is its own kind on them."
 superseded_by = "VF3o-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",

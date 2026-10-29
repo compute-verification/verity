@@ -1,9 +1,9 @@
-# Dither-C (decision 79; was Bc, CHECKED-STRIP's CO-Dither): co32c on the linears and lm_head (every limb a checked
-# word), cohalf on QKᵀ, and P·V on committed digit limbs (`pv`, CHECKED-STRIP Result 3): P served round(P / s) + c with
+# Dither-C (formerly CO-Dither): co32c on the linears and lm_head (every limb a checked
+# word), cohalf on QKᵀ, and P·V on committed digit limbs (`pv`): P served round(P / s) + c with
 # a fresh bit c and c's mean taken off in the epilogue, V served, Ycum's digits committed, so no product is unchecked;
 # what the cheater gets free is vector work, the TS-time ε_skip below. Perplexity +2.20% (8B WT-2 2K), +3.32% (70B C4
 # 2K) with P in one block; +1.65% (8B) in blocks of 256 keys, whose TS ε_skip grows as keys/256 (eps_budget.py's
-# `pv_block_table`: at the measured costs 3.4% (8B) / 1.9% (70B) of the whole at 32K, served output free), on SKIP's
+# `pv_block_table`: at the measured costs 3.4% (8B) / 1.9% (70B) of the whole at 32K, served output free), on the
 # `co32c-pv` arms (`co32c-pv256` and up for blocks of keys).
 name = "dither-c"
 title = "Dither-C"
