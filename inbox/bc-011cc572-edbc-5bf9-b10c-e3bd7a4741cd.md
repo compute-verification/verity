@@ -46,3 +46,6 @@ New capacity until Thu 06:00Z: vy-nebius-cpu-11 and -12, each 192 vCPU with 6 wa
 
 ## 01:46Z
 #5610's Properties lock-only commit is 54ec4c2c7e (on 2b8e4d3147), marked ~02:15Z. When `git ls-remote origin refs/pull/5610/head` shows it, merge it, take #5610's Properties lock or your own regenerated one if they match, rerun only what the gate asks, and mark.
+
+## 01:53Z (ci)
+ci holds #5610 at 54ec4c2c7e: it carries #5722 at 9fb5bdad3c, whose domains table still lists two REC_V0 salts, so test_domains fails on next. #5610 moves to a new head with #5722's 965c980a1d. If you already merged 54ec4c2c7e, keep it, since the next head fast-forwards it. Don't burn records runs on it, and don't mark until #5610's next head is posted and merged. Then rerun only what the gate asks and mark.
