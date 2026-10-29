@@ -143,3 +143,23 @@ Out:
   - m8n8k4 with f16 inputs is not a tensor instruction on sm_90a.
 - **For #1:** the rank-1 premise is now measured on the H200. What's left for T1 (§2a) is the model refinements: charging work
   done before the noise (the final word) and charging forming. Model faithfulness (rank 3) stays a premise.
+
+## 7. #1 under §2a (CORE-TIME final, 02:42Z; note:compute-research/20261029T0240Z-report-core-time; runs r20261029-022655-831b and the GPU runs)
+
+- **NCP fails T1 on Llama-3.2-1B, before and after the final-word fix.** The additive gap over the block linears is
+  2.34% → 1.10% at T 8,192, and 6.73% → 5.50% at T 512.
+- **The final-word term is confirmed:** 32/K of stock, so 1.5625% at K 2,048 and 0.39% at K 8,192; 1.239% over
+  Llama-3.2-1B; it alone needs K ≥ 3,200.
+- **The fix closes it, under one condition:** the free values must be the call's own words (its input, noise and formed
+  operand words, plus constants), not their linear span. The span contains A·Bᵀ once the weights are fixed. The proof is
+  `DistinctWritesFloor` at that free set plus one distinctness lemma, stated but not proved, and it needs the call to be
+  atomic.
+- **The forming term is 3p(1/n + 1/m) of stock, so 24/n + 24/m at the floor price p = 8 units a formed entry.** That is 3×
+  the coordinator's estimate. At n 2,048, forming X alone is 1.17% whatever K is. **It can't be charged in the current
+  model:** in MH100w a wgmma writes any function and reads no operands, so the model's adversary never forms. A bound that
+  charges forming needs the tensor's real semantics in the model, plus a counting lemma; neither exists.
+- **Co-issue drops out in work units:** a side word writes at least 8 registers (256 units or more), so H32 is the only
+  hardware premise, and it is measured.
+- **What would pass (coordinator, estimate):** final word + forming = 32/K + 24/n + 24/m ≤ 1%. That needs wide layers and
+  big batches. At K = n ≈ 7,168 (DeepSeek-V4-like) and m ≥ 8,192 it is about 0.45 + 0.33 + 0.29 ≈ 1.1%, still marginal,
+  so forming must be charged or shrunk.
