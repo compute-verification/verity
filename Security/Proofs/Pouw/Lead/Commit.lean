@@ -1,3 +1,5 @@
+import Proofs.Pouw.Lead.Commit.Hybrid
+
 /-!
 # The lead's commitments
 
