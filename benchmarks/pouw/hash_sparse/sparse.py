@@ -20,14 +20,20 @@ Checks (exact integer arithmetic, small shapes, seeded):
                    linear  N <- N k + D: at zero data the state is a row term plus a column term, one write an output
                    xor     N <- N ^ D: one LOP3 folds two words, 1.5 writes a step against the honest 2
                    keyed   N <- N ^ (D & K_t), K_t a live u32 a step and call: the sparse and skip adversaries' states
-                           differ; the cheapest adversary found writes every word and folds it, 2 writes a step
+                           differ; the cheapest word-grain adversary writes every word and folds it, 2 writes a step
+  bitslice_xor   the keyed xor fold at zero data, 32 outputs of a row a register a bit: the carry chain of row prefix
+                 plus column prefix and paired folds of the carries, bit for bit, in fewer writes a step than the
+                 honest 2
+  mulfold        N <- (N ^ D_t) k_t, k_t a live odd u32: each step a permutation; the word-grain adversary matches at
+                 the honest 3 writes a step; sparse and skip adversaries miss; no row-plus-column form over Z or
+                 GF(2); a bit-sliced multiply by k_t costs tens of LOP3s a step
   lop3_fanin     over all 256 LOP3 functions and every input triple from the registers at hand (the state, two words,
                  the 16 bitwise functions of two keys): none computes two keyed steps, and none fuses a word's last
                  add into its fold.
 
 Pricing (estimates on stated parts): h (honest hashing over stock, W1), the fold's own work, T1 and T2 at T 512 x 64,
 T 512 x 512 and T 8,192 on Llama-3.2-1B's linears, for the lead, sparse commits under DistinctWrites alone, and the
-keyed fold with SHA-512 on the prover or on the certifier (R1), with per-period pools on the card's basis.
+folds with SHA-512 on the prover or on the certifier (R1), with per-period pools on the card's basis.
 
 usage: sparse.py [OUT.json]
 """
@@ -303,6 +309,116 @@ def folds(rng, m=32, n=24, tile=8, s_steps=16, r=4):
     return res
 
 
+def bitslice_xor(rng, rows=8, tile=4, s_steps=64, transpose_ops=320):
+    """The keyed xor fold at zero data, 32 outputs of one row a register a bit (bit j of register b is bit b of output
+    j). D_t = R_t + C_jt with R_t the row's prefix, the same in every lane, so the adversary runs the carry chain, one
+    LOP3 a bit (maj with a broadcast register), up to the key's top set bit, folds each set bit's carry two steps a
+    LOP3 (N_b ^ c ^ c'), and adds the row's and column's parities of A and B once at the end. Core LOP3s counted
+    exactly; transposes, column prefixes and broadcasts amortized at Llama's shapes (64-row tiles)."""
+    m, n = rows, 32
+    z = np.zeros((m, 28 * s_steps), dtype=np.int64), np.zeros((n, 28 * s_steps), dtype=np.int64)
+    honest, coins, rowbit = served_words(rng, z[0], z[1], tile)
+    keys = rng.integers(0, 1 << 32, s_steps, dtype=np.int64)
+    want = fold(honest, "keyed", keys[:, None, None])
+    w = np.array(LANE_W, dtype=np.int64)
+    rowp = np.cumsum(1 + rowbit, 0) & U32
+    colp = np.cumsum(np.einsum("e,setn->stn", w, coins), 0) & U32
+    lanes = 1 << np.arange(32, dtype=np.int64)
+    ok, ops = True, 0
+    for i in range(m):
+        cb = [[int(((colp[t, i // tile] >> b) & 1) @ lanes) for b in range(32)] for t in range(s_steps)]
+        ab = [[U32 if (int(rowp[t, i]) >> b) & 1 else 0 for b in range(32)] for t in range(s_steps)]
+        st, pend, par = [0] * 32, [None] * 32, [0] * 32
+        for t in range(s_steps):
+            kt, carry = int(keys[t]), 0
+            for b in range(kt.bit_length()):
+                if b:
+                    x, y = ab[t][b - 1], cb[t][b - 1]
+                    carry = (x & y) | (x & carry) | (y & carry)
+                    ops += 1
+                if (kt >> b) & 1:
+                    par[b] ^= ab[t][b] ^ cb[t][b]
+                    if not b:
+                        continue
+                    if pend[b] is None:
+                        pend[b] = carry
+                    else:
+                        st[b] ^= pend[b] ^ carry
+                        pend[b] = None
+                        ops += 1
+        for b in range(32):
+            st[b] ^= (pend[b] or 0) ^ par[b]
+            ops += 1 + (pend[b] is not None)
+        got = np.array([sum(((st[b] >> j) & 1) << b for b in range(32)) for j in range(32)], dtype=np.int64)
+        ok &= bool((got == want[i]).all())
+    core = ops / (m * 32 * s_steps)
+    amort = {}
+    for k_steps, n_cols in ((lead_steps(2048), 2048), (lead_steps(8192), 2048)):
+        cols = (2 * 32 + transpose_ops + 16) / (64 * 32)
+        bcast = 32 / n_cols
+        out_t = transpose_ops / (32 * k_steps)
+        adv = core + cols + bcast + out_t
+        amort[f"S{k_steps}"] = {"column_prefix_transpose": cols, "row_broadcast": bcast, "state_transpose": out_t,
+                                "writes_a_step": adv, "t1_percent_against_honest_2": 100 * (2 - adv) * H32 / 28}
+    return {"state_match": ok, "core_lop3_a_step": core, "honest_writes_a_step": 2, "llama": amort}
+
+
+def naf_weight(k):
+    w = 0
+    while k:
+        if k & 1:
+            k -= 2 - (k & 3)
+            w += 1
+        k >>= 1
+    return w
+
+
+def separable_share(st, tile):
+    """Share of 2 x 2 output minors inside a coin tile on which a row-plus-column form fails, over Z/2^32 and over
+    GF(2)^32."""
+    rows = np.array([i for i in range(st.shape[0] - 1) if (i + 1) % tile])
+    a, b = st[rows, :-1], st[rows + 1, 1:]
+    c, d = st[rows, 1:], st[rows + 1, :-1]
+    return {"z": float((((a + b - c - d) & U32) != 0).mean()), "gf2": float(((a ^ b ^ c ^ d) != 0).mean())}
+
+
+def mulfold(rng, m=32, n=24, tile=8, s_steps=16, r=4):
+    """N <- (N ^ D_t) k_t, k_t a live odd u32 a step and call: each step permutes the state. Zero data: the word-grain
+    adversary (IADD3 for D_t from the prefixes, LOP3, IMUL) matches at 3 writes a step, the honest's (MMA, LOP3, IMUL);
+    the sparse and skip adversaries miss; the state is no row-plus-column form over Z or GF(2), unlike the linear fold.
+    A bit-sliced multiply by k_t costs (NAF weight - 1) ripple adds of 2 LOP3s a bit for 32 outputs."""
+    z = np.zeros((m, 28 * s_steps), dtype=np.int64), np.zeros((n, 28 * s_steps), dtype=np.int64)
+    honest, coins, rowbit = served_words(rng, z[0], z[1], tile)
+    ks = rng.integers(0, 1 << 31, s_steps, dtype=np.int64) * 2 + 1
+
+    def mf(words):
+        st = np.zeros(words.shape[1:], dtype=np.int64)
+        for t in range(words.shape[0]):
+            st = ((st ^ (words[t] & U32)) * int(ks[t])) & U32
+        return st
+
+    want = mf(honest)
+    w = np.array(LANE_W, dtype=np.int64)
+    words = np.cumsum(1 + rowbit, 0)[:, :, None] + np.repeat(np.cumsum(np.einsum("e,setn->stn", w, coins), 0), tile, 1)
+    idx = np.arange(r - 1, s_steps, r)
+    near = np.stack([honest[idx[min(np.searchsorted(idx, t), len(idx) - 1)]] for t in range(s_steps)])
+    skip = honest.copy()
+    skip[s_steps // 2] = honest[s_steps // 2 - 1]
+    x = rng.integers(0, 1 << 32, 4096, dtype=np.int64)
+    perm = all(len(np.unique(((x ^ int(d)) * int(k)) & U32)) == len(np.unique(x))
+               for d, k in zip(rng.integers(0, 1 << 32, 8), ks[:8]))
+    keyed = fold(honest, "keyed", rng.integers(0, 1 << 32, s_steps, dtype=np.int64)[:, None, None])
+    lin = fold(honest, "linear")
+    naf = [naf_weight(int(k)) for k in ks]
+    return {"word_grain_adv_state_match": bool((mf(words) == want).all()), "word_grain_adv_writes_a_step": 3,
+            "honest_writes_a_step": 3, "step_is_permutation": perm,
+            "sparse_words_state_differs_share": float((mf(near) != want).mean()),
+            "skip_one_word_state_differs_share": float((mf(skip) != want).mean()),
+            "separable_share": {"mulfold": separable_share(want, tile), "xor_keyed": separable_share(keyed, tile),
+                                "linear": separable_share(lin, tile)},
+            "bitslice_mul_lop3_a_step_mean": float(np.mean([(v - 1) * 2 * 32 / 32 for v in naf]))}
+
+
 def lop3_fanin(rng, cases=64):
     """For each input triple from the registers at hand, a LOP3 exists computing `target` iff the target's bit is
     constant on every minterm class of the triple's bits. Registers: N, D1, D2 and the 16 bitwise functions of K1, K2
@@ -375,17 +491,17 @@ def price(words_a_output_fn, fold_ops_a_word=0.0):
     return {"h": (sha + sha_a) / mac, "h_words": sha / mac, "h_a": sha_a / mac, "o": o}
 
 
-def t2_fold(point, words_ratio, r1=False):
-    """T2 of the keyed fold (estimate): the hash stream scaled by the bytes hashed; the GEMM stream with the export
-    GEMMs replaced by the fold's (no-export GEMM plus one LOP3 a word, at an issue slot or the INT pipe a lane); the
-    lane-coin link unchanged; calibrated by the lead's beside / max(streams)."""
+def t2_fold(point, words_ratio, r1=False, ops=1):
+    """T2 of a fold (estimate): the hash stream scaled by the bytes hashed; the GEMM stream with the export GEMMs
+    replaced by the fold's (no-export GEMM plus `ops` integer ops a word, each at an issue slot or the INT pipe a
+    lane); the lane-coin link unchanged; calibrated by the lead's beside / max(streams)."""
     p = POINTS[point]
     stock = p["beside"] / p["t2"]
     words = p["rows"] * sum(n * lead_steps(k) for _, k, n in LLAMA) * LLAMA_LAYERS
     export_ms = p["export"] if p["export"] is not None else words * sum(EXPORT_UNITS) / 2 / SM_UNITS_S * 1e3
-    fold_ms = [words * (NOEXPORT_UNITS[i] + FOLD_ISSUE[i]) / SM_UNITS_S * 1e3 for i in (0, 1)]
+    fold_ms = [words * (NOEXPORT_UNITS[i] + ops * FOLD_ISSUE[i]) / SM_UNITS_S * 1e3 for i in (0, 1)]
     if p["export"] is not None:
-        fold_ms = [export_ms * (NOEXPORT_UNITS[i] + FOLD_ISSUE[i]) / EXPORT_UNITS[i] for i in (0, 1)]
+        fold_ms = [export_ms * (NOEXPORT_UNITS[i] + ops * FOLD_ISSUE[i]) / EXPORT_UNITS[i] for i in (0, 1)]
     gemm = [p["gemm"] - export_ms + f for f in fold_ms]
     calib = p["beside"] / max(p["hash"], p["gemm"])
     if r1:
@@ -427,12 +543,13 @@ def pricing():
     designs = {
         "lead (every k32 word)": price(lead_steps),
         "sparse every 2nd word (DistinctWrites only)": price(lambda k: math.ceil(lead_steps(k) / 2)),
-        "keyed fold, N_T and D_T committed": price(lambda k: 2, 1.0),
-        "keyed fold, N_T only": price(lambda k: 1, 1.0),
+        "keyed xor fold, N_T and D_T committed": price(lambda k: 2, 1.0),
+        "mul-xor fold, N_T and D_T committed": price(lambda k: 2, 2.0),
+        "mul-xor fold, N_T only": price(lambda k: 1, 2.0),
     }
     for d in designs.values():
         d["cut"] = lead["h"] / d["h"] if d["h"] else float("inf")
-    designs["keyed fold + R1 (certifier hashes)"] = {"h": 0.0, "o": price(lambda k: 2, 1.0)["o"], "cut": float("inf")}
+    designs["mul-xor fold + R1 (certifier hashes)"] = {"h": 0.0, "o": price(lambda k: 2, 2.0)["o"], "cut": float("inf")}
     words_avg = words / out
     ratio2 = (8 * out + a_bytes / 1.0) / (4 * words + a_bytes)
     t1 = {}
@@ -441,11 +558,13 @@ def pricing():
         t1[name] = {"lead": p["t1"], "lead_residual_coin_terms": resid, "lead_hiding": p["hide"],
                     "fold_estimate": resid + p["hide"] + CHUNK_HEAD * 2 / words_avg,
                     "sparse_r2_distinctwrites": 100 * (1 - 0.5) * (32 / 28)}
-    t2 = {name: {"fold": t2_fold(name, ratio2), "fold_r1": t2_fold(name, 0.0, r1=True)} for name in POINTS}
+    t2 = {name: {"xor_fold": t2_fold(name, ratio2), "mulfold": t2_fold(name, ratio2, ops=2),
+                 "mulfold_r1": t2_fold(name, 0.0, r1=True, ops=2)} for name in POINTS}
+    best = designs["mul-xor fold, N_T and D_T committed"]
     return {"lead": lead, "designs": designs, "words_a_output_avg": words_avg, "hashed_bytes_ratio_fold": ratio2,
             "t1_percent": t1, "t2": t2,
-            "per_period": {"lead_h": per_period(lead["h"]), "fold_h": per_period(designs["keyed fold, N_T and D_T committed"]["h"]),
-                           "fold_o": per_period(designs["keyed fold, N_T and D_T committed"]["o"]),
+            "per_period": {"lead_h": per_period(lead["h"]), "fold_h": per_period(best["h"]),
+                           "fold_o": per_period(best["o"]),
                            "fold_t1_8192": per_period(t1["T 8,192"]["fold_estimate"] / 100),
                            "fold_t1_64": per_period(t1["T 512 x 64"]["fold_estimate"] / 100)}}
 
@@ -458,6 +577,8 @@ def main():
         "exact_chain": exact_chain(rng),
         "checkpoint": checkpoint(rng),
         "folds": folds(rng),
+        "bitslice_xor": bitslice_xor(rng),
+        "mulfold": mulfold(rng),
         "lop3_fanin": lop3_fanin(rng),
         "pricing": pricing(),
     }
