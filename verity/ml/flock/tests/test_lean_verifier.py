@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -162,13 +163,23 @@ def _ref_bernoulli(a, b, n, stream):
     return out
 
 
+#: the challenger's coins for a draw that names none: the verifier has no coins of its own
+_COINS = random.Random(20261029)
+
+
+def _with_coins(args):
+    return args if "--stream" in args or "--stream-file" in args else [*args, "--stream", _COINS.randbytes(1 << 14).hex()]
+
+
 def _lean_draw_obj(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+                       text=True)
     return json.loads(p.stdout[5:]) if p.stdout.startswith("DRAW ") else None
 
 
 def _lean_draw(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+                       text=True)
     return json.loads(p.stdout[5:])["units"] if p.stdout.startswith("DRAW ") else None
 
 
@@ -189,8 +200,24 @@ def test_unit_draw_samplers_are_the_exact_reduction():
         b = max(b, 1)
         want = _ref_bernoulli(a, b, n % 50 + 1, bytes(stream))
         assert _lean_draw(["--population", str(n % 50 + 1), "--p", f"{a}/{b}", "--stream", stream.hex()]) == want, (a, b, case)
-    units = _lean_draw(["--population", "1000", "--k", "10"])
-    assert len(set(units)) == 10 and units == sorted(units) and all(0 <= u < 1000 for u in units)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
+    """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a draw that reads coins is
+    refused before any is read, whatever its law, and only a draw of every unit, which reads none, is drawn."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+
+    def draw(*args):
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+
+    for args in (["--population", "1000", "--k", "10"], ["--population", "8", "--p", "1/2"],
+                 ["--population", "8", "--k", "7"]):
+        p = draw(*args)
+        assert p.returncode == 2 and not p.stdout and "draws no coins of its own" in p.stderr, (args, p)
+    for args, n in ((["--population", "8", "--k", "8"], 8), (["--population", "5", "--p", "3/3"], 5)):
+        p = draw(*args)
+        assert p.returncode == 0 and json.loads(p.stdout[5:])["units"] == list(range(n)), (args, p)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -235,7 +262,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
 
     def draw(k, reg, population=512):
         p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", str(population), "--k", str(k),
-                            "--registration", str(reg)], capture_output=True, text=True)
+                            "--registration", str(reg), "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
     for k, other in ((2, 8), (8, 2)):
@@ -267,8 +294,8 @@ def test_a_draw_over_several_tables_has_a_count_they_split():
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def draw(*args):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args],
-                           capture_output=True, text=True)
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args,
+                            "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
     rc, out, err = draw("--p", "1/2", "--tables", "2")
@@ -643,7 +670,7 @@ def _one_stage_draw():
 def test_stratified_draw_agrees_with_core(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
-                        "--out", str(tmp_path), "--random", "20", "--os-draws", "100"], capture_output=True, text=True)
+                        "--out", str(tmp_path), "--random", "20", "--draws", "100"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
 @pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors (PR #131)")
