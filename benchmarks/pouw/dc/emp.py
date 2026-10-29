@@ -1,6 +1,6 @@
 """RT-H200-EMP: every timed loop of a probe run against the data-sheet machine's facets, DS-90's rows (sm_90).
 
-  python3 emp.py RUN_OUT SASS_DIR [--json OUT]
+  uv run python emp.py RUN_OUT SASS_DIR [--json OUT]
 
 RUN_OUT is `emp.sh time`'s output (each binary's rows.jsonl and gate.json under RUN_OUT/<binary>/); SASS_DIR is
 `emp.sh build`'s sass/ (cuobjdump -sass of each binary). A row's rates are the gated patterns' warp instructions a SM
@@ -8,12 +8,14 @@ a clock; a loop's trip rate is one of them over its count, and every opcode in t
 gate's addresses) runs at its count times that. Each facet's occupancy is its SMSP-cycles over SMSP-cycles:
 
   issue   1 a warp instruction, every opcode, uniform included (A2, A2u)
-  tensor  MACs over a quarter of the type's dense peak a SM-clock: s8/u8/e4m3/e5m2 4096, f16/bf16 2048, tf32 1024; a
-          2:4 sparse form at its dense equivalent (A3); BGMMA/BMMA none (DS-90 prices b1 on issue alone)
+  tensor  MACs over a quarter of the type's dense peak a SM-clock (the H200 card's rate.tensor over the format's weight,
+          verity/hardware/cards/h200-sxm-141gb.toml); a 2:4 sparse form at its dense equivalent (A3); BGMMA/BMMA none
+          (DS-90 prices b1 on issue alone)
   alu     2 (logic, shift, LEA, IADD3, compares: 64 results a SM-clock, A4); imad 2 (IMAD*); shfl 4 (SHFL)
 
 The sheet holds a loop iff every facet is at most 1. Any facet above 1 is a measured rate above the sheet's ceiling.
-Also printed: the SM clock each probe ran at (A1: fmax 1980 MHz) and the tensor slots a SM-clock (wgmma s8 n256 = 128).
+Also printed: the SM clock each probe ran at (A1: fmax, the card's clock.sm) and the tensor slots a SM-clock (wgmma s8
+n256 = 128).
 The clock is read two ways: NVML's sample during the item, and the event clock, the longest block's cycles over the
 item's event time a call (times.jsonl), a lower bound on the clock the loop ran at. Under a saturated wgmma the two
 disagree (NVML reads up to 28% high), so a rate a second is the MAC/clk times the event clock, not NVML's.
@@ -28,8 +30,12 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-FMAX_MHZ = 1980
-PEAK = {"S8": 4096, "U8": 4096, "E4M3": 4096, "E5M2": 4096, "F16": 2048, "BF16": 2048, "TF32": 1024}
+from verity.hardware import load, number
+
+CARD = load("h200-sxm-141gb")
+FMAX_MHZ = CARD["clock"]["sm"]["value"]
+PEAK = {f.upper(): int(number(CARD["rate"]["tensor"]) / number(CARD["weight"][f]))
+        for f in ("s8", "u8", "e4m3", "e5m2", "f16", "bf16", "tf32")}
 ALU = ("LOP3", "IADD3", "SHF", "LEA", "ISETP", "IMNMX", "SEL", "PRMT", "FLO", "POPC", "BREV", "IABS", "VIADD", "BMSK",
        "SGXT", "PLOP3", "VIMNMX")
 LINE = re.compile(r"/\*([0-9a-f]{4,})\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][\w.]*)")
