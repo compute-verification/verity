@@ -37,8 +37,8 @@ variable (R : Receipts n κ X) {m : ℕ} {s : Fin n → ℕ}
 
 /-- **The fork's break at window `t`**: some receipt the window opens in both `ω` and its continuation on `ζ` has two
 different messages of one digest among what the two openings' checks hashed. -/
-def Broken (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ)
-    (t : Fin n) (ω ζ : Coins n κ X) : Prop :=
+def Broken (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ)
+    (t : Fin n) (ω ζ : DrawCoins n κ X) : Prop :=
   ∃ p ∈ D.opened prf rest t ω, p ∈ D.opened prf rest t (cont t ω ζ) ∧
     (Hash.CollisionIn R.hash
         (Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t ω p) (R.rank t ω p) (R.opened t ω p) ++
@@ -50,26 +50,26 @@ def Broken (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) 
 
 /-- **Window `t`'s roots split** between `ω` and its continuation on `ζ`: some receipt the window opens in both has its
 verifier, root or rank differ between them. -/
-def Split (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ)
-    (t : Fin n) (ω ζ : Coins n κ X) : Prop :=
+def Split (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ)
+    (t : Fin n) (ω ζ : DrawCoins n κ X) : Prop :=
   ∃ p ∈ D.opened prf rest t ω, p ∈ D.opened prf rest t (cont t ω ζ) ∧
     ¬ (R.verifier t (cont t ω ζ) p = R.verifier t ω p ∧ R.root t (cont t ω ζ) p = R.root t ω p ∧
       R.rank t (cont t ω ζ) p = R.rank t ω p)
 
 /-- The probability of window `t`'s fork break over a uniform pair of coins. -/
 noncomputable def fork [Fintype X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) : ℝ≥0∞ :=
-  Pous.pr fun y : Coins n κ X × Coins n κ X => R.Broken D prf rest t y.1 y.2
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) : ℝ≥0∞ :=
+  Pous.pr fun y : DrawCoins n κ X × DrawCoins n κ X => R.Broken D prf rest t y.1 y.2
 
 /-- The probability that window `t`'s roots split over a uniform pair of coins. -/
 noncomputable def split [Fintype X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) : ℝ≥0∞ :=
-  Pous.pr fun y : Coins n κ X × Coins n κ X => R.Split D prf rest t y.1 y.2
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) : ℝ≥0∞ :=
+  Pous.pr fun y : DrawCoins n κ X × DrawCoins n κ X => R.Split D prf rest t y.1 y.2
 
 /-- **What window `t`'s fork finder outputs on `(ω, ζ)`**: two different messages `uv` of one SHA-512 digest, both
 among what the checks of the two openings of one receipt the window opens in both runs hashed. -/
-def Finds (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ)
-    (t : Fin n) (ω ζ : Coins n κ X) (uv : Hash.Msg × Hash.Msg) : Prop :=
+def Finds (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ)
+    (t : Fin n) (ω ζ : DrawCoins n κ X) (uv : Hash.Msg × Hash.Msg) : Prop :=
   Claims.Collision (fun u => (R.hash u).bytes) uv.1 uv.2 ∧
     ∃ p ∈ D.opened prf rest t ω, p ∈ D.opened prf rest t (cont t ω ζ) ∧
       ((uv.1 ∈ Hash.RowLeaf.outerHashed R.hash R.hash (R.verifier t ω p) (R.rank t ω p) (R.opened t ω p) ++
@@ -87,8 +87,8 @@ open Classical in
 /-- **Window `t`'s fork finder** at `q` SHA-512 calls: on coins `(ω, ζ)` it outputs what it finds (`Finds`), if
 anything. -/
 noncomputable def finder [Fintype X] [Nonempty X] (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) : Claims.Finder where
-  S := Coins n κ X × Coins n κ X
+    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) : Claims.Finder where
+  S := DrawCoins n κ X × DrawCoins n κ X
   out y := if h : ∃ uv, R.Finds D prf rest t y.1 y.2 uv then some h.choose else none
   cost _ := q
 
