@@ -573,7 +573,7 @@ def test_prices_are_per_device_and_sm120s_are_the_measured_ones():
 @pytest.mark.parametrize("m", [1, 32, 128, 2048])
 @pytest.mark.parametrize("k,n", [(128, 128), (1024, 64), (3584, 4608), (3584, 37888), (18944, 3584), (65536, 16)])
 def test_wref_is_leans_wref_of(m, k, n):
-    """Red team F2: W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
+    """W_ref is Lean's `wrefOfRev1` on every unit shape, and the credit its `creditOfRev1`; the weight side
     is not in either, at any m."""
     s = get("pearl-c-h100-v1")
     sh = Shape(m, k, n)
@@ -582,7 +582,7 @@ def test_wref_is_leans_wref_of(m, k, n):
 
 
 def test_lifecycle_work_has_no_weight_side():
-    """Red team F2: two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
+    """Two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
     from verity.core.protocols.pouw.audit import Epoch, Workload
     from clear_audit import Prover, Verifier
 
