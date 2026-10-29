@@ -71,6 +71,23 @@ def test_merge_folds_to_families_and_bases():
     assert "UTCIMMA" not in sm90["bases"] and "UTCIMMA" in c["sm_100"]["bases"]
 
 
+def test_count_reads_the_writes_off_nvdisasm_life_ranges():
+    """On `nvdisasm -plr -lrm narrow` text each form carries its write histogram, by the header's sections: `^` and `x`
+    count, `v` and `:` don't, a guard is a read; R2P's `PR` has no column (the census's known blind spot), and
+    `merge` sums the histograms."""
+    with (FIX.parent / "sass_census_life.sass").open() as f:
+        obj = sass_count.count(f, "life")
+    a = obj["archs"]["sm_90a"]
+    assert a["funcs"] == 1 and a["instrs"] == 11
+    w = {op: e[2] for op, e in a["ops"].items()}
+    assert w["LDC"] == {"GPR=1": 1} and w["ISETP.GT.AND"] == {"PRED=1": 1} and w["BRA"] == {"-": 1}
+    assert w["LOP3.LUT"] == {"GPR=1 PRED=1": 1} and w["S2UR"] == {"UGPR=1": 1}
+    assert w["IMAD.WIDE.U32"] == {"GPR=2": 1} and w["TLD.LZ"] == {"GPR=4": 1} and w["R2P"] == {"-": 1}
+    assert w["IADD3"] == {"GPR=1": 1, "GPR=1 PRED=1": 1}
+    merged = sass_count.merge([obj, {**obj, "source": "again"}])["sm_90"]["ops"]
+    assert merged["IADD3"]["writes"] == {"GPR=1": 2, "GPR=1 PRED=1": 2}
+
+
 # ---- the classification ---------------------------------------------------------------------------------------------------
 
 

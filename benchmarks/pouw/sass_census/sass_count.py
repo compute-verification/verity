@@ -1,11 +1,19 @@
 """The SASS opcodes a binary holds, counted by architecture: the census RT-ISA diffs against A7's menu.
 
 `count` reads `cuobjdump -sass` (or `nvdisasm`) text on stdin and writes one JSON object: for each architecture a
-section names (`arch = sm_90a`, `code for sm_100a`), its functions, its instructions, and each dotted opcode's count
-with its first instruction as an example (`IMMA.16832.S8.S8`: `R4, R8, R12, R4`). `merge` folds those objects into one
-census an architecture: every dotted opcode, its count, the sources it appears in, an example, and its base opcode.
+section names (`arch = sm_90a`, `code for sm_100a`, nvdisasm's `.target sm_90a`), its functions, its instructions, and
+each dotted opcode's count with its first instruction as an example (`IMMA.16832.S8.S8`: `R4, R8, R12, R4`). `merge`
+folds those objects into one census an architecture: every dotted opcode, its count, the sources it appears in, an
+example, and its base opcode.
+
+On `nvdisasm -plr -lrm narrow` text (a cubin's listing with its register life ranges) `count` also records what each
+instruction writes, from the compiler's own dataflow: the registers its life-range columns mark `^` (written) or `x`
+(read and written), counted in each section the function's header names (`GPR`, `PRED`, `UGPR`, `UPRED`). Each dotted
+opcode then carries `writes`, its instructions' histogram over those counts (`GPR=2 PRED=1`: `n`), which `merge` sums.
+A write the compiler never reads (a dead half, `PT`, `RZ`) has no column, so a form's counts are what its uses wrote.
 
     cuobjdump -sass lib.so | python sass_count.py count --source libcublasLt > lt.json
+    nvdisasm -plr -lrm narrow k.sm_90a.cubin | python sass_count.py count --source k > k.json
     python sass_count.py merge counts/*.json > census.json
     python sass_count.py summary census.json
 
@@ -22,8 +30,20 @@ from pathlib import Path
 #: an instruction line: its address, an optional guard predicate, the dotted opcode and its operands up to the `;`
 INS = re.compile(r"^\s*/\*([0-9a-f]{4,})\*/\s+(?:\{\s*)?(@!?U?P(?:[T0-9]+)\s+)?([A-Z][A-Z0-9_]*(?:\.[A-Za-z0-9_]+)*)"
                  r"\s*([^;]*);")
-ARCH = re.compile(r"^\s*(?:arch = |code for )(sm_\d+[a-z]?)\b")
-FUNC = re.compile(r"^\s*Function : (\S+)")
+ARCH = re.compile(r"^\s*(?:arch = |code for |\.target\s+)(sm_\d+[a-z]?)\b")
+FUNC = re.compile(r"^\s*(?:Function : (\S+)|\.text\.(\S+):)")
+#: the register sections an `nvdisasm -plr` header names, in its column order
+SECTIONS = ("GPR", "PRED", "UGPR", "UPRED")
+
+
+def life_writes(line: str, names: list[str]) -> str | None:
+    """`GPR=2 PRED=1`: the registers an instruction's life-range columns mark written, by section (zeros left out)."""
+    _, sep, ranges = line.partition("// |")
+    if not sep or not names:
+        return None
+    cols = ranges.split("|")[:len(names)]
+    counts = [(n, sum(c.count(ch) for ch in "^x")) for n, c in zip(names, cols)]
+    return " ".join(f"{n}={k}" for n, k in counts if k) or "-"
 
 
 def family(arch: str) -> str:
@@ -39,6 +59,7 @@ def count(lines, source: str, only: str | None = None) -> dict:
     archs: dict[str, dict] = {}
     cur = None
     skip = False
+    names: list[str] = []
     for line in lines:
         if "/*" in line and (m := INS.match(line)):
             if skip:
@@ -49,9 +70,18 @@ def count(lines, source: str, only: str | None = None) -> dict:
             cur["instrs"] += 1
             e = cur["ops"].get(op)
             if e is None:
-                cur["ops"][op] = [1, operands[:160]]
-            else:
-                e[0] += 1
+                e = cur["ops"][op] = [0, operands[:160]]
+            e[0] += 1
+            if (w := life_writes(line, names)) is not None:
+                if len(e) == 2:
+                    e.append({})
+                e[2][w] = e[2].get(w, 0) + 1
+            continue
+        if "// |" in line and "GPR" in line:
+            names = [s.strip() for s in line.partition("// |")[2].split("|")[:-1]]
+            unknown = set(names) - set(SECTIONS)
+            if unknown:
+                raise ValueError(f"life-range sections {sorted(unknown)}: SECTIONS names {SECTIONS}")
             continue
         if m := ARCH.match(line):
             skip = only is not None and m.group(1) != only
@@ -73,10 +103,13 @@ def merge(objs: list[dict]) -> dict:
             fam["sources"][src] = fam["sources"].get(src, 0) + a["instrs"]
             fam["funcs"] += a["funcs"]
             fam["instrs"] += a["instrs"]
-            for op, (n, ex) in a["ops"].items():
+            for op, (n, ex, *hist) in a["ops"].items():
                 e = fam["ops"].setdefault(op, {"count": 0, "sources": {}, "example": ex, "base": op.split(".")[0]})
                 e["count"] += n
                 e["sources"][src] = e["sources"].get(src, 0) + n
+                for w, k in (hist[0] if hist else {}).items():
+                    writes = e.setdefault("writes", {})
+                    writes[w] = writes.get(w, 0) + k
     for fam in out.values():
         bases: dict[str, dict] = {}
         for op, e in fam["ops"].items():
