@@ -11,7 +11,8 @@ session its RecSparse (`rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` over the two 
 (`rec-cap/n<N>`, last; `checkCapListed`). A circuit whose unit is one
 of V*'s is refused unless the verifier names which of these statements the session is (`--rec-part J`) and its unit is that
 statement's, its population is that statement's instance count, the verifier's own bindings (`--rec-bindings F`) are its
-partition object's and program's, META binds exactly those, and the circuit file is byte for byte the one `vstar stage`
+partition object's and program's and name V*'s template of that statement (`checkTemplate`), META binds exactly those, and
+the circuit file is byte for byte the one `vstar stage`
 writes for that statement under the verifier's bindings (`circuitFile`).
 
 The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the inner statement, as `InnerFold.lean` sets it
@@ -581,11 +582,75 @@ program (`verity_flock.rec_bindings`), never from the prover's circuit file. -/
 def ownBindingsOfJson (j : Json) : Except String VStar.Bindings :=
   (VStar.Cli.bindingsOf j).mapError (s!"rec-bindings: " ++ ·)
 
+/-- A static value as core's codec writes it into a descriptor id (`codec._spec_id`: `json.dumps(_static_json(v),
+sort_keys=True, separators=(",", ":"))`): an object is `{"dict": {..}}` at every depth, keys sorted, and a list, a natural
+or a string as `VStar.pyDumps` writes it; at nesting depth at most `fuel`. -/
+def staticDumpsAt : Nat → Json → Except String String
+  | 0, _ => throw "a static value nested too deeply"
+  | k + 1, .obj kvs => do
+    let items := kvs.toArray.qsort (fun a b => a.1 < b.1)
+    let parts ← items.mapM fun (key, v) => do pure (VStar.pyStr key ++ ":" ++ (← staticDumpsAt k v))
+    pure ("{\"dict\":{" ++ ",".intercalate parts.toList ++ "}}")
+  | k + 1, .arr a => do
+    let parts ← a.mapM (staticDumpsAt k)
+    pure ("[" ++ ",".intercalate parts.toList ++ "]")
+  | _ + 1, j => VStar.pyDumpsAt 1 j
+
+/-- R's opening part's S as V*'s `RepS` (`rec_residuals.parts` at the opening-only shape): its row ports' elements are its
+`nw`, its v elements its `nv`. -/
+def openingRepS (S : RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat) : VStar.RepS :=
+  let term : RecOpen.Term → VStar.Term
+    | .w i => .w i
+    | .v i => .v i
+    | .wt i u => .wt i u
+  { gf := { nw := (ports.map (·.2)).foldl (· + ·) 0, nv, ops := S.ops.map (·.map term),
+            res := S.res.map fun r => { mul := r.mul, add := r.add.map term } },
+    ports }
+
+/-- **V*'s template of a statement**: the descriptor id core's codec names the statement's Definition by
+(`codec.descriptor_id`), the key of its `program_digests` and its partition's template. A level's (of the table or of R)
+`RecOpen_v4{LANES=…,H=…}` (`rec_open.definition`), a part's (of the algebra or of R's opening)
+`InnerRepCheck_v2{S=…}` at the part's S (`rec_residuals.definition`), RecSparse's `RecSparse_v1{NU=…,ELL=…,S_LOG=…,T_LOG=…}`
+(`rec_sparse.definition`) and a cap's `RecCap_v1` (`rec_cap.definition`). -/
+def templateId : VStar.Stmt → Except String String
+  | .recOpen _ L H _ | .recOpenStacked _ L H _ => pure ("RecOpen_v4{LANES=" ++ toString L ++ ",H=" ++ toString H ++ "}")
+  | .inner _ _ p => do pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 p.S.toJson) ++ "}")
+  | .opening _ _ _ S ports nv => do
+    pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 (openingRepS S ports nv).toJson) ++ "}")
+  | .sparse sh _ => pure ("RecSparse_v1{NU=" ++ toString sh.nu ++ ",ELL=" ++ toString sh.ell ++ ",S_LOG=" ++
+      toString sh.sLog ++ ",T_LOG=" ++ toString sh.tLog ++ "}")
+  | .cap .. => pure "RecCap_v1"
+
+/-- A descriptor id as an error shows it: whole up to 160 characters, else its first 120 and its length (a part's S runs
+to tens of kB). -/
+def briefId (t : String) : String :=
+  if t.length ≤ 160 then t else s!"{String.ofList (t.toList.take 120)}… ({t.length} characters)"
+
+/-- **The verifier's bindings name V*'s Definition**: `f`'s `program_digests` names one Definition, V*'s template of the
+statement `s` (`templateId`). With `checkOwnBindings` (that one key is the template the verifier's partition object's
+query names) the partition's template is V*'s too, so a part relabelled under another Definition's name is refused,
+however consistently its partition object, program, bindings and META carry the label. The digest the key maps to is the
+auditor's (`verity_flock.rec_bindings` with V*'s Definition, `vstar_definition`), which META must carry (`checkMeta`):
+core's codec's digest of the one-Definition program, which this verifier does not encode. -/
+def checkTemplate (s : VStar.Stmt) (f : VStar.Bindings) : V Unit := do
+  let t ← match templateId s with
+    | .ok t => pure t
+    | .error e => throw s!"{s.name}: V*'s template: {e}"
+  match f.programDigests with
+  | .obj kvs =>
+    match kvs.toArray.map (·.1) with
+    | #[k] =>
+      if k != t then
+        throw s!"{s.name}: the verifier's bindings' program_digests names {briefId k}, not V*'s template of the statement {briefId t}"
+    | ks => throw s!"{s.name}: the verifier's bindings' program_digests names {ks.size} Definitions, not V*'s template {briefId t} alone"
+  | _ => throw s!"{s.name}: the verifier's bindings' program_digests is not an object"
+
 /-- The verifier's own bindings `f` are its own partition object's and program's: `f`'s partition digest is the object's
 (`HmRow.partitionDigest`), `f`'s program and the object's `program` are the program's digest (the SHA-512 of its canonical
 descriptor without `annotations`, `TemplateQuery.Desc.parse`), and `f`'s `program_digests` names one Definition, the
-template the object's query names. Its digest is not recomputed: that is core's codec's digest of the one-Definition
-program, which this verifier does not encode; the auditor's `verity_flock.rec_bindings` computes it from the same files. -/
+template the object's query names, which `checkCircuit` holds to V*'s template of the statement (`checkTemplate`). Its
+digest is not recomputed: that is core's codec's digest of the one-Definition program, which this verifier does not
+encode; the auditor's `verity_flock.rec_bindings` computes it from V*'s own Definition of the statement. -/
 def checkOwnBindings (name : String) (f : VStar.Bindings) (obj : Json) (prog : ByteArray) : V Unit := do
   let own := hexOf (← HmRow.partitionDigest obj)
   if f.partition != own then throw s!"{name}: the verifier's bindings' partition digest {f.partition}, its partition object's {own}"
@@ -626,7 +691,8 @@ def checkHolo (s : VStar.Stmt) (c : Circuit) (holo : Bool) : V Unit := do
 
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
 `check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
-`f` at `i`'s holo flag, `checkParsed` and `checkPart` on `c`, and `checkHolo` on `c` at `i`'s holo flag. -/
+`f` at `i`'s holo flag, `checkParsed` and `checkPart` on `c`, `checkHolo` on `c` at `i`'s holo flag, and `checkTemplate`
+on `f`: its `program_digests` names V*'s template of the statement. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
@@ -635,6 +701,7 @@ def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : By
   checkParsed s c
   checkPart s c
   checkHolo s c i.holo
+  checkTemplate s f
   pure s
 
 /-- A statement's message ports that `ownPorts` leaves out: RecSparse's messages but `h` and `claim`, each `<p>` under
