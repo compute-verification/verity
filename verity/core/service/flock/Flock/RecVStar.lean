@@ -76,12 +76,17 @@ def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Opt
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
   pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
 
-def FORMAT : String := "verity/rec-inner/v1"
+/-- The recursion's statement version: V*'s statements whose verifier-registered values are under SHA-512 salts
+(`RecCoins.saltOf`). -/
+def FORMAT : String := "verity/rec-inner/v2"
 
-/-- `verity/rec-inner/v1`'s key for `Inner.holo`, written only when true; absent means false. -/
+/-- The version before `FORMAT`, whose V* statements registered those values under SHAKE256 salts: refused. -/
+def FORMAT_V1 : String := "verity/rec-inner/v1"
+
+/-- `verity/rec-inner/v2`'s key for `Inner.holo`, written only when true; absent means false. -/
 def HOLO_KEY : String := "holo"
 
-/-- `verity/rec-inner/v1`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
+/-- `verity/rec-inner/v2`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
 is under META's own key (`STACKED_SHAPE_KEY`), `{"m", "claims"}`, written only when present. -/
 def SPARSE_KEY : String := "sparse"
 
@@ -92,7 +97,10 @@ def Inner.toJson (i : Inner) : Json :=
     (i.stacked.map fun r => (STACKED_SHAPE_KEY, Json.mkObj [("m", Lean.toJson r.m), ("claims", Lean.toJson r.claims)])).toList)
 
 def Inner.ofJson (j : Json) : Except String Inner := do
-  if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
+  let fmt := (j.getObjValAs? String "format").toOption
+  if fmt == some FORMAT_V1 then
+    throw s!"rec-inner: {FORMAT_V1} is refused: its V* statements' verifier-registered values are under SHAKE256 salts, {FORMAT}'s under SHA-512"
+  if fmt != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
   let holo ← match j.getObjVal? HOLO_KEY with
     | .error _ => pure false
     | .ok (.bool b) => pure b
