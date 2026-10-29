@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
+"""PoUB's inputs to a joint sampling plan (PoUW and the memory claim under one partition): the
 memory line's ε against the openings proved, the pass rate and pacing, and the window; the rebuilds the plan leaves in
 the line; and the serving cost of passes and of proved openings, at three served operating points.
 
