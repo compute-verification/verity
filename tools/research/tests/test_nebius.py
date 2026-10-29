@@ -830,13 +830,18 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert r.returncode == 0, r.stderr
     ud, spec = r.stdout.split("# instance create request (ids are placeholders)\n")
     assert ud.splitlines()[1] == "#cloud-config" and f"      - {pub}" in ud and "PRIVATE KEY" not in r.stdout
+    assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, "Nebius refuses cloud-init over 32768 characters"
     embedded = {m[0]: gzip.decompress(base64.b64decode(m[1]))
                 for m in re.findall(r"  - path: (\S+)\n    permissions: '\d+'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
-    assert embedded["/usr/local/sbin/vy-setup"] == (NEBIUS / "vm_setup.sh").read_bytes()
-    assert embedded["/usr/local/sbin/vy-nebius-stop"] == (NEBIUS / "vm_stop.sh").read_bytes()
+
+    def code(script: bytes) -> list[str]:
+        return [ln for i, ln in enumerate(script.decode().split("\n")) if i == 0 or not re.match(r"\s*#", ln)]
+
+    for path, src in [("/usr/local/sbin/vy-setup", NEBIUS / "vm_setup.sh"), ("/usr/local/sbin/vy-nebius-stop", NEBIUS / "vm_stop.sh"),
+                      ("/usr/local/share/vy/lease.sh", L.LEASE_SH), ("/usr/local/bin/gpu-lease", GPU_LEASE)]:
+        assert code(embedded[path]) == code(src.read_bytes()), path
+        assert subprocess.run(["bash", "-n"], input=embedded[path], capture_output=True).returncode == 0, path
     assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
-    assert embedded["/usr/local/share/vy/lease.sh"] == L.LEASE_SH.read_bytes()
-    assert embedded["/usr/local/bin/gpu-lease"] == GPU_LEASE.read_bytes()
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
     s = json.loads(spec)["spec"]
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
