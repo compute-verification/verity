@@ -12,7 +12,6 @@ import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
 import Proofs.Pouw.DitherInstance
 import Proofs.Pouw.Dimension.A2WordsProofs
-import Proofs.Pouw.Dimension.AdaptiveProofs
 import Proofs.Pouw.Dimension.AlphabetProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
@@ -36,7 +35,6 @@ import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
 import Proofs.Pouw.Dimension.PipeProofs
-import Proofs.Pouw.Dimension.PointwiseAdaptiveProofs
 import Proofs.Pouw.Dimension.PointwiseProofs
 import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.Dimension.RouteUPipeProofs
@@ -68,6 +66,7 @@ import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
 import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
+import Proofs.Pouw.Lead.CoinBranch
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract

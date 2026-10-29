@@ -1,7 +1,7 @@
 import Proofs.Pouw.Dimension.GrindProofs
 
 /-!
-# A program chosen from the coins, in `MH100w` (proofs; draft semantics, pending review)
+# Coin branch: a program chosen from the coins, in `MH100w`, cell by cell (proofs; draft semantics, pending review)
 
 `MH100w`'s programs are straight-line and fixed before the coins. A program that reads coin bits and branches is, at
 each grid point `x`, the straight-line program `prog x` it chose there, run on every grid point where it makes the same
@@ -22,7 +22,11 @@ of a step into the step before on half the points, so `lost_le`'s `M` is at leas
 `m·n·S`, so the floor there credits at most `c·(m·n·S − n)`.
 -/
 
-namespace Pouw.Dimension.H100
+namespace Pouw.SecurityProofs.Lead.CoinBranch
+
+open Pouw.Dimension Pouw.Dimension.H100
+
+section Cells
 
 variable {G : Type}
 
@@ -79,11 +83,11 @@ theorem adaptive_lost {ι : Type} [Fintype ι] [DecidableEq ι] {q : ℕ} (hq : 
   rw [hDc] at h
   exact le_trans (Nat.mul_le_mul_left c (by omega)) h
 
-end Pouw.Dimension.H100
+end Cells
 
-namespace Pouw.Dimension.Ssn
+section Ssn
 
-open Finset Pouw.Dimension.H100
+open Finset Pouw.Dimension.Ssn
 
 variable {m S C L : ℕ}
 
@@ -208,4 +212,6 @@ theorem l4_cell_loss (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → �
       hDd.1 _ h1 _ h2 fun x hx => l4_step_merge hC κ i j htt (hκ j j.isLt) x (hX x hx)
     exact hne (congrArg (fun x : Fin m × ℕ × Fin S => x.2.2) (hinj (hmem _ _) (hmem _ _) heq))
 
-end Pouw.Dimension.Ssn
+end Ssn
+
+end Pouw.SecurityProofs.Lead.CoinBranch

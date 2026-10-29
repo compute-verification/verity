@@ -1,7 +1,7 @@
 import Proofs.Pouw.Dimension.PointwiseProofs
 
 /-!
-# The chunk model against a program that branches on the coins (proofs; draft model, pending review)
+# Coin branch: the chunk model against a program that branches on the coins (proofs; draft model, pending review)
 
 At each coin outcome `ω` such a program is a run `P ω` from the memory `m₀ ω` that holds the targets `Y ω` at some
 point, as in `adaptive_pairs_le`. Each bound reads only the targets an outcome realizes, so it sums over any outcomes.
@@ -33,9 +33,9 @@ point, as in `adaptive_pairs_le`. Each bound reads only the targets an outcome r
   coins of at least `c` outcomes holds at all others.
 -/
 
-namespace Pouw.Dimension.Pointwise
+namespace Pouw.SecurityProofs.Lead.CoinBranch
 
-open Finset
+open Finset Pouw.Dimension.Pointwise
 
 variable {A V : Type} {w : ℕ}
 
@@ -665,4 +665,4 @@ theorem small_cls_le (P : Prog Ω A V E) (O : Finset Ω) (c : ℕ) :
 
 end Priced
 
-end Pouw.Dimension.Pointwise
+end Pouw.SecurityProofs.Lead.CoinBranch
