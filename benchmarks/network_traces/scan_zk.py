@@ -37,8 +37,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
   which no bucket of the group reads, has no leaf; ``prog<j>`` for each lane j < NR, lane j's slot entries
   (`slot_entries`), nb leaves for the group's nb = G·T / EVERY boundaries, leaf b slot j's entry at boundary b (the
-  outputs of the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them once it carries the
-  read bit), the o0 rows of the block round's lane-j member; and ``view``, G·T leaves, leaf t S_t's egress view.
+  outputs of the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them), the o0 rows of the
+  block round's lane-j member; and ``view``, G·T leaves, leaf t S_t's egress view.
 * **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
   ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
   NOTs, a committed row the verifier never opens; ``x`` a row-seg/v1 row, `ROW_SCHEMAS`), one unit a slot entry of the
