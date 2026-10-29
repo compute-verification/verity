@@ -2931,6 +2931,8 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     fake.add(COORD, text="@no-such-lane hello", username="infra", bot_id=BOT)
     retired = fake.add(COORD, text="<!subteam^SRETIRED> how does Daniel like reports?", username="top", bot_id=BOT,
                        ts="1600000000.000004")                     # a retired name's group, tagged by its id alone
+    alert = fake.add(COORD, text="@ci @top main hasn't moved for 6 h", username="vy-monitors", bot_id=BOT,
+                     ts="1600000000.000005")                       # a machine's alert: no one owes it an answer
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000", "--json")
     rep = json.loads(out)
     assert rc == 0 and [x for x in rep["inboxes"] if x["doorbells"]] == [{"name": "circuits", "doorbells": 1, "peak_per_hour": 1, "paused": 0}]
@@ -2939,7 +2941,7 @@ def test_traffic_counts_doorbells_and_reports_dropped_names_and_unanswered_asks(
     rc, out, _ = run(capsys, "traffic", "--hours", "1e6", "--now", "1700100000")
     assert f"UNANSWERED {retired['ts']} by @top to no one it can ring" in out and out.count(": Slack, no record: no reply or reaction") >= 2
     stale = [s["ts"] for s in rep["unanswered"]]
-    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale
+    assert old["ts"] in stale and fyi["ts"] not in stale and bare["ts"] not in stale and alert["ts"] not in stale
 
 
 @pytest.mark.parametrize("bad", [["circuits"], ["router"], ["two words"], "Codex", [7]])
