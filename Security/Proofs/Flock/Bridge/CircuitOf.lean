@@ -274,7 +274,7 @@ theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Flo
 
 /-- **A unit wrong in the wire values a witness opens is faulty** in the sampling statement of `progOf C κ`. -/
 theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
-    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
+    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
     (w : Wit) {u : Fin n} (hu : u ∈ P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))) :
     u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w := by
   classical
@@ -290,7 +290,7 @@ theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (
   exact hu (correct_of_progCorrect P u _ ι h)
 
 theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
-    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
+    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
     (w : Wit) :
     (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))).card ≤
       ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w).filter (· < n)).card :=
@@ -302,7 +302,7 @@ theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) 
 than `K₀` of the circuit's units wrong in the wire values it opens. -/
 theorem card_wrong_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
-    (Cm : Commitment Bool) (w : Wit)
+    (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P κ) w) :
     (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))).card < K₀ := by
   have hle := card_wrong_le_faulty P κ kd desc q roots H Cm w
@@ -368,7 +368,7 @@ theorem partsOf_wrong (xs : Fin (keyCircuit D hU n).N → Bool) :
 the sampling statement of the key program at constants `κ`, leaves fewer than `K₀` of `partsOf`'s units wrong in the
 transcript it opens. -/
 theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (kd K₀ : ℕ) (desc : Claims.Msg)
-    (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (w : Wit)
+    (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf (keyPartition D hU n) κ kd desc q roots)
       (partOf (keyPartition D hU n) κ) w) :
     ((partsOf D hU n).wrong
