@@ -1,0 +1,71 @@
+# HASH: securely reduce PoUW's hashing (from 18:35Z, 29 Oct)
+
+**Daniel, 11:27 AM PDT (18:27Z):** the LEAN workstream lands the lead's implementation and proof on `main`. A second
+workstream explores "all of the ways that we can securely reduce the hashing requirements ... hash fewer steps ...
+jointly explore the space of noising and hashing ... random down projections or just stuff like this, which is cheaper
+than hashing ... other assumptions we can make. Let's just keep searching ... how can we securely reduce hashing? That's
+the core research question."
+
+## The problem, in numbers
+
+- Under DistinctWrites (cost ≥ 32 · #committed, distinct, coin-dependent 32-bit words) credit needs about one committed
+  word per 28–32 MACs. Each word is SHA-512'd at about 3,500 registers a compression (32 words), so about 110 register
+  writes a word.
+- **h**, honest hashing over stock in W1, is about 120–230 (N-SHALB: one register a compression is 0.066× stock). About
+  99.2–99.6% of the credited work is hashing.
+- T2 is 10.9× (64 rows) to 62× sync / 75× async (8,192 rows).
+- **The figure of merit is h, at fixed T1 ≤ 1%, T2 ≤ 100× and T3 ≤ 5%, and the assumption's rank.** Report h for every
+  design.
+
+## Already known (don't repeat it; extend it or break its premise)
+
+- **Sparse commitments:** road (b) (N-DENSE) found neither a word every 64 nor every 128 steps creditable at rank ≤ 3,
+  because of the middle-segment skip (N-SAKU, proved premise-free): a prover skips the uncommitted middle. The same
+  skip kills every exact-output design (NCP, per2, os2).
+- **Linear sketches fold** (H12, N-LIT): Σ r_t w_t over running words equals Σ_τ κ_τ Σ_{t≥τ} r_t, computable without the
+  words. Any commitment linear in the words is cheap for the adversary.
+- **Module-SIS** (GD-SIS, 28 Oct): h = A·x mod 2³² costs 896 int8 MACs a committed byte, and its opening in C-Flock is
+  24–36× SHA-512's rows. It never beats SHA-512, at any row size.
+- **SAK on literally uniform operands** (road (c), N-SAKU): no reduction gives credit, and the obstruction is proved.
+- **Seeded coins** (N-EGRESS): expanding coins from a seed lets an outside machine take the seed, so coins come raw.
+- **R1** (the certifier hashes every word) moves the hashing off the prover, but ships the words: T2 97.5×–665×.
+- The one-hash rule (SHA-512 everywhere, AGENTS.md) and "everything zero-knowledge" stand. A design that needs another
+  primitive or reveals a sketch names the rule change, and the coordinator takes it to Daniel. A sketch is a value: it
+  is committed under a hiding leaf, or its leakage is bounded.
+
+## Directions (each lane owns one; cross-pollinate through notes)
+
+| lane | agent | direction |
+|---|---|---|
+| SPARSE | N-FLOOR | hash fewer steps: which mechanism makes skipped steps unskippable. Candidates: coins for later steps drawn after an earlier commitment (chained rounds, and their latency), checkpoint positions drawn after commitment, noise that compounds through the running word yet stays removable. Price each and find its floor |
+| SKETCH | N-LIT | random projections and sketches cheaper than hashing: non-linear sketches (Σ r·g(w) with cheap non-linear g, byte lookups, squaring mod p), sketches keyed by coins drawn after the words are held, and polynomial or universal hashing sealed by one SHA-512. Survey the literature (Freivalds, universal and almost-universal hashing, sumcheck-style batching, proofs of space and time) and say exactly where each folds |
+| SHA | N-SHALB | fewer SHA-512 bytes per credited MAC within the rules: truncated or packed words (commit k bits of a word), wider credit per word, tree and chunk shapes, and one compression over more credited work. The true floor of h under ShaWrites |
+| NOISE | N-NOISE | the joint noise × commitment grammar: extend last night's 400,505-design grammar with commitment axes (which words, how many bits, sketch or hash), and search for noise that makes sparse, truncated or sketched commitments creditable |
+| ASSUME | N-SALT | the assumption ladder: the weakest premise that lets a design commit only outputs, or every k-th step. Candidates: SAK variants scoped to our noise class, fine-grained conjectures, a tensor-core-only cost model, memory or bandwidth floors, sequential work. Rank each, give its falsification test, and say what h it buys |
+| ALT | N-COVER | other cost bases and placements: credit HBM traffic or MMA issue, not register writes; split hashing between card and certifier with sketches shipped instead of words; price the network for each |
+| HIDE | N-HIDE | hiding and zero-knowledge for every proposal: what a sketch or truncation leaks, the hiding leaf it needs, and its cost; check each against the rules |
+| COUNTER | N-FP8 | counterexample search: for each proposal's claim, search small instances on CPU for a cheaper prover strategy, and report each with a run id |
+| CARD | N-CARD | the card: h, T1, T2, T3, assumption rank and status for every design, on one basis with the lead as the baseline, plus a ranked frontier at each checkpoint |
+
+## Done when
+
+A design that cuts h by at least 10× from the lead's, holding T1 ≤ 1%, T2 ≤ 100× and T3 ≤ 5%:
+- its every premise named and ranked;
+- its credit checked on CPU and its cost measured or bounded;
+- with a falsification test for each new premise.
+
+Or a proof that no design in a stated class can. Short of that, the frontier of h against assumption rank is the
+answer, with the best design at each rank.
+
+## Rules
+
+- No PR, no Slack, no Linear. Push your branch after each commit (`cursor/compute-research-hash-<lane>-<suffix>`).
+  Long jobs go through `research run` on a CPU node (cpu-2..9), with scratch outside the run directory.
+- GPU only on vy-dc-h200-5 through gpu-lease, today until 20:40Z, after N-KERNEL's and N-W1's runs. Never use
+  vy-dc-h200.
+- Each result is labelled proved (Lean, axioms printed), checked (CPU, with a run id), measured (GPU, with a run id)
+  or estimate.
+- Checkpoint notes go under `lanes/compute-research` (`kind: report`), published with `research notes sync --path
+  lanes/compute-research` (or `research notes push compute-research` if your CLI has that instead).
+- Report to the coordinator by finishing your task. **Interim 1 is due 21:00Z** (2 PM PDT): your direction's map, what
+  closes, what's open, and h for anything priced. Then keep going.
