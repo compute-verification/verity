@@ -34,7 +34,9 @@ the requirement is that s and G come after root(B_j), and the row coins b after 
 
 The fix for the tile pools is the wide tag (`wide_tags`): balanced base-255 digits of z_i + `WIDE_OFFSET` against
 G ∈ [−127, 127]. `blc4a-t64-e7-w127` is N-LIT's weighted lane (note 20261029T1108Z-report-np-lit §1): the same three
-coin lanes against A′ = (1, 127, 1). `identical_columns` checks R1's check (b) against chosen identical weight columns.
+coin lanes against A′ = (1, 127, 1). `blc4a-t64-e7-rot` is N-EGRESS's: A′ alternates (127, 1, 1) and (1, 127, 1) by row
+parity, so the coin cancels only between rows of one parity. `identical_columns` checks R1's check (b) against chosen
+identical weight columns.
 
 `mirror_instance` is N-NOISE's frontier design `A/byte1/b13s4/mirror/s8/noc1/M0+tag+wv` (note
 20261029T1106Z-report-np-noise §1): a coin byte u_t(i) a row a step against a drawn nonzero int8 window weight W_t[j],
