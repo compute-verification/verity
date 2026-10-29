@@ -36,8 +36,8 @@ W1.lean`) and every sm_120 SASS opcode that writes a 32-bit register (`OPCODES`)
 **Beyond one write** (part T): the amortized routes. The add, mul, hi and dot invariants read only mixed differences, so
 they hold for F minus any functions of x alone and of y alone: they also refute Y + Z with Y one-sided and Z one
 instruction (the round's IADD3 adding Y and Z for free). For Z a LOP3, both LUT orientations are refuted exhaustively at
-8 bits, which the low byte of any width inherits, for every constant half whose low byte isn't byte-degenerate; the
-halves whose low byte is are listed as open. A P2R'd correction of up to 8 predicate bits in one byte is refuted by
+8 bits, which the low byte of any width inherits; the byte-degenerate low bytes (0x01, 0x7f, 0xfe among them) admit one,
+and xc avoids them. A P2R'd correction of up to 8 predicate bits in one byte is refuted by
 the mixed differences. The ballot route (VOTE.ANY of 32 lanes' bits) and a table lookup at a summed address are
 priced, not refuted (part T's last checks).
 
@@ -57,13 +57,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exact_kit"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from exact_kit.checks import Checks
-from hash_rounds import xc
+from hash_rounds import DEGENERATE_BYTES, xc
 
 M32 = (1 << 32) - 1
 TWO32 = 1 << 32
 CONSTS = sorted({xc(t) >> s & M32 for t in range(80) for s in (0, 32)})
 BAD = (0, 1 << 31, M32, (1 << 31) - 1)
-DEGENERATE_BYTES = (0x00, 0x01, 0x7F, 0x80, 0xFE, 0xFF)  # BAD's analogues on a byte, and +-1 from them
 SPAN = 1 << 20
 
 # Every SASS opcode of sm_120 that writes a general or uniform 32-bit register from data, by family. Opcodes that write
@@ -495,7 +494,9 @@ def main() -> int:
     rng = np.random.default_rng(20261029)
 
     checks.check("constants: the 160 halves of xc(t) avoid the four values that make the XOR an add or a negation "
-                 "(0, 2^31, ~0, 2^31 - 1)", len(CONSTS) == 160 and not set(CONSTS) & set(BAD), f"{len(CONSTS)} halves")
+                 "(0, 2^31, ~0, 2^31 - 1) and the byte-degenerate low bytes (0x00, 0x01, 0x7f, 0x80, 0xfe, 0xff)",
+                 len(CONSTS) == 160 and not set(CONSTS) & set(BAD)
+                 and not {c & 0xFF for c in CONSTS} & set(DEGENERATE_BYTES), f"{len(CONSTS)} halves")
 
     doms = ("full", "span", "window")
     worst1 = {}
@@ -571,14 +572,12 @@ def main() -> int:
     admit = {c for c in lows if any(lop3_plus_one_sided(f1, c))}
     open_halves = [(t, s // 32, f"{xc(t) >> s & M32:#010x}") for t in range(80) for s in (0, 32)
                    if xc(t) >> s & 0xFF in admit]
-    checks.check("T: F1 as Y + Z with Z a LOP3 (any LUT, either orientation) and Y one-sided: no solution at 8 bits, so "
-                 "none at any width, for every constant half whose low byte isn't byte-degenerate (0x00, 0x01, 0x7f, "
-                 "0x80, 0xfe, 0xff); the halves (position, half) whose low byte is one aren't refuted at 8 bits",
-                 admit <= set(DEGENERATE_BYTES),
-                 f"{len(lows) - len(admit)} of {len(lows)} low bytes refuted; open: {open_halves}")
-    ctl_l = [lop3_plus_one_sided(f1, c) for c in (0, 0x80, 0xFF)]
-    checks.check("T controls: at c in {0, 0x80, 0xFF} (an add) the search finds Y + LOP3 (Y = x, Z = y or ~y)",
-                 all(a or b for a, b in ctl_l), str(ctl_l))
+    checks.check(f"T: F1 as Y + Z with Z a LOP3 (any LUT, either orientation) and Y one-sided: no solution at 8 bits for "
+                 f"any of the {len(lows)} distinct low bytes of the constants, so none at any width",
+                 not admit, f"{len(lows) - len(admit)} of {len(lows)} low bytes refuted; open: {open_halves}")
+    ctl_l = [lop3_plus_one_sided(f1, c) for c in DEGENERATE_BYTES]
+    checks.check("T controls: at every byte-degenerate low byte the search finds Y + LOP3 (at 0x00, 0x80 and 0xff an "
+                 "add: Y = x, Z = y or ~y)", all(a or b for a, b in ctl_l), str(ctl_l))
     J, T = 64, 16
     ballot = 1 + 32 / J + 32 / T
     checks.check("T: the ballot route (lane k makes bit k of F as free predicates, VOTEU.ANY packs them) needs each "
