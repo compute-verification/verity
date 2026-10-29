@@ -1104,6 +1104,8 @@ SSN_1L5_DATA = 27
 SSN_TAG_DATA = 24
 TAG_LANES = 4
 TAG_G = 3
+#: `ssn_1l_tag`'s coin lanes (`coin_lanes` of a later step's 31 non-row lanes): the rows a tile's coins are shared by
+BLC_TILE = {1: 128, 3: 64}
 #: the fused linear each projection is served in: one call, so one draw of row coins for all its columns
 FUSED = {"self_attn.q_proj": "self_attn.qkv", "self_attn.k_proj": "self_attn.qkv", "self_attn.v_proj": "self_attn.qkv",
          "mlp.gate_proj": "mlp.gate_up", "mlp.up_proj": "mlp.gate_up"}
@@ -1230,10 +1232,15 @@ def _check_served(p):
         raise ValueError("served.fused shares row coins; ssn2's b is per column")
     if p["nz"] not in (1, 2) or (p["rule"] != "ssn_1l_tag" and p["nz"] != 1):
         raise ValueError("served.nz is 1 or 2, the weight of ssn_1l_tag's later lane bit")
+    if (p["coin_lanes"] not in (0, *BLC_TILE) or (p["rule"] != "ssn_1l_tag" and p["coin_lanes"])
+            or not 1 <= p["coin_bits"] <= 7):
+        raise ValueError(f"served.coin_lanes is 0 or one of {tuple(BLC_TILE)}, only on ssn_1l_tag, and coin_bits "
+                         "1..7, so a coin fits a B' byte")
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
-def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz: int = 1, denoise: bool = False):
+def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz: int = 1, denoise: bool = False,
+                  coin_lanes: int = 0, coin_bits: int = 7):
     """Noise added to the exact integer product and served (`denoise`: committed, gated on the committed words, and
     removed in the epilogue, which leaves the exact product), fresh every call, over S = ceil(k / 28)
     k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
@@ -1244,7 +1251,12 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     {0, ..., 15}^(m x 4) and every later step t adds s_t[j] (1 + 2 b_t), b bits m x (S - 1) and s the public column
     signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn_1l_tag` is `ssn_1l` with row tags (S = 1 +
     ceil((k - 24) / 31)): it adds T(i) G (`row_tags`, `tag_matrix`, G fresh every call) and serves 1 + nz l (`nz` 1
-    or 2), so its bias is rint((sum C + (2 + nz) (S - 1)) / 2), drawing ssn_1l's coins first; `aorb_sv4` is
+    or 2), so its bias is rint((sum C + (2 + nz) (S - 1)) / 2), drawing ssn_1l's coins first; with `coin_lanes`
+    (blc1a, blc4a) that many of a later step's other lanes hold coins against A' = 1, odd and uniform on
+    +-(2^coin_bits - 1) a (`BLC_TILE`-row tile, step, column): their sum is the tile's column term, which the
+    epilogue's fold removes exactly, so they serve nothing and are not drawn here; they leave 31 - coin_lanes data
+    lanes a later step (S = 1 + ceil((k - 24) / (31 - coin_lanes))) and add their largest sum to the accumulator's
+    bound. Rows that leave a smaller tile (its row and window coins) are refused; `aorb_sv4` is
     AorB/rgap1/sv4+tag+nz: on side A (`aorb_side_b` false, for the whole call's columns) `ssn_1l_tag` at nz 2 with
     C the call's columns' `sv_code(4)` vectors; on side B the same with rows and columns exchanged: a1 bits n x 4
     against the rows' sv4 vectors, column tags T(j) against a G a row, later lanes 1 + 2 l a column, l bits
@@ -1265,7 +1277,10 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     if rule in ("ssn_1l", "ssn_1l5", "ssn_pd", "ssn_1l_tag", "aorb_sv4"):
         five, pd, tag = rule == "ssn_1l5", rule == "ssn_pd", rule in ("ssn_1l_tag", "aorb_sv4")
         nz = 2 if aorb else nz
-        s = 1 + -(-(k - (SSN_1L5_DATA if five else SSN_TAG_DATA if tag else SSN_DATA)) // SSN_1L_DATA)
+        if coin_lanes and m % BLC_TILE[coin_lanes]:
+            raise ValueError(f"served.coin_lanes: {m} rows leave a tile under {BLC_TILE[coin_lanes]}, whose row and "
+                             "window coins the bench doesn't model")
+        s = 1 + -(-(k - (SSN_1L5_DATA if five else SSN_TAG_DATA if tag else SSN_DATA)) // (SSN_1L_DATA - coin_lanes))
         off = fused_offset(mm.name, k, n)
         code = mm.shared(("sv4" if aorb else "ssn_code5" if five else "ssn_code", n, off, str(acc.device)),
                          lambda: (sv_code(4, off + n)[:, off:] if aorb else ssn_code5(n, off) if five
@@ -1284,6 +1299,7 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
             top = max(top, G.absmax(noise))
             if not denoise:
                 acc[i:i + NOISE_ROWS] += noise
+        top += coin_lanes * (s - 1) * (2 ** coin_bits - 1)
         bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top
         mm.gate("accumulator", bound <= G.S32, bound)
         return acc

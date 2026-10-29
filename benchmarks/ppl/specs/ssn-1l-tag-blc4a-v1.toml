@@ -1,0 +1,12 @@
+description = "ssn-1l-tag-v1 with blc4a-t64-e7's coin lanes: a later k32 step's lanes 28-30 hold coins against A' = 1, odd and uniform on +-127 a (64-row tile, step, column), released after A_j, beside the row lane 31, so 28 data lanes a later step and S = 1 + ceil((k - 24) / 28); the coins' sum is a tile's column term, which the epilogue's fold removes exactly, so it serves ssn-1l-tag-v1's noise at that S; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l_tag"
+fused = true
+coin_lanes = 3
+coin_bits = 7

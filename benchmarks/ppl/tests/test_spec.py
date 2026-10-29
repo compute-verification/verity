@@ -81,7 +81,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
                  "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1",
                  "ssn-1l-b1-fused-v1", "ssn-1l5-lin-b1-v1", "ssn-1l5-b1-v1", "dither-int8-v1",
-                 "ssn-1l-hw-v1", "ssn-1l-tag-v1", "ssn-1l-tag-nz-v1", "ssn-pd-v1", "ssn-1l-tag-dn-v1", "aorb-sv4-v1"):
+                 "ssn-1l-hw-v1", "ssn-1l-tag-v1", "ssn-1l-tag-nz-v1", "ssn-pd-v1", "ssn-1l-tag-dn-v1", "aorb-sv4-v1",
+                 "ssn-1l-tag-blc4a-v1"):
         want[name] = ("linears", stock, True)
     want["int8-vllm-v1"] = want["int8-vllm-s22-v1"] = ("linears", stock, False)
     want["ssn-1l-tag-magic-v1"] = ("linears", "int8-vllm-v1", True)
@@ -319,6 +320,10 @@ def test_defaults_are_filled_and_typed():
     ('plain = "int8-stock"\n[[linear]]\nstep = "int8"', "names no arm in specs/"),
     ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "dense"', "served.rule is one of"),
     ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn2"\nbits = 4', "widens only ssn_a"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn_1l"\ncoin_lanes = 3', "only on ssn_1l_tag"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn_1l_tag"\ncoin_lanes = 2', "coin_lanes is 0"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn_1l_tag"\ncoin_lanes = 3\ncoin_bits = 8',
+     "fits a B' byte"),
 ])
 def test_rejections_name_the_problem(text, message):
     with pytest.raises(ValueError, match=message.replace("[", r"\[").replace("]", r"\]")):

@@ -300,6 +300,52 @@ def test_aorb_noise_is_its_formula(m, n, side_b):
     assert torch.equal(got, want.T if side_b else want) and run.gates.log["accumulator"]["failed"] == 0
 
 
+def test_blc_coin_lanes_are_a_tile_column_term():
+    """`ssn_1l_tag` with blc4a's coin lanes against its k32 layout written out: step 0 holds 24 data lanes, the row tags
+    against G and a1 against C; each later step 28 data lanes, three coin lanes against A' = 1 (odd coins on +-127 a
+    64-row tile, step and column) and the row lane 1 + l_t against 1. The accumulator less the public bias and each
+    tile's column sum of coins is what the step serves, and de-noised the product; at k 86 it takes one step more than
+    the lead's 31 data lanes."""
+    g = torch.Generator().manual_seed(3)
+    m, k, n = 128, 86, 40
+    s = 1 + -(-(k - steps.SSN_TAG_DATA) // 28)
+    assert s == 2 + -(-(k - steps.SSN_TAG_DATA) // steps.SSN_1L_DATA)
+    x = torch.randint(-127, 128, (m, k), generator=g).float()
+    w = torch.randint(-127, 128, (n, k), generator=g).float()
+    run = types.SimpleNamespace(seed=4, li=2, window=1, rotations={}, gates=matmul.G.Gates(),
+                                arm=types.SimpleNamespace(name="t"), checking=False, cache={})
+
+    def served(denoise, rows=m):
+        mm = matmul.MM("linear", "mlp.down_proj", run, x[:rows], w).integer(x[:rows], w)
+        return steps.served_linear(mm, lambda _m: x[:rows].long() @ w.long().T, rule="ssn_1l_tag", coin_lanes=3,
+                                   denoise=denoise)
+
+    mm = matmul.MM("linear", "mlp.down_proj", run, x, w)
+    lanes, a1, key = mm.coins((m, s - 1)).double(), mm.coins((m, 4)).double(), mm.coins((steps.TAG_LANES,), 2 ** 16)
+    code = steps.ssn_a_w0(n, steps.SSN_DATA)[0]
+    coins = 2 * torch.randint(0, 128, (m // 64, s - 1, 3, n), generator=g).double() - 127
+    xa, wa = torch.zeros(m, 32 * s, dtype=torch.float64), torch.zeros(n, 32 * s, dtype=torch.float64)
+    xa[:, :24], wa[:, :24] = x[:, :24], w[:, :24]
+    xa[:, 24:28], wa[:, 24:28] = steps.row_tags(m), steps.tag_matrix(key, n).T
+    xa[:, 28:32], wa[:, 28:32] = a1, code.T
+    for t in range(1, s):
+        lo = 24 + 28 * (t - 1)
+        d = min(28, k - lo)
+        xa[:, 32 * t:32 * t + d], wa[:, 32 * t:32 * t + d] = x[:, lo:lo + d], w[:, lo:lo + d]
+        xa[:, 32 * t + 28:32 * t + 31] = 1
+        xa[:, 32 * t + 31], wa[:, 32 * t + 31] = 1 + lanes[:, t - 1], 1
+    folded = torch.empty(m, n, dtype=torch.float64)
+    for tile in range(m // 64):
+        wa[:, [32 * t + c for t in range(1, s) for c in range(28, 31)]] = coins[tile].reshape(-1, n).T
+        r = slice(64 * tile, 64 * (tile + 1))
+        folded[r] = xa[r] @ wa.T - coins[tile].sum((0, 1))
+    assert torch.equal(served(False), folded - torch.round(code.sum(0) / 2 + 1.5 * (s - 1)))
+    assert torch.equal(served(True), (x.long() @ w.long().T).double())
+    assert run.gates.log["accumulator"]["failed"] == 0
+    with pytest.raises(ValueError, match="leave a tile under 64"):
+        served(False, rows=96)
+
+
 def test_round_significand():
     s = torch.rand(1000, generator=torch.Generator().manual_seed(0)) * 1e-2 + 1e-6
     assert torch.equal(steps.round_significand(s, 24), s)
