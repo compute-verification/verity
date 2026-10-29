@@ -22,7 +22,8 @@ Two families avoid both the final word and most forming:
 
 - served sparse noise (`ssn_*`): every k32 step carries fresh noise bits against a public pattern W₀, so every word
   carries fresh noise, the final word is the served output A·Bᵀ + noise, and the only forming is a shift and a mask a
-  row a step. `ssn_1l` codes the column in step 1's four lanes and then needs one lane a step (31 data entries);
+  row a step. `ssn_1l` codes the column in step 1's four lanes and then needs one lane a step (31 data entries),
+  each lane reading its own bit of the row's coin words (`ssn_1l_layout`);
 - stacked periodic noise (`per2`): X = [A + V·P | V⊗L], Y = [B; −limbs of fold(B)], exact, with only weights-only
   corrections.
 
@@ -91,6 +92,44 @@ def steps1l(k: int) -> int:
     return 1 + math.ceil(max(0, k - DATA_PER_STEP) / 31)
 
 
+SSN_CODE_N_MAX = 13 ** 4 - 2
+
+
+def ssn_1l_layout(s: int) -> list[tuple[int, int]]:
+    """The served (coin word, bit) of each of a row's S + 3 noise lanes: a1[0..3], then a_t for t = 2..S.
+
+    Step 1 reads bits 0, 8, 16 and 24 of the row's word 0 (`h0 & 0x01010101`). The later steps read word 0's other 28
+    bits in increasing order, then every bit of words 1, 2, … in order (`rotr(h_w, (p - 24) mod 32) & 0x01000000`, OR'd
+    into the register whose other three lanes are data). The map is injective, so SW-LEAN's `ssn1lBit_charged` applies."""
+    out = [(0, 8 * e) for e in range(4)] + [(0, p) for p in range(32) if p % 8]
+    w = 1
+    while len(out) < s + 3:
+        out += [(w, p) for p in range(32)]
+        w += 1
+    return out[:s + 3]
+
+
+def ssn_1l_words(s: int) -> int:
+    return ssn_1l_layout(s)[-1][0] + 1
+
+
+def ssn_1l_forming_writes(s: int) -> int:
+    """Register writes a row a call: one LOP3 a step, plus a funnel-shift rotate for every later step not at bit 24."""
+    return s + sum(1 for _, p in ssn_1l_layout(s)[4:] if p != 24)
+
+
+def _rotr(h: np.ndarray, r: int) -> np.ndarray:
+    return ((h >> r) | (h << (32 - r))) & 0xFFFFFFFF if r else h
+
+
+def ssn_1l_bits(h: np.ndarray, s: int) -> tuple[np.ndarray, np.ndarray]:
+    """a1 (… × 4) and a_t (… × (S − 1)) from a row's coin words h (… × words), through the served extraction."""
+    r1 = h[..., 0] & 0x01010101
+    a1 = np.stack([(r1 >> (8 * e)) & 1 for e in range(4)], axis=-1)
+    al = np.stack([(_rotr(h[..., w], (p - 24) % 32) & 0x01000000) >> 24 for w, p in ssn_1l_layout(s)[4:]], axis=-1)
+    return a1, al
+
+
 def coin_us(nbytes: float) -> float:
     """One call's coin expansion in µs, interpolated on the measured call sizes (one noise byte an entry)."""
     if nbytes <= 0:
@@ -154,16 +193,18 @@ def designs() -> list[Design]:
         Design("ssn_a", "per k32 step: 28 data + 4 bits a=(h>>q)&0x01010101 per row; public W0 (step 1 injective in [-6,6]^4, then one-hot)",
                lambda k: H32 * s(k) / k, lambda m, n, k: 2 * H32 * s(k) / (n * k), _zero,
                lambda m, n, k: H32 * s(k) / (n * k), _zero, _zero, False, "data-independent",
-               "none: stock int8 +-127, int32 holds 127^2 K + sum|W0| for K < 133,000", "~0: served noise std ~6 units vs ~330 (estimate)",
+               "none: stock int8 +-127, int32 holds 127^2 K + sum|W0| for K < 133,000",
+               "~0 (estimate on SW-PPL's ladder: std 6.1 / 9.6 units at K 2,048 / 8,192)",
                "F3 ssn-a-b1-v1", lambda m, n, k: 4 * s(k) / (n * k),
                "no C1, no M1 needed; dominated by ssn_1l", coin_bits=lambda m, n, k: 4 * s(k) * m),
         Design("ssn_1l", "step 1: 28 data + 4 bits against an injective column code in [-6,6]^4; every later k32 step: 31 data + "
-               "1 bit a row, W0 = 1 on that lane for every column",
-               lambda k: H32 * s1(k) / k, lambda m, n, k: 2 * H32 * s1(k) / (n * k), _zero,
+               "1 bit a row, W0 = 1 on that lane for every column; bits read by ssn_1l_layout",
+               lambda k: H32 * s1(k) / k, lambda m, n, k: H32 * ssn_1l_forming_writes(s1(k)) / (n * k), _zero,
                lambda m, n, k: H32 * s1(k) / (n * k), _zero, _zero, False, "data-independent",
-               "none: stock int8 +-127", "~0: served noise std ~6 units vs ~330 (estimate)",
-               "F7 ssn-1l-v1", lambda m, n, k: 4 * s1(k) / (n * k),
-               "lead: no C1, no M1 needed; alpha 32/31", coin_bits=lambda m, n, k: (s1(k) + 3) * m),
+               "none: stock int8 +-127", "~0 (estimate on SW-PPL's ladder: std 6.0 / 9.2 units at K 2,048 / 8,192)",
+               "F7 ssn-1l-b1-v1", lambda m, n, k: 4 * s1(k) / (n * k),
+               "lead: no C1, no M1 needed; alpha 32/31",
+               coin_bits=lambda m, n, k: 32 * ssn_1l_words(s1(k)) * m),
         Design("ssn2", "per k32 step: 28 data + 4 bits a per row and 4 bits b per column (both (h>>q)&0x01010101)",
                lambda k: H32 * s(k) / k, lambda m, n, k: 2 * H32 * s(k) / (n * k),
                lambda m, n, k: 2 * H32 * s(k) / (m * k), lambda m, n, k: H32 * s(k) / (n * k),
@@ -402,7 +443,8 @@ def _bits(rng: np.random.Generator, shape) -> np.ndarray:
 
 
 def _sim_ssn_1l(case: str, salts: int, m: int, n: int, rng: np.random.Generator, skip: int | None = None) -> dict:
-    """ssn_1l on 4 steps (121 data entries); `skip` drops one later step's lane (a mutation)."""
+    """ssn_1l on 4 steps (121 data entries), its bits read from the row's raw coin words by the served extraction, which
+    are the free set; `skip` drops one later step's lane (a mutation)."""
     s = 4
     k = DATA_PER_STEP + 31 * (s - 1)
     a, b = _data(case, m, n, 128, rng)
@@ -416,14 +458,15 @@ def _sim_ssn_1l(case: str, salts: int, m: int, n: int, rng: np.random.Generator,
     y1 = np.concatenate(ycols, axis=0)
     xs, raw, formed = [], [], []
     for _ in range(salts):
-        b1, bl = _bits(rng, (m, 4)), _bits(rng, (m, s - 1))
+        h = rng.integers(0, 2 ** 32, (m, ssn_1l_words(s)), dtype=np.int64)
+        b1, bl = ssn_1l_bits(h, s)
         parts = [a[:, :DATA_PER_STEP], b1]
         for t in range(1, s):
             lo = DATA_PER_STEP + 31 * (t - 1)
             parts += [a[:, lo:lo + 31], bl[:, t - 1:t]]
         x = np.concatenate(parts, axis=1)
         xs.append(x)
-        raw.append(rng.integers(0, 2 ** 32, (m, s)))
+        raw.append(h)
         formed.append(np.concatenate([_pack(x[:, 32 * t + 28:32 * t + 32]) for t in range(s)], axis=1))
     x = np.stack(xs)
     y = np.broadcast_to(y1, (salts, *y1.shape))
@@ -571,6 +614,17 @@ def check() -> list[dict]:
     for name in ("ssn_a", "ssn_1l", "ssn2"):
         bad = {c: sim_design(name, c)["bad_share"] for c in CASES}
         ok(f"{name} words distinct and non-free on every data case", all(v == 0 for v in bad.values()), bad)
+    lay = {s: ssn_1l_layout(steps1l(k)) for k, s in ((2048, 67), (8192, 265))}
+    ok("ssn_1l layout is injective, within 32-bit words, and 3 / 9 words a row at K 2,048 / 8,192",
+       all(len(set(v)) == len(v) == s + 3 and all(0 <= p < 32 for _, p in v) for s, v in lay.items())
+       and (ssn_1l_words(67), ssn_1l_words(265)) == (3, 9), {s: ssn_1l_words(s) for s in lay})
+    hh = np.random.default_rng(3).integers(0, 2 ** 32, (64, 9), dtype=np.int64)
+    a1, al = ssn_1l_bits(hh, 265)
+    direct = np.stack([(hh[:, w] >> p) & 1 for w, p in lay[265]], axis=1)
+    ok("ssn_1l served extraction (LOP3; rotate + LOP3) reads each lane's own (word, bit)",
+       bool((np.concatenate([a1, al], axis=1) == direct).all()), "rotr/mask against (h >> p) & 1")
+    ok("ssn designs' priced shapes fit the column code (n <= 28,559)",
+       all(n <= SSN_CODE_N_MAX for shp in (LLAMA, V4_DENSE, V4_EXPERT) for n, _ in shp.values()), SSN_CODE_N_MAX)
     r = sim_design("ssn_1l_skip", "zero_blocks")
     ok("ssn_1l without one step's lane loses words on zero_blocks (mutation)", r["dup"] > 0, r["bad_share"])
     r = sim_design("ssn_1l", "random", salts=400)
