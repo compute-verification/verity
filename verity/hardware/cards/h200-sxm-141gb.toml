@@ -1,0 +1,77 @@
+# The NVIDIA H200 SXM 141 GB: the one source of its numbers (verity/hardware/README.md).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
+# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
+# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/H200.lean is held to this file.
+
+sku = "h200-sxm-141gb"
+name = "NVIDIA H200 SXM 141 GB"
+die = "GH100"
+arch = "sm_90a"
+board = "692-2G520-0280-001"
+vbios = "96.00.A5.00.03"
+lean = "Security/Definitions/Core/Accel/H200.lean"
+nodes = "two H200 nodes (art:72daa20de42c, art:28ff838a63c9: identical apart from the current clocks)"
+
+[sm]
+count = { value = 132, unit = "SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3 (H100 SXM5: 132 SMs; the H200 is the same GH100 with HBM3e)" }
+
+[clock]
+sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (nvidia-smi -q: max, application, default application and max customer boost clocks 1980 MHz); art:d10829e5b08e (SM and memory clock offset ranges [0, 0], supported clocks top at 1980 and 3201); H100 whitepaper V1.04 Table 3, 'GPU Boost Clock ... 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'" }
+memory = { value = 3201, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (max and application memory clock 3201 MHz); art:d10829e5b08e (offset range [0, 0])" }
+
+# The stores. Registers in 32-bit words an SM; the rest in bytes.
+[store]
+reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Register File Size / SM 256 KB', 64 Ki 32-bit registers" }
+reg_extra = { value = 4494, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words)" }
+smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Combined L1 Cache / Shared Memory 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
+l2 = { value = 52428800, unit = "B", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'L2 Cache Size 50 MB', taken as 50 MiB" }
+dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data sheet, 'GPU Memory 141GB', taken as 141 GiB, above the 143,771 MiB the driver reports" }
+
+# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
+[rate]
+tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at 1980 MHz; measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd)" }
+issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "H100 whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler dispatching one warp instruction a clock" }
+alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer add, compare, min, max, logic and shift 64" }
+imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer multiply and multiply-add 64" }
+shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: warp shuffle 32 (measured 32.0: SHFL.BFLY at 0.999869 warp instructions a SM-clock)" }
+f64 = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 64-bit floating-point add, multiply and multiply-add 64" }
+sfu = { value = 16, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: reciprocal, square root, logarithm, exponential, sine and cosine 16" }
+smem = { value = 32, unit = "bank word/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9, 'Shared Memory', CC 9.0: 32 banks of one 32-bit word a clock" }
+l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the lane loads' issue bound, neither measured nor a ceiling; open until a measured ceiling with its argument replaces it (scattered patterns measured 0.40-1.63 words a SM-clock, art:a71b3e384fd3)" }
+
+[memory]
+bus = { value = 6144, unit = "bit", mark = "ceiling", source = "six HBM3e stacks of 1024 bits; no data-sheet figure" }
+transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3201 MHz nvidia-smi reports" }
+bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above the data sheet's 'GPU Memory Bandwidth 4.8TB/s' (measured 4.26e12, 88.75% of 4.8, art:df775b659979)" }
+
+# The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
+[weight]
+s8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "rate.tensor's unit" }
+u8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheet's INT8 rate, u8 as s8" }
+b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "measured: the H200's b1 MMA (BGMMA m64n256k256) runs 32764.6 b1 MACs a SM-clock, exactly 8 times s8's 4095.6 at the same instruction rate; no document gives a b1 peak" }
+e4m3 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP8 1,979 dense TFLOPS, the INT8 rate" }
+e5m2 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e4m3" }
+e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the card has no FP4 MMA: an op the card lacks only adds programs to the model" }
+f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP16 989.5 dense TFLOPS, half the FP8 rate" }
+bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: BF16 989.5 dense TFLOPS" }
+tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: TF32 494.5 dense TFLOPS" }
+nvf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
+mxf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
+f64 = { value = 32, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 whitepaper: FP64 Tensor Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2 DMMA MACs a SM-clock, 4096 / 128" }
+
+# The model's own ranges (Accel.Card's exact and text).
+[model]
+exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma and wgmma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (silicon.integer.HOPPER_SM90_S8_K32, art:74353cac67fb, 0 mismatches)" }
+instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
+
+# The node's host CPUs (benchmarks/rho's host_ops): the server's, not the card's.
+[host]
+cpu = "Intel Xeon Platinum 8468 (Sapphire Rapids)"
+source = "lscpu on two H200 nodes: each VM sees 1 x 8 cores of the server's"
+sockets = { value = 2, unit = "socket", mark = "ceiling", source = "the 8468 is a 2S part (Intel ARK 231735), and HGX H200 hosts are dual-socket; the VMs can't see the server's socket count" }
+cores = { value = 48, unit = "core/socket", mark = "ceiling", source = "Intel ARK 231735 (Xeon Platinum 8468: 48 cores)" }
+amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput on Sapphire Rapids); not run on these nodes" }
+turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 231735: max turbo 3.8 GHz (all-core turbo 3.1); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
+priority_turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo: as turbo" }
+priority_cores = { value = 0, unit = "core/socket", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo" }
+ops = { value = 7.471104e14, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), 7.471e14" }
