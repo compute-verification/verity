@@ -27,6 +27,7 @@
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkScan",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
@@ -366,6 +367,7 @@
   "Definitions.Core.TC.Spec",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkScan",
   "Properties.SampledProofs",
   "SampledProofs",
   "Properties.Pous.TimedAudit",
@@ -850,6 +852,11 @@
    ],
    "except": [],
    "why": "a party's signed periods are stated over the code that checks them (MemoryChallenger.Attest, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+  },
+  "Properties.NetworkScan": {
+   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
+   "except": [],
+   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.Layout.Fits`), never a proof"
   }
  },
  "reads_exempt": {
@@ -4289,7 +4296,9 @@
    "Pous.Component.SecurityProofs.runAccepts_meets": "completeness: RunAccepts' honest instance: a key of the deployed LMS parameters signs a one-round session over setup's accepted two-block store that the compiled run check accepts",
    "Pous.Component.SecurityProofs.runBinds_meets": "completeness: RunBinds' honest instance: runAccepts_meets' run, accepted twice under one setup",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session of at most MAX_READS reads with no egress, at eps = 2^-128 and foreign_bits the StreamedWipeMeetsReads threshold at r = ratio k, and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill the labels' n * 512 bits, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
-   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0"
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0",
+   "Properties.NetworkScan.ScanFits": "unstated: NetTiming.Layout.Fits' parts (1) and (2) at an accepted scan's layout are proved from scanOf's acceptance (scanFits_egress_ingress, Proofs.Properties.NetworkScan.Fits); part (3), no egress gate depending on a later step's ingress, is open, and ScanFits gets a guarantee entry with its proof",
+   "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
