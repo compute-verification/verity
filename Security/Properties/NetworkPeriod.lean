@@ -26,10 +26,10 @@ supplies each of the statement's quantities as at most the check's number:
   (`faulty_bits`) and, when a tied audit is drawn in part with a bound of at least one wrong unit, every slot entry
   bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
 
-The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its faulty proof
-blocks only as the slot entries they can set; `RowsTiedDrawn` says the check accepts a tied audit only sampled whole
-or with its slot entry templates and the templates its circuit record registers whole beside them each a stratum
-sampled whole, the record its registration's (`StrataDrawnWhole`), so a faulty proof block is in none of them.
+The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
+proof blocks only as the slot entries they can set; `RowsTiedDrawn` says the check accepts a tied audit only sampled
+whole or with its slot entry templates and the templates its circuit record registers whole beside them each a stratum
+sampled whole, the record its registration's (`StrataDrawnWhole`), so an incorrect proof block is in none of them.
 `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree
 the entries port of its chunk of an entry template of that audit's own Program at the closure digest its circuit record
 registers, a record its registration binds. Each reads the entry templates from what the integration registered, over
@@ -103,7 +103,7 @@ def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome P
 accepts a period in the rows form, every audit some link-window's scan's `prog` is an output of (`tiedIn` over the
 commitment's window records) sampled every proof block or, its registration binding its circuit record, each of its
 slot entry templates and those the record registers whole beside them whole (`StrataDrawnWhole`), the rest sampled at
-its δ: `rowsTerms` charges such an audit's free inputs to its link-window, and its faulty proof blocks, in none of
+its δ: `rowsTerms` charges such an audit's free inputs to its link-window, and its incorrect proof blocks, in none of
 those strata, as the entries they can set (`faultyEntries`). -/
 def RowsTiedDrawn : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),

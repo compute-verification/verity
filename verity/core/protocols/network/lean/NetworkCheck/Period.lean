@@ -138,12 +138,12 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
   draw is stratified), and its `bound`; in the rows form, an audit tied to a link-window's scan (`tiedIn`: some
-  link-window's `prog` is its output) is refused unless every unit is drawn (`Σ k = N`) or, its Program having slot
-  entries' templates, each of those and of the templates its circuit record registers whole beside them
-  (`Audit.whole`) is a stratum of its draw drawn whole (`k = n`), the record its registration's (`Audit.boundIn`), the
-  rest sampled at its profile's δ (`drawsWhole`, `Properties.NetworkPeriod.RowsTiedDrawn`): its slots' entries and
-  what they read are then the ones its Programs computed, and `K` charges what its wrong units can set of the entries
-  (`faulty_entries`, below);
+  link-window's `prog` is its output) is refused unless every proof block is sampled (`Σ k = N`) or, its Program
+  having slot entries' templates, each of those and of the templates its circuit record registers whole beside them
+  (`Audit.whole`) is a stratum of its sample sampled whole (`k = n`), the record its registration's (`Audit.boundIn`),
+  the rest sampled at its profile's δ (`drawsWhole`, `Properties.NetworkPeriod.RowsTiedDrawn`): its slots' entries and
+  what they read are then the ones its Programs computed, and `K` charges what its incorrect proof blocks can set of
+  the entries (`faulty_entries`, below);
 * in the rows form, link-window `w`'s scan's Programs' rows are a compute audit's slot entries, a lane a chunk
   (`wired`): for each lane `j`, its `scan/prog<j>` entry names the root and domain of the entries port
   `<descriptor id>/c<j>/o0`, of T / `every` leaves, in the `roots` of one audit's registration, where the descriptor id
@@ -1139,10 +1139,11 @@ def strataOf (prof : Core.Integrity) : Array Core.Stratum := match prof.levels w
     | _ => #[]
   | _ => #[]
 
-/-- A tied audit's draw covers what `K` doesn't charge: every unit drawn, or, its Program having slot entries'
-templates, each of those and of the templates its circuit record registers whole beside them (`Audit.whole`) a stratum
-of the profile drawn whole (`k = size`), a record its registration `reg` binds (`Audit.boundIn`), so its slots' entries
-and what they read are the ones its Programs computed, and only the rest, sampled at its δ, can hold a wrong unit. -/
+/-- A tied audit's sample covers what `K` doesn't charge: every proof block sampled, or, its Program having slot
+entries' templates, each of those and of the templates its circuit record registers whole beside them (`Audit.whole`)
+a stratum of the profile sampled whole (`k = size`), a record its registration `reg` binds (`Audit.boundIn`), so its
+slots' entries and what they read are the ones its Programs computed, and only the rest, sampled at its δ, can hold
+an incorrect proof block. -/
 def drawsWhole (a : Audit) (reg : Json) (prof : Core.Integrity) (f : Facts) : Bool :=
   f.drawn == f.units || (0 < a.entries.size && a.boundIn reg && a.whole.all fun key =>
     (strataOf prof).any fun st => st.name == key && st.k == st.size)
@@ -1171,9 +1172,10 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
 /-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, the answer's units are the
-Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) draws what its link-window's term
-doesn't charge (`drawsWhole`): every unit, or its slot entries' templates and those its circuit record registers whole
-beside them, the term then charging the entries its wrong units can set (`faultyEntries`). -/
+Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) samples whole what its
+link-window's term doesn't charge (`drawsWhole`): every proof block, or its slot entries' templates and those its
+circuit record registers whole beside them, the term then charging the entries its incorrect proof blocks can set
+(`faultyEntries`). -/
 def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) (tied : Bool := false) : Found Facts := do
   let what := s!"audit {i}"
   unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
