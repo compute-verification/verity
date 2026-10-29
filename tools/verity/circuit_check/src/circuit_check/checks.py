@@ -965,7 +965,7 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
             entry["digest"] = circuit_digest_pin(t, pins, F)
     if kind != "reference":
         with spent("block"):
-            entry["block"] = block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
+            entry["block"] = unit_block(t, F, lower_whole)
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
@@ -975,6 +975,12 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
 #: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
 #: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
 UNIT_OWNERS = ("verity.core.protocols.pouw.",)
+
+
+def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
+    """`block_range` of ``t``, failed past the range where ``t`` is staged whole as one unit: checked whole (``lower_whole``) and
+    owned under `UNIT_OWNERS` (`sidecars.owner`)."""
+    return block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
 
 
 def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
@@ -1254,5 +1260,5 @@ def report(targets: list[dict], opts: Options) -> dict:
 
 __all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit",
            "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report",
-           "summarize", "target_equivalence", "template_lowering",
+           "summarize", "target_equivalence", "template_lowering", "unit_block",
            "whole_lowering"]
