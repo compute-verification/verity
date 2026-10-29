@@ -983,8 +983,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`: `n·g` after a prefix that rewinds nothing. Both hold at one statement
   (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement: on the
   spec's statement-indexed tapes (`ZKmalRx`), `m x` sessions in turn (`zkmalRx_iter`).
-* `Layout`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
-  tape per slot) is `zkmalAt_iterG`'s nested run (`Layout.iterProver_flat`), so **`zkmalAt_layout`** charges it
+* `RunParts`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
+  tape per slot) is `zkmalAt_iterG`'s nested run (`RunParts.iterProver_flat`), so **`zkmalAt_layout`** charges it
   `ε₀ + Σ_{j < m} eB j` and `(c + m)·g`, each session's zero knowledge needed only at the histories that start it.
 * `Cut`: a run cut at a round (`cutT`), and the run of a prover stopped there is its own run cut (`interact_stopAt`).
 * `Stop`: a run in parts with a public stop, a test of the verifier-visible history read through the first part:
