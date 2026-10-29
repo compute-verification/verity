@@ -3588,7 +3588,7 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
   const char *sign_domain = WT_RECEIPT ? "verity/poub/sketch-signs/v0" : "verity/bandwidth/sketch-signs/v0";
   const int nl = (int)strlen(name);
   int o = 0;   // SHA512(PASS_DOMAIN ‖ σ ‖ u32be j ‖ root)
-  put(P.seed, o, "verity/poub/seed/v0", 32);
+  put(P.seed, o, "verity/poub/seed/v0", 20);
   put(P.seed, o, sigma, 32);
   put(P.seed, o, zero, 4 + 64);
   P.seed_len = o;
@@ -3614,7 +3614,7 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
   frame(P.tag, o, 'b', zero, 32);
   o = 0;   // Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(s)): the leaves' prefix; sketch-sha512's receipt prefix
 #if WT_RECEIPT
-  put(P.leaf, o, "verity/poub/sketch-receipt/v0", 42);
+  put(P.leaf, o, "verity/poub/sketch-receipt/v0", 30);
 #else
   put(P.leaf, o, "verity/bandwidth/tag-leaf/v1", 29);
   frame(P.leaf, o, 's', name, nl);
