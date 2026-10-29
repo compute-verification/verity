@@ -70,9 +70,32 @@ PER2_LIMBS_REAL = 8
 WEIGHT_SIGMA_INT8 = 25.0
 QUANT_ERR_UNIT = 0.5 / math.sqrt(3)
 
+COIN_PRICED_BYTE = 2101
+COIN_CALL_US = ((131_072, 9.3), (1_048_576, 9.5), (4_194_304, 16.2), (16_777_216, 55.9), (67_108_864, 214.8),
+                (1_073_741_824, 3259.0))
+DITHER_LP = 128
+
 
 def steps28(k: int) -> int:
     return math.ceil(k / DATA_PER_STEP)
+
+
+def steps1l(k: int) -> int:
+    """ssn_1l's k32 steps: step 1 holds 28 data entries and a 4-lane column code, every later step 31 and one lane."""
+    return 1 + math.ceil(max(0, k - DATA_PER_STEP) / 31)
+
+
+def coin_us(nbytes: float) -> float:
+    """One call's coin expansion in µs, interpolated on the measured call sizes (one noise byte an entry)."""
+    if nbytes <= 0:
+        return 0.0
+    pts = COIN_CALL_US
+    if nbytes <= pts[0][0]:
+        return pts[0][1]
+    for (b0, t0), (b1, t1) in zip(pts, pts[1:]):
+        if nbytes <= b1:
+            return t0 + (t1 - t0) * (nbytes - b0) / (b1 - b0)
+    return pts[-1][1] * nbytes / pts[-1][0]
 
 
 @dataclass(frozen=True)
@@ -93,6 +116,7 @@ class Design:
     c1_bytes: Callable[[int, int, int], float]
     verdict: str = ""
     notes: list[str] = field(default_factory=list)
+    coin_bits: Callable[[int, int, int], float] = None
 
 
 def _zero(m: int, n: int, k: int) -> float:
@@ -100,73 +124,86 @@ def _zero(m: int, n: int, k: int) -> float:
 
 
 def designs() -> list[Design]:
-    s = steps28
+    s, s1 = steps28, steps1l
     return [
         Design("ncp3", "X=[A+E1|A+E1R|-(A+E1(I+R))], Y=[B+F1;B-RF1;B+(I-R)F1], E,F in [-31,32] (ncp.py)",
                lambda k: 3.0, lambda m, n, k: 32 / n, lambda m, n, k: 32 / m,
                lambda m, n, k: 24 / n, lambda m, n, k: 24 / m, _zero, True, "data-independent",
                "int7 activations, Route U offset (Int7Int32UUnsigned, k <= 2^16)", "+3.68% 2K / +3.48% 8K (measured, CORE-NCP)",
                "F1 int7-ncp-v1", lambda m, n, k: 3 / n + 3 / m,
-               "fails at T 512 (24/m + 8/m); 2.1% at T 8,192"),
+               "fails at T 512 (24/m + 8/m); 2.1% at T 8,192",
+               coin_bits=lambda m, n, k: 6 * (m + n) * k + k / 4 * math.log2(k / 4)),
         Design("os2", "X=[A+E|E], Y=[B;-B], E=(h&7)-4 one-sided, unsigned offset", lambda k: 2.0,
                lambda m, n, k: 2 * P_ENTRY / n, _zero, lambda m, n, k: 2 * P_ENTRY / n, _zero, _zero, True,
                "weights-only (zero or equal weight columns)", "activations clamped to +-124; u8 offset is a weights-only init",
                "~0 (clamp 124, estimate)", "F2 int8-tok124", lambda m, n, k: 2 / n,
-               "dominated by per2 (alpha 2)"),
-        Design("per2", f"X=[A+V.P | V x L], Y=[B; -limbs(fold32 B)], V in [-4,3] per row, L={PER2_LIMBS_REAL} limbs",
+               "dominated by per2 (alpha 2)", coin_bits=lambda m, n, k: 3 * m * k),
+        Design("per2", "X=[A+V.P | V x L], Y=[B; -limbs(fold32 B)], V in [-4,3] per row, L limbs (PER2_LIMBS_REAL)",
                lambda k: 1 + H32 * PER2_LIMBS_REAL / k,
                lambda m, n, k: P_ENTRY / n + 256 / (n * k), _zero,
                lambda m, n, k: P_ENTRY / n + 256 / (n * k), _zero, _zero, True,
                "weights-only for words; X registers repeat on zero A blocks", "activations clamped to +-124; limbs keep Y int8",
                "~0 (clamp 124, estimate)", "F2 int8-tok124", lambda m, n, k: 1 / n,
-               "needs M1 for the final word; limbs from real weights unmeasured (estimate 8)"),
-        Design("ssn_a", "per k32 step: 28 data + 4 bits a=h&0x01010101 per row; public W0 (step 1 injective in [-6,6]^4, then one-hot)",
-               lambda k: H32 * s(k) / k, lambda m, n, k: H32 * s(k) / (n * k), _zero,
+               "needs M1 for the final word", coin_bits=lambda m, n, k: 3 * 32 * m),
+        Design("ssn_a", "per k32 step: 28 data + 4 bits a=(h>>q)&0x01010101 per row; public W0 (step 1 injective in [-6,6]^4, then one-hot)",
+               lambda k: H32 * s(k) / k, lambda m, n, k: 2 * H32 * s(k) / (n * k), _zero,
                lambda m, n, k: H32 * s(k) / (n * k), _zero, _zero, False, "data-independent",
                "none: stock int8 +-127, int32 holds 127^2 K + sum|W0| for K < 133,000", "~0: served noise std ~6 units vs ~330 (estimate)",
-               "F3 ssn-a-v1", lambda m, n, k: 4 * s(k) / (n * k),
-               "lead: no C1, no M1 needed"),
-        Design("ssn2", "per k32 step: 28 data + 4 bits a per row and 4 bits b per column (both h&0x01010101)",
-               lambda k: H32 * s(k) / k, lambda m, n, k: H32 * s(k) / (n * k),
-               lambda m, n, k: H32 * s(k) / (m * k), lambda m, n, k: H32 * s(k) / (n * k),
+               "F3 ssn-a-b1-v1", lambda m, n, k: 4 * s(k) / (n * k),
+               "no C1, no M1 needed; dominated by ssn_1l", coin_bits=lambda m, n, k: 4 * s(k) * m),
+        Design("ssn_1l", "step 1: 28 data + 4 bits against an injective column code in [-6,6]^4; every later k32 step: 31 data + "
+               "1 bit a row, W0 = 1 on that lane for every column",
+               lambda k: H32 * s1(k) / k, lambda m, n, k: 2 * H32 * s1(k) / (n * k), _zero,
+               lambda m, n, k: H32 * s1(k) / (n * k), _zero, _zero, False, "data-independent",
+               "none: stock int8 +-127", "~0: served noise std ~6 units vs ~330 (estimate)",
+               "F7 ssn-1l-v1", lambda m, n, k: 4 * s1(k) / (n * k),
+               "lead: no C1, no M1 needed; alpha 32/31", coin_bits=lambda m, n, k: (s1(k) + 3) * m),
+        Design("ssn2", "per k32 step: 28 data + 4 bits a per row and 4 bits b per column (both (h>>q)&0x01010101)",
+               lambda k: H32 * s(k) / k, lambda m, n, k: 2 * H32 * s(k) / (n * k),
+               lambda m, n, k: 2 * H32 * s(k) / (m * k), lambda m, n, k: H32 * s(k) / (n * k),
                lambda m, n, k: H32 * s(k) / (m * k), _zero, False, "data-independent", "none (stock int8)",
-               "~0: served noise std ~7 units (estimate)", "F5 ssn2-v1", lambda m, n, k: 4 * s(k) / (n * k) + 4 * s(k) / (m * k),
-               "needs C1 at m 64 (Y masks 1.14/m)"),
+               "~0: served noise std ~7 units (estimate)", "F5 ssn2-b1-v1", lambda m, n, k: 4 * s(k) / (n * k) + 4 * s(k) / (m * k),
+               "needs C1 at m 64 (Y masks 1.14/m); Y coins 1/(7m) bytes a MAC", coin_bits=lambda m, n, k: 4 * s(k) * (m + n)),
         Design("nsf", "one k32 step first: 32 bits per row x public W0 (distinct weight-w columns), served",
-               lambda k: 1 + H32 / k, lambda m, n, k: 8 * H32 / (n * k), _zero, lambda m, n, k: 8 * H32 / (n * k), _zero,
+               lambda k: 1 + H32 / k, lambda m, n, k: 16 * H32 / (n * k), _zero, lambda m, n, k: 8 * H32 / (n * k), _zero,
                _zero, False, "data-dependent within a chain (zero data blocks repeat a word)", "none (stock int8)",
                "~0: error <= w units", "F6 nsf-v1", lambda m, n, k: 32 / (n * k),
-               "dup on zero blocks (massive-activation rows)"),
+               "dup on zero blocks (massive-activation rows)", coin_bits=lambda m, n, k: 32 * m),
         Design("disp2s", "first 16 K-entries of A and B replaced by raw coins R, S (moves); restore [A_P|R]·[B_P;-S] in one k32 step",
                lambda k: 1 + H32 / k, _zero, lambda m, n, k: P_ENTRY * 16 / (m * k), _zero,
                lambda m, n, k: P_ENTRY * 16 / (m * k), _zero, True, "data-dependent within a chain",
                "none (stock int8, exact)", "0 (exact)", "F0 int8-channel127-v1", lambda m, n, k: 16 / (m * k),
-               "needs M1; dup on zero blocks"),
+               "needs M1; dup on zero blocks", coin_bits=lambda m, n, k: 8 * 16 * (m + n)),
         Design("perm", "k32-block order of K permuted per call (TMA coordinates)", lambda k: 1.0, _zero, _zero, _zero, _zero,
                _zero, True, "data-dependent (zero blocks, identical rows)", "none (exact)", "0 (exact)",
-               "F0 int8-channel127-v1", _zero, "needs M1; dup; a noise-dependent address may price as `other` (8/n + 8/m)"),
+               "F0 int8-channel127-v1", _zero, "needs M1; dup; a noise-dependent address may price as `other` (8/n + 8/m)",
+               coin_bits=lambda m, n, k: k / 32 * math.log2(max(2, k / 32))),
         Design("lowrank1", "X=[A+u vᵀ | u x L], v public, u fresh per row; Kronecker and block-diagonal reduce to this or per2",
                lambda k: 1 + H32 * PER2_LIMBS_REAL / k, lambda m, n, k: 2 * P_ENTRY / n, _zero,
                lambda m, n, k: P_ENTRY / n, _zero, _zero, True, "weights-only", "clamp to fit u v",
-               "~0 (estimate)", "F2 int8-tok124", lambda m, n, k: 1 / n, "dominated by per2 (a table select per register)"),
+               "~0 (estimate)", "F2 int8-tok124", lambda m, n, k: 1 / n, "dominated by per2 (a table select per register)",
+               coin_bits=lambda m, n, k: 8 * m),
         Design("dither32", "Dither v3.2 noise (±80 periodic U, V; wrap8) with 32-bit words every k32 and O de-noised",
                lambda k: 1.0, lambda m, n, k: 3 * P_ENTRY / n, lambda m, n, k: 3 * P_ENTRY / m, _zero, _zero,
                lambda m, n, k: 128 / k + 1 / m, True, "data-independent", "wrap8 with wrap indicators",
                "0 (exact O)", "F0 int8-channel127-v1", _zero,
-               "dominated: de-noise L'/K + 1/m and wrap forming unforced"),
+               "dominated: de-noise L'/K + 1/m and wrap forming unforced",
+               coin_bits=lambda m, n, k: 8 * DITHER_LP * (m + n) + k * math.log2(DITHER_LP)),
         Design("rowsign", "row signs s_i on A, served after one sign fix an output", lambda k: 1.0,
                lambda m, n, k: P_ENTRY / n, _zero, lambda m, n, k: P_ENTRY / n, _zero, lambda m, n, k: H32 / k, False,
                "data-dependent (zero partial sums are free)", "none", "0", "F0 int8-channel127-v1", lambda m, n, k: 1 / n,
-               "dominated: the per-output fix is 32/K"),
+               "dominated: the per-output fix is 32/K", coin_bits=lambda m, n, k: m),
         Design("signs2", "column signs d on both A and B: (A d)(d B) = AB at every partial sum", lambda k: 1.0,
                lambda m, n, k: P_ENTRY / n, lambda m, n, k: P_ENTRY / m, _zero, _zero, _zero, True,
-               "every word free (d^2 = 1)", "none", "0", "-", _zero, "rejected: words salt-independent"),
+               "every word free (d^2 = 1)", "none", "0", "-", _zero, "rejected: words salt-independent",
+               coin_bits=lambda m, n, k: k),
         Design("init", "one per-row accumulator init dither c_i", lambda k: 1.0, _zero, _zero, _zero, _zero, _zero, False,
-               "fails: words c_i + D collide on equal partial sums", "none", "0", "-", _zero, "rejected"),
+               "fails: words c_i + D collide on equal partial sums", "none", "0", "-", _zero, "rejected",
+               coin_bits=lambda m, n, k: 21 * m),
     ]
 
 
-DUP_ESTIMATE = {"ncp3": 0.0, "os2": 0.0, "per2": 0.0, "ssn_a": 0.0, "ssn2": 0.0, "lowrank1": 0.0, "dither32": 0.0,
+DUP_ESTIMATE = {"ncp3": 0.0, "os2": 0.0, "per2": 0.0, "ssn_a": 0.0, "ssn_1l": 0.0, "ssn2": 0.0, "lowrank1": 0.0, "dither32": 0.0,
                 "nsf": None, "disp2s": None, "perm": None, "rowsign": None, "signs2": 1.0, "init": None}
 
 
@@ -179,6 +216,8 @@ def gap_terms(d: Design, m: int, n: int, k: int, model: str, c1: bool) -> dict:
     terms = {"alpha": a, "forming_x": fx - cx, "forming_y": fy - cy, "denoise": d.denoise(m, n, k), "final_word": final,
              "dup": a * dup if dup is not None else 0.0}
     terms["gap"] = sum(v for key, v in terms.items() if key != "alpha")
+    terms["coins"] = d.coin_bits(m, n, k) / 8 * COIN_PRICED_BYTE / (m * n * k)
+    terms["gap_coins_uncredited"] = terms["gap"] + terms["coins"]
     terms["dup_data_dependent"] = float(dup is None)
     return terms
 
@@ -201,14 +240,17 @@ def hash_bytes_per_mac(d: Design, m: int, n: int, k: int, c1: bool) -> float:
     return d.alpha(k) * 4 / H32 + (d.c1_bytes(m, n, k) if c1 else 0.0)
 
 
-def t2_estimate(d: Design, point: str, c1: bool) -> float:
+def t2_estimate(d: Design, point: str, c1: bool) -> dict:
+    """Step time over stock: extra tensor width, hashing at HASH_GBPS, and each call's coin expansion run serially
+    (a call's seed reads its operands' roots, so its coins can't be expanded ahead)."""
     p = STEP[point]
     m = p["tokens"]
     macs = sum(m * n * k for n, k in LLAMA.values()) * LLAMA_LAYERS
     byts = sum(m * n * k * hash_bytes_per_mac(d, m, n, k, c1) for n, k in LLAMA.values()) * LLAMA_LAYERS
     alpha = sum(m * n * k * d.alpha(k) for n, k in LLAMA.values()) * LLAMA_LAYERS / macs
+    coin_ms = sum(coin_us(d.coin_bits(m, n, k) / 8) for n, k in LLAMA.values()) * LLAMA_LAYERS * 1e-3
     t_ms = p["stock_ms"] + (alpha - 1) * p["gemm_ms"] + byts / (HASH_GBPS * 1e9) * 1e3
-    return t_ms / p["stock_ms"]
+    return {"t2": (t_ms + coin_ms) / p["stock_ms"], "t2_without_coins": t_ms / p["stock_ms"], "coin_ms": coin_ms}
 
 
 def ssn_a_w0(n: int, k: int, rng: np.random.Generator | None = None) -> np.ndarray:
@@ -239,6 +281,10 @@ def ssn_noise_std(k: int, n: int = 2048) -> dict:
     w2 = (w0.astype(float) ** 2).sum(axis=(0, 1))
     quant = QUANT_ERR_UNIT * WEIGHT_SIGMA_INT8 * math.sqrt(k)
     out = {"K": k, "act_quant_std_units_estimate": quant, "ssn2_std_units": math.sqrt(0.75 * steps28(k))}
+    code = (w0[0].astype(float) ** 2).sum(axis=0)
+    v1l = (code + steps1l(k) - 1) / 4
+    out["ssn_1l_std_units"] = float(np.sqrt(v1l).mean())
+    out["ssn_1l_var_share_of_quant"] = float(v1l.mean()) / quant ** 2
     for bits in MASKS:
         var = w2 * ((2 ** bits) ** 2 - 1) / 12
         out[f"ssn_a_b{bits}_std_units"] = float(np.sqrt(var).mean())
@@ -311,8 +357,43 @@ def _bits(rng: np.random.Generator, shape) -> np.ndarray:
     return rng.integers(0, 2, shape, dtype=np.int64)
 
 
+def _sim_ssn_1l(case: str, salts: int, m: int, n: int, rng: np.random.Generator, skip: int | None = None) -> dict:
+    """ssn_1l on 4 steps (121 data entries); `skip` drops one later step's lane (a mutation)."""
+    s = 4
+    k = DATA_PER_STEP + 31 * (s - 1)
+    a, b = _data(case, m, n, 128, rng)
+    a, b = a[:, :k], b[:k]
+    code = ssn_a_w0(n, DATA_PER_STEP)[0]
+    lane = np.ones((1, n), dtype=np.int64)
+    ycols = [b[:DATA_PER_STEP], code]
+    for t in range(1, s):
+        lo = DATA_PER_STEP + 31 * (t - 1)
+        ycols += [b[lo:lo + 31], lane if t != skip else 0 * lane]
+    y1 = np.concatenate(ycols, axis=0)
+    xs, raw, formed = [], [], []
+    for _ in range(salts):
+        b1, bl = _bits(rng, (m, 4)), _bits(rng, (m, s - 1))
+        parts = [a[:, :DATA_PER_STEP], b1]
+        for t in range(1, s):
+            lo = DATA_PER_STEP + 31 * (t - 1)
+            parts += [a[:, lo:lo + 31], bl[:, t - 1:t]]
+        x = np.concatenate(parts, axis=1)
+        xs.append(x)
+        raw.append(rng.integers(0, 2 ** 32, (m, s)))
+        formed.append(np.concatenate([_pack(x[:, 32 * t + 28:32 * t + 32]) for t in range(s)], axis=1))
+    x = np.stack(xs)
+    y = np.broadcast_to(y1, (salts, *y1.shape))
+    bias = np.rint((code.sum(axis=0) + (s - 1 - (skip is not None))) / 2).astype(np.int64)
+    words = _words(x, y, -np.broadcast_to(bias, (salts, m, n)))
+    out = _distinct([words, np.stack(formed)], [np.stack(raw)])
+    err = words[:, :, :, -1] - (a @ b)[None]
+    return out | {"exact": None, "served_err_mean": float(err.mean()), "served_err_std": float(err.std())}
+
+
 def sim_design(name: str, case: str, salts: int = 24, m: int = 4, n: int = 6, seed: int = 1) -> dict:
     rng = np.random.default_rng(seed)
+    if name in ("ssn_1l", "ssn_1l_skip"):
+        return _sim_ssn_1l(case, salts, m, n, rng, skip=2 if name == "ssn_1l_skip" else None)
     if name in ("ssn_a", "ssn2"):
         k = DATA_PER_STEP * 4
         a, b = _data(case, m, n, 128, rng)
@@ -443,9 +524,13 @@ def check() -> list[dict]:
     for name in ("ncp3", "os2", "per2", "disp2s", "perm"):
         r = sim_design(name, "random")
         ok(f"{name} cancels exactly", r["exact"] is True, r["exact"])
-    for name in ("ssn_a", "ssn2"):
+    for name in ("ssn_a", "ssn_1l", "ssn2"):
         bad = {c: sim_design(name, c)["bad_share"] for c in CASES}
         ok(f"{name} words distinct and non-free on every data case", all(v == 0 for v in bad.values()), bad)
+    r = sim_design("ssn_1l_skip", "zero_blocks")
+    ok("ssn_1l without one step's lane loses words on zero_blocks (mutation)", r["dup"] > 0, r["bad_share"])
+    r = sim_design("ssn_1l", "random", salts=400)
+    ok("ssn_1l served error is zero-mean within 0.5", abs(r["served_err_mean"]) < 0.5, r["served_err_mean"])
     ncp = {c: sim_design("ncp3", c) for c in CASES}
     ok("ncp3: on every data case only the final word (A·B) is free, no duplicates",
        all(r["dup"] == 0 and r["free"] == 4 * 6 for r in ncp.values()), {c: (r["dup"], r["free"]) for c, r in ncp.items()})
@@ -476,8 +561,11 @@ def report(c1_only: bool = False) -> dict:
                     entry[f"llama_{point}"] = weighted(d, LLAMA, m, model, c1)
                     entry[f"v4dense_{point}"] = weighted(d, V4_DENSE, m, model, c1)
                     entry[f"v4expert_{point}"] = weighted(d, V4_EXPERT, m, model, c1, V4_EXPERT_SHARE)
-                entry["t2_T8192"] = t2_estimate(d, "T8192", c1)
-                entry["t2_T512_64tok"] = t2_estimate(d, "T512_64tok", c1)
+                for point in STEP:
+                    t2 = t2_estimate(d, point, c1)
+                    entry[f"t2_{point}"] = t2["t2"]
+                    entry[f"t2_without_coins_{point}"] = t2["t2_without_coins"]
+                    entry[f"coin_ms_{point}"] = t2["coin_ms"]
                 rows.append(entry)
     sims = {d.name: {c: sim_design(d.name, c) for c in CASES} for d in ds if d.name not in ("lowrank1", "dither32")}
     per_dot = {}
@@ -485,14 +573,17 @@ def report(c1_only: bool = False) -> dict:
         per_dot[d.name] = {lin: {"extra_macs": (d.alpha(k) - 1) * k, "words": d.alpha(k) * k / H32,
                                  "forming_x_units_per_row": d.form_x(1, n, k) * n * k,
                                  "forming_y_units_per_col_call": d.form_y(1, n, k) * k,
-                                 "denoise_units": d.denoise(10 ** 9, n, k) * k}
+                                 "denoise_units": d.denoise(10 ** 9, n, k) * k,
+                                 "coin_bits_per_row": d.coin_bits(1, 0, k),
+                                 "coin_bits_per_col_call": d.coin_bits(0, 1, k)}
                            for lin, (n, k) in LLAMA.items()}
     return {"designs": [{k: (v if not callable(v) else None) for k, v in d.__dict__.items() if not callable(v)} for d in ds],
             "rows": rows, "sims": sims, "per_dot_product": per_dot,
             "noise_std": [ssn_noise_std(k) for k in (2048, 8192)], "checks": check(),
             "params": {"H32": H32, "p_entry": P_ENTRY, "data_per_step": DATA_PER_STEP, "llama": LLAMA, "v4_dense": V4_DENSE,
                        "v4_expert": V4_EXPERT, "v4_expert_share": V4_EXPERT_SHARE, "rows": ROWS, "hash_GBps": HASH_GBPS,
-                       "step": STEP, "per2_limbs_estimate": PER2_LIMBS_REAL}}
+                       "step": STEP, "per2_limbs": PER2_LIMBS_REAL, "dup": DUP_ESTIMATE,
+                       "coin_priced_byte": COIN_PRICED_BYTE, "coin_call_us": COIN_CALL_US}}
 
 
 def periods(gap_share: float, alpha: float) -> dict:
@@ -506,14 +597,17 @@ def periods(gap_share: float, alpha: float) -> dict:
 def table(rep: dict) -> str:
     lines = []
     hdr = ("design", "model", "C1", "L T512(64)", "L T512(512)", "L T8192", "V4d T512", "V4d T8192", "V4e T8192",
-           "T2 8192", "T2 512")
+           "L T512(64) +coins", "L T8192 +coins", "V4d T8192 +coins", "T2 8192", "T2 512(64)", "coin ms 8192/64")
     lines.append(" | ".join(hdr))
     for r in rep["rows"]:
-        def f(key):
-            return f"{100 * r[key]['gap']:.3f}%" + ("+dup" if r[key]["dup_data_dependent"] else "")
+        def f(key, gap="gap"):
+            return f"{100 * r[key][gap]:.3f}%" + ("+dup" if r[key]["dup_data_dependent"] else "")
         lines.append(" | ".join([r["design"], r["model"], "y" if r["c1"] else "n", f("llama_T512_64tok"),
                                  f("llama_T512_512tok"), f("llama_T8192"), f("v4dense_T512_64tok"), f("v4dense_T8192"),
-                                 f("v4expert_T8192"), f"{r['t2_T8192']:.1f}x", f"{r['t2_T512_64tok']:.1f}x"]))
+                                 f("v4expert_T8192"), f("llama_T512_64tok", "gap_coins_uncredited"),
+                                 f("llama_T8192", "gap_coins_uncredited"), f("v4dense_T8192", "gap_coins_uncredited"),
+                                 f"{r['t2_T8192']:.1f}x", f"{r['t2_T512_64tok']:.1f}x",
+                                 f"{r['coin_ms_T8192']:.2f}/{r['coin_ms_T512_64tok']:.2f}"]))
     lines.append("")
     for c in rep["checks"]:
         lines.append(f"{'PASS' if c['pass'] else 'FAIL'}  {c['check']}")
@@ -526,10 +620,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--table", action="store_true", help="print the text table")
     args = ap.parse_args(argv)
     rep = report()
-    lead = next(r for r in rep["rows"] if r["design"] == "ssn_a" and r["model"] == "M0" and not r["c1"])
-    rep["periods_ssn_a_M0_noC1_llama_T8192"] = periods(lead["llama_T8192"]["gap"], lead["llama_T8192"]["alpha"])
-    ncp = next(r for r in rep["rows"] if r["design"] == "ncp3" and r["model"] == "M0" and not r["c1"])
-    rep["periods_ncp3_M0_noC1_llama_T8192"] = periods(ncp["llama_T8192"]["gap"], ncp["llama_T8192"]["alpha"])
+    for name in ("ssn_1l", "ssn_a", "ncp3"):
+        r = next(r for r in rep["rows"] if r["design"] == name and r["model"] == "M0" and not r["c1"])
+        for gap in ("gap", "gap_coins_uncredited"):
+            rep[f"periods_{name}_M0_noC1_llama_T8192_{gap}"] = periods(r["llama_T8192"][gap], r["llama_T8192"]["alpha"])
     text = json.dumps(rep, indent=1, default=float)
     if args.json:
         with open(args.json, "w") as fh:
