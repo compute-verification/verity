@@ -188,7 +188,8 @@ theorem keeps : Properties.Pouw.Check.RegistrationKeeps params registration fixe
 theorem serviceAccepted : Properties.Pouw.Check.ServiceAccepted params registration fixed evidence profile draw :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, by decide +kernel, by decide +kernel⟩
 
-theorem saltKept : Properties.Pouw.Check.SaltKept params registration evidence := by decide
+theorem saltKept : Properties.Pouw.Check.SaltKept params registration evidence := by
+  unfold Properties.Pouw.Check.SaltKept; decide
 
 /-- **PoUW's check accepts the literal window**, a draw of `K′ = 4` of its 4 units, publishing level 1's work, the
 sampling item at `K′ = 4`, its `W` root and the 4 units, with the profile the rule fixes. -/
