@@ -739,7 +739,7 @@ def with_check(credit: dict, name: str, check: dict) -> dict:
 def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
     """The auditor's clock's rate over the verifier's, less 1, in ppm, from each coin's release on both (`Rv`, `Ra`):
     the median of the rates between each coin and the one half the session after it. The verifier stamps a coin it
-    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.Coins.ahead`) after it came
+    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.SessionCoins.ahead`) after it came
     back (`audit.Session._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
     that round trip over the session's span (−441 ppm at 60 s and −8989 ppm at 1 s on gate run 7); here it moves two
     of the pairs. None for a session of fewer than four coins."""
