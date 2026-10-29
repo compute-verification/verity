@@ -4,7 +4,7 @@ import Proofs.Pouw.Dimension.RouteUProofs
 import Proofs.Pouw.NCP.Proofs
 
 /-!
-# Committed formed operands and the final word under `DistinctWritesFloor` (scratch; not in a lock)
+# Committed formed operands, the final word and served sparse noise under `DistinctWritesFloor` (scratch; not in a lock)
 
 **Draft, pending review.** Two questions against `MH100w`'s `DistinctWritesFloor` (`Pouw.Dimension.H100Floor`) at the
 floor table `h100Floor`, which is the H200's measured table (`h200Measured = h100Floor`).
@@ -27,6 +27,10 @@ floor table `h100Floor`, which is the H200's measured table (`h200Measured = h10
   words and the coin words (`coinWords`), the committed `X` registers (all three blocks, biased packing: `xAll`, under
   `xAll_props`' conditions on `R`) and `Y` registers (all three blocks, two's complement: `yAll`, under `yAll_props`'
   conditions on `R` and `B`) are targets beside the checked and final words.
+* **Served sparse noise** (`ssnTarget`, `ssn_charged`; `ssn1l_charged` and `ssnA_charged` for SW-NOISE's weights).
+  At every data case, with the free values the constants and the raw coin words, every committed SSN word (each row,
+  column and step) is distinct and non-free when every step's public weights reach every column and step 0's tell the
+  columns apart. No premise on the input: the noise is served, not cancelled.
 * **Any non-final words** (`NfIndep`). The separations read only that the non-final words are independent modulo `V₀`
   at the input-`0` slice: NCP's canonical words (`nfIndep_canonical`) and route U's (`nfIndep_U`, through
   `wordUSubV0` and `indepModShift`), which honest commits when `X` is biased; `ncpU_charged` is `ncp_charged` there.
@@ -1463,5 +1467,307 @@ theorem ncpU_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndepe
   ncp_charged B hB hR hR1 P _ (nfIndep_U 128 hind B P hP) Ix Jx hJ0 hJ XI hXI h12 YI hYI hYd fpSem L Pg hL hPg hO
 
 end FinalWord
+
+/-! ## Served sparse noise: every committed word a target on every data case -/
+
+section SSN
+
+variable {m S : ℕ}
+
+/-- One call's raw coin words: a 32-bit word a row a step. -/
+abbrev SsnCoins (m S : ℕ) : Type := Fin m → Fin S → ℕ
+
+/-- The coin words in range. -/
+def ssnGrid (m S : ℕ) : Set (SsnCoins m S) := {h | ∀ i s, h i s < 2 ^ 32}
+
+/-- **The free values at a data case**: the constants and the raw coin words. With the data fixed, every
+salt-independent value is a constant, so this is today's free set there, and a program may depend on the data. -/
+def FreeSsn (m S : ℕ) : Set (SsnCoins m S → ℚ) :=
+  {f | (∃ q : ℚ, f = fun _ => q) ∨ ∃ i s, f = fun h => (h i s : ℚ)}
+
+/-- A mask reads four lanes of a coin word: none on `0`, each lane alone on some word, and none on some nonzero word. -/
+structure Mask (lane : ℕ → Fin 4 → ℕ) : Prop where
+  zero : ∀ q, lane 0 q = 0
+  unit : ∀ q, ∃ x < 2 ^ 32, ∀ q', lane x q' = if q' = q then 1 else 0
+  off : ∃ x < 2 ^ 32, x ≠ 0 ∧ ∀ q, lane x q = 0
+
+/-- The bit mask `h & 0x01010101`: lane `q` is bit `8q`. -/
+def laneB1 (x : ℕ) (q : Fin 4) : ℕ := x / 256 ^ (q : ℕ) % 2
+
+/-- The nibble mask `h & 0x0F0F0F0F`: lane `q` is bits `8q .. 8q + 3`. -/
+def laneB4 (x : ℕ) (q : Fin 4) : ℕ := x / 256 ^ (q : ℕ) % 16
+
+theorem mask_b1 : Mask laneB1 where
+  zero q := by simp [laneB1]
+  unit q := ⟨256 ^ (q : ℕ), by fin_cases q <;> norm_num, fun q' => by fin_cases q <;> fin_cases q' <;> decide⟩
+  off := ⟨128, by norm_num, by norm_num, fun q => by fin_cases q <;> decide⟩
+
+theorem mask_b4 : Mask laneB4 where
+  zero q := by simp [laneB4]
+  unit q := ⟨256 ^ (q : ℕ), by fin_cases q <;> norm_num, fun q' => by fin_cases q <;> fin_cases q' <;> decide⟩
+  off := ⟨128, by norm_num, by norm_num, fun q => by fin_cases q <;> decide⟩
+
+/-- SSN's committed word of row `i`, column `j`, after step `t`: the data case's constant `κ` (its data part and the
+bias) plus every lane of row `i`'s coin words of steps `s ≤ t`, times the public weight `W s q j`. -/
+def ssnWord (lane : ℕ → Fin 4 → ℕ) (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin 4 → ℕ → ℤ) (i : Fin m) (j : ℕ)
+    (t : Fin S) : SsnCoins m S → ℚ :=
+  fun h => (κ i j t : ℚ) + ∑ s : Fin S, if s ≤ t then ∑ q : Fin 4, (lane (h i s) q : ℚ) * W s q j else 0
+
+/-- The coins with word `x` at row `r`, step `s`, and `0` elsewhere. -/
+def ssnPt (r : Fin m) (s : Fin S) (x : ℕ) : SsnCoins m S := fun i s' => if i = r ∧ s' = s then x else 0
+
+theorem ssnPt_mem {r : Fin m} {s : Fin S} {x : ℕ} (hx : x < 2 ^ 32) : ssnPt r s x ∈ ssnGrid m S := by
+  intro i s'
+  simp only [ssnPt]
+  split_ifs
+  · exact hx
+  · norm_num
+
+theorem zero_mem_ssnGrid : (0 : SsnCoins m S) ∈ ssnGrid m S := fun _ _ => by simp
+
+theorem fin0_le (hS : 0 < S) (t : Fin S) : (⟨0, hS⟩ : Fin S) ≤ t := Fin.le_iff_val_le_val.2 (Nat.zero_le _)
+
+theorem ssnWord_zero {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane) (κ : Fin m → ℕ → Fin S → ℤ)
+    (W : Fin S → Fin 4 → ℕ → ℤ) (i : Fin m) (j : ℕ) (t : Fin S) :
+    ssnWord lane κ W i j t (0 : SsnCoins m S) = κ i j t := by
+  simp [ssnWord, hM.zero]
+
+theorem ssnWord_pt {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane) (κ : Fin m → ℕ → Fin S → ℤ)
+    (W : Fin S → Fin 4 → ℕ → ℤ) (i : Fin m) (j : ℕ) (t : Fin S) (r : Fin m) (s : Fin S) (x : ℕ) :
+    ssnWord lane κ W i j t (ssnPt r s x) =
+      κ i j t + if i = r ∧ s ≤ t then ∑ q : Fin 4, (lane x q : ℚ) * W s q j else 0 := by
+  simp only [ssnWord]
+  congr 1
+  by_cases hi : i = r
+  · subst hi
+    rw [Finset.sum_eq_single s]
+    · simp [ssnPt]
+    · intro s' _ hs'
+      simp [ssnPt, hs', hM.zero]
+    · intro h
+      exact absurd (Finset.mem_univ s) h
+  · simp [ssnPt, hi, hM.zero]
+
+theorem sum_unit {lane : ℕ → Fin 4 → ℕ} {x : ℕ} {q : Fin 4} (hl : ∀ q', lane x q' = if q' = q then 1 else 0)
+    (w : Fin 4 → ℚ) : ∑ q' : Fin 4, (lane x q' : ℚ) * w q' = w q := by
+  simp [hl]
+
+/-- Two SSN words differ on the grid when their constants differ, or when one lane of some row and step moves them
+by different weights. -/
+theorem ssn_ne {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane) (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin 4 → ℕ → ℤ)
+    {i i' : Fin m} {j j' : ℕ} {t t' : Fin S}
+    (h : κ i j t ≠ κ i' j' t' ∨ ∃ (r : Fin m) (s : Fin S) (q : Fin 4),
+      (if i = r ∧ s ≤ t then W s q j else 0) ≠ (if i' = r ∧ s ≤ t' then W s q j' else 0)) :
+    ¬ ∀ g ∈ ssnGrid m S, ssnWord lane κ W i j t g = ssnWord lane κ W i' j' t' g := by
+  intro heq
+  have h0 := heq 0 zero_mem_ssnGrid
+  rw [ssnWord_zero hM, ssnWord_zero hM] at h0
+  rcases h with h | ⟨r, s, q, hne⟩
+  · exact h (by exact_mod_cast h0)
+  · obtain ⟨x, hx, hl⟩ := hM.unit q
+    have h1 := heq _ (ssnPt_mem (r := r) (s := s) hx)
+    rw [ssnWord_pt hM, ssnWord_pt hM, h0] at h1
+    simp only [sum_unit hl] at h1
+    have h1' := add_left_cancel h1
+    apply hne
+    split_ifs at h1' ⊢ <;> exact_mod_cast h1'
+
+/-- An SSN word whose step-0 weights reach its column is no free value: not a constant (one lane of its row moves
+it), and not a raw coin word (a coin word reading no lane moves the coin word and not it). -/
+theorem ssn_ne_free {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane) (κ : Fin m → ℕ → Fin S → ℤ)
+    (W : Fin S → Fin 4 → ℕ → ℤ) (i : Fin m) (j : ℕ) (t : Fin S) (hS : 0 < S) (hW : ∃ q, W ⟨0, hS⟩ q j ≠ 0)
+    (f : SsnCoins m S → ℚ) (hf : f ∈ FreeSsn m S) :
+    ¬ ∀ g ∈ ssnGrid m S, ssnWord lane κ W i j t g = f g := by
+  intro heq
+  have h0 := heq 0 zero_mem_ssnGrid
+  rw [ssnWord_zero hM] at h0
+  rcases hf with ⟨c, rfl⟩ | ⟨i₀, s₀, rfl⟩
+  · obtain ⟨q, hq⟩ := hW
+    obtain ⟨x, hx, hl⟩ := hM.unit q
+    have h1 := heq _ (ssnPt_mem (r := i) (s := ⟨0, hS⟩) hx)
+    rw [ssnWord_pt hM, if_pos ⟨rfl, fin0_le hS t⟩, h0] at h1
+    simp only [sum_unit hl] at h1
+    exact hq (by exact_mod_cast add_eq_left.1 h1)
+  · obtain ⟨x, hx, hx0, hl⟩ := hM.off
+    have h1 := heq _ (ssnPt_mem (r := i₀) (s := s₀) hx)
+    rw [ssnWord_pt hM] at h1
+    simp only [hl, Nat.cast_zero, zero_mul, Finset.sum_const_zero, ite_self, add_zero] at h1
+    simp only [ssnPt, and_self, if_true] at h1
+    simp only [Pi.zero_apply, Nat.cast_zero] at h0
+    rw [h0] at h1
+    exact hx0 (by exact_mod_cast h1.symm)
+
+/-- Two SSN words of different (row, column, step) differ on the grid when every step's weights reach every column
+and step 0's weights tell the columns apart. -/
+theorem ssn_pair {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane) (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin 4 → ℕ → ℤ)
+    (hS : 0 < S) (J : Finset ℕ) (hW1 : ∀ s : Fin S, ∀ j ∈ J, ∃ q, W s q j ≠ 0)
+    (hW2 : ∀ j ∈ J, ∀ j' ∈ J, j ≠ j' → ∃ q, W ⟨0, hS⟩ q j ≠ W ⟨0, hS⟩ q j')
+    {i i' : Fin m} {j j' : ℕ} {t t' : Fin S} (hj : j ∈ J) (hj' : j' ∈ J) (hne : (i, j, t) ≠ (i', j', t')) :
+    ¬ ∀ g ∈ ssnGrid m S, ssnWord lane κ W i j t g = ssnWord lane κ W i' j' t' g := by
+  refine ssn_ne hM κ W (Or.inr ?_)
+  by_cases hi : i = i'
+  · subst hi
+    by_cases hjj : j = j'
+    · subst hjj
+      have ht : t ≠ t' := fun h => hne (by rw [h])
+      rcases lt_or_gt_of_ne ht with h | h
+      · obtain ⟨q, hq⟩ := hW1 t' j hj
+        refine ⟨i, t', q, ?_⟩
+        rw [if_neg (fun h' => absurd h'.2 (not_le.2 h)), if_pos ⟨rfl, le_rfl⟩]
+        exact fun h' => hq h'.symm
+      · obtain ⟨q, hq⟩ := hW1 t j hj
+        refine ⟨i, t, q, ?_⟩
+        rw [if_pos ⟨rfl, le_rfl⟩, if_neg (fun h' => absurd h'.2 (not_le.2 h))]
+        exact hq
+    · obtain ⟨q, hq⟩ := hW2 j hj j' hj' hjj
+      refine ⟨i, ⟨0, hS⟩, q, ?_⟩
+      rw [if_pos ⟨rfl, fin0_le hS t⟩, if_pos ⟨rfl, fin0_le hS t'⟩]
+      exact hq
+  · obtain ⟨q, hq⟩ := hW1 ⟨0, hS⟩ j hj
+    refine ⟨i, ⟨0, hS⟩, q, ?_⟩
+    rw [if_pos ⟨rfl, fin0_le hS t⟩, if_neg (fun h' => hi h'.1.symm)]
+    exact hq
+
+/-- **SSN's distinctness lemma**: at every data case `κ`, with the free values the constants and the raw coin
+words, SSN's committed words (every row, every column of `J`, after every step) are pairwise distinct on the grid and
+none is free, when every step's public weights reach every column (`hW1`) and step 0's tell the columns apart
+(`hW2`). There are `m·|J|·S` of them. -/
+theorem ssnTarget [DecidableEq (SsnCoins m S → ℚ)] {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane)
+    (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin 4 → ℕ → ℤ) (hS : 0 < S) (J : Finset ℕ)
+    (hW1 : ∀ s : Fin S, ∀ j ∈ J, ∃ q, W s q j ≠ 0)
+    (hW2 : ∀ j ∈ J, ∀ j' ∈ J, j ≠ j' → ∃ q, W ⟨0, hS⟩ q j ≠ W ⟨0, hS⟩ q j') :
+    DistinctOn (ssnGrid m S) (FreeSsn m S)
+        ((univ ×ˢ J ×ˢ univ).image fun x : Fin m × ℕ × Fin S => ssnWord lane κ W x.1 x.2.1 x.2.2) ∧
+      ((univ ×ˢ J ×ˢ univ).image fun x : Fin m × ℕ × Fin S => ssnWord lane κ W x.1 x.2.1 x.2.2).card =
+        m * (J.card * S) := by
+  have hd : ∀ x ∈ (univ ×ˢ J ×ˢ univ : Finset (Fin m × ℕ × Fin S)),
+      ∀ y ∈ (univ ×ˢ J ×ˢ univ : Finset (Fin m × ℕ × Fin S)), x ≠ y →
+      ¬ ∀ g ∈ ssnGrid m S, ssnWord lane κ W x.1 x.2.1 x.2.2 g = ssnWord lane κ W y.1 y.2.1 y.2.2 g := by
+    rintro ⟨i, j, t⟩ hx ⟨i', j', t'⟩ hy hne
+    simp only [Finset.mem_product, Finset.mem_univ, true_and, and_true] at hx hy
+    exact ssn_pair hM κ W hS J hW1 hW2 hx hy hne
+  refine ⟨⟨fun w hw w' hw' h => ?_, fun w hw f hf => ?_⟩, ?_⟩
+  · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
+    obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw'
+    by_cases hxy : x = y
+    · rw [hxy]
+    · exact absurd h (hd x hx y hy hxy)
+  · obtain ⟨⟨i, j, t⟩, hx, rfl⟩ := Finset.mem_image.1 hw
+    simp only [Finset.mem_product, Finset.mem_univ, true_and, and_true] at hx
+    exact ssn_ne_free hM κ W i j t hS (hW1 ⟨0, hS⟩ j hx) f hf
+  · rw [card_image_of_differ _ _ hd]
+    simp [Finset.card_product]
+
+/-- **SSN's words are charged** (at the H200's measured table): at every data case, every well-formed `MH100w` program
+on constants and raw coin words that outputs SSN's committed words costs at least `32·m·|J|·S`. -/
+theorem ssn_charged [DecidableEq (SsnCoins m S → ℚ)] {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane)
+    (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin 4 → ℕ → ℤ) (hS : 0 < S) (J : Finset ℕ)
+    (hW1 : ∀ s : Fin S, ∀ j ∈ J, ∃ q, W s q j ≠ 0)
+    (hW2 : ∀ j ∈ J, ∀ j' ∈ J, j ≠ j' → ∃ q, W ⟨0, hS⟩ q j ≠ W ⟨0, hS⟩ q j')
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (SsnCoins m S → ℚ)) (Pg : List (Op100 (SsnCoins m S)))
+    (hL : ∀ f ∈ L, f ∈ FreeSsn m S) (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeSsn m S))
+    (hO : OutputsOn fpSem (ssnGrid m S) Pg L
+      ((univ ×ˢ J ×ˢ univ).image fun x : Fin m × ℕ × Fin S => ssnWord lane κ W x.1 x.2.1 x.2.2)) :
+    32 * (m * (J.card * S)) ≤ cost100 h100Floor Pg := by
+  obtain ⟨hD, hc⟩ := ssnTarget hM κ W hS J hW1 hW2
+  rw [← hc]
+  exact charged _ (fun q => Or.inl ⟨q, rfl⟩) _ fpSem L Pg _ hL hPg hD hO
+
+/-! ### SW-NOISE's weights -/
+
+/-- Column `j`'s code number: `j + 1`, skipping `14,280`, whose base-13 digits are all `6`. -/
+def ssnC (j : ℕ) : ℕ := if j + 1 < 14280 then j + 1 else j + 2
+
+/-- Digit `e` of `c` in base 13. -/
+def ssnDigit (c : ℕ) (e : Fin 4) : ℕ := c / 13 ^ (e : ℕ) % 13
+
+/-- Step 0's injective column code: `C[e, j] = digit e of c_j − 6`, in `[−6, 6]⁴ ∖ {0}`. -/
+def ssnCode (e : Fin 4) (j : ℕ) : ℤ := (ssnDigit (ssnC j) e : ℤ) - 6
+
+theorem ssnDigit_eq (c : ℕ) : ssnDigit c 0 = c % 13 ∧ ssnDigit c 1 = c / 13 % 13 ∧ ssnDigit c 2 = c / 169 % 13 ∧
+    ssnDigit c 3 = c / 2197 % 13 := by
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp [ssnDigit]
+
+theorem ssnCode_ne_zero {j : ℕ} (hj : j < 28559) : ∃ q, ssnCode q j ≠ 0 := by
+  by_contra h
+  push_neg at h
+  obtain ⟨d0, d1, d2, d3⟩ := ssnDigit_eq (ssnC j)
+  have h0 := h 0
+  have h1 := h 1
+  have h2 := h 2
+  have h3 := h 3
+  simp only [ssnCode] at h0 h1 h2 h3
+  unfold ssnC at d0 d1 d2 d3 h0 h1 h2 h3
+  split_ifs at d0 d1 d2 d3 h0 h1 h2 h3 <;> omega
+
+theorem ssnCode_inj {j j' : ℕ} (hj : j < 28559) (hj' : j' < 28559) (hne : j ≠ j') :
+    ∃ q, ssnCode q j ≠ ssnCode q j' := by
+  by_contra h
+  push_neg at h
+  obtain ⟨d0, d1, d2, d3⟩ := ssnDigit_eq (ssnC j)
+  obtain ⟨d0', d1', d2', d3'⟩ := ssnDigit_eq (ssnC j')
+  have h0 := h 0
+  have h1 := h 1
+  have h2 := h 2
+  have h3 := h 3
+  simp only [ssnCode] at h0 h1 h2 h3
+  unfold ssnC at d0 d1 d2 d3 d0' d1' d2' d3' h0 h1 h2 h3
+  split_ifs at d0 d1 d2 d3 d0' d1' d2' d3' h0 h1 h2 h3 <;> omega
+
+/-- `ssn_1l`'s weights: step 0 the code on four lanes, every later step one lane of weight 1 for every column. -/
+def w1l (s : Fin S) (q : Fin 4) (j : ℕ) : ℤ := if (s : ℕ) = 0 then ssnCode q j else if q = 0 then 1 else 0
+
+/-- `ssn_a`'s weights: step 0 the code, later steps one-hot on lane `(j + s) mod 4`. -/
+def wA (s : Fin S) (q : Fin 4) (j : ℕ) : ℤ := if (s : ℕ) = 0 then ssnCode q j else if (q : ℕ) = (j + s) % 4 then 1 else 0
+
+theorem w1l_reach (n : ℕ) (hn : n ≤ 28559) : ∀ s : Fin S, ∀ j ∈ range n, ∃ q, w1l s q j ≠ 0 := by
+  intro s j hj
+  have hj' : j < 28559 := by have := Finset.mem_range.1 hj; omega
+  by_cases hs : (s : ℕ) = 0
+  · obtain ⟨q, hq⟩ := ssnCode_ne_zero hj'
+    exact ⟨q, by simp only [w1l, if_pos hs]; exact hq⟩
+  · exact ⟨0, by simp [w1l, hs]⟩
+
+theorem wA_reach (n : ℕ) (hn : n ≤ 28559) : ∀ s : Fin S, ∀ j ∈ range n, ∃ q, wA s q j ≠ 0 := by
+  intro s j hj
+  have hj' : j < 28559 := by have := Finset.mem_range.1 hj; omega
+  by_cases hs : (s : ℕ) = 0
+  · obtain ⟨q, hq⟩ := ssnCode_ne_zero hj'
+    exact ⟨q, by simp only [wA, if_pos hs]; exact hq⟩
+  · exact ⟨⟨(j + s) % 4, Nat.mod_lt _ (by norm_num)⟩, by simp [wA, hs]⟩
+
+theorem code_cols (hS : 0 < S) (W : Fin S → Fin 4 → ℕ → ℤ) (hW : ∀ q j, W ⟨0, hS⟩ q j = ssnCode q j) (n : ℕ)
+    (hn : n ≤ 28559) : ∀ j ∈ range n, ∀ j' ∈ range n, j ≠ j' → ∃ q, W ⟨0, hS⟩ q j ≠ W ⟨0, hS⟩ q j' := by
+  intro j hj j' hj' hne
+  obtain ⟨q, hq⟩ := ssnCode_inj (by have := Finset.mem_range.1 hj; omega) (by have := Finset.mem_range.1 hj'; omega) hne
+  exact ⟨q, by rw [hW, hW]; exact hq⟩
+
+/-- **`ssn_1l` is charged**: at every data case, for `n ≤ 28,559` columns, `S ≥ 1` steps and either mask (bits or
+nibbles), every well-formed `MH100w` program on constants and raw coin words that outputs `ssn_1l`'s committed words
+costs at least `32·m·n·S`. -/
+theorem ssn1l_charged [DecidableEq (SsnCoins m S → ℚ)] {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane)
+    (κ : Fin m → ℕ → Fin S → ℤ) (hS : 0 < S) (n : ℕ) (hn : n ≤ 28559)
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (SsnCoins m S → ℚ)) (Pg : List (Op100 (SsnCoins m S)))
+    (hL : ∀ f ∈ L, f ∈ FreeSsn m S) (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeSsn m S))
+    (hO : OutputsOn fpSem (ssnGrid m S) Pg L
+      ((univ ×ˢ range n ×ˢ univ).image fun x : Fin m × ℕ × Fin S => ssnWord lane κ w1l x.1 x.2.1 x.2.2)) :
+    32 * (m * (n * S)) ≤ cost100 h100Floor Pg := by
+  have h := ssn_charged hM κ w1l hS (range n) (w1l_reach n hn)
+    (code_cols hS w1l (fun q j => by simp [w1l]) n hn) fpSem L Pg hL hPg hO
+  rwa [Finset.card_range] at h
+
+/-- **`ssn_a` is charged**, as `ssn1l_charged`. -/
+theorem ssnA_charged [DecidableEq (SsnCoins m S → ℚ)] {lane : ℕ → Fin 4 → ℕ} (hM : Mask lane)
+    (κ : Fin m → ℕ → Fin S → ℤ) (hS : 0 < S) (n : ℕ) (hn : n ≤ 28559)
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (SsnCoins m S → ℚ)) (Pg : List (Op100 (SsnCoins m S)))
+    (hL : ∀ f ∈ L, f ∈ FreeSsn m S) (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeSsn m S))
+    (hO : OutputsOn fpSem (ssnGrid m S) Pg L
+      ((univ ×ˢ range n ×ˢ univ).image fun x : Fin m × ℕ × Fin S => ssnWord lane κ wA x.1 x.2.1 x.2.2)) :
+    32 * (m * (n * S)) ≤ cost100 h100Floor Pg := by
+  have h := ssn_charged hM κ wA hS (range n) (wA_reach n hn)
+    (code_cols hS wA (fun q j => by simp [wA]) n hn) fpSem L Pg hL hPg hO
+  rwa [Finset.card_range] at h
+
+end SSN
 
 end Pouw.Dimension.SwLean
