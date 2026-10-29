@@ -1,5 +1,5 @@
 """hm96's hiding work and the hashing of served sparse noise (SSN) in Llama-3.2-1B's served step on the H200, priced: what the
-honest prover alone does to hide its committed values, as a share of stock at T 8,192 and T 512 (64 and 512 rows), under each
+honest prover alone does to hide its committed values, as a share of stock at T 8,192, T 512 (64 and 512 rows) and decode, under each
 commitment layout and each way of forcing it, the proof's cost to open what it draws, and SSN's bytes, t_H/t_S and ShaSpeed's
 precision. Stdlib only, no GPU.
 
@@ -33,6 +33,10 @@ The term is a salt's price times the salts a useful MAC, and the layout sets the
   L1, a leaf over a subtree: one hm96 instance per call over A's chunks and one per forward over its committed words, each
     inner digest a frame-v3-sha512 tree, so A's public root stays a hiding root while openings cost a chunk and its path;
     no seed reads the words' root, so their hash stays off every call's seed path;
+  L1, live round: a live window's (decision 36), where no seed reads a call's root: round r's noise key reads the one root
+    the verifier records before round r's coin, and the noised products are deferred past it, so one instance a round
+    covers every call's A subtree (each in its call's domain) and the previous round's words, and one a window the last
+    round's words;
   L2, private roots: the call's roots enter the noise seed inside the drawn unit's proof only, so one instance hides a
     forward, or a window (WINDOW_STEP_S bounds a step's time from above, so a window holds at least 600 s over it forwards).
 The proof opens an instance by hashing what it covers in-circuit: an L0 row whole, an L1 chunk and its path (two compressions a
@@ -185,6 +189,8 @@ def salts_per_mac(layout: str, rows: int, b: dict, R: int) -> dict:
         return {"A rows": CALLS * rows / fwd, "word rows": b["words_bpm"] / R}
     if layout == "L1":
         return {"calls": (CALLS + 1) / fwd}
+    if layout == "L1, live round":
+        return {"round": 1 / fwd, "the window's last words": WINDOW_STEP_S / S.CENSUS["window s"] / fwd}
     if layout == "L2, a window":
         return {"window": WINDOW_STEP_S / S.CENSUS["window s"] / fwd}
     return {"forward": 1 / fwd}
@@ -199,7 +205,8 @@ def opening_ands(layout: str, b: dict, rows: int, R: int, mode: str) -> dict:
     keyed digest) or nothing (the keyed leaf, whose root the path computes from S); all but unforced open ks once (its
     inner digest and c; the verifier computes its leaf), (a) computes k_w = SHA-512(ks ‖ salt_w) (two compressions) and
     the others the window's midstate S (one). Under L1 a call's A rows are one instance and a forward's words another;
-    under L2 both sit in the forward's (or the window's) one tree."""
+    under L1's live round a round's A rows are one instance and its words sit in the next round's, each path climbing to
+    the round's 65 subtrees; under L2 both sit in the forward's (or the window's) one tree."""
     gadget = {"unforced": 2 * S.ANDS_COMPRESSION, "forced (a)": 2 * S.ANDS_COMPRESSION + 3 * S.ANDS_FROM_8,
               "pad": S.ANDS_COMPRESSION, "keyed digest": S.ANDS_COMPRESSION, "keyed leaf": 0}[mode]
     once = {"unforced": 0, "forced (a)": 5 * S.ANDS_COMPRESSION}.get(mode, 4 * S.ANDS_COMPRESSION)
@@ -213,6 +220,10 @@ def opening_ands(layout: str, b: dict, rows: int, R: int, mode: str) -> dict:
     if layout == "L1":
         return {"words path depth": words, "A path depth": a,
                 "paths and gadgets": 2 * (words + a) * S.ANDS_COMPRESSION + 2 * gadget + once}
+    if layout == "L1, live round":
+        up = math.ceil(math.log2(CALLS + 1))
+        return {"words path depth": words + up, "A path depth": a + up,
+                "paths and gadgets": 2 * (words + a + 2 * up) * S.ANDS_COMPRESSION + 2 * gadget + once}
     up = math.ceil(math.log2((CALLS + 1) * (1 if layout == "L2" else S.CENSUS["window s"] / WINDOW_STEP_S)))
     words, a = words + up, a + up
     return {"words path depth": words, "A path depth": a,
@@ -374,7 +385,7 @@ def main() -> None:
         d: dict = {"bytes": {k: v for k, v in b.items() if k != "calls"}, "calls": b["calls"], "points": {}}
         for pname, (real, m) in POINTS.items():
             pt: dict = {"hiding": {}, "opening_ands": {}}
-            for layout in ("L0", "L1", "L2", "L2, a window"):
+            for layout in ("L0", "L1", "L1, live round", "L2", "L2, a window"):
                 for R in (sizes if layout == "L0" else [S.ROWS_16K]):
                     sp = salts_per_mac(layout, real, b, R)
                     n = sum(sp.values())
@@ -384,6 +395,11 @@ def main() -> None:
                         **{f: {p: n * v for p, v in pr.items()} for f, pr in price.items() if f not in ("parts", "compression")},
                         "by part, unforced floor": {k: v * price["unforced"]["floor"] for k, v in sp.items()},
                         "ands_of_stock": n * HIDING_ANDS / S.ANDS_MAC}
+                    if layout != "L0":
+                        # outside L0 a forward's instances don't grow with its rows, so the term falls as 1/rows
+                        pt["hiding"][key]["rows_for_target"] = {
+                            f: {p: real * n * price[f][p] / TARGET for p in ("floor", "alone")}
+                            for f in ("forced (a)", "forced (a), unrolled mask") if f in price}
                     pt["opening_ands"][key] = {f: opening_ands(layout, b, real, R, f) for f in OPENINGS}
             need = {p: b["words_bpm"] * v / TARGET for p, v in price["unforced"].items()}
             need_a = {p: b["words_bpm"] * v / TARGET for p, v in price["forced (a)"].items()}
@@ -458,8 +474,8 @@ def main() -> None:
               "datacenter": {p: S.CENSUS["datacenter GPUs"] * h200_mac_s * s for p, s in periods.items()},
               "world": {p: S.CENSUS["world FLOP a year"] / 2 * s / S.PERIODS["year"] for p, s in periods.items()}}
     pooled: dict = {"stock_macs": scopes, "stock_ands": {sc: {p: m * S.ANDS_MAC for p, m in ps.items()} for sc, ps in scopes.items()}}
-    for key in ("L0 16 KiB rows", "L0 256 KiB rows", "L1", "L2", "L2, a window"):
-        for pname in ("T 8,192", "T 512, 64 real rows", "T 512, 512 real rows"):
+    for key in ("L0 16 KiB rows", "L0 256 KiB rows", "L1", "L1, live round", "L2", "L2, a window"):
+        for pname in ("T 8,192", "T 512, 64 real rows", "T 512, 512 real rows", "decode, 16 rows", "decode, 1 row"):
             h = out["designs"]["ssn_1l"]["points"][pname]["hiding"][key]
             pooled[f"hiding {key}, {pname}"] = {
                 f: {sc: {p: {"share_floor": h[f]["floor"], "ands_floor": mac * S.ANDS_MAC * h[f]["floor"],
@@ -493,8 +509,9 @@ def main() -> None:
             for key, h in pt["hiding"].items():
                 print(f"    hiding {key:<16} " + "; ".join(
                     f"{f} {h[f]['floor']:.4%} / {h[f]['alone']:.4%}" + (f" / {h[f]['time']:.4%}" if "time" in h[f] else "")
-                    for f in shown) + f"; ANDs {h['ands_of_stock']:.5%}")
-            for key in ("L0 16 KiB rows", "L1", "L2", "L2, a window"):
+                    for f in shown) + f"; ANDs {h['ands_of_stock']:.5%}" + "".join(
+                    f"; rows for the target, {f} {r['floor']:.2f} / {r['alone']:.2f}" for f, r in h.get("rows_for_target", {}).items()))
+            for key in ("L0 16 KiB rows", "L1", "L1, live round", "L2", "L2, a window"):
                 o = pt["opening_ands"][key]
                 print(f"    opening ANDs {key:<15} " + "; ".join(
                     f"{mode} " + ", ".join(f"{k} {v:,.0f}" for k, v in o[mode].items()) for mode in OPENINGS))
