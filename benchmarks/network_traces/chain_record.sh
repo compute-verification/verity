@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
-# builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
 # firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
 #   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
@@ -10,9 +10,9 @@
 #   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified (chain_record.py certs)
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
-#   n2       N2's units proved by C-Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
-#            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
-#            advice and the certifier's clock certificates, and on the others n2_zk.py prove
+#   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
+#            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
+#            N2 unit holds, not run
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when CR_WARDEN_RUN names the gate's network certifier run and scan_zk takes it), each
 #            round drawn on a session of CR_CHALLENGER's
@@ -33,10 +33,7 @@
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory; on the warden path it may be the served node's endpoint report instead, a
 #      report.json beside no advice_trace.jsonl, which the endpoint step then reads rather than runs)
-#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
-#      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
-#      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
-#      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the challenger's coins)
+#      CR_N2_ROUNDS (n2_zk.py's --rounds)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
 #      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
 #      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
@@ -61,7 +58,7 @@
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
-# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the firewall one at a time
+# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the ZK server one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
@@ -184,8 +181,7 @@ if [ -n "${CR_CHALLENGER:-}" ]; then
       || { log "chain: CR_CHALLENGER=gate:… needs CR_PEER and CR_CHALLENGER_KEY"; exit 3; }
     CH+=(--peer "$CR_PEER" --challenger-key "$CR_CHALLENGER_KEY" ${CR_GATE_KEY:+--gate-key "$CR_GATE_KEY"});;
   esac
-elif { [ -z "${CR_SCAN_CMD:-}" ] && [ "${CR_PATH:-}" != certifier-only ]; } || [ -n "${CR_N2_DRAW:-}" ] \
-    || [[ " ${CR_N2_ARGS:-} " == *" --draw "* ]]; then
+elif { [ -z "${CR_SCAN_CMD:-}" ] && [ "${CR_PATH:-}" != certifier-only ]; } || [ -n "${CR_N2_DRAW:-}" ]; then
   log "chain: CR_CHALLENGER (local|gate:USER@HOST) names the auditor's challenger whose sessions the scan's rounds and a" \
     "sampled N2 period draw on: nothing draws on the verifier's own coins"; exit 3
 fi
@@ -231,8 +227,6 @@ elif [ -n "${CR_ENDPOINT:-}" ]; then
   mkdir -p "$OUT/endpoint"; cp "$E2E"/report.json "$E2E"/report.md "$E2E"/endpoint/advice.log "$OUT/endpoint/" 2>/dev/null
   [ -d "$E2E/rehearsal" ] || ln -s "${HONEST%/honest}" "$E2E/rehearsal"
 fi
-BOUND=$("$PY" -c 'import json, sys; b = json.load(open(sys.argv[1]))["chain"]["bits"]; print(int(bool(b["bound"] and b["rebuilt"])))' \
-  "$E2E/report.json" 2>/dev/null || echo 0)
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 (cd verity/core/protocols/network/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
@@ -252,23 +246,14 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 }
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
-  local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
-    ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} $CHS ${CR_N2_ARGS:-}"
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
   elif [ "${CR_PATH:-}" = warden ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --warden-run $WARDEN \
     --bin $BIN --lean $LEAN --out $N2OUT ${CR_N2_GPU:+--gpu} ${CR_N2_DRAW:+--draw $CR_N2_DRAW $CHS}"
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
     --lean $LEAN --out $N2OUT ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
-  elif [ "$BOUND" = 1 ]; then cmd="$advised --e2e $E2E ${CR_N2_WINDOWS:+--windows $CR_N2_WINDOWS}"
   else
-    why="the run is on the advice profile, whose counts N2's advised unit decides on the endpoint's advice, and "
-    if [ -z "${CR_ENDPOINT:-}" ]; then why+="no endpoint records were given (CR_ENDPOINT)"
-    else why+="the endpoint's advice doesn't bind to the run: $("$PY" -c 'import json, sys
-b = json.load(open(sys.argv[1]))["chain"]["bits"]; print((b.get("bound_why") or b.get("why") or "")[:400])' "$E2E/report.json" 2>/dev/null)"; fi
-    if [ "${CR_N2_STANDIN:-}" = simulated ]; then
-      echo "the advised unit on n2_advised_zk's simulated link (its certifier signs each window's sync), not the gate's: $why" \
-        > "$W/n2.standin"; cmd=$advised
-    else echo "$why" > "$W/n2.why"; log "chain: n2 not run: $why"; echo 2 > "$W/n2.rc"; return; fi
+    why="the run is on the advice profile, whose egress counts no N2 unit holds"
+    echo "$why" > "$W/n2.why"; log "chain: n2 not run: $why"; echo 2 > "$W/n2.rc"; return
   fi
   log "chain: n2: $cmd"
   bash -c "$cmd" > "$OUT/n2.log" 2>&1
@@ -316,8 +301,8 @@ text = lambda f: (w / f).read_text().strip() if (w / f).is_file() else None
 json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_SHA:-$(git -C "$SRC" rev-parse HEAD 2>/dev/null)}",
            "gates": "${CR_GATES}".split(), "endpoint": os.environ.get("CR_ENDPOINT"), "profile": "$PROFILE",
            "path": os.environ.get("CR_PATH"), "challenger": os.environ.get("CR_CHALLENGER"),
-           "n2_sampled": not os.environ.get("CR_SCAN_ONLY") and not os.environ.get("CR_N2_CMD") and (
-               bool(os.environ.get("CR_N2_DRAW")) or " --draw " in f" {os.environ.get('CR_N2_ARGS', '')} "),
+           "n2_sampled": not os.environ.get("CR_SCAN_ONLY") and not os.environ.get("CR_N2_CMD")
+               and bool(os.environ.get("CR_N2_DRAW")),
            "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
            "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
            "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),

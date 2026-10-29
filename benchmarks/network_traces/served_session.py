@@ -30,7 +30,7 @@ request's max_tokens, at most KO.
   400 requests at most.
 * **session** sends the request, waiting until ``--at`` (a UTC time) when given; launched more than `LATE_S` after it,
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
-  128,000 regular ids by default), drawn from a fresh secret seed this process alone holds: they are the prover's,
+  128,000 regular ids by default), sampled from a fresh secret seed this process alone holds: they are the prover's,
   which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
   - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
     prompts on its stdin, whose reply goes to KEEP/RUN/start.json alone (0600), ``status`` every `POLL_S` seconds
@@ -68,26 +68,25 @@ request's max_tokens, at most KO.
   field (`valued`).
 * **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
-  by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period sampled (CR_N2_DRAW 8)
-  and the tie on 8 link-windows (CR_TIE_WINDOWS) at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every
-  unit, or ``--draw K`` of them. Every round that draws, each scan round and each member of N2's sampled period, reads
-  its coins from a session of its own of the auditor's challenger (``--challenger``, chain_record.sh's CR_CHALLENGER,
-  `round_coins`), and nothing draws on the verifier's own. It is refused unless the tree has the record's leak guard
-  (``leak_guard.py``), which chain_record.sh runs on its way out, whatever the exit.
+  by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
+  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
+  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
+  verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
+  refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
+  way out, whatever the exit.
 
-**The challenger.** ``--challenger gate:GATE`` (the default) is the auditor's challenger through infra's gate, on the
-network certifier's machine: P (``--coin-peer``, `AUDITOR` by default) is the node the chain runs on, which holds the
-lane's gate key (``--key``) and the kept fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and
-its coin link carries each session's coins over ssh to that port of P's loopback, where the round's client connects;
-only P's own line serves P, and a reserve for a node with no line is refused (`AUDITOR`'s line is ports 7821-7830,
-with its /etc/vy/peers entry). The client may run on any node, the served one included: the root is the network
-certifier's, and the gate opens it once and logs every coin it releases. ``--challenger local`` is a dry run's, a
-session on this machine under a key of its own. ``--main`` is the verifier's copy of main's first-parent history,
-fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does; ``--challenger-key`` is the
-deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. A gate, peer, key or
-main that fails, or a session's evidence that doesn't hold, fails the round: nothing falls back to other coins. The
-CR_K=V may not name the challenger (CR_CHALLENGER, CR_MAIN, CR_PEER, CR_CHALLENGER_KEY, CR_GATE_KEY), and
-CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``, ``--main``).
+**The coin link.** A sample on the gate's coins (``--coins gate``: ``scan_zk.py prove --draw K --challenger gate:GATE
+--main FILE --peer P --challenger-key RECORD --gate-key KEY``, in CR_SCAN_ARGS) runs on the auditor's side: P
+(``--coin-peer``, `AUDITOR` by default) is the node the chain runs on, which holds the lane's gate key and the kept
+fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and its coin link carries the
+session's coins over ssh to that port of P's loopback, where the sample's client connects. The gate key and the warden
+run's witness are the auditor's, so the sample never runs on the served node, which is the prover's: a ``--coin-peer``
+that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
+node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
+a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
+history, fetched from the tree's origin into KEEP/RUN by default (`first_parent`); ``--challenger-key`` is the
+deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. CR_SCAN_ARGS and
+CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
 **The endpoint.** It is started by hand on `PEER` (`HAND_START`) ahead of the session's ``--at``, and it
 listens within about 35 s. Its records stay in its serve dir on h200-2: requests.jsonl (prompt and streamed ids) and
@@ -755,7 +754,7 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--keep", type=Path, default=KEEP)
     q.add_argument("--endpoint", help="endpoint's art (its report.json), or a dry rehearsal's endpoint records")
     q.add_argument("--eos-ids")
-    q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
+    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every unit by default)")
     coin_flags(q, AUDITOR)
     q.add_argument("--key", type=Path, default=KEY)
     q.add_argument("set", nargs="*", help="CR_K=V")

@@ -7,9 +7,9 @@ refusal, with a VERDICT and none accepting, and every other part of it has a VER
 honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
 the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
 neither file and fails. A forgery's part the verifier never checked is "no proof produced (not exercised)", never a
-refusal: one whose session Lean found missing its files (``session files: …``), and one the firewall held back (its
+refusal: one whose session Lean found missing its files (``session files: …``), and one the ZK server held back (its
 prover's ``LIVE`` lines, ``PART.live``, the session verdicts oprove kept, stop at ``FIREWALL-REFUSED: …``, and no session
-reached Lean), since the firewall is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
+reached Lean), since the ZK server is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
 which Lean refused, one of them not exercised, fails the step as not exercised. A forged inner session
 (``forged-inner-W-PART``, 85's NEG_INNER) is read only by the parts ``COVERS`` names for it: without one of them among the
 parts run, nothing could refuse it, and it is "not covered by the parts run", which fails the step like a forgery no part
@@ -17,10 +17,15 @@ refused. One line per part, then the count; the exit is 0 only when there is a p
 forgery is refused.
 
 With ``--compose BIN`` (85's V* parts), the recursive statement's verdict is Lean's, not this script's:
-``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json`` and the V*
-parts' logs (the honest parts 85 gave V*'s inputs, ``own-PART.txt``) accepts only when there is one part per V* statement,
-each accepted at the SHA-512 of that one rows file, and the step fails unless it does. Each forgery of a V* part, put in
-that part's place, must be refused by it too. A run of some of V*'s parts (``LEVELS``) is not composed, and says so.
+``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json``, the
+challenger's interactive-run record ``rec-run.json`` and the V* parts' logs (the honest parts 85 gave V*'s inputs,
+``own-PART.txt``) accepts only when there is one part per V* statement, each one ``--zk`` session accepted at the SHA-512
+of that one rows file and of that inner shape, every part having read one set of the other inputs V*'s parts share and
+no two sessions one coin key (`RecCompose.Accepts`), and the record shows the parts are one run: the staging first, one
+session opened per part, each the composed one, the close last (`RecCompose.OneRun`); the step fails unless it does.
+Each forgery of a V* part, put in that part's place, must be refused by it too. A run of some of V*'s parts (``LEVELS``)
+is not composed, and says so; nor is a run with no ``rec-run.json`` (85's loopback ``serve`` keeps no interactive-run
+record, and runs WARM + RUNS sessions a part), whose parts are not shown to be one run.
 
     python3 verity/ml/flock/pod/lean_verdicts.py [--compose BIN] DIR PART...
     python3 verity/ml/flock/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
@@ -76,7 +81,7 @@ def verdicts(log: Path) -> list[dict]:
 
 
 def firewall_refusal(live: Path) -> str | None:
-    """The firewall's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
+    """The ZK server's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
     if not live.exists():
         return None
     for line in live.read_text(errors="replace").splitlines():
@@ -97,8 +102,8 @@ def no_proof(v: dict) -> bool:
 
 def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, bool, str]:
     """``part``'s (passes, refused, not exercised, line); a forgery's part (``kind``) passes when it has a VERDICT or the
-    firewall held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
-    whose every session is missing its files, or that the firewall held back, is not exercised, never refused."""
+    ZK server held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
+    whose every session is missing its files, or that the ZK server held back, is not exercised, never refused."""
     rc, vs = exit_status(d / f"time-{part}.txt"), verdicts(d / f"{part}.log")
     fw = None if vs or rc is not None else firewall_refusal(d / f"{part}.live")
     if fw:
@@ -132,9 +137,10 @@ def statements(d: Path) -> int:
 
 
 def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool, str]:
-    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json`` and ``rows.json``: (accepted, its line)."""
+    """``binary rec-compose`` over ``logs`` at DIR's ``rec-inner.json``, ``rows.json`` and ``rec-run.json``: (accepted, its
+    line)."""
     r = subprocess.run([binary, "rec-compose", "--rec-inner", str(d / "rec-inner.json"), "--rec-rows", str(d / "rows.json"),
-                        *map(str, logs)], capture_output=True, text=True, check=False)
+                        "--rec-run", str(d / "rec-run.json"), *map(str, logs)], capture_output=True, text=True, check=False)
     line = next((ln for ln in r.stdout.splitlines() if ln.startswith("REC-COMPOSE ")), None)
     return r.returncode == 0 and line is not None, line or f"exit {r.returncode}: {r.stderr.strip()[-300:]!r}"
 
@@ -148,6 +154,10 @@ def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str
     n = statements(d)
     if len(vparts) < n or n == 0:
         print(f"lean compose: {len(vparts)} of V*'s {n} parts run, so the recursive statement is not composed")
+        return True
+    if not (d / "rec-run.json").exists():
+        print("lean compose: no interactive-run record (rec-run.json), so the recursive statement is not composed: its "
+              "parts are not shown to be one run (C10 OneRun)")
         return True
     ok, line = compose(binary, d, [d / f"{p}.log" for p in vparts])
     print(f"lean compose: {line}{'' if ok else '  <- FAILS'}")

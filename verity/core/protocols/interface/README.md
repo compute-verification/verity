@@ -1,6 +1,6 @@
 # core_protocol: the interface every core protocol implements
 
-This is a Lake package (`CoreProtocol`, namespace `Core`). It requires C-Flock's verifier by path for canonical JSON,
+This is a Lake package (`CoreProtocol`, namespace `Core`). It requires Flock's verifier by path for canonical JSON,
 bytes and hashes, and nothing else: no Mathlib. A protocol's port is its own package. It requires this one by path,
 defines one `Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
 
@@ -39,7 +39,7 @@ accepts only what `toJson` writes (re-encoding must give the same canonical JSON
 an `accept` has no reason and both its public outputs and its profile, while a refusal has a reason and neither.
 
 `Protocol`, `Profile` and `Ratio` are the package's spec (`layers` in `lean-audit.json`): a property's statement may read
-them, and they import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
+them, and they import only Lean's JSON, Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
 profile's types derive `DecidableEq`.
 
 ## The command line (`CoreProtocol/Cli.lean`), the same for every protocol
@@ -50,6 +50,13 @@ profile's types derive `DecidableEq`.
 - `<exe> serve` reads one case per stdin line, `{"commitment":"<hex>","evidence":"<hex>","params":<JSON>}` in canonical
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
+
+A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
+`Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
+a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
+bytes on each: they refuse a canonical text holding a string of `2^32` characters or more, or read a prefix of it.
+`Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
+decodes the evidence, and its peak memory is about 2.6 times the line.
 
 ## Blobs (`CoreProtocol/Blobs.lean`)
 
@@ -68,10 +75,36 @@ the toy protocol whose guards cover both.
 ## The profile (`CoreProtocol/Profile.lean`)
 
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
-`linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
+
+## The registration log (`CoreProtocol/Registration.lean`)
+
+`Core.Registration` is a deployment's one registration log, which every subprotocol and both composites read. It is
+append-only: each entry names the head of the log before it (`previous`), the digest of its last entry or of its
+composite's genesis, so the head names the whole log. An entry is in one of two formats, each with its own versioned id:
+
+| format | what it registers |
+| --- | --- |
+| `verity/registration/hardware/v1` | the site's cards (by SKU, under the auditor's data sheets), locations (site, hosts, devices, memory leaves by tier and bytes, the auditor's certifiers and challengers with their keys) and links (`β`, latency) |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+
+Registration registers the site, θ and `B`, not the circuit `B` builds. A subprotocol's Program and parameters, and
+the proof system, are that protocol's public verifier parameters, not entries of the log.
+
+An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, a card's is under `verity/registration/card/v1`, and the
+genesis is under `verity/registration/genesis/v1` over `{"composite": "onsite" | "remote"}`. `check` holds each entry to
+the log before it and refuses the first that fails by name (`previous`, `duplicate-id`, `unknown-ref`, `kind`,
+`card-digest`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`). A
+component reads its view of an accepted log by projection (`View`: the site, θ's values and the builder, at the head).
+Registration is ASCII-only without DEL: a log or parameters holding any other character is refused as `ascii` before
+any digest is taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
+auditor's parameters (`{"composite", "keys", "sheets"}`), the log as commitment (`{"composite", "entries"}`, its head
+the digest) and `{}` as evidence; it makes public the log's view and rejects as `entry I: REFUSAL`.
+`verity.core.protocols.registration` is its Python, held to it by the composition suite's difftest
+(`../composition/tests/test_registration_difftest.py`).
 
 ## Properties
 

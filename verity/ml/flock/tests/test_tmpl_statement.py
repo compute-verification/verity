@@ -1,6 +1,6 @@
 """The templated statement (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``): the flat statement with its unit given as
 the unit's ``flock-ir-tmpl/v2`` template, META ``template`` its lines and ``layout`` the mode, and no ``CIRCUIT unit``
-section, which the Lean verifier reads with ``HmOut.parseTmpl`` (PRF-133).
+section, which the Lean verifier reads with ``HmOut.parseTmpl``.
 
 `tmpl.layout`, the mirror of ``Tmpl.layoutM`` that puts the unit's range at its committed slot, is held to
 ``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
@@ -167,7 +167,7 @@ def test_a_structural_stager_writes_the_templated_statement_of_struct_lowers_tem
         CS.UnitStager(*args, structural=True)
 
 
-#: the auditor's host runs the lowering on numpy and C-Flock's Python alone
+#: the auditor's host runs the lowering on numpy and Flock's Python alone
 NO_TORCH = """
 import importlib.abc, sys
 class _Block(importlib.abc.MetaPathFinder):

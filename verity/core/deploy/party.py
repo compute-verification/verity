@@ -1,4 +1,4 @@
-"""A party: a next-message machine, sans-IO (`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §1).
+"""A party: a next-message machine, sans-IO.
 
 `Security/Definitions/Claims.lean` states parties this way: `Prover.next` gives the next message from the messages so far
 and the prover's tape, `Verifier.next` the next from the prover's messages and its coins. A `Party` is that function as an
@@ -18,7 +18,7 @@ runtime takes for it and its transcript keeps.
 Besides its peers' messages and its sources', the runtime tells a party that a channel closed (`Closed`) or that a frame
 on it was refused (`Refused {name, detail}`, after which the party is finished refused by that name unless it finishes
 first). A party does no I/O and reads no ambient clock or randomness: its coins and clock readings are messages from its sources,
-so its transcript (`transcript.Transcript`) replays it exactly, and the same code runs live, simulated or replayed. What
+so its transcript (`transcript.PartyLog`) replays it exactly, and the same code runs live, simulated or replayed. What
 the runtime gives it in `Identity` is its own device: its name, the configuration's hash, its key and its state directory.
 """
 

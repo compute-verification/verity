@@ -2,10 +2,8 @@
 certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
-the report needs the endpoint's step on the advice profile, needs each drawing round on a challenger session of its own
-that held (the coins step: none, two on one root or one not held refuse it), never accepts a stand-in, merges N2's
-members proved in
-several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
 the scan's class doesn't serve; the job's copy of the
@@ -14,7 +12,9 @@ names what it stubs, and counts the rehearsal's refused runs and the I/O tie's v
 let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' draws and free
 inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
 (exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
-on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
+on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. The report
+needs each drawing round on a challenger session of its own that held (the coins step: none, two on one root or one
+not held refuse it). On certifier/v0's
 period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
 block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
 session and key, link-windows the chain certified under N2's own registrations, the report's compute audits) and the
@@ -490,12 +490,21 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
-    week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
-    lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
+    assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
+    assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
+    assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
+    json.dumps(doc)
+    rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
+    week = {p: rows["week", "link", p] for p in ("registered", "anchors")}
+    lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
     assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + rate * cap))
     assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap))
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
+    assert Fraction(week["anchors"]["eps"]) == Fraction(189_000, 2 ** 20)
+    for scope, n in doc["links"].items():
+        assert rows["week", scope, "registered"]["per_period"] == pytest.approx(n * week["registered"]["per_period"])
+        assert Fraction(rows["week", scope, "registered"]["eps"]) == n * Fraction(189_000, 2 ** 20)
     with pytest.raises(SystemExit, match="drew 16 of 64"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
