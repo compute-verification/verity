@@ -84,7 +84,6 @@ import Proofs.Flock.Soundness.TmplSplitEq
 import Proofs.Flock.Soundness.TmplUnit
 import Proofs.Flock.Soundness.TmplShare
 import Proofs.Flock.Soundness.TmplUnrollAt
-import Proofs.Flock.Soundness.TmplScope
 import Proofs.Flock.Soundness.TmplValue
 import Proofs.Flock.Soundness.TmplValueUnit
 import Proofs.Flock.Soundness.TmplUnitNet

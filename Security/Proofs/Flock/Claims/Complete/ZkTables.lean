@@ -30,7 +30,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Parts
 import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
 import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
 import Proofs.Flock.Claims.Complete.ZkTables.Round0
 import Proofs.Flock.Claims.Complete.ZkTables.Pass
 import Proofs.Flock.Claims.Complete.ZkTables.Refuse
@@ -97,13 +96,8 @@ returning rep records `repRoundsT` rounds (`RepRuns`: `rep_rounds`), level 0's t
 where its lane phase is in closed form (`LaneRows`: `lanes_hold`), and the verifier's masked replay returns on rounds
 carrying the prover's zerocheck and lincheck (`ReplayGo`: `replayWith_ok`). So a rep returns at good coins where its
 rank check passes, the rounds it reads giving its claim points at the coins (`lcRounds_points`), its replay's and
-lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `runsRest`); a returning
-rep's proof has the masked PIOP's closed-form lengths, level 0's cap and Ligerito lengths, the inner proof's 192-byte
-salts and 64-byte path entries, and a file under `2^64` bytes at a good case's at most 2,048 extra claims
-(`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
-mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` and `Zk.Level0Verifier` prove level 0's four
-(`L0.complete_jsonT_closed`), and `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification
-alone (`L0.complete_jsonT_of_spec`).
+lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `runsRest`). `Zk.Level0Premises`
+proves three of level 0's four (`proverRuns`, `proverShape`, `lanes`), and `Zk.RankDeployed` the mask-rank bound.
 For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
 `honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,
