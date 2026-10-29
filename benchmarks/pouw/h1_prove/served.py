@@ -1,5 +1,5 @@
-"""served.py: the units a served H1 window's own draw coin selects (vllm's `pouw_h1` window, its z table one leaf a
-unit of its ``tile``), as PoUW's verifier draws them (core's `credit.drawn`).
+"""served.py: the units a served H1 window's own sampling coin selects (vllm's `pouw_h1` window, its z table one leaf a
+unit of its ``tile``), as PoUW's verifier samples them (core's `credit.drawn`).
 
     python served.py --calls CALLS.json --session DIR --ledger windows.jsonl [--ledger ...] --pin SHA512 --pins LOG
                      --main FILE --descriptor PROGRAM[.gz] [--out DRAWN.json]
@@ -11,18 +11,18 @@ pins log as infra published it, a line a pin; ``--main`` the verifier's own ``gi
 PROGRAM the window Program's descriptor (the rehearsal's ``window-program.json.gz``), whose SHA-512 must be the circuit the
 window's period-open signed.
 
-1. The window's draw coin is the verifier's challenger's, or nothing is drawn: the session the signed ledger opens and
+1. The window's sampling coin is the verifier's challenger's, or nothing is sampled: the session the signed ledger opens and
    ends for the window's root, under the pinned key (`remote.trusted_session`), run from a commit the pins log records
    on main's first-parent line (`challenger.pinned_session`: a session the log doesn't record is refused, though this
-   draw credits nothing), and in it the window's one draw coin,
+   sample credits nothing), and in it the window's one sampling coin,
    opened after its `draw_root` over its manifest, last receipts and every round's root and coin
    (`pouw_h1_challenger.draw_reason`), over a manifest whose ``calls_root`` binds its calls and served trees' entries
    (`pouw_h1_challenger.manifest_reason`). The window's salt and round coins are its served values' checks (vllm's
-   verify), not the draw's.
-2. The draw is core's (`pouw_h1_challenger.drawn_of`, `credit.drawn` on the served window's arguments: stream the window's
-   root, registration its draw root, receipt ``{"receipts": …}``), over the layout of the descriptor its period committed
+   verify), not the sample's.
+2. The sample is core's (`pouw_h1_challenger.drawn_of`, `credit.drawn` on the served window's arguments: stream the window's
+   root, registration its sample root, receipt ``{"receipts": …}``), over the layout of the descriptor its period committed
    (`credit.layout_of`), at the K that period's open committed (`credit.committed_k`): one work stratum a K.
-3. Each drawn unit is located in the window's calls: unit u is call i's unit u - base_i, its row block b and column block
+3. Each sampled proof block is located in the window's calls: unit u is call i's unit u - base_i, its row block b and column block
    c at b · (n / C) + c for the window's R × C ``tile`` (vllm's z/y records' order), and the call's z table's leaf
    u - base_i.
 """

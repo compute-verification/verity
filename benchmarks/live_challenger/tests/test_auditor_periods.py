@@ -279,7 +279,7 @@ def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_wind
 
 
 def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, signer):
-    """PoUW's credit reads the period's draw K from its open (`draw_k`), signed before window 0's first coin."""
+    """PoUW's credit reads the period's sample K from its open (`draw_k`), signed before window 0's first coin."""
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27713", "hash"))
     assert opened["body"]["draw_k"] == 27713
     ok(ssh(host, signer, "period-close --name p1", "hash"))
@@ -294,7 +294,7 @@ def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, si
 
 def test_a_period_open_commits_its_table_rows_when_given_and_none_otherwise(host, signer):
     """PoUW's credit bounds every step's served rows m_s by the table rows T its period's open commits (`rows`, credit's
-    `committed_rows`), signed before window 0's first coin beside its draw K or alone."""
+    `committed_rows`), signed before window 0's first coin beside its sample K or alone."""
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 --rows 12", "hash"))
     assert (opened["body"]["draw_k"], opened["body"]["rows"]) == (27, 12)
     ok(ssh(host, signer, "period-close --name p1", "hash"))
@@ -310,7 +310,7 @@ def test_a_period_open_commits_its_table_rows_when_given_and_none_otherwise(host
 def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(host, signer):
     """PoUW's credit holds every window of a period to the served model's registered weights' root its open commits
     (`weights_root`, `credit.weights_root` of the B rows the auditor registered before the period's first salt, with
-    its model), signed before window 0's first coin, beside its draw K or alone."""
+    its model), signed before window 0's first coin, beside its sample K or alone."""
     w = "5e" * 64
     host.models.write_text(json.dumps({"model": "M8", "circuit": CIRCUIT, "weights_root": w,
                                        "checkpoint_sha512": "c4" * 64}) + "\n")
@@ -332,7 +332,7 @@ def test_a_period_open_commits_its_weights_root_when_given_and_none_otherwise(ho
 def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwise(host, signer):
     """PoUW's credit verifies each window's statements on the circuit file its period's open committed for the call's K
     (`circuit_files`, ``{k<K>: SHA-512}``, credit's `committed_files`), signed before window 0's first coin beside its
-    draw K, whatever order or spacing the JSON came in."""
+    sample K, whatever order or spacing the JSON came in."""
     files = {"k4096": "1a" * 64, "k64": "2b" * 64}
     given = shlex.quote(json.dumps({"k64": "2b" * 64, "k4096": "1a" * 64}, indent=1))
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
