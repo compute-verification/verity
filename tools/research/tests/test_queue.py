@@ -1209,7 +1209,7 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
     """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick; and one GET at a time
-    took a fresh VM's listing four minutes for `next`'s ~1,000 labels (CI-273), so the listings and the GETs each run
+    took a fresh VM's listing four minutes for `next`'s ~1,000 labels, so the listings and the GETs each run
     `PREFETCH_JOBS` at once."""
     from research.queue import PREFETCH_JOBS, StoreLabels
 
@@ -1287,7 +1287,7 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
 
 def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labels(world, monkeypatch, capsys):
     """The lock refuses a second queue command at once, and a fresh VM's listing read labels for minutes under it, so every
-    verdict meanwhile was refused (CI-273).  A command that only reads holds it while it clones and fetches, not after."""
+    verdict meanwhile was refused.  A command that only reads holds it while it clones and fetches, not after."""
     import research.queue as Qm
 
     cfg = world.tmp / "store.toml"
@@ -2412,7 +2412,7 @@ def test_the_same_inputs_search_reads_every_candidate_to_its_bound_newest_first_
 def test_the_same_inputs_search_reads_a_fixed_age_of_runs_and_bounds_only_those_that_may_vouch_for_the_package(
         world, monkeypatch, capsys):
     """A window that started an hour before the head's 9th commit back dropped same-input runs from earlier the same night on a
-    branch with many merges (CI-274), and the store holds thousands of runs a day, most of which are neither a records run
+    branch with many merges, and the store holds thousands of runs a day, most of which are neither a records run
     nor a Lean check.  The search reads every run of the last `RECORDS_LOOKBACK_S`, whatever the head's history, and applies its
     bound only to runs that may hold a pass of the package, so newer runs past that bound don't hide the one that vouches."""
     from research import queue as Q

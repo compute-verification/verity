@@ -2821,7 +2821,7 @@ REQUIRER_AUDIT = re.compile(r"(?:^|/)requirer-([^/]+)/audit\.json$")
 #: how many commits below a head `RecordsGate` follows one that only merged `main`, or only committed a record a run regenerated
 RECORDS_WALK = 8
 #: the attempts `RecordsGate` reads from the store's remote: those started in the lookback before now, whatever the head's history
-#: (a window counted from its commits dropped same-input runs of earlier the same night on a branch with many merges, CI-274)
+#: (a window counted from its commits dropped same-input runs of earlier the same night on a branch with many merges)
 RECORDS_LOOKBACK_S = 3 * 86400
 #: an attempt that may hold a pass of a package (`RecordsGate._commits`): a Lean check (`check.py`), or a records run of the
 #: package it names (`lean_changed.py --records NAME`, NAME a package's path or a part of it, as `lean_changed.py` resolves it)
