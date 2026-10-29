@@ -10,8 +10,8 @@ import Proofs.Flock.Claims.Recursion.SchedDense
 /-!
 # What each V\* part's circuit accepts on the honest outer run, at the layout of record (`DeployedR.layR`)
 
-`RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem` (RECINT's
-statement). It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
+`RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem`.
+ It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
 the compiled record's own reference prover (`refP`, the record's `P`) at the deployed recursive record
 `recBound Readable.relation bR (layR elem) bdR.IVStar` (`bR` the brings whose transcript is the coin server's record,
 `recTr`), on a statement `x` in the recursion's relation at the inner witness `w`, and the part's outer witness is the
@@ -113,7 +113,7 @@ theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length 
     let I := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
     let D := recBound _root_.Flock.Readable.relation bR L DeployedR.bdR.IVStar
     NumsFixed bL.st →
-    ∀ {x : Msg} {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}, Claims.Recursion.R D I x w →
+    ∀ {x : Msg} {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement}, Claims.Recursion.R D I x w →
       D.parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
       (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).out = .acc →

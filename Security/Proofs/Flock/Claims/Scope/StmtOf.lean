@@ -40,7 +40,7 @@ theorem tableAt_model {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts)
     obtain ⟨hwf, hrw⟩ := Hidden.setupHidden_wf hd
     have s := Hidden.setupHidden_spec' hd
     have P := parse_facts (Hidden.parse_untyped ht' s.parse).1
-    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b,
-      Integrate.placedB_eq P (Hidden.hidden_layout' ht' hd) s.leaf a b⟩⟩
+    have L := Hidden.hidden_layout' ht' hd (HiddenExec.setupTables_pinnedH hh hset j hj)
+    exact ⟨hwf, hrw, fun a b => ⟨Integrate.placedA_eq P L s.leaf a b, Integrate.placedB_eq P L s.leaf a b⟩⟩
 
 end Flock.Readable

@@ -127,7 +127,7 @@ its unit named for a shape `sh` (`RecSparse.params`). In every block, at every V
 columns hold `wA` on the message ports, `vA` on `v`'s and with `T > 1` the slots' types `τA` on `tau`'s (`SparseIn`),
 its output columns hold `outOf`'s residuals there (`SparseOuts`): `laid_sparse` at the verifier's net
 (`check_sparse`), whose shape has `T_LOG ≤ 16`. -/
-theorem sparseOuts_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem sparseOuts_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) (hc : Flock.RecSparse.check st.c = .ok ()) {sh : Flock.RecSparse.Shape}
@@ -138,7 +138,7 @@ theorem sparseOuts_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
       wA vA τA := by
   obtain ⟨hv, -, -, hn⟩ := FlockVBridge.Sparse.check_sparse hc hp
   have hn' : Flock.HmNets.netOf (Flock.RecSparse.unitName sh) (Flock.RecSparse.unitLaid sh) = .ok st.c.unit := hn
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hn'
+  have hL := laidRows_of_satisfies L hfl regs hz ho hg hu hn'
   rw [inWords_sparseLaid hn'] at hL
   simp only [Flock.RecSparse.Shape.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
   exact FlockVBridge.Sparse.laid_sparse sh hv.2 _ hL wA vA τA hin
@@ -147,7 +147,7 @@ theorem sparseOuts_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
 built from `RecOpen.unitLaid LANES H` under the name `name`, at `H ≤ 32`: a copy whose input columns hold a row, its
 siblings, the running sums, the coefficients and the position's bits (`OpenIns`) holds the climb from the row's leaf
 and the consistency term on its output columns (`OpenOuts`). -/
-theorem climbAt_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem climbAt_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) {LANES H : ℕ} (hH : H ≤ 32) {name : String}
@@ -159,14 +159,14 @@ theorem climbAt_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
     OpenOuts (copyCol J c w st.c.kLog o (st.c.unitRange.slot (g * st.c.upv + u)) st.c.unit.constPos) ms LANES H
       r a cf rest idx ss := by
   obtain ⟨hr, ha, hcf, hrest, hss, hrow, haux, hacc, hcoef, hdir⟩ := hin
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  have hL := laidRows_of_satisfies L hfl regs hz ho hg hu hl
   rw [FlockVBridge.inWords_unit hl] at hL
   exact FlockVBridge.laid_unit ms hms LANES H hH _ hL r a cf rest idx ss hr ha hcf hrest hss hrow haux hacc hcoef hdir
 
 /-- **R's levels: a satisfied table's copies climb.** Let `RecOpen.check` accept the table's circuit, its unit named
 `rec-open-stacked/l<LANES>-h<H>` (`RecOpen.stackedParams`): it is the rec-open net under that name
 (`RecOpen.check_ok_stacked`), so `climbAt_of_satisfies`. -/
-theorem climbStacked_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem climbStacked_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) (hrec : Flock.RecOpen.check st.c = .ok ()) {LANES H : ℕ}
@@ -179,7 +179,7 @@ theorem climbStacked_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout s
       r a cf rest idx ss := by
   obtain ⟨hvalid, hl⟩ := Flock.RecOpen.check_ok_stacked hrec hp
   simp only [Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hvalid
-  exact climbAt_of_satisfies L regs hz ho hg hu hvalid.2 hl ms hms hin
+  exact climbAt_of_satisfies L hfl regs hz ho hg hu hvalid.2 hl ms hms hin
 
 /-- **R's opening parts: a satisfied table's copies compute the part's residuals.** Let `RecOpening.check` accept the
 table's circuit, its unit named for part `j` of R's opening at a shape `sh` (`RecOpening.params`, `RecOpening.shape?`),
@@ -187,7 +187,7 @@ part `j` being `S` with row ports of `ns` elements and a `v` of `nv` (`RecOpenin
 and copy, if the copy's input columns hold `W` on the row ports and `vv` on `v`'s (`InCols`), zero past `ns`'s total
 and `nv`, its output columns hold each of S's residuals at `W`, `vv` (`PartCols`): `laid_part` at the verifier's
 residuals net (`check_opening`). -/
-theorem openingCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st)
+theorem openingCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st) (hfl : st.c.tmpl = none)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {J c : ℕ} {w : Claims.Flock.Wit}
     (hz : (L.model regs).Satisfies (zOf J w c st.m)) {o g u : ℕ} (ho : o < 2 ^ (st.m - st.c.kLog))
     (hg : g < st.c.g) (hu : u < st.c.upv) (hc : RecOpening.check st.c = .ok ()) {m cl j : ℕ}
@@ -202,7 +202,7 @@ theorem openingCols_of_satisfies {st : Flock.Stmt} (L : FlockSoundness.Layout st
   obtain ⟨S', ns', nv', hpart', hn⟩ := check_opening hc hp hsh
   rw [hpart] at hpart'
   cases hpart'
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hn
+  have hL := laidRows_of_satisfies L hfl regs hz ho hg hu hn
   rw [inWords_unitLaid hn] at hL
   exact laid_part S ns nv (opening_small hpart) _ hL W vv hw0 hv0 hin
 
@@ -220,7 +220,7 @@ theorem sparseOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Ms
     SparseOuts sh (copyOf p t htl w o g u) wA vA τA := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
   obtain ⟨_, P⟩ := parseFacts_of_check h hx ht hpi htl
-  exact sparseOuts_of_satisfies L regs hz ho hg hu P.recSparse hp wA vA τA hin
+  exact sparseOuts_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recSparse hp wA vA τA hin
 
 /-- **A rec-open or R-level part's copies climb at `Flock.check`** (`climb_of_satisfies` or
 `climbStacked_of_satisfies` at every table, with the parser's `RecOpen.check`): a table whose unit is named for
@@ -239,9 +239,9 @@ theorem climbAt_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} 
   obtain ⟨_, P⟩ := parseFacts_of_check h hx ht hpi htl
   rcases hp with hp | hp
   · obtain ⟨hr, ha, hcf, hrest, hss, hrow, haux, hacc, hcoef, hdir⟩ := hin
-    exact climb_of_satisfies L regs hz ho hg hu rfl ms hms P.recNet hp r a cf rest idx ss hr ha hcf hrest hss hrow
+    exact climb_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu rfl ms hms P.recNet hp r a cf rest idx ss hr ha hcf hrest hss hrow
       haux hacc hcoef hdir
-  · exact climbStacked_of_satisfies L regs hz ho hg hu P.recNet hp ms hms hin
+  · exact climbStacked_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recNet hp ms hms hin
 
 /-- **A table of residuals: the plain algebra's part `j`, or R's opening's**: by its unit's name, the circuit `c` is
 part `j` of a plain shape's algebra (`RecResiduals`) or of R's opening at a shape (`RecOpening`), `S` with row ports of
@@ -266,8 +266,8 @@ theorem resCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} 
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
   obtain ⟨_, P⟩ := parseFacts_of_check h hx ht hpi htl
   rcases hpart with ⟨m, k, cl, j, sh, hp, hsh, hh, hpart⟩ | ⟨m, cl, j, sh, hp, hsh, hpart⟩
-  · exact partCols_of_satisfies L regs hz ho hg hu P.recResiduals hp hsh hh hpart W vv hw0 hv0 hin
-  · exact openingCols_of_satisfies L regs hz ho hg hu P.recOpening hp hsh hpart W vv hw0 hv0 hin
+  · exact partCols_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recResiduals hp hsh hh hpart W vv hw0 hv0 hin
+  · exact openingCols_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recOpening hp hsh hpart W vv hw0 hv0 hin
 
 /-! ## A rec-sparse copy's inputs off its columns -/
 
@@ -436,7 +436,7 @@ and the messages, or the fallback (`PartColl`). -/
 def PartLinksTo (H : Msg → Msg) (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
     (G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     PartAt decode L s x xO fun w ms => G x c w ms ∨ PartColl H D L s x xO w
 
 /-- **Part `s`'s links** toward its inner check `chk s` (`PartLinksTo`). -/
@@ -481,7 +481,7 @@ theorem goal_of_links {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coi
     {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shape : Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop} {s : ℕ}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (h : PartLinksTo H D decode L shape shows G s) (x : Msg) (st : Stmt) (hst : D.parse x = some st)
+    (h : PartLinksTo H D decode L shape shows G s) (x : Msg) (st : CompiledStatement) (hst : D.parse x = some st)
     (hf : shape st.form) (xO : Msg) (w : Flock.Wit) (hck : Flock.check DO.parse xO w = true) :
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) → G x c w ms) ∨

@@ -1,6 +1,6 @@
 """network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
-the link's network verdict (`LinkWindows.verify` through the proof service's stream, `network_verdict`), every
+the link's network verdict (`LinkWindows.verify` through the proof system's stream, `network_verdict`), every
 link-window's head checks proved by C-Flock ``prove --zk`` behind the Lean firewall and held by Lean (`n2_zk.prove`), and
 the negatives (``late``, ``extra`` and a tampered head) refused, in `report.json` and `report.md` under ``--out``; then
 the chain's stages (`chain`): the advice's bits per link-window, the prove path's audit and the negatives
@@ -107,7 +107,8 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
 README = "verity/core/protocols/certifier/README.md"
 PEERS = Path("/etc/vy/peers")
 ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
-GATE_HOST = "vy-challenger-1"
+#: the auditor's host whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)
+GATE_HOST = json.loads((ROOT / "benchmarks" / "network_traces" / "site.json").read_text())["challenger"]
 
 CLAIM = {
     "statement": (

@@ -9,7 +9,7 @@ import Proofs.Flock.Recursive.HoloRepCoins
 /-!
 # The opened positions' range (`PosCap0`, `PosCapUp`) at row D's pieces and `Rows.posAt`
 
-`sideCapR_deployed` gives `SideCapR` at the deployed layout from RESTREAD's `ReadsAt` and two ranges: a level-`ℓ`
+`sideCapR_deployed` gives `SideCapR` at the deployed layout from `ReadsAt` and two ranges: a level-`ℓ`
 piece's position, below its `HH` siblings, is one of its cap's nodes. Both hold at every decision, from its own checks:
 
 * `posAt` is the position the verifier rows draw (`verifierRows`) at the statement's own shape, its table's `fast100`
@@ -130,7 +130,7 @@ the table's two reps, `HH = d - cap` at that level (`levelMatch`), and the posit
 (`posAt_lt`, at table 0's setup, `inner_m`). -/
 theorem pieceCtx {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (hP : ∀ x, D.parse x = parse x)
-    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) {x : Msg} {st : Claims.Recursion.Stmt}
+    (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f) {x : Msg} {st : Claims.Recursion.CompiledStatement}
     (hx : D.parse x = some st) (hf : shape st.form) {r : XR} {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ}
     (hr : readX x = some r) (hss : RecVStar.statements r.shape = .ok ss)
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) {q : OpenPiece}
@@ -257,7 +257,7 @@ theorem posCapUp_rowD (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ �
   exact shift_lt (hpos _)
 
 /-- **`SideCapR` at row D's pieces and `Rows.posAt`**, at SHA-512, the deployed layout `layR elem` and the bound
-record at `finalR`: `sideCapR_deployed` from RESTREAD's `ReadsAt` and the two ranges, which every decision's own
+record at `finalR`: `sideCapR_deployed` from `ReadsAt` and the two ranges, which every decision's own
 checks give (`posCap0_rowD`, `posCapUp_rowD`). -/
 theorem sideCapR_rowD (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
@@ -274,7 +274,7 @@ theorem sideCapR_rowD (elem : (r : XR) → List (Fin r.w.parts.length × List (M
 end Deployed
 
 /-- **`recursiveKSAt_of_leaves`' `hCap`**, at its records: `sideCapR_rowD` at `elemR`, `rdR`, the compiled record
-`recL` and the bound record `bdR`, from RESTREAD's `ReadsAt` alone. -/
+`recL` and the bound record `bdR`, from `ReadsAt` alone. -/
 theorem sideCapR_leaf (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
