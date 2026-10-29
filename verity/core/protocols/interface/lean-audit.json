@@ -1,7 +1,8 @@
 {
  "roots": ["CoreProtocol"],
  "exempt": {
-  "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "CoreProtocol.RegistrationMain": "the core-registration executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "escapes": {
   "Core.BlobProtocol.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.BlobsExample's guards cover BlobProtocol.case, which it runs on each line",
