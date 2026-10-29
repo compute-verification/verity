@@ -64,7 +64,9 @@ previous one plus coin terms, an IADD3 at the floor; `lead_blc4a_coin_hd` is the
 evaluation gives the chosen-data term (`t1_attack`) and its copy part (`t1_copy`, revisits of a value the entry held);
 the rest is TensorSemantics' credit lost to chosen data. `t1_tile_copy` is the copy part left at tile grain, where a
 copy saves only when a whole tile's words repeat: ssn_sh's coin is one word a step for the whole call, so data that is
-constant over a tile revisits the tile together, while the lead's coins differ by column. Without xu the
+constant over a tile revisits the tile together, while the lead's coins differ by column. `t1_tile_mac` is the step
+at tile grain over a stock whose linears cost a unit a real MAC, where stock's cheapest instruction pays for its own
+padding below 64 rows (12.02 units a MAC at one row). Without xu the
 lead's coin term, a (tile, column) sum, folds in the epilogue's IADD3 column source, so its served noise is the tag
 lead's;
 `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
@@ -1108,6 +1110,8 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
     alpha = tot["honest"] / st
     macs = sum(c.count for c in comps if c.family in ("linear", "lm_head", "qk", "pv", "router_gemm"))
     lin_gap = groups["linears"]["gap_share"]
+    tile_gap = (t1_mm + cov) * st - sum(r.get("copy", 0.0) - r.get("tile_copy", 0.0) for r in rows)
+    lin_mac_st = st - sum(r["stock"] for r in lin) + sum(r["count"] for r in lin)
     return {"model": model, "point": point, "plan": plan.name, "reading": reading, "stock_units": st,
             "honest_units": tot["honest"], "alpha_w1": alpha, "linears_stock_share": lin_share,
             "macs": macs, "w1_per_mac": st / macs, "linears_gap": lin_gap, "rest_gap": t1_mm + cov - lin_gap,
@@ -1116,6 +1120,7 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
             "t1_attack": sum(r.get("attack", 0.0) for r in rows) / st,
             "t1_copy": sum(r.get("copy", 0.0) for r in rows) / st,
             "t1_tile_copy": sum(r.get("tile_copy", 0.0) for r in rows) / st,
+            "t1_tile_mac": tile_gap / lin_mac_st,
             "linears_attack": sum(r.get("attack", 0.0) for r in lin) / max(1e-30, sum(r["stock"] for r in lin)),
             "slack_share": (tot["honest"] - tot["forced"] - tot["unforced"]) / st,
             "hash_bytes": 4 * tot["words"], "groups": groups, "t2": t2, "t3_estimate": t3,
@@ -1787,6 +1792,13 @@ def check() -> list[dict]:
                    for r in e["components"])
            for e in tg.values()),
        {f"{m} {p}": (e["t1_copy"], e["t1_tile_copy"]) for (m, p), e in tg.items()})
+    um = {(m, p): evaluate(m, p, PLAN["lead_blc4a_pad64"]) for m, p in (("llama", "dec64_2k"), ("llama", "dec1_2k"))}
+    tile_t1 = {k: e["t1"] - e["t1_copy"] + e["t1_tile_copy"] for k, e in um.items()}
+    ok("the linears' stock at a unit a MAC changes nothing where stock's cheapest instruction is a unit a MAC (64 "
+       "rows), and raises the step's share where it isn't (one row, 12 units a MAC)",
+       abs(um[("llama", "dec64_2k")]["t1_tile_mac"] - tile_t1[("llama", "dec64_2k")]) < 1e-5
+       and um[("llama", "dec1_2k")]["t1_tile_mac"] > 1.5 * tile_t1[("llama", "dec1_2k")],
+       {f"{m} {p}": (tile_t1[(m, p)], e["t1_tile_mac"]) for (m, p), e in um.items()})
     for plan in PLANS:
         for model in ("llama", "v4"):
             for point in POINTS:
