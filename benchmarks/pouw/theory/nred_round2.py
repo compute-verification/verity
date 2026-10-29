@@ -6,15 +6,21 @@ Designs (the committed word is D_t(i, j) + N_t(i, j) − β_j, D_t the data's pa
 - `fix` (N-RED interim 1, `ssn_1l-tag`): N_1 = T(i)·G_j + a₁·C_j; each later step adds (1 + b_t)·1.
 - `hw` (N-PREM's `ssn_1l_hw`): N_1 = a₁·C_j, a₁ ∈ {0..15}⁴; each later step adds (1 + 2b_t)·σ_t[j], σ_t public signs.
 - `fix2` (this file): `fix` with each later step adding (1 + b_t)·w_t[j], w_t ∈ {±1}ⁿ drawn from coins after B is
-  committed (once a window).
+  committed (once a window). `fix2w2`: the same with w_t ∈ {±1, ±2}ⁿ.
 - `rc_magic` (N-EXACT): N_1 = r_1(i) + c_j (a row bit and a fresh column bit); each later step adds r_t(i)·1. Both
   are removed in the epilogue, so the served output is exact.
+- `tag_nz`, `tag_nzhi` (N-NOISE's `ssn_1l+tag+nz`, enumerated {1, 3} and the planned nz-high {2, 3}): `fix` with each
+  later step adding (1 + 2b_t)·1 or (2 + b_t)·1.
+- `tagB_nzhi` (N-NOISE's `AorB` on side B): the noise on B's columns, column coins against a public row code and row
+  weight 1, column tags against a per-call row G; each later step adds (2 + b_t(j))·1.
 
 Attacks:
 
-- A2c, cancelled offsets (chosen B): a public, coin-independent part of a step's noise, e.g. `fix`'s 1·1 or `hw`'s
-  σ_t, is cancelled by one data lane (A = 1, B = −pattern), which leaves b_t·(·), zero when b_t = 0: the row's step-t
-  vector then equals its step t − 1 vector, a copy. `fix2`'s w_t is drawn after B, so no B carries it.
+- A2c, cancelled offsets (chosen data): a public, coin-independent part of a step's noise, e.g. `fix`'s 1·1, `hw`'s
+  σ_t or a never-zero lane's static part, is cancelled by one data lane (A = 1, B = −pattern), which leaves b_t·(·),
+  zero when b_t = 0: the row's (side B: the column's) step-t vector then equals its step t − 1 vector, a copy.
+  `fix2`'s w_t is drawn after B, so no B carries it whole; but a lane of −1 cancels it on every 4-word tile where
+  w_t = +1 (1/16 of tiles), so tile copies remain (A2c-tile, `build_tiles`). `fix2w2` takes that to 1/256.
 - A7, birthday at large m (identical rows): `hw` separates identical rows by 16 code bits and the step bits, so two
   rows coincide at step t when their a₁ and their bits through t agree; the share grows with m. `fix`/`fix2`'s tags are
   injective only up to 13^L − 1 rows with L lanes.
@@ -46,13 +52,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import noise_sweep as ns  # noqa: E402
 import nred_attacks as na  # noqa: E402
 
-DESIGNS = ("ssn_1l", "fix", "hw", "fix2", "rc_magic")
+DESIGNS = ("ssn_1l", "fix", "hw", "fix2", "fix2w2", "rc_magic", "tag_nz", "tag_nzhi", "tagB_nzhi")
+TAGGED = ("fix", "fix2", "fix2w2", "tag_nz", "tag_nzhi")
+CANCELLED = {"fix": 1, "hw": 1, "tag_nz": 1, "tag_nzhi": 2, "tagB_nzhi": 2}
 BIG_MS = (8192, 32768, 131072, 1 << 20)
 H2_BLOCK = 128
 
 
 def first_lanes(design: str) -> int:
-    return {"ssn_1l": 28, "hw": 28, "fix": 24, "fix2": 24, "rc_magic": 30}[design]
+    return {"ssn_1l": 28, "hw": 28, "fix": 24, "fix2": 24, "fix2w2": 24, "rc_magic": 30, "tag_nz": 24, "tag_nzhi": 24,
+            "tagB_nzhi": 24}[design]
 
 
 def rc_steps(k: int) -> int:
@@ -65,9 +74,16 @@ def steps(design: str, k: int) -> int:
 
 def public(design: str, n: int, s: int, m: int, rng: np.random.Generator) -> dict:
     """The design's weights: C, G (window coins), σ (public signs), w (window coins), tags."""
-    return {"c": na.code(n), "g": rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, n)),
-            "sig": rng.choice([-1, 1], (s - 1, n)), "w": rng.choice([-1, 1], (s - 1, n)),
-            "tags": na.row_tags(m) if design in ("fix", "fix2") else np.zeros((m, 0), dtype=np.int64)}
+    pub = {"c": na.code(n), "g": rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, n)),
+           "sig": rng.choice([-1, 1], (s - 1, n)), "w": rng.choice([-1, 1], (s - 1, n)),
+           "tags": na.row_tags(m) if design in TAGGED else np.zeros((m, 0), dtype=np.int64)}
+    if design == "fix2w2":
+        pub["w"] = rng.choice([-2, -1, 1, 2], (s - 1, n))
+    if design == "tagB_nzhi":
+        pub["c_rows"] = na.code(m)
+        pub["tags_cols"] = na.row_tags(n)
+        pub["g_rows"] = rng.integers(-na.G_MAX, na.G_MAX + 1, (na.TAG_LANES, m))
+    return pub
 
 
 def coins(design: str, m: int, n: int, s: int, rng: np.random.Generator, h=None) -> dict:
@@ -77,8 +93,12 @@ def coins(design: str, m: int, n: int, s: int, rng: np.random.Generator, h=None)
     else:
         a1 = rng.integers(0, 16 if design == "hw" else 2, (m, 4))
         b = rng.integers(0, 2, (m, s - 1))
-    return {"a1": a1.astype(np.int64), "b": b.astype(np.int64), "r": rng.integers(0, 2, (m, s)),
-            "cbit": rng.integers(0, 2, n)}
+    co = {"a1": a1.astype(np.int64), "b": b.astype(np.int64), "r": rng.integers(0, 2, (m, s)),
+          "cbit": rng.integers(0, 2, n)}
+    if design == "tagB_nzhi":
+        co["a1_cols"] = rng.integers(0, 2, (n, 4))
+        co["b_cols"] = rng.integers(0, 2, (n, s - 1))
+    return co
 
 
 def noise(design: str, pub: dict, co: dict) -> tuple[np.ndarray, np.ndarray]:
@@ -89,7 +109,12 @@ def noise(design: str, pub: dict, co: dict) -> tuple[np.ndarray, np.ndarray]:
     if design == "rc_magic":
         r = np.cumsum(co["r"], axis=1)
         return r[:, None, :] + co["cbit"][None, :, None], np.zeros(n, dtype=np.int64)
-    n1 = a1 @ c + (pub["tags"] @ pub["g"] if design in ("fix", "fix2") else 0)
+    if design == "tagB_nzhi":
+        n1 = side_b_first(pub, co)
+        inc = (2 + co["b_cols"].T)[None] * np.ones((m, 1, 1), dtype=np.int64)
+        cum = np.concatenate([np.zeros((m, 1, n), dtype=np.int64), np.cumsum(inc, axis=1)], axis=1)
+        return n1[:, :, None] + cum.transpose(0, 2, 1), np.full(n, int(np.rint(2.5 * s1)), dtype=np.int64)
+    n1 = a1 @ c + (pub["tags"] @ pub["g"] if design in TAGGED else 0)
     if design == "ssn_1l":
         inc = b[:, :, None] * np.ones((1, 1, n), dtype=np.int64)
         mean = c.sum(0) / 2 + s1 / 2
@@ -99,20 +124,40 @@ def noise(design: str, pub: dict, co: dict) -> tuple[np.ndarray, np.ndarray]:
     elif design == "hw":
         inc = (1 + 2 * b)[:, :, None] * pub["sig"][None]
         mean = 7.5 * c.sum(0) + 2 * pub["sig"].sum(0)
-    elif design == "fix2":
+    elif design in ("fix2", "fix2w2"):
         inc = (1 + b)[:, :, None] * pub["w"][None]
         mean = c.sum(0) / 2 + 1.5 * pub["w"].sum(0)
+    elif design == "tag_nz":
+        inc = (1 + 2 * b)[:, :, None] * np.ones((1, 1, n), dtype=np.int64)
+        mean = c.sum(0) / 2 + 2 * s1
+    elif design == "tag_nzhi":
+        inc = (2 + b)[:, :, None] * np.ones((1, 1, n), dtype=np.int64)
+        mean = c.sum(0) / 2 + 2.5 * s1
     else:
         raise ValueError(design)
     cum = np.concatenate([np.zeros((m, 1, n), dtype=np.int64), np.cumsum(inc, axis=1)], axis=1)
     return n1[:, :, None] + cum.transpose(0, 2, 1), np.rint(mean).astype(np.int64)
 
 
+def side_b_first(pub: dict, co: dict) -> np.ndarray:
+    """tagB_nzhi's step 1, the noise on B's side: column coins against a public row code, column tags against row G
+    (per call, from coins), the row code's mean removed."""
+    rc = pub["c_rows"]
+    return (rc.T @ co["a1_cols"].T + pub["g_rows"].T @ pub["tags_cols"].T
+            - np.rint(rc.sum(0) / 2).astype(np.int64)[:, None])
+
+
 def final_noise(design: str, pub: dict, co: dict) -> np.ndarray:
     """The served noise N_S − β (m × n), without the m × n × S intermediate."""
     c, a1, b = pub["c"], co["a1"], co["b"]
-    n1 = a1 @ c + (pub["tags"] @ pub["g"] if design in ("fix", "fix2") else 0)
     s1 = b.shape[1]
+    if design == "tagB_nzhi":
+        return side_b_first(pub, co) + (2 + co["b_cols"]).sum(1)[None] - int(np.rint(2.5 * s1))
+    n1 = a1 @ c + (pub["tags"] @ pub["g"] if design in TAGGED else 0)
+    if design == "tag_nz":
+        return n1 + (1 + 2 * b).sum(1)[:, None] - np.rint(c.sum(0) / 2 + 2 * s1).astype(np.int64)
+    if design == "tag_nzhi":
+        return n1 + (2 + b).sum(1)[:, None] - np.rint(c.sum(0) / 2 + 2.5 * s1).astype(np.int64)
     if design == "ssn_1l":
         return n1 + b.sum(1)[:, None] - np.rint(c.sum(0) / 2 + s1 / 2).astype(np.int64)
     if design == "fix":
@@ -120,7 +165,7 @@ def final_noise(design: str, pub: dict, co: dict) -> np.ndarray:
     if design == "hw":
         inc = _exact_matmul(1 + 2 * b, pub["sig"])
         return n1 + inc - np.rint(7.5 * c.sum(0) + 2 * pub["sig"].sum(0)).astype(np.int64)
-    if design == "fix2":
+    if design in ("fix2", "fix2w2"):
         return n1 + _exact_matmul(1 + b, pub["w"]) - np.rint(c.sum(0) / 2 + 1.5 * pub["w"].sum(0)).astype(np.int64)
     raise ValueError(design)
 
@@ -161,8 +206,7 @@ def case_data(case: str, design: str, m: int, n: int, s: int, pub: dict, rng: np
         if case == "cancel_identical":
             a = np.repeat(row, m, axis=0)
         a[:, d1:] = 0
-        pat = {"fix": np.ones((s - 1, n)), "hw": pub["sig"], "fix2": pub["sig"], "ssn_1l": np.ones((s - 1, n)),
-               "rc_magic": np.ones((s - 1, n))}[design]
+        pat = pub["sig"] if design in ("hw", "fix2", "fix2w2") else CANCELLED.get(design, 1) * np.ones((s - 1, n))
         for t in range(1, s):
             lane = d1 + 31 * (t - 1)
             a[:, lane] = 1
@@ -191,7 +235,7 @@ def adversary_keys(design: str, case: str, a: np.ndarray, co: dict) -> np.ndarra
         key = (rows[:, None] * s + step) * (s + 1) + np.cumsum(co["r"], axis=1)
     elif design == "rc_magic" and case == "zero_tails":
         key = np.arange(m)[:, None] * (s + 1) + np.cumsum(co["r"], axis=1)
-    elif case == "cancel" and design in ("fix", "hw", "fix2"):
+    elif case == "cancel" and design in ("fix", "hw", "fix2", "fix2w2", "tag_nz", "tag_nzhi"):
         key = np.arange(m)[:, None] * (s + 2) + last_one(co["b"])
     else:
         key = np.arange(m * s).reshape(m, s)
@@ -210,6 +254,41 @@ def build(design, a, b, pub, co, key) -> tuple[np.ndarray, int]:
             src = first.setdefault(int(key[i, t]), (i, t))
             out[i, :, t] = w[src[0], :, src[1]]
     return out, len(first) * n
+
+
+def build_cols(design, a, b, pub, co) -> tuple[np.ndarray, int]:
+    """Side B's adaptive prover on the cancelled case: column j's step-t vector (all m rows) is a copy of its step
+    t − 1 vector unless the column's bit at t is 1; keyed on (column, last step whose column bit is 1)."""
+    w = words(design, a, b, pub, co)
+    m, n, s = w.shape
+    key = np.arange(n)[:, None] * (s + 2) + last_one(co["b_cols"])
+    out = np.empty_like(w)
+    first = {}
+    for j in range(n):
+        for t in range(s):
+            src = first.setdefault(int(key[j, t]), (j, t))
+            out[:, j, t] = w[:, src[0], src[1]]
+    return out, len(first) * m
+
+
+def build_tiles(design, a, b, pub, co, v: int = 1) -> tuple[np.ndarray, int, int]:
+    """A2c at tile width on fix2: with a data lane of −v on every column, row i's TILE-column tile τ at step t repeats
+    step t − 1 when b_t(i) = 0 and w_t is v on all of τ. One vector a key, one pointer a copied tile."""
+    w = words(design, a, b, pub, co)
+    m, n, s = w.shape
+    q = n // na.TILE
+    match = (pub["w"][:, :q * na.TILE].reshape(s - 1, q, na.TILE) == v).all(axis=2)
+    same = (co["b"] == 0)[:, :, None] & match[None]
+    idx = np.where(~same, np.arange(1, s)[None, :, None], 0)
+    src = np.concatenate([np.zeros((m, 1, q), dtype=np.int64), np.maximum.accumulate(idx, axis=1)], axis=1)
+    out = w.copy()
+    rows = np.arange(m)[:, None]
+    for t in range(1, s):
+        for tau in range(q):
+            cols = np.arange(tau * na.TILE, (tau + 1) * na.TILE)[None, :]
+            out[:, cols[0], t] = w[rows, cols, src[:, t, tau][:, None]]
+    copied = int((src != np.arange(s)[None, :, None]).sum())
+    return out, w.size - copied * na.TILE, copied
 
 
 def small(seed: int = 23) -> tuple[list[dict], dict]:
@@ -239,19 +318,50 @@ def small(seed: int = 23) -> tuple[list[dict], dict]:
             r = {"oracle_vector_saving": na.saving(w.size, orc["vector_words"], m * s),
                  "oracle_tile_saving": 1 - orc["tile_words"] / w.size, "repeat_previous_step": rep / (m * (s - 1)),
                  "row_values_share": orc["row_values"] / w.size}
-            key = adversary_keys(design, case, a, co)
-            adv, writes = build(design, a, b, pub, co, key)
+            if design == "tagB_nzhi" and case == "cancel":
+                adv, writes = build_cols(design, a, b, pub, co)
+                pointers = n * s
+                r["column_repeat_previous_step"] = int(sum((w[:, :, t] == w[:, :, t - 1]).all(axis=0).sum()
+                                                           for t in range(1, s))) / (n * (s - 1))
+            else:
+                adv, writes = build(design, a, b, pub, co, adversary_keys(design, case, a, co))
+                pointers = m * s
             r["adversary_equal"] = bool(np.array_equal(adv, w))
-            r["adversary_saving"] = na.saving(w.size, writes, m * s) if r["adversary_equal"] else 0.0
+            r["adversary_saving"] = na.saving(w.size, writes, pointers) if r["adversary_equal"] else 0.0
             if design == "rc_magic":
                 r["exact_after_epilogue"] = bool((w[:, :, -1] - co["r"].sum(1)[:, None] - co["cbit"][None]
                                                   == a @ b).all())
             det[f"{design}/{case}"] = r
     d = det
-    for design in ("fix", "hw"):
-        ok(f"A2c {design}: a chosen B lane of −(public step weight) makes the adaptive prover's copies save > 35%, "
-           "words equal", d[f"{design}/cancel"]["adversary_equal"] and d[f"{design}/cancel"]["adversary_saving"] > 0.35,
+    for design in ("fix", "hw", "tag_nz", "tag_nzhi", "tagB_nzhi"):
+        ok(f"A2c {design}: a chosen data lane of −(the never-zero lane's public part) makes the adaptive prover's "
+           "copies save > 35%, words equal",
+           d[f"{design}/cancel"]["adversary_equal"] and d[f"{design}/cancel"]["adversary_saving"] > 0.35,
            d[f"{design}/cancel"])
+    for design in ("tag_nz", "tag_nzhi"):
+        ok(f"{design} closes plain zero tails (no repeat without the cancelling lane)",
+           d[f"{design}/zero_tails"]["repeat_previous_step"] == 0, d[f"{design}/zero_tails"])
+    m2, n2, s2 = 128, 256, 12
+    for design in ("fix2", "fix2w2"):
+        pub = public(design, n2, s2, m2, rng)
+        a, b = case_data("zero_tails", design, m2, n2, s2, pub, rng)
+        d1 = first_lanes(design)
+        for t in range(1, s2):
+            a[:, d1 + 31 * (t - 1)] = 1
+            b[d1 + 31 * (t - 1)] = -1
+        co = coins(design, m2, n2, s2, rng)
+        adv, writes, copied = build_tiles(design, a, b, pub, co)
+        w = words(design, a, b, pub, co)
+        det[f"{design}/cancel_tile"] = {"adversary_equal": bool(np.array_equal(adv, w)),
+                                        "copied_tile_share": copied / (m2 * (n2 // na.TILE) * s2),
+                                        "saving": na.saving(w.size, writes, copied), "m": m2, "n": n2, "S": s2}
+    tile = det["fix2/cancel_tile"]
+    ok("A2c-tile fix2: a data lane of −1 makes ~1/32 of later tiles copies (b_t = 0 and w_t = +1 on the tile), "
+       "words equal, > 1.5% saved at one pointer a copied tile",
+       tile["adversary_equal"] and tile["saving"] > 0.015, tile)
+    tile = det["fix2w2/cancel_tile"]
+    ok("A2c-tile fix2w2 (w ∈ {±1, ±2}): the same copies are words-equal and save < 0.5%",
+       tile["adversary_equal"] and tile["saving"] < 0.005, tile)
     ok("fix2: the same cancellation finds no repeat (oracle: every row vector distinct), and the copying prover's "
        "words differ from honest (it fails)",
        d["fix2/cancel"]["oracle_vector_saving"] <= 0 and not d["fix2/cancel"]["adversary_equal"], d["fix2/cancel"])
@@ -348,18 +458,31 @@ def rc_at_scale(seed: int = 31) -> dict:
 
 
 def a2c_at_scale(seed: int = 37) -> dict:
-    """A2c on fix and hw: with the public step weight cancelled, a row's step t repeats step t − 1 whenever b_t = 0."""
+    """A2c with the never-zero lane's public part cancelled, over Llama's linears:
+
+    - `m…` (fix, hw, tag_nz, tag_nzhi): a row's step t repeats step t − 1 whenever b_t = 0, one row vector a key;
+    - `sideB/m…` (tagB_nzhi, AorB's side B): a column's step t repeats whenever its bit is 0, one column vector a key;
+    - `fix2_tile/m…`, `fix2w2_tile/m…`: a tile repeats when b_t = 0 and w_t is +1 on it, one pointer a copied tile."""
     rng = np.random.default_rng(seed)
     out = {}
     for m in na.MS:
-        sv = st = 0.0
+        acc = {"rows": 0.0, "sideB": 0.0, "fix2_tile": 0.0, "fix2w2_tile": 0.0}
+        st = 0.0
         for n, k in ns.LLAMA.values():
             s = ns.steps1l(k)
             b = rng.integers(0, 2, (m, s - 1))
-            writes = n * (m + int(b.sum()))
-            sv += ns.H32 * (m * n * s - writes - m * s)
+            acc["rows"] += ns.H32 * (m * n * s - n * (m + int(b.sum())) - m * s)
+            bc = rng.integers(0, 2, (n, s - 1))
+            acc["sideB"] += ns.H32 * (m * n * s - m * (n + int(bc.sum())) - n * s)
+            zero_rows = (b == 0).sum(0)
+            for label, alphabet in (("fix2_tile", (-1, 1)), ("fix2w2_tile", (-2, -1, 1, 2))):
+                wt = rng.choice(alphabet, (s - 1, n // na.TILE, na.TILE))
+                match = (wt == 1).all(axis=2).sum(1)
+                acc[label] += ns.H32 * (na.TILE - 1) * float((zero_rows * match).sum())
             st += m * n * k
-        out[f"m{m}"] = sv / st
+        out[f"m{m}"] = acc["rows"] / st
+        for label in ("sideB", "fix2_tile", "fix2w2_tile"):
+            out[f"{label}/m{m}"] = acc[label] / st
     return out
 
 
@@ -478,7 +601,7 @@ def fix2_costs() -> dict:
 def final_noise_matches(seed: int = 47) -> dict:
     rng = np.random.default_rng(seed)
     out = {}
-    for design in ("ssn_1l", "fix", "hw", "fix2"):
+    for design in ("ssn_1l", "fix", "hw", "fix2", "fix2w2", "tag_nz", "tag_nzhi", "tagB_nzhi"):
         m, n, s = 96, 40, 9
         pub = public(design, n, s, m, rng)
         co = coins(design, m, n, s, rng)
@@ -578,7 +701,13 @@ def main(argv: list[str] | None = None) -> int:
                    "pass": max(v for k, v in bd.items() if k.startswith("fix2_L6")) <= 0, "detail": ""})
     checks.append({"check": "A1 rc_magic: > 1% of stock at Llama m 64",
                    "pass": rc["llama_m64"]["A1"] > 0.01, "detail": rc["llama_m64"]})
-    checks.append({"check": "A2c fix/hw: > 30% of stock at every m", "pass": min(a2c.values()) > 0.3, "detail": a2c})
+    checks.append({"check": "A2c on fix, hw, tag_nz, tag_nzhi (rows) and tagB_nzhi (columns): > 30% of stock at every m",
+                   "pass": min(a2c[f"m{m}"] for m in na.MS) > 0.3 and min(a2c[f"sideB/m{m}"] for m in na.MS) > 0.3,
+                   "detail": {k: v for k, v in a2c.items() if k.startswith(("m", "sideB"))}})
+    checks.append({"check": "A2c-tile: fix2 > 1% of stock at every m; fix2w2 < 0.2%",
+                   "pass": min(a2c[f"fix2_tile/m{m}"] for m in na.MS) > 0.01
+                   and max(a2c[f"fix2w2_tile/m{m}"] for m in na.MS) < 0.002,
+                   "detail": {k: v for k, v in a2c.items() if "tile" in k}})
     fn_ok = final_noise_matches()
     checks.append({"check": "final_noise equals the full model's last step minus β, every design but rc_magic",
                    "pass": all(fn_ok.values()), "detail": fn_ok})
@@ -590,6 +719,8 @@ def main(argv: list[str] | None = None) -> int:
     rep = {"checks": checks, "small": det, "birthday": bd, "rc_magic_at_scale": rc, "a2c_at_scale": a2c, "h2": hh,
            "a5_step_greedy": a5, "fix2_costs": fix2_costs(), "served_std": served_std(),
            "periods": {"A2c_m8192": ns.periods(a2c["m8192"], 1.044),
+                       "A2c_sideB_m8192": ns.periods(a2c["sideB/m8192"], 1.044),
+                       "A2c_fix2_tile_m8192": ns.periods(a2c["fix2_tile/m8192"], 1.044),
                        "rc_A1_llama_m8192": ns.periods(rc["llama_m8192"]["A1"], rc["llama_m8192"]["alpha"]),
                        "ssn_1l_A5_m64": ns.periods(a5["ssn_1l/m64"]["gap_share_of_stock"], 1.044),
                        "fix2_A5_m64": ns.periods(a5["fix2/m64"]["gap_share_of_stock"], 1.044),
