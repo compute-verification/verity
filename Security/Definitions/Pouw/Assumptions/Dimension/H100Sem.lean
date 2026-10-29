@@ -335,9 +335,6 @@ def Lane.eval {α : Type} [Fintype α] (u : Lane α) (e : α → ℤ) : ℤ := u
 def Lane.FitsOn {α : Type} [Fintype α] (nlo nhi : ℤ) (τ : BamType) (u : Lane α) : Prop :=
   ∀ e : α → ℤ, (∀ i, nlo ≤ e i ∧ e i ≤ nhi) → τ.lo ≤ u.eval e ∧ u.eval e ≤ τ.hi
 
-/-- The lane fits the type: on every noise value in `[−32, 31]` it lies in `[lo, hi]`. -/
-def Lane.Fits {α : Type} [Fintype α] (τ : BamType) (u : Lane α) : Prop := u.FitsOn (-32) 31 τ
-
 /-- A lane as a coordinate vector. -/
 def Lane.vec {α : Type} (u : Lane α) : Option α → ℚ := fun i => (u i : ℚ)
 
@@ -367,18 +364,16 @@ def BamOp.price {α β : Type} : BamOp α β → ℕ
   | .copy _ => 0
   | .const _ => 0
 
-/-- Well-formed at the types `Ts`: a tensor-core register is of a listed type and its lanes fit it, and a merge reads
-at most three registers. -/
-def BamOp.WF {α β : Type} [Fintype α] [Fintype β] (Ts : List BamType) : BamOp α β → Prop
-  | .tc τ _ u v => τ ∈ Ts ∧ (∀ t, (u t).Fits τ) ∧ ∀ t, (v t).Fits τ
-  | .merge c => c.length ≤ 3
-  | _ => True
-
-/-- Well-formed at the types `Ts` on noise in `[nlo, nhi]`. -/
+/-- Well-formed at the types `Ts` on noise in `[nlo, nhi]`: a tensor-core register is of a listed type and its lanes
+fit it, and a merge reads at most three registers. -/
 def BamOp.WFOn {α β : Type} [Fintype α] [Fintype β] (nlo nhi : ℤ) (Ts : List BamType) : BamOp α β → Prop
   | .tc τ _ u v => τ ∈ Ts ∧ (∀ t, (u t).FitsOn nlo nhi τ) ∧ ∀ t, (v t).FitsOn nlo nhi τ
   | .merge c => c.length ≤ 3
   | _ => True
+
+/-- Well-formed at the types `Ts` on this file's noise, `[−32, 31]`. -/
+def BamOp.WF {α β : Type} [Fintype α] [Fintype β] (Ts : List BamType) (o : BamOp α β) : Prop :=
+  o.WFOn (-32) 31 Ts
 
 /-- A program's registers. -/
 def bamRegs {α β : Type} [Fintype α] [Fintype β] [DecidableEq α] [DecidableEq β] (P : List (BamOp α β)) :
