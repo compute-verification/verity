@@ -1,12 +1,13 @@
-"""The remote bandwidth audit over a monitoring period: a week, a month and a year of every machine of a
+"""PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
 openings' pooled bound's δ, 2^-40, and S the session's draws).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
-T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
+T = machines·⌊period/window_s⌋ sessions in a period (the core's `block_count`), each on its own live coins, against one
+adaptive prover.
 
-- **Pooled** (`pooled_step`): #4413's count bound (`FlockSoundness.Audit.Periods.prCoin_count_le_choose`). When each
+- **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each
   session, given the earlier ones, is accepted and short of its `q_bytes` with probability at most p = `eps`, at least M
   of the T are with probability at most C(T, M)·p^M. M is the least count within δ (`short_sessions`), so except with δ
   at least T − M + 1 sessions certify their `q_bytes`: the period certifies at least (T − M + 1)·`q_bytes`, and at most
@@ -29,12 +30,12 @@ from pathlib import Path
 from typing import Any
 
 # The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
-from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_sessions
+from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, block_count, short_sessions
 
 from . import codec, pooled
 
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
-STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose", "pr": 4413,
+STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 EXCEPT = "each session's coin PRF advantage and coin commitment hiding (named assumptions) over the period's sessions"
 
@@ -84,9 +85,9 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
     eps = Fraction(o["eps"])
     periods = {}
     for name, seconds in PERIODS:
-        per_machine = seconds // window_s
-        t = machines * per_machine
-        row: dict[str, Any] = {"seconds": seconds, "sessions": t, "sessions_per_machine": per_machine}
+        per_machine, t = block_count(seconds, window_s), block_count(seconds, window_s, machines)
+        row: dict[str, Any] = {"seconds": seconds, "sessions": t, "sessions_per_machine": per_machine,
+                               "basis": f"one session scaled up to {t} sessions, not a measured {name}"}
         if t == 0:
             periods[name] = row | {"why": f"a {window_s} s window doesn't fit a {name}"}
             continue
