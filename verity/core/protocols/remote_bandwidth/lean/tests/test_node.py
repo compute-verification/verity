@@ -20,8 +20,8 @@ from verity.core.protocols.remote_bandwidth import line
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-A = site.Sheet("gpu-a", tc=1 << 20, bw=1 << 14, chip=1 << 30, mem=96 << 30)
-B = site.Sheet("gpu-b", tc=1 << 21, bw=1 << 15, chip=1 << 31, mem=141 << 30)
+A = site.Sheet(site.DeviceFigures("gpu-a", 1, 1 << 20), bw=1 << 14, chip=1 << 30, mem=96 << 30)
+B = site.Sheet(site.DeviceFigures("gpu-b", 1, 1 << 21), bw=1 << 15, chip=1 << 31, mem=141 << 30)
 HOST_CARD = {"chip_bytes": 3_105_652_736, "link_window_bytes": 6_291_456}
 
 
