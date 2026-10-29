@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The dither-hb benches. Libraries are built on a CPU host and copied to the GPU host, so nothing but the bench runs on
 # the H200 or the B200 (no CPU phase there):
-#   build    (a CPU host) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u,h1zref,h1c}.so and the
+#   build    (a CPU host) every library for each ARCH in a comma list: $OUT/lib/ARCH/{kb,kb_pg,h1noise,h1u}.so and the
 #            h1u variants in $VARIANTS (NAME=FLAGS, e.g. pd4=-DH1U_PF=1,-DH1U_PD=4 builds h1u_pd4.so), their SASS and
 #            resource usage, and BUILD.txt: the commit and arch, and per library the sha256 of the repository files
 #            nvcc -M names (a bench refuses a library whose sources differ at its own commit)
@@ -11,13 +11,6 @@
 #   h1u      h1u.so, h1noise.so and every h1u_* / h1noise_* variant shipped: h1ubench.py (H1 + fx1's fused unit, and
 #            each build's two-launch kh_unit_ws as arm NAME-ws, gated against receipts.py and h1tile.reference, the
 #            noise floor gated as h1bench.py does, then all timed against the plain int8 GEMMs)
-#   h1z      h1u.so, h1noise.so, h1zref.so and every h1u_* variant shipped: h1zbench.py (each build's one-stream kh_one, z
-#            with the exact wrap correction, gated against h1v3_ca.py (H1V3's reference) at small anchors and against
-#            h1zref.cu's z = X·(B + c)ᵀ at the served shapes, receipts against receipts.py, y = dequant(z), the no-write
-#            control and both faults; then timed against its two-launch receipts-only form, the noise floor and plain)
-#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (measured only: each build's credited one-stream
-#            call on per-unit noise against J10 banded noise, both gated, then timed with each form's two launches alone;
-#            with h1noise.so shipped too, its --noise-lib, which BENCH_ARGS --tw's tile-width price needs)
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
 #            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
 #   units    h1u_kr.so (dither-a's served receipts-only build, the base) and every h1u_kr*.so variant shipped:
@@ -27,24 +20,19 @@
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
 #            backend and SERVE-REG's gated lane rows)
-#   z        h1c.so (the served libh1c.so, the base) and every h1c_*.so variant shipped (built from $H1C_VARIANTS,
-#            NAME=FLAGS as $VARIANTS): zbench.py (dither-a -zy's between-step tables, each build gated against
-#            commit.py and the base's every word, then each set's h1c_build timed)
-#   zprof    the same builds under ncu (ZPROF_NCU, default --set full -k regex:h1c_): zbench.py --profile, then the text
-#            pages; the full set's replays outlast the default lease, so give it LEASE="--max-min 40" or fewer kernels
 # Benches in a comma list (kbench,h1u) run one after another under one lease.
 #
 #   OUT=B bash benchmarks/hash/dither/job.sh sm_90a,sm_100a build          (a CPU host with CUDA 13.0, up to 20 minutes)
 #   OUT=R LIBS=B/lib/sm_90a bash benchmarks/hash/dither/job.sh sm_90a h1u  (an H200 under a GPU lease, up to 40 minutes)
 #
-# Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u h1zref h1c" and
+# Env: VARIANTS (default below), BUILDS (the base libraries a build makes, default "kb h1noise h1u" and
 # kb_pg on sm_100a; set empty, only the variants), NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the
 # SASS gate), JOBS (builds at once, default 8), BENCH_ARGS (extra flags for the bench, e.g. "--ms 1,32 --linears o"), HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials|z|zprof[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|prof|units|unitsprof|partials[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -79,10 +67,8 @@ if [ "$BENCH" = build ]; then
   for arch in ${ARCH//,/ }; do
     dir="$OUT/lib/$arch"
     mkdir -p "$dir"
-    read -r -a builds <<< "${BUILDS-kb h1noise h1u h1zref h1c}"
+    read -r -a builds <<< "${BUILDS-kb h1noise h1u}"
     [ "$arch" = sm_100a ] && [ -z "${BUILDS+set}" ] && builds+=(kb_pg)
-    # h1c.cu's variants in $H1C_VARIANTS (NAME=FLAGS: h1c_NAME.so), for z|zprof
-    for v in ${H1C_VARIANTS:-}; do builds+=("h1c_${v%%=*}:h1c:${v#*=}"); done
     # h1u.cu's knobs: H1U_MINB (CTAs an SM the registers leave room for), H1U_PF (the fused form prefetches too), H1U_PD
     # (segments of A and B in flight), H1U_L2PF (L2 prefetch 16 segments ahead and of the next chunk's workspace), H1U_WARPS,
     # H1U_SPLIT (h1p: a pair of warps a unit), H1U_KSPLIT (h1k: the one-stream unit's K split, 2 or 4 producer warps, for
@@ -135,24 +121,6 @@ for b in ${BENCH//,/ }; do
         v=$(basename "$f" .so); NEED+=("$v"); vars+=" --noise-variant ${v#h1noise_}=$f"
       done
       CMDS+=("$PY $HERE/h1ubench.py --lib $LIBS/h1u.so --noise-lib $LIBS/h1noise.so$vars --out $OUT ${BENCH_ARGS:-}") ;;
-    h1z)
-      NEED+=(h1u h1noise h1zref)
-      vars=""
-      for f in "$LIBS"/h1u_*.so; do
-        [ -f "$f" ] || continue
-        v=$(basename "$f" .so); NEED+=("$v"); vars+=" --variant ${v#h1u_}=$f"
-      done
-      CMDS+=("$PY $HERE/h1zbench.py --lib $LIBS/h1u.so --ref-lib $LIBS/h1zref.so --noise-lib $LIBS/h1noise.so$vars --out $OUT ${BENCH_ARGS:-}") ;;
-    j10hb)
-      NEED+=(h1zref)
-      jl=""
-      for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
-        [ -f "$f" ] || continue
-        v=$(basename "$f" .so); NEED+=("$v"); jl+=" --lib ${v#h1u_}=$f"
-      done
-      [ -n "$jl" ] || { echo "job.sh: j10hb needs an h1u*.so in $LIBS" >&2; exit 2; }
-      [ -f "$LIBS/h1noise.so" ] && { NEED+=(h1noise); jl+=" --noise-lib $LIBS/h1noise.so"; }
-      CMDS+=("$PY $HERE/j10hb.py$jl --ref-lib $LIBS/h1zref.so --out $OUT ${BENCH_ARGS:-}") ;;
     units|unitsprof)
       # h1u_kr.so (today's served receipts-only build) as the base, then every other h1u_kr*.so shipped
       ul=""
@@ -177,21 +145,6 @@ for b in ${BENCH//,/ }; do
         CMDS+=("env PARTIALS_LIB=$f $PY -m pytest -q -rA -p no:cacheprovider $ROOT/benchmarks/pouw/tests/test_partials.py $ROOT/benchmarks/pouw/tests/test_lane_refs.py")
       done
       [ -f "$LIBS/h1u.so" ] || { echo "job.sh: partials needs $LIBS/h1u.so" >&2; exit 2; } ;;
-    z|zprof)
-      # h1c.so (today's libh1c.so) as the base, then every h1c_*.so shipped
-      zl=""
-      for f in "$LIBS"/h1c.so "$LIBS"/h1c_*.so; do
-        [ -f "$f" ] || continue
-        v=$(basename "$f" .so); NEED+=("$v"); zl+=" --lib ${v#h1c_}=$f"
-      done
-      [ -f "$LIBS/h1c.so" ] || { echo "job.sh: $b needs $LIBS/h1c.so, the base" >&2; exit 2; }
-      if [ "$b" = z ]; then
-        CMDS+=("$PY $HERE/zbench.py$zl --out $OUT ${BENCH_ARGS:-}")
-      else
-        NCU=${NCU:-$(dirname "$NVCC")/ncu}
-        CMDS+=("$NCU --profile-from-start off --clock-control none ${ZPROF_NCU:---set full -k regex:h1c_} --nvtx -f -o $OUT/zprof $PY $HERE/zbench.py$zl --profile --out $OUT ${BENCH_ARGS:-}")
-        CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/zprof.ncu-rep --ncu $NCU --out $OUT")
-      fi ;;
     prof)
       plibs=""
       for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
