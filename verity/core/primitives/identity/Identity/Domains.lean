@@ -343,7 +343,7 @@ abbrev REMOTE_BANDWIDTH_TIMING_JITTER : String := "verity/remote-bandwidth/timin
 abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"
 abbrev REMOTE_BANDWIDTH_PERIOD : String := "verity/remote-bandwidth/window/v1"
 abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-salts/v0"
-abbrev STORE_SALT : String := "verity/store/salt/v0"
+abbrev STORE_SALT : String := "verity/store/salt/v1"
 abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 abbrev MEMORY_MAP : String := "verity/memory-map/v1"
 

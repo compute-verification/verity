@@ -56,7 +56,7 @@ from verity.ml.commitments.merkle import merkle_depth
 from . import audit, codec, receipts
 
 BLOCK = codec.BLOCK_BYTES
-SALT_VERSION = "verity/store/salt/v1"
+SALT_VERSION = domains.STORE_SALT
 """The salts' format, which `Binding.record` names beside the roots they make."""
 SALT_DOMAIN = SALT_VERSION.encode() + b"\0"
 PAYLOAD_LABEL = hashlib.sha512(domains.REMOTE_SESSION_PAYLOAD_SALTS.encode()).digest()

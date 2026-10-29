@@ -347,7 +347,7 @@ REMOTE_BANDWIDTH_TIMING_JITTER = "verity/remote-bandwidth/timing-jitter/v0"
 REMOTE_BANDWIDTH_PROTOCOL = "verity/remote-bandwidth/v0"
 REMOTE_BANDWIDTH_PERIOD = "verity/remote-bandwidth/window/v1"
 REMOTE_SESSION_PAYLOAD_SALTS = "verity/remote-session/payload-salts/v0"
-STORE_SALT = "verity/store/salt/v0"
+STORE_SALT = "verity/store/salt/v1"
 WORD_CODEC_KV = "verity/word-codec/kv/v0"
 MEMORY_MAP = "verity/memory-map/v1"
 

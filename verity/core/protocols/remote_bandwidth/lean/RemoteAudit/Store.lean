@@ -44,7 +44,7 @@ namespace RemoteAudit.Store
 open Lean (Json)
 open Flock
 
-def SALT_DOMAIN : ByteArray := tag0 "verity/store/salt/v1"
+def SALT_DOMAIN : ByteArray := tag0 Domains.STORE_SALT
 def PAYLOAD_LABEL : ByteArray := sha512 Domains.REMOTE_SESSION_PAYLOAD_SALTS.toUTF8
 
 /-- `store_salt(key, label, c)`, SHA-512 in counter mode (`Codec.xof`, as `Unboxed.xof` computes it): one a block of
