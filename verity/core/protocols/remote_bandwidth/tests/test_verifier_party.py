@@ -80,12 +80,12 @@ def test_the_party_follows_period_json() -> None:
     assert local.host == "n0" and local.address is None
     assert local.command == (sys.executable, "-m", verifier_party.MODULE, "--listen", "127.0.0.1:0")
     assert verifier_party.Party.of({"challenger_host": "n0"}, "n0") == local
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for bandwidth"):
-        verifier_party.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {"command": ["x"]}}}, "n0")
-    wired = verifier_party.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"bandwidth": {
-        "command": ["ssh", "vy-auditor-1", "verifier"], "address": "10.0.0.7:7961"}}}, "n0")
-    assert wired == verifier_party.Party("vy-auditor-1", ("ssh", "vy-auditor-1", "verifier"), ("10.0.0.7", 7961))
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for bandwidth"):
+        verifier_party.Party.of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"]}}}, "n0")
+    wired = verifier_party.Party.of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {
+        "command": ["ssh", "auditor-host", "verifier"], "address": "192.0.2.7:7961"}}}, "n0")
+    assert wired == verifier_party.Party("auditor-host", ("ssh", "auditor-host", "verifier"), ("192.0.2.7", 7961))
     assert verifier_party.placement("n0", "n0")["trusted-host"].startswith("unmet: ")
-    held = verifier_party.placement("n0", "vy-auditor-1")
-    assert held["parties"] == {"challenger": "vy-auditor-1", "prover": "n0", "verifier": "vy-auditor-1"}
+    held = verifier_party.placement("n0", "auditor-host")
+    assert held["parties"] == {"challenger": "auditor-host", "prover": "n0", "verifier": "auditor-host"}
     assert held["trusted-host"].startswith("holds: ")
