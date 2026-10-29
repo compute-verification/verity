@@ -9,3 +9,5 @@
   - **forming:** unfused 784–812 an entry (NCP's 3 copies 1,443–1,589); fused, A in registers ~0, A in shared 58, B in shared 94;
   - **Dither's correction:** 15.5× / 9.0× / 7.6× the plain GEMM at m 64 / 512 / 8,192; NCP's 3K product 1.95× / 2.15× / 3.20×.
   Check SW-GPU's caveat: its hashing beside wgmma ran on another lane's unlanded int8_wgmma from an unpushed local commit.
+- (05:30Z) **SW-OLD final** (note compute-research/20261029T0450Z-report-sw-old, art:23672edccf40d63a2c04662f14ec099d1473d7ccc155c2c2cba7fffc96cbced7). It has a 52-row catalog of old work-bound arguments; all 111 Lean names it cites exist on main fdb365d3f5, 40 of them locked. No old argument closes a gap term alone, or commits less than every k32 below SAK on its own. Merge counting can't reach a word every k64 (Theorem B's κ = 1 is tight: about 35 saved a merge at L 64 against 32 a register). Its three picks:
+  - **Smell (lost work):** 14 branches holding old checks are gone from origin, so Theorem W's, W4's and KSW-K's checks can't be rerun. Add it to the catalogue and name an owner for restoring them (the branch names are in SW-OLD's note).
