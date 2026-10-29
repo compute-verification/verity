@@ -533,6 +533,7 @@ KBIG_BINDING = """def kbig():
 """
 
 
+@pytest.mark.slow
 def test_bindings_built_apart_check_the_reference_and_find_the_boolean_definitions_a_full_build_does(tmp_path):
     """Built apart, a reference two bindings bind at two statics is checked at the statics of the one `targets.reachable`
     keeps, not the first binding's (its descriptor holds them: `cache.descriptor`), and a word primitive's check finds the
