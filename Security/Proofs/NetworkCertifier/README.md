@@ -31,11 +31,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                wardenCode), the fail cell (failCell) and the client's view (clientView)
 ../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
                                server's uplink: its record format (TapRecord: on a schedule it holds, every cell its
-                               code sends reads back from its record) and its one code run giving the cells and the
-                               record (tapCode)
+                               code sends reads back from its record alone, with no schedule given) and its one code
+                               run giving the cells and the record (tapCode)
 ../../Definitions/NetworkCertifier/RecordRows.lean  trusted: the network certifier's record as the Python one writes it
                                (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
-                               (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
+                               (bucketFrames), the lanes read back from them past each lane's padding (lanesOfRows),
+                               and the schedules it holds (Fits)
 ../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
                                committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
                                sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
@@ -76,12 +77,13 @@ SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
 Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host, on a schedule its
-                                         record format holds, its cells read back from the record its same run writes
-                                         (tap_cells_read), and each data cell its lane sends before the fail cell is
-                                         in it (tap_data_read)
-RecordRows.lean  the rows format reads back the code's cells on every schedule that fits it (read_record), so it
-                                         is a record format (tapRecord); #guards hold it to the Python network
-                                         certifier's egress records
+                                         record format holds, its cells read back from the record its same run writes,
+                                         from the record alone (tap_cells_read), and each data cell its lane sends
+                                         before the fail cell is in it (tap_data_read)
+RecordRows.lean  the rows format reads back the code's cells from the record alone on every schedule that fits
+                                         it (read_record: a lane's cells are in bucket order, wardenCode_sorted, after
+                                         its padding, drop_flatMap_laneFrames), so it is a record format (tapRecord);
+                                         #guards hold it to the Python network certifier's egress records
 TapRows.lean    the leak bound at the network certifier's rows: the sampling relation at a trace that agrees
                                          with its openings gives the leak relation at them (rLeakTap_of_r, through the
                                          trace filled in with its values), and a disagreement is a collision
@@ -277,7 +279,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
   statement, where the network certifier registers its observations at the transfer gates (`TapOpens`, its openings
   under the statement's roots), the secrets of a covert sender whose every window meets its good event (`WindowGood`)
-  number at most `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
+  number at most `∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each
   window's audit fails the leak relation at the network certifier's rows (`RLeakTap`) with probability at most
   `δ + ε_ks + ε_bind + Pr[B_tap]`. Every unit outside the faulty set is correct, so the extracted trace opens every
   transfer gate there, at the network certifier's value unless the two openings collide (`B_tap`, under
@@ -286,12 +288,13 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   the server's uplink, and it functions as an active warden (`Definitions/NetworkCertifier/Tap.lean`):
   one run of its code (`tapCode`, under one `trusted-host`) gives the cells the client receives and the observations
   the audits read, its record of those cells, so on every schedule its record format holds (`TapRecord.fits`) the
-  cells read back from the observations (`tap_cells_read`, a lemma, not a premise). The format the Python network
-  certifier writes, a row a bucket of frames naming their connections (`RowsFormat`,
-  `Definitions/NetworkCertifier/RecordRows.lean`), is one (`RowsFormat.tapRecord`), on the schedules whose cells fall
-  in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
-  holds the fail cells and padding too, so the proof counts the cells through the
-  observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
+  cells read back from the observations alone, with no schedule given (`tap_cells_read`, a lemma, not a premise). The
+  format the Python network certifier writes, a row a bucket of frames naming their connections (`RowsFormat`,
+  `Definitions/NetworkCertifier/RecordRows.lean`), is one (`RowsFormat.tapRecord`), on the schedules at its `r` and
+  `D` whose cells fall in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the
+  Python records. The record
+  holds the schedule, the padding and the fail cells, so the proof counts the cells through the observations and
+  charges no schedule and no fail cell: the count is of records. Its named assumptions are
   `Claims.Sampling.KS`, `Commitment.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
@@ -314,10 +317,11 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   outside the monitoring period's good event (`PooledGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units and
   every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
   meeting it number at most
-  `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
+  `(N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
   faulty units cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof
   unit's output limit. The network certifier is one device, as in the period's bound: on every schedule its record
-  format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live audits the two
+  format holds, the cells the client receives read back from its record alone (`tap_cells_read`), so the schedule
+  adds no factor and its one named assumption is `trusted-host`. Over live audits the two
   inputs are `Flock.Guarantees.SampledKSLive` at each window's history and the live `SampledLeakAccepted` (P2),
   neither discharged, so it is not the deployed system's bound over a monitoring period until they are.
 

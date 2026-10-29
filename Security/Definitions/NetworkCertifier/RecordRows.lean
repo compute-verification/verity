@@ -14,11 +14,12 @@ frames fill the row's first slots, each encoded as a `List Bool` (`enc`), and a 
 `T` buckets is buckets `i·T … i·T + T − 1`, on one egress link (`link`); a bucket's jitter class and statuses are the
 network certifier's, from anything it saw.
 
-Read back (`lanesOfRows`), connection `c`'s cell `j`, for `j < cells c`, is the `(j mod r)`-th of its frames in bucket
-`adm c + D + ⌊j/r⌋`: `cells c` is the lane's length through its last bucket. A schedule fits the format
-(`RowsFormat.Fits`) when its lanes' cells fall in the monitoring period's buckets and no bucket holds more than `S`
-frames, which the network certifier's admission keeps (at most `lanes` connections a bucket, `r` frames each, and
-`S = lanes·r`).
+Read back (`lanesOfRows`), connection `c`'s lane is its frames in bucket order, each in its bucket, past the first
+`r·D`: the record holds the schedule, since its first frames are its padding from its admission and its lane is the
+rest, through its last bucket, so the read takes none. The format's `r` and `D` are the deployment's, public. A
+schedule fits the format (`RowsFormat.Fits`) when it has the format's `r` and `D`, its lanes' cells fall in the
+monitoring period's buckets and no bucket holds more than `S` frames, which the network certifier's admission keeps (at
+most `lanes` connections a bucket, `r` frames each, and `S = lanes·r`).
 
 **What the Python records add.** A connection the network certifier fails for its client's sake (a malformed cell, or
 ingress past its bound) fails at once, before `adm c + D` too; `wardenLane` fails a lane only at a late cell or a late
@@ -42,12 +43,13 @@ def bucketFrames (conns : List κ) (s : WardenSchedule κ) (v : κ → List (ℕ
     List (κ × CellView Cell) :=
   conns.flatMap fun c => (laneFrames s v c b).map (c, ·)
 
-/-- **The lanes read back** from rows of frames under the schedule: connection `c`'s cell `j`, for `j < cells c`, is the
-`(j mod r)`-th of its frames in its bucket `adm c + D + ⌊j/r⌋`. -/
-def lanesOfRows [DecidableEq κ] (s : WardenSchedule κ) (rows : ℕ → List (κ × CellView Cell)) (c : κ) :
+/-- **The lanes read back** from rows of frames over the buckets before `N`, at `r` cells a bucket and a latency of `D`
+buckets, with no schedule: connection `c`'s frames in bucket order, each with its bucket, past the first `r·D`, the
+padding before its lane. -/
+def lanesOfRows [DecidableEq κ] (r D N : ℕ) (rows : ℕ → List (κ × CellView Cell)) (c : κ) :
     List (ℕ × CellView Cell) :=
-  (List.range (s.cells c)).map fun j =>
-    (s.bucket c j, (((rows (s.bucket c j)).filterMap fun f => if f.1 = c then some f.2 else none)[j % s.r]?).getD .pad)
+  ((List.range N).flatMap fun b =>
+    ((rows b).filterMap fun f => if f.1 = c then some f.2 else none).map (b, ·)).drop (r * D)
 
 /-- The number of frames connection `c` sends in bucket `b` on schedule `s`, whatever its cells hold. -/
 def laneLoad (s : WardenSchedule κ) (c : κ) (b : ℕ) : ℕ :=
@@ -55,14 +57,17 @@ def laneLoad (s : WardenSchedule κ) (c : κ) (b : ℕ) : ℕ :=
     ((List.range (s.cells c)).filter fun j => s.bucket c j == b).length
 
 /-- **The rows format**: the connections in ordinal order (`conns`), a frame's encoding (`enc`) and its decoding
-(`dec`), the egress link the rows are on (`link`), the buckets a window (`T`), and each bucket's jitter class and
-statuses, from the schedule and what reached the network certifier. -/
+(`dec`), the egress link the rows are on (`link`), the buckets a window (`T`), the cells a bucket (`r`) and the
+latency in buckets (`D`) of every schedule it holds, and each bucket's jitter class and statuses, from the schedule and
+what reached the network certifier. -/
 structure RowsFormat (κ Cell : Type) (L K : ℕ) where
   conns : List κ
   enc : κ × CellView Cell → List Bool
   dec : List Bool → Option (κ × CellView Cell)
   link : Fin L
   T : ℕ
+  r : ℕ
+  D : ℕ
   jitter : WardenSchedule κ → (κ → Arrivals Cell) → ℕ → ℕ
   status : WardenSchedule κ → (κ → Arrivals Cell) → ℕ → Fin K → Status
 
@@ -92,15 +97,16 @@ def frames {S n : ℕ} (o : Fin n → List (Obs L K S)) (b : ℕ) : List (κ × 
     | none => []
   else []
 
-/-- **The read**: the lanes read back (`lanesOfRows`) from the frames off the record. -/
-def read [DecidableEq κ] {S n : ℕ} (s : WardenSchedule κ) (o : Fin n → List (Obs L K S)) :
-    κ → List (ℕ × CellView Cell) :=
-  lanesOfRows s (F.frames o)
+/-- **The read**: the lanes read back (`lanesOfRows`) from the frames off the record, over the monitoring period's
+`n·T` buckets. -/
+def read [DecidableEq κ] {S n : ℕ} (o : Fin n → List (Obs L K S)) : κ → List (ℕ × CellView Cell) :=
+  lanesOfRows F.r F.D (n * F.T) (F.frames o)
 
-/-- **A schedule fits the format** over `n` windows of `S` slots: every cell of every lane is in one of the monitoring
-period's `n·T` buckets, and no bucket holds more than `S` frames. -/
+/-- **A schedule fits the format** over `n` windows of `S` slots: it has the format's `r` and `D`, every cell of every
+lane is in one of the monitoring period's `n·T` buckets, and no bucket holds more than `S` frames. -/
 def Fits (S n : ℕ) (s : WardenSchedule κ) : Prop :=
-  (∀ c j, j < s.cells c → s.bucket c j < n * F.T) ∧ ∀ b, (F.conns.map fun c => laneLoad s c b).sum ≤ S
+  s.r = F.r ∧ s.D = F.D ∧ (∀ c j, j < s.cells c → s.bucket c j < n * F.T) ∧
+    ∀ b, (F.conns.map fun c => laneLoad s c b).sum ≤ S
 
 end RowsFormat
 

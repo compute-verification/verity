@@ -498,13 +498,15 @@ def fxFrame (n : ℕ) : Option (Fin 3 × CellView Unit) :=
   else none
 
 /-- **A rows format of the fixture `fxQueue`**: its three connections in order, a frame encoded as that many `true`
-bits, one egress link and one status, ten buckets a window. -/
+bits, one egress link and one status, ten buckets a window, two cells a bucket and a latency of three buckets. -/
 def fxRows : RowsFormat (Fin 3) Unit 1 1 where
   conns := List.finRange 3
   enc x := List.replicate (fxCode x) true
   dec l := fxFrame l.length
   link := 0
   T := 10
+  r := 2
+  D := 3
   jitter _ _ _ := 0
   status _ _ _ _ := .complete
 
@@ -515,10 +517,10 @@ theorem fxRows_wf : fxRows.Wf := by
 theorem fxQueue_bucket (c : Fin 3) (j : ℕ) (hj : j < fxQueueSched.cells c) : fxQueueSched.bucket c j < 10 := by
   fin_cases c <;> simp [fxQueueSched, WardenSchedule.bucket] at hj ⊢ <;> omega
 
-/-- **`fxQueue`'s schedule fits the format** over one window of four slots: its cells fall in buckets `4 … 9`, and no
-bucket holds more than four frames. -/
+/-- **`fxQueue`'s schedule fits the format** over one window of four slots: it has the format's two cells a bucket and
+latency of three buckets, its cells fall in buckets `4 … 9`, and no bucket holds more than four frames. -/
 theorem fxQueue_fits : (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueSched := by
-  refine ⟨fun c j hj => by simpa [fxRows] using fxQueue_bucket c j hj, fun b => ?_⟩
+  refine ⟨rfl, rfl, fun c j hj => by simpa [fxRows] using fxQueue_bucket c j hj, fun b => ?_⟩
   rcases Nat.lt_or_ge b 10 with hb | hb
   · interval_cases b <;> decide
   · have h0 : ∀ c, laneLoad fxQueueSched c b = 0 := by

@@ -17,9 +17,10 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
   (`trusted-host`), a named assumption.
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512, at
   `δ = 1/8` (`tapD_bound_fails`).
-* `PooledLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
-  sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
-  reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
+* `PooledLeakAccepted_honest`: its premise on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`); and
+  on it the format's record of the cells the code sends reads back to them, with no schedule given (`read_record`).
+  Stated as their conjunction, not as `fits` alone: the witnesses rule reads a statement that is one definition applied
+  by unfolding it once, and `fits` is a field.
 * `PooledLeakAccepted_nontrivial`: its bound fails at an audit that always accepts, at `δ = 1/2` with one window of
   one step whose faulty set holds its one unit (`pooled_bound_fails`). There its conditional escape (`hesc`) holds
   only at `q = 0`, which its `hF` refuses at `δ < 1`.
@@ -68,16 +69,17 @@ theorem PeriodLeakAccepted_nontrivial :
           (fun _ => tapOps) Unit silentP []).Pr shaD :=
   tapD_bound_fails shaD
 
-/-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
-each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/
+/-- **`PooledLeakAccepted`'s schedule premise at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
+each fits its rows format (`hfit`), and on it the format's record of the cells the code sends reads back to them, with
+no schedule given (`RowsFormat.read_record`). -/
 theorem PooledLeakAccepted_honest :
     (∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits s) ∧
-      ∀ s ∈ ({fxQueueSched} : Set (WardenSchedule (Fin 3))), ∀ c, s.cells c ≤ 6 := by
-  refine ⟨fun s hs => ?_, fun s hs c => ?_⟩
-  · rw [Set.mem_singleton_iff.1 hs]
-    exact fxQueue_fits
-  · rw [Set.mem_singleton_iff.1 hs]
-    fin_cases c <;> decide
+      ∀ a : Fin 3 → Arrivals Unit, (RowsFormat.tapRecord fxRows fxRows_wf 4 1).read
+        ((RowsFormat.tapRecord fxRows fxRows_wf 4 1).record fxQueueSched a (wardenCode fxQueueSched a)) =
+          wardenCode fxQueueSched a := by
+  refine ⟨fun s hs => ?_, fun a => (RowsFormat.tapRecord fxRows fxRows_wf 4 1).read_record _ fxQueue_fits a⟩
+  rw [Set.mem_singleton_iff.1 hs]
+  exact fxQueue_fits
 
 /-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at one window of one step whose faulty
 set holds its one unit, `Fmax = 1`, `δ = 1/2` and `e = e' = 0` (`pooled_bound_fails`). -/
