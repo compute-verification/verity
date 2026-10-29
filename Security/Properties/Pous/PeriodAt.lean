@@ -50,7 +50,7 @@ structure AuditsOf {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (ΩW �
   /-- the memory challenger's signed session -/
   session : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → PousCheck.Run.Session
   /-- the memory challenger's record of its sessions -/
-  device : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → MemoryChallenger.Properties.Device
+  device : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → MemoryChallenger.Properties.Challengers
 
 /-- `Audits` at `N` blocks: the payload as `schAt N`'s bits. -/
 abbrev AuditsAt (N : ℕ) [NeZero N] (ΩW ΩQ : Type) : Type := AuditsOf (schAt N) ΩW ΩQ
