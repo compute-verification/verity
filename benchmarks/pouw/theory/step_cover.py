@@ -32,26 +32,34 @@ non-free on the salt grid; premises (`PREMISES`) raise that per class. Each op's
   measures the share of elements whose output still varies, which the headline does not credit.
 - X: a shuffle or a reduction to memory (a copy or a sum another word already holds); H: bf16x2 arithmetic (rounded).
 - A: a load or address arithmetic (a copy of a committed word, or a function of indices alone), never a target.
+- K: a function of the coins alone (a dither stream's words), free to a prover that reads the coins; never a target.
 
 Designs (`PLANS`): `linears` is today (ssn_1l on the linears, the rest stock and uncovered); `lean` adds lean lane
 idioms; `best` adds an int8 lm_head under ssn_1l, int8 attention (`ssn_sh` on QKᵀ and PV), fused C-all lanes and
 committed noise-carrying padding at small m; `best_p3` and `best_p4` add premises up to ranks 3 and 4a; `best_sh` puts
 ssn_sh on the linears too; `best_pad64` pads every matmul below 64 rows to wgmma's 64; `best_dither` and
 `best_p4_dither` round every int8 / u8 quantize as floor(x·s + u), u from an in-kernel xorshift stream seeded by a raw
-coin word (`dithered`), which makes the rounded values and their packs targets at a T3 cost (`T3["dither"]`);
-`best_max` and `best_p4_max` add static activation scales and an int8 router gate, `best_p4_max_s8` the softmax's
-row max over every 8th score, and `best_p4_all` resident epilogue scales and norm rows (`MEM`), the sampler's
-two-pass argmax and the row max once every two PV calls (`max_block`);
+coin word (`dithered`): u's words are class K and a zero round is a constant, so coin-keyed dither adds priced work it
+cannot force and stays out of the lever plans; `best_max` and `best_p4_max` add static activation scales and an int8
+router gate, `best_p4_max_s8` the softmax's row max over every 8th score, and `best_p4_all` resident epilogue scales
+and norm rows (`MEM`), the sampler's two-pass argmax and the row max once every two PV calls (`max_block`);
+`best_p4_nkd` adds noise-keyed dither (`noise_dithered`): u is the pre-round f32's low mantissa byte (SHF, LOP3), a
+function of the noised value, so u and every nonzero round are targets at a T3 cost (`T3["noise_dither"]`);
 `best_p4_smlite` commits only the softmax's MUFU outputs.
 
-`ssn_sh` is ssn_1l's sibling for small n: step 1 holds 28 data lanes and 4 bits a row against the injective column
-code, and every later step 28 data lanes and one register shared by every row, a raw coin word (a move), against W₀ =
-[1, 0, 0, 0]; the accumulator's init cancels the shared bytes. Its forming is one LOP3 a row a call, at α = 32/28.
+Every ssn design carries row tags (`-tag`): step 1 gives 4 of its data lanes to a row's tag (balanced base-13 digits of
+a row index) against a [-3, 3] matrix drawn once a window after the model's root, kept in the served output, so rows
+with equal data (padding, zero or repeated rows) form distinct words against a prover that reads the coins
+(`vec_repeat_share`). `ssn_sh` is ssn_1l's sibling for small n: step 1 holds 24 data lanes, the 4 tag lanes and 4 bits
+a row against the injective column code, and every later step 28 data lanes and one register shared by every row, a
+raw coin word (a move), against W₀ = [1, 0, 0, 0]; the accumulator's init cancels the shared bytes. Its forming is one
+LOP3 a row a call, at α = 32/28. ssn_1l-tag's step counts are unchanged at every linear's K here.
 
 `check()` reproduces the served model's decode and prefill MAC shares and noise_sweep's ssn_1l terms, checks ssn_sh's and the int8 PV blocks'
 distinctness on every data case (with mutations that must fail), the softmax chain's classes on a noisy row, the
 magic-number conversion's exact range, the degree-3 exp2's error, that dithered rounds vary across salts where plain
-ones don't (`sim_dither`) and the small-m instruction choice. Output: a JSON
+ones don't and noise-keyed ones as often as independent u's would (`sim_dither`), that tags remove a coin-reading
+prover's row copies, and the small-m instruction choice. Output: a JSON
 report (`--json PATH`) and a text table (`--table`).
 """
 
@@ -305,6 +313,24 @@ def dithered(ops: list[tuple[str, float, str]], zero: float = ZERO_ACT,
     return out
 
 
+def noise_dithered(ops: list[tuple[str, float, str]], zero: float = ZERO_ACT,
+                   zero_pack: float = ZERO_ACT_PACK) -> list[tuple[str, float, str]]:
+    """Noise-keyed dither: each round to int8 / u8 takes u from its own input, the pre-round f32's low mantissa byte
+    shifted into a float in [1, 2) (SHF, then LOP3 against a mask and 1.0's bits), then FFMA(x, s, u) and a round-down
+    magic FADD. That byte carries the served noise, so u is a function of data and noise that a prover reading the coins
+    must still compute: every word is a target except the rounds (`zero`) and packs (`zero_pack`) that are 0."""
+    out = []
+    for op, cnt, cls in ops:
+        if (op, cls) == ("FFMA", "R"):
+            out += [("SHF", cnt, "T"), ("LOP3", cnt, "T"), ("FFMA", cnt, "T"), ("FADD", cnt * (1 - zero), "T"),
+                    ("FADD", cnt * zero, "R")]
+        elif (op, cls) == ("PRMT", "R"):
+            out += [("PRMT", cnt * (1 - zero_pack), "T"), ("PRMT", cnt * zero_pack, "R")]
+        else:
+            out.append((op, cnt, cls))
+    return out
+
+
 def static_scaled(ops: list[tuple[str, float, str]]) -> list[tuple[str, float, str]]:
     """A quantize with a calibrated static scale: its amax (the FMNMX selections and their SHFL tree) is gone, and a
     saturating FFMA (x·s/254 + 0.5 under .SAT) bounds what the scale no longer does; it is a new value wherever it
@@ -494,6 +520,7 @@ class Plan:
     two_pass_argmax: bool = False
     max_block: int = I8_BLOCK
     tag: int = TAG_LANES
+    noise_dither: bool = False
     note: str = ""
 
 
@@ -533,6 +560,10 @@ PLANS = [
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_max_s8 with resident epilogue scales and norm rows (`MEM`), the sampler's two-pass argmax and "
               f"the row max over {2 * I8_BLOCK}-key blocks (two PV calls)"),
+    Plan("best_p4_nkd", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="best_p4_all with every int8 / u8 round dithered by a hash of its own noisy input (`noise_dithered`)"),
 ]
 PLAN = {p.name: p for p in PLANS}
 
@@ -550,13 +581,15 @@ T3 = {
                "uniform fraction v, interpolated between int8 and int7 activations' +3.5%; more where a token's "
                "scale leaves most coordinates under one step, since there it is O(|x|) against O(x^2))", 0.012,
                "dither-int8-v1"),
+    "noise_dither": ("+1.2% (estimate: as `dither`, since u, a hash of the input's own bits, is near uniform and "
+                     "independent of the round's fraction; `sim_dither` checks it unbiased)", 0.012, "nkd-int8-v1"),
     "static": ("unmeasured: one calibrated scale a tensor for every activation quantize, instead of a token's amax",
                None, "static-int8-v1"),
     "router": ("unmeasured: the router's gate in int8 can flip an expert choice", None, None),
     "rowmax": ("unmeasured: a strided row max with a margin costs P the margin's bits and clamps the scores it misses",
                None, "rowmax-s8-v1"),
     "max_block": ("unmeasured: P's u8 round against a max over two PV calls' keys loses bits where one call's own "
-                  "scores sit below the other's", None, "rowmax-s8-b224-v1"),
+                  "scores sit below the other's", None, "rowmax-s8-b208-v1"),
 }
 
 
@@ -679,6 +712,8 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                     cands = {e: strided_max(o, plan.rowmax_stride) for e, o in cands.items()}
                 if plan.dither:
                     cands = {e: dithered(o, ZERO_P, ZERO_P) for e, o in cands.items()}
+                if plan.noise_dither:
+                    cands = {e: noise_dithered(o, ZERO_P, ZERO_P) for e, o in cands.items()}
                 if plan.exp == "best":
                     e = min(cands, key=lambda e: (lambda r: (r["honest"] - r["forced"], r["honest"]))(
                         lane_cost(cands[e], reading, plan.premises, True, plan.softmax_targets)))
@@ -691,6 +726,8 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                     v += f"_max{plan.rowmax_stride}"
                 if plan.max_block != I8_BLOCK:
                     v += f"_mb{plan.max_block}"
+                if plan.noise_dither:
+                    v += "_nkd"
         else:
             if c.kind == "sampler" and plan.two_pass_argmax and v == "fused":
                 v = "fused_two_pass"
@@ -699,6 +736,8 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                 ops, v = static_scaled(ops), "fused_static"
             if plan.dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
                 ops, reach, v = dithered(ops), True, v + "_dither"
+            if plan.noise_dither and v.startswith("fused") and any(cls == "R" for _, _, cls in ops):
+                ops, reach, v = noise_dithered(ops), True, v + "_nkd"
             if c.kind != "move":
                 ops = ops + mem_ops(c.kind, v, plan.resident)
         h = lane_cost(ops, reading, plan.premises, reach, plan.softmax_targets if c.kind == "softmax" else "TMC")
@@ -792,11 +831,14 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
         r["design"] != "stock" for r in rows) else 0.0
     if plan.dither:
         t3 += T3["dither"][1]
+    if plan.noise_dither:
+        t3 += T3["noise_dither"][1]
     t3_unmeasured = ((["static"] if plan.static_scales else []) + (["rowmax"] if plan.rowmax_stride > 1 else []) +
                      (["max_block"] if plan.max_block != I8_BLOCK and plan.attention == "i8" else []) +
                      (["router"] if plan.router == "i8" and any(r["family"] == "router_gemm" for r in rows) else []))
     t3_formats = sorted({r["t3"][2] for r in rows if len(r["t3"]) > 2 and r["t3"][2]}
-                        | {T3[k][2] for k in t3_unmeasured + (["dither"] if plan.dither else []) if T3[k][2]})
+                        | {T3[k][2] for k in t3_unmeasured + (["dither"] if plan.dither else [])
+                           + (["noise_dither"] if plan.noise_dither else []) if T3[k][2]})
     alpha = tot["honest"] / st
     macs = sum(c.count for c in comps if c.family in ("linear", "lm_head", "qk", "pv", "router_gemm"))
     lin_gap = groups["linears"]["gap_share"]
@@ -1145,36 +1187,48 @@ def _xorshift32(x: np.ndarray) -> np.ndarray:
     return x ^ ((x << np.uint32(5)) & np.uint32(0xFFFFFFFF))
 
 
-def sim_dither(salts: int = 48, samples: int = 2048, seed: int = 6, dither: bool = True) -> dict:
+def sim_dither(salts: int = 48, samples: int = 2048, seed: int = 6, dither: bool | str = True) -> dict:
     """A noised linear's outputs quantized per token to int8, each rounded as floor(x·s + u) with u's byte from a
-    xorshift32 stream seeded by a raw coin word (dither) or as rint(x·s) (not): the share of int8 values and of their
-    4-byte packs that vary across salts (noise bits and coin word), and whether the varying packs are pairwise
-    distinct."""
+    xorshift32 stream seeded by a raw coin word (dither), from the low mantissa byte of x, the dequantized f32
+    (dither="noise", `noise_dithered`), or as rint(x·s) (False): the share of int8 values and of their 4-byte packs
+    that vary across salts (here 16 noise patterns, step 1's bits; an element whose code column gives n distinct x
+    across the salts varies with probability 1 − 2/(n+1) under independent uniform u's and equal fractions, more when
+    the noise also moves x's fraction), whether the varying packs are
+    pairwise distinct, the share of zeros, and the rounding's bias and error against x·s."""
     rng = np.random.default_rng(seed)
     sigma = 30 * 25 * math.sqrt(2048)
     acc = np.rint(rng.normal(0, sigma, samples))
     code = nsw.ssn_a_w0(samples, nsw.DATA_PER_STEP)[0]
     bias = np.rint(code.sum(axis=0) / 2)
-    s = np.float32(127 / np.abs(acc).max())
+    deq = np.float32(0.0123)
+    s = np.float32(127 / np.abs(acc * deq).max())
     lane = np.arange(samples // 4, dtype=np.uint32)
-    qs, packs = [], []
+    qs, packs, errs, xs = [], [], [], []
     for _ in range(salts):
-        vals = (acc + rng.integers(0, 2, 4) @ code - bias).astype(np.float32)
+        vals = ((acc + rng.integers(0, 2, 4) @ code - bias) * deq).astype(np.float32)
+        xs.append(vals)
         coin = np.uint32(rng.integers(0, 2**32))
         st = _xorshift32(_xorshift32(coin ^ (lane * np.uint32(0x9E3779B9))))
         u = ((st[:, None] >> (np.uint32(8) * np.arange(4, dtype=np.uint32))) & np.uint32(0xFF)).reshape(-1)
+        if dither == "noise":
+            u = vals.view(np.uint32) & np.uint32(0xFF)
         u = (u.astype(np.float32) + np.float32(0.5)) / np.float32(256)
         q = np.floor(vals * s + u) if dither else np.rint(vals * s)
         q = np.clip(q, -127, 127).astype(np.int8)
         qs.append(q)
         packs.append(q.view(np.uint32))
+        errs.append(q.astype(np.float64) - vals.astype(np.float64) * float(s))
     q, pk = np.stack(qs), np.stack(packs)
     vq, vp = ~(q == q[:1]).all(axis=0), ~(pk == pk[:1]).all(axis=0)
     cols = pk[:, vp].T
-    return {"int8_vary_share": float(vq.mean()), "pack_vary_share": float(vp.mean()), "zero_share": float((q == 0).mean()),
+    err = np.stack(errs)
+    nx = np.array([len(np.unique(c)) for c in np.stack(xs).T])
+    return {"int8_vary_share": float(vq.mean()), "pack_vary_share": float(vp.mean()),
+            "independent_u_share": float((1 - 2 / (nx + 1)).mean()), "distinct_x_mean": float(nx.mean()),
+            "zero_share": float((q == 0).mean()), "bias": float(err.mean()), "err_rms": float(np.sqrt((err ** 2).mean())),
             "pack_distinct_share": len({c.tobytes() for c in cols}) / max(1, len(cols)),
             "mean_abs_err_vs_rint": float(np.abs(q.astype(np.float64) - np.rint(
-                (acc[None] * s)).clip(-127, 127)).mean())}
+                (acc[None] * deq * s)).clip(-127, 127)).mean())}
 
 
 def check() -> list[dict]:
@@ -1265,6 +1319,13 @@ def check() -> list[dict]:
        "distinct, error ~0.25 a step; rint varies on < 5%", dz["int8_vary_share"] >= 0.9 and dz["pack_vary_share"] == 1
        and dz["pack_distinct_share"] == 1 and dz["mean_abs_err_vs_rint"] < 0.3 and dr["int8_vary_share"] < 0.05,
        (dz, dr))
+    nk = sim_dither(dither="noise")
+    ok("noise-keyed dither: int8 values vary across salts at least as often as independent uniform u's would, less "
+       "0.03 (1 - 2/(n+1) for an element's n distinct x; the noise's own shift of x only adds), every pack varies, "
+       "unbiased within 0.02 of a step, error rms within 10% of coin-keyed dither's",
+       nk["int8_vary_share"] >= nk["independent_u_share"] - 0.03 and nk["pack_vary_share"] == 1
+       and abs(nk["bias"]) < 0.02
+       and abs(nk["err_rms"] - dz["err_rms"]) < 0.1 * dz["err_rms"], (nk, dz))
     ok("degree-3 exp2 within 2e-4 relative on [-30, 0] (u8 P's step is 3.9e-3)",
        sm["poly_exp2_max_rel_err"] < 2e-4, sm["poly_exp2_max_rel_err"])
     xs = np.array([-(2 ** 22), -1, 0, 1, 12345, 2 ** 22 - 1], dtype=np.int64)
@@ -1317,7 +1378,8 @@ def report(lookup: bool = False) -> dict:
     out["idioms"] = idioms
     out["flip_shares"] = flip_shares()
     out["softmax_sim"] = {e: sim_softmax(exp=e) for e in ("mufu", "poly")}
-    out["dither_sim"] = {"dither": sim_dither(), "rint": sim_dither(dither=False)}
+    out["dither_sim"] = {"dither": sim_dither(), "noise_dither": sim_dither(dither="noise"),
+                         "rint": sim_dither(dither=False)}
     out["checks"] = check()
     best = {(e["model"], e["point"], e["plan"]): e for e in out["evals"] if e["reading"] == "paired"}
     out["periods"] = {}
@@ -1335,7 +1397,8 @@ def report(lookup: bool = False) -> dict:
     return out
 
 
-PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all")
+PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
+                "best_p4_nkd")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
