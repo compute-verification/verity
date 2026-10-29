@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Pinned
+import Definitions.Pouw.Assumptions.GameStatements
 import Proofs.Pouw.Prob
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
