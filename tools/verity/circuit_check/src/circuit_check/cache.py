@@ -1804,11 +1804,13 @@ _NEXT: dict[int, tuple[Any, bool, tuple[Any, ...]]] = {}
 
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
-    descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`): what the target is, whatever module or
-    path it was written in.  A by-calls root (`targets.is_by_calls`) is its own entry (`by_calls.entry`), without what its body
-    calls.  A body that cannot be built gives the error's type, so no stored entry matches."""
+    descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`), and of every reference, by its
+    id and statics: what the target is, whatever module or path it was written in.  A by-calls root (`targets.is_by_calls`) is
+    its own entry (`by_calls.entry`), without what its body calls.  A body that cannot be built gives the error's type, so no
+    stored entry matches."""
     from verity.ml.circuits import codec as C
     from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.ml.circuits.evaluation import ScalarReference
 
     from . import by_calls as BC
     from . import targets as TG
@@ -1837,6 +1839,10 @@ def descriptor(fn: Any) -> str:
                         own = BC.entry(f) if by_calls else C.definition_entry(f)
                         e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(own)).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
+                elif isinstance(f, ScalarReference):
+                    # one reference bound at two statics is two targets of one id (`targets.reachable` keeps the first)
+                    st = json.dumps(sorted(f.bindings.items()), default=repr)
+                    parts.append([f.id, hashlib.sha512(st.encode()).hexdigest()])
                 if isinstance(f, SpecializedDefinition):
                     nxt = _NEXT.get(id(f))
                     if nxt is None or nxt[0] is not f or nxt[1] != by_calls:

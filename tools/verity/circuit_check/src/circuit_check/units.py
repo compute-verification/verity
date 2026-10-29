@@ -45,7 +45,9 @@ binding whose record doesn't count, and every one when none does or there are no
 body.  A target that misses through such a binding is made where it is checked (`cli._made`, `make`): by the zygote that forks
 the checks of that binding's targets, each under a recording its check then holds (`cli._prepare`), so the bodies they share
 are built once, as a full build builds them; the target is held to the descriptor its binding's build gave.  A primitive its
-id makes, which has no body, is made here (`built_here`).  A binding whose process dies fails the run, as it
+id makes, which has no body, is made here (`built_here`), and so is each Boolean Definition a binding's build registered
+(`made_words`): C-Flock lowers a word primitive by the first one registered of that word, so a check forked from here finds
+the one a full build's would.  A binding whose process dies fails the run, as it
 would kill a build in one process.  When every binding was built apart, the task list's entry is stored as a full build stores
 it, its reads every binding's share and this process's own; it and each record are digested where this process stores them,
 as a full build's are (a full build digests none of its reads where it builds them either).
@@ -77,7 +79,8 @@ class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted.  Built in a process of
     its own (``apart``, `built_apart`), with what that process read: its record's reads and its share of the task list's
-    (``listed``), and the CPU seconds it took (``seconds``)."""
+    (``listed``), and the CPU seconds it took (``seconds``).  ``words``: the Boolean Definitions its build registered
+    (`_words`), where a process built it apart."""
     units: tuple[str, ...]
     kind: str
     label: str
@@ -89,6 +92,7 @@ class Entry:
     reads: dict[str, list[str]] | None = None
     listed: dict[str, list[str]] | None = None
     seconds: float | None = None
+    words: list[list[str]] | None = None
 
     @property
     def root_ids(self) -> list[str]:
@@ -386,7 +390,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         entry = Entry(units, kind, label, key(units, n), roots)
         rec = _lookup(cache, repo, entry) if stored else None
         if rec is not None:
-            entry.nodes, entry.reused = rec["nodes"], True
+            entry.nodes, entry.reused, entry.words = rec["nodes"], True, rec.get("words")
         elif kind == "model" and apart is None:
             try:
                 with CC.producing(units):
@@ -397,7 +401,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         entries.append(entry)
     rec = _lookup(cache, repo, entries[0]) if stored else None
     if rec is not None:
-        entries[0].nodes, entries[0].reused = rec["nodes"], True
+        entries[0].nodes, entries[0].reused, entries[0].words = rec["nodes"], True, rec.get("words")
     if not any(e.reused for e in entries) and apart is None:
         return None
     listed = None
@@ -429,10 +433,34 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
                     (v is e or e.nodes.get(fid, {}).get("d") == v.nodes[fid].get("d")):
                 objects[fid] = fn
     calls = call_families(entries, d, objects)
+    out = Plan(entries, objects, d, calls, listed)
+    words = made_words(out)
     if log:
         log(f"circuit-check: catalog from records: {sum(e.reused for e in entries)} of {len(entries)} bindings reused, "
-            f"{sum(e.apart for e in entries)} built apart, {len(objects)} Definitions built here")
-    return Plan(entries, objects, d, calls, listed)
+            f"{sum(e.apart for e in entries)} built apart, {len(objects)} Definitions built here, {words} of them Boolean "
+            "Definitions another process's build registered")
+    return out
+
+
+def made_words(plan: Plan) -> int:
+    """Made here (`make`): each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this
+    process didn't build it (``words``: built apart, or its record's) and that this process doesn't hold.  C-Flock lowers a
+    word primitive by the build of the first registered Boolean Definition of that word (`verity_flock.ir_lower`'s
+    ``_boolean_build``), so each check forked from here finds the build a full build's would.  `Stale` for one that no record
+    reaches; the count made."""
+    from verity.ml.circuits.defs import REGISTRY
+
+    n = 0
+    for e in plan.entries:
+        for fid, _word in e.words or ():
+            if fid in REGISTRY:
+                continue
+            node = fid if fid in plan.derived.via else next((i for i, x in plan.derived.nodes.items() if x["f"] == fid), None)
+            if node is None:
+                raise Stale(f"{fid}: {e.name}'s build registers it as a word's Boolean Definition, and no record reaches it")
+            make(plan, node)
+            n += 1
+    return n
 
 
 def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> int:
@@ -444,7 +472,8 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
              for e in todo]
     n = 0
     for e, got, now in zip(todo, reads, CC.seen_all(repo, reads)):
-        if CC.store(cache, e.key, repo, got, {"roots": e.root_ids, "nodes": e.nodes}, now) is not None:
+        value = {"roots": e.root_ids, "nodes": e.nodes, **({"words": e.words} if e.words is not None else {})}
+        if CC.store(cache, e.key, repo, got, value, now) is not None:
             n += 1
     return n
 
@@ -514,19 +543,36 @@ def _reach_one(e: Entry, described: bool = False) -> dict[str, dict]:
     return nodes
 
 
+def _words(before: set[str]) -> list[list[str]]:
+    """``[id, word id]`` of each Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.trace` registers
+    one) registered since the registry held ``before``, in the order it was registered."""
+    from verity.ml.circuits.defs import REGISTRY
+
+    out = []
+    for fid, d in REGISTRY.defs.items():
+        w = getattr(getattr(d, "word", None), "id", None)
+        if fid not in before and isinstance(w, str) and callable(getattr(d, "build", None)):
+            out.append([fid, w])
+    return out
+
+
 def _child(e: Entry, out: Path, described: bool = False, side: list[str] | None = None, untraced: int = 0) -> None:
     """In a process forked for ``e``: its nodes or its error to ``out``, and out through `os._exit`, so nothing of the parent's
     (its atexit, its buffers) runs twice.  With ``side`` (traced: the units of the bindings that make no root): what its build
     read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots) and what it did that
-    the tracer cannot see (`cache.untraced`, past the parent's ``untraced``)."""
+    the tracer cannot see (`cache.untraced`, past the parent's ``untraced``); and the Boolean Definitions its build registered
+    (`_words`)."""
+    from verity.ml.circuits.defs import REGISTRY
+
     from . import cli
 
     CC._INTERNAL.clear()              # forked inside `cache.internal`: what this process reads is its build's
     code = 0
     try:
         start = cli._rss_gb()
+        before = set(REGISTRY.defs)
         try:
-            got = {"nodes": _reach_one(e, described), "start": start}
+            got = {"nodes": _reach_one(e, described), "start": start, "words": _words(before)}
             if side is not None:
                 got.update(reads=CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots),
                            listed=CC.task_list_reads(e.roots), untraced=CC.untraced()[untraced:])
@@ -604,7 +650,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
                 else:
                     e = entries[i]
                     e.nodes, e.apart = got["nodes"], True
-                    e.reads, e.listed = got.get("reads"), got.get("listed")
+                    e.reads, e.listed, e.words = got.get("reads"), got.get("listed"), got.get("words")
                     e.seconds = round(usage.ru_utime + usage.ru_stime, 2)
                     CC._UNTRACED.extend(got.get("untraced", ()))
     finally:

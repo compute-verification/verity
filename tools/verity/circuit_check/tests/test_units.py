@@ -399,6 +399,98 @@ def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_pa
     assert out["hits"] == built["hits"] and "SynX_v1" not in out["hits"], (out["hits"], built["hits"])
 
 
+#: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
+#: the NVFP4 dot), and a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
+#: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers)
+WORDS = """
+from verity.ml.circuits import bind, composite, primitive
+from verity.ml.circuits.evaluation import ScalarReference
+
+from syn.prims import SynAdd, V
+
+SCALE = ScalarReference("syn.scale", lambda a, b, *, K: (a * K + b) & 0xFFFF, lambda K: ((V, V), V), statics=("K",))
+BITS = []
+
+
+@primitive("SynW", 1, [("a", V), ("b", V)], V)
+def SynW(a, b):
+    return (a - b) & 0xFFFF
+
+
+@composite("SynWTop", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynWTop(B, S, a, b):
+    if not BITS:
+        @composite("SynWBits", 1, [], lambda S: ((("a", V), ("b", V)), V))
+        def SynWBits(B, S, a, b):
+            return B.call(SynAdd, a, b)
+        SynWBits.word, SynWBits.build = SynW, lambda C, *x: list(x)
+        BITS.append(SynWBits)
+    return B.call(bind(BITS[0]), a, b)
+"""
+WORDS_BINDINGS = """def scale2():
+    from syn import words
+    return [words.SCALE.bind(K=2)]
+
+
+def scale3():
+    from syn import words
+    return [words.SCALE.bind(K=3)]
+
+
+def wtop():
+    from syn import words
+    return [bind(words.SynWTop)]
+
+
+def wprim():
+    from syn import words
+    return [words.SynW]
+
+
+"""
+#: the check's value also says whether a Boolean Definition of the target's word is registered where it is checked, as
+#: C-Flock's lowering looks one up (`verity_flock.ir_lower`'s ``_boolean_build``)
+WORDED = """def worded(fid):
+    from verity.ml.circuits.defs import REGISTRY
+
+    return any(getattr(getattr(d, "word", None), "id", None) == fid and callable(getattr(d, "build", None))
+               for d in REGISTRY.defs.values())
+
+
+"""
+
+
+def test_bindings_built_apart_check_the_reference_and_find_the_boolean_definitions_a_full_build_does(tmp_path):
+    """Built apart, a reference two bindings bind at two statics is checked at the statics of the one `targets.reachable`
+    keeps, not the first binding's (its descriptor holds them: `cache.descriptor`), and a word primitive's check finds the
+    Boolean Definition of its word that only another binding's body build registers (`units.made_words`): the values and keys
+    a full build gives.  The records hold those Boolean Definitions, so a run from them finds them too."""
+    from test_cache import _set_pin
+
+    trees = []
+    for name in ("t", "here"):
+        root = _tree(tmp_path / name)
+        (root / "syn/words.py").write_text(WORDS.lstrip("\n"))
+        _edit(root, "syn/catalog.py", "BINDINGS = [", WORDS_BINDINGS + "BINDINGS = [")
+        _bindings(root, '(("_scale2_roots",), scale2)', '(("_scale3_roots",), scale3)', '(("_wtop_roots",), wtop)',
+                  '(("_wprim_roots",), wprim)')
+        _edit(root, "syn/check.py", "def check_definition(", WORDED + "def check_definition(")
+        _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "[evaluate(fn, 3, 0x0105), worded(fn.id)]")
+        _edit(root, "syn/check.py", '"gates": fn.gates', '"gates": getattr(fn, "gates", 1)')
+        trees.append(root)
+    root, here = trees
+    whole = _run(here, FORKED.replace(", jobs=2, isolate=True, fork=True)", ")"))
+    assert whole["values"]["syn.scale"] == [3 * 3 + 0x0105, False] and whole["values"]["SynW_v1"][1], whole["values"]
+    first = _run(root, FORKED)
+    assert first["stats"]["units"]["reused"] == 0, first["stats"]["units"]
+    assert first["values"] == whole["values"] and first["keys"] == whole["keys"]
+    _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
+    _set_pin(root, "SynW_v1", {"and": 1})
+    out = _run(root, FORKED)
+    assert out["stats"]["units"]["rebuilt"] == [] and out["values"] == whole["values"], out["stats"]["units"]
+    assert "SynW_v1" not in out["hits"], out["hits"]
+
+
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
     its Boolean version among them though no record holds one, and a vocabulary kind that doesn't bind refuses them by name, as
