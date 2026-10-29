@@ -8,20 +8,24 @@ import Proofs.Pouw.NCP.Proofs
 **Draft, pending review.** Two questions against `MH100w`'s `DistinctWritesFloor` (`Pouw.Dimension.H100Floor`) at the
 floor table `h100Floor`, which is the H200's measured table (`h200Measured = h100Floor`).
 
-* **Candidate 1** (`formed_charged`, `formed_free_of_saltIndep`, `rawDither_exact`). Commit the formed noised operands
-  `X = A + D` and `Y = B + E`, int8 packed four to a 32-bit register (`pack4`). On the grid `D × Ω` (data fixed before the
-  noise, then the noise), with the free set `FreeC1 C`: every salt-independent value and the raw coin words `C`. A formed
-  register is charged 32 iff it moves with the salt at some fixed datum on `S` and equals no coin word on `S`; distinct
-  registers count once each. Otherwise a zero-cost program outputs it (`formed_free_of_saltIndep`, `coin_free`), so no
-  bound charges it. For an i.i.d. raw-byte dither the charged registers are exactly those whose data register is not
-  `0` mod 256 (`rawDither_exact`).
-* **The final-word lemma** (`finalWordTarget`, `finalWord_charged`, `all_charged`). On a call's grid `Call m n k`
-  (its int7 input `A` and its noise, the weights `B` fixed) with the free set the constants and the call's own words
-  (its input words `inWords`, and noise-side words `W'`: coin words and, in the variant CORE-TIME stated, the formed
-  operand words), NCP's final words `A_i·B_j` and every non-final checked word are pairwise distinct and none is free.
-  The non-final words rest on the proved `indep_words_sub` at the zero-data slice; the final words on `B`'s columns
-  being nonzero and pairwise distinct and int8. The free set is the words themselves, not their span: the span on a
-  weights slice holds every final word (CORE-TIME's `span_frees_final_word`).
+* **Committed formed operands** (`formed_charged`, `formed_free_of_saltIndep`, `rawDither_exact`). Commit the formed
+  noised operands `X = A + D` and `Y = B + E`, int8 packed four to a 32-bit register (`pack4`). On the grid `D × Ω`
+  (data fixed before the noise, then the noise), with the free set `FreeC1 C`: every salt-independent value and the
+  raw coin words `C`. A formed register is charged 32 iff it moves with the salt at some fixed datum on `S` and equals
+  no coin word on `S`; distinct registers count once each. Otherwise a zero-cost program outputs it
+  (`formed_free_of_saltIndep`, `free_costs_nothing`), so no bound charges it. For an i.i.d. raw-byte dither the charged
+  registers are exactly those whose data register is not `0` mod 256 (`rawDither_exact`).
+* **The final word** (`finalWordTarget`, `finalWord_charged`). On a call's grid `Call m n k` (its int7 input `A` and
+  its noise, the weights `B` fixed) with the free set the constants and the call's own words (its input words
+  `inWords`, and noise-side words `W'`), NCP's final words `A_i·B_j` and every non-final checked word are pairwise
+  distinct and none is free. The non-final words rest on the proved `indep_words_sub` at the input-`0` slice; the
+  final words on `B`'s columns being nonzero, pairwise distinct and int8. The free set is the words themselves, not
+  their span: on a weights slice that span holds every final word. The grid ranges over every int7 input: with `A`
+  fixed, `A·B` is a constant, and constants are free.
+* **Both** (`allTarget`, `all_charged`; concretely `block1_charged` and `ncp_charged`). With the free values the
+  constants, the input words and the coin words (`coinWords`), the committed `X` registers (all three blocks, biased
+  packing: `xAll`, under `xAll_props`' conditions on `R`) and block 1 of `Y` (`yWord`) are targets beside the checked
+  and final words.
 -/
 
 namespace Pouw.Dimension.SwLean
@@ -300,7 +304,7 @@ def DataStep : Call m n k → Call m n k → Prop := fun g g' => g.2 = g'.2
 /-- The noise step: the same input, any two noises. -/
 def NoiseStep : Call m n k → Call m n k → Prop := fun g g' => g.1 = g'.1
 
-/-- **The call's own words** (`FreeCall` as CORE-TIME stated it): the constants and the words `W`. -/
+/-- **The call's own words**: the constants and the words `W`. -/
 def FreeCall (W : Set (Call m n k → ℚ)) : Set (Call m n k → ℚ) := {f | (∃ q : ℚ, f = fun _ => q) ∨ f ∈ W}
 
 theorem freeCall_const (W : Set (Call m n k → ℚ)) (q : ℚ) : (fun _ : Call m n k => q) ∈ FreeCall W :=
@@ -503,10 +507,10 @@ theorem final_ne_of_dichotomy (B : Mat) (i j : ℕ) (hj0 : ∃ l < k, B l j ≠ 
 
 /-! ### The lemma -/
 
-/-- **The final-word lemma for NCP** (CORE-TIME's `FinalWordTarget`, proved): on a call's grid (int7 input, every
-noise, the weights `B` fixed), with the free values the constants, the call's input words and noise-side words `W'`
-(each in `V₀` at the input-`0` slice, and each ignoring the input or moving with the noise: coin words and the formed
-words both qualify), the non-final checked words at positions `P` and the final words `A_i·B_j` for `i ∈ Ix`,
+/-- **The final-word lemma for NCP**: on a call's grid (int7 input, every noise, the weights `B` fixed), with the
+free values the constants, the call's input words and noise-side words `W'` (each in `V₀` at the input-`0` slice, and
+each ignoring the input or moving with the noise: coin words qualify, and so do the formed words in the biased
+packing), the non-final checked words at positions `P` and the final words `A_i·B_j` for `i ∈ Ix`,
 `j ∈ Jx` are distinct and none is free, when `B` is int8 and its columns in `Jx` are nonzero and pairwise distinct.
 There are `|P| + |Ix|·|Jx|` of them. -/
 theorem finalWordTarget [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
@@ -979,6 +983,428 @@ theorem block1_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointInde
       rcases Finset.mem_union.1 hw with hw | hw
       · obtain ⟨x, -, rfl⟩ := Finset.mem_image.1 hw
         exact xWord_ne_coin x.1 x.2 c hc
+      · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw
+        exact yWord_ne_coin B y.1 y.2 (hYi y hy).2.2 c hc)
+    hd fpSem L Pg hL hPg hO
+  rwa [hcard] at h
+
+/-! ### All three blocks of `X` -/
+
+/-- A register whose input-`0` slice has bytes in `[0, 255]`, each a function in `V₀` plus a constant, is in `V₀`
+there. -/
+theorem reg_mem_V0 (X : Call m n k → Fin 4 → ℤ) (ψ : Fin 4 → Noise 1 m n k → ℤ) (q : Fin 4 → ℤ)
+    (hψ : ∀ t, (fun ω => (ψ t ω : ℚ)) ∈ V0 1 m n k) (hX : ∀ ω t, X (zeroA, ω) t = ψ t ω + q t)
+    (hr : ∀ ω t, 0 ≤ X (zeroA, ω) t ∧ X (zeroA, ω) t < 256) : slice0 (reg X) ∈ V0 1 m n k := by
+  have hf : slice0 (reg X) =
+      (fun ω : Noise 1 m n k => (ψ 0 ω : ℚ)) + (256 : ℚ) • (fun ω => (ψ 1 ω : ℚ)) +
+        (65536 : ℚ) • (fun ω => (ψ 2 ω : ℚ)) + (16777216 : ℚ) • (fun ω => (ψ 3 ω : ℚ)) +
+        fun _ => ((q 0 + 256 * q 1 + 65536 * q 2 + 16777216 * q 3 : ℤ) : ℚ) := by
+    funext ω
+    simp only [slice0, reg_of_range X _ (hr ω), hX ω, Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+    push_cast
+    ring
+  rw [hf]
+  exact Submodule.add_mem _ (Submodule.add_mem _ (Submodule.add_mem _ (Submodule.add_mem _ (hψ 0)
+    (Submodule.smul_mem _ _ (hψ 1))) (Submodule.smul_mem _ _ (hψ 2))) (Submodule.smul_mem _ _ (hψ 3)))
+    (mem_V0_of_const _)
+
+/-- A formed `X` register in the biased packing: bytes `s·A[i, 4c+t] + φ t ω + 128`, with `s` the block's sign and `φ`
+its noise. -/
+def xReg (s : ℤ) (φ : Fin 4 → Noise 1 m n k → ℤ) (i c : ℕ) : Call m n k → ℚ :=
+  reg fun g t => s * g.1 i (4 * c + t) + φ t g.2 + 128
+
+/-- A block's noise: `0` at `ω₀`, within `±64`, and in `V₀`. -/
+structure NoiseForm (φ : Fin 4 → Noise 1 m n k → ℤ) : Prop where
+  zero : ∀ t, φ t ω₀ = 0
+  range : ∀ t ω, -64 ≤ φ t ω ∧ φ t ω ≤ 64
+  mem : ∀ t, (fun ω => (φ t ω : ℚ)) ∈ V0 1 m n k
+
+theorem xReg_byte (s : ℤ) (φ : Fin 4 → Noise 1 m n k → ℤ) (i c : ℕ) (g g' : Call m n k)
+    (h : xReg s φ i c g = xReg s φ i c g') (t : Fin 4) :
+    byte (s * g.1 i (4 * c + t) + φ t g.2 + 128) = byte (s * g'.1 i (4 * c + t) + φ t g'.2 + 128) :=
+  (reg_eq_iff _ _ _ _).1 h t
+
+theorem xReg_slice0 {s : ℤ} {φ : Fin 4 → Noise 1 m n k → ℤ} (hφ : NoiseForm φ) (i c : ℕ) :
+    slice0 (xReg s φ i c) ∈ V0 1 m n k := by
+  refine reg_mem_V0 _ φ (fun _ => 128) hφ.mem (fun ω t => ?_) fun ω t => ?_
+  · show s * zeroA i (4 * c + t) + φ t ω + 128 = φ t ω + 128
+    simp [zeroA]
+  · have := hφ.range t ω
+    show 0 ≤ s * zeroA i (4 * c + t) + φ t ω + 128 ∧ s * zeroA i (4 * c + t) + φ t ω + 128 < 256
+    simp only [zeroA, mul_zero, zero_add]
+    omega
+
+theorem xReg_moves {s : ℤ} {φ : Fin 4 → Noise 1 m n k → ℤ} (hφ : NoiseForm φ) (i c : ℕ)
+    (hm : ∃ t ω, φ t ω ≠ 0) : Moves (int7 m n k) NoiseStep (xReg s φ i c) := by
+  obtain ⟨t, ω, ht⟩ := hm
+  refine ⟨(zeroA, ω₀), zero_int7 _, (zeroA, ω), zero_int7 _, rfl, fun h => ?_⟩
+  have e := xReg_byte s φ i c _ _ h t
+  have hr := hφ.range t ω
+  simp only [zeroA, mul_zero, zero_add, hφ.zero, byte] at e
+  omega
+
+theorem xReg_ne_coin {s : ℤ} {φ : Fin 4 → Noise 1 m n k → ℤ} (hφ : NoiseForm φ) (i c : ℕ) (w : Call m n k → ℚ)
+    (hw : w ∈ coinWords m n k) : ¬ ∀ g ∈ int7 m n k, xReg s φ i c g = w g := by
+  refine differ_of_point (zero_int7 ω₀) ?_
+  rw [coin_at_ω₀ w hw]
+  intro h
+  unfold xReg at h
+  have e : byte (s * zeroA i (4 * c + 0) + φ 0 ω₀ + 128) = byte 31 := (reg_eq_iff _ _ _ _).1 h 0
+  simp only [zeroA, mul_zero, zero_add, hφ.zero, byte] at e
+  omega
+
+/-- **Data separates**: two registers of signs `±1` differ on `int7` when their indices or their signs differ. At
+`A = e_{i, 4c}` byte 0 of `(s, i, c)` reads `128 + s`, and of `(s', i', c')` reads `128 + s'` if the index is the
+same and `128` if not. -/
+theorem xReg_ne_data {s s' : ℤ} (hs : s = 1 ∨ s = -1) (hs' : s' = 1 ∨ s' = -1) {φ φ' : Fin 4 → Noise 1 m n k → ℤ}
+    (hφ : NoiseForm φ) (hφ' : NoiseForm φ') {i c i' c' : ℕ} (hne : (i, c) ≠ (i', c') ∨ s ≠ s') :
+    ¬ ∀ g ∈ int7 m n k, xReg s φ i c g = xReg s' φ' i' c' g := by
+  refine differ_of_point (unitAt_int7 (m := m) (n := n) (k := k) i (4 * c) ω₀) fun h => ?_
+  unfold xReg at h
+  have e : byte (s * unitAt i (4 * c) i (4 * c + 0) + φ 0 ω₀ + 128) =
+      byte (s' * unitAt i (4 * c) i' (4 * c' + 0) + φ' 0 ω₀ + 128) := (reg_eq_iff _ _ _ _).1 h 0
+  have hu1 : unitAt i (4 * c) i (4 * c + 0) = 1 := by simp [unitAt]
+  rw [hu1, hφ.zero, hφ'.zero] at e
+  by_cases hii : i' = i ∧ c' = c
+  · obtain ⟨rfl, rfl⟩ := hii
+    rw [hu1] at e
+    have hss : s ≠ s' := hne.resolve_left (fun h => h rfl)
+    simp only [byte] at e
+    rcases hs with rfl | rfl <;> rcases hs' with rfl | rfl <;> simp_all <;> omega
+  · have hu : unitAt i (4 * c) i' (4 * c' + 0) = 0 := by
+      simp only [unitAt]
+      rw [if_neg]
+      rintro ⟨rfl, h'⟩
+      exact hii ⟨rfl, by omega⟩
+    rw [hu] at e
+    simp only [byte] at e
+    rcases hs with rfl | rfl <;> omega
+
+/-- **Noise separates**: registers with the same sign and index differ on `int7` when their noise differs somewhere. -/
+theorem xReg_ne_noise {s : ℤ} {φ φ' : Fin 4 → Noise 1 m n k → ℤ} (hφ : NoiseForm φ) (hφ' : NoiseForm φ') (i c : ℕ)
+    (hd : ∃ t ω, φ t ω ≠ φ' t ω) : ¬ ∀ g ∈ int7 m n k, xReg s φ i c g = xReg s φ' i c g := by
+  obtain ⟨t, ω, ht⟩ := hd
+  refine differ_of_point (zero_int7 ω) fun h => ?_
+  unfold xReg at h
+  have e : byte (s * zeroA i (4 * c + t) + φ t ω + 128) = byte (s * zeroA i (4 * c + t) + φ' t ω + 128) :=
+    (reg_eq_iff _ _ _ _).1 h t
+  have h1 := hφ.range t ω
+  have h2 := hφ'.range t ω
+  simp only [zeroA, mul_zero, zero_add, byte] at e
+  omega
+
+theorem xReg_moves_data {s : ℤ} (hs : s = 1 ∨ s = -1) {φ : Fin 4 → Noise 1 m n k → ℤ} (hφ : NoiseForm φ) (i c : ℕ) :
+    Moves (int7 m n k) DataStep (xReg s φ i c) := by
+  refine ⟨(zeroA, ω₀), zero_int7 _, (unitAt i (4 * c), ω₀), unitAt_int7 _ _ _, rfl, fun h => ?_⟩
+  unfold xReg at h
+  have e : byte (s * zeroA i (4 * c + 0) + φ 0 ω₀ + 128) = byte (s * unitAt i (4 * c) i (4 * c + 0) + φ 0 ω₀ + 128) :=
+    (reg_eq_iff _ _ _ _).1 h 0
+  have hu1 : unitAt i (4 * c) i (4 * c + 0) = 1 := by simp [unitAt]
+  simp only [hu1, zeroA, hφ.zero, mul_zero, mul_one, byte] at e
+  rcases hs with rfl | rfl <;> omega
+
+/-- `E₁` is `1` at `(i, j)` and `0` elsewhere. -/
+def ωE (i j : ℕ) : Noise 1 m n k := (fun _ i' j' => if (i' : ℕ) = i ∧ (j' : ℕ) = j then 32 else 31, fun _ _ => 31)
+
+theorem e1_ωE (i j i' l : ℕ) :
+    e1Of (ωE (m := m) (n := n) (k := k) i j) 0 i' l = if i' < m ∧ l < k ∧ i' = i ∧ l = j then 1 else 0 := by
+  simp only [e1Of, ωE]
+  by_cases h : 0 < 1 ∧ i' < m ∧ l < k
+  · rw [dif_pos h]
+    by_cases h' : i' = i ∧ l = j
+    · rw [if_pos h', if_pos ⟨h.2.1, h.2.2, h'⟩]
+      rfl
+    · rw [if_neg h', if_neg fun h'' => h' ⟨h''.2.2.1, h''.2.2.2⟩]
+      rfl
+  · rw [dif_neg h, if_neg fun h'' => h ⟨Nat.one_pos, h''.1, h''.2.1⟩]
+
+theorem mm_e1_ωE (R : Mat) {i j : ℕ} (hi : i < m) (hj : j < k) (l : ℕ) :
+    mm k (e1Of (ωE (m := m) (n := n) (k := k) i j) 0) R i l = R j l := by
+  simp only [mm, e1_ωE]
+  rw [Finset.sum_eq_single j (fun j' hj' hne => by simp [hne]) (fun h => absurd (Finset.mem_range.2 hj) h)]
+  simp [hi, hj]
+
+/-- Block 1's noise: `E₁[i, 4c+t]`. -/
+def φ₁ (i c : ℕ) : Fin 4 → Noise 1 m n k → ℤ := fun t ω => e1Of ω 0 i (4 * c + t)
+
+/-- Block 2's noise: `E₂[i, 4c+t]`, `E₂ = E₁·R`. -/
+def φ₂ (R : Mat) (i c : ℕ) : Fin 4 → Noise 1 m n k → ℤ := fun t ω => E2 k (e1Of ω 0) R i (4 * c + t)
+
+/-- Block 3's noise: `−E₃[i, 4c+t]`, `E₃ = E₁ + E₂`; block 3's sign is `−1`. -/
+def φ₃ (R : Mat) (i c : ℕ) : Fin 4 → Noise 1 m n k → ℤ := fun t ω => -(E3 k (e1Of ω 0) R i (4 * c + t))
+
+theorem abs_e1 (ω : Noise 1 m n k) (i l : ℕ) : |e1Of ω 0 i l| ≤ 32 := by
+  have := e1_range ω 0 i l
+  rw [abs_le]
+  omega
+
+/-- `|E₂| ≤ 32` when every column of `R` has absolute sum at most 1 (a signed permutation's columns have sum 1). -/
+theorem abs_e2 (R : Mat) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1) (ω : Noise 1 m n k) (i l : ℕ) :
+    |E2 k (e1Of ω 0) R i l| ≤ 32 := by
+  simp only [E2, mm]
+  calc |∑ j ∈ range k, e1Of ω 0 i j * R j l| ≤ ∑ j ∈ range k, |e1Of ω 0 i j * R j l| := Finset.abs_sum_le_sum_abs _ _
+    _ ≤ ∑ j ∈ range k, 32 * |R j l| := Finset.sum_le_sum fun j _ => by
+        rw [abs_mul]
+        exact mul_le_mul_of_nonneg_right (abs_e1 ω i j) (abs_nonneg _)
+    _ = 32 * ∑ j ∈ range k, |R j l| := by rw [Finset.mul_sum]
+    _ ≤ 32 := by linarith [hR l]
+
+theorem e2_mem_V0 (R : Mat) (i l : ℕ) : (fun ω : Noise 1 m n k => (E2 k (e1Of ω 0) R i l : ℚ)) ∈ V0 1 m n k := by
+  have : (fun ω : Noise 1 m n k => (E2 k (e1Of ω 0) R i l : ℚ)) =
+      ∑ j ∈ range k, (R j l : ℚ) • fun ω : Noise 1 m n k => (e1Of ω 0 i j : ℚ) := by
+    funext ω
+    simp only [E2, mm, Finset.sum_apply, Pi.smul_apply, smul_eq_mul]
+    push_cast
+    exact Finset.sum_congr rfl fun j _ => mul_comm _ _
+  rw [this]
+  exact Submodule.sum_mem _ fun j _ => Submodule.smul_mem _ _ (e1_mem_V0 i j)
+
+theorem e2_ω₀ (R : Mat) (i l : ℕ) : E2 k (e1Of (ω₀ (m := m) (n := n) (k := k)) 0) R i l = 0 := by
+  simp [E2, mm, e1_ω₀]
+
+theorem φ₁_form (i c : ℕ) : NoiseForm (φ₁ (m := m) (n := n) (k := k) i c) where
+  zero t := e1_ω₀ 0 i _
+  range t ω := by
+    have := e1_range ω 0 i (4 * c + t)
+    exact ⟨by simp only [φ₁]; omega, by simp only [φ₁]; omega⟩
+  mem t := e1_mem_V0 i _
+
+theorem φ₂_form (R : Mat) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1) (i c : ℕ) :
+    NoiseForm (φ₂ (m := m) (n := n) (k := k) R i c) where
+  zero t := e2_ω₀ R i _
+  range t ω := by
+    have := abs_le.1 (abs_e2 R hR ω i (4 * c + t))
+    exact ⟨by simp only [φ₂]; linarith, by simp only [φ₂]; linarith⟩
+  mem t := e2_mem_V0 R i _
+
+theorem φ₃_form (R : Mat) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1) (i c : ℕ) :
+    NoiseForm (φ₃ (m := m) (n := n) (k := k) R i c) where
+  zero t := by simp [φ₃, E3, e1_ω₀, e2_ω₀]
+  range t ω := by
+    have h1 := abs_le.1 (abs_e1 ω i (4 * c + t))
+    have h2 := abs_le.1 (abs_e2 R hR ω i (4 * c + t))
+    simp only [φ₃, E3, Pi.add_apply]
+    exact ⟨by linarith, by linarith⟩
+  mem t := by
+    have : (fun ω : Noise 1 m n k => (φ₃ R i c t ω : ℚ)) =
+        -((fun ω : Noise 1 m n k => (e1Of ω 0 i (4 * c + t) : ℚ)) + fun ω => (E2 k (e1Of ω 0) R i (4 * c + t) : ℚ)) := by
+      funext ω
+      simp only [φ₃, E3, Pi.add_apply, Pi.neg_apply]
+      push_cast
+      ring
+    rw [this]
+    exact Submodule.neg_mem _ (Submodule.add_mem _ (e1_mem_V0 i _) (e2_mem_V0 R i _))
+
+/-- `X`'s committed register `(b, i, c)`: block `b ∈ {0, 1, 2}` (blocks 1, 2, 3), row `i`, entries `4c..4c+3` of
+the block. -/
+def xAll (R : Mat) (x : ℕ × ℕ × ℕ) : Call m n k → ℚ :=
+  if x.1 = 0 then xReg 1 (φ₁ x.2.1 x.2.2) x.2.1 x.2.2
+  else if x.1 = 1 then xReg 1 (φ₂ R x.2.1 x.2.2) x.2.1 x.2.2
+  else xReg (-1) (φ₃ R x.2.1 x.2.2) x.2.1 x.2.2
+
+theorem xAll_0 (R : Mat) (i c : ℕ) : xAll (m := m) (n := n) (k := k) R (0, i, c) = xReg 1 (φ₁ i c) i c := by
+  simp [xAll]
+
+theorem xAll_1 (R : Mat) (i c : ℕ) : xAll (m := m) (n := n) (k := k) R (1, i, c) = xReg 1 (φ₂ R i c) i c := by
+  simp [xAll]
+
+theorem xAll_2 (R : Mat) (i c : ℕ) : xAll (m := m) (n := n) (k := k) R (2, i, c) = xReg (-1) (φ₃ R i c) i c := by
+  simp [xAll]
+
+/-- Each `X` register as `xReg` with its sign and a noise form. -/
+theorem xAll_eq (R : Mat) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1) (x : ℕ × ℕ × ℕ) :
+    ∃ s φ, (s = 1 ∨ s = -1) ∧ NoiseForm φ ∧ xAll (m := m) (n := n) (k := k) R x = xReg s φ x.2.1 x.2.2 := by
+  by_cases h0 : x.1 = 0
+  · exact ⟨1, φ₁ x.2.1 x.2.2, Or.inl rfl, φ₁_form _ _, by simp [xAll, h0]⟩
+  · by_cases h1 : x.1 = 1
+    · exact ⟨1, φ₂ R x.2.1 x.2.2, Or.inl rfl, φ₂_form R hR _ _, by simp [xAll, h1]⟩
+    · exact ⟨-1, φ₃ R x.2.1 x.2.2, Or.inr rfl, φ₃_form R hR _ _, by simp [xAll, h0, h1]⟩
+
+/-- **The conditions on `X`'s registers** (all three blocks, biased packing), for index triples `(b, i, c)` with
+`b < 3` and `i < m`:
+* block 1 moves with the noise when `4c < k`;
+* block 2 moves when some column `4c + t` of `R` has a nonzero entry above `k`;
+* block 3 moves when some column `4c + t` of `I + R` does (else `E₃ = 0` there, and the register is `−A`: free);
+* blocks 1 and 2 of one index differ when some column `4c + t` of `R` is not the unit vector `e_{4c+t}` (else
+  `E₂ = E₁` there, and they are one register).
+Under these, the registers are in `V₀` at the input-`0` slice, move with the noise, equal no coin word, and differ
+pairwise on `int7`. -/
+theorem xAll_props (R : Mat) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1) (XI : Finset (ℕ × ℕ × ℕ))
+    (hXI : ∀ x ∈ XI, x.1 < 3 ∧ x.2.1 < m ∧
+      (x.1 = 0 → 4 * x.2.2 < k) ∧
+      (x.1 = 1 → ∃ t : Fin 4, ∃ j < k, R j (4 * x.2.2 + t) ≠ 0) ∧
+      (x.1 = 2 → ∃ t : Fin 4, ∃ j < k, (if j = 4 * x.2.2 + t then 1 else 0) + R j (4 * x.2.2 + t) ≠ 0))
+    (h12 : ∀ i c, (0, i, c) ∈ XI → (1, i, c) ∈ XI →
+      ∃ t : Fin 4, ∃ j < k, R j (4 * c + t) ≠ if j = 4 * c + t then 1 else 0) :
+    (∀ x ∈ XI, slice0 (xAll (m := m) (n := n) (k := k) R x) ∈ V0 1 m n k) ∧
+    (∀ x ∈ XI, Moves (int7 m n k) NoiseStep (xAll (m := m) (n := n) (k := k) R x)) ∧
+    (∀ x ∈ XI, ∀ w ∈ coinWords m n k, ¬ ∀ g ∈ int7 m n k, xAll (m := m) (n := n) (k := k) R x g = w g) ∧
+    (∀ x ∈ XI, ∀ x' ∈ XI, x ≠ x' →
+      ¬ ∀ g ∈ int7 m n k, xAll (m := m) (n := n) (k := k) R x g = xAll R x' g) ∧
+    (∀ x, Moves (int7 m n k) DataStep (xAll (m := m) (n := n) (k := k) R x)) := by
+  refine ⟨fun x _ => ?_, fun x hx => ?_, fun x _ w hw => ?_, fun x hx x' hx' hne => ?_, fun x => ?_⟩
+  · obtain ⟨s, φ, _hs, hφ, he⟩ := xAll_eq (m := m) (n := n) (k := k) R hR x
+    rw [he]
+    exact xReg_slice0 hφ _ _
+  · obtain ⟨b, i, c⟩ := x
+    obtain ⟨hb, hi, h0, h1, h2⟩ := hXI _ hx
+    simp only at hb hi h0 h1 h2
+    by_cases hb0 : b = 0
+    · subst hb0
+      rw [xAll_0]
+      refine xReg_moves (φ₁_form i c) i c ⟨0, ω₁, ?_⟩
+      show e1Of ω₁ 0 i (4 * c + 0) ≠ 0
+      rw [add_zero, e1_ω₁ hi (h0 rfl)]
+      norm_num
+    · by_cases hb1 : b = 1
+      · subst hb1
+        rw [xAll_1]
+        obtain ⟨t, j, hj, hR0⟩ := h1 rfl
+        refine xReg_moves (φ₂_form R hR i c) i c ⟨t, ωE i j, ?_⟩
+        show mm k (e1Of (ωE i j) 0) R i (4 * c + t) ≠ 0
+        rw [mm_e1_ωE R hi hj]
+        exact hR0
+      · have hb2 : b = 2 := by omega
+        subst hb2
+        rw [xAll_2]
+        obtain ⟨t, j, hj, hR0⟩ := h2 rfl
+        refine xReg_moves (φ₃_form R hR i c) i c ⟨t, ωE i j, ?_⟩
+        show -(e1Of (ωE i j) 0 i (4 * c + t) + mm k (e1Of (ωE i j) 0) R i (4 * c + t)) ≠ 0
+        rw [mm_e1_ωE R hi hj, e1_ωE]
+        intro h
+        apply hR0
+        by_cases hjt : j = 4 * c + t
+        · subst hjt
+          rw [if_pos ⟨hi, hj, rfl, rfl⟩] at h
+          rw [if_pos rfl]
+          omega
+        · rw [if_neg fun h' => hjt h'.2.2.2.symm] at h
+          rw [if_neg hjt]
+          omega
+  · obtain ⟨s, φ, _hs, hφ, he⟩ := xAll_eq (m := m) (n := n) (k := k) R hR x
+    rw [he]
+    exact xReg_ne_coin hφ _ _ w hw
+  · obtain ⟨b, i, c⟩ := x
+    obtain ⟨b', i', c'⟩ := x'
+    by_cases hic : (i, c) = (i', c')
+    · obtain ⟨rfl, rfl⟩ := Prod.mk.inj hic
+      have hbb : b ≠ b' := fun h => hne (by rw [h])
+      have hb3 := (hXI _ hx).1
+      have hb3' := (hXI _ hx').1
+      have hi := (hXI _ hx).2.1
+      simp only at hb3 hb3' hi
+      have key : (0, i, c) ∈ XI → (1, i, c) ∈ XI →
+          ¬ ∀ g ∈ int7 m n k, xReg 1 (φ₁ (m := m) (n := n) (k := k) i c) i c g = xReg 1 (φ₂ R i c) i c g := by
+        intro h0 h1
+        obtain ⟨t, j, hj, hRj⟩ := h12 i c h0 h1
+        refine xReg_ne_noise (φ₁_form i c) (φ₂_form R hR i c) i c ⟨t, ωE i j, ?_⟩
+        show e1Of (ωE i j) 0 i (4 * c + t) ≠ mm k (e1Of (ωE i j) 0) R i (4 * c + t)
+        rw [mm_e1_ωE R hi hj, e1_ωE]
+        intro h
+        apply hRj
+        rw [← h]
+        by_cases hjt : j = 4 * c + t
+        · subst hjt
+          rw [if_pos ⟨hi, hj, rfl, rfl⟩, if_pos rfl]
+        · rw [if_neg hjt, if_neg fun h' => hjt h'.2.2.2.symm]
+      have hne13 : (1 : ℤ) ≠ -1 := by norm_num
+      rcases (show b = 0 ∨ b = 1 ∨ b = 2 by omega) with rfl | rfl | rfl <;>
+        rcases (show b' = 0 ∨ b' = 1 ∨ b' = 2 by omega) with rfl | rfl | rfl
+      · exact absurd rfl hbb
+      · rw [xAll_0, xAll_1]
+        exact key hx hx'
+      · rw [xAll_0, xAll_2]
+        exact xReg_ne_data (Or.inl rfl) (Or.inr rfl) (φ₁_form i c) (φ₃_form R hR i c) (Or.inr hne13)
+      · rw [xAll_1, xAll_0]
+        exact not_eq_symm (key hx' hx)
+      · exact absurd rfl hbb
+      · rw [xAll_1, xAll_2]
+        exact xReg_ne_data (Or.inl rfl) (Or.inr rfl) (φ₂_form R hR i c) (φ₃_form R hR i c) (Or.inr hne13)
+      · rw [xAll_2, xAll_0]
+        exact xReg_ne_data (Or.inr rfl) (Or.inl rfl) (φ₃_form R hR i c) (φ₁_form i c) (Or.inr hne13.symm)
+      · rw [xAll_2, xAll_1]
+        exact xReg_ne_data (Or.inr rfl) (Or.inl rfl) (φ₃_form R hR i c) (φ₂_form R hR i c) (Or.inr hne13.symm)
+      · exact absurd rfl hbb
+    · obtain ⟨s, φ, hs, hφ, he⟩ := xAll_eq (m := m) (n := n) (k := k) R hR (b, i, c)
+      obtain ⟨s', φ', hs', hφ', he'⟩ := xAll_eq (m := m) (n := n) (k := k) R hR (b', i', c')
+      rw [he, he']
+      exact xReg_ne_data hs hs' hφ hφ' (Or.inl hic)
+  · obtain ⟨s, φ, hs, hφ, he⟩ := xAll_eq (m := m) (n := n) (k := k) R hR x
+    rw [he]
+    exact xReg_moves_data hs hφ _ _
+
+/-- **Candidate 1 and the final word on NCP, concretely** (at the H200's measured table): with the free values the
+constants, the call's input words and its coin words, a well-formed `MH100w` program that outputs, on every int7 input
+and every noise, the non-final words at `P`, the final words of `Ix × Jx`, the committed `X` registers `XI` (all three
+blocks, biased packing; `xAll_props`' conditions on `R`) and the committed block-1 `Y` registers `Yi` (weights not all
+`31` mod 256), costs at least `32·(|P| + |Ix|·|Jx| + |XI| + |Yi|)`. -/
+theorem ncp_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+    (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255) (hR : ∀ l, ∑ j ∈ range k, |R j l| ≤ 1)
+    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
+    (XI : Finset (ℕ × ℕ × ℕ))
+    (hXI : ∀ x ∈ XI, x.1 < 3 ∧ x.2.1 < m ∧
+      (x.1 = 0 → 4 * x.2.2 < k) ∧
+      (x.1 = 1 → ∃ t : Fin 4, ∃ j < k, R j (4 * x.2.2 + t) ≠ 0) ∧
+      (x.1 = 2 → ∃ t : Fin 4, ∃ j < k, (if j = 4 * x.2.2 + t then 1 else 0) + R j (4 * x.2.2 + t) ≠ 0))
+    (h12 : ∀ i c, (0, i, c) ∈ XI → (1, i, c) ∈ XI →
+      ∃ t : Fin 4, ∃ j < k, R j (4 * c + t) ≠ if j = 4 * c + t then 1 else 0)
+    (Yi : Finset (ℕ × ℕ)) (hYi : ∀ y ∈ Yi, y.1 < n ∧ 4 * y.2 < k ∧ ∃ t : Fin 4, byte (B (4 * y.2 + t) y.1) ≠ 31)
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Call m n k → ℚ)) (Pg : List (Op100 (Call m n k)))
+    (hL : ∀ f ∈ L, f ∈ FreeCall (inWords m n k ∪ coinWords m n k))
+    (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeCall (inWords m n k ∪ coinWords m n k)))
+    (hO : OutputsOn fpSem (int7 m n k) Pg L
+      ((P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪
+        (XI.image (xAll R) ∪ Yi.image fun y => yWord B y.1 y.2))) :
+    32 * (P.card + Ix.card * Jx.card + (XI.card + Yi.card)) ≤ cost100 h100Floor Pg := by
+  obtain ⟨hx0, hxN, hxW, hxx, hxD⟩ := xAll_props (m := m) (n := n) (k := k) R hR XI hXI h12
+  have hyy : ∀ y ∈ Yi, ∀ y' ∈ Yi, y ≠ y' →
+      ¬ ∀ g ∈ int7 m n k, yWord (m := m) (n := n) (k := k) B y.1 y.2 g = yWord B y'.1 y'.2 g :=
+    fun y hy y' _ hne => yWord_ne_yWord B (hYi y hy).1 (hYi y hy).2.1 hne
+  have hxy : ∀ t ∈ XI.image (xAll (m := m) (n := n) (k := k) R),
+      ∀ t' ∈ Yi.image (fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2), ¬ ∀ g ∈ int7 m n k, t g = t' g := by
+    intro t ht t' ht'
+    obtain ⟨x, -, rfl⟩ := Finset.mem_image.1 ht
+    obtain ⟨y, -, rfl⟩ := Finset.mem_image.1 ht'
+    exact differ_of_moves (hxD x) (yWord_ignores_data B y.1 y.2)
+  have hcard : (XI.image (xAll (m := m) (n := n) (k := k) R) ∪
+      Yi.image fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2).card = XI.card + Yi.card := by
+    rw [card_union_of_cross hxy, card_image_of_differ XI _ hxx, card_image_of_differ Yi _ hyy]
+  have hd : ∀ w ∈ XI.image (xAll (m := m) (n := n) (k := k) R) ∪
+      Yi.image (fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2),
+      ∀ w' ∈ XI.image (xAll (m := m) (n := n) (k := k) R) ∪
+      Yi.image (fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2), (∀ g ∈ int7 m n k, w g = w' g) → w = w' := by
+    intro w hw w' hw' h
+    rcases Finset.mem_union.1 hw with hw | hw <;> rcases Finset.mem_union.1 hw' with hw' | hw'
+    · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
+      obtain ⟨x', hx', rfl⟩ := Finset.mem_image.1 hw'
+      by_cases hxe : x = x'
+      · rw [hxe]
+      · exact absurd h (hxx x hx x' hx' hxe)
+    · exact absurd h (hxy w hw w' hw')
+    · exact absurd (fun g hg => (h g hg).symm) (hxy w' hw' w hw)
+    · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw
+      obtain ⟨y', hy', rfl⟩ := Finset.mem_image.1 hw'
+      by_cases hye : y = y'
+      · rw [hye]
+      · exact absurd h (hyy y hy y' hy' hye)
+  have h := all_charged hind B hB (coinWords m n k) coinWords_V0 coinWords_ignore P hP Ix Jx hJ0 hJ _
+    (fun w hw => by
+      rcases Finset.mem_union.1 hw with hw | hw
+      · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
+        exact hx0 x hx
+      · obtain ⟨y, -, rfl⟩ := Finset.mem_image.1 hw
+        exact yWord_slice0 B y.1 y.2)
+    (fun w hw => by
+      rcases Finset.mem_union.1 hw with hw | hw
+      · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
+        exact hxN x hx
+      · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw
+        exact yWord_moves B (hYi y hy).1 (hYi y hy).2.1)
+    (fun w hw c hc => by
+      rcases Finset.mem_union.1 hw with hw | hw
+      · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
+        exact hxW x hx c hc
       · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw
         exact yWord_ne_coin B y.1 y.2 (hYi y hy).2.2 c hc)
     hd fpSem L Pg hL hPg hO
