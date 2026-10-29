@@ -108,6 +108,23 @@ Sanity.lean     a satisfiability witness for every named hypothesis, the joint w
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
                                          record, and `G_nontrivial`, its conclusion false at a verifier
                                          that accepts everything
+WitnessToys.lean  the instances the count and period witnesses are stated at, each built by hand at a positive
+                                         instance (the honest certifier at a Program, the reference schedule over two
+                                         execution blocks of two buckets and one advice bit each, the verifier and the
+                                         sender that accept and leak everything, a sampled audit with a possible faulty
+                                         unit, the accepting verifier `tapD`, the rows format of the Python fixture
+                                         `fxQueue`)
+CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeqs`, one under a sampled
+                                         audit, two through the wire) and six ingress. The honest run is
+                                         accepted at the reference schedule (`fxRate`) or at `sampProg`, or has every
+                                         status complete, and each bound is false at the verifier that accepts
+                                         everything (`acceptAll`); the per-execution-block forms at `e₀ = 0`, from
+                                         the empty prefix. In the lock's `witnesses`
+PeriodWitnesses.lean  the monitoring period's two pairs (PeriodLeakAccepted, PooledLeakAccepted), in the
+                                         lock's `witnesses`: no binder over the instance, the sampled verifier's
+                                         code the one named assumption (Assumptions/SampledCode.lean)
+Assumptions/SampledCode.lean  `NetTiming.Assumptions.SampledCodeRuns`: the sampled verifier the service runs
+                                         is a `SamplingDeploy.Code` whose run meets the record's facts
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
@@ -206,7 +223,7 @@ The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarante
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `horizonWrongUnits` and `horizonLeak`). All 25 are under `shape.frozen` as
+last two by `horizonIncorrectBlocks` and `horizonLeak`). All 25 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
