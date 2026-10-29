@@ -14,28 +14,40 @@ A design is one choice per axis:
   shifts, more coins), `nib` (a 4-bit lane), `tele` (telescoping: lane t is x_t - x_{t-1}, so the
   final word's row-common noise is zero). Gap rotating over the four bytes (a data layout premise): `rgapB` for B in
   1, 2, 4, 8 (LOP3 with a mask, values 2^b, one shift every 4B steps), `lop1` (no shifts, four bits a coin word).
-  Dither only: `xor1`. Or the step's whole 4-lane register is a raw coin word: `raw1` (fresh every step), `raw4` (one
-  word for four steps, a byte a step), `rawS` (one word for the call).
+  `byte1`: one coin byte a step, PRMT'd into lane 3 from a coin word that serves four steps. Dither only: `xor1`.
+  Or the step's whole 4-lane register is a raw coin word: `raw1` (fresh every step), `raw4` (one word for four steps,
+  a byte a step), `rawS` (one word for the call).
 - code: what tells the n columns apart at step 1. `b13s4` (ssn_1l's shifted base 13), `b13b4`, `b13b5` (balanced),
   `svL` (the n shortest nonzero vectors of Z^L, a public table, L up to 28 lanes), `rawc` (a raw coin word's 4 bytes
   against sv4's table), `initc` (the code added as each accumulator's initial value, an IDP4A an output), `colbits`
   (a row bit times a fresh column bit), `none`.
 - denoise: `served` (O' = A·Bᵀ + noise), `epi_row` (the row-common part subtracted in the dequant epilogue: the
   row-scale FMUL becomes an FFMA with a per-row constant, premise `epilogue-ffma`), `epi_full` (also the code part,
-  an IDP4A and an add an output), `cancel` (negated lanes in a last step, so the final word is exact).
+  an IDP4A and an add an output), `cancel` (negated lanes in a last step, so the final word is exact), `mirror` (a lane
+  at every step; the second half replays the first half's coins against negated weights, so the lanes' noise sums to
+  zero and only the step-1 code is served; with an odd lane count one step carries a second lane).
 - format: `s8` (s8 × s8 at ±127), `s8h126`, `odd` (odd int8 weights), `int7`, `u8s8`.
 - c1: whether the formed operand registers are committed. model: M0 or M1 (only `cancel` reads it).
 - tag: `tag` puts four public owner tags T(o) (balanced base-13 digits of the owner's index) in step 1 against
   coin-drawn weights G in [-3, 3] on the other side: in B per window for side A (no cost a call), in A per call for
-  side B (two writes and a coin word a row). They stay served. nz: the lane is 1 + 2^(b+1)·x, never zero (a static 1
-  in the noised side's layout, `NZ_INJECTS` only).
+  side B (two writes and a coin word a row). They stay served. nz: a static bit in the noised side's layout beside the
+  coin bit keeps the lane nonzero (`NZ_INJECTS` only): `lo` 1 + 2^(b+1)·x, odd, so a sign folds into the same LOP3;
+  `hi` 2^(b+1) + 2^b·x, at the plain lane's variance. weights: the public weight against the noise lane, per column
+  and step, in B's layout: `ones`, `sign` (±1 drawn from the window's coins after B is committed; B's own lane for
+  side B, which needs `lo`) or `wide` (nonzero int8 drawn the same way, side A); window weights cost nothing a call.
 
 Three readings of the charging model are scored. Functional (the calculator's): a word is charged when it is pairwise
 distinct from every other word and from every free value as a function on the salt grid. Salt-adaptive, natural data
 (`dup_adaptive`): a prover that reads the coins before it computes also saves each word or row vector equal to another
 at those coins, α · (zero dot share · μ₀ + identical owner share · κ), μ₀ the chance a step's noise increment is zero
 and κ `a1_collapse` at the identical owners' group (noise_data.py's shares). Salt-adaptive, chosen data
-(`dup_chosen`, N-RED's A1 and A2): α · max(κ over all owners identical, μ₀ for zero tails).
+(`dup_chosen`), with accumulators regrouped for free: α · max(κ over all owners identical (N-RED's A1), p), where p
+is `cancel_share`, the mean over steps of the largest point mass of a step's increment: a data dot fixed before the
+call's coins at minus that value leaves the word unchanged on p of the entries (N-RED's A2 and A2c, N-LEAN's §2b).
+p is the bound over the call's coins alone, which holds however the data reads the window's weights; `p_fixed`, the
+mass with the weights drawn too, is reported beside it. The closed classes also read `tile_saving`: owners identical
+with zero data, the words a prover saves by copying a TILE-word tile equal to another (one address write a tile),
+from any owner and step, or skipping a zero word, by Monte Carlo.
 
 `symbolic_check` decides data-independent distinctness exactly on a small instance: every committed word (and C1's
 formed registers) is a multilinear polynomial in the coin bits with coefficients polynomial in the data, and a pair is
@@ -47,11 +59,14 @@ Output: a JSON report (`--json`), the frontier as a text table (`--table`); `--d
 from __future__ import annotations
 
 import argparse
+import contextlib
 import itertools
 import json
 import math
+import multiprocessing
 import os
 import sys
+import zlib
 from dataclasses import dataclass, replace
 from functools import lru_cache
 
@@ -68,10 +83,12 @@ FIELD = 127 * 127
 SIDES = ("A", "B", "AorB", "A+B", "AB", "dither", "init", "kord", "scale", "sparsity", "pad")
 LANE_SIDES = ("A", "B", "AorB", "A+B", "AB", "dither")
 INJECTS = ("rot1", "rot2", "rot4", "rot8", "prmt", "prmt1", "prmt2", "prmt4", "nib", "tele", "rgap1", "rgap2", "rgap4",
-           "rgap8", "lop1", "xor1", "raw1", "raw4", "rawS")
+           "rgap8", "lop1", "xor1", "byte1", "raw1", "raw4", "rawS")
 CODES = ("b13s4", "b13b4", "b13b5", "sv3", "sv4", "sv5", "sv6", "sv8", "sv12", "sv16", "sv28", "rawc", "initc",
          "colbits", "none")
-DENOISES = ("served", "epi_row", "epi_full", "cancel")
+DENOISES = ("served", "epi_row", "epi_full", "cancel", "mirror")
+WEIGHTS = ("ones", "sign", "wide")
+WIDE = np.array([v for v in range(-127, 128) if v])
 FORMATS = ("s8", "s8h126", "odd", "int7", "u8s8")
 RAW = {"raw1": 1, "raw4": 4, "rawS": None}
 #: bit-lane injections: (bits used a byte before a shift, slots a version, versions a word, value of slot b, gap fixed)
@@ -119,27 +136,33 @@ def _balanced_digits(z: np.ndarray, lanes: int) -> np.ndarray:
     return np.stack(out)
 
 
+def _shell(lanes: int, w: int) -> list[tuple[int, ...]]:
+    """Every vector of Z^lanes with squared norm w."""
+    out: list = []
+
+    def rec(prefix: list, left: int, rem: int) -> None:
+        if rem == 0:
+            if left == 0:
+                out.append(tuple(prefix))
+            return
+        b = math.isqrt(left)
+        for x in range(-b, b + 1):
+            prefix.append(x)
+            rec(prefix, left - x * x, rem - 1)
+            prefix.pop()
+
+    rec([], w, lanes)
+    return out
+
+
+@lru_cache(maxsize=None)
 def _sv_explicit(lanes: int, n: int) -> np.ndarray:
-    """The n shortest nonzero vectors of Z^lanes, by norm then lexicographically (small n: the symbolic instance)."""
-    out, r = [], 1
-    while True:
-        grid = itertools.product(range(-r, r + 1), repeat=lanes) if (2 * r + 1) ** lanes <= 200_000 else None
-        if grid is None:
-            vecs = []
-            for w in range(1, 4):
-                for supp in itertools.combinations(range(lanes), w):
-                    for signs in itertools.product((-1, 1), repeat=w):
-                        v = [0] * lanes
-                        for e, sg in zip(supp, signs):
-                            v[e] = sg
-                        vecs.append(tuple(v))
-        else:
-            vecs = [v for v in grid if any(v)]
-        vecs.sort(key=lambda v: (sum(x * x for x in v), v))
-        if len(vecs) >= n:
-            out = vecs[:n]
-            return np.array(out, dtype=np.int64).T
-        r += 1
+    """The n shortest nonzero vectors of Z^lanes, by norm then lexicographically."""
+    out, w = [], 1
+    while len(out) < n:
+        out += sorted(_shell(lanes, w))
+        w += 1
+    return np.array(out[:n], dtype=np.int64).T
 
 
 @lru_cache(maxsize=None)
@@ -246,7 +269,6 @@ class Inject:
     lev_steps: int
     epi: int
     rmax: float
-    walk: float
     layout: bool
 
 
@@ -259,25 +281,35 @@ def _slot_vals(inj: str, count: int) -> list[float]:
     return [float(2 ** (t % b_bits)) for t in range(count)]
 
 
-def _walk(var_step: float, steps: int, mu: float) -> float:
-    """Mean over steps of the chance two independent owners' cumulative noise agree (a local-limit estimate)."""
-    if steps <= 0:
-        return 1.0
-    t = np.arange(1, steps + 1)
-    return float(np.minimum(mu, 1 / np.sqrt(2 * math.pi * 2 * var_step * t)).mean())
-
-
-def lane_steps(inj: str, s: int, code: str) -> int:
+def lane_steps(inj: str, s: int, code: str, dn: str = "served") -> int:
     """Steps carrying a noise lane: 2..S, and step 1 too when there is no code (and for tele, whose path x_1 .. x_{S-1},
-    0 must start away from the code's own noise)."""
-    return max(0, s - 1) + (1 if code == "none" or inj == "tele" else 0)
+    0 must start away from the code's own noise, and for mirror, so that no step's increment is the code's alone)."""
+    return max(0, s - 1) + (1 if code == "none" or inj == "tele" or dn == "mirror" else 0)
+
+
+def lane_plan(count: int, mirror: bool) -> list[list[tuple[int, int]]]:
+    """For each lane step, the (coin lane, sign) pairs it carries: lane u alone, or for mirror the first half's lanes
+    replayed negated in order, the unpaired middle lane negated in the last step."""
+    if not mirror:
+        return [[(u, 1)] for u in range(count)]
+    h = math.ceil(count / 2)
+    plan = [[(u, 1)] for u in range(h)] + [[(u, -1)] for u in range(count - h)]
+    if count % 2:
+        plan[-1].append((h - 1, -1))
+    return plan
 
 
 @lru_cache(maxsize=None)
-def inject_cost(inj: str, s: int, code: str, nz: bool = False) -> Inject:
+def inject_cost(inj: str, s: int, code: str, nz: str = "none", dn: str = "served") -> Inject:
     """Writes, coin words and served row-common noise of the noise lanes for one owner (a row; a column for side B)."""
-    steps = lane_steps(inj, s, code)
+    steps = lane_steps(inj, s, code, dn)
+    mirror = dn == "mirror"
+    coined = math.ceil(steps / 2) if mirror else steps
     code_words = 0 if code == "none" else 1
+    if inj == "byte1":
+        words = code_words + math.ceil(coined / 4)
+        return Inject(steps + (steps % 2 if mirror else 0), coined, words, coined * BYTE_VAR, 1 / 256, 1,
+                      2 * math.ceil(coined / 4), 128.0 * steps, False)
     if inj in RAW:
         reuse = RAW[inj] or max(1, steps)
         raws = math.ceil(steps / reuse) if steps else 0
@@ -288,36 +320,36 @@ def inject_cost(inj: str, s: int, code: str, nz: bool = False) -> Inject:
         else:
             var, lev = steps * BYTE_VAR, 1
         rmax = 128.0 * steps
-        return Inject(0, 0, code_words + raws, var, 1 / 256, lev, 2 * raws, rmax, _walk(BYTE_VAR, steps, 1 / 256),
-                      False)
+        return Inject(0, 0, code_words + raws, var, 1 / 256, lev, 2 * raws, rmax, False)
     b_bits, per_version, versions_word, val, fixed = BITS[inj]
-    if inj == "rot1" and code in ("b13s4", "b13b4"):
+    if inj == "rot1" and code in ("b13s4", "b13b4") and not mirror:
         writes = ns.ssn_1l_forming_writes(s) - 1
         words = ns.ssn_1l_words(s)
     else:
         code_bits = {"none": 0, "rawc": 0, "initc": 4}.get(code, code_lanes(code))
         width = 4 if val == "nib" else 1
-        slots = max(0, steps - (1 if inj == "tele" and steps else 0))
+        slots = max(0, coined - (1 if inj == "tele" and coined else 0))
         versions = math.ceil(slots / per_version) if slots else 0
         lane_words = math.ceil(versions / versions_word) if versions else 0
         words = max(lane_words, math.ceil((code_bits + slots * width) / 32)) + (code == "rawc")
-        writes = steps + max(0, versions - lane_words) + (2 * max(0, steps - 1) if inj == "tele" else 0)
-    vals = [(2 * v if nz else v) for v in _slot_vals(inj, steps)]
+        writes = (steps + (2 if mirror else 1) * max(0, versions - lane_words)
+                  + (2 * max(0, steps - 1) if inj == "tele" else 0) + (steps % 2 if mirror else 0))
+    vals = _slot_vals(inj, coined)
     if val == "nib":
         var, mu, epi = steps * NIB_VAR, 1 / 16, 3 * words
     else:
-        var, mu = sum(v * v for v in vals) / 4, (0.0 if nz else 0.5)
+        var = sum(v * v for v in vals) / 4 * (4 if nz == "lo" else 1)
+        mu = 0.0 if nz != "none" else 0.5
         epi = 2 * words if b_bits in (1, 8) else (3 * (8 // b_bits) + 1) * words
-    var_step = var / steps if steps else 0.25
     if inj == "tele":
-        return Inject(writes, steps, words, 0.0, 0.5, 2, 0, 1.0, _walk(0.5, steps, 0.5), not fixed)
-    return Inject(writes, steps, words, var, mu, 1, epi, sum(vals) + nz * steps, _walk(var_step, steps, 0.5),
-                  not fixed)
+        return Inject(writes, steps, words, 0.0, 0.5, 2, 0, 1.0, not fixed)
+    rmax = {"none": sum(vals), "lo": 2 * sum(vals) + steps, "hi": 3 * sum(vals)}[nz]
+    return Inject(writes, coined, words, var, mu, 1, epi, rmax, not fixed)
 
 
-#: LOP3 injections with a spare low bit in the lane: `nz` keeps a static 1 there in A's layout and moves the coin bit
-#: up one, so a lane is 1 + 2^(b+1)·x, never zero
+#: LOP3 injections with a spare bit beside the coin bit, which `nz` sets in the noised side's layout
 NZ_INJECTS = ("rot1", "rot2", "rot4", "rgap1", "rgap2", "rgap4", "lop1")
+NZ_FORMS = ("none", "lo", "hi")
 TAG_LANES = 4
 
 
@@ -352,19 +384,63 @@ def _occupied(p: np.ndarray, weight: float, q: float, m: int) -> float:
     return float((weight * q * -np.expm1(m * np.log1p(-np.minimum(p / q, 1 - 1e-16)))).sum())
 
 
+def _coin_states(inj: str) -> float:
+    return 256.0 if inj in RAW or inj == "byte1" else (16.0 if inj == "nib" else 2.0)
+
+
+def _active(plan: list[list[tuple[int, int]]]) -> list[list[int]]:
+    """The coin lanes whose noise is still in the accumulator after each lane step."""
+    coef: dict = {}
+    out = []
+    for lanes in plan:
+        for c, sg in lanes:
+            coef[c] = coef.get(c, 0) + sg
+        out.append(sorted(c for c, v in coef.items() if v))
+    return out
+
+
+def _gauss_occupied(var: float, q: float, m: int) -> float:
+    if not var:
+        return _occupied(np.ones(1), 1.0, q, m)
+    sd = math.sqrt(var)
+    step = max(1.0, sd / 400)
+    x = np.arange(-8 * sd, 8 * sd + step, step)
+    return _occupied(np.exp(-x * x / (2 * var)) / math.sqrt(2 * math.pi * var), step, q, m)
+
+
 @lru_cache(maxsize=None)
-def a1_collapse(inj: str, s: int, code: str, m: int, side: str = "A") -> float:
+def a1_collapse(inj: str, s: int, code: str, m: int, history: bool = False, dn: str = "served") -> float:
     """N-RED's A1 at the vector level: m rows with equal data, the mean over steps of the share of row vectors (a row's
     words at one step) that equal another row's at that step, which an adaptive prover copies instead of computing.
-    A row's vector at step t is fixed by its code coins and its owner-common cumulative noise D_t; AB's and dither's
-    vary per column, so there the state is the row's whole coin history."""
+    A row's vector at step t is fixed by its code coins and its owner-common cumulative noise D_t; with `history` (AB,
+    dither, window weights) the noise varies per column, so the state is the row's coin history."""
     if m < 2:
         return 0.0
-    q, count = _code_states(code), lane_steps(inj, s, code)
+    q, count = _code_states(code), lane_steps(inj, s, code, dn)
     start, out = s - count, []
-    if side in ("AB", "dither"):
+    cap = 60 / math.log2(_coin_states(inj))
+    if dn == "mirror":
+        active = _active(lane_plan(count, True))
+        vals = _slot_vals(inj, len(active)) if inj in BITS else []
         for t in range(s):
-            states = q * 2.0 ** min(60, max(0, t - start + 1))
+            lanes = active[t - start] if t >= start else []
+            if history:
+                states = q * _coin_states(inj) ** min(cap, len(lanes))
+                out.append(1 - states * -math.expm1(m * math.log1p(-1 / states)) / m)
+                continue
+            if inj == "byte1":
+                dist = _gauss_occupied(len(lanes) * BYTE_VAR, q, m)
+            else:
+                pmf = np.ones(1)
+                for c in lanes:
+                    pmf = (np.convolve(pmf, np.full(16, 1 / 16)) if inj == "nib"
+                           else np.convolve(pmf, np.r_[0.5, np.zeros(int(vals[c]) - 1), 0.5]))
+                dist = _occupied(pmf[pmf > 0], 1.0, q, m)
+            out.append(1 - min(dist, m) / m)
+        return float(np.mean(out))
+    if history:
+        for t in range(s):
+            states = q * _coin_states(inj) ** min(cap, max(0, t - start + 1))
             out.append(1 - states * -math.expm1(m * math.log1p(-1 / states)) / m)
         return float(np.mean(out))
     pmf, var = np.ones(1), 0.0
@@ -372,7 +448,9 @@ def a1_collapse(inj: str, s: int, code: str, m: int, side: str = "A") -> float:
     for t in range(s):
         lane = t - start
         if lane >= 0:
-            if inj in RAW:
+            if inj == "byte1":
+                var = (lane + 1) * BYTE_VAR
+            elif inj in RAW:
                 var = (sum(c * c for c in (len(range(e, lane + 1, 4)) for e in range(4))) if inj == "rawS"
                        else lane + 1) * BYTE_VAR
             elif inj == "tele":
@@ -385,15 +463,204 @@ def a1_collapse(inj: str, s: int, code: str, m: int, side: str = "A") -> float:
                 nxt[:len(pmf)] += pmf / 2
                 nxt[v:] += pmf / 2
                 pmf = nxt
-        if var:
-            sd = math.sqrt(var)
-            step = max(1.0, sd / 400)
-            x = np.arange(-8 * sd, 8 * sd + step, step)
-            dist = _occupied(np.exp(-x * x / (2 * var)) / math.sqrt(2 * math.pi * var), step, q, m)
-        else:
-            dist = _occupied(pmf[pmf > 0], 1.0, q, m)
+        dist = _gauss_occupied(var, q, m) if var else _occupied(pmf[pmf > 0], 1.0, q, m)
         out.append(1 - min(dist, m) / m)
     return float(np.mean(out))
+
+
+TILE = 4
+TILE_POSITIONS = 8
+
+
+def _lane_draws(inj: str, count: int, owners: int, nz: str, rng: np.random.Generator) -> np.ndarray:
+    """count × owners lane values drawn as `_lane_values` builds them."""
+    if count <= 0:
+        return np.zeros((0, owners), dtype=np.int64)
+    if inj == "byte1":
+        return rng.integers(-128, 128, (count, owners))
+    if inj in RAW:
+        reuse, t = RAW[inj] or count, np.arange(count)
+        words = rng.integers(0, 2 ** 32, (math.ceil(count / reuse), owners), dtype=np.int64)
+        byte = (words[t // reuse] >> (8 * (t % 4))[:, None]) & 255
+        return np.where(byte >= 128, byte - 256, byte)
+    if inj == "nib":
+        return rng.integers(0, 16, (count, owners))
+    x = rng.integers(0, 2, (count, owners))
+    if inj == "tele":
+        if count == 1:
+            return x
+        out = np.empty((count, owners), dtype=np.int64)
+        out[0], out[1:-1], out[-1] = -x[0], x[:count - 2] - x[1:count - 1], x[count - 2]
+        return out
+    v = np.array(_slot_vals(inj, count), dtype=np.int64)[:, None]
+    if nz == "lo":
+        return 1 + 2 * v * x
+    if nz == "hi":
+        return 2 * v + v * x
+    return (-1 if BITS[inj][3] == -1 else 1) * v * x
+
+
+def _code_part(code: str, owners: int, cols: np.ndarray, others: int, rng: np.random.Generator) -> np.ndarray:
+    """owners × len(cols) step-1 code noise: each owner's code coins against the code's public weights."""
+    if code == "none":
+        return np.zeros((owners, len(cols)), dtype=np.int64)
+    if code == "colbits":
+        return rng.integers(0, 2, (owners, 1)) * rng.integers(0, 2, (1, len(cols)))
+    cm = code_matrix(code, others)[:, cols].astype(np.int64)
+    lo, hi = (-128, 128) if code == "rawc" else (0, 2)
+    return rng.integers(lo, hi, (owners, cm.shape[0])) @ cm
+
+
+def _weight_draws(weights: str, count: int, cols: int, rng: np.random.Generator) -> np.ndarray:
+    if weights == "sign":
+        return rng.choice(np.array([-1, 1]), (count, cols))
+    if weights == "wide":
+        return rng.choice(WIDE, (count, cols))
+    return np.ones((count, cols), dtype=np.int64)
+
+
+@lru_cache(maxsize=None)
+def tile_saving(side: str, inj: str, s: int, code: str, owners: int, others: int, nz: str = "none",
+                tag: str = "none", weights: str = "ones", dn: str = "served") -> float:
+    """N-RED's tile-level A1 with zero tails, by Monte Carlo: `owners` owners with equal, zero data, at TILE_POSITIONS
+    tiles of TILE consecutive others; the share of all (owner, step) words a prover saves by copying a tile equal to
+    one already written (one address write for TILE words) or by leaving a zero word unwritten."""
+    rng = np.random.default_rng(zlib.crc32(repr((side, inj, s, code, owners, others, nz, tag, weights, dn)).encode()))
+    count = lane_steps(inj, s, code, dn)
+    start = s - count
+    plan = lane_plan(count, dn == "mirror")
+    coined = 1 + max((c for lanes in plan for c, _ in lanes), default=-1)
+    mult = rng.integers(1, 2 ** 63, TILE, dtype=np.uint64) | np.uint64(1)
+    saved = total = 0.0
+    for pos in rng.choice(others // TILE, size=min(TILE_POSITIONS, others // TILE), replace=False):
+        cols = np.arange(pos * TILE, (pos + 1) * TILE)
+        cur = _code_part(code, owners, cols, others, rng)
+        if tag != "none":
+            cur = cur + owner_tags(owners).T @ rng.integers(-3, 4, (TAG_LANES, TILE))
+        lanes = _lane_draws(inj, coined, owners, nz, rng)
+        w = _lane_draws(inj, coined, TILE, nz, rng) if side == "AB" else _weight_draws(weights, coined, TILE, rng)
+        keys, zeros = [], []
+        for t in range(s):
+            if t >= start:
+                for c, sg in plan[t - start]:
+                    cur = cur + sg * lanes[c][:, None] * w[c][None, :]
+            keys.append((cur.astype(np.uint64) * mult).sum(1))
+            zeros.append((cur == 0).sum(1))
+        key, zero = np.concatenate(keys), np.concatenate(zeros)
+        _, first, cnt = np.unique(key, return_index=True, return_counts=True)
+        zu = zero[first]
+        saved += float(np.where(zu == TILE, cnt * TILE, zu + (cnt - 1) * (TILE - 1)).sum())
+        total += key.size * TILE
+    return saved / total if total else 0.0
+
+
+Pmf = tuple  # ((value, mass), ...)
+
+
+def _pmf(values, masses=None) -> Pmf:
+    v = np.asarray(values, dtype=np.int64).ravel()
+    w = np.full(v.size, 1 / v.size) if masses is None else np.asarray(masses, dtype=float).ravel()
+    u, inv = np.unique(v, return_inverse=True)
+    return tuple(zip(u.tolist(), np.bincount(inv, weights=w).tolist()))
+
+
+def _conv(a: Pmf, b: Pmf) -> Pmf:
+    va, ma = np.array([x for x, _ in a]), np.array([y for _, y in a])
+    vb, mb = np.array([x for x, _ in b]), np.array([y for _, y in b])
+    return _pmf(va[:, None] + vb[None, :], ma[:, None] * mb[None, :])
+
+
+def _times(a: Pmf, b: Pmf) -> Pmf:
+    va, ma = np.array([x for x, _ in a]), np.array([y for _, y in a])
+    vb, mb = np.array([x for x, _ in b]), np.array([y for _, y in b])
+    return _pmf(va[:, None] * vb[None, :], ma[:, None] * mb[None, :])
+
+
+def _top(a: Pmf) -> float:
+    return max(y for _, y in a)
+
+
+def lane_pmfs(inj: str, count: int, nz: str = "none") -> list[Pmf]:
+    """Each coin lane's value over the call's coins (tele: the per-step difference, its middle steps' form)."""
+    if inj in RAW or inj == "byte1":
+        return [_pmf(range(-128, 128))] * count
+    if inj == "nib":
+        return [_pmf(range(16))] * count
+    if inj == "tele":
+        return [_pmf([-1, 0, 0, 1])] * count
+    if inj == "xor1":
+        return [_pmf([0, 1])] * count
+    sign = -1 if BITS[inj][3] == -1 else 1
+    out = []
+    for v in _slot_vals(inj, count):
+        v = int(v)
+        out.append(_pmf({"none": [0, sign * v], "lo": [1, 1 + 2 * v], "hi": [2 * v, 3 * v]}[nz]))
+    return out
+
+
+WEIGHT_PMF = {"ones": _pmf([1]), "sign": _pmf([-1, 1]), "wide": _pmf(WIDE)}
+CANCEL_COLUMNS = 64
+
+
+@lru_cache(maxsize=None)
+def _code_top(code: str, others: int) -> float:
+    """The step-1 code part's largest point mass, averaged over CANCEL_COLUMNS evenly spread columns."""
+    if code in ("none", "initc"):
+        return 1.0
+    if code == "colbits":
+        return 0.75
+    cols = np.unique(np.linspace(0, others - 1, min(others, CANCEL_COLUMNS)).astype(int))
+    cm = code_matrix(code, others)[:, cols].astype(np.int64)
+    coin = _pmf(range(-128, 128)) if code == "rawc" else _pmf([0, 1])
+    tops = []
+    for j in range(cm.shape[1]):
+        acc: Pmf = ((0, 1.0),)
+        for c in cm[:, j]:
+            if c:
+                acc = _conv(acc, _times(coin, ((int(c), 1.0),)))
+        tops.append(_top(acc))
+    return float(np.mean(tops))
+
+
+@lru_cache(maxsize=None)
+def _term_tops(side: str, lane: Pmf, sg: int, weights: str) -> tuple[float, float]:
+    """(fixed, bound) largest masses of one lane's increment: a row lane times a column lane (AB), plus one (A+B), or
+    times its window weight."""
+    if side == "AB":
+        t = _top(_times(lane, lane))
+        return t, t
+    if side == "A+B":
+        t = _top(_conv(lane, lane))
+        return t, t
+    wt = WEIGHT_PMF[weights]
+    return _top(_times(lane, _pmf([sg * v for v, _ in wt], [y for _, y in wt]))), _top(lane)
+
+
+@lru_cache(maxsize=None)
+def cancel_share(side: str, inj: str, s: int, code: str, others: int, nz: str = "none", weights: str = "ones",
+                 dn: str = "served") -> tuple[float, float]:
+    """N-LEAN's §2b: the mean over the S steps of the largest point mass of one entry's step increment, which a data
+    dot fixed before the call's coins cancels (the word repeats) on that share of the entries. Returns (fixed, bound):
+    `fixed` with the window's weights drawn too, `bound` over the call's coins alone, for any known nonzero weight.
+    A step with two lanes, or step 1's code beside a lane, takes the smaller lane's mass: P(X + Y = c) is at most
+    either's largest mass for independent X, Y."""
+    if side == "dither":
+        return 0.5, 0.5
+    count = lane_steps(inj, s, code, dn)
+    start = s - count
+    plan = lane_plan(count, dn == "mirror")
+    coined = 1 + max((c for lanes in plan for c, _ in lanes), default=-1)
+    lanes = lane_pmfs(inj, coined, nz)
+    fixed, bound = [], []
+    for t in range(s):
+        tops = [_term_tops(side, lanes[c], sg, weights) for c, sg in (plan[t - start] if t >= start else [])]
+        ft, b = min([x for x, _ in tops], default=1.0), min([y for _, y in tops], default=1.0)
+        if t == 0:
+            ct = _code_top(code, others)
+            ft, b = min(ft, ct), min(b, ct)
+        fixed.append(ft)
+        bound.append(b)
+    return float(np.mean(fixed)), float(np.mean(bound))
 
 
 # ---------------------------------------------------------------- compiled design
@@ -408,12 +675,14 @@ class Point:
     c1: bool
     model: str
     tag: str = "none"
-    nz: bool = False
+    nz: str = "none"
+    weights: str = "ones"
 
     @property
     def name(self) -> str:
         base = f"{self.side}/{self.inject}/{self.code}/{self.denoise}/{self.fmt}/{'c1' if self.c1 else 'noc1'}/{self.model}"
-        return base + ("+tag" if self.tag != "none" else "") + ("+nz" if self.nz else "")
+        return (base + ("+tag" if self.tag != "none" else "") + {"none": "", "lo": "+nz", "hi": "+nzh"}[self.nz]
+                + {"ones": "", "sign": "+ws", "wide": "+wv"}[self.weights])
 
 
 def premises(p: Point) -> list[str]:
@@ -432,29 +701,41 @@ def kernel_assumptions(p: Point) -> list[str]:
         out.append("gap-layout")
     if p.side in ("B", "A+B", "AB") or p.code == "colbits":
         out.append("b-forming")
+    if p.weights != "ones":
+        out.append("b-window")
     return out
 
 
 @lru_cache(maxsize=None)
-def _side_terms(side: str, inj: str, code: str, dn: str, c1: bool, m: int, n: int, k: int, nz: bool = False,
-                tag: str = "none") -> dict:
+def _side_terms(side: str, inj: str, code: str, dn: str, c1: bool, m: int, n: int, k: int, nz: str = "none",
+                tag: str = "none", weights: str = "ones") -> dict:
     """A design's terms before its format's sign fix and its model's final word."""
     if inj == "xor1" and side != "dither" or side == "dither" and inj != "xor1":
         return {"invalid": "xor1 is dither's injection, and dither's only"}
-    if side in ("AB", "A+B") and inj in RAW:
-        return {"invalid": "a raw register's bytes are 4 lanes, not one lane a side"}
-    if nz and (inj not in NZ_INJECTS or side == "dither"):
-        return {"invalid": "nz needs a LOP3 lane with a spare low bit"}
+    if side in ("AB", "A+B") and (inj in RAW or inj == "byte1"):
+        return {"invalid": "a byte lane a side is AB's or A+B's only with a byte weight a call; not in the grammar"}
+    if nz != "none" and (inj not in NZ_INJECTS or side == "dither"):
+        return {"invalid": "nz needs a LOP3 lane with a spare bit"}
     if tag != "none" and side not in ("A", "B"):
         return {"invalid": "owner tags sit in the noised side's step 1, against coin-drawn weights on the other"}
+    if weights != "ones" and (side not in ("A", "B") or nz == "none" and inj != "byte1"):
+        return {"invalid": "window weights scale one noise lane a side in B's layout, and move only a lane that is "
+                           "never zero"}
+    if side == "B" and (weights == "wide" or weights == "sign" and nz != "lo"):
+        return {"invalid": "side B's weight sits in its own lane: a sign folds into one LOP3 only on an odd (nz lo) "
+                           "lane, and a wide weight needs a multiply"}
+    if weights != "ones" and dn in ("epi_row", "epi_full", "cancel"):
+        return {"invalid": "window weights make the lanes' noise rank S, which only mirror removes"}
+    if dn == "mirror" and (side not in ("A", "B") or inj in RAW or inj == "tele" or code in ("none", "initc")):
+        return {"invalid": "mirror replays one lane a side against negated weights after a served step-1 code"}
     own, other = (n, m) if side == "B" else (m, n)
     if other > code_capacity(code):
         return {"invalid": f"code {code} holds {code_capacity(code)} < {other}"}
     if tag != "none" and own > TAG_MAX:
         return {"invalid": f"tags hold {TAG_MAX} owners"}
     lanes = 4 if inj in RAW else (0 if side == "dither" else (2 if side == "A+B" else 1))
-    s = steps_for(k, code, lanes, inj, TAG_LANES if tag != "none" else 0)
-    cost = inject_cost(inj, s, code, nz)
+    s = steps_for(k, code, lanes, inj, (TAG_LANES if tag != "none" else 0) + (lanes if dn == "mirror" else 0))
+    cost = inject_cost(inj, s, code, nz, "mirror" if dn == "mirror" else "served")
     cw, cformed = code_writes(code)
     alpha = H32 * s / k
     per_owner = cost.writes + cw
@@ -485,10 +766,11 @@ def _side_terms(side: str, inj: str, code: str, dn: str, c1: bool, m: int, n: in
     elif side == "dither":
         row_var = (s - 1) * ns.WEIGHT_SIGMA_INT8 ** 2 / 4
     else:
-        row_var = cost.var
+        row_var = cost.var * float((WIDE.astype(float) ** 2).mean() if weights == "wide" else 1.0)
     if tag != "none":
         var_code = var_code + tag_norm2(own) * 4.0
-    mu_step = {"AB": 0.0 if nz else 0.75, "A+B": cost.mu ** 2}.get(side, cost.mu)
+    mu_step = {"AB": 0.0 if nz != "none" else 0.75, "A+B": cost.mu ** 2}.get(side, cost.mu)
+    p_fixed, p_bound = cancel_share(side, inj, s, code, other, nz, weights, dn)
     denoise, final, extra_lanes = 0.0, 0.0, 0
     lcode = code_lanes(code) if code not in ("initc",) else 4
     if dn == "epi_row":
@@ -520,29 +802,37 @@ def _side_terms(side: str, inj: str, code: str, dn: str, c1: bool, m: int, n: in
             extra_lanes += 3
         denoise = (2 + cost.epi + 2 * math.ceil(extra_lanes / 4) + 1) * H32 / (other * k)
         row_var, var_code = 0.0, var_code * 0
+    elif dn == "mirror":
+        extra_lanes = lane_steps(inj, s, code, dn) % 2
+        row_var = 0.0
     alpha_tot = alpha + extra_lanes / k
     gap = max(0.0, form + form_other - forced) + denoise
     coins = coin_bits / 8 * ns.COIN_PRICED_BYTE / (m * n * k)
     sh = _shares(m)
+    history = side in ("AB", "dither") or weights != "ones"
+    adn = "mirror" if dn == "mirror" else "served"
     if tag != "none":
         kappa_chosen = 0.0
     else:
-        kappa_chosen = a1_collapse(inj, s, code, own, side)
+        kappa_chosen = a1_collapse(inj, s, code, own, history, adn)
     group = max(2, round(sh["id_rows"] * m))
-    kappa_nat = 0.0 if side == "B" or tag != "none" else a1_collapse(inj, s, code, group, side)
+    kappa_nat = 0.0 if side == "B" or tag != "none" else a1_collapse(inj, s, code, group, history, adn)
     dup_nat = sh["zero_dot"] * mu_step + sh["id_rows"] * kappa_nat
     if side == "B":
-        dup_nat += sh["id_cols"] * a1_collapse(inj, s, code, max(2, round(sh["id_cols"] * n)), side)
-    dup_chosen = max(kappa_chosen, mu_step)
+        dup_nat += sh["id_cols"] * a1_collapse(inj, s, code, max(2, round(sh["id_cols"] * n)), history, adn)
+    dup_chosen = max(kappa_chosen, p_bound)
     std = float(np.sqrt(var_code + row_var).mean())
     qerr = math.sqrt(k / 12) * ns.WEIGHT_SIGMA_INT8
     return {"alpha": alpha_tot, "s": s, "forming": form + form_other, "forced": forced, "denoise": denoise,
             "final_word": 0.0, "sign_fix": 0.0, "gap": gap, "coins": coins, "dup_adaptive": alpha_tot * dup_nat,
-            "dup_chosen": alpha_tot * dup_chosen, "a1_chosen": alpha_tot * kappa_chosen, "a2_chosen": alpha_tot * mu_step,
-            "std": std, "row_std": math.sqrt(row_var), "code_std": float(np.sqrt(var_code).mean()),
-            "t3_ratio": std / qerr, "mu_step": mu_step, "coin_bits_owner": 32 * cost.words,
-            "leverage_words_per_bit": cost.lev_steps * other, "c1_bytes": forced / H32 * 4 if c1 else 0.0,
-            "writes_owner_per_step": per_owner / max(1, s - 1), "side_B": float(side == "B")}
+            "dup_chosen": alpha_tot * dup_chosen, "a1_chosen": alpha_tot * kappa_chosen,
+            "a2_chosen": alpha_tot * p_bound, "a2_fixed": alpha_tot * p_fixed, "p_bound": p_bound,
+            "p_fixed": p_fixed, "std": std, "row_std": math.sqrt(row_var),
+            "code_std": float(np.sqrt(var_code).mean()), "t3_ratio": std / qerr, "mu_step": mu_step,
+            "coin_bits_owner": 32 * cost.words, "coin_bits_per_mac": coin_bits / (m * n * k),
+            "leverage_words_per_bit": cost.lev_steps * other,
+            "c1_bytes": forced / H32 * 4 if c1 else 0.0, "writes_owner_per_step": per_owner / max(1, s - 1),
+            "side_B": float(side == "B"), "side": side, "owners": own, "others": other}
 
 
 @lru_cache(maxsize=None)
@@ -551,7 +841,7 @@ def terms(p: Point, m: int, n: int, k: int) -> dict:
     if p.side not in LANE_SIDES:
         return {"invalid": "no data-independent noise in the committed words"}
     sides = ("A", "B") if p.side == "AorB" else (p.side,)
-    cands = [_side_terms(sd, p.inject, p.code, p.denoise, p.c1, m, n, k, p.nz, p.tag) for sd in sides]
+    cands = [_side_terms(sd, p.inject, p.code, p.denoise, p.c1, m, n, k, p.nz, p.tag, p.weights) for sd in sides]
     good = [c for c in cands if "invalid" not in c]
     if not good:
         return cands[0]
@@ -597,7 +887,8 @@ def score(p: Point) -> dict:
                 return out
             w = m * n * k
             for key, v in t.items():
-                acc[key] = acc.get(key, 0.0) + w * v
+                if key not in ("side", "owners", "others"):
+                    acc[key] = acc.get(key, 0.0) + w * v
             tot += w
         out[wl] = {key: v / tot for key, v in acc.items()}
     for point in ns.STEP:
@@ -684,14 +975,23 @@ class _Coins:
         return out
 
 
-def _lane_values(inj: str, coins: _Coins, owner, count: int, nz: bool = False) -> list[Poly]:
+def _lane_values(inj: str, coins: _Coins, owner, count: int, nz: str = "none") -> list[Poly]:
     """Noise lane values for steps 2..s of one owner."""
     if count <= 0:
         return []
-    if nz:
-        one = {frozenset(): {(): 1}}
-        return [_add(one, _scale(_bit(x), 2 * int(v))) for x, v in zip(coins.bits(owner, count),
-                                                                          _slot_vals(inj, count))]
+    if nz != "none":
+        out = []
+        for x, v in zip(coins.bits(owner, count), _slot_vals(inj, count)):
+            static, coin = (1, 2 * int(v)) if nz == "lo" else (2 * int(v), int(v))
+            out.append(_add({frozenset(): {(): static}}, _scale(_bit(x), coin)))
+        return out
+    if inj == "byte1":
+        vals, word = [], None
+        for t in range(count):
+            if t % 4 == 0:
+                word = coins.word()
+            vals.append(coins.byte(word, t % 4))
+        return vals
     if inj in RAW:
         reuse, vals, word = RAW[inj] or count, [], None
         for t in range(count):
@@ -721,6 +1021,17 @@ def _lane_values(inj: str, coins: _Coins, owner, count: int, nz: bool = False) -
     sv = _slot_vals(inj, count)
     sign = -1 if BITS[inj][3] == -1 else 1
     return [_scale(_bit(x), sign * int(v)) for x, v in zip(xs, sv)]
+
+
+def _public_weight(weights: str, x: int, c: int) -> int:
+    """A window weight for (other, coin lane) in the symbolic instance: fixed and mixed, as a window's draw is once
+    known."""
+    if weights == "sign":
+        return 1 - 2 * ((x * 7 + c * 3 + (x * c) % 5) % 2)
+    if weights == "wide":
+        w = (x * 37 + c * 11 + (x * c) % 7) % 254 + 1
+        return w if w <= 127 else 127 - w
+    return 1
 
 
 def symbolic_check(p: Point, m: int = 2, n: int = 3, s: int = 5) -> dict:
@@ -789,10 +1100,12 @@ def symbolic_check(p: Point, m: int = 2, n: int = 3, s: int = 5) -> dict:
                     if p.c1:
                         formed.append(data_a[(o, t)])
         else:
-            count = lane_steps(inj, s, code)
+            count = lane_steps(inj, s, code, p.denoise)
             start = s - count
-            own_vals = {o: _lane_values(inj, coins, ("own", o), count, p.nz) for o in owners}
-            oth_vals = ({x: _lane_values(inj, coins, ("oth", x), count, p.nz) for x in others}
+            plan = lane_plan(count, p.denoise == "mirror")
+            coined = 1 + max((c for lanes in plan for c, _ in lanes), default=-1)
+            own_vals = {o: _lane_values(inj, coins, ("own", o), coined, p.nz) for o in owners}
+            oth_vals = ({x: _lane_values(inj, coins, ("oth", x), coined, p.nz) for x in others}
                         if side in ("A+B", "AB") else {})
             if p.tag != "none":
                 tags = owner_tags(len(owners))
@@ -806,14 +1119,17 @@ def symbolic_check(p: Point, m: int = 2, n: int = 3, s: int = 5) -> dict:
                             tot = _add(tot, _scale(g[e], int(tags[e, o])))
                         add_inc(*at(o, x), 0, tot)
             for o in owners:
-                for t, v in enumerate(own_vals[o], start=start):
-                    if p.c1 and inj not in RAW:
-                        formed.append(_add(_data(f"r{o}_{t}"), _scale(v, 2 ** 24)))
-                    for x in others:
-                        if side == "AB":
-                            add_inc(*at(o, x), t, _mul(v, oth_vals[x][t - start]))
-                        else:
-                            add_inc(*at(o, x), t, v)
+                for u, step_lanes in enumerate(plan):
+                    t = start + u
+                    for c, sg in step_lanes:
+                        v = own_vals[o][c]
+                        if p.c1 and inj not in RAW and sg > 0:
+                            formed.append(_add(_data(f"r{o}_{t}_{c}"), _scale(v, 2 ** 24)))
+                        for x in others:
+                            if side == "AB":
+                                add_inc(*at(o, x), t, _mul(v, oth_vals[x][c]))
+                            else:
+                                add_inc(*at(o, x), t, _scale(v, sg * _public_weight(p.weights, x, c)))
             if side == "A+B":
                 for x in others:
                     for t, v in enumerate(oth_vals[x], start=start):
@@ -927,7 +1243,42 @@ def variance_floor_check(max_support: int = 5, grid: int = 8) -> dict:
         mu = float(p.max())
         if mu < 1:
             worst = min(worst, var - (1 - mu) / 2)
-    return {"distributions": count, "min_slack": worst, "pass": worst >= -1e-12, "tight_at_bit": 0.25 == (1 - 0.5) / 2}
+    return {"distributions": count, "min_slack": worst, "pass": bool(worst >= -1e-12),
+            "tight_at_bit": 0.25 == (1 - 0.5) / 2}
+
+
+def mass_floor_check(max_support: int = 7, grid: int = 12) -> dict:
+    """Var X >= (1/p^2 - 1)/12 for an integer X whose largest point mass is p, checked over every distribution on
+    {0..max_support-1} with masses in multiples of 1/grid; equality at a uniform on 1/p consecutive integers."""
+    worst, count = math.inf, 0
+    x = np.arange(max_support)
+    for masses in itertools.product(range(grid + 1), repeat=max_support):
+        if sum(masses) != grid:
+            continue
+        count += 1
+        p = np.array(masses) / grid
+        var = float((p * x * x).sum() - (p * x).sum() ** 2)
+        worst = min(worst, var - (1 / p.max() ** 2 - 1) / 12)
+    return {"distributions": count, "min_slack": worst, "pass": bool(worst >= -1e-12)}
+
+
+def cancel_floor(var_served: float, s: int) -> float:
+    """§2b's floor for a served design whose S step increments are independent: their variances sum to the served
+    variance V, each step's largest mass is >= f(v) = (12v + 1)^(-1/2), and f is convex, so the mean is >= f(V/S)."""
+    return 1 / math.sqrt(12 * var_served / s + 1)
+
+
+def cancel_floors() -> dict:
+    """§2b's floor at T3_SAFE, MAC-weighted over each workload's linears, with ssn_1l's steps."""
+    out = {}
+    for wl, (shapes, m) in WORKLOADS.items():
+        num = den = 0.0
+        for n, k in shapes.values():
+            v = (T3_SAFE * math.sqrt(k / 12) * ns.WEIGHT_SIGMA_INT8) ** 2
+            num += m * n * k * cancel_floor(v, ns.steps1l(k))
+            den += m * n * k
+        out[wl] = num / den
+    return out
 
 
 def coin_bound(m: int, n: int, s: int, mu: float, q: int) -> float:
@@ -942,6 +1293,8 @@ def lower_bounds() -> dict:
     return {
         "lanes": lanes,
         "variance": variance_floor_check(),
+        "mass": mass_floor_check(),
+        "cancel_floor_at_t3_safe": cancel_floors(),
         "coins_ssn_1l_llama_down_T8192": {"bound_bits_row": coin_bound(1, 2048, s, 0.5, 2048),
                                           "ssn_1l_bits_used_row": s + 3,
                                           "ssn_1l_bits_expanded_row": 32 * ns.ssn_1l_words(s)},
@@ -964,6 +1317,12 @@ def lower_bounds() -> dict:
                   ">= P(X != X')/2), so a fair bit's 1/4 is the floor at mu = 1/2; the owner-common sum can be zero "
                   "(tele, epi_row); the column part of an L-lane bit code is >= the mean |c|^2/4 of the n shortest "
                   "vectors of Z^L, which tends to 1/4 as L -> n/2.",
+            "cancel": "a data dot fixed before the coins at minus a step increment's likeliest value leaves the word "
+                      "unchanged with that value's mass p (§2b). An integer X with largest mass p has Var X >= "
+                      "(1/p^2 - 1)/12 (put mass p on the integers nearest the mean). So a served design with "
+                      "independent step increments and served variance V gives up a mean share >= (12V/S + 1)^(-1/2) "
+                      "of its words when regrouping is free: cancel_floor_at_t3_safe at V = (T3_SAFE·qerr)^2. Only "
+                      "dependent increments (mirror, cancel) or noise removed in the epilogue go below it.",
         },
     }
 
@@ -980,10 +1339,12 @@ def enumerate_points() -> list[Point]:
             continue
         if model == "M1" and dn != "cancel":
             continue
-        nzs = (False, True) if inj in NZ_INJECTS and side in LANE_SIDES and side != "dither" else (False,)
+        nzs = NZ_FORMS if inj in NZ_INJECTS and side in LANE_SIDES and side != "dither" else ("none",)
         tags = ("none", "tag") if side in ("A", "B", "AorB") else ("none",)
         for nz, tag in itertools.product(nzs, tags):
-            pts.append(Point(side, inj, code, dn, fmt, c1, model, tag, nz))
+            moves = (nz != "none" or inj == "byte1") and side in ("A", "B", "AorB")
+            for weights in (WEIGHTS if moves else ("ones",)):
+                pts.append(Point(side, inj, code, dn, fmt, c1, model, tag, nz, weights))
     return pts
 
 
@@ -1022,26 +1383,78 @@ def frontier(rows: list[dict]) -> list[dict]:
 
 
 def _structural(p: Point) -> tuple:
-    return (p.side, p.inject, p.code, p.denoise == "cancel", p.fmt == "odd" and p.side == "dither", p.c1, p.tag, p.nz)
+    return (p.side, p.inject, p.code, p.denoise if p.denoise in ("cancel", "mirror") else "served",
+            p.fmt == "odd" and p.side == "dither", p.c1, p.tag, p.nz, p.weights)
 
 
 SSN_1L = "A/rot1/b13s4/served/s8/noc1/M0"
-#: N-RED's fix: row tags against coin-drawn weights, and later lanes 1 + a_t
+#: N-RED's first fix: row tags against coin-drawn weights, and later lanes never zero
 SSN_1L_TAG = SSN_1L + "+tag+nz"
-#: (C1, premises, A1/A2 closed)
+#: N-RED's second: the later lanes' public weights signed by window coins drawn after B
+SSN_1L_HARD = SSN_1L + "+tag+nzh+ws"
+#: a coin byte a step against wide window weights, replayed negated in the second half, with N-RED's owner tags (the
+#: code-only first and last steps otherwise repeat across owners)
+MIRROR = "A/byte1/b13s4/mirror/s8/noc1/M0+tag+wv"
+REFERENCES = {"ssn_1l": SSN_1L, "ssn_1l_tag": SSN_1L_TAG, "ssn_1l_hard": SSN_1L_HARD, "mirror": MIRROR}
+#: (C1, premises, chosen-reading T1 within T1_BAR)
 CLASSES = {"noc1, no premise": (False, False, False), "noc1, premises": (False, True, False),
            "c1, no premise": (True, False, False), "c1, premises": (True, True, False),
-           "noc1, no premise, A1/A2 closed": (False, False, True), "noc1, premises, A1/A2 closed": (False, True, True),
-           "c1, no premise, A1/A2 closed": (True, False, True)}
+           "noc1, no premise, chosen <= 1%": (False, False, True), "noc1, premises, chosen <= 1%": (False, True, True),
+           "c1, no premise, chosen <= 1%": (True, False, True)}
 #: the class frontiers keep designs whose served noise std is at most this share of the GEMM's own activation
 #: rounding error, sqrt(K/12)·sigma_w (an estimate standing in for T3 until perplexity is measured)
 T3_SAFE = 0.05
-#: a design closes A1 and A2 when chosen identical rows and zero tails save at most this share of stock
-CHOSEN_CLOSED = 1e-3
+#: T1's bar: a design is closed when its chosen-reading T1 (gap plus the chosen saving) is within it
+T1_BAR = 1e-2
+CLOSED_WORKLOADS = ("llama_T512_64tok", "llama_T8192")
 
 
 def _closed(r: dict) -> bool:
-    return all(r[wl]["dup_chosen"] <= CHOSEN_CLOSED for wl in ("llama_T512_64tok", "llama_T8192"))
+    return all(r[wl]["gap_chosen"] <= T1_BAR for wl in CLOSED_WORKLOADS)
+
+
+def tile_update(point: dict) -> dict:
+    """A scored design's chosen-data saving with `tile_saving` read beside the vector level, at CLOSED_WORKLOADS."""
+    p = Point(**point)
+    out = {}
+    for wl in CLOSED_WORKLOADS:
+        shapes, m = WORKLOADS[wl]
+        dup = tile = tot = 0.0
+        for n, k in shapes.values():
+            t = terms(p, m, n, k)
+            sv = t["alpha"] * tile_saving(t["side"], p.inject, t["s"], p.code, t["owners"], t["others"], p.nz, p.tag,
+                                          p.weights, "mirror" if p.denoise == "mirror" else "served")
+            dup, tile, tot = dup + m * n * k * max(t["dup_chosen"], sv), tile + m * n * k * sv, tot + m * n * k
+        out[wl] = {"dup_chosen": dup / tot, "tile_saving": tile / tot}
+    return out
+
+
+def _apply_tile(r: dict, upd: dict) -> None:
+    for wl, u in upd.items():
+        row = r[wl]
+        row["dup_chosen_vector"] = row["dup_chosen"]
+        row.update(u)
+        row["gap_chosen"] = row["gap"] + row["dup_chosen"]
+    r["tile_checked"] = True
+
+
+def tile_check(rows: list[dict], pmap) -> None:
+    todo = [r for r in rows if not r.get("tile_checked")]
+    for r, upd in zip(todo, pmap(tile_update, [r["point"] for r in todo])):
+        _apply_tile(r, upd)
+
+
+def tile_frontier(rows: list[dict], pmap) -> list[dict]:
+    """The frontier of the rows that stay closed once tile-checked. Only frontier rows are checked, until the frontier
+    holds checked rows alone: a check can only raise a row's chosen saving, so a row dominated by a checked row in
+    its unchecked (lower) values stays dominated."""
+    live = [r for r in rows if _closed(r)]
+    while True:
+        front = frontier(live)
+        if all(r.get("tile_checked") for r in front):
+            return front
+        tile_check(front, pmap)
+        live = [r for r in live if _closed(r)]
 
 
 def _in_class(r: dict, cls: str) -> bool:
@@ -1054,47 +1467,71 @@ def dominates(a: dict, b: dict) -> bool:
     return all(x <= y + 1e-15 for x, y in zip(oa, ob)) and any(x < y - 1e-15 for x, y in zip(oa, ob))
 
 
-def run() -> dict:
+def _beating(rows: list[dict], ref: dict, pmap) -> list[dict]:
+    """The s8 rows that dominate `ref` with both tile-checked (dominators checked until the list is stable)."""
+    tile_check([ref], pmap)
+    while True:
+        beat = [r for r in rows if r["point"]["fmt"] == "s8" and dominates(r, ref)]
+        if all(r.get("tile_checked") for r in beat):
+            return beat
+        tile_check(beat, pmap)
+
+
+@contextlib.contextmanager
+def _mapper(jobs: int):
+    if jobs <= 1:
+        yield lambda f, xs: list(map(f, xs))
+        return
+    with multiprocessing.get_context("fork").Pool(jobs) as pool:
+        yield lambda f, xs: pool.map(f, xs, chunksize=max(1, len(xs) // (8 * jobs)))
+
+
+def run(jobs: int = 1) -> dict:
     pts = enumerate_points()
-    checks, rows, invalid = {}, [], {}
-    for p in pts:
-        r = score(p)
-        if "invalid" in r:
-            invalid[p.name] = r["invalid"]
-            continue
-        key = _structural(p)
-        if key not in checks:
-            checks[key] = symbolic_check(p)
-        if not checks[key]["valid"]:
-            invalid[p.name] = "not distinct for every input"
-            continue
-        r["check"] = checks[key]
-        r["t3_format"] = FORMAT_T3[p.fmt]
-        rows.append(r)
-    for side in SIDES[len(LANE_SIDES):]:
-        p = Point(side, "rot1", "none", "served", "s8", False, "M0")
-        checks[_structural(p)] = symbolic_check(p)
-    front = frontier(rows)
-    ssn = next(r for r in rows if r["name"] == SSN_1L)
-    ssn_tag = next(r for r in rows if r["name"] == SSN_1L_TAG)
+    with _mapper(jobs) as pmap:
+        scored = pmap(score, pts)
+        reps: dict = {}
+        for p, r in zip(pts, scored):
+            if "invalid" not in r:
+                reps.setdefault(_structural(p), p)
+        for side in SIDES[len(LANE_SIDES):]:
+            p = Point(side, "rot1", "none", "served", "s8", False, "M0")
+            reps.setdefault(_structural(p), p)
+        keys = list(reps)
+        checks = dict(zip(keys, pmap(symbolic_check, [reps[k] for k in keys])))
+        rows, invalid = [], {}
+        for p, r in zip(pts, scored):
+            if "invalid" in r:
+                invalid[p.name] = r["invalid"]
+            elif not checks[_structural(p)]["valid"]:
+                invalid[p.name] = "not distinct for every input"
+            else:
+                r["check"] = checks[_structural(p)]
+                r["t3_format"] = FORMAT_T3[p.fmt]
+                rows.append(r)
+        front = frontier(rows)
+        vector_closed = sum(map(_closed, rows))
+        safe = [r for r in rows if r["llama_T8192"]["t3_ratio"] <= T3_SAFE]
+        classes = {cls: (tile_frontier if CLASSES[cls][2] else lambda rs, _: frontier(rs))(
+            [r for r in safe if _in_class(r, cls)], pmap) for cls in CLASSES}
+        by_name = {r["name"]: r for r in rows}
+        refs = {key: by_name[nm] for key, nm in REFERENCES.items()}
+        beats = {key: _beating(rows, ref, pmap) for key, ref in refs.items()}
     reasons: dict = {}
     for v in invalid.values():
         reasons[v] = reasons.get(v, 0) + 1
-    safe = [r for r in rows if r["llama_T8192"]["t3_ratio"] <= T3_SAFE]
-    classes = {cls: frontier([r for r in safe if _in_class(r, cls)]) for cls in CLASSES}
-    beat = [r for r in rows if r["point"]["fmt"] == "s8" and dominates(r, ssn)]
-    beat_tag = [r for r in rows if r["point"]["fmt"] == "s8" and dominates(r, ssn_tag)]
+    checked = [r for r in rows if r.get("tile_checked")]
     return {"counts": {"points": len(pts), "scored": len(rows), "invalid": len(invalid), "frontier": len(front),
                        "structural_checks": len(checks), **{f"frontier {c}": len(v) for c, v in classes.items()},
-                       "dominate_ssn_1l": len(beat), "dominate_ssn_1l_tag": len(beat_tag),
-                       "a1_a2_closed": sum(map(_closed, rows))},
-            "invalid_reasons": reasons, "shares_source": SHARES_SOURCE,
-            "ssn_1l": ssn, "ssn_1l_tag": ssn_tag, "frontier": front,
+                       **{f"dominate_{key}": len(v) for key, v in beats.items()},
+                       "vector_closed": vector_closed, "tile_checked": len(checked),
+                       "tile_closed": sum(map(_closed, checked))},
+            "invalid_reasons": reasons, "shares_source": SHARES_SOURCE, **refs, "frontier": front,
             "class_frontiers": {c: [r["name"] for r in v] for c, v in classes.items()},
-            "dominate_ssn_1l": [r["name"] for r in beat], "dominate_ssn_1l_tag": [r["name"] for r in beat_tag],
+            **{f"dominate_{key}": [r["name"] for r in v] for key, v in beats.items()},
             "rows": rows,
             "checks": {"|".join(map(str, k)): v for k, v in checks.items()}, "lower_bounds": lower_bounds(),
-            "objectives": [list(o) for o in OBJECTIVES]}
+            "objectives": [list(o) for o in OBJECTIVES], "tile": {"words": TILE, "positions": TILE_POSITIONS}}
 
 
 def _row(r: dict) -> str:
@@ -1103,6 +1540,10 @@ def _row(r: dict) -> str:
                        f"{100 * L64['gap_coins_uncredited']:.3f}%", f"{100 * L['gap_coins_uncredited']:.3f}%",
                        f"{100 * L64['gap_adaptive']:.4f}%",
                        f"{100 * L64['gap_chosen']:.2f}%/{100 * L['gap_chosen']:.2f}%",
+                       f"{100 * L64['tile_saving']:.2f}%/{100 * L['tile_saving']:.2f}%" if r.get("tile_checked")
+                       else "-",
+                       f"{100 * L['p_fixed']:.3f}%/{100 * L['p_bound']:.3f}%",
+                       f"{1 / L['coin_bits_per_mac']:.0f}" if L["coin_bits_per_mac"] else "-",
                        f"{100 * r['v4dense_T8192']['gap']:.4f}%",
                        f"{r['t2_T8192']['t2']:.2f}x", f"{L['std']:.2f} ({L['row_std']:.2f}/{L['code_std']:.2f})",
                        f"{L['t3_ratio']:.4f}", f"{L['alpha']:.4f}", f"{L['writes_owner_per_step']:.3f}",
@@ -1111,7 +1552,7 @@ def _row(r: dict) -> str:
 
 
 HEADER = ("design | T1 64tok | T1 8192 | +coins 64tok | +coins 8192 | adaptive 64tok | chosen 64tok/8192 | "
-          "V4d 8192 | T2 8192 | "
+          "tile 64tok/8192 | p fixed/bound 8192 | MACs/coin bit 8192 | V4d 8192 | T2 8192 | "
           "std (row/code) | std/qerr | alpha | writes/step | coin bits/owner | mu_step | leverage/bit | premises | kernel")
 
 
@@ -1130,13 +1571,14 @@ def table(rep: dict, limit: int = 40) -> str:
                   HEADER + " | best at"]
         lines += [_row(by_name[nm]) + " | " + ", ".join(objs) for nm, objs in heads.items()]
         lines.append("")
-    lines += [f"## s8 designs that dominate ssn_1l on every objective ({len(rep['dominate_ssn_1l'])}; first {limit})",
-              HEADER]
-    lines += [_row(by_name[nm]) for nm in sorted(rep["dominate_ssn_1l"], key=lambda nm: _obj(by_name[nm]))[:limit]]
-    lines += ["", f"## s8 designs that dominate ssn_1l+tag+nz ({len(rep['dominate_ssn_1l_tag'])}; first {limit})",
-              HEADER]
-    lines += [_row(by_name[nm]) for nm in sorted(rep["dominate_ssn_1l_tag"], key=lambda nm: _obj(by_name[nm]))[:limit]]
-    lines += ["", "ssn_1l:", _row(rep["ssn_1l"]), "ssn_1l+tag+nz:", _row(rep["ssn_1l_tag"]),
+    for key, nm in REFERENCES.items():
+        beat = rep[f"dominate_{key}"]
+        lines += [f"## s8 designs that dominate {nm} on every objective, tile-checked ({len(beat)}; first {limit})",
+                  HEADER]
+        lines += [_row(by_name[b]) for b in sorted(beat, key=lambda b: _obj(by_name[b]))[:limit]]
+        lines.append("")
+    lines += ["## references", HEADER] + [_row(rep[key]) for key in REFERENCES]
+    lines += ["", "cancel floor at T3_SAFE: " + json.dumps(rep["lower_bounds"]["cancel_floor_at_t3_safe"]),
               json.dumps(rep["counts"]), json.dumps(rep["invalid_reasons"])]
     return "\n".join(lines)
 
@@ -1146,10 +1588,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json")
     ap.add_argument("--table", action="store_true")
     ap.add_argument("--data", help="noise_data.py's output, for the adaptive reading's shares")
+    ap.add_argument("--jobs", type=int, default=1, help="worker processes")
     args = ap.parse_args(argv)
     if args.data:
         load_shares(args.data)
-    rep = run()
+    rep = run(args.jobs)
     if args.json:
         with open(args.json, "w") as fh:
             json.dump(rep, fh, separators=(",", ":"), default=float)
