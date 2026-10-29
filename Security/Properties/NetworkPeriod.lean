@@ -31,8 +31,9 @@ undrawn. `RowsProgWired` says it accepts no link-window whose scan's `prog` is n
 the entries port of a `SlotEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. Beside them, their nontrivial lemmas' objects:
-`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
-check that accepts every period.
+`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, `acceptAllRows`, a
+check that accepts every period, and the rows-form period (`rowsParams`, `oneWindow`) whose link-window it accepts though
+`wired` or `stateTied` fails there.
 -/
 
 namespace Properties.NetworkPeriod
@@ -126,5 +127,41 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
 `RowsStateTied` to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
+
+/-! The period at which `RowsProgWired`'s and `RowsStateTied`'s nontrivial lemmas fail their conclusions. -/
+
+/-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
+digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
+
+def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
+
+/-- A link-window's registration whose `prog` is at the root `r` and the domain `d`. -/
+def tiedWindow : Registration :=
+  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "scan/prog"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+
+/-- The slot audit's registration with its `SCAN_STATE` registered at the root `root` and the domain `e`, beside its
+entries port at `r` and `d`. -/
+def stateReg (root : String) : Registration :=
+  { record := Lean.Json.mkObj [
+      ("registered", Lean.Json.arr #[Lean.Json.mkObj
+        [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
+      ("roots", Lean.Json.arr #[Lean.Json.mkObj
+        [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("root", "r"), ("domain", "d")]])], digest := .empty }
+
+/-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, and whose state, the tree
+its units read and register their states in, is at the root `s` and the domain `e`. -/
+def stateWindow : Registration :=
+  { record := Lean.Json.mkObj [("roots", Lean.Json.arr #[
+      Lean.Json.mkObj [("port", "scan/prog"), ("root", "r"), ("domain", "d")],
+      Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]])], digest := .empty }
+
+/-- A rows-form period over the audits `audits`, under `slotSchedule`, of one link-window. -/
+def rowsParams (audits : Array Audit) : Params :=
+  ⟨audits, #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0⟩, 1⟩
+
+/-- A commitment registering the audits `audits` and one link-window, `reg`. -/
+def oneWindow (audits : Array Registration) (reg : Registration) : Commitment := ⟨audits, #[reg], .empty⟩
 
 end Properties.NetworkPeriod
