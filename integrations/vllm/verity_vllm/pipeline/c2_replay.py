@@ -2,7 +2,7 @@
 
 One implementation for both places it runs: the Commit, in process, right after the committed run (`pipeline.commit`), and the CPU
 replay of a deferred Commit's bundle (`pipeline.replay_bundle`, `row stage replay`).  What differs between them is passed in on the
-`Site`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
+`ReplaySources`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
 checkpoint opened against the committed weights root), the weights check and the VU export hook.
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
@@ -46,7 +46,7 @@ def rss_kb() -> tuple[int | None, int | None]:
 
 
 @dataclass
-class Site:
+class ReplaySources:
     """Everything the C2 replay of one instrumented run reads.  `weights_of(prefix)`: the weights provider for the Programs' field
     prefix; `weights_check()`: the proof that the slices it serves are the committed weights ({"equal": bool, ...});
     `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is.  `reads`: when a dict, the replay's draw is made
@@ -106,7 +106,7 @@ def live_weights_check(register: Callable[[], dict[str, Any]], com: Any, rc: Any
         return {"equal": None, "note": f"by reference, unverified at replay: {_we!r}"[:200]}
 
 
-def cache_key(s: Site) -> str | None:
+def cache_key(s: ReplaySources) -> str | None:
     """The replay cache (--replay-cache, default OFF): sampled_replay is a pure function of (committed bytes = the
     run root, the manifest digest, the seed, the replay code); a later pair whose FULL key equals an earlier pair's reuses that pair's
     record (copy carries `reused_from`; `evaluated_here` = 0 so nothing is counted twice).  Any differing component -> its own replay,
@@ -132,7 +132,7 @@ def cache_key(s: Site) -> str | None:
         return None
 
 
-def run(s: Site, replay_cache: dict[str, dict[str, Any]]) -> None:
+def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
     """The replay + linkage of the run on `s`, their artifact (`sampled_replay_p<pair>.json`) and their components on `s.row`.  A
     replay this host cannot hold (`driver.PoolDoesNotFit`) is raised, not recorded: it says nothing about the run."""
     from verity_vllm.check.replay.driver import PoolDoesNotFit
@@ -169,7 +169,7 @@ def run(s: Site, replay_cache: dict[str, dict[str, Any]]) -> None:
     record(s, sr, lk, _art)
 
 
-def reused(s: Site, _cached: dict[str, Any], _rc_key: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def reused(s: ReplaySources, _cached: dict[str, Any], _rc_key: str) -> tuple[dict[str, Any], dict[str, Any]]:
     pair, rc = s.pair, s.rc
     _from = {"pair": _cached["pair"], "run_root": _cached["run_root"], "root_equal": rc.run_root.hex() == _cached["run_root"], "seed": _cached["seed"],
              "code": _cached["code"], "artifact": _cached["artifact"], "key_sha256": hashlib.sha256(_rc_key.encode()).hexdigest(),
@@ -190,7 +190,7 @@ def reused(s: Site, _cached: dict[str, Any], _rc_key: str) -> tuple[dict[str, An
     return sr, lk
 
 
-def programs_of_record(s: Site, _rl: dict[str, str], *, definitions: bool = True) -> tuple[dict[str, dict], dict[str, str]]:
+def programs_of_record(s: ReplaySources, _rl: dict[str, str], *, definitions: bool = True) -> tuple[dict[str, dict], dict[str, str]]:
     """The population is derived from the Program OF RECORD: every loaded Program's digest must be the Build digest of
     record (--program-digest, B=1) or one of the manifest's component digests (B>=2), and the Definitions this tree evaluates their
     rows by must be the ones their Builds bound (`check.replay.definitions`); else REFUSED by name.  ``definitions=False`` for a
@@ -276,7 +276,7 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
             for k, v in loaded.items()}
 
 
-def linkage_requests(s: Site, _rl: dict[str, str], _arr: dict[str, int], _pi_steps: dict[str, int | None], _horizons: dict | None) -> list[dict[str, Any]]:
+def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int], _pi_steps: dict[str, int | None], _horizons: dict | None) -> list[dict[str, Any]]:
     """The DECLARED seed of each request = the SamplingParams.seed the run was asked for (the same per-request /
     sampling-level resolution vllm_adapter.sampling_params uses; None on a greedy row), and the Program's S of record from each request
     Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload cap: horizon = min(cap,
@@ -304,7 +304,7 @@ def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str,
             for r in reqs if int(r.get("cached") or 0)}
 
 
-def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -> tuple[dict[str, Any], Any]:
+def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -> tuple[dict[str, Any], Any]:
     """ONE mechanism for the not-executed class (`commit.executed_prefix`): sampled_replay's
     `population.not_executed_by_rule`, fed with named record facts (`EPX.executed_prefix_facts`) -- never literals.  On a tree without
     the `executed_prefix=` kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
@@ -329,7 +329,7 @@ def executed_prefix_kw(s: Site, _epr_r: dict, lk: dict, _arr: dict, _rl: dict) -
     return _sr_kw, _ep_facts
 
 
-def live_only(s: Site) -> str | None:
+def live_only(s: ReplaySources) -> str | None:
     """The protocol entry whose replay reads the live run (`pouw_circuit.around`): such a run's C2 cannot be deferred to a bundle."""
     entries = getattr(s.protocols, "entries", None) or ()
     if not entries:
@@ -339,7 +339,7 @@ def live_only(s: Site) -> str | None:
     return next((e for e in entries if e.split(":", 1)[0] == PWC.pouw.NAME and e.split(":", 1)[1] in PWC.PC.C.SCHEMES), None)
 
 
-def plan(s: Site, planner: Any = None) -> dict[str, Any]:
+def plan(s: ReplaySources, planner: Any = None) -> dict[str, Any]:
     """The replay's and the linkage's committed reads made against `s.com` without evaluating anything (what a slim replay bundle must
     hold, `commit.store_dump.touched`): the same Programs, readers and draw as `run`.  With a ``planner`` (`replay_plan.Planner`) the
     Programs, their population and the draw are its, prepared while the engine ran; only the reads are made here."""
@@ -350,7 +350,7 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
     return {"replay": sr, "linkage": lk.get("result")}
 
 
-def serving_rows(s: Site) -> None:
+def serving_rows(s: ReplaySources) -> None:
     """The in-Commit hook (`serving_rows.readers`) at the C2 site of a run whose replay is deferred to its bundle: the window
     committed from `s.com` over the Programs of record, as `evaluate` commits it in process, once the run's roots are final and
     before any draw (the deferred replay draws on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
@@ -367,7 +367,7 @@ def serving_rows(s: Site) -> None:
     SRW.readers(s.args.serving_rows, s.com, s.rc, s.weights_of(prefix), progs, bm, arr, loaded, s.manifest, s.args.label, digs)
 
 
-def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
+def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
     from verity_vllm.commit import executed_prefix as EPX
@@ -465,7 +465,7 @@ def retention_of(com: Any, args: Any) -> str | None:
             else (str(args.retain) if getattr(args, "retain", None) else ("host" if _blocks else None)))
 
 
-def reconcile(s: Site, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr_kw: dict) -> None:
+def reconcile(s: ReplaySources, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr_kw: dict) -> None:
     """ONE mechanism, reconciled on the record: the Commit's classification of the manifest identities
     (binding coverage) and the population's third bucket must name the same identities -- n_exec per request, count per row family; a
     batch-level / named-input family is outside the population split's reach and is named, not equal."""
@@ -532,7 +532,7 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
           f"{(_rss_c2a - _rss_c2b) >> 10} MiB back before the openings-after-release replay", flush=True)
 
 
-def record(s: Site, sr: dict, lk: dict, _art: Path) -> None:
+def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
     """The replay's and the linkage's records and components on the run's row (graded by finalize.grade_sampled_replay), and their lines."""
     row, pair, components = s.row, s.pair, s.components
     row["commit"]["sampled_replay"] = {k: v for k, v in sr.items() if k not in ("strata",)} | {"artifact": str(_art), "strata_n": len(sr.get("strata") or {})}
