@@ -1,6 +1,6 @@
 // M_key·y a loop trip, for counting its SASS: the committer's own mask_roll in the H200's split form (native_rows.cu, the byte
 // table in shared memory), the loop body a salt's 24 loads, the product and its 16 stores. MASK_UNROLL=1: the same product
-// with its loop over r unrolled, so each byte's shift is static. Built only to be disassembled (mask_sass.sh); never launched.
+// with its loop over r unrolled, so each byte's shift is static. Disassembled by mask_sass.sh; mask_check.cu runs mask_unrolled.
 #include "native_rows.cu"
 
 #if MASK_UNROLL

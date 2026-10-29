@@ -20,7 +20,9 @@ labeled run, `served.py` the served arm's runs).
 - SHA-512 on the H200, measured: `sha512_sass.sh` compiles `sha512_probe.cu` (the committer's `sha512.cuh`, rolled and
   unrolled) and `sha512_sass.py` counts a compression's instructions and registers written from its SASS (W1);
   `sw_hash_rows.sh` (`sw_hash_rows.py`) times hm96-sha512 leaves alone at each row size; `sha512_latency.sh` times one
-  compression's latency on one thread (`sha512_latency.cu`). Priced from those outputs (stdlib, no GPU):
+  compression's latency on one thread (`sha512_latency.cu`). hm96's mask M_key·y: `mask_sass.sh` compiles `mask_probe.cu`
+  (the committer's `mask_roll`, rolled and unrolled) and `mask_sass.py` prices a salt's registers written, path by path;
+  `mask_check.sh` holds each form to the committer's formula on the H200 and times it (`mask_check.cu`). Priced from those outputs (stdlib, no GPU):
   `sw_hash_price.py`, DistinctWrites' interior commitment options; `np_hide_price.py`, hm96's hiding work under each
   commitment layout, the proof's cost to open, served sparse noise's T2 and hashing frontier, ShaSpeed's precision, and
   each call's seed path. Each script's docstring has its arguments.
