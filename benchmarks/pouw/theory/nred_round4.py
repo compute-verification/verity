@@ -337,6 +337,31 @@ def runs(seed: int = 97, m: int = 256, n: int = 64) -> dict:
     return out
 
 
+def wide_draws(seeds: range = range(200, 210), m: int = 256, n: int = 64) -> dict:
+    """The wide tag's cross-row residual under literal P across draws: one draw per seed, each a fresh step's data.
+    The weighted lane is included to show it leaves cross-row as it is, draw by draw."""
+    grains = ("P/xrow", "P'32/xrow", "P'32/column", "P/masked", "M/masked")
+    cases = [("blc4a-t64-e7", "v4_dense", "a2r"), ("blc4a-t64-e7", "v4_dense", "a2c"),
+             ("blc4a-t64-e7", "llama", "a2r"), ("blc4a-t64-e7-w127", "v4_dense", "a2r")]
+    out = {}
+    for cfg, shape_name, pattern in cases:
+        shape, per_seed = SHAPES[shape_name], {}
+        for seed in seeds:
+            rng = np.random.default_rng(seed)
+            insts = {kk: lead_instance(cfg, kk, m, n, rng, pattern, "wide")
+                     for kk in sorted({kk for _, kk in shape.values()})}
+            for kk, v in insts.items():
+                v["share_keys"] = list(shares(v, kk, n).keys())
+            sh = weighted(insts, shape)
+            per_seed[seed] = {g: sh[g] for g in grains}
+        out[f"{cfg}+wide/{pattern}/{shape_name}"] = {
+            "per_seed": per_seed,
+            "range": {g: [min(v[g] for v in per_seed.values()), max(v[g] for v in per_seed.values())] for g in grains},
+            "above_1pct": {g: sum(v[g] > 0.01 for v in per_seed.values()) for g in grains},
+            "above_0.1pct": {g: sum(v[g] > 0.001 for v in per_seed.values()) for g in grains}}
+    return out
+
+
 def tile_rows(seed: int = 113) -> dict:
     """Tile grain against rows (A2r, Llama): a column's free-search pool fills as rows × steps approach the range its
     words span, so a fix that holds at 256 rows can fail at more."""
@@ -724,7 +749,20 @@ def check(rep: dict) -> list[dict]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json", default=None)
+    ap.add_argument("--wide-draws", action="store_true", help="only the wide tag's cross-row across seeds")
     args = ap.parse_args()
+    if args.wide_draws:
+        wd = wide_draws()
+        same = all(wd["blc4a-t64-e7+wide/a2r/v4_dense"]["per_seed"][s]["P/xrow"]
+                   == wd["blc4a-t64-e7-w127+wide/a2r/v4_dense"]["per_seed"][s]["P/xrow"] for s in range(200, 210))
+        for key, v in wd.items():
+            print(f"{key:36s} " + "  ".join(f"{g}=[{100 * lo:.2f}, {100 * hi:.2f}]% >1%:{v['above_1pct'][g]} "
+                                            f">0.1%:{v['above_0.1pct'][g]}" for g, (lo, hi) in v["range"].items()))
+        print(f"weighted lane leaves cross-row unchanged, seed by seed: {same}")
+        if args.json:
+            with open(args.json, "w") as f:
+                json.dump({"wide_draws": wd, "weighted_lane_same_xrow": same}, f, indent=1)
+        return
     rep = {"runs": runs(), "scaling": scaling(), "ordering": ordering(),
            "identical_columns": {t: identical_columns(tag=t) for t in ("narrow", "wide")},
            "mirror": mirror_runs(), "a5": a5_lead(), "mask": mask_blocks(), "tile_rows": tile_rows()}
