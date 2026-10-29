@@ -36,8 +36,8 @@ from verity.ml.commitments import hm96, keyed
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
 
-__all__ = ["A_SCHEMA", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
-           "TILE_WORDS", "WORDS_SCHEMA", "WORDS_POSITION", "Refused", "Subtree", "Window", "a_position", "a_segments", "chunks",
+__all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
+           "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "Refused", "Subtree", "Window", "a_position", "a_segments", "chunks",
            "committed_tiles", "instance_domain", "key_leaf", "keyed_root", "pad_cols", "pad_rows", "stream", "subtree",
            "words_position", "words_values"]
 
@@ -46,8 +46,8 @@ TILE_WORDS = TILE_ROWS * TILE_COLS
 ROW_TILE = 64
 CHUNK_WORDS = 65536
 A_SEGMENT = 1024
-WORDS_SCHEMA = "pouw/lead/words/v1"
-A_SCHEMA = "pouw/lead/a/v1"
+WORDS_LEAF_TAG = "pouw/lead/words/v1"
+A_LEAF_TAG = "pouw/lead/a/v1"
 BINDING_TAG = b"pouw/lead/instance/v1"
 WORDS_POSITION = 1 << 63
 KEY_SALT_BYTES = hm96.SHA512.salt_bytes
@@ -210,13 +210,13 @@ class Window:
 
     def a_root(self, forward: int, call: int, a: bytes) -> bytes:
         """root(A_j): the keyed digest of the call's A, in ``A_SEGMENT``-byte segments, at f calls + j."""
-        return self._keyed(a_position(forward, self._calls, call), A_SCHEMA, a_segments(a))
+        return self._keyed(a_position(forward, self._calls, call), A_LEAF_TAG, a_segments(a))
 
     def words_root(self, forward: int, calls: Sequence[bytes]) -> bytes:
         """The forward's words root: the keyed digest of its calls' committed streams, in call order, at 2^63 + f."""
         if len(calls) > self._calls:
             raise Refused(f"{len(calls)} calls' words in a window of {self._calls} calls a forward")
-        return self._keyed(words_position(forward), WORDS_SCHEMA, words_values(calls))
+        return self._keyed(words_position(forward), WORDS_LEAF_TAG, words_values(calls))
 
     def _keyed(self, position: int, schema: str, values: list[bytes]) -> bytes:
         if self._salt_w is None:

@@ -158,10 +158,10 @@ def test_a_segments(rows, K):
 def test_leaves_are_inline_frame_v3_leaves_at_their_rank():
     dom = L.instance_domain(SALT, L.a_position(2, 64, 5), 3)
     values = [b"\x01" * 1024, b"\x02" * 1024, b"\x03" * 32]
-    sub = L.subtree(dom, L.A_SCHEMA, values)
+    sub = L.subtree(dom, L.A_LEAF_TAG, values)
     for r, v in enumerate(values):
-        prefix = dom.leaf_prefix(r, r, L.A_SCHEMA, len(v))
-        assert sub.levels[0][r] == hashlib.sha512(prefix + v).digest() == dom.leaf(r, r, L.A_SCHEMA, v)
+        prefix = dom.leaf_prefix(r, r, L.A_LEAF_TAG, len(v))
+        assert sub.levels[0][r] == hashlib.sha512(prefix + v).digest() == dom.leaf(r, r, L.A_LEAF_TAG, v)
     assert sub.levels[0][3] == dom.pad(3)
     assert sub.root == dom.node(1, 0, dom.node(0, 0, *sub.levels[0][:2]), dom.node(0, 1, *sub.levels[0][2:]))
     assert sub.depth == 2
@@ -169,14 +169,14 @@ def test_leaves_are_inline_frame_v3_leaves_at_their_rank():
 
 def test_one_leaf_instance_is_its_leaf():
     dom = L.instance_domain(SALT, L.words_position(0), 1)
-    sub = L.subtree(dom, L.WORDS_SCHEMA, [b"\x00" * 512])
-    assert sub.levels == ((dom.leaf(0, 0, L.WORDS_SCHEMA, b"\x00" * 512),),) and sub.depth == 0
+    sub = L.subtree(dom, L.WORDS_LEAF_TAG, [b"\x00" * 512])
+    assert sub.levels == ((dom.leaf(0, 0, L.WORDS_LEAF_TAG, b"\x00" * 512),),) and sub.depth == 0
 
 
 def test_equal_values_share_no_compression():
     """Zero data (decode's padding, a repeated prompt): equal chunks at different positions differ from the first block on."""
     dom = L.instance_domain(SALT, L.words_position(1), 300)
-    firsts = {dom.leaf_prefix(r, r, L.WORDS_SCHEMA, 4 * L.CHUNK_WORDS)[:128] for r in range(300)}
+    firsts = {dom.leaf_prefix(r, r, L.WORDS_LEAF_TAG, 4 * L.CHUNK_WORDS)[:128] for r in range(300)}
     assert len(firsts) == 300
 
 
@@ -185,8 +185,8 @@ def test_hashing_meets_commit_l1w_credit():
     m, n, S, bn, K = 17, 256, 9, 128, 2048
     words = L.stream(_export(_random_words(np.random.default_rng(11), m, n, S, bn), S, bn), m, n, S, bn)
     a = random.Random(1).randbytes(m * K)
-    for values, schema, floor in ((L.chunks(words), L.WORDS_SCHEMA, 4 * L.pad_rows(m) * L.pad_cols(n) * S / 128 + 2),
-                                  (L.a_segments(a), L.A_SCHEMA, m * K / 128)):
+    for values, schema, floor in ((L.chunks(words), L.WORDS_LEAF_TAG, 4 * L.pad_rows(m) * L.pad_cols(n) * S / 128 + 2),
+                                  (L.a_segments(a), L.A_LEAF_TAG, m * K / 128)):
         dom = L.instance_domain(SALT, 0, len(values))
         msgs = {dom.leaf_prefix(r, r, schema, len(v)) + v for r, v in enumerate(values)}
         assert len(msgs) == len(values)
@@ -199,11 +199,11 @@ def test_a_leafs_message_holds_its_rank_and_position():
     n = 300
     dom = L.instance_domain(SALT, L.a_position(1, 64, 2), n)
     values = [r.to_bytes(2, "big") * 4 for r in range(n)]
-    sub = L.subtree(dom, L.A_SCHEMA, values)
+    sub = L.subtree(dom, L.A_LEAF_TAG, values)
     frame = b"veritor/protocol/merkle/frame/v3\0" + (4).to_bytes(4, "big") + b"leaf"
     for r in (0, 1, 7, 255, 256, 299):
         u = r.to_bytes(max(1, (r.bit_length() + 7) // 8), "big")
-        parts = (dom.domain_id, u, u, L.A_SCHEMA.encode(), values[r])
+        parts = (dom.domain_id, u, u, L.A_LEAF_TAG.encode(), values[r])
         message = frame + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
         assert sub.levels[0][r] == hashlib.sha512(message).digest()
         assert message[121:121 + len(u)] == u == message[129 + len(u):129 + 2 * len(u)]

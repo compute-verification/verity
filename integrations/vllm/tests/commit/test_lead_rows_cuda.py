@@ -64,7 +64,7 @@ def _leaves(ext, hasher, dom, schema: str, values: list[bytes], first: int) -> l
     return [out[64 * i:64 * i + 64] for i in range(len(values))]
 
 
-@pytest.mark.parametrize("schema", [L.WORDS_SCHEMA, L.A_SCHEMA, "s", "x" * 32])
+@pytest.mark.parametrize("schema", [L.WORDS_LEAF_TAG, L.A_LEAF_TAG, "s", "x" * 32])
 @pytest.mark.parametrize("first", [0, 250, 65530, (1 << 24) - 3, (1 << 32) - 8])
 @pytest.mark.parametrize("size,last", [(8, 8), (1024, 1024), (1024, 32), (4 * L.CHUNK_WORDS, 4 * L.CHUNK_WORDS), (4 * L.CHUNK_WORDS, 512),
                                        (1032, 1000), (136, 8)])
@@ -77,7 +77,7 @@ def test_leaves_are_core_inline_leaves(ext, hasher, schema, first, size, last):
 
 def test_leaves_refuse_ranks_past_2_32_and_ragged_bytes(ext, hasher):
     dom = L.instance_domain(SALT, 0, 4)
-    ls, buf = ext.LeadStep(dom.domain_id, L.A_SCHEMA), _dev(bytes(4096))
+    ls, buf = ext.LeadStep(dom.domain_id, L.A_LEAF_TAG), _dev(bytes(4096))
     for args in ((1024, 1, 1024, (1 << 32)), (1020, 2, 1020, 0), (1024, 4, 1028, 0), (1024, 5, 1024, 0)):
         with pytest.raises(RuntimeError):
             hasher.lead_leaves(ls, buf, *args, _stream())
@@ -103,11 +103,11 @@ def test_subtrees_are_lead_rows(ext, hasher, m, n, S, bn, K):
     ex = _export(rng, m, n, S, bn)
     words = hasher.lead_stream(torch.from_numpy(ex).cuda(), m, n, S, bn, _stream())
     a = rng.bytes(m * K)
-    for values, schema, pos in ((L.chunks(L.stream(ex, m, n, S, bn)), L.WORDS_SCHEMA, L.words_position(2)),
-                                (L.a_segments(a), L.A_SCHEMA, L.a_position(2, 64, 9))):
+    for values, schema, pos in ((L.chunks(L.stream(ex, m, n, S, bn)), L.WORDS_LEAF_TAG, L.words_position(2)),
+                                (L.a_segments(a), L.A_LEAF_TAG, L.a_position(2, 64, 9))):
         dom = L.instance_domain(SALT, pos, len(values))
         sub = L.subtree(dom, schema, values)
-        src = words.view(torch.uint8) if schema == L.WORDS_SCHEMA else _dev(a)
+        src = words.view(torch.uint8) if schema == L.WORDS_LEAF_TAG else _dev(a)
         size = len(values[0])
         got = hasher.lead_leaves(ext.LeadStep(dom.domain_id, schema), src, size, len(values), len(values[-1]), 0, _stream())
         leaves = got.cpu().numpy().tobytes()
