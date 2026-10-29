@@ -1438,11 +1438,35 @@ def blobs_of(members: list[dict]) -> tuple[dict[str, bytes], set[str]]:
 
 
 def known(members: list[dict], at: SimpleNamespace) -> bytes:
-    """What the scan leaves out: the circuits, zeros, and the window's pads and ENDs (fixed by the ordinals)."""
+    """What the scan leaves out: the circuits, zeros, the window's pads and ENDs (fixed by the ordinals), and each
+    member's refs (`refs_of`)."""
     B = at.setup.cls.B
     cells = [IT.pad_cell(B, q) + IT.end_cell(q, B) for q in [0, *at.ordinals]]
     circuits = {m["pin"]: m["dir"] / "circuit.txt" for m in members}
-    return b"".join(f.read_bytes() for f in circuits.values()) + bytes(WR.SALT_BYTES) + b"".join(cells)
+    return (b"".join(f.read_bytes() for f in circuits.values()) + bytes(WR.SALT_BYTES) + b"".join(cells)
+            + b"".join(refs_of(m) for m in members))
+
+
+def refs_of(m: dict) -> bytes:
+    """Member m's refs in its public file (`shared_bcs`' format): each instance's table row of each port, u32
+    little-endian, instance-major, which the statement fixes before any witness (a unit's own row, or its boundary's
+    slot entry in first-read order, `registered.table`). They are small integers, which a witness row's small fields
+    can equal (S_0's ``now``, ``phase`` and an empty slot). Its header and b‖c stay scanned: its roots, paths and
+    commitments are computed from the witness. Refused unless each port's refs are its table's rows in first-read
+    order: each at most one past the largest before it, ending at its last row."""
+    head, body = (m["dir"] / f"pub-{m['n']}.bin").read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    rows = [int(h["shared_rows"][p.name]) for p in m["ports"]]
+    at, n = 128 * sum(rows), int(h["instances"])
+    refs = body[at:at + 4 * n * len(rows)]
+    top, ok = [-1] * len(rows), len(refs) == 4 * n * len(rows)
+    for k in range(n * len(rows) if ok else 0):
+        x, q = int.from_bytes(refs[4 * k:4 * k + 4], "little"), k % len(rows)
+        ok = ok and x <= top[q] + 1
+        top[q] = max(top[q], x)
+    if not ok or n and top != [r - 1 for r in rows]:
+        raise SystemExit(f"{m['name']}: its public file's refs aren't each port's table rows in first-read order")
+    return refs
 
 
 def sparse(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], set[str], int]:
