@@ -72,7 +72,7 @@ theorem clockKBoundsCount : ClockKBoundsCount := by
   refine Nat.mul_le_mul (le_two_pow_clog2 _) (Nat.mul_le_mul (caps_le caps) ?_)
   rw [← Finset.prod_pow_eq_pow_sum]
   refine Finset.prod_le_prod fun i _ => ?_
-  simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
+  simp only [AuditTerms.bits, AuditTerms.of, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
 /-- The tied factor is at most `2 ^ κ_t`: `(N_t + 1)^F_t ≤ 2^(⌈log2 (N_t + 1)⌉ · F_t)`, and the min of the powers is
@@ -109,9 +109,9 @@ theorem le_mul_ceil_div (a b : ℕ) (hb : 0 < b) : a ≤ b * ((a + b - 1) / b) :
 theorem tiedFMeets : TiedFMeets := by
   intro δ k n F h
   by_cases hc : δ.num = 0 ∨ k = 0 ∨ n = 0
-  · rw [tiedF, if_pos hc] at h
+  · rw [tiedF, ite_eq_left hc] at h
     cases h
-  rw [tiedF, if_neg hc] at h
+  rw [tiedF, ite_eq_right hc] at h
   have hX := Option.some.inj h
   simp only [not_or] at hc
   obtain ⟨hnum, hk, hn⟩ := hc
@@ -142,9 +142,8 @@ theorem tiedFMeets : TiedFMeets := by
 /-- **`TiedFMeets`'s honest witness**: at the demo's tied sample, 169 of w63k4's 7,000,000 proof blocks, and
 `δ_t = 10^-6`, the check computes an `F_t`. -/
 theorem tiedFMeets_honest : ∃ F, tiedF ⟨1, 10 ^ 6⟩ 169 7000000 = some F := by
-  refine ⟨_, ?_⟩
   unfold tiedF
-  exact if_neg (by decide)
+  exact ⟨_, ite_eq_right (by decide)⟩
 
 /-- **`TiedFMeets`'s nontrivial witness**: its conclusion fails at `δ = 10^-6`, a sample of its one proof block
 (`q = 1`) and `F = 0`, what a computation of `F_t` that accepts everything may return. -/
