@@ -135,7 +135,7 @@ theorem pack4_eq_iff (v w : Fin 4 → ℤ) : pack4 v = pack4 w ↔ ∀ t, byte (
 def reg {G : Type} (X : G → Fin 4 → ℤ) : G → ℚ := fun g => ((pack4 (X g) : ℤ) : ℚ)
 
 /-- Two registers, at two grid points, are equal iff their four bytes are. -/
-theorem reg_eq_iff {G : Type} (X Y : G → Fin 4 → ℤ) (g g' : G) :
+theorem reg_eq_iff {G G' : Type} (X : G → Fin 4 → ℤ) (Y : G' → Fin 4 → ℤ) (g : G) (g' : G') :
     reg X g = reg Y g' ↔ ∀ t, byte (X g t) = byte (Y g' t) := by
   simp only [reg, Int.cast_inj]
   exact pack4_eq_iff _ _
@@ -663,6 +663,326 @@ theorem all_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndepen
   obtain ⟨hD, hc⟩ := allTarget hind B hB W' hW0 hW1 P hP Ix Jx hJ0 hJ Op hop0 hopN hopW hopd
   rw [← hc]
   exact charged _ (freeCall_const _) _ fpSem L Pg _ hL hPg hD hO
+
+/-! ### Concrete registers: the coin words, and block 1 of `X` and `Y` -/
+
+/-- Every coin `33`, so every noise entry `1`. -/
+def ω₁ : Noise 1 m n k := (fun _ _ _ => 32, fun _ _ => 32)
+
+/-- `F₁` is `1` at `(l, j)` and `0` elsewhere. -/
+def ωF (l j : ℕ) : Noise 1 m n k := (fun _ _ _ => 31, fun l' j' => if (l' : ℕ) = l ∧ (j' : ℕ) = j then 32 else 31)
+
+theorem e1_ω₀ (u i l : ℕ) : e1Of (ω₀ (m := m) (n := n) (k := k)) u i l = 0 := by
+  simp only [e1Of, ω₀]
+  split_ifs <;> rfl
+
+theorem f1_ω₀ (l j : ℕ) : f1Of (ω₀ (m := m) (n := n) (k := k)) l j = 0 := by
+  simp only [f1Of, ω₀]
+  split_ifs <;> rfl
+
+theorem e1_ω₁ {i l : ℕ} (hi : i < m) (hl : l < k) : e1Of (ω₁ (m := m) (n := n) (k := k)) 0 i l = 1 := by
+  simp only [e1Of, ω₁, dif_pos (show 0 < 1 ∧ i < m ∧ l < k from ⟨Nat.one_pos, hi, hl⟩)]
+  rfl
+
+theorem f1_ωF (l j l' j' : ℕ) :
+    f1Of (ωF (m := m) (n := n) (k := k) l j) l' j' = if l' < k ∧ j' < n ∧ l' = l ∧ j' = j then 1 else 0 := by
+  simp only [f1Of, ωF]
+  by_cases h : l' < k ∧ j' < n
+  · rw [dif_pos h]
+    by_cases h' : l' = l ∧ j' = j
+    · rw [if_pos h', if_pos ⟨h.1, h.2, h'⟩]
+      rfl
+    · rw [if_neg h', if_neg fun h'' => h' ⟨h''.2.2.1, h''.2.2.2⟩]
+      rfl
+  · rw [dif_neg h, if_neg fun h'' => h ⟨h''.1, h''.2.1⟩]
+
+theorem e1_ωF (l j u i l' : ℕ) : e1Of (ωF (m := m) (n := n) (k := k) l j) u i l' = 0 := by
+  simp only [e1Of, ωF]
+  split_ifs <;> rfl
+
+theorem e1_range (ω : Noise 1 m n k) (u i l : ℕ) : -31 ≤ e1Of ω u i l ∧ e1Of ω u i l ≤ 32 := by
+  simp only [e1Of]
+  split_ifs with h
+  · have := (ω.1 ⟨u, h.1⟩ ⟨i, h.2.1⟩ ⟨l, h.2.2⟩).isLt
+    omega
+  · omega
+
+theorem byte_of_range {x : ℤ} (h0 : 0 ≤ x) (h1 : x < 256) : byte x = x := Int.emod_eq_of_lt h0 h1
+
+/-- A register whose bytes are in `[0, 255]` is the plain base-256 sum. -/
+theorem reg_of_range {G : Type} (X : G → Fin 4 → ℤ) (g : G) (h : ∀ t, 0 ≤ X g t ∧ X g t < 256) :
+    reg X g = (X g 0 : ℚ) + 256 * X g 1 + 65536 * X g 2 + 16777216 * X g 3 := by
+  simp only [reg, pack4, byte_of_range (h 0).1 (h 0).2, byte_of_range (h 1).1 (h 1).2, byte_of_range (h 2).1 (h 2).2,
+    byte_of_range (h 3).1 (h 3).2]
+  push_cast
+  ring
+
+/-- `E₁[i, l]` as a function of the noise is in `V₀`. -/
+theorem e1_mem_V0 (i l : ℕ) : (fun ω : Noise 1 m n k => (e1Of ω 0 i l : ℚ)) ∈ V0 1 m n k := by
+  by_cases h : 0 < 1 ∧ i < m ∧ l < k
+  · refine Submodule.mem_sup_left (Submodule.subset_span (Set.mem_insert_of_mem _ ?_))
+    show _ ∈ coords 1 m n k
+    refine List.mem_append_left _ (List.mem_flatMap.2 ⟨0, List.mem_finRange _, List.mem_flatMap.2 ⟨⟨i, h.2.1⟩,
+      List.mem_finRange _, List.mem_map.2 ⟨⟨l, h.2.2⟩, List.mem_finRange _, ?_⟩⟩⟩)
+    funext ω
+    simp only [e1Of, dif_pos h]
+    push_cast
+    rfl
+  · have : (fun ω : Noise 1 m n k => (e1Of ω 0 i l : ℚ)) = 0 := by
+      funext ω
+      simp only [e1Of, dif_neg h]
+      rfl
+    rw [this]
+    exact Submodule.zero_mem _
+
+/-- A register whose input-`0` slice has bytes in `[0, 255]`, each `E₁[i, l_t]` plus a constant, is in `V₀` there. -/
+theorem reg_e1_mem_V0 (X : Call m n k → Fin 4 → ℤ) (i : ℕ) (l : Fin 4 → ℕ) (q : Fin 4 → ℤ)
+    (hX : ∀ ω t, X (zeroA, ω) t = e1Of ω 0 i (l t) + q t) (hr : ∀ ω t, 0 ≤ X (zeroA, ω) t ∧ X (zeroA, ω) t < 256) :
+    slice0 (reg X) ∈ V0 1 m n k := by
+  have hf : slice0 (reg X) =
+      (fun ω : Noise 1 m n k => (e1Of ω 0 i (l 0) : ℚ)) + (256 : ℚ) • (fun ω => (e1Of ω 0 i (l 1) : ℚ)) +
+        (65536 : ℚ) • (fun ω => (e1Of ω 0 i (l 2) : ℚ)) + (16777216 : ℚ) • (fun ω => (e1Of ω 0 i (l 3) : ℚ)) +
+        fun _ => ((q 0 + 256 * q 1 + 65536 * q 2 + 16777216 * q 3 : ℤ) : ℚ) := by
+    funext ω
+    simp only [slice0, reg_of_range X _ (hr ω), hX ω, Pi.add_apply, Pi.smul_apply, smul_eq_mul]
+    push_cast
+    ring
+  rw [hf]
+  refine Submodule.add_mem _ (Submodule.add_mem _ (Submodule.add_mem _ (Submodule.add_mem _ (e1_mem_V0 _ _)
+    (Submodule.smul_mem _ _ (e1_mem_V0 _ _))) (Submodule.smul_mem _ _ (e1_mem_V0 _ _)))
+    (Submodule.smul_mem _ _ (e1_mem_V0 _ _))) (mem_V0_of_const _)
+
+/-- A function of the call that reads the noise only through `F₁` has its input-`0` slice in `fnF ⊆ V₀`. -/
+theorem slice0_mem_V0_of_f1 (w : Call m n k → ℚ) (s : Mat → ℚ) (hw : ∀ g, w g = s (f1Of g.2)) :
+    slice0 w ∈ V0 1 m n k := by
+  refine Submodule.mem_sup_right (Submodule.subset_span fun ω ω' h => ?_)
+  have : f1Of ω = f1Of ω' := by
+    funext l j
+    simp only [f1Of, h]
+  simp only [slice0, hw, this]
+
+/-- The `E₁` coin word `(i, c)`: the coins of `E₁[i, 4c..4c+3]`, each `e + 31 ∈ [0, 63]`, packed. -/
+def coinE (i c : ℕ) : Call m n k → ℚ := reg fun g t => e1Of g.2 0 i (4 * c + t) + 31
+
+/-- The `F₁` coin word `(j, c)`: the coins of `F₁[4c..4c+3, j]`, packed. -/
+def coinF (j c : ℕ) : Call m n k → ℚ := reg fun g t => f1Of g.2 (4 * c + t) j + 31
+
+/-- The call's coin words. -/
+def coinWords (m n k : ℕ) : Set (Call m n k → ℚ) :=
+  {f | (∃ i c, f = coinE (m := m) (n := n) (k := k) i c) ∨ ∃ j c, f = coinF (m := m) (n := n) (k := k) j c}
+
+/-- Block 1 of `X` in the biased packing: bytes `A[i, 4c+t] + E₁[i, 4c+t] + 128`. -/
+def xWord (i c : ℕ) : Call m n k → ℚ := reg fun g t => g.1 i (4 * c + t) + e1Of g.2 0 i (4 * c + t) + 128
+
+/-- Block 1 of `Y`: bytes `B[4c+t, j] + F₁[4c+t, j]`, in two's complement. -/
+def yWord (B : Mat) (j c : ℕ) : Call m n k → ℚ := reg fun g t => B (4 * c + t) j + f1Of g.2 (4 * c + t) j
+
+theorem coinWords_V0 : ∀ w ∈ coinWords m n k, slice0 w ∈ V0 1 m n k := by
+  rintro w (⟨i, c, rfl⟩ | ⟨j, c, rfl⟩)
+  · refine reg_e1_mem_V0 _ i (fun t => 4 * c + t) (fun _ => 31) (fun _ _ => rfl) fun ω t => ?_
+    have := e1_range ω 0 i (4 * c + t)
+    show (0 : ℤ) ≤ e1Of ω 0 i (4 * c + t) + 31 ∧ e1Of ω 0 i (4 * c + t) + 31 < 256
+    omega
+  · exact slice0_mem_V0_of_f1 _ (fun F => reg (fun _ : Unit => fun t => F (4 * c + t) j + 31) ()) fun _ => rfl
+
+theorem coinWords_ignore : ∀ w ∈ coinWords m n k, Ignores (int7 m n k) DataStep w ∨ Moves (int7 m n k) NoiseStep w := by
+  rintro w (⟨i, c, rfl⟩ | ⟨j, c, rfl⟩) <;> left <;> rintro ⟨a, ω⟩ _ ⟨a', ω'⟩ _ (h : ω = ω') <;> subst h <;> rfl
+
+/-- At `(0, ω₀)` every coin word reads the bytes `31`. -/
+theorem coin_at_ω₀ (w : Call m n k → ℚ) (hw : w ∈ coinWords m n k) :
+    w (zeroA, ω₀) = reg (fun (_ : Unit) (_ : Fin 4) => (31 : ℤ)) () := by
+  rcases hw with ⟨i, c, rfl⟩ | ⟨j, c, rfl⟩
+  · unfold coinE
+    refine (reg_eq_iff _ _ _ _).2 fun t => ?_
+    show byte (e1Of ω₀ 0 i (4 * c + t) + 31) = byte 31
+    rw [e1_ω₀, zero_add]
+  · unfold coinF
+    refine (reg_eq_iff _ _ _ _).2 fun t => ?_
+    show byte (f1Of ω₀ (4 * c + t) j + 31) = byte 31
+    rw [f1_ω₀, zero_add]
+
+theorem xWord_moves {i c : ℕ} (hi : i < m) (hc : 4 * c < k) :
+    Moves (int7 m n k) NoiseStep (xWord (m := m) (n := n) (k := k) i c) := by
+  refine ⟨(zeroA, ω₀), zero_int7 _, (zeroA, ω₁), zero_int7 _, rfl, fun h => ?_⟩
+  have h0 := (reg_eq_iff _ _ _ _).1 h 0
+  have e : byte (zeroA i (4 * c + 0) + e1Of ω₀ 0 i (4 * c + 0) + 128) =
+      byte (zeroA i (4 * c + 0) + e1Of ω₁ 0 i (4 * c + 0) + 128) := h0
+  rw [e1_ω₀, e1_ω₁ hi (by omega)] at e
+  simp only [zeroA, byte] at e
+  omega
+
+theorem xWord_ne_coin (i c : ℕ) (w : Call m n k → ℚ) (hw : w ∈ coinWords m n k) :
+    ¬ ∀ g ∈ int7 m n k, xWord (m := m) (n := n) (k := k) i c g = w g := by
+  refine differ_of_point (zero_int7 ω₀) ?_
+  rw [coin_at_ω₀ w hw]
+  intro h
+  unfold xWord at h
+  have e : byte (zeroA i (4 * c + 0) + e1Of ω₀ 0 i (4 * c + 0) + 128) = byte 31 := (reg_eq_iff _ _ _ _).1 h 0
+  rw [e1_ω₀] at e
+  simp only [zeroA, byte] at e
+  omega
+
+theorem xWord_slice0 (i c : ℕ) : slice0 (xWord (m := m) (n := n) (k := k) i c) ∈ V0 1 m n k := by
+  refine reg_e1_mem_V0 _ i (fun t => 4 * c + t) (fun _ => 128) (fun ω t => ?_) fun ω t => ?_
+  · show zeroA i (4 * c + t) + e1Of ω 0 i (4 * c + t) + 128 = _
+    simp only [zeroA, zero_add]
+  · have := e1_range ω 0 i (4 * c + t)
+    show 0 ≤ zeroA i (4 * c + t) + e1Of ω 0 i (4 * c + t) + 128 ∧ zeroA i (4 * c + t) + e1Of ω 0 i (4 * c + t) + 128 < 256
+    simp only [zeroA]
+    omega
+
+/-- Two block-1 `X` registers at different indices differ on `int7`: at `A = e_{i, 4c}` byte 0 of `(i, c)` reads
+`129`, and of any other in-range index `128`. -/
+theorem xWord_ne_xWord {i c i' c' : ℕ} (hne : (i, c) ≠ (i', c')) :
+    ¬ ∀ g ∈ int7 m n k, xWord (m := m) (n := n) (k := k) i c g = xWord i' c' g := by
+  refine differ_of_point (unitAt_int7 (m := m) (n := n) (k := k) i (4 * c) ω₀) fun h => ?_
+  unfold xWord at h
+  have e : byte (unitAt i (4 * c) i (4 * c + 0) + e1Of ω₀ 0 i (4 * c + 0) + 128) =
+      byte (unitAt i (4 * c) i' (4 * c' + 0) + e1Of ω₀ 0 i' (4 * c' + 0) + 128) := (reg_eq_iff _ _ _ _).1 h 0
+  have hu : unitAt i (4 * c) i' (4 * c' + 0) = 0 := by
+    simp only [unitAt]
+    rw [if_neg]
+    rintro ⟨rfl, h'⟩
+    exact hne (by rw [show c = c' by omega])
+  have hu1 : unitAt i (4 * c) i (4 * c + 0) = 1 := by simp [unitAt]
+  simp only [e1_ω₀, hu, hu1, byte] at e
+  omega
+
+theorem xWord_moves_data (i c : ℕ) : Moves (int7 m n k) DataStep (xWord (m := m) (n := n) (k := k) i c) := by
+  refine ⟨(zeroA, ω₀), zero_int7 _, (unitAt i (4 * c), ω₀), unitAt_int7 _ _ _, rfl, fun h => ?_⟩
+  unfold xWord at h
+  have e : byte (zeroA i (4 * c + 0) + e1Of ω₀ 0 i (4 * c + 0) + 128) =
+      byte (unitAt i (4 * c) i (4 * c + 0) + e1Of ω₀ 0 i (4 * c + 0) + 128) := (reg_eq_iff _ _ _ _).1 h 0
+  have hu1 : unitAt i (4 * c) i (4 * c + 0) = 1 := by simp [unitAt]
+  simp only [e1_ω₀, hu1, zeroA, byte] at e
+  omega
+
+theorem yWord_ignores_data (B : Mat) (j c : ℕ) : Ignores (int7 m n k) DataStep (yWord (m := m) (n := n) (k := k) B j c) := by
+  rintro ⟨a, ω⟩ _ ⟨a', ω'⟩ _ (h : ω = ω')
+  subst h
+  rfl
+
+theorem yWord_slice0 (B : Mat) (j c : ℕ) : slice0 (yWord (m := m) (n := n) (k := k) B j c) ∈ V0 1 m n k :=
+  slice0_mem_V0_of_f1 _ (fun F => reg (fun _ : Unit => fun t => B (4 * c + t) j + F (4 * c + t) j) ()) fun _ => rfl
+
+theorem yWord_step (B : Mat) {j c : ℕ} (hj : j < n) (hc : 4 * c < k) :
+    yWord (m := m) (n := n) (k := k) B j c (zeroA, ω₀) ≠
+      yWord (m := m) (n := n) (k := k) B j c (zeroA, ωF (4 * c) j) := by
+  intro h
+  unfold yWord at h
+  have e : byte (B (4 * c + 0) j + f1Of ω₀ (4 * c + 0) j) = byte (B (4 * c + 0) j + f1Of (ωF (4 * c) j) (4 * c + 0) j) :=
+    (reg_eq_iff _ _ _ _).1 h 0
+  rw [f1_ω₀, f1_ωF, if_pos ⟨by omega, hj, by omega, rfl⟩] at e
+  simp only [byte] at e
+  omega
+
+theorem yWord_moves (B : Mat) {j c : ℕ} (hj : j < n) (hc : 4 * c < k) :
+    Moves (int7 m n k) NoiseStep (yWord (m := m) (n := n) (k := k) B j c) :=
+  ⟨(zeroA, ω₀), zero_int7 _, (zeroA, ωF (4 * c) j), zero_int7 _, rfl, yWord_step B hj hc⟩
+
+/-- A block-1 `Y` register is no coin word when its four weights are not all the coin offset `31` mod 256. -/
+theorem yWord_ne_coin (B : Mat) (j c : ℕ) (hB31 : ∃ t : Fin 4, byte (B (4 * c + t) j) ≠ 31) (w : Call m n k → ℚ)
+    (hw : w ∈ coinWords m n k) : ¬ ∀ g ∈ int7 m n k, yWord (m := m) (n := n) (k := k) B j c g = w g := by
+  refine differ_of_point (zero_int7 ω₀) ?_
+  rw [coin_at_ω₀ w hw]
+  intro h
+  unfold yWord at h
+  obtain ⟨t, ht⟩ := hB31
+  have e : byte (B (4 * c + t) j + f1Of ω₀ (4 * c + t) j) = byte 31 := (reg_eq_iff _ _ _ _).1 h t
+  rw [f1_ω₀, add_zero] at e
+  exact ht (e.trans rfl)
+
+/-- Two block-1 `Y` registers at different in-range indices differ on `int7`: the noise step `ωF (4c) j` moves
+`(j, c)` and leaves `(j', c')`. -/
+theorem yWord_ne_yWord (B : Mat) {j c j' c' : ℕ} (hj : j < n) (hc : 4 * c < k) (hne : (j, c) ≠ (j', c')) :
+    ¬ ∀ g ∈ int7 m n k, yWord (m := m) (n := n) (k := k) B j c g = yWord B j' c' g := by
+  intro heq
+  have h0 := heq _ (zero_int7 ω₀)
+  have h1 := heq _ (zero_int7 (ωF (4 * c) j))
+  have hfix : yWord (m := m) (n := n) (k := k) B j' c' (zeroA, ω₀) =
+      yWord (m := m) (n := n) (k := k) B j' c' (zeroA, ωF (4 * c) j) := by
+    unfold yWord
+    refine (reg_eq_iff _ _ _ _).2 fun t => ?_
+    show byte (B (4 * c' + t) j' + f1Of ω₀ (4 * c' + t) j') =
+      byte (B (4 * c' + t) j' + f1Of (ωF (4 * c) j) (4 * c' + t) j')
+    rw [f1_ω₀, f1_ωF, if_neg]
+    rintro ⟨-, -, h', rfl⟩
+    have : c' = c := by omega
+    exact hne (by rw [this])
+  exact yWord_step B hj hc (by rw [h0, hfix, ← h1])
+
+/-- **Candidate 1 and the final word on NCP's block 1, concretely** (at the H200's measured table): with the free
+values the constants, the call's input words and its coin words, a well-formed `MH100w` program that outputs the
+non-final words at `P`, the final words of `Ix × Jx`, the committed block-1 `X` registers of `Xi` (biased packing) and
+the committed block-1 `Y` registers of `Yi`, on every int7 input and every noise, costs at least
+`32·(|P| + |Ix|·|Jx| + |Xi| + |Yi|)`. The `Y` registers need weights not all `31` mod 256. -/
+theorem block1_charged [DecidableEq (Call m n k → ℚ)] (hind : CheckpointIndependent k 16 R) (B : Mat)
+    (hB : ∀ l j, -255 ≤ B l j ∧ B l j ≤ 255)
+    (P : Finset ℕ) (hP : P ⊆ range (nonFinal k m n)) (Ix Jx : Finset ℕ)
+    (hJ0 : ∀ j ∈ Jx, ∃ l < k, B l j ≠ 0) (hJ : ∀ j ∈ Jx, ∀ j' ∈ Jx, j ≠ j' → ∃ l < k, B l j ≠ B l j')
+    (Xi Yi : Finset (ℕ × ℕ)) (hXi : ∀ x ∈ Xi, x.1 < m ∧ 4 * x.2 < k)
+    (hYi : ∀ y ∈ Yi, y.1 < n ∧ 4 * y.2 < k ∧ ∃ t : Fin 4, byte (B (4 * y.2 + t) y.1) ≠ 31)
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Call m n k → ℚ)) (Pg : List (Op100 (Call m n k)))
+    (hL : ∀ f ∈ L, f ∈ FreeCall (inWords m n k ∪ coinWords m n k))
+    (hPg : ∀ o ∈ Pg, o.WFw h100Floor (FreeCall (inWords m n k ∪ coinWords m n k)))
+    (hO : OutputsOn fpSem (int7 m n k) Pg L
+      ((P.image (nfWord R B) ∪ (Ix ×ˢ Jx).image fun x => finalWord B x.1 x.2) ∪
+        (Xi.image (fun x => xWord x.1 x.2) ∪ Yi.image fun y => yWord B y.1 y.2))) :
+    32 * (P.card + Ix.card * Jx.card + (Xi.card + Yi.card)) ≤ cost100 h100Floor Pg := by
+  have hxx : ∀ x ∈ Xi, ∀ x' ∈ Xi, x ≠ x' →
+      ¬ ∀ g ∈ int7 m n k, xWord (m := m) (n := n) (k := k) x.1 x.2 g = xWord x'.1 x'.2 g :=
+    fun x _ x' _ hne => xWord_ne_xWord hne
+  have hyy : ∀ y ∈ Yi, ∀ y' ∈ Yi, y ≠ y' →
+      ¬ ∀ g ∈ int7 m n k, yWord (m := m) (n := n) (k := k) B y.1 y.2 g = yWord B y'.1 y'.2 g :=
+    fun y hy y' _ hne => yWord_ne_yWord B (hYi y hy).1 (hYi y hy).2.1 hne
+  have hxy : ∀ t ∈ Xi.image (fun x => xWord (m := m) (n := n) (k := k) x.1 x.2),
+      ∀ t' ∈ Yi.image (fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2), ¬ ∀ g ∈ int7 m n k, t g = t' g := by
+    intro t ht t' ht'
+    obtain ⟨x, -, rfl⟩ := Finset.mem_image.1 ht
+    obtain ⟨y, -, rfl⟩ := Finset.mem_image.1 ht'
+    exact differ_of_moves (xWord_moves_data x.1 x.2) (yWord_ignores_data B y.1 y.2)
+  have hcard : (Xi.image (fun x => xWord (m := m) (n := n) (k := k) x.1 x.2) ∪
+      Yi.image fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2).card = Xi.card + Yi.card := by
+    rw [card_union_of_cross hxy, card_image_of_differ Xi _ hxx, card_image_of_differ Yi _ hyy]
+  have hd : ∀ w ∈ Xi.image (fun x => xWord (m := m) (n := n) (k := k) x.1 x.2) ∪
+      Yi.image (fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2),
+      ∀ w' ∈ Xi.image (fun x => xWord (m := m) (n := n) (k := k) x.1 x.2) ∪
+      Yi.image (fun y => yWord (m := m) (n := n) (k := k) B y.1 y.2), (∀ g ∈ int7 m n k, w g = w' g) → w = w' := by
+    intro w hw w' hw' h
+    rcases Finset.mem_union.1 hw with hw | hw <;> rcases Finset.mem_union.1 hw' with hw' | hw'
+    · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
+      obtain ⟨x', hx', rfl⟩ := Finset.mem_image.1 hw'
+      by_cases hxe : x = x'
+      · rw [hxe]
+      · exact absurd h (hxx x hx x' hx' hxe)
+    · exact absurd h (hxy w hw w' hw')
+    · exact absurd (fun g hg => (h g hg).symm) (hxy w' hw' w hw)
+    · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw
+      obtain ⟨y', hy', rfl⟩ := Finset.mem_image.1 hw'
+      by_cases hye : y = y'
+      · rw [hye]
+      · exact absurd h (hyy y hy y' hy' hye)
+  have h := all_charged hind B hB (coinWords m n k) coinWords_V0 coinWords_ignore P hP Ix Jx hJ0 hJ _
+    (fun w hw => by
+      rcases Finset.mem_union.1 hw with hw | hw
+      · obtain ⟨x, -, rfl⟩ := Finset.mem_image.1 hw
+        exact xWord_slice0 x.1 x.2
+      · obtain ⟨y, -, rfl⟩ := Finset.mem_image.1 hw
+        exact yWord_slice0 B y.1 y.2)
+    (fun w hw => by
+      rcases Finset.mem_union.1 hw with hw | hw
+      · obtain ⟨x, hx, rfl⟩ := Finset.mem_image.1 hw
+        exact xWord_moves (hXi x hx).1 (hXi x hx).2
+      · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw
+        exact yWord_moves B (hYi y hy).1 (hYi y hy).2.1)
+    (fun w hw c hc => by
+      rcases Finset.mem_union.1 hw with hw | hw
+      · obtain ⟨x, -, rfl⟩ := Finset.mem_image.1 hw
+        exact xWord_ne_coin x.1 x.2 c hc
+      · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.1 hw
+        exact yWord_ne_coin B y.1 y.2 (hYi y hy).2.2 c hc)
+    hd fpSem L Pg hL hPg hO
+  rwa [hcard] at h
 
 end FinalWord
 
