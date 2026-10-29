@@ -199,7 +199,7 @@ def lay_out(req: RQ.Requirement, positions, seed: int):
         payload[j] = payload.get(j, 0) | req.values[v] << offset[v]
     for j in set(block.values()):
         freed.setdefault(max(req.last[v] for v, k in block.items() if k == j), set()).add(j)
-    return (RQ.Store.Placement(block, offset),
+    return (RQ.Store.Packing(block, offset),
             RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload))
 
 
@@ -456,7 +456,7 @@ class UnitsLink:
     they are set, the link credits nothing."""
     holds: bool
     req: RQ.Requirement
-    layout: RQ.Store.Placement
+    layout: RQ.Store.Packing
     appends: bytes | None = None
     proved: bool = False
     epsilon: float = 1.0
