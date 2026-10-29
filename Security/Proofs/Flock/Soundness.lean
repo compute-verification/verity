@@ -140,6 +140,7 @@ import Proofs.Flock.Soundness.Audit.HarmBudgetLife
 import Proofs.Flock.Soundness.Refine
 import Proofs.Flock.Soundness.E2E
 import Proofs.Flock.Soundness.StrictCR
+import Proofs.Flock.Soundness.Teeth
 import Proofs.Flock.Soundness.Types.Units
 import Proofs.Flock.Soundness.Types.Program
 import Proofs.Flock.Soundness.Types.ProgramPlaces
