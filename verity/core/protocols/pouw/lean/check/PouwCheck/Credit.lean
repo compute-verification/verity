@@ -1,5 +1,6 @@
 import Std.Data.HashMap
-import Flock.Keccak
+import Flock.Bytes
+import Flock.Hash
 import Flock.Program
 import Flock.RegKnown
 import PouwCommit.Frame
@@ -1057,11 +1058,14 @@ def OK_VALUE : String := "ok"
 /-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's, #3124). -/
 def OK_ROW : Array Nat := #[1]
 /-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's, #3124). -/
-def OK_SALT_TAG : ByteArray := "verity/pouw/h1-prove/ok-row-salt/v0".toUTF8.push 0
+def OK_SALT_TAG : ByteArray := "verity/pouw/h1-prove/ok-row-salt/v1".toUTF8.push 0
 
-/-- `core_check.ok_salt`: SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position), `PouwCheck.saltBytes` bytes. -/
+/-- `core_check.ok_salt`: `PouwCheck.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
+`c < PouwCheck.saltBytes / 64`, each output whole, over msg = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position). -/
 def okSalt (context : String) (position : Nat) : ByteArray :=
-  Flock.Keccak.shake256 ((OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position) PouwCheck.saltBytes
+  let msg := (OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position
+  (List.range (PouwCheck.saltBytes / 64)).foldl (fun acc c => acc ++ Flock.Sha512.hash (msg ++ Flock.be32 c.toUInt32))
+    ByteArray.empty
 
 /-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
 2w + 1. -/
