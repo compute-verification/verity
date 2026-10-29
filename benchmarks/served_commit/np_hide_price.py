@@ -3,12 +3,14 @@ honest prover alone does to hide its committed values, as a share of stock at T 
 commitment layout and each way of forcing it, the proof's cost to open what it draws, and SSN's bytes, t_H/t_S and ShaSpeed's
 precision. Stdlib only, no GPU.
 
-    python3 benchmarks/served_commit/np_hide_price.py SASS_JSON BEST_SASS_JSON ROWS_JSON OUT_JSON
+    python3 benchmarks/served_commit/np_hide_price.py SASS_JSON BEST_SASS_JSON ROWS_JSON OUT_JSON [LATENCY_JSON]
 
 SASS_JSON and ROWS_JSON are sw_hash_price.py's inputs: a SHA-512 compression's W1 work in the committer's build, and each row
 size's leaf kernels' GPU time (the salt kernel's derived and given salts, a compression's time). BEST_SASS_JSON is the build
 with the fewest registers written a compression: ShaSpeed can credit no more than it, so the committer's excess over it is
-honest-only work, and each register a compression is priced as a share of stock at SSN's volume.
+honest-only work, and each register a compression is priced as a share of stock at SSN's volume. LATENCY_JSON, if given, is
+sha512_latency.cu's output: a call's seed path (A's hash, the seed and its first noise block, which the call's GEMM waits on)
+is priced at a compression's latency on one thread.
 
 An hm96 instance is one salt: y = PRF_ks(pos) (three compressions from round 8), c = SHA-512(salt_prefix ‖ y) (two) and
 b = x ⊕ M_key·y. A prover that reuses one salt skips all three, and nothing the gadget checks changes, so they are honest-only
@@ -140,7 +142,19 @@ def opening_ands(layout: str, b: dict, rows: int, R: int, forced: bool) -> dict:
                 "words row over the unit's own outputs": max(0, S.blocks(R) - S.blocks(UNIT_OUT_BYTES)) * S.ANDS_COMPRESSION + extra}
     big = max(rows * c["words_row"] for c in b["calls"].values())
     depth = math.ceil(math.log2(max(2, big / UNIT_OUT_BYTES)))
+    if layout.startswith("L2"):
+        # up from the call's subtree to the instance: the forward's calls, and for a window its forwards
+        span = CALLS + 1 if layout == "L2" else (CALLS + 1) * S.CENSUS["window s"] / WINDOW_STEP_S
+        depth += math.ceil(math.log2(span))
     return {"path depth": depth, "path and gadget": 2 * depth * S.ANDS_COMPRESSION + extra}
+
+
+def seed_path(rows: int, k: int, flat: bool) -> int:
+    """Compressions one after another from a call's A (rows of k bytes) to its first noise block under L1: A's row digest
+    (row-seg's segments side by side, then their outer hash), its subtree and the merge with the words' root, the instance's
+    leaf (its salt, c and M_key·y precomputed), the seed past its fixed prefix, and one noise block."""
+    row = S.blocks(k) if flat else 9 + -(-(64 * -(-k // 1024) + 17) // 128)
+    return row + 1 + 2 * math.ceil(math.log2(max(2, rows))) + 2 + HM96_LEAF + 2 + 1
 
 
 def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict) -> dict:
@@ -177,6 +191,16 @@ def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict) -> dict
     return out
 
 
+def latency(path: Path) -> dict:
+    """sha512_latency.cu's output: a compression's latency on one thread (a row's chain, mode 0; a tree path's, mode 1) from
+    the SM clock's slope between 16 and 256 compressions at CLOCK, and the launch floor (one compression, wall time)."""
+    d = json.loads(path.read_text())
+    one = {(r["mode"], r["n"]): r for r in d["rows"] if r["grid"] == 1 and r["block"] == 1}
+    ns = {m: (one[(m, 256)]["cycles_max"] - one[(m, 16)]["cycles_max"]) / 240 / CLOCK * 1e9 for m in (0, 1)}
+    return {"src": {"sha_roll": d["sha_roll"]}, "row_ns": ns[0], "tree_ns": ns[1], "launch_us": one[(0, 1)]["wall_us_best"],
+            "rows": d["rows"]}
+
+
 def main() -> None:
     sass = json.loads(Path(sys.argv[1]).read_text())["compression"]
     best = json.loads(Path(sys.argv[2]).read_text())["compression"]
@@ -184,6 +208,7 @@ def main() -> None:
     price = instance_prices(sass, rows)
     excess = {"registers": sass["registers_written"] - best["registers_written"],
               "floor": sass["w1_floor"] - best["w1_floor"], "alone": sass["w1_alone"] - best["w1_alone"]}
+    lat = latency(Path(sys.argv[5])) if len(sys.argv) > 5 else None
     r16 = rows.by[S.ROWS_16K]
     l1_ratio = (r16["leaf_ns"] - r16["salt_ns_leaf"] + 65 / 80 * r16["c_ns"] + (3 - 2) * r16["c_ns"]) / (r16["leaf_ns"] + 3 * r16["c_ns"])
     rates = {"16 KiB low": HASH_ALONE[16384][0], "16 KiB high": HASH_ALONE[16384][1],
@@ -195,7 +220,7 @@ def main() -> None:
                   "L1 16 KiB chunks": (S.blocks(16384) + 5) / 16384}
     out: dict = {"inputs": {"sass": sass, "best_sass": best, "committer_excess_a_compression": excess, "rows_16k": r16,
                             "l1_time_ratio": l1_ratio, "rates_units_byte": rates, "mask_registers": MASK_REGS,
-                            "mask_registers_b1_estimate": MASK_REGS_B1, "units_s": UNITS_S},
+                            "mask_registers_b1_estimate": MASK_REGS_B1, "units_s": UNITS_S, "latency": lat},
                  "instance": price, "designs": {}}
     sizes = sorted(rows.by)
     for design in SSN:
@@ -246,6 +271,15 @@ def main() -> None:
                             "ms": ms, "of_stock_step": ms / stock if stock else None,
                             "share_of_hashed_bytes": b["a_bpm"] / b["bpm"]}
             pt["pre_noise"] = pre
+            if lat:
+                pt["seed_path"] = {}
+                for lay, flat in (("row-seg rows", False), ("flat rows", True)):
+                    comps = N.LAYERS * sum(seed_path(real, k, flat) for _, k in N.LINEARS.values())
+                    ms = comps * lat["tree_ns"] * 1e-6
+                    ms_launch = ms + CALLS * lat["launch_us"] * 1e-3
+                    pt["seed_path"][lay] = {"compressions_a_forward": comps, "ms": ms, "ms_with_a_launch_a_call": ms_launch,
+                                            "of_stock_step": ms / stock if stock else None,
+                                            "with_launch_of_stock_step": ms_launch / stock if stock else None}
             d["points"][pname] = pt
         out["designs"][design] = d
     dc_mac_s = S.CENSUS["datacenter GPUs"] * S.CENSUS["H200 int8 dense ops/s"] / 2
@@ -304,6 +338,10 @@ def main() -> None:
             for k, v in pt["pre_noise"].items():
                 print(f"    pre-noise {k}: W1 {v['w1']['floor']:.3f} / {v['w1']['alone']:.3f} of stock, ANDs {v['ands_of_stock']:.4%}"
                       + (f", {v['ms']:.2f} ms ({v['of_stock_step']:.1%} of the stock step)" if v["of_stock_step"] else ""))
+            for k, v in pt.get("seed_path", {}).items():
+                print(f"    seed path, {k}: {v['compressions_a_forward']} compressions a forward one after another, {v['ms']:.2f} ms, "
+                      f"{v['ms_with_a_launch_a_call']:.2f} ms with a launch a call"
+                      + (f" ({v['of_stock_step']:.1%} / {v['with_launch_of_stock_step']:.1%} of the stock step)" if v["of_stock_step"] else ""))
 
 
 if __name__ == "__main__":
