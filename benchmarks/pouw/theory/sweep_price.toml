@@ -289,14 +289,14 @@ status = "open"
 owner = "SW-HASH"
 requires = ["salt-forced"]
 closes = ["hiding_mask"]
-source = "SW-HASH interim §7: honest's table product M_key·y (960 shared-memory loads and XORs a leaf, a GF(2) product) is the cheapest way to compute it; unstated, rank 4 like SAK for one map"
+source = "SW-HASH interim §7: honest's table product M_key·y (960 shared-memory loads and XORs a leaf, a GF(2) product) is the cheapest way to compute it; unstated, rank 4 like SAK for one map. SW-SMELL final §2.4 (d): likely false as worded, since the key is public and fixed, so a table size is a free time-memory choice within device-memory advice (16-bit chunks: 96 lookups a leaf) and Hankel products have sub-quadratic algorithms; it holds only in ShaSpeed's form (no program with the same device memory computes M·y with less work than the best honest one), with honest's T2 priced at that table size (not done)"
 
 [premise.hiding-ruled]
 rank = 0
 status = "open"
 owner = "Daniel (through the coordinator)"
 closes = ["hiding"]
-source = "SW-HASH interim §7 (c): zero knowledge is mandated, so the salt side's hiding work is credited by ruling, not by a premise about the adversary; no ruling yet"
+source = "SW-HASH interim §7 (c): zero knowledge is mandated, so the salt side's hiding work is credited by ruling, not by a premise about the adversary; no ruling yet. SW-SMELL final §2.4: the ruling is a choice of target, cost(H) without the zero-knowledge overhead; what it waives is each row's hiding_closed (ssn_1l at 256 KiB rows: 1.18x stock)"
 
 [premise.route-u2]
 rank = 0
@@ -316,14 +316,14 @@ status = "scratch"
 owner = "SW-LEAN"
 requires = ["atomic-call", "period-inventory", "weights-distinct"]
 closes = ["final_word"]
-source = "SW-LEAN interim: finalWordTarget / finalWord_charged, proved in Security/Proofs/Pouw/Dimension/Scratch/SwLean.lean (cursor/compute-research-sw-lean-fa5d at 19904038b9, art:bef3acdfa62b1252ed4478a6915fd140997ab6a9bd2d1f4ee52030717e42ab9c; axioms clean, run r20261029-044839-bed3), in no lock; on the grid uniform in the call's input, so rank 0 given the atomic call and PeriodInventory. Padding rows, repeated rows and replayed requests make A_i·B free, as do zero or equal weight columns (SW-SMELL S8: weights-distinct)"
+source = "SW-LEAN interim: finalWordTarget / finalWord_charged, proved in Security/Proofs/Pouw/Dimension/Scratch/SwLean.lean (cursor/compute-research-sw-lean-fa5d at 19904038b9, art:bef3acdfa62b1252ed4478a6915fd140997ab6a9bd2d1f4ee52030717e42ab9c; axioms clean, run r20261029-044839-bed3), in no lock; on the grid uniform in the call's input, so rank 0 given the atomic call and PeriodInventory. Padding rows, repeated rows and replayed requests make A_i·B free, as do zero or equal weight columns (SW-SMELL S8: weights-distinct). SW-LEAN final §2-3 (3726b081f0, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2): for any non-final words independent modulo V0 (NfIndep), NCP's canonical words and route U's (nfIndep_U), and with candidate 1 in one free set (ncp_charged, ncpU_charged); route U''s checked values are not defined (route-u2)"
 
 [premise.commit-forced]
 rank = 0
 status = "open"
 owner = "SW-LEAN"
 forces_committed = true
-source = "SWEEP.md candidate 1. SW-LEAN interim: formed_charged (scratch, no atomicity needed) charges each committed register that moves with the salt and equals no coin word, pairwise-different ones once each, and is exact; beside the final-word lemma (allTarget) each operand register needs (a)-(d), proved for no concrete register yet, and two's-complement X fails (a) (the biased packing passes it: route U's u8 x s8 product, whose c0 = -beta·colsum(Y) is fixed per weight, SW-SMELL). NCP's R must have no fixed point with sign -1 (X3 = -A there is free: the shift by 24 avoids it); committed E1/F1 need an 8-bit coin grid. It forces the committed register once, not route U's second write to it (lane_fix)"
+source = "SWEEP.md candidate 1. SW-LEAN interim: formed_charged (scratch, no atomicity needed) charges each committed register that moves with the salt and equals no coin word, pairwise-different ones once each, and is exact; beside the final-word lemma (allTarget) each operand register needs (a)-(d), proved for no concrete register yet, and two's-complement X fails (a) (the biased packing passes it: route U's u8 x s8 product, whose c0 = -beta·colsum(Y) is fixed per weight, SW-SMELL). NCP's R must have no fixed point with sign -1 (X3 = -A there is free: the shift by 24 avoids it); committed E1/F1 need an 8-bit coin grid. It forces the committed register once, not route U's second write to it (lane_fix). SW-LEAN final §1 (SwLean.lean at 3726b081f0, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2, axioms run r20261029-063252-4ff0; scratch, in no lock): every concrete NCP operand register, X in the biased packing (xAll_props) and Y in two's complement (yAll_props), with R's columns and entries bounded, R without fixed points, and no block-1 Y register of four B bytes all 31 (a coin word, free: a CPU count per checkpoint). Stays open: SSN's formed registers (C1) aren't instantiated, and two's-complement X has no theorem"
 
 [premise.tensor-semantics]
 rank = 3
@@ -387,9 +387,9 @@ source = "SW-SEM interim: NCP's noise isn't fresh (blocks 2 and 3 reuse E1 throu
 
 [premise.ssn-distinct]
 rank = 0
-status = "open"
+status = "scratch"
 owner = "SW-LEAN"
-source = "SW-NOISE final §4 (note compute-research/20261029T0551Z-report-sw-noise): a served sparse noise's words D_t(i,j) - beta_j + (the coin bits' public coefficients) are affine in the coin bits, pairwise distinct and non-free as functions of them whatever A and B (rows: a nonzero code coefficient on the row's own bits; columns: step 1's injective code; steps: each step's own bit), and the formed registers (C1) meet formed_charged's three conditions; the int8 case of DistinctLiveH1T (open, not refuted); checked on six degenerate data cases by run r20261029-054725-38d8, with a mutation. It rests on DistinctOn's set semantics: in Theorem D's span model every affine word after the first is free (SW-NOISE's smell)"
+source = "SW-LEAN final §5 (SwLean.lean at 3726b081f0 on cursor/compute-research-sw-lean-fa5d, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2, axioms clean in run r20261029-063252-4ff0; scratch, in no lock): ssnTargetG / ssn_chargedG at every data case with no input premise, for any layout reading each weighed lane from its own bit of the row's coin words (ssn1lBit_charged: S + 3 bits a row; ssnABit_charged: 4S); the cost is at least 32·m·n·S a call for n <= 28,559 (ssnCode_inj, the card's n_max). The served extraction must be stated as an injective (word, bit) map: SW-NOISE's literal masks reach bits {q, q+8, q+16, q+24} and 24..31 only. Not covered: grinding (ssn-success-set) and C1's formed registers. Before it, SW-NOISE final §4 (note compute-research/20261029T0551Z-report-sw-noise): a served sparse noise's words D_t(i,j) - beta_j + (the coin bits' public coefficients) are affine in the coin bits, pairwise distinct and non-free as functions of them whatever A and B (rows: a nonzero code coefficient on the row's own bits; columns: step 1's injective code; steps: each step's own bit), and the formed registers (C1) meet formed_charged's three conditions; the int8 case of DistinctLiveH1T (open, not refuted); checked on six degenerate data cases by run r20261029-054725-38d8, with a mutation. It rests on DistinctOn's set semantics: in Theorem D's span model every affine word after the first is free (SW-NOISE's smell)"
 
 [premise.ssn-success-set]
 rank = 0
@@ -428,7 +428,8 @@ source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster 
 # entries (one LOP3 a packed register from XOF bytes, CORE-SMELL C28); derive_extra the derivation's intermediate
 # entries, which no commitment holds and nothing forces (SSN's shift before its LOP3); denoise the de-noise work in W1
 # units; pre_noise_bytes the bytes hashed before the noise (A's commitment feeds the call's seed); coin_calls the XOF
-# bytes a call, by the measured table that times them (also the coins' credited hashing, two hashed bytes a byte).
+# bytes a call, by the measured table that times them (also the coins' credited hashing, two hashed bytes a byte);
+# n_max, where set, the most columns its distinctness lemma covers (a wider matmul is refused, outside the domain).
 [noise.ncp]
 r = 3
 formed_x = "3*m*K"
@@ -458,6 +459,7 @@ denoise = "0"
 pre_noise_bytes = "m*K"
 operand_max = 127
 served = "ssn-1l-b1-v1"
+n_max = 28559
 lane_fix = { none = "0" }
 coin_calls = { coins = ["m*(ceil((K - 28)/31) + 4)/8"] }
 wide = "proportional"
@@ -476,6 +478,7 @@ denoise = "0"
 pre_noise_bytes = "m*K"
 operand_max = 127
 served = "ssn-a-b1-v1"
+n_max = 28559
 lane_fix = { none = "0" }
 coin_calls = { coins = ["m*ceil(K/28)/2"] }
 wide = "proportional"

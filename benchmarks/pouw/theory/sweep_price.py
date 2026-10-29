@@ -39,7 +39,9 @@ credit's (ShaSpeed and its composition with DistinctWrites, rank 4), is shown be
 hashing needs both.
 
 A design whose card entry leaves a count missing or "?" is refused and never ranked, so an unpriced term can't top the
-table. Every number carries its card source: measured (a run id), estimate, or arithmetic.
+table; so is one outside its bound's domain (below 64 rows a call, C15; past its noise's `n_max` columns, SSN's column
+code). Beside each hiding term is the hiding work the design's premises close, by ruling or credit. Every number
+carries its card source: measured (a run id), estimate, or arithmetic.
 
 The ranking, at each point: designs that meet T1 first (T1 is hard), then rank (an open premise counts as rank 5 until
 settled, then its own), then T2's and T3's targets, then the fewest unsettled premises, then T1, T2 and T3.
@@ -73,6 +75,7 @@ ROUTES = {"U": ("U",), "mix": ("U", "U'"), "none": ("none",)}
 CLASSES = {"formed_x": "forming", "formed_y": "forming", "noise_x": "noise_derivation", "noise_y": "noise_derivation"}
 HASH_CREDIT = ("ShaSpeed", "hash-compose")
 REQUIRED = ("H32", "W1") + HASH_CREDIT
+HIDING_PREMISES = ("hiding-ruled", "salt-forced", "mask-optimal")
 TARGET = {"t1": 0.01, "t2": 100.0, "t3": 0.05}
 WORD_BYTES = 4
 BLOCK = 128
@@ -312,7 +315,7 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
         return {"terms": dict.fromkeys(TERMS, 0.0), "stock": m * n * K, "r": 1.0, "mK": m * K, "nK": n * K} | dict.fromkeys(
             ("credited_bytes", "hashed_bytes", "word_bytes", "operand_bytes", "pre_noise_bytes", "coin_bytes", "x_entries",
              "y_entries", "noise_y", "words", "coinform_ms", "a_ms", "bulk_hash_ms", "sts_ms", "stg_ms", "a_chain",
-             "extra_macs"), 0.0)
+             "extra_macs", "hiding_closed"), 0.0)
     r = get("r", 1.0)
     L = c["L"] if isinstance(c.get("L"), int) else (32 if lenient else None)
     if L is None:
@@ -368,6 +371,7 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
     unit_c = BLOCK * hw
     if "hiding" not in closes:
         t["hiding"] = ((0.0 if "hiding_salt" in closes else salt_c) + (0.0 if "hiding_mask" in closes else mask_c)) * unit_c
+    hiding_closed = (salt_c + mask_c) * unit_c - t["hiding"]
     salt_b = salt_c * BLOCK if ("hiding_salt" in closes and "hiding" not in closes) else 0.0
     xof = {table: [ev(s, m=m, n=n, K=K) for s in exprs] for table, exprs in noise["coin_calls"].items()}
     coin_b = sum(map(sum, xof.values())) * price["coin_bytes"]["value"]
@@ -391,7 +395,7 @@ def call_units(card: dict, name: str, m: float, n: float, K: float, g: float = 1
             "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "extra_macs": (r - 1) * stock,
             "coinform_ms": sum(coinsncp_ms(card, b * g, table) for table, bs in xof.items() for b in bs) / g,
             "a_ms": max(a_chain_s, a_bulk_s) / g * 1e3, "a_chain": chain / g, "bulk_hash_ms": bulk * 1e3,
-            "sts_ms": nwords * sts * 1e3, "stg_ms": nwords * stg * 1e3}
+            "sts_ms": nwords * sts * 1e3, "stg_ms": nwords * stg * 1e3, "hiding_closed": hiding_closed}
 
 
 def t3_of(card: dict, served: str | None, model: str) -> dict:
@@ -413,10 +417,14 @@ def evaluate(card: dict, name: str, point: str, delta: float = 0.0, lenient: boo
     if small:
         raise Refused([f"outside the bound's domain: {', '.join(small)} below {MIN_ROWS} rows a call, where MH100's floor "
                        f"is shape-blind (CORE-SMELL C15)"])
+    n_max = card["noise"].get(d.get("noise"), {}).get("n_max", math.inf)
+    wide = [f"{x['name']} (n {x['n']:,.0f})" for x in cs if x["n"] > n_max]
+    if wide:
+        raise Refused([f"outside the noise's domain: {', '.join(wide)} past its column code's {n_max:,.0f} columns"])
     rate = pt.get("hash_rate", card["price"]["hash_rate"]["value"])
     keys = ("stock", "credited_bytes", "hashed_bytes", "word_bytes", "operand_bytes", "pre_noise_bytes", "coin_bytes",
             "x_entries", "y_entries", "noise_y", "mK", "nK", "words", "coinform_ms", "a_ms", "a_chain", "bulk_hash_ms",
-            "sts_ms", "stg_ms", "extra_macs")
+            "sts_ms", "stg_ms", "extra_macs", "hiding_closed")
     agg: dict = dict.fromkeys(keys, 0.0) | {"terms": dict.fromkeys(TERMS, 0.0)}
     per_matmul = {}
     r = None
@@ -455,7 +463,7 @@ def evaluate(card: dict, name: str, point: str, delta: float = 0.0, lenient: boo
     t3w = max(v for v in (t3["ctx2k"], t3["ctx8k"]) if v is not None) if t3["ctx2k"] is not None else None
     matmul_open = [o for o in open_items if o["premise"] not in HASH_CREDIT]
     return {"design": name, "title": d["title"], "point": point, "t1": t1, "terms": terms, "t1_pass": t1 <= TARGET["t1"],
-            "t1_coins_uncredited": t1 + agg["coin_bytes"] * hw / stock,
+            "t1_coins_uncredited": t1 + agg["coin_bytes"] * hw / stock, "hiding_closed": agg["hiding_closed"] / stock,
             "delta": delta, "delta_star": delta_star, "hash_units_per_mac": hash_share,
             "hash_bytes_per_mac": agg["credited_bytes"] / stock, "coin_bytes_per_mac": agg["coin_bytes"] / stock,
             "pre_noise_units": agg["pre_noise_bytes"] * hw / stock,
@@ -536,6 +544,9 @@ def needs(row: dict) -> list[str]:
            f"{'proved outside the lock: lock it' if o['status'] == 'scratch' else 'open'}): {o['source']}"
            for o in row["open"]]
     out += [f"{a['premise']} (assumed, rank {a['rank']}): {a['source']}" for a in row["assumed"]]
+    if row["hiding_closed"]:
+        out.append(f"the salt side's hiding work, {row['hiding_closed']:.2%} of stock, is closed by "
+                   f"{' and '.join(p for p in row['premises'] if p in HIDING_PREMISES)}")
     if not row["t1_pass"]:
         big = max(((k, v) for k, v in row["terms"].items()), key=lambda kv: kv[1])
         out.append(f"T1 {row['t1']:.2%} > 1%: its largest term is {big[0]} {big[1]:.2%}")
@@ -670,7 +681,7 @@ def render(card: dict, results: dict) -> str:
                   f"{len(res['rows'])} designs priced, {len(res['refused'])} refused; the top {SHOWN} and the named "
                   "designs (the CSV has every row).", "",
                   "| # | design | rank matmul (overall) | T1 | +coins | final word | uncommitted | forming | lane fix | "
-                  "derivation | hiding | T2 sync / async (unfused) | T3 | delta* | open (matmul) |",
+                  "derivation | hiding (closed) | T2 sync / async (unfused) | T3 | delta* | open (matmul) |",
                   "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for i, row in enumerate(res["rows"], 1):
             if i > SHOWN and card["design"][row["design"]].get("swept"):
@@ -680,8 +691,8 @@ def render(card: dict, results: dict) -> str:
                 f"| {i} | {row['design']} | {row['rank']} ({row['rank_with_hash']}) | **{pct(row['t1'])}** "
                 f"{'pass' if row['t1_pass'] else 'fail'} | {pct(row['t1_coins_uncredited'])} | {pct(t['final_word'])} | "
                 f"{pct(t['uncommitted_steps'])} | "
-                f"{pct(t['forming'])} | {pct(t['lane_fix'])} | {pct(t['noise_derivation'])} | {pct(t['hiding'])} | "
-                f"{t2s(row)} ({row['t2']['unfused']:.1f}x) {'pass' if row['t2_pass'] else 'fail'} | "
+                f"{pct(t['forming'])} | {pct(t['lane_fix'])} | {pct(t['noise_derivation'])} | {pct(t['hiding'])} "
+                f"({pct(row['hiding_closed'])}) | {t2s(row)} ({row['t2']['unfused']:.1f}x) {'pass' if row['t2_pass'] else 'fail'} | "
                 f"{pct(row['t3_worst'])} | {row['delta_star']:.1e} | {row['matmul_open']}: {opened(row)} |")
         lines += ["", "Refused (an unpriced term or outside the domain):", ""]
         named = {k: v for k, v in res["refused"].items() if not card["design"][k].get("swept")}
@@ -888,6 +899,17 @@ def main() -> int:
                  and all(card["design"][n].get("source") for n in ranked), f"{len(ranked)} designs ranked")
     checks.check("V4-Pro's experts (128 rows a call at 8,192 tokens) are inside the domain, and its T 512 isn't priced",
                  "v4pro" in results and results["v4pro"]["rows"], f"{len(results['v4pro']['rows'])} rows")
+    ssn_swept = [n for n in swept if card["design"][n]["noise"].startswith("ssn")]
+    checks.check("SSN is refused on V4-Pro, whose wq_b (n 65,536) is past its column code's 28,559 columns "
+                 "(SW-LEAN's ssnCode_inj, SW-SMELL final §3.3), and priced on Llama and V4-like (n <= 16,384)",
+                 all("noise's domain" in results["v4pro"]["refused"][n][0] for n in ssn_swept)
+                 and all(n in {r["design"] for r in results[p]["rows"]} for n in ssn_swept for p in ("t8192", "v4like")),
+                 results["v4pro"]["refused"].get(ssn_swept[0], ["ranked"])[0][:90])
+    hr, op = row("t8192", "ssn-1l-k32-w-r256k-hr"), row("t8192", "ssn-1l-k32-w-r256k")
+    checks.check("what the hiding ruling waives is the unforced design's hiding term: 1.18x stock for ssn_1l at 256 KiB "
+                 "rows (SW-SMELL final: print it beside each -hr row)",
+                 abs(hr["hiding_closed"] - op["terms"]["hiding"]) < 1e-12 and hr["terms"]["hiding"] == 0
+                 and op["hiding_closed"] == 0 and 1.1 < hr["hiding_closed"] < 1.3, f"{hr['hiding_closed']:.2%} waived")
 
     if checks.mutations:
         def mutated(fn) -> dict:
@@ -945,6 +967,10 @@ def main() -> int:
         rows16, ref16 = ranking(c, "t512", names=few)
         checks.mutation("a decode batch of 16 rows is refused as outside the domain (C15), not priced",
                         not rows16 and all("domain" in ref16[n][0] for n in few), ref16[few[0]][0][:60])
+        c = mutated(lambda c: c["noise"]["ssn-1l"].pop("n_max"))
+        rows_pro, _ = ranking(c, "v4pro", names=["ssn-1l-k32-w-r256k-hr"])
+        checks.mutation("drop SSN's column-code limit and ssn_1l is priced on V4-Pro's 65,536-column wq_b, a distinctness "
+                        "claim on a matmul its lemma doesn't cover", bool(rows_pro), f"{len(rows_pro)} priced")
 
     out.mkdir(parents=True, exist_ok=True)
     md = render(card, results)
@@ -973,14 +999,15 @@ def main() -> int:
     with (out / "ranking.csv").open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["point", "position", "design", "rank", "rank_effective", "rank_with_hash", "t1",
-                    "t1_coins_uncredited", *TERMS, "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
-                    "hash_bytes_per_mac", "open"])
+                    "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst",
+                    "delta_star", "hash_bytes_per_mac", "open"])
         for p, res in results.items():
             for i, r in enumerate(res["rows"], 1):
                 e = r["t2"]["engines"]
                 w.writerow([p, i, r["design"], r["rank"], r["rank_effective"], r["rank_with_hash"], f"{r['t1']:.6g}",
                             f"{r['t1_coins_uncredited']:.6g}",
-                            *(f"{r['terms'][k]:.6g}" for k in TERMS), f"{e['sync']['ratio']:.4g}",
+                            *(f"{r['terms'][k]:.6g}" for k in TERMS), f"{r['hiding_closed']:.6g}",
+                            f"{e['sync']['ratio']:.4g}",
                             f"{e['async']['ratio']:.4g}", f"{r['t2']['unfused']:.4g}",
                             "" if r["t3_worst"] is None else f"{r['t3_worst']:.4g}",
                             f"{r['delta_star']:.4g}", f"{r['hash_bytes_per_mac']:.4g}",
