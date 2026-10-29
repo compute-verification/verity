@@ -1,12 +1,12 @@
 """The store binding's decision at a hello at a store's size, timed through both verifiers: a synthetic pinned model
 whose arena is `--weights` chunks (random digests) then zeros to `--arena-blocks`, `--engines` arenas of it, then
 `--host` host chunks, under one payload key, `store.Binding` over it as it stands past what it reads of the files, and
-the Lean verifier of record (`remote-audit-verifier`) bound to it (`verifier.bind_lean`). Each phase is one hello's
+the Lean verifier (`remote-audit-verifier`) bound to it (`verifier.bind_lean`). Each phase is one hello's
 decision, timed as a whole, with each verifier's own time (store.py's `recompute_s`, the Lean's `lean_s`) and CPU
 seconds (store.py's processes, the Lean's threads):
 
 ~~~text
-sequential  #3413's order: `Binding.hold` (its root in `--workers` processes), then the Lean's `hold` (its root on
+sequential  one after the other: `Binding.hold` (its root in `--workers` processes), then the Lean's `hold` (its root on
             `--workers` threads), on a hello whose root is 64 zero bytes: both refuse, at the root they computed
 concurrent  `verifier.hold_store`, the two at once on the same cores, on the same hello: both refuse
 bound       `verifier.hold_store` on a hello carrying that root: both bind
@@ -23,8 +23,7 @@ disagree, or that decides otherwise than its row says, fails the bench. Writes O
 
 The defaults are a whole node's 130M chunks: eight arenas of an 8B BF16 model's 4M weights chunks.
 
-    research run --on vy-nebius-cpu-1 --project verity --cwd source -- bash -lc \
-      'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/remote_session/binding_bench.py --out "$OUT"'
+    uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/remote_session/binding_bench.py --out OUT
 """
 from __future__ import annotations
 
@@ -52,7 +51,7 @@ NODE = b"binding-bench-node"
 PHASES = ("sequential", "concurrent", "bound", "split")
 PYTHON_SHARE = 0.6
 """store.py's share of the cores in `split`: its root's time over both roots' on 11 cores each, 665 s and 436 s at
-130M chunks (r20261023-232339-6365)."""
+130M chunks."""
 
 
 def pin_data() -> bytes:
@@ -139,7 +138,7 @@ def main() -> int:
                     "expected_root": bb.state.get("expected_root"), "load_before": load, "load_after": os.getloadavg()}
 
         def sequential(root: bytes) -> dict:
-            """#3413's decision of a hello carrying `root`: `Binding.hold`, then the Lean's `hold`, timed."""
+            """The sequential decision of a hello carrying `root`: `Binding.hold`, then the Lean's `hold`, timed."""
             load, t, c, lc = os.getloadavg(), time.monotonic(), python_cpu(), lean_cpu(lean)
             try:
                 regions = b.hold(NODE, blocks, root, key, None)

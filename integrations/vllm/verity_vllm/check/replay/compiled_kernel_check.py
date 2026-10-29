@@ -1,4 +1,4 @@
-"""C2 of record for `Execution=compiled` rows (DECISIONS-2 (1): stratified sampled EXACT VU replay + ordered boundary linkage),
+"""C2 of record for `Execution=compiled` rows (stratified sampled EXACT VU replay + ordered boundary linkage),
 from the committed bytes alone.
 
 VU = one Inductor kernel launch of P_compiled (compiled_relations.relation); its input boundaries are committed under
@@ -293,7 +293,7 @@ class CompiledKernelCheck:
                              "method": "every committed engine step x every request row range of the step (engine row order): ids(s) == token(k-1) / declared prompt at prefill, "
                                        "argmax lm_head(final_norm_out(s)) == token(k); positions(s)[rows] == prompt_len + k - 1 (decode) / 0..len-1 (prefill); "
                                        "tokens = the engine's own per-request outputs (== control arm's); coincident_pairs = rows of one step with equal "
-                                       "(token(k-1), token(k), position) -- told apart by no gate (rev M-0330), must be 0; coincident_pairs_tokens = the token-only count"}
+                                       "(token(k-1), token(k), position) -- told apart by no gate, must be 0; coincident_pairs_tokens = the token-only count"}
         eg = res["edges"]
         eg["ok"] = (not eg["declared"]) or (eg["checked"] > 0 and eg["equal"] == eg["checked"] and eg["missing"] == 0 and not eg["mismatch"])
         res["ok"] = (res["launches_checked"] > 0 and res["launches_exact"] == res["launches_checked"] and res["launches_missing"] == 0
@@ -409,7 +409,7 @@ class CompiledKernelCheck:
                 res["errors"].append(f"step {s} piece {piece} {kernel}: {e!r}"[:300])
 
     def _link_step(self, s: int, metas: dict[str, Any], lm_head: Any, res: dict[str, Any]) -> None:
-        """Ordered boundary linkage of ONE engine step, per request row range of the step's batched buffers (F-cb-23: the
+        """Ordered boundary linkage of ONE engine step, per request row range of the step's batched buffers (the
         per-(step, request) attribution of the committed rows).  ids(s)[rows of r] == r's token(k-1) (its prefill rows == the DECLARED prompt);
         argmax lm_head(final_norm_out(s)[last row of r]) == r's token(k); the tokens are the engine's own per-request outputs (equal to the
         uninstrumented control arm's).  Runs over EVERY committed step (attribution), the sampled steps included."""
@@ -547,7 +547,7 @@ class CompiledKernelCheck:
         # a lift needs a structural (pointwise) kernel: for a reduction the sampled equality is recorded but does not lift
         k["lift_eligible"] = bool(k["all_shown"] and k.get("structural"))
         if k["all_shown"] and not k.get("structural"):
-            k["why"] = "F-r16-22: non-pointwise heuristic -- the config sets the reduction order; sampled equality is not a property of the kernel (not lifted)"
+            k["why"] = "non-pointwise heuristic -- the config sets the reduction order; sampled equality is not a property of the kernel (not lifted)"
 
     def _pos_name(self, metas: dict[str, Any]) -> str | None:
         """The committed positions buffer of a step: the first piece's RoPE launch `pos` input (`c01.<rope kernel>/pos`), else any `/pos`."""

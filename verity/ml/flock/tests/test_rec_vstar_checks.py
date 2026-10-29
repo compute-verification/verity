@@ -12,7 +12,8 @@ message-round ports. A session is the statement the verifier names (`--rec-part 
 bindings (`--rec-bindings F`, which `verity_flock.rec_bindings` computes from the partition object and program) exactly,
 `program_digests` by value. Candidate 3's session adds RecSparse, R's levels under names of their own
 (`rec-open-stacked/l<LANES>-h<H>`) and R's opening at META's shape, each needed. The honest sessions themselves are replayed on the pod: their statements are
-hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow."""
+hundreds of MB. Each `rec-statements` builds the algebra's parts at its shape, about 5 s, so every test is slow; its runs are
+kept on the machine while the verifier and their inputs are unchanged (`keyed.run`)."""
 from __future__ import annotations
 
 import json
@@ -50,7 +51,7 @@ def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=
 
 
 def _statements(inner: Path, *check: str) -> tuple[int, dict]:
-    p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(inner), *check], capture_output=True, text=True)
+    p = keyed.run([str(BIN), "rec-statements", "--rec-inner", str(inner), *check])
     [line] = [json.loads(ln[9:]) for ln in p.stdout.splitlines() if ln.startswith("RECVSTAR ")]
     return p.returncode, line
 

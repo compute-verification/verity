@@ -18,7 +18,7 @@ least at which (P3) (`Bound.WeightCovers`) holds, at about 4 bits of `λ`.
 At one table of `N₀ = 2^23` and the bounds `k_I = 4402`, `C_DE = 2^33`, `wCover` is about `2^69.65`. At the deployed
 shape (one inner table at `m = 35`, `k_log = 24`) the recursion's security level (`Claims.Recursion.lam`) is about 65.2
 bits per SHA-512 call at `wCover`, against 69.4 at `w = C_DE`: its third term, `128 − log₂(γ_E·c_Be)/2`, the one that
-binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route
+binds, loses about 4 bits. That is below the 100-bit floor and the `2^-128` target under every weight. Route
 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises
 still open: `PartChecksBV`, `PartOpensB`, `DecompB`, the readers' three facts and the coin server's transcript
@@ -32,11 +32,11 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **`γ`'s weight at `IVStar` at the deployment** (ASK-72): (P3)'s floor at the deployed plain record's weight. -/
+/-- **`γ`'s weight at `IVStar` at the deployment**: (P3)'s floor at the deployed plain record's weight. -/
 noncomputable def wCover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) : Msg → ℝ :=
   coverW (FlockDeploy.deployPlainTrim rel).weight
 
-/-- **The deployed bound record** (ASK-72): `bdDeployed` with `γ`'s weight at `IVStar` at `wCover`, at every other
+/-- **The deployed bound record**: `bdDeployed` with `γ`'s weight at `IVStar` at `wCover`, at every other
 choice the code side makes. -/
 noncomputable def bdCover (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (nextE : Msg → List Msg → List Coin → Claims.OC Out)

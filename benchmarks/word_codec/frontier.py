@@ -1,12 +1,9 @@
 """The rate audit's frontier (the overnight brief's core plot), rendered on demand from the evidence store.
 
-Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON list of points in the schema below, put with
-
-    research data put --kind codec-frontier-points/v0 --file points.json --preserve \
-      --meta '{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}'
-
-and this script selects them all (`research data select --kind codec-frontier-points/v0`), or reads `--art` ids and
-`--file` paths, adds ra-codec-tensor's runs as points (`--tensor`, its `codec-tensor.json`: `tensor_points`), and
+Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON list of points in the schema below, kept
+with the metadata `{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}`. This script selects them
+all from the store, or reads `--art` ids and
+`--file` paths, adds the tensor-core codec's runs as points (`--tensor`, its `codec-tensor.json`: `tensor_points`), and
 draws:
 - x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
   axis (at d = 1 and `--tau`, default the median τ of the points); μ_rebuild's numerator is d − τ, d the step's time in
@@ -31,7 +28,7 @@ Schema `verity/codec-frontier-point/v0`, one object per (configuration, batch):
 
 ~~~text
 schema      "verity/codec-frontier-point/v0"
-lane        the lane that produced it (ra-codec-wide, ra-word-codec, ra-codec-tensor, ...)
+lane        the lane that produced it, as the producing benchmark names it
 model       optional: whose linears y is over, "llama-3.1-70b" or "llama-3.1-8b" (the default)
 b, k        word width in bits (61, 127, 256, 512, 521, 16448 for P2) and rounds
 ks          optional: each linear's k, when they differ; k and x are then the mean's, and `check` prices the point at
@@ -97,7 +94,7 @@ TENSOR_MODELS = {"70b": "llama-3.1-70b", "8b": "llama-3.1-8b"}
 
 
 def load_tensor(src: str) -> tuple[dict, str | None]:
-    """A `codec-tensor.json` (ra-codec-tensor's `benchmarks/codec_tensor/bench.py`): a path, or the art of its run's
+    """A `codec-tensor.json` (`benchmarks/codec_tensor/bench.py`'s): a path, or the art of its run's
     files."""
     if not src.startswith("art:"):
         return json.loads(Path(src).read_text()), None
@@ -106,7 +103,7 @@ def load_tensor(src: str) -> tuple[dict, str | None]:
 
 
 def tensor_points(docs: list[tuple[dict, str | None]]) -> list[dict]:
-    """ra-codec-tensor's runs as points: y from each run's `layer` (per batch, each linear at its best arm over native:
+    """The tensor-core codec's runs as points: y from each run's `layer` (per batch, each linear at its best arm over native:
     `plain` the base, `fused_k<k>` − plain the decode; untagged, so tag and commit 0 and τ 0, which the sketch twins
     replace), x and Δ from whichever document's `analysis` names the field: x the adversary's best root at the squaring
     floor over CUDA cores, tensor cores and both (at the locked clock), Δ the CUDA decode's. A field no `analysis`
@@ -194,7 +191,7 @@ def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = 
 def sketch_twins(points: list[dict], cost: dict[int, float], tau: float = 0.0) -> list[dict]:
     """For each measured point (its commit serial: the overlapped twin has the same base and decode), a modelled twin
     with the sketch-then-hash tag in place of the full-byte one: its own base and decode, plus `cost[batch]`, the
-    sketch's tag and commit together (ra-sketch-tag's measured y on a plain store), and τ the sketch's (0 grants the
+    sketch's tag and commit together (the sketch tag's measured y on a plain store), and τ the sketch's (0 grants the
     adversary the most); a point whose tag is the sketch already has none."""
     out = []
     for p in points:
@@ -341,11 +338,11 @@ def main() -> int:
                     help="each point's own x, not the best encode any point of its width reports (`adversary`)")
     ap.add_argument("--tau-cap", type=float, help="τ at most this: the cheapest tag the adversary knows")
     ap.add_argument("--sketch", help="BATCH:Y,...: add each measured point's modelled twin with the sketch-then-hash "
-                    "tag, Y its tag and commit at that batch (e.g. 1:0.073,32:0.150, ra-sketch-tag's plain store)")
+                    "tag, Y its tag and commit at that batch (e.g. 1:0.073,32:0.150, the sketch tag's plain store)")
     ap.add_argument("--sketch-tau", type=float, default=0.0, help="the sketch twins' τ (default 0)")
     ap.add_argument("--only-sketch", action="store_true", help="with --sketch: draw and rank only the twins")
     ap.add_argument("--tensor", action="append", default=[],
-                    help="ra-codec-tensor's codec-tensor.json, a path or its run's files art (`tensor_points`)")
+                    help="the tensor-core codec's codec-tensor.json, a path or its run's files art (`tensor_points`)")
     a = ap.parse_args()
     points = []
     arts = a.art or ([] if a.file else store_arts())
