@@ -1,5 +1,5 @@
 import Proofs.Pouw.Dimension.Scratch.SwLean
-import Proofs.Pouw.Dimension.Scratch.Grind
+import Proofs.Pouw.Dimension.GrindProofs
 
 /-!
 # Served sparse noise on a success set, and SW-NOISE's served layouts (scratch; not in a lock)

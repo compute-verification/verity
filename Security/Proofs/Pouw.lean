@@ -16,6 +16,7 @@ import Proofs.Pouw.Dimension.AdaptiveProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
 import Proofs.Pouw.Dimension.ForestProofs
+import Proofs.Pouw.Dimension.GrindProofs
 import Proofs.Pouw.Dimension.Fp8MmaProofs
 import Proofs.Pouw.Dimension.H100CiteProofs
 import Proofs.Pouw.Dimension.H100DenseProofs
