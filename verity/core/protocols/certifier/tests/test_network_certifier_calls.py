@@ -1,16 +1,21 @@
 """The lead's calls at the network certifier (`calls`): the shape a call's coins take, the coins flipped after its A root
-(G exactly uniform by rejection), the release word for word as the lead's kernel reads it, and the per-call count refused
-past the call's bits."""
+(G exactly uniform by rejection), the release word for word as the lead's kernel reads it, the per-call count refused
+past the call's bits, and the node's calls over its PoUW windows and its control channel."""
 
+import asyncio
 import itertools
+import json
 import math
+import os
+import random
+import socket
 import struct
 
 import pytest
 
 from verity.core.protocols.certifier.calls import (
-    ADMITTED_TILES, G_BOUND, RELEASE_TAG, ROT_W, CallRefusal, Calls, CallShape, Coins, EgressCap, Verdict, col_code,
-    flip, release, timing_bits,
+    ADMITTED_TILES, CALLS_LINE_BYTES, G_BOUND, RELEASE_TAG, ROT_W, CallRefusal, Calls, CallsClient, CallShape, Coins,
+    EgressCap, NodeCalls, Verdict, col_code, flip, release, serve_calls, timing_bits,
 )
 from verity.ml.commitments.identity import tagged_sha512
 
@@ -370,3 +375,157 @@ def test_the_record_carries_shape_roots_release_digest_and_verdict_and_no_count(
     assert calls.summary() == [want]
     calls.words_root(3, ROOT_W)
     assert calls.summary() == [{**want, "words_root": ROOT_W.hex(), "verdict": "accepted"}]
+
+
+# --- the node: its PoUW windows, its links' ticks and its control channel ---------------------------------------------
+
+def verdicts(record: list[dict]) -> dict[int, str | None]:
+    return {c["call"]: c["verdict"] for c in record}
+
+
+def test_a_node_begins_each_window_at_its_first_tick_and_publishes_the_window_before():
+    node = NodeCalls(EgressCap(32, 16 * 8 * 64))
+    with pytest.raises(CallRefusal, match="no PoUW window has begun"):
+        node.a_root(0, ROOT_A, TIGHT)
+    assert node.tick(0, 0) == [] and node.records == {}
+    node.a_root(0, ROOT_A, TIGHT)
+    node.a_root(1, ROOT_A, TIGHT)
+    assert node.words_root(0, ROOT_W) is Verdict.ACCEPTED
+    assert node.tick(2, 0) == [] and node.window == 2
+    assert verdicts(node.records[0]) == {0: "accepted", 1: "open when the window closed"}
+    node.a_root(0, ROOT_A, TIGHT)
+    node.close()
+    node.close()
+    assert sorted(node.records) == [0, 2] and verdicts(node.records[2]) == {0: "open when the window closed"}
+    for late in (lambda: node.tick(3, 0), lambda: node.a_root(1, ROOT_A, TIGHT), lambda: node.words_root(0, ROOT_W)):
+        with pytest.raises(CallRefusal, match="the node's calls are closed"):
+            late()
+
+
+def test_a_tick_of_an_earlier_window_counts_against_the_calls_open_when_it_runs():
+    node = NodeCalls(EgressCap(32, 16 * 8 * 64))
+    node.tick(1, 0)
+    node.a_root(0, ROOT_A, TIGHT)
+    assert node.tick(0, 32, [26]) == [] and node.window == 1
+    assert node.tick(0, 1) == [0]
+    with pytest.raises(CallRefusal, match="PoUW window"):
+        node.tick(-1, 0)
+
+
+def test_a_tick_while_a_calls_coins_are_flipped_counts_against_it_and_doesnt_wait_for_the_flip():
+    node, held, ticked = None, [], []
+
+    def entropy(k: int) -> bytes:
+        held.append(node._lock.locked())
+        if not held[-1] and not ticked:
+            ticked.append(node.tick(0, 32, [26]))
+        return os.urandom(k)
+
+    node = NodeCalls(EgressCap(32, 16 * 8 * 64), entropy)
+    node.tick(0, 0)
+    assert len(node.a_root(0, ROOT_A, TIGHT)) == TIGHT.release_bytes
+    assert held and not any(held) and ticked == [[]]
+    assert node.tick(0, 1) == [0]
+
+
+def test_coins_flipped_after_their_window_closed_dont_go_out():
+    node, flips = None, []
+
+    def entropy(k: int) -> bytes:
+        if not flips:
+            flips.append(node.tick(1, 0))
+        return os.urandom(k)
+
+    node = NodeCalls(LEAD, entropy)
+    node.tick(0, 0)
+    with pytest.raises(CallRefusal, match="the window is closed"):
+        node.a_root(0, ROOT_A, SMALL)
+    assert [(c["release"], c["verdict"]) for c in node.records[0]] == [(None, "open when the window closed")]
+    assert len(node.a_root(0, ROOT_A, SMALL)) == SMALL.release_bytes
+
+
+def test_a_node_whose_entropy_fails_refuses_its_windows_calls_and_flips_again_in_the_next():
+    fails = [True]
+
+    def entropy(k: int) -> bytes:
+        if fails.pop() if fails else False:
+            raise OSError("no entropy")
+        return os.urandom(k)
+
+    node = NodeCalls(LEAD, entropy)
+    node.tick(0, 0)
+    with pytest.raises(OSError):
+        node.a_root(0, ROOT_A, SMALL)
+    with pytest.raises(ValueError, match="failed earlier"):
+        node.a_root(1, ROOT_A, SMALL)
+    with pytest.raises(CallRefusal, match="not open"):
+        node.words_root(0, ROOT_W)
+    node.tick(1, 0)
+    assert verdicts(node.records[0]) == {0: "its coins were not flipped", 1: "its coins were not flipped"}
+    assert len(node.a_root(0, ROOT_A, SMALL)) == SMALL.release_bytes
+
+
+def control_channel(node: NodeCalls, prover):
+    """`prover(host, port)` run off the loop against `serve_calls(node)` on loopback; returns what it returns."""
+    async def main():
+        server = await serve_calls(node, "127.0.0.1", 0)
+        try:
+            return await asyncio.to_thread(prover, *server.sockets[0].getsockname()[:2])
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    return asyncio.run(main())
+
+
+def test_the_control_channel_answers_an_a_root_with_its_release_and_a_words_root_with_its_verdict():
+    data = random.Random(7).randbytes(4096)
+    node = NodeCalls(EgressCap(32, 16 * 8 * 64), Feed(data))
+    node.tick(0, 0)
+
+    def prover(host: str, port: int):
+        with CallsClient(host, port) as client:
+            out = [client.a_root(0, ROOT_A, SMALL), client.a_root(1, ROOT_A, TIGHT)]
+            with pytest.raises(CallRefusal, match="registered already"):
+                client.a_root(0, ROOT_A, SMALL)
+            verdict = [client.words_root(0, ROOT_W)]
+            node.tick(0, 32, [27])
+            verdict.append(client.words_root(1, ROOT_W))
+            with pytest.raises(CallRefusal, match="not open"):
+                client.words_root(1, ROOT_W)
+            with pytest.raises(CallRefusal, match="call 3's coins weren't flipped: the feed ran out"):
+                client.a_root(3, ROOT_A, CallShape(512, 64, 64))
+        return out, verdict
+
+    out, verdict = control_channel(node, prover)
+    feed = Feed(data)
+    assert out == [release(flip(SMALL, feed)), release(flip(TIGHT, feed))]
+    assert verdict == [Verdict.ACCEPTED, Verdict.PAST_BITS]
+    node.close()
+    digests = [tagged_sha512(RELEASE_TAG, o).hex() for o in out]
+    assert [(c["release"], c["verdict"]) for c in node.records[0]] == [
+        (digests[0], "accepted"), (digests[1], "past its bits"), (None, "its coins were not flipped")]
+
+
+def test_the_control_channel_refuses_a_line_that_isnt_a_request():
+    node = NodeCalls(LEAD)
+    lines = [b"not json", b"[0]", b'{"call": 0}', b'{"call": 0, "a_root": "zz", "rows": 1, "cols": 8, "K": 1}',
+             b'{"call": 0, "words_root": "%s", "extra": 1}' % ROOT_W.hex().encode(),
+             b'{"call": 5, "a_root": "%s", "rows": 0, "cols": 8, "K": 1}' % ROOT_A.hex().encode(),
+             b'{"call": 6, "a_root": "%s", "rows": 1, "cols": 8, "K": 1}' % ROOT_A.hex().encode(),
+             b"x" * (CALLS_LINE_BYTES + 1)]
+
+    def prover(host: str, port: int):
+        with socket.create_connection((host, port)) as sock, sock.makefile("rwb") as stream:
+            stream.write(b"\n".join(lines) + b"\n")
+            stream.flush()
+            sock.shutdown(socket.SHUT_WR)
+            return [json.loads(line) for line in stream.read().splitlines()]
+
+    answers = control_channel(node, prover)
+    generic = {"refused": "a request is a JSON object of call, a_root (hex), rows, cols and K, or of call and "
+                          "words_root (hex)"}
+    assert answers[:5] == [generic] * 5
+    assert answers[5] == {"call": 5, "refused": "a call's rows is a positive integer, not 0"}
+    assert answers[6] == {"call": 6, "refused": "no PoUW window has begun: a window begins at its first tick"}
+    assert answers[7:] == [{"refused": f"a request is one line of at most {CALLS_LINE_BYTES} bytes"}]

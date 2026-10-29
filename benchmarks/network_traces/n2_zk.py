@@ -25,9 +25,9 @@ decides nothing.
   certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
-* **The period** (``--draw K``): each member's windows sampled rather than all proved, as `n2_advised_zk`'s: every
-  window's salted root committed, then K of them drawn on the auditor's challenger's coins (`LinkWindows.period_draw`),
-  and only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
+* **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
+  committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and only those
+  registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
   stream's δ, on the Lean verifier of record's sample. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``). Each member draws on a session of its
@@ -82,10 +82,10 @@ HERE = Path(__file__).resolve().parent
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
 
+import round_coins as RC  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-import round_coins as RC  # noqa: E402
-from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -562,8 +562,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     drawn, windows, segment = None, rd.windows, None
     if k is not None:
         try:
-            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
-                                   advice=None if rd.advice is None else AD.digest(rd.advice))
+            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
