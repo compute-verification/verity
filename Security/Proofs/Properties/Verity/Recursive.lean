@@ -41,17 +41,18 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     the value most often read off the witnesses `RecursiveKSAt`'s extractor returns, over the draws and the accepted
     runs that draw the gate's unit. The circuit is the committed file's (R6, `Vocab.Registered`).
   - The per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
-    the shared `condError FinderCR δ` (`Dep.err`, the shape of `Vocab.error`): where the finders built from the
-    strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session prover, `ecr/sha-512` at each
-    binding finder `Dep.bindAt` at its budget), the draw's miss plus `t' · 2^{-λ}` plus the binding term (`Dep.delta`);
-    elsewhere `⊤`. Every budget is a defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
+    the shared `condError FinderCR δ` at the strategy's session (`Dep.errAt`, the shape of `Vocab.error`): where the
+    finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session
+    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus `t' · 2^{-λ}` plus
+    the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a defined function of the strategy's cost `t'`
+    (`Vocab.cost`), with no call model.
   - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
     `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
-  It takes as hypotheses `RecursiveKSAt` at the deployed brings, the honest half (the honest run is accepted at the
-  deployed statements, `HonestHalf`), the coupling at each strategy (`SessionIn`, the session's projection) with the
-  draw's
-  miss, the deployment's reading of a witness (`hread`) and its collision from two (`hcoll`), and `live-verifier`.
+  It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
+  session's projection) with the draw's miss, the deployment's reading of a witness (`hread`) and its collision from
+  two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
+  states it with `RecursiveKS` and `λ₂ ≥ 100` discharged (`SampledProofsRecursive`).
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
 here rather than in `Properties` until C-Flock's spec is extracted.
@@ -515,30 +516,37 @@ open Accounting (Device)
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
-/-- **The recursive configuration's verdict**: `Vocab.Verdict .sampled` with the recursive configuration's compiled
-component in place of onsite's sampled component. The conjuncts:
+/-- **Sampled proofs' case in what the prover sent**, on the blobs `bs`: onsite's three byte strings decode, and one of
+the cases is sampled proofs' component's (`VStar.Recursive.Sampled.protocol` on the blobs), with the parameters `a`
+onsite names for it and the commitment `cb` and evidence `eb` it carries. -/
+def SampledCase (s : Verity.Sent) (bs : Array ByteArray) (a cb eb : ByteArray) : Prop :=
+  ∃ ps b ev, Verity.Decoded s ps b ev ∧
+    ∃ x ∈ Properties.Composition.triples (Verity.componentsOn bs) ps ev,
+      x.1 = VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray bs) ∧
+        x.2.1.params.toUTF8 = a ∧ x.2.2.commitment = cb ∧ x.2.2.evidence = eb
+
+/-- **The recursive configuration's verdict**: `Vocab.Verdict .sampled` at a sampled-proofs case whose parameters name
+the recursive form (`recVerdict_verdict`). The conjuncts:
 * the circuit file passed the commit phase's check (`Registered`, R6);
 * onsite's cases are an accepted composition whose policy and sampled proofs commit to one record (`RecordAccepts`);
-* the parameters name the recursive form;
-* sampled proofs' component accepts what the prover sent, on some blobs.
+* on some blobs, sampled proofs' component (`VStar.Recursive.Sampled.protocol`) accepts its own case in what the prover
+  sent (`SampledCase`, `DecodedAccepted`), and that case's parameters name the recursive form.
 
 The blobs are content-addressed bytes sent with the evidence, last, and the event counts any blobs on which the
 component accepts. -/
 def RecVerdict (V : Vocab d α) (o : Verity.Ending) : Prop :=
   V.Registered o.params o.file ∧ RecordAccepts o.sent ∧
-    (∃ j p, Core.canonicalJson o.params = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)) ∧
-    ∃ bs, (VStar.Recursive.Sampled.protocol.answer o.params o.commitment o.evidence bs).verdict = .accept
+    ∃ bs a cb eb, SampledCase o.sent bs a cb eb ∧
+      Properties.Composition.DecodedAccepted
+        (VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray bs)) a cb eb ∧
+      ∃ j p, Core.canonicalJson a = .ok j ∧ VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p)
 
-/-- **The honest half** (non-vacuity). On every dense statement where the inner relation holds, the
-deployed record's honest prover is accepted except with the record's completeness error `δcRec`, at every tape and
-every inner decoder. -/
-def HonestHalf (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
-    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Prop :=
-  ∀ decI, Claims.Complete FlockDeploy.sha512 (recordAt wE w b aux nOf hd recRest).V
-    (recordAt wE w b aux nOf hd recRest).P
-    (Claims.Recursion.R (recordAt wE w b aux nOf hd recRest)
-      (Claims.Recursion.Inner.ofFlock (boundAt wE w).deploy decI))
-    RecDeploy.DenseAt ((recordAt wE w b aux nOf hd recRest).δc FlockDeploy.sha512)
+/-- **The recursive configuration's verdict is onsite's sampled verdict**: `RecVerdict` is `Vocab.Verdict .sampled` with
+the sampled case's form named. -/
+theorem recVerdict_verdict (V : Vocab d α) {o : Verity.Ending} (h : RecVerdict V o) : V.Verdict .sampled o := by
+  obtain ⟨hreg, hrec, bs, a, cb, eb, ⟨ps, b, ev, hdec, x, hx, h1, ha, hc, he⟩, hda, -⟩ := h
+  subst ha hc he
+  exact ⟨hreg, hrec, bs, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
 
 /-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the coin server's record), with the
 inner decoder `decI` and the outer decoder `decO` that fix its extractor. -/
@@ -596,8 +604,8 @@ device log (`Vocab.rounds`, `Vocab.coinsRead`) with the session.
 * `out ξ s` is the play's outcome at `ξ`, at the tape and the session's coins `s`. The play's outcome under the
   device's uniform releases is distributed so (`prob_le`).
 * `drawOf ξ` is the units `ξ` draws.
-* Wherever the recursive component accepts on blobs `bs`, the parameters and evidence it decodes name `x ξ`, and the
-  blobs show the run and its staged rows are the component's (`names_shows`).
+* Wherever sampled proofs' component accepts its case on blobs `bs` at the recursive form, the parameters and evidence
+  it decodes name `x ξ`, and the blobs show the run and its staged rows are the component's (`names_shows`).
 * Each run of the session is part of one run of `σ`, so its SHA-512 calls are at most the strategy's, `V.cost`
   (`calls_le`). -/
 structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) where
@@ -613,11 +621,11 @@ structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.S
   drawOf : Ξ → Finset (Fin (V.units F))
   prob_le : ∀ E : Verity.Ending → Prop, Game.prob E (V.game θ F c) σ ≤
     ENNReal.ofReal (Claims.Ex fun ξ => Claims.Pr fun s : Ω × (Fin (q.D.V.k (x ξ)) → Coin) => E (out ξ s))
-  names_shows : ∀ ξ s bs j p e,
-    (VStar.Recursive.Sampled.protocol.answer (out ξ s).params (out ξ s).commitment (out ξ s).evidence bs).verdict =
-      .accept →
-    Core.canonicalJson (out ξ s).params = .ok j → VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p) →
-    VStar.Recursive.Sampled.evidenceOf (out ξ s).evidence = .ok (.inr e) →
+  names_shows : ∀ ξ s bs a cb eb j p e, SampledCase (out ξ s).sent bs a cb eb →
+    Properties.Composition.DecodedAccepted
+      (VStar.Recursive.Sampled.protocol.onBlobs (Core.Blobs.ofArray bs)) a cb eb →
+    Core.canonicalJson a = .ok j → VStar.Recursive.Sampled.paramsOfJson j = .ok (.inr p) →
+    VStar.Recursive.Sampled.evidenceOf eb = .ok (.inr e) →
     Names p e (Core.Blobs.ofArray bs) (x ξ) ∧
       Shows q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray bs)
         (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen ∧
@@ -726,37 +734,37 @@ noncomputable def delta (S : SessionIn V q θ F c σ) (dColl : ℕ) (δs lam : �
       Real.sqrt (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)))
 
 open Classical in
-/-- **The error at the strategy `τ`**, the shared `condError FinderCR δ τ := if FinderCR τ then δ τ else ⊤`
-(the shape of `Vocab.error`): `delta` where the finders built from `τ` meet `FinderCR`, and `⊤` elsewhere. -/
-noncomputable def err (Sof : (τ : Game.Strategy (V.game θ F c)) → SessionIn V q θ F c τ)
+/-- **The error at the strategy's session `S`**, the shared `condError FinderCR δ := if FinderCR then δ else ⊤`
+(the shape of `Vocab.error`): `delta` where the finders built from the strategy meet `FinderCR`, and `⊤` elsewhere. -/
+noncomputable def errAt (S : SessionIn V q θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (nI vS : Msg → ℕ) (δs lam : ℝ) (τ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
-  if q.FinderCR V (Sof τ) collOf dColl nI vS then q.delta V (Sof τ) dColl δs lam else ⊤
+    (nI vS : Msg → ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
+  if q.FinderCR V S collOf dColl nI vS then q.delta V S dColl δs lam else ⊤
 
 end Dep
 
 /-- **Its conclusion fails for a verifier that accepts everything**: at a strategy whose extracted transcript fails
 the claim, where the finders built from it meet `FinderCR` and the error's number (`Dep.delta`) is below one. -/
 theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (θ F c : ByteArray)
-    (Sof : (τ : Game.Strategy (V.game θ F c)) → SessionIn V q θ F c τ) (σ : Game.Strategy (V.game θ F c))
+    (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) (δs lam : ℝ)
     (hbad : ¬ V.Holds θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty⟩)
-    (hcr : q.FinderCR V (Sof σ) collOf dColl nI vS) (hlt : q.delta V (Sof σ) dColl δs lam < 1) :
+    (hcr : q.FinderCR V S collOf dColl nI vS) (hlt : q.delta V S dColl δs lam < 1) :
     ¬ Game.prob (fun o => True ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ ≤
-      q.err V Sof collOf dColl nI vS δs lam σ := by
+      q.errAt V S collOf dColl nI vS δs lam := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
     prob_play_eq_one (V.rounds θ) θ F c (fun o => True ∧ ¬ V.Holds θ F c σ .sampled o)
       (fun _ _ => ⟨trivial, hbad⟩) σ
-  rw [Dep.err, if_pos hcr] at h
+  rw [Dep.errAt, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
 
 /-- **Its hypotheses hold at the honest deployment where they are choices of the deployment**: `K₀ = ⌊ε n⌋ + 1` covers
 the claim's `ε` share (`hK₀`) wherever `ε n ≥ 0`; and where the extracted transcript is correct on every unit and the
 commitment opens it (the honest commitment's case), the target's event is empty, so its conclusion holds at every
-bound. The other hypotheses are code facts and the coupling, each its owner's: `RecursiveKS`, `HonestHalf`,
-`hread` and `hcoll` (the bridge, with `place`), `Sof` and `hdraw` (the session's projection). -/
+bound. The other hypotheses are code facts and the coupling, each its owner's: `RecursiveKS`, `hread` and `hcoll`
+(the bridge, with `place`), the session `S` and `hdraw` (the session's projection). -/
 theorem sampledProofsRecursive_honest (V : Vocab d α) :
     (∀ θ F, 0 ≤ (V.certOf θ).ε * V.units F → ∀ m : ℕ, (V.certOf θ).ε * V.units F < m →
       ⌊(V.certOf θ).ε * V.units F⌋₊ + 1 ≤ m) ∧
