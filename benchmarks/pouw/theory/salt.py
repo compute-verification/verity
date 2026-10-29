@@ -284,15 +284,17 @@ def shares(ds: dict) -> dict:
 
 def in_circuit() -> dict:
     """ANDs a drawn unit's proof spends hiding one public digest beyond x itself (hm96's gadget: c's 2 compressions and
-    the leaf's 2 over private (b, c), M_key·y XORs only), and once a proof (ks's leaf and S). The keyed leaf's first
-    block, row-bound's, is public data hashed from the secret S, so it moves one compression into the circuit."""
+    the leaf's 2 over private (b, c), M_key·y XORs only), and once a proof (ks's leaf and S). At L0 the keyed leaf's first
+    block, row-bound's, is public data hashed from the secret S, so it moves one compression into the circuit; under L1
+    the keyed hash is the subtree root's node hash, whose blocks hold the private children and are in the circuit anyway."""
     hm96 = 4 * ANDS_COMPRESSION
     return {"hm96 today": {"a digest": hm96, "once": 0},
             "hm96 + (a)": {"a digest": hm96 + 3 * ANDS_FROM_8, "once": KS_OPEN},
             "hm96 + (a) + FM": {"a digest": hm96 + 3 * ANDS_FROM_8 + N_OUT * WORDS * (26 + 11), "once": KS_OPEN},
             "pad (P1)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION},
             "keyed digest (P2)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION},
-            "keyed leaf (P3)": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION}}
+            "keyed leaf (P3), L0": {"a digest": ANDS_COMPRESSION, "once": KS_OPEN + ANDS_COMPRESSION},
+            "keyed leaf (P3), L1": {"a digest": 0, "once": KS_OPEN + ANDS_COMPRESSION}}
 
 
 def per_period(share: float) -> dict:
