@@ -35,7 +35,7 @@ from collections.abc import Sequence
 from typing import Any, Callable
 
 from ..secret_hint import FRESH_SHELL, lost
-from . import canon, ids, kinds
+from . import canon, ids, kinds, vocab
 from .index import Index
 from .model import ArtifactManifest, Label, Payload, TreeFile, utc_now, validate_attempt_doc
 from .remote import ConfigError, Remote, config_path, load_remote
@@ -783,8 +783,6 @@ class LocalStore:
     def withdrawn(self, art_id: str) -> str | None:
         """Why `art_id` was withdrawn (`research data withdraw`: its newest `withdrawn` label's value and who set it), or None, by
         this store's labels: `research data push` pulls the remote's first, since a withdrawal is often made on another machine."""
-        from . import vocab  # noqa: PLC0415
-
         labs = self.labels(art_id, key=vocab.WITHDRAWN)
         return f"{labs[-1].value!r}, by {labs[-1].by}" if labs else None
 
