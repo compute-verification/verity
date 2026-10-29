@@ -123,6 +123,7 @@ DC_DEV void wu_run(const OpArgs& a) {
   OP_KERNEL(wu_##NAME, 512) { wu_run<F_s8_n128, R, __VA_ARGS__>(a); }                     \
   OP_KERNEL(wu256_##NAME, 384) { wu_run<F_s8_n256, R, __VA_ARGS__>(a); }
 WU(dadd, 64, O_DADD_I)
+WU(dfma, 64, O_DFMA_RI)
 WU(fadd, 64, O_FADD_I)
 WU(dadd_fadd, 64, O_DADD_I, O_FADD_I)
 WU(dadd2_imadw_fadd, 64, O_DADD_I, O_IMADW, O_DADD_I, O_FADD_I)
@@ -146,11 +147,12 @@ WU(hfma2_lop3, 64, O_HFMA2_RI, O_LOP3_R)
   {.name = #NAME, .kernel = (const void*)NAME, .tpb = 512, .expect = PAT, .iters = 512, .note = NOTE}
 #define WG128 "IGMMA.64x128x32.S8.S8*"
 #define WG256 "IGMMA.64x256x32.S8.S8*"
+// s=s8: h32.py reads the fixed wgmma at no more than its shape's data-sheet rate (its warpgroups can finish apart).
 #define P_WU(NAME, LPAT, LNOTE)                                                                                     \
   {.name = "wu_" #NAME, .kernel = (const void*)wu_##NAME, .tpb = 512, .expect = WG128 "=4;" LPAT, .warps = "8;8", \
-   .iters = 4096, .note = "c=mix w=" WG128 ":64," LNOTE, .until = 2},                                              \
+   .iters = 4096, .note = "c=mix s=s8 w=" WG128 ":64," LNOTE, .until = 2},                                         \
   {.name = "wu256_" #NAME, .kernel = (const void*)wu256_##NAME, .tpb = 384, .expect = WG256 "=4;" LPAT,           \
-   .warps = "8;4", .iters = 4096, .note = "c=mix w=" WG256 ":128," LNOTE, .until = 2}
+   .warps = "8;4", .iters = 4096, .note = "c=mix s=s8 w=" WG256 ":128," LNOTE, .until = 2}
 static const OpProbe PROBES[] = {
     P_WA(s8_n8, "s8", "IGMMA.64x8x32.S8.S8*", 4),
     P_WA(s8_n64, "s8", "IGMMA.64x64x32.S8.S8*", 32),
@@ -207,6 +209,7 @@ static const OpProbe PROBES[] = {
          "c=mix w=BMMA.168128.AND.POPC:4,DADD:2,FADD:1"),
     P_MM(mm_f64m8k4_fadd3, "DMMA.8x8x4*=64,FADD=192", "c=mix w=DMMA.8x8x4*:4,FADD:1"),
     P_WU(dadd, "DADD=64", "DADD:2"),
+    P_WU(dfma, "DFMA=64", "DFMA:2"),
     P_WU(fadd, "FADD=64", "FADD:1"),
     P_WU(dadd_fadd, "DADD=32,FADD=32", "DADD:2,FADD:1"),
     P_WU(dadd2_imadw_fadd, "DADD=32,IMAD.WIDE.U32=16,FADD=16", "DADD:2,IMAD.WIDE.U32:2,FADD:1"),
