@@ -117,7 +117,7 @@ conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.P
 commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
 
 WIDE320_CLAIMS = (*WIDE_CLAIMS, "prf/sha-512")
-"""What `wide320_certificate` rests on: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`, ASK-184) for the
+"""What `wide320_certificate` rests on: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`) for the
 memory challenger's indices, which `ObligationWide320` reads as uniform: they are derived by SHA-512 from its 64-byte
 secret source."""
 
