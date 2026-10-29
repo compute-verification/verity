@@ -13,8 +13,7 @@ builds the pure-dataflow population (no RETURN-SLOT policy) for the record.  The
 default 16/32: widths, recomputes, a Call boundary not committed); the check that passed is recorded in the header (`query.word_check`,
 `word_record`; never in the identities, so the rows digest is the same) and the Commit refuses a Q_word manifest without it
 (`commit.partition.word_check_refusal`).  `--query Q_module_body_v1` (with `--word-check off`) is for A/B only.
-Four tap policies are on by default, each with a `--no-...` for A/B only: `--norm-scales` (`query.norm_scales`), `--guarded-max`
-(`query.guarded_max`: the query header states it, and every attention hidden-stream identity gains the MS class), `--router-softmax` and
+Three tap policies are on by default, each with a `--no-...` for A/B only: `--norm-scales` (`query.norm_scales`), `--router-softmax` and
 `--vocab-range` (`query.router_softmax`, `query.vocab_range`); the scale-products policy (`query.scale_products`) applies to every manifest
 and adds nothing to a Program without a shared-scale FP8 GEMM.  `--cross-call-check` (opt-in) fails the Build when a value is computed in
 two Calls (`query.cross_call`).
@@ -39,7 +38,6 @@ from verity_vllm.query.program_view import from_instances, iter_instance_rows
 from verity_vllm.query.compose import compose_global, merge_ranks
 from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
 from verity.ml.definitions import cross_call
-from verity_vllm.query import guarded_max as GM
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
@@ -129,7 +127,7 @@ def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict
 
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
-          profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False, guarded_max: bool = False,
+          profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
           taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD, word_max_gates: str | None = None,
           jobs: int = 1, log=None) -> dict[str, Any]:
     """The manifest of one request Program; `jobs` > 1 cuts the word check's Definitions in that many processes first."""
@@ -150,9 +148,6 @@ def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_i
         wc = word_check(P, corr, r.required, word, acquired=acquired if (norm_scales or taps or sp) else None, max_gates=word_max_gates,
                         unreturned=r.unreturned, log=log)
         r.manifest["query"]["word_check"] = word_record(wc, strict=True, max_gates=word_max_gates)
-    if guarded_max:
-        r.manifest["query"] = GM.header(r.manifest["query"], GM.attention_words(P), GM.max_scaled_words(P))
-        r.manifest.update(GM.with_ms(r.manifest))
     if cross_call:
         cross_call_check(program_dir, log=log)
     if log:
@@ -455,7 +450,7 @@ def stdin_digest() -> str:
     return wd
 
 
-def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, wds: list[str | None], *, guarded_max: bool, jobs: int,
+def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, wds: list[str | None], *, jobs: int,
             log, budget_gb: float | None = None, **kw: Any) -> list[dict[str, Any]]:
     """The global manifest of each rank's Program set (`roots[i]` is rank `ranks[i]`'s): every component built by `build_components`,
     checked and composed in declaration order."""
@@ -464,8 +459,8 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
     tasks = []
     for root, rank in zip(roots, ranks):
         dirs = _program_dirs_for(dict(fixture, requests=PP.with_cached(fixture)), root)
-        tasks += [(dirs[str(r["workload_request_id"])], dict(kw, workload=w, request_id=r["request_id"], rank=rank, ranks=world,
-                                                             guarded_max=guarded_max, log=log)) for r, w in zip(reqs, wl)]
+        tasks += [(dirs[str(r["workload_request_id"])], dict(kw, workload=w, request_id=r["request_id"], rank=rank, ranks=world, log=log))
+                  for r, w in zip(reqs, wl)]
     prefetch_word_rules([d for d, _kw in tasks], kw.get("word"), word_max_gates=kw.get("word_max_gates"), jobs=jobs, budget_gb=budget_gb,
                         log=log)
     parts: dict[str, dict[str, Any]] = {}
@@ -478,10 +473,7 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
             raise ValueError(f"request {rid}: Program has {len(man['steps'])} steps, the declaration caps {reqs[r]['max_tokens']} tokens: wrong component")
         parts[rid] = man
         if r == len(reqs) - 1:
-            g = compose_global(fixture, parts, reqs, workload_digest=stdin_digest() if wds[k] == "-" else wds[k], rank=ranks[k], ranks=world)
-            if guarded_max:
-                g = GM.with_ms(dict(g, query=GM.merged(g["query"], [p["query"] for p in parts.values()])))
-            out.append(g)
+            out.append(compose_global(fixture, parts, reqs, workload_digest=stdin_digest() if wds[k] == "-" else wds[k], rank=ranks[k], ranks=world))
             parts.clear()
 
     build_components(tasks, jobs=jobs, after=after, budget_gb=budget_gb, log=log)
@@ -490,17 +482,17 @@ def _global(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: 
 
 def build_global(fixture: dict[str, Any], programs_root: str, *, workload_digest: str | None = None, rank: int = 0, ranks: int = 1,
                  profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
-                 guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
+                 taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
                  word_max_gates: str | None = None, jobs: int = 1,
                  log=None) -> dict[str, Any]:
     return _global(fixture, [programs_root], [rank], ranks, [workload_digest], profile=profile, return_slots=return_slots, word=word,
-                   norm_scales=norm_scales, guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query,
+                   norm_scales=norm_scales, taps=taps, cross_call=cross_call, query=query,
                    word_max_gates=word_max_gates, jobs=jobs, log=log)[0]
 
 
 def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[int], world: int, *, workload_digests: list[str | None] | None = None,
                        profile: str | None = None, return_slots: bool = True, word: str | None = None, norm_scales: bool = False,
-                       guarded_max: bool = False, taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
+                       taps: tuple[str, ...] = (), cross_call: bool = False, query: str = QUERY_OF_RECORD,
                        word_max_gates: str | None = None, jobs: int = 1, budget_gb: float | None = None,
                        log=None) -> dict[str, Any]:
     """One global manifest per rank Program set (`roots[i]` is rank `ranks[i]`'s), merged by `merge_ranks` when the row is TP; `jobs`
@@ -511,7 +503,7 @@ def build_global_ranks(fixture: dict[str, Any], roots: list[str], ranks: list[in
     if world > 1 and sorted(ranks) != list(range(world)):
         raise ValueError(f"build-global: TP world {world} needs one --programs-root per rank 0..{world - 1} (got ranks {ranks})")
     parts = _global(fixture, roots, ranks, world, wds, profile=profile, return_slots=return_slots, word=word, norm_scales=norm_scales,
-                    guarded_max=guarded_max, taps=taps, cross_call=cross_call, query=query, word_max_gates=word_max_gates, jobs=jobs,
+                    taps=taps, cross_call=cross_call, query=query, word_max_gates=word_max_gates, jobs=jobs,
                     budget_gb=budget_gb, log=log)
     return merge_ranks(parts) if world > 1 else parts[0]
 
@@ -536,9 +528,6 @@ CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.ml.defin
 WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.ml.definitions.word.gate_limits): a Definition over its limit is a too-large violation, "
                        "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.5 KB of host memory "
                        "per gate cut and 20 bytes per operand it reads); the query id is the same under any")
-GUARDED_MAX_HELP = ("on by default, --no-guarded-max for A/B only: the guarded-max policy (verity_vllm.query.guarded_max) -- the attention "
-                    "stream's ROW word 3 carries GuardNegInfZero(m) after a row's first key block and its MS class every block's max * "
-                    "scale; the Commit then needs the guarded-max tap build")
 UNIT_RULE_CACHE_HELP = ("a directory the word check's unit rules are shared through, across processes and runs (word.use_rule_cache); "
                         "a rule read there is the one the check computes")
 JOBS_HELP = ("processes for the word check's cuts (word.prefetch) and, in build-global, the component builds (build_components), each "
@@ -559,7 +548,6 @@ class BuildOptions:
     unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
-    guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
     router_softmax: bool = option("--router-softmax", default=True, action="boolean_optional", help=ROUTER_SOFTMAX_HELP)
     vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
@@ -586,7 +574,6 @@ class BuildGlobalOptions:
     unit_rule_cache: str | None = option("--unit-rule-cache", env=word_query.RULE_CACHE_ENV, default=None, help=UNIT_RULE_CACHE_HELP)
     query: str = option("--query", default=QUERY_OF_RECORD, choices=list(QUERIES), help=QUERY_HELP)
     norm_scales: bool = option("--norm-scales", default=True, action="boolean_optional", help=NORM_SCALES_HELP)
-    guarded_max: bool = option("--guarded-max", default=True, action="boolean_optional", help=GUARDED_MAX_HELP)
     router_softmax: bool = option("--router-softmax", default=True, action="boolean_optional", help=ROUTER_SOFTMAX_HELP)
     vocab_range: bool = option("--vocab-range", default=True, action="boolean_optional", help=VOCAB_RANGE_HELP)
     cross_call_check: bool = option("--cross-call-check", default=False, action="store_true", help=CROSS_CALL_HELP)
@@ -621,7 +608,7 @@ def main(a: Any) -> int:
     if a.cmd == "build":
         wl = _load_json(a.workload) if a.workload else None
         man = build(a.program, workload=wl, request_id=a.request_id, rank=a.rank, ranks=a.ranks, profile=a.profile, return_slots=not a.no_return_slots,
-                    word=a.word_check, norm_scales=a.norm_scales, guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
+                    word=a.word_check, norm_scales=a.norm_scales, taps=taps_of(a.router_softmax, a.vocab_range),
                     cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(), log=log)
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "complete": man["complete"], "out": a.out}))
@@ -630,7 +617,7 @@ def main(a: Any) -> int:
         fx = _load_json(a.fixture)
         man = build_global_ranks(fx, a.programs_root, a.rank or [0] * len(a.programs_root), a.ranks, workload_digests=a.workload_digest,
                                  profile=a.profile, return_slots=not a.no_return_slots, word=a.word_check, norm_scales=a.norm_scales,
-                                 guarded_max=a.guarded_max, taps=taps_of(a.router_softmax, a.vocab_range),
+                                 taps=taps_of(a.router_softmax, a.vocab_range),
                                  cross_call=a.cross_call_check, query=a.query, word_max_gates=a.word_max_gates, jobs=a.jobs or cpus(),
                                  budget_gb=a.build_ram_budget_gb, log=log)
         _write(man, a.out)
