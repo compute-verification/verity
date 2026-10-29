@@ -92,7 +92,7 @@ from typing import Any
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
                                                    precise_sleep)
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
 from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.release import with_release
 
@@ -303,8 +303,8 @@ class Warden:
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
-                 publish: Callable[[Record, GridParams], None] | None = None,
-                 withhold: Callable[[Record, GridParams], None] | None = None,
+                 publish: Callable[[BlockGrid, GridParams], None] | None = None,
+                 withhold: Callable[[BlockGrid, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None) -> None:
@@ -315,7 +315,7 @@ class Warden:
         self.releases: list[Report] = []
         self._pacer: Pacer | None = None
         self._unreleased: Counter[int] = Counter()
-        self._held: dict[int, tuple[Callable[[Record, GridParams], None], list[tuple[Record, GridParams]]]] = {}
+        self._held: dict[int, tuple[Callable[[BlockGrid, GridParams], None], list[tuple[BlockGrid, GridParams]]]] = {}
         self.run_id = run_nonce(RUN_ID_BYTES)
         if not (isinstance(self.run_id, bytes) and len(self.run_id) == RUN_ID_BYTES):
             raise ValueError(f"a run id is {RUN_ID_BYTES} bytes")
@@ -325,9 +325,9 @@ class Warden:
         self.egress = Certifier(egress_link, params.grid)
         self.ingress = Certifier(ingress_link, params.grid)
         self.fails = Certifier(fails_link, params.fails_grid)
-        self.records: list[Record] = []
+        self.records: list[BlockGrid] = []
         self.publish = publish or (lambda record, grid: self.records.append(record))
-        self.withheld: list[Record] = []
+        self.withheld: list[BlockGrid] = []
         self.withhold = withhold or (lambda record, grid: self.withheld.append(record))
         self.release = release
         self.queue: deque[_Connection] = deque()
@@ -627,7 +627,8 @@ class Warden:
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
 
-def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record], fails: Sequence[Record]) -> dict:
+def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
+          fails: Sequence[BlockGrid]) -> dict:
     """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a warden
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
     ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its

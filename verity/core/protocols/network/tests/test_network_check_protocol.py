@@ -32,7 +32,7 @@ from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
                                                                 Direction, Issuer, LmsKey, RecordHead, SignerRefused,
                                                                 certificate_digest, parameters_digest, record_head)
-from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, Record, Status
+from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, BlockGrid, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.core.protocols.certifier.service import encode
 
@@ -300,7 +300,7 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
-def _signed_anyway(issuer: Issuer, record: Record, direction: Direction, g: GridParams, parameters: bytes,
+def _signed_anyway(issuer: Issuer, record: BlockGrid, direction: Direction, g: GridParams, parameters: bytes,
                    deadline: bool) -> CertifiedRecord | None:
     """A certificate of a faulted record, which `Issuer.certify` refuses: its head signed under the issuer's key."""
     head = record_head(record.link, direction, record.window, record.grid, record.status, g, parameters,
@@ -334,7 +334,7 @@ class Drawn:
     n: int
     params: dict
     records: list[CertifiedRecord]
-    raws: dict[tuple[str, str, int], tuple[Record, GridParams]]
+    raws: dict[tuple[str, str, int], tuple[BlockGrid, GridParams]]
     egress: list[str]
     frames: dict[str, list[LogicalFrame]]
     syncs: dict[str, list[ClockSync]]
@@ -440,7 +440,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     issuer = Issuer(signer, session,
                     coins=lambda k: hashlib.shake_256(session + next(drawn_salts).to_bytes(8, "big")).digest(k))
     records: list[CertifiedRecord] = []
-    raws: dict[tuple[str, str, int], tuple[Record, GridParams]] = {}
+    raws: dict[tuple[str, str, int], tuple[BlockGrid, GridParams]] = {}
 
     def certify(record, direction, g, parameters):
         lw = (direction.value, record.link, record.window)
@@ -527,7 +527,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
             r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session)).encode()))])))
     elif m == "extra":
         empty = tuple((None,) * grid.allocation for _ in range(grid.buckets))
-        extra = draw(st.sampled_from([Record("zz", 0, empty, COMPLETE), Record(tl, W, empty, COMPLETE)]))
+        extra = draw(st.sampled_from([BlockGrid("zz", 0, empty, COMPLETE), BlockGrid(tl, W, empty, COMPLETE)]))
         r = issuer.certify(extra, draw(st.sampled_from([EGRESS, INGRESS])), grid, parameters_digest(grid, ss))
         raws[(r.direction.value, extra.link, extra.window)] = (extra, grid)
         records.insert(n % (len(records) + 1), r)
