@@ -355,12 +355,17 @@ def planes_of(lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
     return np.maximum(_BITLEN[np.clip(-lo - 1, 0, 255)], _BITLEN[np.clip(hi, 0, 255)]) + 1
 
 
+_PLANES8 = planes_of(np.arange(-128, 128), np.arange(-128, 128)).astype(np.uint8)
+
+
 def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, block: int = 1) -> float:
     """The cheapest exact R·Bᵀ when the adversary reorders the reduction index once for every `group` tiles of 8
-    columns, by their largest magnitude, so outliers share chunks. Per chunk it takes the least of b1 planes
-    (r_bits · planes · 0.125, 256 deep), u4 nibbles (0.5 each, 64 deep, R of up to 4 bits) and s8 (1.0). A reordering
-    of single indices rewrites R's block (m·K bits, 32 to a register at 32 units), 1/(8·group) units a MAC; one of whole
-    32-index blocks is a 4-byte copy, free in W1. Group 0 keeps K's order."""
+    columns, by their largest magnitude, so outliers share chunks. Per chunk it takes the least of b1 planes, u4
+    nibbles (0.5 each, 64 deep, R of up to 4 bits) and s8 (1.0). The b1 route keeps q planes (r_bits · q · 0.125, 256
+    deep) and adds the entries that need more as sparse corrections, one predicated add a row of R and noise bit with
+    int16 partials two to a register (16 units), r_bits · count / 128 a MAC of the chunk. A reordering of single
+    indices rewrites R's block (m·K bits, 32 to a register at 32 units), 1/(8·group) units a MAC; one of whole 32-index
+    blocks is a 4-byte copy, free in W1. Group 0 keeps K's order."""
     n, K = B.shape
     span = cols * (group or n // cols)
     tot = 0.0
@@ -372,8 +377,8 @@ def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, bl
             blk = blk[:, idx]
         t = blk.reshape(blk.shape[0] // cols, cols, K // 64, 64)
         lo64, hi64 = t.min(axis=(1, 3)), t.max(axis=(1, 3))
-        lo256, hi256 = lo64.reshape(-1, K // 256, 4).min(axis=2), hi64.reshape(-1, K // 256, 4).max(axis=2)
-        b1 = r_bits * 0.125 * planes_of(lo256, hi256)
+        pe = _PLANES8[blk.astype(np.int16) + 128].reshape(blk.shape[0] // cols, cols, K // 256, 256)
+        b1 = np.min([r_bits * (0.125 * q + (pe > q).sum(axis=(1, 3)) / 128.0) for q in range(1, 9)], axis=0)
         u4 = (np.where(planes_of(lo64, hi64) <= 4, 0.5, 1.0).reshape(-1, K // 256, 4).mean(axis=2)
               if r_bits <= 4 else 1.0)
         tot += float(np.minimum(np.minimum(b1, u4), 1.0).sum()) * cols * 256
