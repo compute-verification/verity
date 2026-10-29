@@ -101,11 +101,7 @@ theorem allGo_succ (fuel : ℕ) (a b : Lin) (rest : List Lin) :
       ((((a :: b :: rest).take ((a :: b :: rest).length / 2)).zip
           (((a :: b :: rest).drop ((a :: b :: rest).length / 2)).take ((a :: b :: rest).length / 2))).mapM
           (fun (p, q) => Flock.HmNets.and p q) >>= fun ands =>
-        VStar.allGo fuel (ands ++ (a :: b :: rest).drop (2 * ((a :: b :: rest).length / 2)))) := by
-  first
-    | rfl
-    | (rw [VStar.allGo.eq_def])
-    | (rw [VStar.allGo.eq_def]; rfl)
+        VStar.allGo fuel (ands ++ (a :: b :: rest).drop (2 * ((a :: b :: rest).length / 2)))) := by rfl
 
 /-- One round of `_all` keeps "every form is 1": the pairwise ANDs of the halves, then the odd last form. -/
 theorem all_step {n m : ℕ} (hm : 2 * m ≤ n) (f g : ℕ → Bool)
