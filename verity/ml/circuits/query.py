@@ -1,15 +1,15 @@
-"""Query language (IR §7): `/`, `/Name`, `//Name`, `//A/B`, `//A//B`, `//A ! groups(F, k)`.
+"""Query strings (IR §7): `parse(text)`, the string form of `verity.ml.circuits.query_ast`'s queries, which
+`query_ast.evaluate(program, text)` evaluates; and `query(circuit, path)`, the calls a path names.
 
-Results are ordered collections of `FunctionCall`s (path queries) or `Region`s (`groups`), in canonical
-call-preorder, zero-based. `groups(F, k)` is evaluated once per scope selected by the left side and
-concatenated; a block whose calls are not adjacent is rejected (`GapError`), never absorbed or re-cut.
+`query` takes `/`, `/Name`, `//Name`, `//A/B` and `//A//B` and returns the `FunctionCall`s the path selects (`/`: the
+root's `Region`), in canonical call-preorder, zero-based.
 
 `parse(text)` turns the general structural query syntax of `verity.ml.circuits.query_ast` into its AST:
 `members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`,
 `override(F, {"//Gemm_v1{*}": G})`, `zip(...)`, `where(F, spec=..., form=..., w_max=...)`, `union/minus/inter(F, G)`,
 `root()`.  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
 `//A ! groups(F, k)` -> `members("//A", "@fn:F", k)` (k adjacent members of one node per set; the legacy `query()`
-below is untouched and keeps its exact block semantics).
+takes paths only).
 """
 
 from __future__ import annotations
@@ -21,10 +21,6 @@ from .query_ast import (Default, Each, Instances, Members, Nodes, NodeSel, Path,
                       concat as _concat, inter as _inter, minus as _minus, override as _override, union as _union,
                       where as _where)
 from .layout import FunctionCall, Circuit, Region
-
-
-class GapError(QueryError):
-    pass
 
 
 _STEP = re.compile(r"(//|/)([A-Za-z_][A-Za-z0-9_]*)?")
@@ -65,26 +61,10 @@ def _descendants(circuit: Circuit, scope_call: FunctionCall | None, name: str | 
             yield from _descendants(circuit, c, name)
 
 
-def query(circuit: Circuit, q: str) -> list:
-    """Evaluate a query against the circuit. Returns a list of `FunctionCall` (path queries) or `Region`
-    (`groups`) objects in canonical order."""
-    if "!" in q:
-        left, right = q.split("!", 1)
-        m = _GROUPS.match(right)
-        if not m:
-            raise QueryError(f"unsupported right side {right.strip()!r} (only groups(F, k))")
-        fname, k = m.group(1), int(m.group(2))
-        if k <= 0:
-            raise QueryError("groups(F, k) needs a positive k")
-        scopes = _path(circuit, left)
-        out: list[Region] = []
-        for sc in scopes:
-            out.extend(groups(circuit, sc, fname, k))
-        return out
-    return _path(circuit, q)
-
-
-def _path(circuit: Circuit, path: str) -> list:
+def query(circuit: Circuit, path: str) -> list:
+    """The calls `path` names in the circuit, as `FunctionCall`s in canonical order (`/`: the root's `Region`)."""
+    if "!" in path:
+        raise QueryError(f"query() takes a path; evaluate the block query {path!r} with query_ast.evaluate(program, ...)")
     steps = _parse_path(path)
     if steps == [("/", None)]:
         return [Region(circuit, 0, circuit.size)]
@@ -105,29 +85,6 @@ def _path(circuit: Circuit, path: str) -> list:
         nxt.sort(key=lambda c: (c.lo, -c.hi))
         frontier = list(nxt)
     return frontier  # type: ignore[return-value]
-
-
-def groups(circuit: Circuit, scope: FunctionCall | Region | None, fname: str, k: int) -> list[Region]:
-    """Within one scope: direct child calls to `fname` in canonical order, cut from the beginning into blocks
-    of at most `k`; each block must be adjacent, nonempty, nonoverlapping; returns one region per block."""
-    if k <= 0:
-        raise QueryError("groups(F, k) needs a positive k")
-    if isinstance(scope, Region) and not isinstance(scope, FunctionCall):
-        if scope.lo == 0 and scope.hi == circuit.size:
-            scope = None
-        else:
-            raise QueryError("groups scope must be a call (or the root)")
-    calls = [c for c in _children(circuit, scope, fname) if c.matches(fname)]
-    out: list[Region] = []
-    for b in range(0, len(calls), k):
-        block = calls[b:b + k]
-        lo, hi = block[0].lo, block[0].hi
-        for c in block[1:]:
-            if c.lo != hi:
-                raise GapError(f"groups({fname},{k}): calls {block[0]!r} .. {c!r} are not adjacent (gap at [{hi}:{c.lo}])")
-            hi = c.hi
-        out.append(Region(circuit, lo, hi))
-    return out
 
 
 # ---------------------------------------------------------------------------------------------------------
