@@ -59,7 +59,10 @@ whose P chunk rounds to 0, `p_chunk_zero`); `lead_blc4a_pad64` and `lead_blc4a_c
 blc4a-t64-e7 (`blc4a_terms`), on every ssn_1l matmul, charge each noised matmul's chosen-data residual (the lead's p*
 a coined later word; ssn_sh's shared byte, `walk_share`) and read chosen data (`Plan.chosen`): TensorSemantics credits
 nothing there, since a prover that picks the data can make a later step's data part constant, and that word is the
-previous one plus coin terms, an IADD3 at the floor; `lead_blc4a_coin_hd` is the coin plan on honest data;
+previous one plus coin terms, an IADD3 at the floor; `lead_blc4a_coin_hd` is the coin plan on honest data, and
+`lead_blc4a_pad64_xu` the lead de-noised by N-EXACT's xu (exact served outputs, as `best_p4_exact_sep`). Without xu the
+lead's coin term, a (tile, column) sum, folds in the epilogue's IADD3 column source, so its served noise is the tag
+lead's;
 `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
 bits at the magic conversion, the column mean in the FFMA) leaves the code and the tags served, and the lanes covered.
 
@@ -704,6 +707,13 @@ PLANS = [
               "matmul's chosen-data residual charged, and chosen data: TensorSemantics credits nothing, since a "
               "prover that picks the data can make a later step's data part constant, and that word is the "
               "previous one plus coin terms, an IADD3 at the floor"),
+    Plan("lead_blc4a_pad64_xu", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
+         static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
+         noise_dither=True, block_max=True, small_m="wgmma64", blc=True, chosen=True, exact=True, exact_idp4a=0,
+         premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+         note="lead_blc4a_pad64 de-noised by N-EXACT's xu (step S cancels the code and the tag; the stock epilogue "
+              "removes the rest at its own instruction count): every linear's, the lm_head's and the router's served "
+              "output is exact, so only attention's lanes stay forced"),
     Plan("lead_blc4a_coin", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
          static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
          noise_dither=True, block_max=True, pad_fill="coin", blc=True, chosen=True,
@@ -1819,7 +1829,8 @@ def report(lookup: bool = False) -> dict:
 
 PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
                 "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_nkd_bmax_pad64", "best_p4_nkd_bmax_coin", "best_p4_exact",
-                "best_p4_exact_sep", "lead_blc4a_pad64", "lead_blc4a_coin", "lead_blc4a_coin_hd")
+                "best_p4_exact_sep", "lead_blc4a_pad64", "lead_blc4a_pad64_xu", "lead_blc4a_coin",
+                "lead_blc4a_coin_hd")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
                "t8192_1x8k": ("llama", "T8192_1x8k"), "decode_b64_2k": ("llama", "dec64_2k"),
