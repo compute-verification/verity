@@ -1,4 +1,4 @@
-"""HC-PROVED's screens of pfill-k's phase filler (psched_probe.sh's PROBES, ';'-separated `pscore pscore` rows):
+"""Screens of pfill-k's phase filler (psched_probe.sh's PROBES, ';'-separated `pscore pscore` rows):
 `python3 benchmarks/pouw/filler/pfill_phase_screen.py NAME` prints screen NAME's probes. A row is (B, L, split SMs, phase
 warps, phase S, phase tiles a block a layer); the split pumps pfill-k's arm filler (W 8, NC 4, S 256, 2^19), the phase
 filler is blocks of NC 4 ram tiles of that many warps, which the build fixes: NVCC_APPEND_FLAGS="-DPFILL_BITS -DPF_PW=W"
@@ -16,7 +16,7 @@ def _at(w, rows):
 
 SCREENS = {
     # S 32 tiles sized from the leader's TABLE_V3 phase work at pfill-k's rate, a size below and above, at the leader's
-    # split and pfill-power-split's where they differ (r20261016-083237-b004: every row 1.076-1.302)
+    # split and pfill-power-split's where they differ (every row 1.076-1.302)
     "s1": _at(8, [
         (32, 1024, 92, 8, 1), (32, 1024, 92, 16, 1),
         (32, 2048, 92, 16, 1), (32, 2048, 92, 32, 1), (32, 2048, 108, 16, 1),
@@ -43,7 +43,7 @@ SCREENS = {
         (256, 3072, 60, 64, 8),
     ]),
     # the narrower tile (-DPF_PW=2, 8K registers and 12 KB a block, so pv_dec keeps its 3 blocks an SM): s2's work a layer
-    # (r20261016-085255-cdd2: every row 1.12-2.0, its quarter-peak blocks outlast attention; s2 at PF_PW 4 1.019-1.088
+    # (every row 1.12-2.0, its quarter-peak blocks outlast attention; s2 at PF_PW 4 1.019-1.088
     # below its cliff)
     "s3": _at(2, [
         (32, 1024, 92, 128, 1), (32, 2048, 92, 128, 2),
@@ -80,7 +80,7 @@ SCREENS = {
         (256, 3072, 60, 64, 10), (256, 3072, 60, 64, 11),
     ]),
     # the split alone (dscore's own driver, which filler-scorer/v3 reads; it reads pscore's phase rows as an arm-side
-    # driver's work), larger than POWER_SPLIT at B >= 128, where pfill-k read 1.018-1.027 (r20261016-080414-aac8)
+    # driver's work), larger than POWER_SPLIT at B >= 128, where pfill-k read 1.018-1.027
     "s7": [(b, l, f, 0, 0, 0) for b, l, fs in (
         (128, 2048, (100, 108, 116)), (128, 6144, (116, 124, 132)), (132, 5120, (68, 76, 84)),
         (144, 5120, (68, 76, 84)), (256, 2048, (68, 76)), (256, 3072, (68, 76, 84))) for f in fs],
@@ -96,9 +96,9 @@ SCREENS = {
 
 
 #: (B, L, pump SMs, LM): pfill-k's pump beside FILL's step with no filler warps (fscore, FW = AFW = 0; PROBE_BINS has
-#: fscore) on more SMs than FusedPump's rows where those read <= 1.0 or near it (r20261016-092208-bbfb: 48/16K 116 0.995,
+#: fscore) on more SMs than FusedPump's rows where those read <= 1.0 or near it (48/16K 116 0.995,
 #: 128/6K 92 0.992, 128/2K 100 0.962, 32/24K 132 1.005, 132/5K and 144/5K 76 1.019), and 144 at B <= 32, where
-#: pfill-k-fused's 140 read 0.92-0.96 (r20261016-095012-1980) and FusedPump's 148 broke (1.08-1.13)
+#: pfill-k-fused's 140 read 0.92-0.96 and FusedPump's 148 broke (1.08-1.13)
 FUSED = {
     "s8": [(48, 16384, 124, 0), (48, 16384, 132, 0), (48, 16384, 140, 0), (128, 6144, 100, 0), (128, 6144, 108, 0),
            (128, 6144, 116, 0), (128, 2048, 108, 0), (32, 24576, 140, 1), (132, 5120, 84, 0), (144, 5120, 84, 0),

@@ -12,7 +12,7 @@ the labels).
 The tile set is a pure function of the instruction id, the repository fixtures and :data:`CANARY_SEED` (:func:`canary_plan`,
 :func:`canary_tiles`, witnessed by :func:`canary_digest`):
 
-* the first :data:`CANARY_TILES` tiles of every finite-sweep family ``tc_probe.families`` defines for the format, drawn by the
+* the first :data:`CANARY_TILES` tiles of every finite-sweep family ``tc_probe.families`` defines for the format, sampled by the
   same generator as ``--sweep`` with ``n_random = CANARY_N_RANDOM`` (a small sweep, in the sweep's order, so a canary tile is a
   sweep tile of a known seed);
 * every regression tile of every *resolved* discrepancy-log entry naming the instruction or a Target over it
@@ -177,8 +177,8 @@ def canary_plan(instruction_id: str, repo: Path | str | None = None) -> CanaryPl
 
 
 def canary_tiles(plan: CanaryPlan, fmt: P.Format, M: int, K: int) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray, dict | None]]:
-    """``(family, A, Bt, C, meta)`` for every family of the plan: the first ``tiles_per_family`` tiles of the family drawn by
-    ``tc_probe.families`` with the canary seed.  Slicing after the draw keeps every family's tiles independent of which families
+    """``(family, A, Bt, C, meta)`` for every family of the plan: the first ``tiles_per_family`` tiles of the family sampled by
+    ``tc_probe.families`` with the canary seed.  Slicing after the sample keeps every family's tiles independent of which families
     the plan keeps (the generator consumes the same random stream either way)."""
     rng = np.random.default_rng(plan.seed)
     keep = set(plan.families)

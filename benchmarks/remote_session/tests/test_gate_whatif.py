@@ -67,7 +67,7 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
     return {"k": 0, "pace": {"k": 1}, "window_ns": 1, "windows_seen": seen}, lines, proved
 
 
-def recorded(rtt: int, passes: list[int], tau: int = MS // 2) -> tuple[gw.Record, dict]:
+def recorded(rtt: int, passes: list[int], tau: int = MS // 2) -> tuple[gw.SessionTimes, dict]:
     s, lines, proved = loop(rtt, passes, tau=tau)
     auditor, _ = al.auditor_seen(lines, s["windows_seen"])
     rec = gw.record(s, lines, auditor, proved, tau)
@@ -80,7 +80,7 @@ PASSES = [50 * MS if g % 5 == 4 else 110 * MS for g in range(24)]
 
 def test_a_record_replayed_at_its_own_round_trip_is_itself_and_at_another_is_the_loops_record_there():
     """The session's round trip is read off both clocks (the least exchange less the challenger's own time, σ_0's fetch
-    here, which has no draws to compute), whatever the clocks' offset. At it the replay is the record; at 2 ms it is
+    here, which has no samples to compute), whatever the clocks' offset. At it the replay is the record; at 2 ms it is
     the record of the same loop at 2 ms, on both clocks, where the short passes' roots no longer wait on the verifier."""
     rec, own = recorded(100 * MS, PASSES)
     assert rec.r0 == 100 * MS and min(rec.net) == 100 * MS + 300_000

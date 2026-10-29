@@ -8,7 +8,7 @@ Nothing is timed before its gate passed, in this order:
   go through the device's encode and decode unchanged, the decode's checksum mode giving the payloads' XOR;
 - `gate_bound`: the bound key's launchers (`kv_encode_bound`, `kv_decode_bound`) against `tests/kv_vectors.json`'s
   "bound" at the keys of the library's field and mask, and against `kv.py` over token-layers across index 2^32; at the
-  remote audit's codec, against its `vectors.json`'s `codec.coin` too, the append coin's form (`gate_coin`);
+  PoUB's codec, against its `vectors.json`'s `codec.coin` too, the append coin's form (`gate_coin`);
   `--gates-only` stops here;
 - `read`: the read rate R over a store of `--store-gib`, the best of a few grids;
 - `rates`: compute-only squarings (ILP 1 and 2 words a thread), decodes and encodes of k rounds, words/s;
@@ -44,6 +44,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/bench/seed").digest()
@@ -69,27 +70,38 @@ CLOCK_LOCKED_MHZ, CLOCK_MAX_MHZ = 2092, 2430  # the nodes' locked SM clock (thei
 RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
 
+_v, _i, _q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+KV = {   # kv.cu's functions every build exports (`cuda_lib.load`)
+    "kv_set_key": [_v, _i, _v],
+    "kv_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "kv_decode": [_v, _v, _q, _q, _i, _i, _v, _v],
+    "kv_encode_bound": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "kv_decode_bound": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "kv_read": [_v, _q, _v, _i, _v],
+    "kv_chain": [_i, _i, _i, _q, _i, _v, _v],
+    "kv_spin": [ctypes.c_longlong, _v],
+    "kv_attn_shape": [_v],
+    "kv_attn": [_v, _i, _v, _v, _v, _i, _i, _i, _i, _i, _i, _v],
+    "kv_karatsuba": ([], _i),
+}
+KV_BUILT = {   # and those of some builds, each bound where the library has it
+    "kv_set_mask": [_v],
+    "kv_rc_buffers": [_v, _v, _v],
+    "kv_rc_pass": [_v, _v, _v],
+    "kv_rc_receipts": [_v, _q, _i, _i, _q, _v],
+    "kv_prim": [_i, _v, _v, _v, _i, _v],
+    "kv_decode_occ": [_v, _q, _q, _i, _i, _v, _i, _v, _v],
+}
+
+
 class Lib:
-    def __init__(self, name: str, path: str) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-        self.name, self.path, self.so = name, path, ctypes.CDLL(str(Path(path).resolve()))
-        so = self.so
-        so.kv_set_key.argtypes = [v, i, v]
-        so.kv_encode.argtypes = [v, v, q, q, i, i, v]
-        so.kv_decode.argtypes = [v, v, q, q, i, i, v, v]
-        so.kv_encode_bound.argtypes = [v, v, q, q, i, v, i, v]
-        so.kv_decode_bound.argtypes = [v, v, q, q, i, v, i, v]
-        so.kv_read.argtypes = [v, q, v, i, v]
-        so.kv_chain.argtypes = [i, i, i, q, i, v, v]
-        so.kv_spin.argtypes = [ctypes.c_longlong, v]
-        so.kv_attn_shape.argtypes = [v]
-        so.kv_attn.argtypes = [v, i, v, v, v, i, i, i, i, i, i, v]
-        so.kv_karatsuba.restype = i
+    def __init__(self, name: str, path: str, functions: dict | None = None) -> None:
+        """kv.cu's library at `path`, with `functions` (another library's that includes kv.cu) bound beside its own."""
+        self.name, self.path = name, path
+        so = self.so = cuda_lib.load(Path(path).resolve(), {**KV, **(functions or {})}, KV_BUILT)
         self.field = K.field(name.split("-")[0])
         self.karatsuba = so.kv_karatsuba()
         self.mask = hasattr(so, "kv_mask") and so.kv_mask() != 0
-        if self.mask:
-            so.kv_set_mask.argtypes = [v]
         if so.kv_bits() != self.field.n:
             raise RuntimeError(f"{name}: the library is built for {so.kv_bits()} bits")
         self.kmax = so.kv_kmax()
@@ -287,8 +299,8 @@ def gate_bound(lib: Lib, torch, log) -> dict:
 
 
 def gate_coin(lib: Lib, torch, log) -> dict | None:
-    """The append coin's form of the bound key (remote_bandwidth's PROTOCOL.md §3), for a library at the remote
-    audit's codec (`codec.DEFAULT`; None for another): `vectors.json`'s `codec.coin` blocks, each encoded by
+    """The append coin's form of the bound key (remote_bandwidth's PROTOCOL.md §3), for a library at
+    PoUB's codec (`codec.DEFAULT`; None for another): `vectors.json`'s `codec.coin` blocks, each encoded by
     `kv_encode_bound` at its own indices under b_j(c_a), equal the pinned words (their SHA-512 and first word), decode
     back, and don't decode under the form without the coin."""
     for p in (str(HERE.parents[1]), str(REMOTE_VECTORS)):
@@ -304,7 +316,7 @@ def gate_coin(lib: Lib, torch, log) -> dict | None:
     seed, coin, k = bytes.fromhex(pinned["seed"]), bytes.fromhex(pinned["coin"]["c_a"]), rc.rounds
     key, dev = RC.key(seed, rc), K.key(f.name, seed, k, mask=rc.masked)
     if (dev.c, dev.tau, dev.mask) != (key.c, key.tau, key.mask):
-        raise RuntimeError("kv.py's key is not the remote audit's codec key")
+        raise RuntimeError("kv.py's key is not PoUB's codec key")
     set_key(lib, dev)
     w, st = K.token_layer_words(f), stream(torch)
     blocks = []

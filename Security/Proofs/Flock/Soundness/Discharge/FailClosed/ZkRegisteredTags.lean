@@ -46,10 +46,22 @@ theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (
       obtain ⟨hsz, hst⟩ := ZkHidden.setupOf_tableJH hh hd hs
       have h0 : 0 < sts.size := by rw [hsz]; exact Composed.nTab_pos I
       have s := Hidden.setupHidden_spec' (hst 0 h0)
-      have hc0 := s.parse
-      rw [ZkHidden.parseH_tagsAt hty, hck.parseH hh'] at hc0
+      have hc0 : HmOut.loadPublic (zkTags I) sts[0].c I.publicFile = .ok (pubZ I) := by
+        cases hf : (circC (zkTags I) I).tmpl with
+        | none =>
+          have hp := hck.parseH hh' hf
+          have h1 := s.parseF ((tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hp))
+          rw [ZkHidden.parseH_tagsAt hty, hp] at h1
+          rw [← Except.ok.inj h1]
+          exact hck.loadH hh'
+        | some tu =>
+          obtain ⟨-, -, -, hn, -⟩ := hck.templated hf
+          have h1 := s.parse
+          rw [show tagsAt (zkTags I) I.count 0 = zkTags I by simp [tagsAt, hn], hck.parseC hh'] at h1
+          rw [← Except.ok.inj h1]
+          exact hck.loadHC hh'
       obtain ⟨pop, hpop, -, hdr⟩ := s.pub
-      rw [ZkHidden.loadPublicH_tagsAt, ← Except.ok.inj hc0, hck.loadH hh'] at hpop
+      rw [ZkHidden.loadPublicH_tagsAt, hc0] at hpop
       obtain rfl := Except.ok.inj hpop
       exact ⟨{ sts[0].c with outPorts := #[] }, _, 0, h0, hdr _ rfl⟩
   obtain ⟨c', d', i, hi, hdr⟩ := key

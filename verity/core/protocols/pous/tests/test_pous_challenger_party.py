@@ -2,23 +2,30 @@
 challenger on an injected clock. Given the period's coins, the challenger's side designates the id `period.run` does in
 one process and challenges the same indices. The run's check accepts its session against the honest prover and refuses
 it against one that answers zeros. The warm-ups before round 0 are on a public index, and neither timed nor judged. The
-prover answers with the collector paused, as the challenger does. `Party.of` reads
-`period.json`'s challenger host, and `placement` says whether `trusted-host`'s premise holds."""
+prover answers with the collector paused, as the challenger does. The deployment layer's runtime, running the same two
+parties on the same coins and clock readings, signs the session the stream does. `side_of` reads `period.json`'s
+challenger host, and `placement` says whether `trusted-host`'s premise holds."""
 
 from __future__ import annotations
 
 import gc
 import hashlib
 import json
+import os
 import socket
 import threading
 
 import pytest
 
 import pous_test_signer as ts
+from verity.core.deploy import sources as S
+from verity.core.deploy.party import Send
+from verity.core.deploy.runtime import run as deploy_run
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period, run
+from verity.core.wire import Message
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
@@ -34,7 +41,7 @@ class Clock:
         return self.now
 
 
-def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], bytes]:
+def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]:
     """`period.run` in one process under a test signer at the small point: its period, point, published setup, `C*`'s
     labels and table."""
     point = period.point_for(len(STORE), period.W, period.C0)
@@ -46,8 +53,8 @@ def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], byt
     return p, point, published, blocks, b"".join(mc.block_digest(b) for b in blocks)
 
 
-def _split(point: run.Point, root: bytes, respond, signer: mc.Signer,
-           warmups: int = CP.WARMUPS) -> tuple[bytes, run.Session, int]:
+def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: int = CP.WARMUPS,
+           draw=os.urandom) -> tuple[bytes, run.Session, int]:
     """One session with the challenger's side in a thread and the prover's here, over a socket pair."""
     a, b = socket.socketpair()
     got: dict = {}
@@ -55,7 +62,8 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer,
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["session"] = CP.serve(f, CP.request_of("n0", point, root), signer=signer, log=ts.session_log(),
-                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(), warmups=warmups)
+                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(), warmups=warmups,
+                                      draw=draw)
 
     t = threading.Thread(target=side)
     t.start()
@@ -107,6 +115,41 @@ def test_the_warmups_come_first_and_are_neither_timed_nor_judged() -> None:
     assert a["verdict"] == "accept", a
 
 
+class GivenCoins:
+    """A coins source that answers its first draw with the period's coins, as `serve` is given them, and the rest
+    from `draw`."""
+
+    def __init__(self, draw) -> None:
+        self.draw, self.given = draw, [COINS]
+
+    def start(self, params, identity) -> list:
+        return []
+
+    def on(self, msg) -> list:
+        n = msg.message.fields["n"]
+        return [Send(S.OWNER, Message("Coins", body=self.given.pop() if self.given else self.draw(n)))]
+
+
+def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
+    """`Challenger` and `Prover` in the deployment layer's runtime, on `serve`'s coins and a clock that reads what
+    `Clock` does, its hiding key and salts drawn from one seeded stream, sign the session `serve` signs over the stream,
+    and the prover answers the same frames."""
+    _, point, published, blocks, _ = _in_process()
+    sid, old, rounds = _split(point, published.root, lambda i: blocks[i], ts.TestSigner(b"same key", 2),
+                              draw=S.SeededCoins(b"hiding").draw)
+    caps = {CP.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
+            CP.PROVER: {"store": lambda i: blocks[i]}}
+    clock = S.VirtualClock(S.VirtualTime(Clock()()), 1_000)
+    r = deploy_run({"protocol": CP.ID, "params": CP.request_of("n0", point, published.root)},
+                   [CP.CHALLENGER, CP.PROVER], "live", None, protocols={CP.ID: CP.PROTOCOL}, capabilities=caps,
+                   authenticate=False,
+                   sources={CP.CHALLENGER: {"clock": clock, "coins": GivenCoins(S.SeededCoins(b"hiding").draw)}})
+    assert r.status == "completed", r.outcomes
+    assert r.outcomes[CP.CHALLENGER] == {"outcome": {"session": old.to_json(), "session_id": sid.hex()},
+                                         "refused": None}
+    assert r.outcomes[CP.PROVER] == {"outcome": rounds, "refused": None}
+
+
 def test_a_short_answer_is_refused_by_the_prover() -> None:
     a, b = socket.socketpair()
     with a, b, a.makefile("rwb") as fa, b.makefile("rwb") as fb:
@@ -128,16 +171,16 @@ def test_the_prover_answers_with_no_collection_inside_the_rounds() -> None:
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = CP.Party.of({}, "vy-nebius-cpu-4", tmp_path)
-    assert (local.host, local.address) == ("vy-nebius-cpu-4", None) and str(tmp_path) in local.command
-    assert CP.Party.of({"challenger_host": "vy-nebius-cpu-4"}, "vy-nebius-cpu-4", tmp_path) == local
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for pous"):
-        CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"bandwidth": {"command": ["x"]}}},
-                    "vy-nebius-cpu-4", tmp_path)
-    wired = CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {
-        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "vy-nebius-cpu-4", tmp_path)
-    assert wired == CP.Party("vy-auditor-1", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
+    local = CP.side_of({}, "cpu-node", tmp_path)
+    assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
+    assert CP.side_of({"challenger_host": "cpu-node"}, "cpu-node", tmp_path) == local
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for pous"):
+        CP.side_of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {"command": ["x"]}}},
+                   "cpu-node", tmp_path)
+    wired = CP.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {
+        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", tmp_path)
+    assert wired == Side("auditor-host", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
     assert CP.placement("n0", "n0")[CP.PREMISE].startswith("unmet: ")
-    assert CP.placement("n0", "vy-auditor-1") == {
-        "parties": {"memory_challenger": "vy-auditor-1", "prover": "n0", "verifier": "n0"},
-        CP.PREMISE: "holds: the memory challenger ran on vy-auditor-1, not the prover's n0"}
+    assert CP.placement("n0", "auditor-host") == {
+        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
+        CP.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}

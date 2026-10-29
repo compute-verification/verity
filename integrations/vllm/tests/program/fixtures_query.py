@@ -493,7 +493,7 @@ def interface_w_out_bound(part: Part) -> int:
 
 
 def _type_widths(t) -> list[int]:
-    from verity.ml.circuits.types import Record, Value
+    from verity.ml.circuits.types import RecordType, Value
     if isinstance(t, Value):
         return [t.w]
     if isinstance(t, Array):
@@ -503,7 +503,7 @@ def _type_widths(t) -> list[int]:
         for f in t.fields:
             out.extend(_type_widths(f))
         return out
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         out = []
         for _, f in t.fields:
             out.extend(_type_widths(f))

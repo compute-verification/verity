@@ -8,8 +8,8 @@ import Proofs.Pous.Accounting.Numbers
 /-!
 # Fisch 2018/702, Claims 13–14, proved
 
-The definitions and statements are copied verbatim from `FischClaims1314Draft.lean` (under red-team review), whose
-header lists the modelling choices. Only the `sorry`s are replaced.
+The definitions and statements are copies of the trusted ones (`Security/Definitions/Pous/Model/Pebbling.lean`,
+`Pous.Guarantees.FischClaim13` and `FischClaim14`).
 
 * **Claim 13** from Claim 12 (`PousB2.b2_stacking`). Let `E` be the set of endpoints. If `|E| < εn/2`, pebble
   every node of `E` black as well. That is at most `(1 − ε/2)n` black pebbles, and `δ < (ε/2)/2`, so Claim 12 gives

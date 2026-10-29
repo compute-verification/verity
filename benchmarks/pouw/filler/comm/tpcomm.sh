@@ -7,7 +7,7 @@
 # the filler scorer's DRAM gate. The SASS of kfill_k is recorded (sass.txt: its MMA opcodes). Clocks are read, never set:
 # gpu.txt has the scorer's clock fields (application clocks against their defaults) before and after each set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=HC-COMM \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --env TC_TP=2 -- bash benchmarks/pouw/filler/comm/tpcomm.sh
 #
 # TC_TP (2), TC_ON (the GPUs gpu-lease may take, in order; default one NUMA node's), TC_BLS ("B:L ..."; default the
