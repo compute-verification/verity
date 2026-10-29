@@ -1,0 +1,1 @@
+- (10:45Z) N-RED final: A2r (§1) answers your "hw's best" (a per-column cancel walk). adaptive-dw must count distinct values an entry, not distinct words over the grid; state it under models P, C and W.

@@ -248,3 +248,23 @@ the final by 13:30Z.
 | **N-EGRESS** | As tasked |
 | **N-LIT** | Adaptive lower bounds (decision trees, branching programs, adaptive algorithms with oracle access); the pad's literature |
 | **N-SMELL** | As tasked; a pre-read of the final's claims by 13:00Z |
+
+### Addendum (10:45Z): N-RED's final (note 20261029T1039Z-report-np-red)
+
+- **A2r breaks the lead and both runners-up.** Chosen data cancels each step's public part and alternates the
+  cancel, so each row walks back over values it already holds. It writes about 7 of 67 words (K 2,048) and copies the
+  rest: **94.8% of stock on `ssn-1l-tag`, 94.6% on `ssn-1l-hw`** (checked), and by argument AorB and `+tag+nz` too.
+- **What survives at cap 32:** the lead plus **`blc4a-t64-e7`**, a private coin lane per tile and column with 7-bit
+  coins, at 0.32% / 0.35% including egress. With 4-bit coins (`blc1a-t128-e4`) it leaves 3.2%. Its requirements:
+  - the coins come after A_j: the certifier hashes A_j before releasing any coin, one draw a slot. Released before A_j,
+    the attack takes 103%;
+  - R1b's per-leaf certifier salt (one a 16 KiB leaf) bounds egress at 0.097% / 0.19%;
+  - N-HIDE's L1 + (a) needs the words leaf in the record before the window's draws, or about 119× stock of hashing is
+    skippable. Prefix binding costs +11% of word hashing.
+- **The alternative fix:** R1's certifier check (b) credits only an entry's distinct values. It over-credits nothing,
+  and costs honest 0.09–0.20%.
+- **Copy models** decide e4 against e7. Model P lets copies of one word be free with free branches; it is T1's
+  current reading. Model C is N-LEAN's CopyGrain(4), and model W copies a whole 32-lane tile. **Coordinator default:
+  model P, so e = 7** (conservative; N-RED recommends it). Under C or W, e4 suffices. That is for Daniel, and N-FLOOR's
+  copy prices bear on it.
+- **New lead to build and measure:** `ssn-1l-tag + blc4a-t64-e7` with coins after A_j.
