@@ -239,8 +239,7 @@ EOF
 }
 
 # loopback NAME PUB INST CIRCUIT [--zk]: a verifier process (serve, on the verifier's cores, every session at once) and
-# prove_live against it; the sessions under $DD/$STEP-NAME/sessions; the prover's status, or 3 where it is 0 and the
-# verifier did not accept each of the NS sessions (`accepted`)
+# prove_live against it; the sessions under $DD/$STEP-NAME/sessions; the prover's status
 loopback() {
   local name=$1 pub=$2 inst=$3 circ=$4 zk=${5:-} s=$DD/$STEP-$1 PORT=$(free_port) PIN=$(sha512sum $4 | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/$STEP/$name
@@ -260,6 +259,7 @@ loopback() {
   [ $rc != 0 ] || for i in $(seq ${RECORD_WAIT_S:-300}); do
     [ $(cat $s/sessions/index.jsonl 2>/dev/null | wc -l) -ge $NS ] && break; sleep 1; done
   kill $SP; wait $SP 2>/dev/null
+  # the prover's 0 is 3 unless the verifier accepted each of the NS sessions
   [ $rc != 0 ] || accepted $s/sessions/index.jsonl || rc=3
   LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
   return $rc
