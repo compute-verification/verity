@@ -1,7 +1,7 @@
-"""`verity/annotations/v0`: names, descriptions, formats and groupings of a program's parts, keyed by ids the program already
+"""`verity/metadata/v0`: names, descriptions, formats and groupings of a program's parts, keyed by ids the program already
 has, outside every digest.
 
-    {"format": "verity/annotations/v0",
+    {"format": "verity/metadata/v0",
      "entries": [
        {"key": "def:RoPE_v1", "name": "RoPE", "description": "rotary position embedding of one token's heads"},
        {"key": "port:RoPE_v1/in/x", "name": "heads", "format": "BF16"},
@@ -23,7 +23,7 @@ and ``digest`` (on a ``def`` key with a full id: `definition_digest`) are stalen
 was written against another body.  Fields: ``name``, ``description``, ``format`` (strings), ``aliases`` (strings), each set at most
 once per key in one file; `merge` layers files, a later file's field replacing an earlier one's.
 
-**Digests.**  Annotations never enter a program digest: `attach` puts them in the descriptor's ``annotations`` field, which
+**Digests.**  Metadata never enters a program digest: `attach` puts it in the descriptor's ``annotations`` field, which
 `codec.program_digest` excludes (``PROTOCOL.md`` §1).  Validation reads only the descriptor's
 structure; it evaluates nothing.
 """
@@ -38,7 +38,7 @@ from .codec import canonical_json
 from .program import input_id
 from .types import type_from_json
 
-FORMAT = "verity/annotations/v0"
+FORMAT = "verity/metadata/v0"
 TEXT_FIELDS = ("name", "description", "format")
 FIELDS = {"key", "members", "callee", "digest", "program", "aliases", *TEXT_FIELDS}
 _KIND = re.compile(r"^(def|node|wire|port|call|group):(.+)$")
@@ -158,18 +158,18 @@ def _entry_errors(e: Mapping[str, Any], i: int) -> list[dict]:
     return out
 
 
-def validate(annotations: Mapping[str, Any], desc: Mapping[str, Any], program_digest: str | None = None) -> Verdict:
-    """The annotations against one program's descriptor: every entry well formed, every key resolved (or absent: a Definition the
+def validate(metadata: Mapping[str, Any], desc: Mapping[str, Any], program_digest: str | None = None) -> Verdict:
+    """The metadata against one program's descriptor: every entry well formed, every key resolved (or absent: a Definition the
     program does not have), groups closed, each (key, field) set once, the guards current.  ``program_digest`` enables the checks of
     ``call`` keys naming this program."""
     v = Verdict(True)
-    if not isinstance(annotations, Mapping) or set(annotations) != {"format", "entries"} or annotations.get("format") != FORMAT \
-            or not isinstance(annotations.get("entries"), list):
+    if not isinstance(metadata, Mapping) or set(metadata) != {"format", "entries"} or metadata.get("format") != FORMAT \
+            or not isinstance(metadata.get("entries"), list):
         v.errors.append({"code": "format"})
         v.ok = False
         return v
     prog = _Program(desc, program_digest)
-    entries = annotations["entries"]
+    entries = metadata["entries"]
     keys = {e["key"] for e in entries if isinstance(e, Mapping) and isinstance(e.get("key"), str)}
     seen: dict[tuple[str, str], int] = {}
     for i, e in enumerate(entries):
@@ -219,15 +219,15 @@ def validate(annotations: Mapping[str, Any], desc: Mapping[str, Any], program_di
     return v
 
 
-def attach(desc: Mapping[str, Any], annotations: Mapping[str, Any]) -> dict:
-    """A copy of the descriptor carrying the annotations in its ``annotations`` field (no digest moves)."""
+def attach(desc: Mapping[str, Any], metadata: Mapping[str, Any]) -> dict:
+    """A copy of the descriptor carrying the metadata in its ``annotations`` field (no digest moves)."""
     out = dict(desc)
-    out["annotations"] = dict(desc.get("annotations", {}), **{FORMAT: list(annotations["entries"])})
+    out["annotations"] = dict(desc.get("annotations", {}), **{FORMAT: list(metadata["entries"])})
     return out
 
 
 def merge(*layers: Mapping[str, Any]) -> dict:
-    """Annotation files in order, a later (key, field) replacing an earlier one: the repo's files, then a site's pending overlay."""
+    """Metadata files in order, a later (key, field) replacing an earlier one: the repo's files, then a site's pending overlay."""
     by_key: dict[str, dict] = {}
     for layer in layers:
         for e in layer["entries"]:
