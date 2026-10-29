@@ -26,13 +26,22 @@ A, `cols` output columns and inner dimension `K`, and later the root of its comm
   record, never a dropped frame.
 
 The record (`Calls.summary`) carries each call's shape, roots, release's digest and verdict; the counts are witness.
+
+**On the node** (`NodeCalls`), one window's calls are PoUW window p's, from p's first tick on any of the node's links,
+and every link's proxy counts each of its buckets against them as it ticks (`active.Proxy(calls=…)`), so a call's count
+is over all of the node's boundary links. The prover registers on the control channel (`serve_calls`, `CallsClient`):
+an A root is answered with the call's release, and a words root with its verdict.
 """
 
 from __future__ import annotations
 
+import asyncio
 import enum
+import json
 import os
+import socket
 import struct
+import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -302,8 +311,21 @@ class Calls:
     def a_root(self, call: int, root: bytes, shape: CallShape) -> bytes:
         """Register call `call`'s A root and shape, open its count, and release its coins (`release`), once, as the only
         reply to this registration. A registration it refuses flips no coin. A call whose coins aren't flipped is
-        refused (`NO_COINS`) and never opens, and so is every later call of the window: once the entropy fails, the
-        certifier flips nothing more."""
+        refused (`NO_COINS`) and its count closes, and so is every later call of the window: once the entropy fails, the
+        certifier flips nothing more. It is `open`, the flip from the entropy `open` returns, and `released` (or
+        `unflipped`), which `NodeCalls` runs with only the first and last under its lock."""
+        entropy = self.open(call, root, shape)
+        try:
+            out = release(flip(shape, entropy))
+        except Exception:
+            self.unflipped(call)
+            raise
+        self.released(call, out)
+        return out
+
+    def open(self, call: int, root: bytes, shape: CallShape) -> Entropy:
+        """Register call `call`'s A root and shape and open its count, ahead of its coins. Returns the entropy its
+        coins are flipped from."""
         self._live()
         if type(call) is not int or call < 0:
             raise CallRefusal(f"a call id is an integer ≥ 0, not {call!r}")
@@ -311,15 +333,23 @@ class Calls:
             raise CallRefusal(f"call {call}'s A root is registered already, and its coins went out once")
         if not isinstance(shape, CallShape):
             raise CallRefusal(f"a call's shape is a CallShape, not {type(shape).__name__}")
-        c = self._calls[call] = _Call(shape, _root(root, "an A root"), Verdict.NO_COINS)
-        try:
-            out = release(flip(shape, self._entropy))
-        except Exception:
-            self._entropy = _spent
-            raise
-        c.release, c.verdict = tagged_sha512(RELEASE_TAG, out), None
+        self._calls[call] = _Call(shape, _root(root, "an A root"), None)
         self._open.add(call)
-        return out
+        return self._entropy
+
+    def released(self, call: int, out: bytes) -> None:
+        """Record call `call`'s release, `out`, which goes out only if this returns: not once the window has closed."""
+        self._live()
+        self._calls[call].release = tagged_sha512(RELEASE_TAG, out)
+
+    def unflipped(self, call: int) -> None:
+        """Call `call`'s coins weren't flipped: it is refused (`NO_COINS`) unless it was already, its count closes, and
+        the window flips nothing more."""
+        self._entropy = _spent
+        c = self._calls[call]
+        self._open.discard(call)
+        if c.verdict is None:
+            c.verdict = Verdict.NO_COINS
 
     def bucket(self, allocation: int, frames: Sequence[int] = ()) -> list[int]:
         """Count one boundary link's bucket against every open call: ⌈log2(r + 1)⌉ timing bits at allocation r, and
@@ -371,3 +401,198 @@ class Calls:
                  "release": c.release.hex() or None, "words_root": c.words_root.hex() if c.words_root else None,
                  "verdict": c.verdict.value if c.verdict else None}
                 for call, c in sorted(self._calls.items())]
+
+
+class NodeCalls:
+    """A node's calls across its PoUW windows and its boundary links, as the network certifier keeps them. PoUW window
+    p's calls (`Calls`) are the node's from p's first tick on any of the node's links (`tick`), which closes the window
+    before it and gives that window's record to `publish(window, Calls.summary())` (by default kept in `records`).
+    Every link's every bucket counts against the calls open when its tick runs, whatever window the tick is in: that
+    is when its frames leave or enter the node. The control channel (`serve_calls`) and the links' ticks may run on
+    other threads, and a lock orders them. A call's coins are flipped outside the lock, so no tick waits for a flip;
+    the call is open from its A root on, so the buckets ticked meanwhile count against it. `publish` runs under the
+    lock and doesn't call back."""
+
+    def __init__(self, cap: EgressCap, entropy: Entropy = os.urandom,
+                 publish: Callable[[int, list[dict]], None] | None = None) -> None:
+        self.cap, self._entropy = cap, entropy
+        self.records: dict[int, list[dict]] = {}
+        self.publish = publish or self.records.__setitem__
+        self.window: int | None = None
+        self._calls: Calls | None = None
+        self._closed = False
+        self._lock = threading.Lock()
+
+    def tick(self, window: int, allocation: int, frames: Sequence[int] = ()) -> list[int]:
+        """One link's bucket at its tick in PoUW window `window`, counted against the open calls (`Calls.bucket`):
+        from `window`'s first tick on, its calls are the node's. Returns the calls it refuses."""
+        with self._lock:
+            if self._closed:
+                raise CallRefusal("the node's calls are closed")
+            if type(window) is not int or window < 0:
+                raise CallRefusal(f"a PoUW window is an integer ≥ 0, not {window!r}")
+            if self.window is None or window > self.window:
+                self._close_window()
+                self.window, self._calls = window, Calls(self.cap, self._entropy)
+            return self._calls.bucket(allocation, frames)
+
+    def a_root(self, call: int, root: bytes, shape: CallShape) -> bytes:
+        """`Calls.a_root` in the node's window, its coins flipped outside the lock: they go out only if the window is
+        still open once they are flipped."""
+        with self._lock:
+            calls = self._live()
+            entropy = calls.open(call, root, shape)
+        try:
+            out = release(flip(shape, entropy))
+        except Exception:
+            with self._lock:
+                calls.unflipped(call)
+            raise
+        with self._lock:
+            calls.released(call, out)
+        return out
+
+    def words_root(self, call: int, root: bytes) -> Verdict:
+        """`Calls.words_root` in the node's window."""
+        with self._lock:
+            return self._live().words_root(call, root)
+
+    def close(self) -> None:
+        """Close the node's last window, its open calls refused, and publish its record. Nothing is taken after."""
+        with self._lock:
+            if not self._closed:
+                self._close_window()
+                self._closed = True
+
+    def _live(self) -> Calls:
+        if self._closed:
+            raise CallRefusal("the node's calls are closed")
+        if self._calls is None:
+            raise CallRefusal("no PoUW window has begun: a window begins at its first tick")
+        return self._calls
+
+    def _close_window(self) -> None:
+        if self._calls is not None:
+            self._calls.close()
+            self.publish(self.window, self._calls.summary())
+
+
+#: The longest request or answer line on the control channel. A release's bytes follow its answer line.
+CALLS_LINE_BYTES = 1024
+_REQUEST = "a request is a JSON object of call, a_root (hex), rows, cols and K, or of call and words_root (hex)"
+
+
+def _line(answer: dict) -> bytes:
+    return json.dumps(answer).encode() + b"\n"
+
+
+def _call_answer(node: NodeCalls, line: bytes) -> tuple[dict, bytes]:
+    """`serve_calls`' answer to one request line, and the bytes that follow it."""
+    try:
+        req = json.loads(line)
+        call = req["call"]
+        if set(req) == {"call", "a_root", "rows", "cols", "K"}:
+            root, shape = bytes.fromhex(req["a_root"]), CallShape(req["rows"], req["cols"], req["K"])
+        elif set(req) == {"call", "words_root"}:
+            root, shape = bytes.fromhex(req["words_root"]), None
+        else:
+            raise KeyError("call")
+    except CallRefusal as e:
+        return {"call": call, "refused": str(e)}, b""
+    except (ValueError, KeyError, TypeError):
+        return {"refused": _REQUEST}, b""
+    try:
+        if shape is None:
+            return {"call": call, "verdict": node.words_root(call, root).value}, b""
+        out = node.a_root(call, root, shape)
+    except CallRefusal as e:
+        return {"call": call, "refused": str(e)}, b""
+    except (OSError, RuntimeError, ValueError) as e:
+        return {"call": call, "refused": f"call {call}'s coins weren't flipped: {e}"}, b""
+    return {"call": call, "release": len(out)}, out
+
+
+async def serve_calls(node: NodeCalls, host: str, port: int) -> asyncio.Server:
+    """The certifier's control channel for the node's calls, on the loop of its links' proxies (`active.Proxy.run`). It
+    answers each JSON line a connection sends, in order, with one JSON line: `{"call", "a_root", "rows", "cols", "K"}`
+    (the root in hex) with `{"call", "release": length}` and then the release's `length` bytes, `{"call",
+    "words_root"}` with `{"call", "verdict"}`, and what `NodeCalls` refuses, or a line that isn't a request, with
+    `{"call", "refused": reason}` (without a call for a line that names none). Each request runs off the loop, so no
+    tick waits for a flip. The channel ends at the certifier: none of its bytes reaches a boundary link, and none
+    counts. Returns the listening server: `close()` stops it."""
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        try:
+            while True:
+                try:
+                    line = await reader.readline()
+                except ValueError:
+                    while await reader.read(1 << 16):  # to the sender's end, so the refusal isn't lost to a reset
+                        pass
+                    writer.write(_line({"refused": f"a request is one line of at most {CALLS_LINE_BYTES} bytes"}))
+                    break
+                if not line:
+                    break
+                answer, out = await asyncio.to_thread(_call_answer, node, line)
+                writer.write(_line(answer))
+                if out:
+                    writer.write(out)
+                await writer.drain()
+        except ConnectionError:
+            pass
+        finally:
+            writer.close()
+
+    return await asyncio.start_server(handle, host, port, limit=CALLS_LINE_BYTES)
+
+
+class CallsClient:
+    """The prover's handle on the certifier's control channel (`serve_calls`) at `host`:`port`, one connection that
+    carries its requests in order: `a_root(call, root, shape)` returns the call's release and `words_root(call, root)`
+    its verdict. A refusal raises `CallRefusal` with the certifier's reason, and an answer that isn't one `ValueError`.
+    `timeout` bounds the socket's waits (None: no bound)."""
+
+    def __init__(self, host: str, port: int, *, timeout: float | None = None) -> None:
+        self._sock = socket.create_connection((host, port), timeout=timeout)
+        self._stream = self._sock.makefile("rwb")
+
+    def a_root(self, call: int, root: bytes, shape: CallShape) -> bytes:
+        answer = self._ask({"call": call, "a_root": bytes(root).hex(), "rows": shape.rows, "cols": shape.cols,
+                            "K": shape.K})
+        if answer.get("release") != shape.release_bytes:
+            raise ValueError(f"call {call}'s answer isn't a release of {shape.release_bytes} bytes: {answer}")
+        out = self._stream.read(shape.release_bytes)
+        if len(out) != shape.release_bytes:
+            raise ValueError(f"the control channel ended {len(out)} bytes into call {call}'s release")
+        return out
+
+    def words_root(self, call: int, root: bytes) -> Verdict:
+        answer = self._ask({"call": call, "words_root": bytes(root).hex()})
+        try:
+            return Verdict(answer.get("verdict"))
+        except ValueError:
+            raise ValueError(f"call {call}'s answer isn't a verdict: {answer}") from None
+
+    def _ask(self, body: dict) -> dict:
+        self._stream.write(_line(body))
+        self._stream.flush()
+        line = self._stream.readline(CALLS_LINE_BYTES)
+        try:
+            answer = json.loads(line)
+        except ValueError:
+            answer = None
+        if isinstance(answer, dict) and isinstance(answer.get("refused"), str):
+            raise CallRefusal(answer["refused"])
+        if not (isinstance(answer, dict) and answer.get("call") == body["call"]):
+            raise ValueError(f"the certifier's answer to call {body['call']!r} isn't one: {line[:200]!r}")
+        return answer
+
+    def close(self) -> None:
+        self._stream.close()
+        self._sock.close()
+
+    def __enter__(self) -> CallsClient:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()

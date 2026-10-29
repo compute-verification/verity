@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 import signers
 from verity.ml.crypto import aead, lms
-from verity.core.protocols.certifier import active, online, served
+from verity.core.protocols.certifier import active, calls, online, served
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey, LmsSigner, parameters_digest
 from verity.core.protocols.certifier.active import (
     DATA,
@@ -799,6 +799,48 @@ def test_a_proxy_with_ordinals_names_each_request_to_its_server_and_changes_noth
     proxy, wire = asyncio.run(replay(honest(), server=server, ordinals=True))
     assert server.ordinals == {name: stream for name, stream, _, _ in SESSIONS}
     assert proxy.records == honest_run[0].records and wire == honest_run[1]
+
+
+def test_a_proxys_ticks_count_each_bucket_against_the_calls_open_when_it_runs(honest_run):
+    """With `calls`, the node's calls, which the prover registers on the control channel between ticks, each egress
+    and ingress tick counts its bucket against the calls open when it runs: ⌈log2(r + 1)⌉ timing bits and 8·B bits a
+    real frame. So calls open from tick T's end to tick T + 4's count ticks T + 1 … T + 4 of both grids: one given
+    exactly that many bits is accepted, and one given fewer is refused. One still open when the next PoUW window
+    begins is refused then. The records and the wire are the run's without calls."""
+    baseline, honest_wire = honest_run
+    T = EGRESS.buckets
+
+    def bits(t: int) -> int:
+        out = 0
+        for link, params in (("responses", EGRESS), ("requests", INGRESS)):
+            record, = [r for r in baseline.records if r.link == link and r.window == t // params.buckets]
+            out += params.allocation.bit_length() + 8 * params.frame_bytes * row_count(record.grid[t % params.buckets])
+        return out
+
+    span = sum(bits(t) for t in range(T + 1, T + 5))
+    exact, short, root = calls.CallShape(16, 8, 64), calls.CallShape(15, 8, 64), bytes(64)
+    node = calls.NodeCalls(calls.EgressCap(span, 16 * 8 * 64))
+    plan = {T: [lambda c: c.a_root(0, root, exact), lambda c: c.a_root(1, root, short)],
+            T + 4: [lambda c: c.words_root(0, root), lambda c: c.words_root(1, root),
+                    lambda c: c.a_root(2, root, exact)]}
+    channel = {}
+
+    async def prover(proxy: Proxy, t: int) -> None:
+        if not channel:
+            channel["server"] = await calls.serve_calls(node, "127.0.0.1", 0)
+            channel["client"] = await asyncio.to_thread(calls.CallsClient,
+                                                        *channel["server"].sockets[0].getsockname()[:2])
+        for act in plan.get(t, ()):
+            await asyncio.to_thread(act, channel["client"])
+        if t == WINDOWS * T - 1:
+            channel["client"].close()
+            channel["server"].close()
+
+    proxy, wire = asyncio.run(replay(honest(), probe=prover, calls=node))
+    node.close()
+    assert proxy.records == baseline.records and wire == honest_wire
+    assert {p: [(c["call"], c["verdict"]) for c in record] for p, record in node.records.items()} == {
+        0: [], 1: [(0, "accepted"), (1, "past its bits"), (2, "open when the window closed")], 2: []}
 
 
 ORDINAL_OF = {name: stream for name, stream, _, _ in SESSIONS}

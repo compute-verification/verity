@@ -291,7 +291,9 @@ A spec-level reference for network accounting's timing channel:
   every bucket of every boundary link counts against the call, ⌈log2(r + 1)⌉ timing bits and each real frame's content
   bits, and the call is refused once its count passes its bits, cap · rows · n · K / fwdMacs
   (`Pouw.Lead.Layout.callBits`), or when the window closes first. The control channel, which carries the registrations
-  in and the releases out, ends at the certifier and is no boundary link.
+  in and the releases out, ends at the certifier and is no boundary link. On a node (`NodeCalls`) a window's calls are
+  a PoUW window's, and the proxies of all of the node's links count their buckets against them
+  (`active.Proxy(calls=…)`); the prover registers on the control channel (`serve_calls`, `CallsClient`).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
