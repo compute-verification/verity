@@ -5,8 +5,8 @@
 # from the challenger whose entropy is $WORK/coin-state/<run id>.  The passes stay on the node for
 # commit.py and job.sh under window.sh's retention record (priority keep): only `research retention rm`, with the owner's
 # yes, deletes them.
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
-#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/served_zk/serve.sh
+#   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/served_zk/serve.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; ID=${RESEARCH_RUN_ID:?}; OUT=$D/out; mkdir -p "$OUT"
 WORK=/workspace/pouw/mvp-e2e
@@ -20,7 +20,7 @@ CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-$
   || { stamp "BUILD_FAIL rc=$?"; tail -20 "$OUT/build.log"; exit 11; }
 tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 
-# the challenger's coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
+# the challenger's coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 stamp "pouw-check-difftest build"
 (cd verity/core/protocols/pouw/lean/check && lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \

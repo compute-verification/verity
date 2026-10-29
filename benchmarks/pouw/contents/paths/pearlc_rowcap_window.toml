@@ -1,4 +1,0 @@
-order = 322
-path = "`pearlc_rowcap_window.py`, `pearlc_rowcap_window.sh`"
-runs_on = "CPU (with GLM-5.3's snapshot for the w2 slices)"
-what = "Option (b) of card 82c1e288 on `pearl-c-h100-v1-h3` at k = 256: honest acceptance of 64-row bands over the whole n = 6,144 under -h3's per-tile row cap, a row cap at C·ρ, a row cap over a window of W tiles, and the window as the audit tile; the packed-window concentration and the sampled γ each row cap costs"

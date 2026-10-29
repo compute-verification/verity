@@ -568,7 +568,7 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
                 f"{p['context']}"), None
     if sorted(items) != sorted(Wd.REGISTERED):
         if sorted(items) == sorted(Wd.LEGACY_REGISTERED):
-            return "window-form: no-fixed-length: registered before the fixed-length rule, so not of record", None
+            return "window-form: no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record", None
         return f"public-items: registered {', '.join(sorted(items))}, declared {', '.join(sorted(Wd.REGISTERED))}", None
     why = Wd.length_problem(items["length"], p["max_tokens"])
     if why is not None:
