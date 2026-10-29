@@ -198,7 +198,7 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
 
 
 def test_a_members_public_file_alone_then_its_provers_file_are_the_files_its_circuits_text_gives(tmp_path):
-    """The audit stages every member's public file before the draw and a drawn member's prover's file after it, from the
+    """The audit stages every member's public file before the sample and a drawn member's prover's file after it, from the
     circuit read and hashed once (`flock_circuit`) and the window's files read once: byte for byte what the circuit's text gives."""
     w = window(4, 3)
     c = SR.commit(w, data(w), salt_key=bytes(32))

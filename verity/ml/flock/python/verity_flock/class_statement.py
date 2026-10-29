@@ -17,7 +17,7 @@ M0's statement proves a template's identical units with every instance's input r
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
-  Definition, a Call's broadcast parameters drawn once per Call), the statement binds the partition's ``verity/partition/v1``
+  Definition, a Call's broadcast parameters sampled once per Call), the statement binds the partition's ``verity/partition/v1``
   digest and the program's SHA-512 (an owner-function partition, which no record can name, binds the SHA-512 of its description
   under the tag ``verity/flock/experimental-owners``).
 
@@ -567,7 +567,7 @@ def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]
 
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
-    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
+    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are sampled once per Call
     (group of members). Returns (inputs, outputs, rows): per input position every instance's word, and per source group
     (`sources` of the representative) every instance's row identity: the leaves it reads, and the Call they belong to when all
     are parameters the Call broadcasts, else the evaluation. Instances with one identity open one committed row."""
@@ -1298,7 +1298,7 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
     system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
     provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
-    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier draws by that law at its
+    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by that law at its
     Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover alike)."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
@@ -1713,7 +1713,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "another pod (FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
     ap.add_argument("--serve-points", type=int, default=1, help="with --serve-only: serve that many provers' --warm + --runs "
                     "sessions, one prover after another on the same verifier processes (the points of one GPU session)")
-    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
+    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, sampled by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
     ap.add_argument("--warm", type=int, default=0)
