@@ -69,6 +69,13 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for name in ("int8-channel127-v1", "ncp-v1-served", "ncp-v1-served-head", "ncp-linears"):
         want[name] = ("linears", "int8-linears", False)
     want["ncp-v1-served-attn"] = want["ncp-v1-served-pv"] = ("all", "int8-all", False)
+    stock = "int8-channel127-v1"
+    for name in ("ncp-smooth", "ncp-rotate", "lin-a63-w127", "lin-a127-w63", *(f"lin-t{t}" for t in (31, 47, 79, 95, 111))):
+        want[name] = ("linears", stock, False)
+    for name in ("ncp-v1-served-qk", "ncp-pv-sink", "ncp-pv-p127", "ncp-pv-p127-sink"):
+        want[name] = ("all", stock, False)
+    for name in ("ncp-qk-rot", "ncp-attn-fix", "ncp-linears-attn-fix"):
+        want[name] = ("all", stock, True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -296,10 +303,19 @@ def test_defaults_are_filled_and_typed():
     ('[[attention]]\nstep = "int8"\nq = "dither"\nq_top = 7\nqk_bits = 4', "no room under"),
     ('[[attention]]\nstep = "int8"\nv = "dither"\nqk_bits = 2', "widens a dither"),
     ('[[linear]]\nstep = "int8"\n[mlp]\nx = 1', "unknown keys ['mlp']"),
+    ('plain = "int8-stock"\n[[linear]]\nstep = "int8"', "names no arm in specs/"),
 ])
 def test_rejections_name_the_problem(text, message):
     with pytest.raises(ValueError, match=message.replace("[", r"\[").replace("]", r"\]")):
         parse(text)
+
+
+def test_a_spec_may_name_its_plain_arm():
+    import run
+    a = parse('plain = "int8-channel127-v1"\n[[attention]]\nstep = "int8"\nmatmuls = ["pv"]', "pv")
+    assert (a.scope, a.plain) == ("attention", "int8-channel127-v1")
+    names = [x.name for x in run.arms_for([str(spec.SPECS / "ncp-pv-p127.toml")])]
+    assert names == ["ncp-pv-p127", "int8-channel127-v1"]
 
 
 def test_bf16_is_not_a_spec():

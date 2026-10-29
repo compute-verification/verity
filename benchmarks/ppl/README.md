@@ -49,7 +49,8 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
   seeds' range, its Δ% against bf16 and against its scope's plain int8 arm, and the significance rule's verdict.
 - **Plain int8**, for each scope: `int8-linears` (rotated, one scale per token and per output row, rounded to ±127),
   `int8-attention` (rotated, one limb, Q, K, P and V rounded) and `int8-all` (both). Every run includes the plain arm
-  of each spec's scope.
+  of each spec's scope, or the arm a spec names with `plain = "NAME"` (a served baseline such as the stock int8
+  checkpoint's `int8-channel127-v1`).
 - **Significance rule** (`methodology.compare`). Arm A is better than arm B (`<`) only when both hold:
   - their seed ranges of perplexity are disjoint;
   - a paired sign test over windows, on each window's seed-mean NLL, favours A at one-sided α = 0.025: at least 13 of

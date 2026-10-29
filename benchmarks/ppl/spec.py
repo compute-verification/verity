@@ -221,7 +221,7 @@ def _check_phases(kind: str, steps: tuple) -> None:
 
 def parse(data: dict, name: str) -> Arm:
     import steps  # noqa: F401  (registers the built-in steps)
-    unknown = set(data) - {"description", "linear", "attention"}
+    unknown = set(data) - {"description", "linear", "attention", "plain"}
     if unknown:
         raise ValueError(f"{name}: unknown keys {sorted(unknown)}")
     lin = tuple(parse_step("linear", t) for t in data.get("linear", []))
@@ -229,7 +229,10 @@ def parse(data: dict, name: str) -> Arm:
     _check_phases("linear", lin)
     _check_phases("attention", att)
     arm = Arm(name, lin, att, data.get("description", ""))
-    return Arm(arm.name, arm.linear, arm.attention, arm.description, plain=PLAIN.get(arm.scope, ""))
+    plain = data.get("plain", PLAIN.get(arm.scope, ""))
+    if plain and not (SPECS / f"{plain}.toml").exists():
+        raise ValueError(f"{name}: plain = {plain!r} names no arm in specs/")
+    return Arm(arm.name, arm.linear, arm.attention, arm.description, plain=plain)
 
 
 def load(ref: str) -> Arm:
@@ -241,7 +244,8 @@ def load(ref: str) -> Arm:
 
 
 #: the plain int8 arm each scope is reported against: every matmul in the arm's scope on the int8 grid, rounded to one
-#: scale per row, rotated, nothing else
+#: scale per row, rotated, nothing else. A spec's `plain = "NAME"` names another arm of specs/ instead (a served
+#: baseline, such as the stock int8 checkpoint's `int8-channel127-v1`)
 PLAIN = {"linears": "int8-linears", "attention": "int8-attention", "all": "int8-all"}
 BF16 = Arm("bf16", description="the reference: bf16 linears, PyTorch SDPA attention")
 

@@ -17,8 +17,8 @@
     run.py setup --data DIR                                                 stage the datasets (datasets.json) there
     run.py selftest                                                         the engine on a tiny model, CPU or GPU
 
-SPEC is a TOML file or the name of one in specs/. The bf16 reference and the plain int8 arm of each SPEC's scope run
-with it. A run whose gates fail writes its gates and no perplexity, and exits 1."""
+SPEC is a TOML file or the name of one in specs/. The bf16 reference and the plain int8 arm of each SPEC's scope (or
+the one it names, `plain = "NAME"`) run with it. A run whose gates fail writes its gates and no perplexity, and exits 1."""
 from __future__ import annotations
 
 import argparse
@@ -58,7 +58,7 @@ def load_plugins(paths) -> None:
 
 
 def arms_for(refs: list[str]) -> list:
-    """The SPECs, and the plain int8 arm of each one's scope, in that order (each once)."""
+    """The SPECs, and each one's plain int8 arm, in that order (each once)."""
     import steps  # noqa: F401
     if any(Path(r).stem == spec.BF16.name for r in refs):
         raise ValueError("bf16 is the reference; every run has it")

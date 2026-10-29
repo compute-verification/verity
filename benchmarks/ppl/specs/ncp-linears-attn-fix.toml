@@ -1,0 +1,27 @@
+description = "ncp-linears (SmoothQuant alpha 0.5 and online rotations ahead of the ±63 linears) with both attention matmuls on NCP's int7 domain as ncp-attn-fix: Q K^T rotated, Q and K on ±63; P on [0, 127], one scale per query row, served as P - 64 on NCP's int7 domain [-64, 63] and the offset added back exactly as 64 times V's causal prefix sum, with key 0 (the attention sink) in a P block of its own, read and scaled on its own; V on ±63; lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+matmuls = ["qk"]
+
+[[attention]]
+step = "int8"
+q_top = 63
+k_top = 63
+p_top = 127
+v_top = 63
+p_sink = true
