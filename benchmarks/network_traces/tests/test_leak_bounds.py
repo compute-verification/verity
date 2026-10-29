@@ -5,6 +5,7 @@ K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lea
 `eps`) rather than from the calculator:
 - the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
 - a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
+- a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
 - the datacenter's links are the census's reference datacenter's machines, and the world's are the adversary resource
   model's compute in machines of the datacenter's GPUs;
 - a share is of one copy of the weights, labelled with what it is;
@@ -126,10 +127,14 @@ def test_the_caps_are_charged_twice_at_lean_s_ceilings():
         link = LB.link(W63, RATE, T=32, egress_cells=cells)
         assert link.cell == clog2(cells + 1) and link.cap == 2 * clog2(cells + 1)
     assert [LB.link(W63, RATE, T=32, egress_cells=c).cap for c in (1, 2, 3, 63, 64, 65)] == [2, 4, 4, 12, 14, 14]
+    assert LB.JITTER_BOUND == 2
+    steps = (16, 32, 48)
+    assert [LB.link(W63, RATE, T=t).jitter for t in steps] == [clog2(2 ** t) for t in steps] == list(steps)
     tau = Fraction(4)
     four = LB.link(W63, Fraction(4) / (32 * tau), T=32, tau=tau, egress_cells=65)
     schedules = cells = clog2(65 + 1) * 4
-    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 == 9_144
+    jitter = clog2(LB.JITTER_BOUND ** 32)
+    assert four.bits(four.block_s, "registered") == schedules + cells + 9_088 + jitter == 9_176
 
 
 def test_the_census_sets_the_datacenter_and_the_world():
@@ -177,9 +182,11 @@ def test_eps_is_the_scans_delta_summed():
 def test_the_pooled_datacenters_faulty_blocks_alone_pass_the_weights():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
-    assert LB.fmax(one / n) == 15 and floor.share > 1
-    assert floor.bits == pytest.approx(n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1)))
-    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == 0
+    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
+    jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
+    assert LB.fmax(one / n) == 15 and faulty > LB.WEIGHTS.bits
+    assert floor.bits == pytest.approx(faulty + jitter)
+    assert LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors").bits == jitter
 
 
 def test_a_window_class_and_refusals():

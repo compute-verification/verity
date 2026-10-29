@@ -547,6 +547,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
     assert digest not in PC.SLOT_ENTRY_PINS
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
+    assert p["jitter"] == SP.LB.JITTER_BOUND
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [audit["registration"]], "windows": [reg]}
     ev = json.loads(bytes.fromhex(case["evidence"]))
     (x,) = ev["windows"]
