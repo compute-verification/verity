@@ -26,8 +26,9 @@ Strategies:
 - `skip` (zero data): only the committed words, each segment's coin products packed into the narrowest IMMA the
   field's bits allow (low 1 bit: b1; low ≤ 4: u4), with `mul`'s coefficients folded into the column operand.
 - `fold` (`lin` over 32-bit words, zero data): Σ r_t w_t = Σ_τ c_τ R_τ, with R_τ V split into four u8 digits.
-- `bitslice` (low 1 bit, zero data): 32 rows' parities in one register; acc ^= U-bits & V-mask, one LOP3 a lane step
-  for 32 entries; a 32×32 bit transpose a committed 1,024 bits when the agg hashes the fields entry-major.
+- `bitslice` (low k ≤ 4 bits, zero data): k bit planes of 32 rows a register; at k 1, acc ^= U-bits & V-mask, one
+  LOP3 a lane step for 32 entries. Operand loads are amortized over a BLOCK × BLOCK register tile of row blocks and
+  columns, and the fields pay a 32×32 bit transpose (entry-major, as the honest prover packs them) a 1,024 bits.
 - `four_russians`: `bitslice` with each 32-row block's increment planes tabulated over a lane group's column bits
   (shared by every column of the call), so a lane step is k loads and a k-bit ripple add whatever q is.
 - `bsketch` (a sketch over 1-bit fields): the bitslice's bits, transposed, against r's bit planes in one b1 IMMA.
@@ -57,6 +58,7 @@ MEM_BITS = 34
 TRANSPOSE_WB = (2 * 2 + 3 * 5) * 16 / 1024
 T1 = 0.01
 CALL_M = CALL_N = 4096
+BLOCK = 8
 
 MAC_S_H200 = 0.4 * 9.89e14
 WORLD_MAC_YR = 4.68e30
@@ -304,11 +306,9 @@ def bitslice(rule, inst, d):
         for x in range(k):
             bits = (snaps[int(p)][x][:, None, :] >> np.arange(32)[None, :, None]) & 1
             fields[:, :, idx] |= bits.reshape(m, n) << x
-    per_lane_step = bitslice_ops(k) / 32 + k * (2 / CALL_M + 12 / (32 * CALL_N))
-    cost = S * q * per_lane_step
-    if rule.agg == "hash":
-        cost += len(d.P) * k * TRANSPOSE_WB
-    else:
+    per_lane_step = bitslice_ops(k) / 32 + k * (2 / CALL_M + 12 / (32 * CALL_N)) + k * 2 / (32 * BLOCK)
+    cost = S * q * per_lane_step + len(d.P) * k * TRANSPOSE_WB
+    if rule.agg != "hash":
         cost += commit_ops(rule, len(d.P))
     return cost, aggregate(rule, d, fields), f"{bitslice_ops(k)} LOP3 a lane step a 32-row register"
 
@@ -334,8 +334,9 @@ def four_russians(rule, inst, d):
         return None
     _, out, _ = res
     per, g = four_russians_cost(rule.k, inst.q)
-    cost = inst.S * per
-    cost += len(d.P) * rule.k * TRANSPOSE_WB if rule.agg == "hash" else commit_ops(rule, len(d.P))
+    cost = inst.S * per + len(d.P) * rule.k * TRANSPOSE_WB
+    if rule.agg != "hash":
+        cost += commit_ops(rule, len(d.P))
     return cost, out, f"tables of {g} lanes' column bits a 32-row block"
 
 
