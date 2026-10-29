@@ -93,7 +93,7 @@ theorem filter_lt_append_filter_eq {β : Type} (N : ℕ) :
     have hxN := hN x (by simp)
     rcases Nat.lt_or_eq_of_le hxN with h | h
     · have ih := filter_lt_append_filter_eq N xs hxs fun y hy => hN y (List.mem_cons_of_mem _ hy)
-      simp [List.filter_cons, h, Nat.ne_of_lt h, ih]
+      simp [h, Nat.ne_of_lt h, ih]
     · have h1 : xs.filter (fun x => decide (x.1 < N)) = [] :=
         List.filter_eq_nil_iff.2 fun y hy => by
           have := hx y hy
@@ -104,7 +104,7 @@ theorem filter_lt_append_filter_eq {β : Type} (N : ℕ) :
           have := hx y hy
           have := hN y (List.mem_cons_of_mem _ hy)
           exact beq_iff_eq.2 (by omega)
-      simp [List.filter_cons, h, h1, h2]
+      simp [h, h1, h2]
 
 /-- **A list in key order, bucket by bucket, is the list**, when every key is a bucket before `N`. -/
 theorem flatMap_filter_fst {β : Type} :
@@ -185,7 +185,7 @@ theorem drop_flatMap_laneFrames (s : WardenSchedule κ) (a : κ → Arrivals Cel
         (b, ·) = [] := by
     intro b hb
     have : ¬(s.adm c ≤ b ∧ b < s.adm c + s.D) := fun h => absurd h.2 (Nat.not_lt.2 hb)
-    rw [if_neg this]
+    rw [ite_eq_right this]
     rfl
   have hcel : ∀ b, b < s.adm c + s.D → (wardenCode s a c).filter (fun x => x.1 == b) = [] := by
     intro b hb
@@ -193,6 +193,7 @@ theorem drop_flatMap_laneFrames (s : WardenSchedule κ) (a : κ → Arrivals Cel
     obtain ⟨j, -, hj⟩ := mem_wardenCode_fst s a c hx
     rw [← hj]
     simp only [beq_iff_eq, WardenSchedule.bucket]
+    have := Nat.le_add_right (s.adm c + s.D) (j / s.r)
     omega
   have hkey : ∀ x ∈ wardenCode s a c, x.1 < N := fun x hx => by
     obtain ⟨j, hj, e⟩ := mem_wardenCode_fst s a c hx
