@@ -57,7 +57,7 @@ theorem next_open (f : ℕ → ℕ) (a : ℕ) : ∀ d : ℕ,
         omega
 
 /-- A dense statement's read shape has no holo flag and no sparse phase. -/
-theorem dense_shape {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem dense_shape {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) :
     r.shape.holo = false ∧ r.shape.sparse = none := by
   obtain ⟨r', hr', -, rfl⟩ := parse_read hst
