@@ -31,7 +31,7 @@ The named assumptions:
   from `ρ`) succeeds with probability above `g`. It is what trusted training buys: a model with a trigger that makes its
   honest outputs carry weight bits fails it.
 
-`indepDraw a` is the draw that catches unit `u` independently with probability `a u`, and `acceptCoins B` its coins that
+`indepSample a` is the draw that catches unit `u` independently with probability `a u`, and `acceptCoins B` its coins that
 miss the incorrect set `B`. A deployment's egress is its honest egress with a deviation (`Dev`, `Dev.apply`) applied: the
 slots that differ, and their values. `changedThrough` collects the slots each window changes, through the first
 detection.
@@ -106,7 +106,7 @@ def TrustedModel {W H T : Type} [Fintype W] (ρ : W → ℝ) (S : W → T) (hon 
 
 /-- The draw that catches each unit `u` independently with probability `a u`: a coin says, per unit, whether an
 incorrect `u` would be caught (drawn, and not lucky). -/
-def indepDraw {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
+def indepSample {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
 
 /-- The coins of the independent draw on which the incorrect set `B` escapes: none of its units is caught. -/
 def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=
