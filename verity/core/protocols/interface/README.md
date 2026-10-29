@@ -42,6 +42,14 @@ an `accept` has no reason and both its public outputs and its profile, while a r
 them, and they import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
 profile's types derive `DecidableEq`.
 
+## Decoding, then a check of the decoded values (`CoreProtocol/Decoded.lean`)
+
+`Protocol.decode` is the part of `answer` that reads bytes: the parameters through `canonicalJson` and `params`, the
+commitment and the evidence through their decoders. Each may run `Lean.Json.parse`, which is `partial`, so no proof
+evaluates it. `Protocol.answerOf` is the rest, on decoded values. `Protocol.answer_decode` (`rfl`) says `answer` is
+`answerOf` of `decode`, so a proof about decoded values holds of `answer` on any bytes that decode to them. A
+composition's form of it is `Core.Composition.checkSame_decode` (`../composition`).
+
 ## The command line (`CoreProtocol/Cli.lean`), the same for every protocol
 
 - `<exe> id` prints the id.

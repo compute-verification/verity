@@ -108,6 +108,15 @@ products are one:
 - onsite, `sameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/one-stage/v2] components`, whose
   policy and one-stage audit each commit to the run's registration record.
 
+## Decoding, then a check of the decoded values
+
+`CoreComposition/Decoded.lean` writes `checkSame` as decoding followed by a check of the decoded values, so that a proof
+can evaluate the check past the decoders, whose `Lean.Json.parse` is `partial`. `decodeCases` decodes each subprotocol's
+case under its own decoders (`Core.Protocol.decode`). `checkSameOf` is `checkSame` on the cases' ids and parameters
+(`fitOf`, text the fit compares) and the decoded cases. `checkSame_decode` proves the two equal on every input, and
+`sameB_decode` does the same on the caller's blobs. A blob that a subprotocol's own check decodes (the one-stage audit's
+session files) is decoded inside that check.
+
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's PoUW period and
 network certification name one record a window, in their evidence and their period commitment, so they join the check
 when each window's record names the registration log's head (`Core.Registration`, `../interface`), which then is the one
