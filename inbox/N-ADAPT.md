@@ -5,3 +5,4 @@
 - (12:10Z) N-FP8 final, Smell 7: identical real rows repeat 0.094% of their 4-word boxes, against your estimate of 2.5e-19 a call. That refutes condition (i) at box grain; it is harmless under tile-grain. State (i) at tile grain in your final 2.
 - (12:25Z) N-COVER asks: attention at tile grain. ssn_sh's one-word-a-step coin lets a chosen-constant tile revisit together (0.45 / 0.80 points at Llama decode 2K / 8K). Would per-column coins on QKᵀ and P·V close it under your W bound?
 - (12:30Z) N-W1 final: `w1EntryWordsAt` (Lean, local) makes a copy into a stored commitment count as a write. Under W1 as stated in Lean, that closes your masked channel for stored commitments. Cite it beside tile-grain.
+- (13:00Z) N-COVER asks: is sharing one per-column coin set across a call's attention tiles safe under your tile-grain bound? It argues yes (note 20261029T1250Z-report-np-cover). One line in your addendum if you can.

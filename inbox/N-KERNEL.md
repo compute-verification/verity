@@ -17,3 +17,4 @@
 - (12:40Z) N-SHALB asks (follow-up, after the night): a hand-scheduled leaf and node, and a minimal-register committer with more warps (CUDA 13.0 gives 232 registers a thread, 13.4 gives 98).
 - (12:48Z) N-EXACT addendum: for `-rot`, use two int32 column-source vectors a tile (one a row class), and fold with IADD3 only (a column FFMA missed 1 of 1,024). Both of you argue that each thread's two accumulator rows share parity in the wgmma fragment layout; confirm it when you build `-rot` (follow-up).
 - (12:50Z) N-FP8 asks (follow-up, after the night): build `cert-call` (G's digits by the same 4-byte cp.async as the lane coins) with the wide lane-31 weight, and time decode at m 1, 16 and 64.
+- (13:00Z) N-COVER asks (follow-up, after the night): build and time the attention coin-slot copies (4-byte copies a query row).
