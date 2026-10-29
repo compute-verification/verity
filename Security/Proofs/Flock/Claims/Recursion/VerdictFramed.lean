@@ -93,7 +93,7 @@ theorem find_name_arr {a : Array StreamRec} {name : String} {k : ℕ} (hk : k < 
 substituted, the decoder reads stream `k` at the `k`-th rep stream's name, and its rounds at the reader's counts and
 messages. -/
 theorem decoded_streams {hs : Hashes Flock.V} {H : Claims.Msg → Claims.Msg} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {link : List ByteArray × List ByteArray} {sess : Session}
+    {mids : List (Claims.Msg × Coin)} {f : FinalP} {link : List ByteArray × List ByteArray} {sess : RunRecord}
     (hj : f.j = recJ spec sts link c₁ ms cs f.ps)
     (h : Record.decodeJWith hs spec (jAt H spec sts c₁ mids f) = .ok sess) :
     sess.streams.size = min spec.repStreams.size (recStreams spec sts ms cs).size ∧

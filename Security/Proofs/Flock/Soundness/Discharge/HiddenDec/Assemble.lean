@@ -34,7 +34,7 @@ theorem accepts_repsH {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutp
     (hrr : I.tags.retainRounds = true)
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1" ∨ I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
     (h : Accepts I t) :
-    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
+    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : RunRecord) (sch : Flock.Schedule),
       Flock.Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (recordDraw t.record) I.partition
         I.program = .ok st ∧ setupOf I t.record = .ok (spec, #[st]) ∧ Record.decode spec t.record = .ok sess ∧
       Flock.fast100 st.m = some sch ∧
