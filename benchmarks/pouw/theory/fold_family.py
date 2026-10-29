@@ -32,9 +32,11 @@ Families: `mulxor` (FOLD-OPT's step, the keys drawn), `arith` (the first four ki
 
 `--sweep=KIND` replaces the drawn members by KIND's one-step members at every w-bit c (k drawn odd). An unsat at c
 then holds for every 32-bit pair of constants whose low w bits are c and that k. `--sweep-c=C` fixes c at C and sweeps
-every w-bit k instead, even ones included (a round's K_t is any constant). `--grids=AxBxC,AxBxC` sets the zero target's two grids (rows ×
-columns × entry states). Rows and columns are drawn with repeats, the free terms are per drawn row and column, and each
-cell draws its own entry states, so a sat at any grid is a fit to be rechecked and an unsat at any grid holds.
+every w-bit k instead, even ones included (a round's K_t is any constant).
+
+`--grids=AxBxC,AxBxC` sets the zero target's two grids (rows × columns × entry states). Rows and columns are drawn with
+repeats, the free terms are per drawn row and column, and each cell draws its own entry states, so a sat at any grid
+is a fit to be rechecked and an unsat at any grid holds.
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
 [--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]
