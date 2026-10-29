@@ -23,6 +23,14 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
 - No `sorry` and no axiom, and the Lean check passes. The honest and the nontrivial lemma are listed. The record lands,
   and Daniel's DM of it is the check.
 
+## Nodes (20:42Z, infra)
+
+- **No Lean records or `verity lean try` runs on cpu-2** until Fri 30 Oct 20:00Z; its build slots are reserved for
+  proofs (PRF-282).
+- Free Lean build slots are on cpu-8 and cpu-3.
+- cpu-5's check slots are crowded, and its /workspace is under its inode floor.
+- cpu-9 is back after a restart.
+
 ## Rules
 
 - **Read `.agents/skills/lean-proofs/SKILL.md` first.** In particular: the statement comes first, never make a
