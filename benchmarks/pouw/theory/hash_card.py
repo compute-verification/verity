@@ -42,6 +42,7 @@ GONE = ("refuted", "closed")
 LABELS = ("proved", "checked", "measured", "estimate")
 REQUIRE_FALSIFICATION = True
 FOLD_WRITES = True
+GRANT_ANY_REFUTED = False
 
 
 def load(path: Path = DATA) -> dict:
@@ -211,10 +212,12 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
     """One design on the basis: h, cut against the lead, T1/T2/T3 with labels, ranks, status and flags."""
     flags: list[str] = []
     adds = []
-    refuted = []
+    refuted, refuting = [], []
     for a in spec.get("adds", []):
         rank, why = family_rank(hc, a)
         fam = hc.get("family", {}).get(a.get("family", ""), {})
+        if fam.get("status") == "refuted":
+            refuting.append(fam)
         adds.append(a | {"rank": rank} | ({"status": "refuted"} if fam.get("status") == "refuted" else {}))
         if why:
             flags.append(why)
@@ -228,6 +231,8 @@ def design_entry(card: dict, hc: dict, key: str, spec: dict, lead: dict, kind: s
          "note": spec.get("note", ""), "status": spec.get("status", "proposed"), "rule_change": spec.get("rule_change", ""),
          "what": spec.get("what", ""), "extra_w1_per_mac": float(spec.get("extra_w1_per_mac", 0.0)), "adds": adds,
          "rule_question": spec.get("rule_question", "")}
+    e["stands_if"] = ([f.get("stands_if", "") for f in refuting] if refuting and e["status"] not in GONE
+                      and (GRANT_ANY_REFUTED or all(f.get("stands_if") for f in refuting)) else [])
     if refuted and e["status"] not in GONE:
         e["status"] = "refuted"
     if "combine" in spec or "fold" in spec:
@@ -349,13 +354,14 @@ def done_missing(e: dict) -> list[str]:
     return out
 
 
-def frontier(entries: list[dict], enforce: bool = True, rules_stand: bool = False) -> list[dict]:
+def frontier(entries: list[dict], enforce: bool = True, rules_stand: bool = False, stands_if: bool = False) -> list[dict]:
     """At each rank, the least-h design among those meeting every target, not refuted or closed, with the axis at most
-    that rank; with `rules_stand`, only designs that need no ruling."""
+    that rank; with `rules_stand`, only designs that need no ruling; with `stands_if`, a design refuted only by families
+    that state the write model under which they'd stand counts as standing (the model granted)."""
     out = []
     for lv in sorted(set(ps.RANKS.values())):
         live = [e for e in entries if e.get("h") is not None and e.get("ranks") and e["ranks"]["axis"] <= lv
-                and (not enforce or (e["meets"] and e["status"] not in GONE))
+                and (not enforce or (e["meets"] and (e["status"] not in GONE or (stands_if and e.get("stands_if")))))
                 and not (rules_stand and (e.get("rule_change") or e.get("rule_question")))]
         if live:
             best = min(live, key=lambda e: (e["h"], e["ranks"]["axis"], e["id"]))
@@ -394,7 +400,7 @@ def rank_label(v: float) -> str:
 
 
 def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: list[dict], fr_rules: list[dict],
-           checks_line: str) -> str:
+           checks_line: str, fr_model: list[dict] | None = None) -> str:
     b = hc["basis"]
     L = [f"# The HASH card: h against assumption rank, the lead as baseline", "",
          f"**Basis.** {b['title']}. Model {b['model']}, points {', '.join(b['points'])}, the words in "
@@ -453,14 +459,19 @@ def render(hc: dict, lead: dict, readings: list[dict], entries: list[dict], fr: 
         if fl:
             L.append(f"- **{e['id']}**: " + "; ".join(fl) + ".")
     by = {e["id"]: e for e in entries}
-    for title, f_ in (("as the lanes rank them, rulings pending", fr), ("under the rules as they stand (no ruling needed)", fr_rules)):
+    models = sorted({f.get("model", f["stands_if"]) for f in hc.get("family", {}).values() if f.get("stands_if")})
+    tables = [("as the lanes rank them, rulings pending", fr), ("under the rules as they stand (no ruling needed)", fr_rules)]
+    if fr_model is not None:
+        tables.append(("under the rules as they stand, with each refuted family's write model granted ("
+                       + " | ".join(models) + ")", fr_model))
+    for title, f_ in tables:
         L += ["", f"## The frontier, {title}: the least h at each rank among designs meeting T1, T2 and T3", "",
               "| axis rank ≤ | best design | h | cut vs lead | effective rank | what done-when still needs |", "|---|---|---|---|---|---|"]
         for f in f_:
             e = by[f["best"]]
             L.append(f"| {rank_label(f['rank'])} | {f['best']} | {f['h']:.2f} | {fmt(f['cut'], digits=2)}× | "
                      f"{rank_label(e['ranks']['axis_effective'])} | {'; '.join(e['done_missing']) or 'nothing'} |")
-    best = list(dict.fromkeys(["lead"] + [f["best"] for f in fr + fr_rules]))
+    best = list(dict.fromkeys(["lead"] + [f["best"] for f in fr + fr_rules + (fr_model or [])]))
     L += ["", "## Per monitoring period: honest commitment work of the frontier's designs (h × stock, W1 at stock's AND rate)",
           "", "Pooled totals over each period and scope; the share of the compute covered is h itself (and T1's uncredited "
           "share beside it). The window is one 600 s window.", "",
@@ -601,8 +612,17 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
     ok = all(by[f["best"]]["meets"] and by[f["best"]]["status"] not in GONE for f in fr)
     checks.check(f"{prefix}the frontier's h falls (weakly) as rank rises, and every design on it meets T1, T2 and T3 and "
                  f"stands", mono and ok and bool(fr), " → ".join(f"{rank_label(f['rank'])}: {f['best']} {f['h']:.1f}" for f in fr))
+    fm = frontier(entries, rules_stand=True, stands_if=True)
+
+    def granted(e: dict) -> bool:
+        fams = [hc.get("family", {}).get(a.get("family", ""), {}) for a in hc.get("proposal", {}).get(e["id"], {}).get("adds", [])]
+        return all(f.get("stands_if") for f in fams if f.get("status") == "refuted")
+    ok = all(by[f["best"]]["meets"] and (by[f["best"]]["status"] not in GONE or granted(by[f["best"]])) for f in fm)
+    checks.check(f"{prefix}with each refuted family's stated write model granted (rules otherwise as they stand), every "
+                 f"design on the frontier meets T1, T2 and T3 and is refuted, if at all, only by such families",
+                 ok and bool(fm), " → ".join(f"{rank_label(f['rank'])}: {f['best']} {f['h']:.1f}" for f in fm))
     return {"lead": lead, "readings": readings, "entries": entries, "frontier": fr,
-            "frontier_rules": frontier(entries, rules_stand=True)}
+            "frontier_rules": frontier(entries, rules_stand=True), "frontier_model": fm}
 
 
 def mutations(card: dict, hc: dict, checks: Checks) -> None:
@@ -655,6 +675,17 @@ def mutations(card: dict, hc: dict, checks: Checks) -> None:
     caught("done-when that ignores an open premise without a falsification test", card, h2,
            switched("REQUIRE_FALSIFICATION", False))
     caught("a derived design's h without the fold's own register writes", card, hc, switched("FOLD_WRITES", False))
+    h3 = copy.deepcopy(hc)
+    h3["family"]["mut-refuted"] = {"what": "seeded", "stated": [{"lane": "TEST", "name": "seeded", "rank": "4a"}],
+                                   "status": "refuted", "refuted_by": "a seeded adversary"}
+    h3["proposal"]["mut-refuted"] = {
+        "lane": "TEST", "note": "none", "title": "a seeded refuted proposal", "status": "proposed",
+        "h": {"value": 0.5, "price": "w1-forms", "label": "checked"}, "t1": {"value": 0.0001, "label": "checked"},
+        "t2": {"value": 2.0, "label": "estimate"}, "t3": {"value": 0.0, "label": "measured"},
+        "adds": [{"id": "seeded", "family": "mut-refuted", "rank": "4a", "part": "hashing", "status": "open",
+                  "falsification": "x"}]}
+    caught("a model-granted frontier that grants a family stating no write model", card, h3,
+           switched("GRANT_ANY_REFUTED", True))
 
     def axis_without_adds(card2, hc2):
         spec = {"lane": "TEST", "note": "none", "title": "seeded", "status": "proposed",
@@ -693,13 +724,15 @@ def main() -> int:
         f", {sum(m['caught'] for m in checks.mutants)}/{len(checks.mutants)} mutations caught" if checks.mutants else "")
     out.mkdir(parents=True, exist_ok=True)
     (out / "hash_card.md").write_text(render(hc, res["lead"], res["readings"], res["entries"], res["frontier"],
-                                             res["frontier_rules"], line))
+                                             res["frontier_rules"], line, res["frontier_model"]))
     keep = ("id", "kind", "title", "lane", "note", "status", "design", "h", "h_label", "cut", "t1", "t1_dw", "fold_w1",
-            "t2", "t3", "meets", "flags", "rule_change", "rule_question", "refused", "attacks", "done_missing", "adds")
+            "t2", "t3", "meets", "flags", "rule_change", "rule_question", "refused", "attacks", "done_missing", "adds",
+            "stands_if")
     js = {"basis": hc["basis"], "lead": {k: res["lead"][k] for k in ("name", "h", "t1", "t2_measured", "t2_card", "t3_measured",
                                                                      "macs_per_word")}
           | {"parts": res["lead"]["parts"], "ranks": res["lead"]["ranks"]},
           "readings": res["readings"], "frontier": res["frontier"], "frontier_rules_stand": res["frontier_rules"],
+          "frontier_model_granted": res["frontier_model"],
           "designs": [{k: e[k] for k in keep if k in e} | {"ranks": e.get("ranks")} for e in res["entries"]]}
     (out / "hash_card.json").write_text(json.dumps(js, indent=1, sort_keys=True, default=str) + "\n")
     with (out / "hash_card.csv").open("w", newline="") as fh:

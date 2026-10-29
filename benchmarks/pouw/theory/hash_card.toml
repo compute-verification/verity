@@ -121,7 +121,7 @@ what = "inbox/HASH.md: it equals Σ_τ κ_τ Σ_{t≥τ} r_t, computable without
 #   rule_change: the rule a design needs changed (another primitive, a revealed sketch); rule_question: one asked
 #   caveats: conditions another lane's note sets on the design, carried as flags
 #   adds[].family: a premise another lane states under another name and rank ([family.*]); the card takes the highest
-#   family.stands_if: the write model under which a refuted family's known adversaries no longer beat it
+#   family.stands_if: the write model under which a refuted family's known adversaries no longer beat it (`model`: its name)
 
 # Premise families: one statement two lanes name and rank differently, or one premise a lane states for several designs.
 [family.xor-fold-writes]
@@ -129,6 +129,7 @@ what = "a program that outputs the XOR of a cell's words (m of them, or all of t
 stated = [{ lane = "SHA", name = "XorWrites_m", rank = "4a" }, { lane = "ASSUME", name = "FoldMaterial (+ XorFoldOpt)", rank = 5 }]
 status = "refuted"
 refuted_by = "under today's W1 (MH100w, predicate writes free): COUNTER's pack (run r20261029-202456-94fa, checked bit for bit; it counts IADD3s, not their carry predicates) undercuts the credit by 28-36% of stock (the XOR fold), 21-24% (xor-16) and 12-15% (xor-11) at the lead's layout; SHA's part Y (run r20261029-203316-fc3f, checked bit for bit, writes modelled) pays 1.396 a word against honest's 1.5 at m 16 (0.931x) and ties at m 11 (0.9997x); credit = stock alone is sound but leaves honest's words and fold uncredited (T1 about 77%)"
+model = "predicate writes priced (B1)"
 stands_if = "a predicate write is priced as a register write (shalb.py's B1 dataflow rung; SHA Ask 1): the best known adversary then pays 1.375-1.486x honest on a fresh-output IMMA and 1.031-1.115x on the served in-place IGMMA (1.000x against ptxas's 2 + 1/m at m 16); ASSUME's whole-cell fold is not priced so"
 
 [family.trunc-writes]
@@ -136,6 +137,7 @@ what = "a program that outputs each word's low 16 bits, two halves a message reg
 stated = [{ lane = "SHA", name = "TruncWrites_16", rank = "4a" }]
 status = "refuted"
 refuted_by = "under today's W1 (predicate writes free): SHA's part Z (run r20261029-203316-fc3f, bit for bit against honest's message registers, writes modelled) pays 1.370 a word against honest's 1.5 (0.913x)"
+model = "predicate writes priced (B1)"
 stands_if = "a predicate write is priced as a register write (B1): part Z then pays 1.875 a word (1.25x)"
 
 [family.fold-opt]
