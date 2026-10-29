@@ -70,7 +70,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[name] = ("linears", "int8-linears", False)
     want["ncp-v1-served-attn"] = want["ncp-v1-served-pv"] = ("all", "int8-all", False)
     stock = "int8-channel127-v1"
-    for name in ("ncp-smooth", "ncp-rotate", "lin-a63-w127", "lin-a127-w63", *(f"lin-t{t}" for t in (31, 47, 79, 95, 111))):
+    for name in ("ncp-smooth", "ncp-rotate", "ncp-smooth-rotate", "lin-a63-w127", "lin-a127-w63",
+                 *(f"lin-t{t}" for t in (31, 47, 79, 95, 111)), *(f"rot-t{t}" for t in (15, 31, 47))):
         want[name] = ("linears", stock, False)
     for name in ("ncp-v1-served-qk", "ncp-pv-sink", "ncp-pv-p127", "ncp-pv-p127-sink"):
         want[name] = ("all", stock, False)

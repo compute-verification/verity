@@ -1,0 +1,15 @@
+description = "NCP's int7 linears with SmoothQuant alpha 0.5 (folded into the norms and v/up rows) and then each linear's input rotated online (x Q, W Q offline), then activations one scale per token and weights one per output row on ±63, the exact product; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "smooth"
+alpha = 0.5
+kv_shared = true
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
