@@ -402,7 +402,7 @@ def _wgmma(id_: str, fmt: Format, models: tuple[Model, ...]) -> Instruction:
     k = 16 if fmt is BF16 else 32
     rs = f"wgmma_{fmt.name}_m64n8k{k}_rs_tiles" if fmt is BF16 else None  # FP8: A is always in registers
     return Instruction(id_, "sm_90a", "wgmma_tiles.cu", f"wgmma_{fmt.name}_m64n8k{k}_tiles",
-                       f"wgmma.mma_async.sync.aligned.m64n8k{k}.f32.{fmt.name}.{fmt.name}", fmt, 64, k, models, rs_kernel=rs, chain=rs is not None)
+                       f"wgmma.mma_async.sync.aligned.m64n8k{k}.f32.{fmt.name}.{fmt.name}", fmt, 64, k, models, rs_kernel=rs, chain=True)
 
 
 def _tcgen05(id_: str, models: tuple[Model, ...]) -> Instruction:
@@ -537,7 +537,7 @@ def _sha256_text(text: str) -> str:
 
 class Probe:
     def __init__(self, so: Path, ins: Instruction, a_source: str | None = None, kernel: str | None = None, k: int | None = None):
-        """``kernel`` / ``k`` override the instruction's entry point and tile depth (the chained BF16 wgmma kernels, K = 64)."""
+        """``kernel`` / ``k`` override the instruction's entry point and tile depth (the chained wgmma kernels, K = 4 * k)."""
 
         self.ins = ins
         self.a_source = a_source or ins.a_sources[0]
@@ -1571,7 +1571,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
     return report, capture
 
 
-# --- chained wgmma (BF16) ---------------------------------------------------------------------------------------------------------
+# --- chained wgmma (BF16, FP8) ---------------------------------------------------------------------------------------------------------
 
 CHAIN_STEPS = 4
 
@@ -1583,7 +1583,7 @@ def chain_kernel(probe: Probe) -> str:
 
 
 def _eval_chain_tiles(args):
-    """``_eval_tiles`` for K = 16 * CHAIN_STEPS tiles: each model's step folded over the k16 slices in ascending order."""
+    """``_eval_tiles`` for K = k * CHAIN_STEPS tiles: each model's step folded over the k slices in ascending order."""
 
     A, Bt, C = args
     n, M, K = A.shape
@@ -1607,8 +1607,8 @@ def _eval_chain_tiles(args):
 
 
 def chain_sweep(so: Path, base: Probe, args, out: Path) -> dict:
-    """Every sweep family at K = 64 through the chained kernel (one layout check first), against each model's step folded over the
-    four k16 slices: whether back-to-back wgmma on one accumulator equal the chain of single steps, bit for bit.  ``base`` is the
+    """Every sweep family at K = 4 * k through the chained kernel (one layout check first and its SASS count), against each model's
+    step folded over the four k slices: whether back-to-back wgmma on one accumulator equal the chain of single steps, bit for bit.  ``base`` is the
     single-instruction probe whose layout check fixed the descriptor offsets."""
 
     ins, a_source = base.ins, base.a_source
@@ -1627,6 +1627,7 @@ def chain_sweep(so: Path, base: Probe, args, out: Path) -> dict:
         raise RuntimeError(f"chain layout check failed: {probe.kernel} ({int(np.count_nonzero(want != got))} words differ)")
     if probe.tcgen05:
         probe.set_enable_input_d(not args.no_input_d)
+    sass = sass_check(so, probe.kernel, out, CHAIN_STEPS * ins.sass_mma) if ins.tu == "wgmma_tiles.cu" else None
     model_names = [m.name for m in ins.models]
     fams: dict = {}
     rng = np.random.default_rng(args.seed + CHAIN_STEPS)
@@ -1653,7 +1654,7 @@ def chain_sweep(so: Path, base: Probe, args, out: Path) -> dict:
             print(f"chain{CHAIN_STEPS}", name, json.dumps({k: v for k, v in fam.items() if k != "first_mismatches"}), flush=True)
     totals = {m: sum(f["models"][m]["mismatches"] for f in fams.values() if f["asserted"]) for m in model_names}
     return {"kernel": probe.kernel, "steps": CHAIN_STEPS, "k": K, "a_source": a_source, "seed": args.seed + CHAIN_STEPS,
-            "n_random": args.chain_n_random, "layout_check": {"status": "passed", "elements": int(want.size)}, "families": fams,
+            "n_random": args.chain_n_random, "layout_check": {"status": "passed", "elements": int(want.size)}, "sass": sass, "families": fams,
             "total_elements": sum(f["elements"] for f in fams.values()),
             "total_asserted_elements": sum(f["elements"] for f in fams.values() if f["asserted"]),
             "total_mismatches_by_model": totals, "model_agrees": {m: totals[m] == 0 for m in model_names}}
@@ -1735,8 +1736,8 @@ def main() -> int:
     ap.add_argument("--replay-instances", default=None, metavar="DIR", help="bench-instances/v1 directory with the built arrays: replay tu-k16 and vu-k1536 (BF16)")
     ap.add_argument("--instances-manifest", default=None, metavar="JSON", help="the pinned manifest to check the arrays against (default DIR/manifest.json)")
     ap.add_argument("--sweep", action="store_true")
-    ap.add_argument("--chain", action="store_true", help="BF16 wgmma: every family at K = 64 through four back-to-back wgmma in one commit group, "
-                    "against the model's step folded over the four k16 slices")
+    ap.add_argument("--chain", action="store_true", help="wgmma (BF16, FP8): every family at K = 4 * k through four back-to-back wgmma in one commit group, "
+                    "against the model's step folded over the four k slices")
     ap.add_argument("--chain-n-random", type=int, default=2000, help="--n-random of the chained families")
     ap.add_argument("--no-input-d", action="store_true", help="tcgen05: the first MMA runs with enable_input_d = 0 (the accumulator not read) "
                     "and every family's accumulators are +0, so the models see what the hardware computes")
@@ -1827,7 +1828,7 @@ def main() -> int:
 
     if args.chain:
         if not ins.chain:
-            ap.error("--chain needs an instruction with the chained kernels (sm90.wgmma.m64n8k16.bf16, sm100.tcgen05.mma.bf16)")
+            ap.error("--chain needs an instruction with the chained kernels (sm90.wgmma.*, sm100.tcgen05.mma.bf16)")
         results["chain_sweep"] = chain_sweep(so, probe, args, out)
         print("chain TOTAL", results["chain_sweep"]["total_asserted_elements"], "asserted elements,",
               json.dumps(results["chain_sweep"]["total_mismatches_by_model"]), "mismatches", flush=True)

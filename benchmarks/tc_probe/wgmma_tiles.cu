@@ -4,6 +4,7 @@
 //   wgmma_e5m2_m64n8k32_tiles   wgmma.mma_async.sync.aligned.m64n8k32.f32.e5m2.e5m2   A 64x32 e5m2, Bt 8x32 e5m2, C/D 64x8 f32
 //   wgmma_bf16_m64n8k16_tiles   wgmma.mma_async.sync.aligned.m64n8k16.f32.bf16.bf16   A 64x16 bf16 (SS: A in shared memory)
 //   wgmma_bf16_m64n8k16_rs_tiles                                                      the same with A from registers (RS)
+//   *_chain4_tiles              four of the instruction back to back on one accumulator in one commit group (``--chain``)
 //
 // Written after veritor `gpu/tc-fp8/wgmma_fp8_probe.py`, which reached the
 // instruction through Triton (`tl.dot` on a 64x64x32 tile) and confirmed a single QGMMA in the SASS; here the instruction is
@@ -134,11 +135,14 @@ enum Op { E4M3 = 0, E5M2 = 1 };
 constexpr int M = 64, N = 8, K = 32;
 constexpr int THREADS = 128;  // one warpgroup
 
-// One warpgroup (one block of 128 threads) per tile: A[64][32] bytes, Bt[8][32] bytes, C/D[64][8] u32.
-template <int OP>
+// One warpgroup (one block of 128 threads) per tile: A[64][32*STEPS] bytes, Bt[8][32*STEPS] bytes, C/D[64][8] u32.  STEPS = 1
+// is the single-instruction probe; STEPS = 4 issues four wgmma back to back on the same accumulator registers inside one
+// fence / commit / wait group (k slices 0..3 in order), as a fast-accumulation FP8 GEMM mainloop does for one K = 128 block.
+template <int OP, int STEPS>
 __device__ __forceinline__ void tile_body(const uint8_t* __restrict__ A, const uint8_t* __restrict__ Bt,
                                           const uint32_t* __restrict__ C, uint32_t* __restrict__ D, int ntiles,
                                           uint32_t lbo, uint32_t sbo) {
+    constexpr int KT = K * STEPS;
     const int tile = blockIdx.x;
     if (tile >= ntiles) return;
     const int tid = threadIdx.x;
@@ -147,15 +151,17 @@ __device__ __forceinline__ void tile_body(const uint8_t* __restrict__ A, const u
     const int g = lane >> 2;
     const int t = lane & 3;
 
-    // B in the canonical K-major no-swizzle layout: byte (kh*128 + n*16 + kk) holds Bt[n][kh*16 + kk].
-    __shared__ __align__(128) uint8_t sB[N * K];
-    const uint8_t* a = A + (size_t)tile * M * K;
-    const uint8_t* b = Bt + (size_t)tile * N * K;
+    // B in the canonical K-major no-swizzle layout: byte (kh*128 + n*16 + kk) of slice s holds Bt[n][32s + kh*16 + kk].
+    __shared__ __align__(128) uint8_t sB[STEPS][N * K];
+    const uint8_t* a = A + (size_t)tile * M * KT;
+    const uint8_t* b = Bt + (size_t)tile * N * KT;
     const uint32_t* c = C + (size_t)tile * M * N;
     uint32_t* d = D + (size_t)tile * M * N;
-    for (int i = tid; i < N * K; i += THREADS) {
-        const int kh = i >> 7, n = (i >> 4) & 7, kk = i & 15;
-        sB[i] = b[n * K + kh * 16 + kk];
+    for (int s = 0; s < STEPS; ++s) {
+        for (int i = tid; i < N * K; i += THREADS) {
+            const int kh = i >> 7, n = (i >> 4) & 7, kk = i & 15;
+            sB[s][i] = b[n * KT + s * K + kh * 16 + kk];
+        }
     }
 #if TC_PROBE_WGMMA_ENABLED
     asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");  // generic-proxy writes -> visible to the async proxy
@@ -163,25 +169,30 @@ __device__ __forceinline__ void tile_body(const uint8_t* __restrict__ A, const u
     __syncthreads();
 
     const int r0 = 16 * warp + g, r1 = r0 + 8;
-    uint32_t af[4];
-    af[0] = *reinterpret_cast<const uint32_t*>(a + r0 * K + 4 * t);
-    af[1] = *reinterpret_cast<const uint32_t*>(a + r1 * K + 4 * t);
-    af[2] = *reinterpret_cast<const uint32_t*>(a + r0 * K + 16 + 4 * t);
-    af[3] = *reinterpret_cast<const uint32_t*>(a + r1 * K + 16 + 4 * t);
+    uint32_t af[STEPS][4];
+    for (int s = 0; s < STEPS; ++s) {
+        af[s][0] = *reinterpret_cast<const uint32_t*>(a + r0 * KT + s * K + 4 * t);
+        af[s][1] = *reinterpret_cast<const uint32_t*>(a + r1 * KT + s * K + 4 * t);
+        af[s][2] = *reinterpret_cast<const uint32_t*>(a + r0 * KT + s * K + 16 + 4 * t);
+        af[s][3] = *reinterpret_cast<const uint32_t*>(a + r1 * KT + s * K + 16 + 4 * t);
+        for (int i = 0; i < 4; ++i) fence_operand(af[s][i]);
+    }
     float df[4];
     df[0] = __uint_as_float(c[r0 * N + 2 * t]);
     df[1] = __uint_as_float(c[r0 * N + 2 * t + 1]);
     df[2] = __uint_as_float(c[r1 * N + 2 * t]);
     df[3] = __uint_as_float(c[r1 * N + 2 * t + 1]);
-    const uint64_t desc_b = smem_desc(sB, lbo, sbo);
 
     for (int i = 0; i < 4; ++i) fence_operand(df[i]);
-    for (int i = 0; i < 4; ++i) fence_operand(af[i]);
     wgmma_fence();
-    if (OP == E4M3) {
-        wgmma_e4m3_m64n8k32(df, af, desc_b);
-    } else {
-        wgmma_e5m2_m64n8k32(df, af, desc_b);
+#pragma unroll
+    for (int s = 0; s < STEPS; ++s) {
+        const uint64_t desc_b = smem_desc(sB[s], lbo, sbo);
+        if (OP == E4M3) {
+            wgmma_e4m3_m64n8k32(df, af[s], desc_b);
+        } else {
+            wgmma_e5m2_m64n8k32(df, af[s], desc_b);
+        }
     }
     wgmma_commit();
     wgmma_wait_all();
@@ -193,14 +204,15 @@ __device__ __forceinline__ void tile_body(const uint8_t* __restrict__ A, const u
     d[r1 * N + 2 * t + 1] = __float_as_uint(df[3]);
 }
 
-__global__ void wgmma_e4m3_m64n8k32_tiles_kernel(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uint32_t* D, int ntiles,
-                                                 uint32_t lbo, uint32_t sbo) {
-    tile_body<E4M3>(A, Bt, C, D, ntiles, lbo, sbo);
-}
-__global__ void wgmma_e5m2_m64n8k32_tiles_kernel(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uint32_t* D, int ntiles,
-                                                 uint32_t lbo, uint32_t sbo) {
-    tile_body<E5M2>(A, Bt, C, D, ntiles, lbo, sbo);
-}
+#define FP8_KERNEL(NAME, OP, STEPS)                                                                                              \
+    __global__ void NAME##_kernel(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uint32_t* D, int ntiles, uint32_t lbo,   \
+                                  uint32_t sbo) {                                                                                   \
+        tile_body<OP, STEPS>(A, Bt, C, D, ntiles, lbo, sbo);                                                                     \
+    }
+FP8_KERNEL(wgmma_e4m3_m64n8k32_tiles, E4M3, 1)
+FP8_KERNEL(wgmma_e5m2_m64n8k32_tiles, E5M2, 1)
+FP8_KERNEL(wgmma_e4m3_m64n8k32_chain4_tiles, E4M3, 4)
+FP8_KERNEL(wgmma_e5m2_m64n8k32_chain4_tiles, E5M2, 4)
 
 // BF16 m64n8k16: A[64][16*STEPS] and Bt[8][16*STEPS] BF16 words, C/D[64][8] u32; one warpgroup per tile.  STEPS = 1 is the
 // single-instruction probe; STEPS = 4 issues four wgmma back to back on the same accumulator registers inside one
@@ -315,6 +327,12 @@ void launch_e4m3(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uint32_
 void launch_e5m2(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uint32_t* D, int ntiles) {
     wgmma_e5m2_m64n8k32_tiles_kernel<<<ntiles, THREADS>>>(A, Bt, C, D, ntiles, g_lbo, g_sbo);
 }
+void launch_e4m3_chain4(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uint32_t* D, int ntiles) {
+    wgmma_e4m3_m64n8k32_chain4_tiles_kernel<<<ntiles, THREADS>>>(A, Bt, C, D, ntiles, g_lbo, g_sbo);
+}
+void launch_e5m2_chain4(const uint8_t* A, const uint8_t* Bt, const uint32_t* C, uint32_t* D, int ntiles) {
+    wgmma_e5m2_m64n8k32_chain4_tiles_kernel<<<ntiles, THREADS>>>(A, Bt, C, D, ntiles, g_lbo, g_sbo);
+}
 
 }  // namespace
 
@@ -334,6 +352,14 @@ int wgmma_e4m3_m64n8k32_tiles(const void* A, const void* Bt, const uint32_t* C, 
 // A: ntiles*64*32 e5m2 bytes, Bt: ntiles*8*32 e5m2 bytes, C/D: ntiles*64*8 f32 bits.
 int wgmma_e5m2_m64n8k32_tiles(const void* A, const void* Bt, const uint32_t* C, uint32_t* D, int ntiles) {
     return tc_probe::run_tiles(A, Bt, C, D, ntiles, M * K, N * K, M * N, launch_e5m2);
+}
+
+// Four chained FP8 wgmma per tile: A ntiles*64*128 bytes, Bt ntiles*8*128 bytes, C/D ntiles*64*8 f32 bits.
+int wgmma_e4m3_m64n8k32_chain4_tiles(const void* A, const void* Bt, const uint32_t* C, uint32_t* D, int ntiles) {
+    return tc_probe::run_tiles(A, Bt, C, D, ntiles, M * K * 4, N * K * 4, M * N, launch_e4m3_chain4);
+}
+int wgmma_e5m2_m64n8k32_chain4_tiles(const void* A, const void* Bt, const uint32_t* C, uint32_t* D, int ntiles) {
+    return tc_probe::run_tiles(A, Bt, C, D, ntiles, M * K * 4, N * K * 4, M * N, launch_e5m2_chain4);
 }
 
 // A: ntiles*64*16 BF16 words, Bt: ntiles*8*16 BF16 words, C/D: ntiles*64*8 f32 bits.  SS form (A through a descriptor).
