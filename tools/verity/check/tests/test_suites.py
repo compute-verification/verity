@@ -1018,14 +1018,12 @@ def _reused(tmp_path: Path) -> list[str]:
     return sorted(json.loads(p.read_text())) if p.exists() else []
 
 
-def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_is_killed(tmp_path):
-    """A pytest the OOM killer ends wrote no report and left its forkserver running: the
-    suite's own process group takes what it left with it, and the signal and peak RSS are said."""
-    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+def _killed_workspace(root: Path, left: Path) -> None:
+    """A checkout whose one suite's one test starts a child, writes its pid to ``left`` and kills its own pytest by SIGKILL."""
+    tests = root / "pkg" / "tests"
     _per_test_workspace(root)
     for f in tests.glob("test_*.py"):
         f.unlink()
-    left = tmp_path / "left.pid"
     (tests / "test_killed.py").write_text(
         "import os, signal, subprocess, sys\n\n"
         "def test_killed():\n"
@@ -1034,11 +1032,39 @@ def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_
         "    os.kill(os.getpid(), signal.SIGKILL)\n")
     _git(root, "add", "-A")
     _git(root, "commit", "-q", "-m", "killed")
+
+
+def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_is_killed(tmp_path):
+    """A pytest the OOM killer ends wrote no report and left its forkserver running: the
+    suite's own process group takes what it left with it, and the signal and peak RSS are said.  Whether it is called an OOM
+    kill reads the host's count, which any process on the machine moves, so that is the next test's, with the count replaced."""
+    root, left = tmp_path / "tree", tmp_path / "left.pid"
+    _killed_workspace(root, left)
     p = _run_suite(root, tmp_path, "--fresh")
-    assert p.returncode == 1 and "killed by SIGKILL: pytest died by SIGKILL at a peak RSS of" in p.stdout, p.stdout
+    assert p.returncode == 1 and ": pytest died by SIGKILL at a peak RSS of" in p.stdout, p.stdout
     assert "killed 1 processes its tests left in the suite's process group" in p.stdout, p.stdout
     stat = Path("/proc") / left.read_text() / "stat"
     assert not stat.exists() or stat.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"), stat.read_text()
+
+
+@pytest.mark.parametrize("counts, oom", [((3, 3), False), ((3, 4), True), ((None, 4), False)])
+def test_a_sigkill_is_an_oom_kill_only_when_the_kernels_count_rose_across_the_suite(tmp_path, monkeypatch, counts, oom):
+    """`run` reads the kernel's OOM-kill count (`oom_kills`) before and after the suite: a SIGKILL is the OOM killer's only when
+    the count rose, and isn't when it can't be read."""
+    root = tmp_path / "tree"
+    _killed_workspace(root, tmp_path / "left.pid")
+    for k in [k for k in os.environ if k.startswith(("R2_", "AWS_", "RESEARCH_", "VERITY_"))]:
+        monkeypatch.delenv(k)
+    spec = importlib.util.spec_from_file_location("suites_killed", root / "tools" / "verity" / "check" / "suites.py")
+    S = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, S)
+    spec.loader.exec_module(S)
+    seen = iter(counts)
+    monkeypatch.setattr(S, "oom_kills", lambda: next(seen))
+    [suite] = [s for s in S.discover() if s.path == "pkg"]
+    (tmp_path / "logs").mkdir()
+    r = S.run(suite, [], [], tmp_path / "logs")
+    assert (r.signal, r.oom, r.leftover) == ("SIGKILL", oom, 1), r.log.read_text()
 
 
 def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
