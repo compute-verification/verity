@@ -20,7 +20,6 @@ from typing import Callable
 
 import pytest
 
-import research.queue as Q
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
 from research.queue import (DRIVE_FLAGS, PR, PREFLIGHT_BUDGET_S, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files,
@@ -310,8 +309,8 @@ def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_pr
 
 def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_nothing_new_keeps_next(world):
     """A PR that didn't merge, left where `--first` put it in the order the sync compares `next` with, would have every member
-    above it merged again (new commits, each judged again) on each tick with `main` still.  Left out at a head, it (and a PR that contains it) is tried above the rest until that head
-    moves."""
+    above it merged again (new commits, each judged again) on each tick with `main` still.  Left out at a head, it (and a PR
+    that contains it) is tried above the rest until that head moves."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}))
@@ -319,14 +318,14 @@ def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_noth
     _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'main\n'})}:refs/heads/main")
     first = (3, 1, 4)
     members, entries = world.queue(first=first).sync()
-    assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
+    assert [m.pr for m in members] == [1, 2] and entries[3].state == "refused" and entries[4].state == "waiting"
     for _ in range(2):
         again, entries = world.queue(first=first).sync()
         assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 2, merged 0")
         assert entries[3].state == "refused" and entries[4].state == "waiting"
     world.gh.put(3, world.change({"c.txt": "3 on main\n"}))                                       # fixed: first again
     members, entries = world.queue(first=first).sync()
-    assert [m.pr for m in members] == [3, 2, 1] and entries[4].state == "refused"     # #4 holds the old #3, which conflicts
+    assert [m.pr for m in members] == [3, 1, 2] and entries[4].state == "refused"     # #4 holds the old #3, which conflicts
     again, _ = world.queue(first=first).sync()
     assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 3, merged 0")
 
@@ -505,9 +504,10 @@ def test_a_pr_whose_preflight_onto_next_refuses_it_stays_out_and_the_members_abo
     assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why and world.on_next(q) == [1, 3]
 
 
-def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base_is(world, monkeypatch):
+def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base_is(world):
     """A PR's preflight is recorded per (head, base): a sync that tries a refused PR again onto the same tree reads its refusal
-    back, and so does a rebuild of `next` whose merges are new commits of the same trees.  A new base runs it again."""
+    back, and so does one onto another commit of that tree (a rebuilt `next`'s merges carry the time they're made).  A new
+    base runs it again."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"b.txt": "2\n"}))
     refuse, calls = _sync_preflight({2: "refused: x"})
@@ -520,12 +520,16 @@ def test_an_unchanged_head_and_base_tree_is_not_preflighted_again_and_a_new_base
     members, entries = again.sync()
     assert [m.pr for m in members] == [1] and entries[2].why == "refused: x" and [n for n, _ in calls] == [1, 2], world.logs
     first = members[0].commit
-    _git(world.origin, "update-ref", "refs/heads/next", _git(world.origin, "rev-parse", "main"))
-    monkeypatch.setitem(Q.IDENTITY, "GIT_COMMITTER_DATE", "2000-01-01T00:00:00Z")    # a later second's merge
+    remade = subprocess.run(["git", "commit-tree", f"{first}^{{tree}}", "-p", f"{first}^1", "-p", f"{first}^2", "-m",
+                             _git(world.origin, "log", "-1", "--format=%B", first)], cwd=world.origin, check=True, text=True,
+                            capture_output=True, env={**os.environ, **{k: v for d in ("AUTHOR", "COMMITTER") for k, v in (
+                                (f"GIT_{d}_NAME", "q"), (f"GIT_{d}_EMAIL", "q@q"), (f"GIT_{d}_DATE", "2000-01-01T00:00:00Z"))}}
+                            ).stdout.strip()
+    _git(world.origin, "update-ref", "refs/heads/next", remade)
     rebuilt = world.queue()
     rebuilt.preflight = refuse
     members, entries = rebuilt.sync()
-    assert [m.pr for m in members] == [1] and members[0].commit != first and entries[2].state == "refused"
+    assert [m.commit for m in members] == [remade] and remade != first and entries[2].state == "refused"
     assert [n for n, _ in calls] == [1, 2], world.logs
     _move_main(world, {"c.txt": "moved\n"})
     moved = world.queue()
