@@ -9,7 +9,7 @@
 // shalb_words_check.py to hold to verity.ml.commitments bit for bit; each kernel is then timed (CUDA events, median of
 // REPS launches).
 //
-//   nvcc -O3 --use_fast_math -std=c++17 -arch=sm_90a -DSHA_ROLL=1 -I<committer> sha512_words_gpu.cu -o g
+//   nvcc -O3 --use_fast_math -std=c++17 -arch=sm_90a -DSHA_ROLL=1 [-DWORDS_MINB=3] -I<committer> sha512_words_gpu.cu -o g
 //   ./g DOMAIN_ID_FILE OUT
 #include <cuda_runtime.h>
 
@@ -31,6 +31,10 @@
     }                                                                                 \
   } while (0)
 
+#ifndef WORDS_MINB  // the minimal kernels' blocks an SM (__launch_bounds__), which caps their registers a thread
+#define WORDS_MINB 1
+#endif
+
 using u64 = uint64_t;
 constexpr int N = 1 << 19, NCHK = 1024, REPS = 7, THREADS = 256;
 constexpr u64 POS0 = 131072;
@@ -48,8 +52,9 @@ __global__ void fill(u64* rows, size_t n) {
   }
 }
 
-__global__ void __launch_bounds__(THREADS) chunks_min(const __grid_constant__ shaw::Pre p, const u64* __restrict__ rows,
-                                                      u64* __restrict__ dig, u64* __restrict__ leaves, int n) {
+__global__ void __launch_bounds__(THREADS, WORDS_MINB)
+    chunks_min(const __grid_constant__ shaw::Pre p, const u64* __restrict__ rows, u64* __restrict__ dig,
+               u64* __restrict__ leaves, int n) {
   const int t = blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= n) return;
   u64 d[8], lf[8];
@@ -61,8 +66,8 @@ __global__ void __launch_bounds__(THREADS) chunks_min(const __grid_constant__ sh
   }
 }
 
-__global__ void __launch_bounds__(THREADS) nodes_min(const __grid_constant__ shaw::Pre p, const u64* __restrict__ leaves,
-                                                     u64* __restrict__ nodes, int m) {
+__global__ void __launch_bounds__(THREADS, WORDS_MINB)
+    nodes_min(const __grid_constant__ shaw::Pre p, const u64* __restrict__ leaves, u64* __restrict__ nodes, int m) {
   const int j = blockIdx.x * blockDim.x + threadIdx.x;
   if (j >= m) return;
   u64 nd[8];

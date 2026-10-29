@@ -2,11 +2,12 @@
 # The words committer (sha512_words.cuh) on one GPU: its registers a compression from SASS (sha512_words_probe.cu at
 # WORDS_NB 8, 16 and 32, extrapolated in pairs to the 16 KiB chunk's 128), and sha512_words_gpu.cu's leaves and nodes
 # held to verity.ml.commitments bit for bit (shalb_words_check.py) with its time beside the served committer's
-# (SHA_ROLL 1, as served, and 0).
+# (SHA_ROLL 1, as served, and 0). WORDS_MINB="3 4" also builds the minimal kernels at those blocks an SM (fewer
+# registers a thread, more warps) beside SHA_ROLL 1.
 # Runs under gpu-lease on its GPU node: research run --on NODE -- gpu-lease 1 --wait -- bash benchmarks/pouw/shalb/shalb_words_gpu.sh
 # The node's CUDA toolkit if it has one, else the CUDA wheels in a scratch venv outside the run dir. cwd: the source
-# tree's root. Output: $OUT/{words*.sass, counts.json, counts.txt, gpu_roll{1,0}.txt, check_roll{1,0}.txt,
-# words_roll{1,0}.bin, tools.txt}.
+# tree's root. Output: $OUT/{words*.sass, counts.json, counts.txt, tools.txt}, and for each build V (roll1, roll0,
+# roll1_minbB): $OUT/{gpu_V.txt, check_V.txt, ptxas_V.txt, words_V.bin}.
 set -euo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 d=$(mktemp -d); trap 'rm -rf "$d"' EXIT
@@ -41,9 +42,10 @@ print(f"registers a trip: {c}; a pair of data blocks, 16 to 32: {pair:g}, 8 to 1
 print(f"16 KiB item (128 data blocks, padding, leaf 2, node 2 = 133 compressions): {item:.0f}, {item / 133:.2f} a compression")
 EOF
 python3 "$HERE/shalb_words_check.py" domain "$d/did"
-for roll in 1 0; do
-  nvcc -O3 --use_fast_math -std=c++17 -arch=sm_90a -DSHA_ROLL=$roll -I"$SRC" "${INC[@]}" "${LIB[@]}" \
-    "$HERE/sha512_words_gpu.cu" -o "$d/gpu$roll"
-  "$d/gpu$roll" "$d/did" "$OUT/words_roll$roll.bin" | tee "$OUT/gpu_roll$roll.txt"
-  python3 "$HERE/shalb_words_check.py" check "$d/did" "$OUT/words_roll$roll.bin" | tee "$OUT/check_roll$roll.txt"
+for v in roll1 roll0 ${WORDS_MINB:+$(printf 'roll1_minb%s ' $WORDS_MINB)}; do
+  roll=${v:4:1} minb=${v#*minb}; [ "$minb" = "$v" ] && minb=1
+  nvcc -O3 --use_fast_math -std=c++17 -arch=sm_90a -DSHA_ROLL=$roll -DWORDS_MINB=$minb -Xptxas -v -I"$SRC" \
+    "${INC[@]}" "${LIB[@]}" "$HERE/sha512_words_gpu.cu" -o "$d/$v" 2> "$OUT/ptxas_$v.txt"
+  "$d/$v" "$d/did" "$OUT/words_$v.bin" | tee "$OUT/gpu_$v.txt"
+  python3 "$HERE/shalb_words_check.py" check "$d/did" "$OUT/words_$v.bin" | tee "$OUT/check_$v.txt"
 done
