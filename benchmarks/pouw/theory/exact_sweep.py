@@ -1162,6 +1162,7 @@ def check() -> list[dict]:
 
 def report() -> dict:
     ds = designs()
+    by_name = {d.name: d for d in ds}
     rows = []
     for d in ds:
         for model in MODELS:
@@ -1171,15 +1172,18 @@ def report() -> dict:
                     e[f"llama_{point}"] = weighted(d, ns.LLAMA, m, model, c1)
                     e[f"v4dense_{point}"] = weighted(d, ns.V4_DENSE, m, model, c1)
                 for point in ns.STEP:
-                    t2 = ns.t2_estimate(d, point, c1)
-                    e[f"t2_{point}"], e[f"t2_overlapped_{point}"] = t2["t2"], t2["t2_overlapped"]
+                    # a mixed design's T2 is the worse of its paths' (an upper estimate)
+                    parts = [ns.t2_estimate(by_name[path], point, c1)
+                             for path in ({MIX[d.name](lin) for lin in ns.LLAMA} if d.name in MIX else {d.name})]
+                    e[f"t2_{point}"] = max(p["t2"] for p in parts)
+                    e[f"t2_overlapped_{point}"] = max(p["t2_overlapped"] for p in parts)
                 rows.append(e)
     per_dot = {d.name: {lin: {"alpha": d.alpha(k), "extra_macs": (d.alpha(k) - 1) * k,
                               "forming_x_writes_row": d.form_x(1, n, k) * n * k / H32,
                               "forming_y_writes_col": d.form_y(1, n, k) * k / H32,
                               "denoise_writes_row_call": d.denoise(10 ** 12, n, k) * n * k / H32,
                               "coin_bits_row": d.coin_bits(1, 0, k), "coin_bits_col_call": d.coin_bits(0, n, k) / n}
-                        for lin, (n, k) in ns.LLAMA.items()} for d in ds}
+                        for lin, (n, k) in ns.LLAMA.items()} for d in ds if d.name not in MIX}
     return {"designs": [{k: v for k, v in d.__dict__.items() if not callable(v)} for d in ds], "rows": rows,
             "per_dot_product": per_dot, "checks": check(),
             "data": {"exact": EXACT or None, "noise_summary": NOISE.get("summary")},
