@@ -16,7 +16,8 @@ Two results shape the list.
   float 1.5·2²³ + (D − r_i − c_j) while |A·Bᵀ| < 2²², and replacing the column FMUL by FFMA(v, s_j, −1.5·2²³·s_j)
   removes the offset; when 1.5·2²³·s_j is exact in fp32 the output is stock's bit for bit. A separable noise r_i + c_j
   is removed with the epilogue's own instruction count. A column-only c_j folds into the FFMA alone while
-  |A·Bᵀ + c_j| < 2²⁴. A noise that isn't separable (SSN's code a₁·C_j) costs a write an output (32/K) to remove.
+  |A·Bᵀ + c_j| < 2²⁴ and −c_j·s_j is an fp32, so a few bits beside a 22-bit scale; a wide column term, such as a private
+  coin lane's sum over a row tile, folds only in IADD3's column source, loaded per tile. A noise that isn't separable (SSN's code a₁·C_j) costs a write an output (32/K) to remove.
 
 `rc_magic` carries a row bit every k32 step and a fresh column bit in step 1 and removes both at the epilogue; its words
 are distinct on the salt grid for every data case. A program that branches on the coins (W1 prices a branch at 0) sees
@@ -993,17 +994,18 @@ def stock_epilogue(acc: np.ndarray, s_col: np.ndarray, s_row: np.ndarray) -> np.
 
 
 def magic_epilogue(acc: np.ndarray, r: np.ndarray, c: np.ndarray, s_col: np.ndarray, s_row: np.ndarray) -> np.ndarray:
-    """IADD3(D, MAGIC_BITS − r_i, −c_j) read as fp32, FFMA(v, s_j, −MAGIC·s_j), FMUL(s_i), bf16."""
-    bits = (acc.astype(np.int64) + (MAGIC_BITS - r)[:, None] - c[None, :]) & 0xFFFFFFFF
+    """IADD3(D, MAGIC_BITS − r_i, −c_j) read as fp32, FFMA(v, s_j, −MAGIC·s_j), FMUL(s_i), bf16; c is a column's term
+    or, shaped like D, a row tile's column term (the column source loaded per tile)."""
+    bits = (acc.astype(np.int64) + (MAGIC_BITS - r)[:, None] - np.broadcast_to(c, acc.shape)) & 0xFFFFFFFF
     v = bits.astype(np.uint32).view(np.float32)
     u = _fma(v, np.broadcast_to(s_col[None, :], v.shape), np.broadcast_to(_f32(-MAGIC * s_col)[None, :], v.shape))
     return _bf16(_f32(u.astype(np.float64) * s_row[:, None]))
 
 
 def ffma_epilogue(acc: np.ndarray, c: np.ndarray, s_col: np.ndarray, s_row: np.ndarray) -> np.ndarray:
-    """I2F(D), FFMA(f, s_j, −c_j·s_j), FMUL(s_i), bf16."""
+    """I2F(D), FFMA(f, s_j, −c_j·s_j), FMUL(s_i), bf16; c as in `magic_epilogue`."""
     f = acc.astype(np.float32)
-    u = _fma(f, np.broadcast_to(s_col[None, :], f.shape), np.broadcast_to(_f32(-c * s_col)[None, :], f.shape))
+    u = _fma(f, np.broadcast_to(s_col[None, :], f.shape), np.broadcast_to(_f32(-np.asarray(c) * s_col), f.shape))
     return _bf16(_f32(u.astype(np.float64) * s_row[:, None]))
 
 
@@ -1045,6 +1047,13 @@ def check_epilogue(rng: np.random.Generator) -> dict:
     big[1, 0] = 2 * MAGIC_RANGE
     out["out_of_range_breaks"] = bool((magic_epilogue(big + r[:, None] + c[None, :], r, c, s_col, s_row)
                                        != stock_epilogue(big, s_col, s_row)).any())
+    # a private coin lane's sum over a row tile's steps (16-row tiles here), up to 3 lanes × 67 steps × 127
+    sig = np.repeat(rng.integers(-25_000, 25_001, (m // 16, n)), 16, axis=0)
+    out["tile_sum_magic_equal"] = bool((magic_epilogue(acc + sig, r, c[None, :] + sig, s_col, s_row) == stock).all())
+    out["tile_sum_ffma_mismatch_share"] = float((ffma_epilogue(p + sig, sig, s_col, s_row) != stock).mean())
+    col = np.broadcast_to(s_col[None, :], p.shape)
+    out["tile_sum_ffma_fp32_mismatch_share"] = float(
+        (_fma(_f32(p + sig), col, _f32(-sig * s_col[None, :])) != _f32(p * s_col[None, :].astype(np.float64))).mean())
     return out
 
 
@@ -1549,6 +1558,9 @@ def check() -> list[dict]:
        ep["fold_exact_rounded"] and ep["magic_equal"], ep)
     ok("column-only fold (I2F, FFMA with −c_j·s_j) equals stock's output bit for bit", ep["ffma_equal"], ep)
     ok("an output at 2^22 breaks the magic epilogue (mutation: the range bound is needed)", ep["out_of_range_breaks"], ep)
+    ok("a row tile's column sum of private coins (|σ| ≤ 25,000) folds exactly in IADD3's column source loaded per tile, "
+       "and not in the column FFMA alone: −σ·s_j isn't an fp32 at 22-bit scales",
+       ep["tile_sum_magic_equal"] and ep["tile_sum_ffma_fp32_mismatch_share"] > 0.001, ep)
     ok("unrounded fp32 scales: mismatches are rare and within max(2 accumulator units, 1 bf16 ulp) of stock",
        ep["raw_scale_mismatch_share"] < 0.01 and ep["raw_scale_mismatch_max_units_rel_bf16"] <= 2, ep)
     for name in ("rc_magic", "rc_ffma", "ssn_xr", "ssn_x"):
