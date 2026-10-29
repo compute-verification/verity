@@ -13,7 +13,7 @@ A step's tree is three levels of trees, each a ``frame-v3-sha512`` tree padded t
 A row's leaf, row g of slot s (rows numbered in the layout's order within a slot) and rank r in its unit::
 
   x    = SHA-512(P(8 len(row)) || row)                       rowleaf.sha512_row_v2_digest
-  y    = ChaCha20 chunks 3g, 3g+1, 3g+2, key the step's salt key, nonce s      C-Flock's hm96_salt
+  y    = ChaCha20 chunks 3g, 3g+1, 3g+2, key the step's salt key, nonce s      Flock's hm96_salt
   b||c = hm96.SHA512.commit_string(KEY, x, y)                public, 128 bytes
   leaf = unit_domain(u).leaf(r, r, "hm96-sha512/row/v2", hm96.SHA512.tree_leaf(KEY, b||c))
 
@@ -208,7 +208,7 @@ def fresh_salt_key() -> bytes:
 
 def row_salts(salt_key: bytes, slot: int, first: int, n: int) -> bytes:
     """The salts of rows ``first .. first + n - 1`` of ``slot``, 192 bytes each: ChaCha20 chunks 3g .. 3g + 2 under the step's
-    salt key with nonce ``slot`` (C-Flock's ``hm96_salt``, ``verity.core.protocols.pouw.audit.hm96_salt``)."""
+    salt key with nonce ``slot`` (Flock's ``hm96_salt``, ``verity.core.protocols.pouw.audit.hm96_salt``)."""
     return keystream(salt_key, slot, 3 * first, 3 * n)
 
 

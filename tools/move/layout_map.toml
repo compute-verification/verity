@@ -29,7 +29,7 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "catalog/pyproject.toml" = "verity/ml/circuits/ops/pyproject.toml"
 "kernels/verity_kernels/" = "verity/ml/kernels/"
 "kernels/hash_gpu/" = "verity/ml/kernels/hash_gpu/"
-# C-Flock keeps its distribution and import name (`verity_flock` depends on verity-vllm and verity-numerical, which depend on
+# Flock keeps its distribution and import name (`verity_flock` depends on verity-vllm and verity-numerical, which depend on
 # `verity`, so it can't fold into `verity`); its verifier's Lean is core's first package
 "backends/flock/" = "verity/ml/flock/"
 "backends/flock/verifier/lean/" = "verity/core/service/flock/"
