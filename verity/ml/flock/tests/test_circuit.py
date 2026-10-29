@@ -376,7 +376,7 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
 
 def test_the_zk_hooks_name_the_provers_randomness():
     """Under ``--zk`` the identity's ``hooks``, which the statement digest binds, name where the pads and every table's
-    draws come from: the Lean verifier's default statements (``Flock.Zk.hooks`` under ``Tags.osMasks``) and the prover's
+    samples come from: the Lean verifier's default statements (``Flock.Zk.hooks`` under ``Tags.osMasks``) and the prover's
     ``zk_identity`` and session tables write the same words."""
     import re
     from pathlib import Path

@@ -15,7 +15,7 @@ order; the figure is the median replay over CALLS, in µs a call.  Variants, per
                   and in form w (hash_rows_b3s), each with tree_a
   k.stats_a       forming's stats_a, which form s folds into A's commitment and the hm96 variants run on their own
   a.hm96          the statement's A commitment: A's 32 FP32 rows (4k bytes) as hm96-sha512/row-seg/v1 leaves and their tree
-  a.sha512        the same rows' unsalted sha512/row-seg/v1 digests alone (a firewall salting them later)
+  a.sha512        the same rows' unsalted sha512/row-seg/v1 digests alone (a ZK server salting them later)
   p.hm96          A's fp8-p rows (A' ‖ P_A, k + 128 bytes) the same way: the tile's input rows, which a prover may commit after
                   the pass instead
   t.h2            -h2's tile hashing (hash_msg, hash_leaf, the tile tree)
@@ -36,7 +36,7 @@ A decode step's four linears LAYERS deep, each a graph replayed REPS rounds, in 
                     the tile rows as row/v2 leaves, each in one tree (grid-wide launches)
   batch.sha512      the step's A rows' unsalted sha512/row-seg/v1 digests alone
   batch.p.hm96      the step's fp8-p rows (k + 128 bytes) of each k as hm96-sha512 row-seg leaves, each k in one tree: what a
-                    prover commits after the pass, before the draw
+                    prover commits after the pass, before the sample
 Throughput, outside graphs: hash_rows_b3s against a.hm96's kernels over PREFILL rows of each k, in GB/s of row bytes.
 
   python3 rows_bench.py --cubin pearl_c_sm120.cubin --rows-cubin hm96_rows.cubin --out OUT.json

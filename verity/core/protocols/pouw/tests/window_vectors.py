@@ -9,7 +9,7 @@ tile of its short last tile row, 16 rows high) and B rows 5 and 64.  Call 1 is 1
 A row 3 and B rows 0 and 1.  So 8 real tiles, level 7, N = 9, and the filler's one zero row on each side covers tile 8.
 Each side row is the FP8 operand row (k = 32, codes and P SHAKE-256 of a tag) then its index field (`Wd.side_row`); the
 salts are SHAKE-256 too.  Both calls name one toy pass's -h3 tile root, and F_σ its toy tile domain; ``tile_reads`` is
-each real tile's (p, at) (`Wd.tile_read`).  The draw is K′ = 3 tiles in sessions of cap 2, so session 1 pads with N − 1."""
+each real tile's (p, at) (`Wd.tile_read`).  The sample is K′ = 3 tiles in sessions of cap 2, so session 1 pads with N − 1."""
 
 from __future__ import annotations
 

@@ -15,12 +15,12 @@
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the prover builds, the venv and FLOCK_STAGE_CACHE under it)
 #      LEASE_MAX_MIN=30  BUNDLE=1 (0: keep the sessions out of the store)  STAGE_ONLY=1 (build, stage and check; no GPU)
 #      any FC_*=VALUE reaches the prover (FC_PIPELINE_DEPTH=4 and FC_HOST_PREPIN=1 by default, as the hill-climb)
-#      ZK=1: configuration 2's stand-in (zk.py): M1's masked sessions (--zk) on the host's witness, under the firewall's send
+#      ZK=1: configuration 2's stand-in (zk.py): M1's masked sessions (--zk) on the host's witness, under the ZK server's send
 #      check unless FC_FIREWALL=0; the result is zk-point's, no contract result and no bundle
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 : "${WORKLOAD:?WORKLOAD= is required}" "${B:?B= is required}"
-# the firewall rechecks a witness the host assembled (PROTOCOL §10.2), so both arms take it: their difference is the firewall's
+# the ZK server rechecks a witness the host assembled (PROTOCOL §10.2), so both arms take it: their difference is the ZK server's
 [ "${ZK:-0}" = 1 ] && export FLOCK_ZK=1 FC_FIREWALL=${FC_FIREWALL:-1} FC_HOST_WITNESS=1 BUNDLE=0
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/pt-$$}/out}; mkdir -p "$O"
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/proof-throughput}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
@@ -80,7 +80,7 @@ PT staged --results "$O/staged.jsonl" > "$O/staged.txt" || { tail -20 "$O/stage.
 log "staged: $(cat "$O/staged.txt")"
 [ "${STAGE_ONLY:-0}" = 1 ] && { log "STAGE_ONLY: done"; exit 0; }
 # a firewalled prover's Lean Hello sets each session up at the verifier's own statement (live PROTOCOL.md §10.4), which takes
-# a stratified draw only with the verifier's own partition, program and K = B, as verify.sh derives them
+# a stratified sample only with the verifier's own partition, program and K = B, as verify.sh derives them
 if [ "${ZK:-0}" = 1 ] && [ "$FC_FIREWALL" = 1 ]; then
   C0=$(PT staged --results "$O/staged.jsonl" --cache-dir) && PT partition --workload "$WORKLOAD" --circuit "$C0/circuit.txt" \
     --out "$S/partition.json" --program-out "$S/program.json" > "$O/partition.txt" 2>&1 \
