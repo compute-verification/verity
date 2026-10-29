@@ -47,9 +47,6 @@ def Strategy.comap {Ω Ω' M C : Type} {n : ℕ} (P : Strategy Ω M C n) (f : Ω
   msg x := P.msg (f x)
   causal x := P.causal (f x)
 
-theorem run_comap {Ω Ω' M C : Type} {n : ℕ} [Inhabited M] (P : Strategy Ω M C n) (f : Ω' → Ω) (V : Responder M C n)
-    (x : Ω') : run (P.comap f) V x = run P V (f x) := rfl
-
 /-- On one space, equal distributions are equal fiber counts. -/
 theorem SameDist.card_eq {Ω V : Type} [Fintype Ω] [Nonempty Ω] [DecidableEq V] {f g : Ω → V} (h : SameDist f g)
     (v : V) : #{ω | f ω = v} = #{ω | g ω = v} := by

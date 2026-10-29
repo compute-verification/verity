@@ -220,16 +220,6 @@ theorem Seq.simG_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (C
   · simp only [hg, ite_true, spBind_eval, spUnder_eval, SP.eval]
   · simp only [hg, ite_false, Bool.false_eq_true, SP.eval]
 
-theorem Seq.simU_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type)
-    [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
-    (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB : Msg → ℕ) (c : (Q.simU SA CB progB).C x) :
-    (Q.simU SA CB progB).out H Vs θ x c =
-      cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x c.1)
-        (spOut H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x c.1).map Prod.fst)
-          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))))
-          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))) c.2)) :=
-  Q.simG_out SA CB progB _ H Vs θ x kB c
-
 /-- **The composed run is `A`'s run, then where it goes on `B`'s run** against `V*` after `A`'s messages. -/
 theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
     (w : WA) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ)
@@ -539,12 +529,6 @@ def Seq.Reach {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA �
   ∃ w, RA x w ∧ ∃ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : TA),
     goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true ∧
       Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs) = u
-
-/-- `RelOn` where `B`'s relation holds at every unit and tape. -/
-theorem Seq.relOn_of_forall {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA)
-    (RA : Rel WA) (RB : Rel WB) (h : ∀ x w, RA x w → ∀ ωA u, RB (Q.xB x u) (Q.wB w ωA x u)) :
-    Q.RelOn H PA RA RB :=
-  fun x w hw _ _ _ ωA _ => h x w hw ωA _
 
 theorem Finder.pr_nonneg (H : Msg → Msg) (F : Finder) : 0 ≤ F.Pr H := Pr_nonneg _
 
