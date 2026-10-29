@@ -9,8 +9,9 @@ import Lean.Data.Json
 `Audit.check_link`, `Audit.check_ingress_link`). `NetworkCertifier/DifftestMain.lean` reads both files and fails unless `evaluate`,
 which computes the same results from the program's definitions (`NetworkCertifier`), gives every one of them. The Lean
 audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code`
-(`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`, membership
-in `Σ_sync`) equal to the reference definitions in `Security/Definitions/NetworkCertifier/`, which the guarantees read.
+(`security_proofs`) proves what it evaluates (`expectedRow`, `Accepted` of `constantRate`, `StatusComplete`) equal to
+the reference definitions in `Security/Definitions/NetworkCertifier/`, which the guarantees read: the program's windows
+as one execution block, its frames sent at the hand ticks it computes from the syncs.
 
 An instance is `L` egress links and `K ≥ L` boundary links (the egress links first), windows of `T` buckets, `W` of
 them with advice, the allocation `S`, the sync set `Σ_sync`, and per egress link its frames in canonical order and the
@@ -46,8 +47,8 @@ instance decEqFinFun {n : Nat} {α : Type} [DecidableEq α] : DecidableEq (Fin n
 instance decidableExistsProp {p : Prop} {q : p → Prop} [Decidable p] [∀ h, Decidable (q h)] : Decidable (∃ h, q h) :=
   if hp : p then decidable_of_iff (q hp) ⟨fun h => ⟨hp, h⟩, fun ⟨_, h⟩ => h⟩ else isFalse fun ⟨h, _⟩ => hp h
 
-instance decidableAccepted {L K S : Nat} {In Adv : Type} (P : Program L S In Adv) (op : Nat → List (Obs L K S) → In)
-    (k : Nat) (o : List (Obs L K S)) (a : Adv) : Decidable (Accepted P op k o a) := by
+instance decidableAccepted {L K S : Nat} {In Adv : Type} (P : EgressPrediction L S In Adv)
+    (op : Nat → List (Obs L K S) → In) (k : Nat) (o : List (Obs L K S)) (a : Adv) : Decidable (Accepted P op k o a) := by
   unfold Accepted; infer_instance
 
 instance decidableStatusComplete {L K S : Nat} (k : Nat) (o : List (Obs L K S)) : Decidable (StatusComplete k o) := by
@@ -177,7 +178,7 @@ def evaluate (r : Raw) : Except String Json := do
   let o : List (Obs L K S) := (List.range r.rows.size).map fun t =>
     { rows := fun ℓ s => ((r.rows.getD t #[]).getD ℓ #[]).getD s none, jitter := 0
       status := fun κ => (r.status.getD t #[]).getD κ .complete }
-  let P : Program L S Unit (Unit × (Fin W → ss.Elem)) := constantRate T W ss fun _ _ ℓ => frames ℓ
+  let P : EgressPrediction L S Unit (Unit × (Fin W → ss.Elem)) := constantRate T W ss fun _ _ ℓ => frames ℓ
   let op : Nat → List (Obs L K S) → Unit := fun _ _ => ()
   let σ : Fin W → ss.Elem := fun w => elem (unit w)
   let recorded (w : Nat) : Bool := (w + 1) * T ≤ o.length

@@ -555,7 +555,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                     "note": "memory_challenger.SCHEMES accepts no test-signed session: no session is "
                                             "accepted, honest or not, and no storage profile is issued"}
     allowance = honest.get("rtt_allowance_ns")
-    point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.MAX_RTT_ALLOWANCE_NS,
+    point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.RTT_ALLOWANCE_CAP_NS,
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
     gaps = tuple(f"operating point: {name} is not the frozen value" for name, ok in point.items() if not ok)
@@ -568,7 +568,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     deadline = {"limit_ns": limit, "limit_fixed_before_load": bool(honest.get("limit_fixed_before_load")),
                 "allowance_kind": honest.get("allowance_kind"), "rtt_allowance_ns": honest.get("rtt_allowance_ns"),
                 "honest_margin_min_s": (honest.get("margin_s") or {}).get("min"),
-                "spec_rtt_allowance_max_ns": R.MAX_RTT_ALLOWANCE_NS}
+                "spec_rtt_allowance_max_ns": R.RTT_ALLOWANCE_CAP_NS}
     metrics = {"encode_s": encode_s, "encode_cache": cache.record if cache else None, "encoded_blocks": encoded,
                "encode_GBps": encoded * payload / encode_s / 1e9,
                "encode_stored_GBps": encoded * nb / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,

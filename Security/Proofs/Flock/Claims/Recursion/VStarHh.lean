@@ -66,15 +66,6 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
       (FlockSoundness.Discharge.Hm.length_digBytes _) hKl (digestOf_getD ws) (maskOf_getD y)
   · rw [hsp, sha512_eq]
 
-/-- **The port's row prefix is the placed row's**, where `TraceOk` holds: its rows are of the port's words. -/
-theorem rowPfx_of_traceOk {c : Circuit} {pin : _root_.VStar.In.PartIn} (h : VStarTrace.TraceOk c pin) {nm : String}
-    {q n : ℕ} {rw : _root_.VStar.In.Row} (hq : c.ports.findIdx? (·.name == nm) = some q)
-    (hr : portRow pin nm n = some rw) : rowPfx c q = (HmRow.rowPrefix rw.words.size).data.toList := by
-  obtain ⟨hlt, hname, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hq
-  have hnm : c.ports[q].name = nm := by simpa using hname
-  have hw := (h.rows q hlt n rw (by rw [hnm]; exact hr)).1
-  simp [rowPfx, Array.getElem?_eq_getElem hlt, hw]
-
 /-- **A placed slot outputs its row's commit string**: where the slot commits (`SlotCommits`), the trace places the
 stager's row and salt at port `nm`'s instance `n` (`PlacesR`), and the port's row prefix is the row's. -/
 theorem hmCommit_placed {c : Circuit} {pin : _root_.VStar.In.PartIn} {w : Claims.Flock.Wit} {nm : String} {q n : ℕ}
@@ -128,24 +119,5 @@ theorem rowHidden_staged {st : Stage} {x xO : Msg} {s : ℕ} {r : XR} {c : Circu
     have hN' := in_block hrows htop hq
     rw [getElem!_pos c.ports _ hqs] at hN'
     exact ⟨_, rowHidden_eq _ hl hq hqs hN'⟩
-
-/-- **A slot at the deployed builder's witness outputs the inner prover's commit string** of the row the stager placed
-there: at part `s`, where the stager accepts, `TraceOk` holds, the slot commits and the stager placed the row `ws`
-under the salt `saltBytes y` at port `nm`'s instance `n`. -/
-theorem hmCommit_vstarWit {mask : ℕ → ℕ → Bool} {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
-    {hist : List (Msg × Msg)} {s : ℕ} {st : _root_.VStar.Stmt} {c : Circuit} {src : _root_.VStar.In.Src}
-    {pin : _root_.VStar.In.PartIn} (hp : partAt x s = some (st, c)) (hsrc : srcOf I x w ρ hist = some src)
-    (hi : _root_.VStar.In.partIn src (progOf c) st = .ok pin) (h : VStarTrace.TraceOk c pin)
-    {nm : String} {q n : ℕ} {ws : Array ℕ} {y : Salt} {ps : List ℕ}
-    (hsc : SlotCommits c nm q n (vstarWit (VStarTrace.A mask) I x w ρ hist s))
-    (hq : c.ports.findIdx? (·.name == nm) = some q) (hrw : portRow pin nm n = some ⟨ws, saltBytes y⟩)
-    (hps : rowHidden c nm n = some ps) :
-    readForms (vstarWit (VStarTrace.A mask) I x w ρ hist s) (hmCommit c q n) =
-      hmLeaf (asX (digestOf ws) + maskX y, saltH FlockDeploy.sha512 y) := by
-  rw [vstarWit_eq hp hsrc hi] at hsc ⊢
-  rw [hmCommit_placed (VStarTrace.placesR_assign h mask) hsc hq hrw hps (rowPfx_of_traceOk h hq hrw)]
-  show FlockSoundness.Binding.commitString (rowMsg ws) (saltBytes y).data.toList = _
-  rw [show (saltBytes y).data.toList = List.ofFn y by simp [saltBytes]]
-  exact commitString_rowMsg ws y
 
 end RecDeploy.VStarBuild

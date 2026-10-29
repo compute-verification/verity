@@ -99,9 +99,6 @@ def opIns (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinO
   chainIns Hd T.chainTag T.E op.cs op.Tn ++
     rIn Hd T op :: sIn T op :: lIn Hd T op :: walkIns Hd T.ME op.idx (Hd (lIn Hd T op)) op.sibs
 
-theorem reach_eq (Hd : List UInt8 → Dg) (T : GK.CoinTree Dg Coin Salt) (op : GK.CoinOpening Dg Coin Salt) :
-    T.reach Hd op = walk Hd T.ME op.idx (Hd (lIn Hd T op)) op.sibs := rfl
-
 /-! ## A passing walk asks every input -/
 
 /-- **`p` passing asks every input of `ins` under `ν` and gets a digest, and `k` then passes, within `p`'s calls.** -/

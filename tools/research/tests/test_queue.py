@@ -785,6 +785,22 @@ def test_a_pr_holding_an_older_head_of_a_pr_not_admitted_at_its_current_head_wai
     assert [m.pr for m in q.sync()[0]] == [5, 7]
 
 
+def test_an_older_head_two_prs_were_seen_at_is_carried_by_the_marked_one(world):
+    """#6 was opened on #5's branch at its head `old`; both move on, #5 marked and #6 not.  #7, branched at `old`, holds
+    commits #5's marked head covers, so it goes after #5 and waits for nothing of #6's."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(6, old, ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
+    q = world.queue()
+    q.sync()                                                                    # the queue sees #5 and #6 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old))               # #5 moves on from `old`, marked
+    world.gh.put(6, world.change({"s.txt": "soundness\n"}, base=old), ready=False)
+    members, entries = q.sync()
+    assert entries[7].after == entries[7].older == (5,), entries[7].why
+    assert [m.pr for m in members] == [5, 7]
+
+
 def _merge(world: World, into: str, other: str) -> str:
     """A merge commit of ``other`` into ``into`` (first parent ``into``)."""
     _git(world.dev, "checkout", "-q", "--detach", into)
@@ -2300,8 +2316,8 @@ def test_a_package_passes_as_a_requirer_on_a_reused_path_or_in_a_lean_check_and_
 
 def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys):
     """A records run of `Security` audits `Security/Proofs` too (its `proved_in`), with that package's verdict in
-    `audit-Proofs/report.json`: a head changing both locks is vouched for by one run when the report passed, and refused with its
-    first failure line when it didn't."""
+    `audit-pkg_Proofs/report.json` (lean/check.py tags it by its path, not `audit-Proofs`): a head changing both locks is
+    vouched for by one run when the report passed, and refused with its first failure line when it didn't."""
     world.with_store_remote()
     both = {LOCK: _lock(A="2"), "pkg/Proofs/lean-audit.json": _lock(B="2")}
     def report(failure=None):
@@ -2309,7 +2325,7 @@ def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys)
 
     h = world.change(both)
     _published(world, h, passed=False, files={"lean-audit/audit.json": _audit(),
-                                              "lean-audit/audit-Proofs/report.json": report("replay: P.t: stale\n  more")})
+                                              "lean-audit/audit-pkg_Proofs/report.json": report("replay: P.t: stale\n  more")})
     capsys.readouterr()
     assert _mark(world, 1, h) == 1
     err = capsys.readouterr().err
@@ -2317,7 +2333,7 @@ def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys)
     assert "--records pkg/Proofs --update" in err and "more" not in err
 
     h2 = world.change({"pkg/Proofs/P.lean": "theorem p : True := trivial\n"}, base=h)
-    rid = _published(world, h2, files={"lean-audit/audit.json": _audit(), "lean-audit/audit-Proofs/report.json": report()})
+    rid = _published(world, h2, files={"lean-audit/audit.json": _audit(), "lean-audit/audit-pkg_Proofs/report.json": report()})
     assert _mark(world, 2, h2) == 0
     assert any(f"records gate: pkg/Proofs: records run {rid} of {h2[:12]} passed it" in line for line in world.logs)
 
@@ -2325,7 +2341,9 @@ def test_a_package_audited_beside_pkg_is_read_from_its_own_report(world, capsys)
 def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_of_that_record(world, capsys):
     """`--update` passes by writing the record, kept as `record/lean-audit.json` when it differs from the commit's lock: the head
     it ran on still has the old lock, which a train's Lean check fails.  The commit of exactly that record over it is vouched for
-    by the run below it, so a lane needs no second run; any other lock there is refused."""
+    by the run below it, so a lane needs no second run; any other lock there is refused.  A merge of another PR that resolves to
+    that commit's tree byte for byte is vouched for through it too, and so is a commit above it that changes only non-Lean tests
+    or docs; one that changes a file the records read, a `.lean` file under `tests/` included, isn't."""
     world.with_store_remote()
     h1 = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
     rec = _lock(A="2", B="2")
@@ -2339,6 +2357,46 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
     h2 = world.change({LOCK: rec}, base=h1)
     assert _mark(world, 1, h2) == 0
     assert f"{h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where pkg passed" in world.logs[-1]
+
+    other = world.change({"c.txt": "another PR's\n"})
+    _git(world.dev, "checkout", "-q", "--detach", h2)
+    _git(world.dev, "merge", "-q", "--no-ff", "-s", "ours", "-m", "merge another PR, keeping our lock", other)
+    h3 = _git(world.dev, "rev-parse", "HEAD")
+    _git(world.dev, "push", "-q", "origin", f"{h3}:refs/dev/{h3}")
+    assert _mark(world, 1, h3) == 0
+    assert (f"{h3[:12]} has {h2[:12]}'s tree byte for byte, where {h2[:12]} commits the record records run {rid}"
+            in world.logs[-1])
+
+    h4 = world.change({"pkg/tests/test_t.py": "def test_t(): pass\n", "pkg/README.md": "pkg\n"}, base=h2)
+    assert _mark(world, 1, h4) == 0
+    assert (f"{h4[:12]} changes none of pkg's records inputs over {h2[:12]}, where {h2[:12]} commits the record records run "
+            f"{rid}" in world.logs[-1])
+    assert _mark(world, 1, world.change({"pkg/A.lean": "theorem a : 1 = 1 := rfl\n"}, base=h2)) == 1
+    assert _mark(world, 1, world.change({"pkg/tests/T.lean": "def t := 1\n"}, base=h2)) == 1   # the audit walks it
+
+
+def test_a_requirer_whose_record_the_run_regenerated_is_vouched_for_only_at_the_commit_of_that_record(world, capsys):
+    """`--records PKG --update` also updates a requirer that failed only on record differences, and its pass is
+    then on the record it wrote (`record/<path>/`), not the head's lock: the head is refused for it, and the commit of both
+    records is vouched for by that one run."""
+    world.with_store_remote()
+    req = "req/lean-audit.json"
+    h1 = world.change({LOCK: _lock(A="2"), req: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    rec, rreq = _lock(A="2", B="2"), _lock(A="2", C="2")
+    rid = _published(world, h1, files={"lean-audit/audit.json": _audit(), "lean-audit/requirer-req/audit.json": _audit("req"),
+                                       "lean-audit/record/lean-audit.json": rec, f"lean-audit/record/{LOCK}": rec,
+                                       f"lean-audit/record/{req}": rreq})
+    capsys.readouterr()
+    assert _mark(world, 1, h1) == 1
+    err = capsys.readouterr().err
+    assert f"records run {rid} of {h1[:12]} passed req only with the record its `--update` wrote" in err
+    assert f"commit its `record/{req}`" in err and "commit its `record/lean-audit.json`" in err
+    assert _mark(world, 1, world.change({LOCK: rec, req: _lock(A="2", C="3")}, base=h1)) == 1
+    h2 = world.change({LOCK: rec, req: rreq}, base=h1)
+    assert _mark(world, 1, h2) == 0
+    for pkg in ("pkg", "req"):
+        assert any(f"records gate: {pkg}: {h2[:12]} commits the record records run {rid} of {h1[:12]} regenerated, where "
+                   f"{pkg} passed" in line for line in world.logs)
 
 
 def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_for_it_and_one_that_differs_or_cant_be_read_doesnt(
@@ -2369,15 +2427,39 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
     assert _mark(world, 1, h) == 0
     assert f"research queue: records gate: pkg: a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
-    for n, files in ((6, {"lib/tests/T.lean": "def t := 2\n"}), (7, {"lib/README.md": "lib, said again\n", "lib/READMEs.txt": "x\n"}),
+    for n, files in ((6, {"lib/tests/t.py": "x = 2\n"}), (7, {"lib/README.md": "lib, said again\n", "lib/READMEs.txt": "x\n"}),
                      (8, {"pkg/test/x.txt": "y\n", "pkg/NOTES.md": "notes\n"})):        # tests and docs: no records run reads them
         assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 0
         assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
     for n, files in ((2, {"lib/L.lean": "def l := 2\n"}), (3, {"lean-toolchain": "v2\n"}),
                      (9, {"lib/lakefile.toml": 'name = "lib"\ndefaultTargets = ["L"]\n'}), (10, {"lib/tests.lean": "def t := 1\n"}),
+                     (11, {"lib/tests/T.lean": "def t := 2\n"}),                        # the audit walks every .lean file
                      (4, {"tools/verity/lean/check.py": "# the checker, changed\n"}),
                      (5, {"tools/verity/check/common.py": "# its helpers, changed\n"})):
+        capsys.readouterr()
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
+        assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
+
+
+def test_a_change_to_checker_files_no_records_run_reads_leaves_a_same_input_pass_standing(world, capsys):
+    """A test or a doc of `tools/verity/lean/` made every records run at another commit vouch for nothing, as the whole
+    directory was one input.  Its tests, its Markdown and `RECORDS_TOOL_UNREAD` are no records input; a file of it a run
+    reads (`merge.py`, which merges a lock across a merge of `main`) still is, and so is a new one until it is listed."""
+    world.with_store_remote()
+    _move_main(world, {"tools/verity/lean/check.py": "# the checker\n", "tools/verity/lean/merge.py": "# the lock driver\n",
+                       "tools/verity/lean/tool.py": "# the scheduled runs\n", "tools/verity/lean/README.md": "the checker\n",
+                       "tools/verity/lean/tests/test_check.py": "x = 1\n"})
+    c = world.change({LOCK: _lock(A="2")})
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()})
+    for n, files in ((1, {"tools/verity/lean/tests/test_check.py": "x = 2\n", "tools/verity/lean/tests/fixtures/T.lean": "def t := 1\n"}),
+                     (2, {"tools/verity/lean/README.md": "the checker, said again\n", "tools/verity/lean/NOTES.md": "notes\n"}),
+                     (3, {"tools/verity/lean/tool.py": "# the scheduled runs, changed\n"})):
+        assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 0
+        assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+    for n, files in ((4, {"tools/verity/lean/merge.py": "# the lock driver, changed\n"}),
+                     (5, {"tools/verity/lean/new.py": "x = 1\n"})):
         capsys.readouterr()
         assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
         assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
@@ -3160,7 +3242,7 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
         return quick_tier.build(str(lake), pkg, d, {**env, **extra})
 
     assert run(1) == {"dir": d, "rc": 0, "start": "cold"}
-    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / "verity--core--service--flock"
+    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / d.replace("/", "--")
     assert (warm / "warm").is_file()
     assert run(2) == {"dir": d, "rc": 0, "start": "warm"}
     assert run(3, FAIL_WARM="1") == {"dir": d, "rc": 0, "start": "cold"}

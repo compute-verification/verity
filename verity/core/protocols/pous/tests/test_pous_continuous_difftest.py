@@ -28,6 +28,7 @@ import pytest
 import pous_continuous_model as model
 from pous_continuous_model import (ALL_SENT, CLOSED, HIT, LATE, NO_HARD_DEADLINE, NONE_OPEN, NOT_REVEALED, REJECT,
                                    UNANSWERED, WITHIN, WRONG, ClockOracle, Record, Refused)
+from pous_fakes import Clock
 from verity.core.protocols.pous import band
 from verity.core.protocols.pous.audit import UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import encode_segments
@@ -71,16 +72,8 @@ def world():
     return blocks, VerifierKey.from_segments(PARAMS, SALT, [blocks[:16], blocks[16:]])
 
 
-class Clock:
-    def __init__(self):
-        self.now = 0
-
-    def __call__(self):
-        return self.now
-
-
 def verdict(a) -> str:
-    """An `audit.Answer` as a Lean verdict."""
+    """An `audit.ChallengeReply` as a Lean verdict."""
     if getattr(a, "rejected", False):
         assert not a.correct and not a.on_time, a
         return REJECT

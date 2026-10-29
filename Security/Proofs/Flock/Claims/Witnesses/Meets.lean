@@ -19,8 +19,8 @@ record, the sampling record's `flock`, and their antecedents are of that record 
 * `Flock.scope_meets_plain`, `_zk`: the record's readable scope (`Flock.InScope` at the record's `zk`) holds a statement
   with a witness in its relation (`RelS`), the readable part of `Complete`'s antecedent (`Scope x`, `R x w`), what
   `ScopeMatches` equates with the scope check, and what each of `Nontrivial`'s recorded runs is of. That some bytes
-  parse to it is beyond Lean: the verifier's parser reads the circuit file's header with `Lean.Json.parse`, a
-  `partial` function.
+  parse to it is beyond Lean: the verifier's parser reads the circuit file's rows with `HmRow.parse`, which
+  regenerates the `hm96` nets, beyond what the kernel evaluates.
 * `Sampling.scope_meets`: the sampling scope's readable form (`Sampling.InScope`) holds a program, partition and
   design; it reads no field of the record, of which the tree has no concrete one. It is the readable part of the
   sampling `Complete`'s antecedent, of what its `ScopeMatches` equates, and of `Nontrivial`'s runs.
@@ -77,14 +77,14 @@ theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Rel
 
 /-- **A statement of the sampling scope**: the one-gate program that returns its input, under `Q_word` v1, with the
 design that checks every unit of its one class. -/
-def Sampling.scopeStmt : Claims.Sampling.Stmt := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def Sampling.scopeStmt : Claims.Sampling.AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
 /-- Its partition: one class of one stratum of one replay unit, the one proof unit `{0}`. -/
 def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[[0]]]]]⟩
 
 /-- **The sampling scope holds a statement**: its readable form reads no field of the record. -/
 theorem Sampling.scope_meets :
-    ∃ (P : Claims.Sampling.Partition) (s : Claims.Sampling.Stmt), Claims.Sampling.InScope P s := by
+    ∃ (P : Claims.Sampling.Partition) (s : Claims.Sampling.AuditStatement), Claims.Sampling.InScope P s := by
   refine ⟨Sampling.scopePartition, Sampling.scopeStmt, ⟨?_, ?_⟩,
     ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
   · intro g x hg i hi

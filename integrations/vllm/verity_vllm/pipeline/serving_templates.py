@@ -261,7 +261,8 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
     when it does not bind.  A caller holds the bound descriptor id to ``spec``."""
     from verity.ml.circuits.codec import lookup_primitive
     from verity.ml.circuits.defs import REGISTRY
-    from verity_vllm.query.program_view import _registry, spec_base, spec_statics
+    from verity.ml.definitions.registry.catalog import load
+    from verity_vllm.query.program_view import spec_base, spec_statics
 
     def static(v: Any) -> Any:
         try:
@@ -269,7 +270,7 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
         except KeyError:
             return v
 
-    reg, _errors = _registry()
+    reg, _errors = load()
     d = reg.defs.get(family or spec_base(spec))
     if d is None or not hasattr(d, "bind"):
         return None

@@ -82,7 +82,7 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noq
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
-from verity.core.protocols.certifier.grid import Record  # noqa: E402
+from verity.core.protocols.certifier.grid import BlockGrid  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -119,7 +119,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     cells = {(d["registration"]["direction"], d["registration"]["window"]): (d["registration"], salts, wiring_salt)
              for d, salts, wiring_salt in ws.read_cells(run) if "registration" in d}
     start = first_cells(params)
-    found: dict[str, dict[int, Record]] = {}
+    found: dict[str, dict[int, BlockGrid]] = {}
     for name in LINKS:
         link, direction = ws.CERTIFIED[name]
         found[name] = {}
@@ -160,7 +160,7 @@ def templates(params: WardenParams) -> tuple:
     return bind(WardenRowIdentity, B=tg), bind(WardenRowIdentity, B=rest)
 
 
-def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Window:
+def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Binding:
     """The verifier's window: the transfer-gate template's two chunks of n units (ingress, egress), then the rest."""
     params = at[ws.INGRESS].params
     tg, other = templates(params)
@@ -173,10 +173,10 @@ def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Window:
 
     members = tuple(CS.Member(tid, n=n, base=j * n, tables=(("row", n),), name=f"{tid}/{c}", **ports(WR.row_bytes(params) // 2))
                     for j, (c, _p) in enumerate(LINKS.values())) + (CS.Member(rid, n=rest, base=2 * n, **ports(params.cell_bytes)),)
-    return CS.Window(program, query, law, f"{ROOT}/rank0", members, work_table=SRW.work_table_of(law, {tid: 2 * n, rid: rest}, [tid]))
+    return CS.Binding(program, query, law, f"{ROOT}/rank0", members, work_table=SRW.work_table_of(law, {tid: 2 * n, rid: rest}, [tid]))
 
 
-def chunks(mine: CS.Window) -> dict[str, CS.Member]:
+def chunks(mine: CS.Binding) -> dict[str, CS.Member]:
     """Each link's transfer-gate chunk."""
     return {name: next(m for m in mine.members if m.name.endswith(f"/{c}")) for name, (c, _p) in LINKS.items()}
 
@@ -230,7 +230,7 @@ def refused(x: SimpleNamespace, st: SimpleNamespace, reads_from: int = 0) -> str
     return WR.refusal(port, x.dom, st.entry, [WR.bc(r, s) for r, s in zip(st.rows, st.salts)])
 
 
-def commit(out: Path, mine: CS.Window, at: dict[str, SimpleNamespace], altered: bool = False,
+def commit(out: Path, mine: CS.Binding, at: dict[str, SimpleNamespace], altered: bool = False,
            made: str | None = None) -> CS.Committed:
     """The window committed into ``out`` as serving would commit it: each chunk's registered port's rows under the warden's
     salts and its header naming the Program's units' value and the rows' positions and paths (``altered``: unit 0 of c0 reads
@@ -260,7 +260,7 @@ def commit(out: Path, mine: CS.Window, at: dict[str, SimpleNamespace], altered: 
     return c
 
 
-def reads(mine: CS.Window, at: dict[str, SimpleNamespace]) -> dict[str, dict]:
+def reads(mine: CS.Binding, at: dict[str, SimpleNamespace]) -> dict[str, dict]:
     """The verifier's own ``--registered`` file of each chunk: its registered port at the root the warden signed, named by the
     Program's units' value, each unit (from the chunk's first) opening the row of its read (q, k), placed by the wiring the
     warden signed."""
@@ -268,7 +268,7 @@ def reads(mine: CS.Window, at: dict[str, SimpleNamespace]) -> dict[str, dict]:
             for name, m in chunks(mine).items() for x in [at[name]]}
 
 
-def source_of(mine: CS.Window, at: dict[str, SimpleNamespace]):
+def source_of(mine: CS.Binding, at: dict[str, SimpleNamespace]):
     """The verifier's check of the registration's window: a stand-in of its run naming the warden's cells as it read them."""
     want = provenance(at)
 

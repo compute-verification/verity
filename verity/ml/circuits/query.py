@@ -5,9 +5,10 @@ call-preorder, zero-based. `groups(F, k)` is evaluated once per scope selected b
 concatenated; a block whose calls are not adjacent is rejected (`GapError`), never absorbed or re-cut.
 
 `parse(text)` turns the general structural query syntax of `verity.ml.circuits.query_ast` into its AST:
-`members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`,
+`members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`, `frontier(32)`,
 `override(F, {"//Gemm_v1{*}": G})`, `zip(...)`, `where(F, spec=..., form=..., w_max=...)`, `union/minus/inter(F, G)`,
-`root()`.  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
+`root()`, `table(".", "owners")`, `table(path, name, of="gates")`, `group(F, "name")`, `group(F, ["base", "static:K"])`,
+`members(path, sel, k=(r, c))`, `label(F, affine=(a, b, n))`, `label(F, table="dev")` (a tuple and a list are one value).  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
 `//A ! groups(F, k)` -> `members("//A", "@fn:F", k)` (k adjacent members of one node per set; the legacy `query()`
 below is untouched and keeps its exact block semantics).
 """
@@ -18,7 +19,8 @@ import re
 from typing import Iterator
 
 from .query_ast import (Default, Each, Instances, Members, Nodes, NodeSel, Path, Query, QueryError, Rest, Root, Zip,
-                      concat as _concat, inter as _inter, minus as _minus, override as _override, union as _union,
+                      concat as _concat, frontier as _frontier, group as _group, inter as _inter, label as _label,
+                      members as _members, minus as _minus, override as _override, table as _table, union as _union,
                       where as _where)
 from .layout import FunctionCall, Circuit, Region
 
@@ -190,6 +192,8 @@ class _Parser:
             return self.dict()
         if k == "p" and v == "[":
             return self.list()
+        if k == "p" and v == "(":
+            return self.tuple_()
         if k == "id":
             if v in ("True", "False", "None") and not (self.peek(1)[0] == "p" and self.peek(1)[1] == "("):
                 self.i += 1
@@ -220,6 +224,16 @@ class _Parser:
                 self.i += 1
         self.take("p", "]")
         return out
+
+    def tuple_(self) -> tuple:
+        self.take("p", "(")
+        out: list = []
+        while not self.at("p", ")"):
+            out.append(self.value())
+            if self.at("p", ","):
+                self.i += 1
+        self.take("p", ")")
+        return tuple(out)
 
     def call(self) -> Query:
         name = self.take("id")[1]
@@ -265,10 +279,8 @@ def _construct(name: str, args: list, kw: dict) -> Query:
         return Instances(Path.parse(args[0]))
     if name == "members":
         need(2)
-        k = _int_arg(name, "k", args[2] if len(args) > 2 else kw.get("k", 1))
-        if k <= 0:
-            raise QueryError("members(...) needs a positive k")
-        return Members(Path.parse(args[0]), NodeSel.parse(args[1]), k)
+        k = args[2] if len(args) > 2 else kw.get("k", 1)
+        return _members(Path.parse(args[0]), NodeSel.parse(args[1]), k if isinstance(k, (list, tuple)) else _int_arg(name, "k", k))
     if name == "nodes":
         need(2)
         return Nodes(Path.parse(args[0]), NodeSel.parse(args[1]))
@@ -291,6 +303,9 @@ def _construct(name: str, args: list, kw: dict) -> Query:
         if w is None:
             raise QueryError("default(w) needs a width")
         return Default(_int_arg(name, "w", w))
+    if name == "frontier":
+        need(1)
+        return _frontier(args[0])
     if name == "override":
         need(2)
         if not isinstance(args[1], dict):
@@ -310,6 +325,21 @@ def _construct(name: str, args: list, kw: dict) -> Query:
         return _inter(_q(args[0]), _q(args[1]))
     if name == "root":
         return Root()
+    if name == "table":
+        need(2)
+        if not isinstance(args[1], str):
+            raise QueryError(f"table(path, name): the name is a string, got {args[1]!r}")
+        return _table(Path.parse(args[0]), args[1], args[2] if len(args) > 2 else kw.get("of", "nodes"))
+    if name == "group":
+        need(2)
+        if not isinstance(args[1], (str, list)):
+            raise QueryError(f"group(F, key): the key is a key part or a list of them, got {args[1]!r}")
+        return _group(_q(args[0]), args[1])
+    if name == "label":
+        need(1)
+        if len(args) > 1 or set(kw) - {"affine", "table"}:
+            raise QueryError("label(F, affine=[a, b, n]) or label(F, table=NAME): the map is one keyword argument")
+        return _label(_q(args[0]), affine=kw.get("affine"), table=kw.get("table"))
     raise QueryError(f"unknown query constructor {name!r}")
 
 

@@ -60,13 +60,15 @@ def test_gpu_registry_keeps_namespaces_distinct():
     assert gpus()["h200"].nebius_platform == "gpu-h200-sxm"
 
 
-def test_package_imports_only_the_standard_library():
+def test_package_imports_the_standard_library_and_the_settings_machinery_alone():
+    """``verity.settings``, which is stdlib only itself, is the one module it takes from ``verity``."""
     package = Path(__file__).parents[1] / "verity_config"
     imports = set()
     for source in package.glob("*.py"):
         for node in ast.walk(ast.parse(source.read_text())):
             if isinstance(node, ast.Import):
-                imports.update(alias.name.partition(".")[0] for alias in node.names)
+                imports.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                imports.add(node.module.partition(".")[0])
-    assert not {name for name in imports if name not in sys.stdlib_module_names and name != "__future__"}
+                imports.update(f"{node.module}.{alias.name}" if node.module == "verity" else node.module for alias in node.names)
+    assert not {name for name in imports if name.partition(".")[0] not in sys.stdlib_module_names
+                and name not in ("__future__", "verity.settings")}

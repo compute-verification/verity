@@ -3,6 +3,7 @@
     python tools/verity/lean/merge.py BASE OURS THEIRS [PATH]   what git runs (`%O %A %B %P`): the merge is written to OURS
     python tools/verity/lean/merge.py --lean BASE OURS THEIRS [PATH]   the same for a `.lean` file (`lean-imports`)
     python tools/verity/lean/merge.py --lakefile BASE OURS THEIRS [PATH]   the same for a `lakefile.toml` (`lakefile-lists`)
+    python tools/verity/lean/merge.py --caps BASE OURS THEIRS [PATH]   the same for `tests/test_lean_packages.py` (`lean-caps`)
     python tools/verity/lean/merge.py --install [REPO]         register the drivers in the repository's git config, once per clone
     python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
 
@@ -18,12 +19,14 @@ What the build determines never refuses: the records `check.py --update` writes 
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
 it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
 Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, unless that side
-moved the definition to another module, where alone it stays (`moved`); readers as sets less those the merged record no
-longer lists, a group left without readers or definitions dropped) or ours' value (a
-hash or a record both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
+moved the definition to another module, where alone it stays (`moved`), or renamed or deleted it, which its record says by
+reading it nowhere while it states every reader of the module as the base did (`gone`); readers as sets less those the
+merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a hash or a record
+both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
-refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry, a dependency's revision, a policy
-entry (a layer's field, a `compile_time` digest).
+refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
+premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`), a dependency's
+revision, a policy entry (a layer's field, a `compile_time` digest).
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
@@ -40,7 +43,9 @@ that each add a guarantee's module to `Guarantees.lean` merge, and any other con
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
 package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
-other side moved can't bring it back.
+other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), a conflict all of whose sides
+are its ratchet caps' lines (`UNWITNESSED = {...}`, `INLINE = {...}`) merges as counters, each key theirs' count plus ours'
+change from the base, so two branches that each witness or grandfather guarantees merge; any other conflict stays git's.
 """
 from __future__ import annotations
 
@@ -65,9 +70,14 @@ NAME = "lean-audit"
 LEAN = "lean-imports"
 #: the lakefiles' driver (`--lakefile`)
 LAKEFILE = "lakefile-lists"
+#: `tests/test_lean_packages.py`'s driver (`--caps`)
+CAPS = "lean-caps"
 #: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
+#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
+CAP_LINE = re.compile(r'(\s*(?:UNWITNESSED|INLINE) = )\{([^{}]*)\}\s*$')
+CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
@@ -75,6 +85,9 @@ SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`)
 NESTED = {"upstream", "shape", "claims", "trees"}
+#: nested maps whose entries are maps merged one level deeper still: `shape.inline`'s guarantees, each {premise: why} merged
+#: premise by premise, a guarantee left with none dropped (the check refuses an empty one, and `--update` drops it)
+DEEPER = {"shape[inline]"}
 MISSING = object()
 
 
@@ -105,13 +118,15 @@ def names(o, a, b) -> bool:
 
 
 def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1) -> dict:
-    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too, and lists of names merge
-    as lists."""
+    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too (one level more under a
+    `DEEPER` path), and lists of names merge as lists."""
     out = {}
     for k in keys(path, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is MISSING or isinstance(x, dict)):
-            v = entries(f"{path}[{k}]", {} if x is MISSING else x, y, z, why, depth - 1)
+            sub = f"{path}[{k}]"
+            v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER))
+            v = MISSING if path in DEEPER and not v else v
         elif depth > 1 and names(x, y, z):
             v = items([] if x is MISSING else x, y, z)
         else:
@@ -197,17 +212,23 @@ def core(group):
     return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
 
 
-def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str]) -> dict:
+def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str], dropped: dict | None = None) -> dict:
     """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
     side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
-    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  A
-    hash both sides changed differently is ours' (`derived`)."""
+    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  But
+    when the dropping side's `gone` (``dropped``, by "ours" and "theirs") says it renamed or deleted it, and the other side kept
+    its hash, the removal applies: the union would bring back a read of a definition the merged tree no longer has (a
+    `J10R.Layout` renamed `NoiseLayout` would stay beside the new name).  A hash both sides changed differently is ours'
+    (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
     for d in sorted(set(xd) | set(yd) | set(zd)):
         p, q, r = xd.get(d, MISSING), yd.get(d, MISSING), zd.get(d, MISSING)
         if p is not MISSING and (q is MISSING) != (r is MISSING):
-            defs[d] = q if r is MISSING else r
+            h = q if r is MISSING else r
+            if h == p and dropped and dropped["ours" if q is MISSING else "theirs"](d):
+                continue
+            defs[d] = h
             candidate.append(f"reads[{m}].definitions[{d}]")
         elif (v := derived(f"reads[{m}].definitions[{d}]", p, q, r, candidate)) is not MISSING:
             defs[d] = v
@@ -217,7 +238,31 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
     return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
 
 
-def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
+def gone(m: str, o: dict, side: dict, other: dict, records: tuple[dict, dict, dict], candidate: list[str]):
+    """Whether a definition of module ``m`` that ``side`` (its `reads`) no longer lists anywhere was renamed or deleted there,
+    as `group` asks: every guarantee that read ``m`` at the base is, on that side, removed or stated as at the base, so the same
+    statements no longer reach it.  One the side restated may only have stopped reading it, which leaves the union.  A removal
+    the other side's new or restated readers of ``m`` may still need is named in ``candidate``."""
+    base, mine, others = records
+    listed = {d for g in side.values() for d in A.definitions(g)}
+
+    def same(rec: dict, g: str) -> bool:
+        return g not in rec or (g in base and A.unowned(rec[g]) == A.unowned(base[g]))
+    kept = all(same(mine, g) for g in (o.get(m) or {}).get("guarantees", []))
+    new = any(not same(others, g) for g in (other.get(m) or {}).get("guarantees", []))
+
+    def ask(d: str) -> bool:
+        if d in listed or not kept:
+            return False
+        if new:
+            candidate.append(f"reads[{m}].definitions[{d}] (removed)")
+        return True
+    return ask
+
+
+def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
+          records: tuple[dict, dict, dict] = ({}, {}, {})) -> dict:
+    """The `reads` sections merged module by module (`group`), ``records`` being the base's, ours' and theirs' guarantees."""
     out = {}
     for m in sorted(set(a) | set(b)):
         x, y, z = o.get(m), a.get(m), b.get(m)
@@ -227,11 +272,14 @@ def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> di
             g = z
         elif core(z) == core(x):
             g = y
-        elif y is None or z is None:
-            g = group(m, x or {}, y or {}, z or {}, why, [])
-            candidate.append(f"reads[{m}]")
         else:
-            g = group(m, x or {}, y, z, why, candidate)
+            drop = {"ours": gone(m, o, a, b, records, candidate),
+                    "theirs": gone(m, o, b, a, (records[0], records[2], records[1]), candidate)}
+            if y is None or z is None:
+                g = group(m, x or {}, y or {}, z or {}, why, [], drop)
+                candidate.append(f"reads[{m}]")
+            else:
+                g = group(m, x or {}, y, z, why, candidate, drop)
         if g is not None:
             out[m] = {"definitions": dict(sorted(A.definitions(g).items())), "guarantees": sorted(g.get("guarantees", []))}
     moved(o, a, b, out, candidate)
@@ -310,7 +358,8 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
-            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate)
+            records = tuple(s.get("guarantees") if isinstance(s.get("guarantees"), dict) else {} for s in (base, ours, theirs))
+            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate, records)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why, candidate)
         elif k == "assumptions" and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
@@ -585,6 +634,54 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     return "".join(out), left
 
 
+def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
+    """A conflict side's ratchet caps ({its line up to `{`: its counts by key}), blank lines aside, or None when it holds
+    anything else."""
+    out: dict[str, dict[str, int]] = {}
+    for s in lines:
+        if not s.strip():
+            continue
+        m = CAP_LINE.match(s)
+        if m is None or m.group(1) in out:
+            return None
+        found = [CAP_ENTRY.fullmatch(p) for p in m.group(2).split(",")] if m.group(2).strip() else []
+        if None in found:
+            return None
+        out[m.group(1)] = {e.group(1): int(e.group(2)) for e in found}
+    return out
+
+
+def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+    """A conflict all of whose sides are the same ratchet caps' lines, merged as counters: each key theirs' count plus ours'
+    change from the base (a key a side lacks counts as the base's, or 0), in ours' order with theirs' new keys after the key
+    theirs has before them.  None when a side holds anything else, the sides hold different caps, or a count would go below
+    0 (both sides dropped the same entries: the count is the merged lock's, which only `check.py` can say)."""
+    x, y, z = _cap_lines(o), _cap_lines(a), _cap_lines(b)
+    if x is None or y is None or z is None or not y or not set(x) == set(y) == set(z):
+        return None
+    out = []
+    for s in a:
+        m = CAP_LINE.match(s)
+        if m is None:
+            out.append(s)
+            continue
+        base, ours, theirs = x[m.group(1)], y[m.group(1)], z[m.group(1)]
+        counts = {k: theirs.get(k, base.get(k, 0)) + ours.get(k, base.get(k, 0)) - base.get(k, 0)
+                  for k in items([], list(ours), list(theirs))}
+        if any(n < 0 for n in counts.values()):
+            return None
+        body = ", ".join(f'"{k}": {n}' for k, n in counts.items())
+        out.append(m.group(1) + "{" + body + "}" + ("\n" if s.endswith("\n") else ""))
+    return out
+
+
+def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
+    """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`: git's own merge, then each conflict
+    whose sides are only its ratchet caps' lines merged as counters (`_caps`), so two branches that each move a cap merge.
+    Any other conflict is left as git writes it."""
+    return lean(base, ours, theirs, (_caps,))
+
+
 def load(path: Path) -> dict:
     text = path.read_text()
     return A.as_guarantees(json.loads(text)) if text.strip() else {}
@@ -598,7 +695,9 @@ def install(repo: Path) -> None:
     driver = f"python3 {Path(os.path.relpath(HERE / 'merge.py', top)).as_posix()} %O %A %B %P"
     for name, what, argv in ((NAME, "lean-audit.json: each side's guarantees, reads and dependencies", driver),
                              (LEAN, ".lean: each side's imports", driver.replace(" %O", " --lean %O")),
-                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O"))):
+                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O")),
+                             (CAPS, "tests/test_lean_packages.py: each side's change to the ratchet caps",
+                              driver.replace(" %O", " --caps %O"))):
         for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
             subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)
         print(f"merge.py: merge.{name}.driver = {argv} (in {top})")
@@ -623,6 +722,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
+    ap.add_argument("--caps", action="store_true", help="BASE OURS THEIRS [PATH] are `tests/test_lean_packages.py`'s: merge "
+                    "its ratchet caps (`UNWITNESSED`, `INLINE`) as counters")
     a = ap.parse_args(argv)
     if a.install is not None:
         install(a.install)
@@ -635,11 +736,11 @@ def main(argv: list[str]) -> int:
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
-    if a.lean or a.lakefile:
-        text, left = lakefile(base, ours, theirs) if a.lakefile else lean(base, ours, theirs)
+    if a.lean or a.lakefile or a.caps:
+        text, left = (lakefile if a.lakefile else caps if a.caps else lean)(base, ours, theirs)
         ours.write_text(text)
         if left:
-            what = "requires and string arrays" if a.lakefile else "import lists"
+            what = "requires and string arrays" if a.lakefile else "the ratchet caps" if a.caps else "import lists"
             print(f"merge.py: {path}: {left} conflict(s) beyond {what}", file=sys.stderr)
         return 1 if left else 0
     candidate: list[str] = []

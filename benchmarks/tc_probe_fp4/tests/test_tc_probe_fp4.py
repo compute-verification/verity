@@ -26,7 +26,6 @@ import cast  # noqa: E402
 import f1_rates as F1  # noqa: E402
 import f2_strassen as F2  # noqa: E402
 import f3_lut as F3  # noqa: E402
-from emulation import E  # noqa: E402
 import k32  # noqa: E402
 import lean_vectors as LV  # noqa: E402
 import meta_rule as MR  # noqa: E402
@@ -34,11 +33,12 @@ import probe as P  # noqa: E402
 import recheck as RC  # noqa: E402
 import sp_e4m3 as SP  # noqa: E402
 import sparse as S  # noqa: E402
-import t1_merged as T  # noqa: E402
 import tool  # noqa: E402
+import vec as V  # noqa: E402
 import w1_price as W  # noqa: E402
 
 from verity.ml.circuits.silicon import models as M  # noqa: E402
+from verity.ml.circuits.silicon.errors import InvalidArtifact  # noqa: E402
 from verity.ml.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
 
 
@@ -612,74 +612,6 @@ def test_clock_label_needs_every_sample_at_the_lock():
     assert W.clock_label([None], [2100.0], 2100) == "unlocked"
 
 
-def test_t1_emulation_is_1ad1aaa2_verbatim():
-    assert T.emulation_gate() is None
-
-
-@pytest.mark.parametrize("fam", ["gaussian", "t4", "massive", "spread", "spread-both"])
-def test_t1_quantizer_without_the_shortcut_is_routes_quantizer(fam):
-    """Without the pruning and at routes' per-16 scales, the capture's quantizer draws and returns what routes' does."""
-    x1, x2 = (E.family(fam, "A", 8, 512, rng) for rng in (np.random.default_rng(4), np.random.default_rng(4)))
-    rng1, rng2 = np.random.default_rng(9), np.random.default_rng(9)
-    want_c, want_s = E.quantize_pearl_c4(x1, 0.25, rng1)
-    got_c, got_s, keep = T.quantize(x2, 0.25, rng2, prune=False, block=16)
-    assert keep is None and np.array_equal(want_c, got_c) and np.array_equal(want_s, got_s)
-    assert rng1.integers(1 << 30) == rng2.integers(1 << 30)
-
-
-def test_t1_operands_are_2of4_under_d24_and_the_hardware():
-    o = T.operands("t4", 20260930, rows=16, cols=8, k=512)
-    assert T.structure_failures(o) == []
-    nz = (o.ca & 7) != 0
-    assert (nz.reshape(16, -1, 4).sum(axis=2) <= 2).all()
-    pairs = nz.reshape(16, -1, 4, 2).any(axis=3)
-    p0, p1 = o.meta & 3, o.meta >> 2
-    allowed = np.zeros_like(pairs)
-    np.put_along_axis(allowed, p0[..., None].astype(np.int64), True, axis=2)
-    np.put_along_axis(allowed, p1[..., None].astype(np.int64), True, axis=2)
-    assert not (pairs & ~allowed).any()
-    assert np.array_equal(o.sa16[:, 0::2], o.sa16[:, 1::2])
-
-
-def test_t1_vectorised_fakes_are_the_pinned_models():
-    """The dry run's devices: the dense one is BLACKWELL_SM120_NVF4 chained, the sparse ones sparse.gather_dense and
-    logical_g16 (the emulation's merged_k128), word for word on hot and cold accumulators."""
-    rng = np.random.default_rng(12)
-    n = 6
-    As = rng.integers(0, 16, (n, 16, 64)).astype(np.uint8)
-    META = S.META_VALID[rng.integers(0, 6, (n, 16, 16))]
-    B = rng.integers(0, 16, (n, 8, 128)).astype(np.uint8)
-    SFA, SFB = P.UE4M3_VALID[rng.integers(0, 127, (n, 16, 4))], P.UE4M3_VALID[rng.integers(0, 127, (n, 8, 4))]
-    C = P.f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(-10, 30, (n, 16, 8)))).astype(np.float32))
-    C[0] = 0
-    A, SA, SB = S.expand(As, META), S.model_scales(SFA), S.model_scales(SFB)
-    models = S.candidates("sp_nvf4")
-    for fake, model in (("gather4", "gather_dense"), ("merged_k128", "logical_g16")):
-        want, err = S.model_words(models[model], A, B, SA, SB, C)
-        assert not err.any() and np.array_equal(T.FakeSparseT1(fake).tiles("sp_nvf4", As, B, META, SFA, SFB, C), want)
-    two = S.model_words(S.TwoHalves("two", M.BLACKWELL_SM120_NVF4), A, B, SA, SB, C)[0]
-    assert np.array_equal(T.FakeDenseT1().tiles("nvf4", A, B, C, SA, SB, steps=2), two)
-
-
-@pytest.mark.slow
-def test_t1_dry_run_records_the_finding_and_fails_closed(no_nvcc, tmp_path):
-    """The whole driver on the CPU at routes' size (one family, one hot h): the dense words are the pinned chain's, and one
-    flipped dense word fails the run."""
-    base = ["--instruction", "sp_nvf4_t1", "--fake-silicon", "gather4", "--seed", "20260930", "--families", "gaussian",
-            "--hot-bits", "14", "--model-sample", "64"]
-    assert P.main(base + ["--out", str(tmp_path / "ok")]) == 0
-    doc = json.loads((tmp_path / "ok" / "probe_results.json").read_text())
-    for name, r in doc["families"]["gaussian"].items():
-        assert r["emulation"]["native_vs_dense_hw"] == {"span": r["span"]["words"], "chain": r["chain"]["words"]}
-        assert r["emulation"]["gather4_vs_sparse_hw"] == {"span": r["span"]["words"], "chain": r["chain"]["words"]}
-        assert r["span"]["matched_exact"] == r["span"]["exact_spans"]
-        assert r["pinned_sample"]["gather_dense_mismatches"] == r["pinned_sample"]["dense_mismatches"] == 0
-    assert doc["finding"]["cold"]["gaussian"]["span"] == [262144, 262144]
-    assert doc["finding"]["h14"]["gaussian"]["span"][0] < 262144
-    assert (tmp_path / "ok" / "t1_gaussian.npz").exists()
-    assert P.main(base + ["--out", str(tmp_path / "bad"), "--corrupt-word"]) == 1
-
-
 def test_meta_rule_predicates_on_ptx_ordered_pairs():
     """Part C on PTX's six nibbles: the hardware's patterns are the ones touching at most two pairs, and D-24 and the hardware
     each admit patterns the other refuses."""
@@ -919,6 +851,41 @@ def test_f1_dry_run_prices_against_nvfp4_and_its_gates_fail_closed(no_nvcc, tmp_
                                                                              "tf32.fake.json"]
 
 
+def test_vec_ue4m3_dyadic_is_silicons_on_every_code():
+    mant, exp = V.ue4m3_dyadic(np.arange(256))
+    for code in range(256):
+        if code & 0x7F == 0x7F:
+            with pytest.raises(InvalidArtifact):
+                M._scale_dyadic("ue4m3", code)
+        else:
+            assert (int(mant[code]), int(exp[code])) == M._scale_dyadic("ue4m3", code)
+
+
+def test_vec_nvf4_step_is_silicons_align_add():
+    """On silicon's group terms, word for word: random firings over every valid scale code, and the edges (zero, -0, subnormal
+    and extreme accumulators, no participating group, groups whose products cancel)."""
+    rng, n, nvf4 = np.random.default_rng(11), 6144, M.BLACKWELL_SM120_NVF4
+    a, b = rng.integers(0, 16, (n, 64)), rng.integers(0, 16, (n, 64))
+    a[rng.random((n, 64)) < rng.choice([0.0, 0.5, 0.95, 1.0], (n, 1))] = 0
+    cancel = rng.random(n) < 0.2
+    a[cancel, 1::2], b[cancel, 1::2] = a[cancel, 0::2] ^ 8, b[cancel, 0::2]
+    scales = np.array([s for s in range(256) if s & 0x7F != 0x7F])
+    sa, sb = scales[rng.integers(0, scales.size, (n, 4))], scales[rng.integers(0, scales.size, (n, 4))]
+    c = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
+    c[(c & 0x7F800000) == 0x7F800000] &= 0xBFFFFFFF
+    near = rng.random(n) < 0.5
+    c[near] = P.f32_bits((rng.standard_normal(near.sum()) * np.exp2(rng.integers(-40, 40, near.sum()))).astype(np.float32))
+    edges = [0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF]
+    c[: 8 * len(edges)] = np.repeat(edges, 8)
+    terms = [nvf4.group_terms(*(x[i].tolist() for x in (a, b, sa, sb))) for i in range(n)]
+    want = np.array([nvf4.align_add(int(c[i]), terms[i]) for i in range(n)], np.uint32)
+    mant, x, part = (np.array([[t[j] for t in ts] for ts in terms]) for j in range(3))
+    got = V.nvf4_step(c, [mant[:, g] for g in range(4)], [x[:, g] for g in range(4)], [part[:, g].astype(bool) for g in range(4)])
+    assert np.array_equal(got, want)
+    subnormal = ((want & 0x7F800000) == 0) & ((want & 0x7FFFFF) != 0)
+    assert part.all(1).any() and not part.any(1).all() and (want == 0).any() and subnormal.any()
+
+
 def test_f3_variants_cover_every_width_and_arm():
     table = F3.variants()
     assert sorted(table) == sorted((arm, g, c) for g, c in F3.WIDTHS.values() for arm in F3.ARMS)
@@ -948,7 +915,7 @@ def test_f3_tables_sum_to_the_group_dots_and_pack_the_scales(width):
     gd, _, _, part = F3.terms(ops.acodes, ops.ascale, ops.wcodes, ops.wscale, grp)
     assert np.array_equal(lo.transpose(0, 2, 1), gd[:, 0::2]) and np.array_equal(hi.transpose(0, 2, 1), gd[:, 1::2])
     w = pk.wsc.astype(np.int64)
-    mb, eb = E.ue4m3_dyadic(ops.wscale.astype(np.int64))
+    mb, eb = V.ue4m3_dyadic(ops.wscale.astype(np.int64))
     assert np.array_equal(w & 15, mb) and np.array_equal(((w >> 4) & 15) - 10, eb)
     assert np.array_equal((w >> 8) & 0xFFFF, (((ops.wcodes.reshape(ng, c, 4, 16) & 7) != 0) << np.arange(16)).sum(-1))
     # the mixed family reaches every participation case and keeps its scales and accumulators in the model's domain
@@ -1140,7 +1107,6 @@ def test_offline_sass_gates(tmp_path):
                 ["probe.py", "--instruction", "f8f6f4", "--out", str(tmp_path / "p"), "--sass-only"],
                 ["probe.py", "--instruction", "cvt_e2m1x2_f32", "--out", str(tmp_path / "c"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4", "--out", str(tmp_path / "sp"), "--sass-only"],
-                ["probe.py", "--instruction", "sp_nvf4_t1", "--out", str(tmp_path / "t1"), "--sass-only"],
                 ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
                 ["f1_rates.py", "build", "--out", str(tmp_path / "f1")],
                 ["f2_strassen.py", "build", "--out", str(tmp_path / "f2")],

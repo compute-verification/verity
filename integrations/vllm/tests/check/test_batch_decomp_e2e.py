@@ -26,7 +26,7 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match.program_compare import compare_steps, load_oracle
 from verity_vllm.observe.log import dumps as log_dumps
 from verity_vllm.observe.fold.fold import fold
-from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Witness
+from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, WitnessParam
 from tests.observe import test_fold_synthetic as toy
 from tests.observe.test_fold_synthetic import (A_COS, A_DOWN_W, A_EMBED, A_GU_W, A_LN1, A_LN2, A_NORM, A_O_W, A_QKV_W, BF, BN, C, I32D, I64D,
                                                       W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM, W_O, W_QKV, Ids, V, _as3, _kv_flat,
@@ -200,7 +200,7 @@ def p_rms_witness(node, ctx, borrow=False):
     if borrow:
         keys[-1] = keys[0]
     return Compute(bind(VI.RMSNormTritonV3, N=C["H"]), a["input_ptr"].shape[0],
-                   (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]), Witness("schedule", tuple(keys))), (PerRow(a["output_ptr"]),), (node.id,),
+                   (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]), WitnessParam("schedule", tuple(keys))), (PerRow(a["output_ptr"]),), (node.id,),
                    node.enter.module or "")
 
 
@@ -369,7 +369,7 @@ def test_negative_cross_request_operand_fails_the_row(memory, tmp_path, derived_
 
 
 def test_prog_retains_one_copy_of_the_operand_references_and_the_verdicts_are_unchanged(memory, tmp_path, derived_is_a_fold):
-    """`cb_a.compare.Prog` keeps ONE representation of the operand references
+    """`cb_a.compare.RootView` keeps ONE representation of the operand references
     (`inst[*].args` runs): the decoded IR body (`nodes`) is released after the instance list is built and the fold rows' `operand_refs`
     (a third copy, O(LP^2) over a long prefill) are reduced to parameter-space runs at read time and dropped once the weight-field map
     is derived.  The comparisons read `inst`/`inputs` only, so the verdicts -- positive (B=2, unequal LP and T) and the cross-request

@@ -86,7 +86,7 @@ KV = {   # kv.cu's functions every build exports (`cuda_lib.load`)
 }
 KV_BUILT = {   # and those of some builds, each bound where the library has it
     "kv_set_mask": [_v],
-    "kv_rc_buffers": [_v, _v, _v],
+    "kv_rc_buffers": [_v],
     "kv_rc_pass": [_v, _v, _v],
     "kv_rc_receipts": [_v, _q, _i, _i, _q, _v],
     "kv_prim": [_i, _v, _v, _v, _i, _v],

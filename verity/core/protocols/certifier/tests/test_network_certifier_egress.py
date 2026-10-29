@@ -93,7 +93,7 @@ def test_the_map_is_the_wardens_slots():
     E, P = IT.END_ENTRY, IT.EMPTY
     slots = [EG.Request(1, 0, 3), EG.Request(2, 0, 0), EG.Request(3, 2, 1), None]
     maps = [EG.bucket_map(b, slots, 4, 2, 1) for b in range(5)]
-    R = EG.Record
+    R = EG.Occupancy
     assert maps[0] == ((R(1, 0, P), R(1, 0, P), R(2, 1, P), R(2, 1, P)), False)
     assert maps[1] == ((R(1, 0, 0), R(1, 0, 1), R(2, 1, E), R(2, 1, P)), False)
     assert maps[2] == ((R(1, 0, 2), R(1, 0, E), R(3, 2, P), R(3, 2, P)), False)
@@ -254,9 +254,8 @@ def test_a_request_not_yet_in_the_state_computes_another_row():
 def test_the_units_ands():
     """The unit's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
     request slots of 64 outputs, 17-bit ids, D = 22): what circuit-check pins and the status extrapolates."""
-    memo = {}
-    assert HC.ands(_fn(shape(PARAMS, NR, K)), memo) == ANDS_ZK
-    assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22)), memo) == ANDS_CLASS
+    assert HC.ands(_fn(shape(PARAMS, NR, K))) == ANDS_ZK
+    assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22))) == ANDS_CLASS
 
 
 #: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's unit

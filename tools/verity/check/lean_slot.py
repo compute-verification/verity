@@ -16,7 +16,8 @@ it (check.py under check's step) runs at once instead of taking a second slot. W
 
 With every slot of its pool taken, a request waits, and never gives up: it queues in arrival order in `lean-line-P` beside
 SLOTS (`slot.py`'s line), re-reads SLOTS every POLL_S, and prints each slot's holder (pid, since when, run, who, the time it
-took the slot) and the waiters ahead of it whenever that changes, and every REPORT_EVERY polls otherwise. Who asked is --by,
+took the slot) and the waiters ahead of it whenever that changes, and every REPORT_EVERY polls otherwise. In a `research run`,
+the run's timeout moves later by the time it waited, so the wait never counts against it. Who asked is --by,
 else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `check-NAME.who`), else RESEARCH_AGENT_URL.
 
 `python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters; --json, the same as one
@@ -148,14 +149,17 @@ def asker(by: str | None = None) -> dict:
 
 
 def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc), sleep=time.sleep,
-         log=lambda s: print(s, file=sys.stderr, flush=True), or_any: bool = True) -> tuple[str, int, int]:
+         log=lambda s: print(s, file=sys.stderr, flush=True), or_any: bool = True,
+         mono=time.monotonic) -> tuple[str, int, int]:
     """Wait for a slot of ``pool`` (SLOTS exists; `resolve`); return the pool it came from, its index and the descriptor
-    holding it."""
+    holding it. In a `research run`, the time it waited moves the run's timeout as much later (`slot.defer_run`): with every
+    slot busy a wait can outlast a run's whole --timeout, which then ended the run before its audit began."""
     d = SLOTS.parent
     pools = parse(SLOTS.read_text())
     name, n = resolve(pools, pool, or_any)
+    began = mono()
     ticket, tfd = SLOT.join(d, who=asker(by), line=line_name(name))
-    told, since = None, 0
+    told, since, slept = None, 0, False
     try:
         while True:
             try:
@@ -175,7 +179,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
                 for ln in lines:
                     log(f"lean-slot:   {ln}")
                 told, since = seen, 0
-            since += 1
+            since, slept = since + 1, True
             sleep(POLL_S)
     finally:
         ticket.unlink(missing_ok=True)
@@ -188,6 +192,9 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
     tmp.chmod(0o664)
     os.replace(tmp, path)
     log(f"lean-slot: Lean audit slot {name}/{i} of {n} ({SLOTS})")
+    if slept and (moved := SLOT.defer_run(round(mono() - began, 3), f"lean-slot: the line for pool {name}",
+                                          SLOT.research_run_dir())):
+        log(moved)
     return name, i, fd
 
 

@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.ZkTables.Goals
 import Proofs.Flock.Claims.Complete.Zk.Walk
+import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The honest masked run's proof files, at several tables
@@ -48,7 +49,7 @@ level-0 commitment; the record is the honest masked record of the commitments' c
 stream; the sends are the link of the caps, then the streams' rounds in order; and the `j`th proof file and stream are
 table `j / 2`'s rep `j % 2`'s (`RepFileJ`). -/
 theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
-    {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own)
+    {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
     (trs : Array Trace) (tape : TapeZk)
     (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →
@@ -204,13 +205,13 @@ def RepShapedJ : Prop := ∀ c : Case H rel, 1 < c.sts.size → RepShapedAt c
 /-- **Each rep's decoded masked proof is the honest one**, at a run of any number of tables: two proof files per
 table, each under `2^64` bytes, and each rep's file decodes at the masked verifier's shape to a proof of the table's
 PCS parameters, with the table's `root_B` as its cap and a 64-byte pads' root. -/
-theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
+theorem Run.repJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
     o.proofs.size = 2 * o.tabs.size ∧ (∀ b ∈ o.proofs, b.size < 2 ^ 64) ∧ ∀ i < o.tabs.size, ∀ r < 2,
       Zk.decode (shapeZk o.tabs[i]! (o.sch i) (o.extras i).size) (o.bytes i r) = .ok (o.zp i r) ∧
       (o.zp i r).proof.params = pcsParams o.tabs[i]!.merkle (o.sch i) ∧
       flat (o.zp i r).proof.cap = o.sess.rootB[i]! ∧ (o.zp i r).inner.root.size = 64 := by
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := id hS
-  obtain ⟨hz, hcz⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hcz, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   obtain ⟨-, hmax, hsz, -⟩ := o.toCase.tables
   unfold Tags.MAX_TABLES at hmax
@@ -236,7 +237,7 @@ theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.t
         exact (hP st' hst'').2) hst hrun
   dsimp only at hpsz hfiles
   rw [htsz] at hcsz
-  obtain ⟨rbs, streams, -, -, -, -, -, hlink, -, -, hsess, -, -, -⟩ := Run.jsonJ S h64 o hS
+  obtain ⟨rbs, streams, -, -, -, -, -, hlink, -, -, hsess, -, -, -⟩ := Run.jsonJ h64 o hS
   have hsc' : ∀ i (hi : i < o.sts.size), Zk.schedule (Setup.ofCircuit o.sts[i]!).m = .ok schs[i]! ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit o.sts[i]!).merkle
         (schs[i]!.1.levels.getD 0 default) schs[i]!.2 (packed (traces o.sts o.w)[i]! (Setup.ofCircuit o.sts[i]!).m)
@@ -323,9 +324,9 @@ theorem Run.repJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.t
 
 /-- **What the record's checks ask of the proof files**, at a run where the statement's `hello` prints and the rep
 proofs fit their shapes, with the record's size (`Run.recordFits`, `ready`'s). -/
-theorem filesAt (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
+theorem filesAt (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : RepShapedAt o.toCase) :
     FilesAt o := by
-  obtain ⟨hsz, hb, hrep⟩ := Run.repJ S h64 o hS hR
+  obtain ⟨hsz, hb, hrep⟩ := Run.repJ h64 o hS hR
   obtain ⟨-, hmax, -, -⟩ := o.toCase.tables
   unfold Tags.MAX_TABLES at hmax
   have ht : o.tabs.size = o.sts.size := tabsOf_size _
@@ -339,16 +340,16 @@ theorem filesAt (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.to
     rfl
 
 /-- **What the record's checks ask of the proof files**, at every run of several tables, from `RepShapedJ`. -/
-theorem filesJ (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel) : FilesJ H rel :=
-  fun o hc => filesAt S h64 o (hS o.toCase hc) (hR o.toCase hc)
+theorem filesJ (h64 : Out64 H) (hS : StmtOkJ H rel) (hR : RepShapedJ H rel) : FilesJ H rel :=
+  fun o hc => filesAt h64 o (hS o.toCase hc) (hR o.toCase hc)
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables: `completeJ` with what the record's checks ask of the proof files from `RepShapedJ` (`filesJ`). -/
 theorem completeJR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
+    (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hRJ : RepShapedJ H rel)
     (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) : Claims.Flock.Complete H (deployZk rel) :=
-  completeJ H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ S h64 hSJ hRJ) hOp hMR hMF
+  completeJ H rel h64 hS hR hPR hRS hLg hIn hSJ hPRJ (filesJ h64 hSJ hRJ) hOp hMR hMF
 
 end FlockComplete.ZkTables

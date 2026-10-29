@@ -104,9 +104,6 @@ theorem alignedW_natAbs_lt (w : ℕ) (E : ℤ) (t : Term) (hm : t.mag < 2 ^ 25) 
 /-- Truncation toward zero to `p` significant bits (`trunc14` at `p = 14`). -/
 def truncP (p : ℕ) (y : ℚ) : ℚ := if y = 0 then 0 else truncTo (2 ^ (binade |y| - ((p : ℤ) - 1))) y
 
-theorem truncP_14 : truncP 14 = trunc14 := by
-  funext y; simp only [truncP, trunc14]; norm_num
-
 theorem abs_truncP_sub_le {p : ℕ} (hp : 1 ≤ p) (y : ℚ) : |truncP p y - y| ≤ |y| / 2 ^ (p - 1) := by
   rcases eq_or_ne y 0 with rfl | hy
   · simp [truncP]

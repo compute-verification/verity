@@ -1,7 +1,7 @@
 """Tensors in `W`: a model's tensors laid out and zero-padded to whole segments, and per-tensor decode.
 
-`Layout.of` packs tensors back to back in the order given, or each from a segment boundary with `align=True`;
-`Layout.of_ranges` takes byte ranges already fixed, such as a safetensors data section.  A tensor decodes from the
+`TensorLayout.of` packs tensors back to back in the order given, or each from a segment boundary with `align=True`;
+`TensorLayout.of_ranges` takes byte ranges already fixed, such as a safetensors data section.  A tensor decodes from the
 segments it overlaps and nothing else, since segments decode independently, with any codec.
 """
 
@@ -15,21 +15,23 @@ from .primitives import Primitives
 
 
 @dataclass(frozen=True, slots=True)
-class Placement:
+class TensorRange:
+    """Tensor `name`'s bytes in `W`: `size` of them from byte `offset`."""
+
     name: str
     offset: int
     size: int
 
 
 @dataclass(frozen=True, slots=True)
-class Layout:
+class TensorLayout:
     """`params` has as many segments as `W` needs; `tensors` are their byte ranges in `W`, in order."""
 
     params: Geometry
-    tensors: tuple[Placement, ...]
+    tensors: tuple[TensorRange, ...]
 
     @classmethod
-    def of(cls, base: Geometry, sizes: Iterable[tuple[str, int]], align: bool = False) -> Layout:
+    def of(cls, base: Geometry, sizes: Iterable[tuple[str, int]], align: bool = False) -> TensorLayout:
         seg = base.segment_bytes
         placements, at, names = [], 0, set()
         for name, size in sizes:
@@ -39,16 +41,16 @@ class Layout:
                 raise ValueError(f"tensor {name!r} needs a nonnegative size")
             if align and size and at % seg:
                 at += seg - at % seg
-            placements.append(Placement(name, at, size))
+            placements.append(TensorRange(name, at, size))
             names.add(name)
             at += size
         return cls(base.with_segments(max(1, -(-at // seg))), tuple(placements))
 
     @classmethod
-    def of_ranges(cls, base: Geometry, ranges: Iterable[tuple[str, int, int]]) -> Layout:
+    def of_ranges(cls, base: Geometry, ranges: Iterable[tuple[str, int, int]]) -> TensorLayout:
         """The layout with each tensor at `(name, offset, size)` as given: distinct names, disjoint ranges.  `W` ends at
         the last range, padded to whole segments; bytes between ranges are zero in `pack`."""
-        placements = sorted((Placement(name, offset, size) for name, offset, size in ranges), key=lambda p: p.offset)
+        placements = sorted((TensorRange(name, offset, size) for name, offset, size in ranges), key=lambda p: p.offset)
         names, end = set(), 0
         for p in placements:
             if type(p.name) is not str or p.name in names:
@@ -61,7 +63,7 @@ class Layout:
             end = max(end, p.offset + p.size)
         return cls(base.with_segments(max(1, -(-end // base.segment_bytes))), tuple(placements))
 
-    def placement(self, name: str) -> Placement:
+    def placement(self, name: str) -> TensorRange:
         for p in self.tensors:
             if p.name == name:
                 return p
@@ -96,7 +98,7 @@ class Layout:
         return {"params": self.params.manifest(), "tensors": [[p.name, p.offset, p.size] for p in self.tensors]}
 
 
-def decode_tensor(layout: Layout, prims: Primitives, salt: bytes, name: str, block: Callable[[int], bytes],
+def decode_tensor(layout: TensorLayout, prims: Primitives, salt: bytes, name: str, block: Callable[[int], bytes],
                   codec: Codec | None = None) -> bytes:
     """Tensor `name` from the labels of the segments it overlaps; `block(i)` returns label `i` of `C`.  The codec
     defaults to the layout's parameters' own."""

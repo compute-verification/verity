@@ -8,20 +8,22 @@ process, `Local`), in the protocol's order:
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
    verifier samples the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
-2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, drawn from
+2. the verifier opens a session (`audit.AuditRun`) on coins its challenger commits to before the first one, drawn from
    `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`) under
    each window's challenge, sent as its value and the root it was opened after (`coins.Released`), each root sent
    before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
    (`deadline_ns`) before it closes the window;
 3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them;
 4. once the session has its outcome, the verifier sends the prover the coin commitment and every released coin's
-   opening (`audit.Session.disclose`), and the prover checks each challenge it was sent against them (`Prover.end`).
+   opening (`audit.AuditRun.disclose`), and the prover checks each challenge it was sent against them (`Prover.end`).
 
 Every call to the session is an event of the verifier's log with the clock reading it took, and the log, its coins and
 the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
-`eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
+`eps = (2^24 + ⌈W/g⌉·s)/2^64`, the session's openings coins at its `samples` s each, as the Lean's `certify` computes
+them: the bound `Properties.RemoteAudit.Component.LineHeldAtComponent` proves (`PublishedEps`), not the draws a session
+made, min(s, U) of a draw's U receipts, which can be fewer.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
 (`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
@@ -45,13 +47,14 @@ from typing import Any, Protocol
 
 from verity.core.protocols.pous.period import Period, Run
 from verity.core.protocols.pous.period import records
+from verity.core.protocols.profile import WINDOW_DELTA
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled, receipts
 from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
-DELTA = Fraction(1, 2 ** 40)
+DELTA = WINDOW_DELTA
 """`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
 WORD_BYTES = 64
 DATA_BYTES = WORD_BYTES - 1
@@ -68,21 +71,30 @@ def payloads(store: bytes) -> list[bytes]:
                      for u in range(codec.BLOCK_BYTES // WORD_BYTES)) for b in range(n)]
 
 
+def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
+    """`RemoteAudit.Protocol.eps`: δ + ⌈W/g⌉·s/2^64 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
+    return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 64)
+
+
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
     """`RemoteAudit.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
+    if record.samples is None:
+        raise ValueError("the record states no samples, at which eps charges each draw's rejection: certify a "
+                         "session's record (`Session.record`)")
     windows, _ = audit.pooled_windows(record)
-    us, ss = sum(u for u, _ in windows), sum(s for _, s in windows)
+    us = sum(u for u, _ in windows)
     base = {"delta": str(DELTA), "receipts": us, "windows": [[u, s] for u, s in windows]}
     try:
         b = pooled.bound(windows, DELTA)
     except pooled.Refused as e:
         return {"eps": "0", "q_bytes": 0}, base | {"gaps": [str(e)], "wrong": None}
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
-    return ({"eps": str(Fraction(2 ** 24 + ss, 2 ** 64)), "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
+    return ({"eps": str(eps(len(record.windows), record.groups_per_coin, record.samples)),
+             "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
             base | {"gaps": [], "wrong": str(b.wrong)})
 
 
-def answer(session: audit.Session) -> dict[str, Any]:
+def answer(session: audit.AuditRun) -> dict[str, Any]:
     """The session's answer in the core interface's canonical form, as `RemoteAudit.Protocol.check` gives it. Like the
     check (`RemoteAudit.Protocol.sessionOf`), it refuses the one form no property of the Lean covers, a session paced at
     one window in flight."""
@@ -214,15 +226,15 @@ def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int 
 
 
 def opened(reg: audit.Registration, coins: bytes, clock: Callable[[], int], *, not_before: int, windows: int, passes: int,
-           samples: int, window_ns: int, deadline_ns: int) -> audit.Session:
+           samples: int, window_ns: int, deadline_ns: int) -> audit.AuditRun:
     """The verifier's session over the store `reg` registers, on `clock`, its challenger's coins drawn from `coins`."""
     params = audit.Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=passes, window_ns=window_ns,
                           codec=reg.codec, receipt=reg.receipt, rows=reg.rows)
     challenger = C.local(reg.digest, 0, windows, _Stream(coins, reg.node), clock=lambda: clock() / 1e9)
-    return audit.Session(params, reg, None, challenger, not_before_ns=not_before, clock=clock)
+    return audit.AuditRun(params, reg, None, challenger, not_before_ns=not_before, clock=clock)
 
 
-def case_of(s: audit.Session, events: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def case_of(s: audit.AuditRun, events: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """The core case `RemoteAudit.Protocol` replays: session `s`'s registration, every coin its challenger committed to
     (each one it didn't release opened now), its log `events` and its parameters."""
     params, challenger = s.params, s.coins

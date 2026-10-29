@@ -47,7 +47,7 @@ and the salted table's verdict on those pends, at the cap `capOfRoot` reads off 
 and salts `opnOf` reads off the two proof files, accepts. -/
 theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
-    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
+    (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord)
     (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
     (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
@@ -86,7 +86,7 @@ with `table_refines_plain`, the verdict at `leafPlain`. -/
 theorem table_verdict_plain (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (extra : List (Model.Claim 𝔽 S.m))
-    (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (sess : RunRecord) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
     (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
     ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
@@ -126,7 +126,7 @@ theorem table_verdict_leaf (spec : SessionSpec) (st : Setup) (S : Model.Statemen
     (hms : (id = "hm96-sha512/v1" ∧ st.merkle = MerkleScheme.hm96Sha512) ∨
       (id = "flock-leaf/sha512-unsalted" ∧ st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted"))
     (extra : List (Model.Claim 𝔽 S.m))
-    (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
+    (sess : RunRecord) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
     (sch : Flock.Schedule) (hf : Flock.fast100 st.m = some sch) (i : ℕ) (b₀ b₁ c : ByteArray)
     (h0 : verifyRep spec st sch sess i 0 b₀ = .ok c) (h1 : verifyRep spec st sch sess i 1 b₁ = .ok c) :
     ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
@@ -153,7 +153,7 @@ rep's compiled game, played with its proof file's messages and its stream's coin
 table's verdict on those pends, at `capOfRoot` of the table's `root_B` and at `opnOf` of its two proof files, accepts. -/
 theorem accepts_verdict_hm96 {I : Inputs} {t : Transcript} (hl : I.tags.merkleLeaf = "hm96-sha512/v1")
     (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),

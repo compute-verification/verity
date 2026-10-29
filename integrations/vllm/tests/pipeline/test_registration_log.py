@@ -74,7 +74,7 @@ def test_each_break_is_refused_with_its_code():
     bad["provenance"][0]["root"] = "00" * 64
     assert REF.check_baseline(bad, out["trusted"]) == {"error": "theta-root"}
     _p, inst, out = _case(program_digest="cd" * 64)             # a log registered for another Program
-    assert REF.check_baseline(inst, out["trusted"]) == {"error": "theta-unbound"}
+    assert REF.check_baseline(inst, out["trusted"]) == {"error": "run-program"}
     _p, inst, out = _case(registered=())                         # θ bound per run: the Program the builder made before
     assert REF.check_baseline(inst, out["trusted"]) == {"error": "theta-not-registered"}
 

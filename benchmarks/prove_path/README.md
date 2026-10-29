@@ -117,7 +117,7 @@ meaningful only once the advice is the circuit's one free input outside the regi
 stand-in partition rather than the whole window, its free inputs are its units' inputs, far more bits than the advice
 declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
 
-Over a monitoring period, `NetTiming.SecurityProofs.HorizonLeakAccepted` composes the windows. It takes each window's
+Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the windows. It takes each window's
 conditional escape and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at the window's
 history would discharge, and doesn't discharge them yet.
 
@@ -145,7 +145,7 @@ guarantee above.
 **The named assumptions.**
 - SHA-512 collision resistance: `FlockSoundness.Assumptions.SHA512CRStrict` and `SHA512CRExpected`
   (`Security/Proofs/Flock/Soundness/Assumptions.lean`), and `Claims.StrictBirthday` and `Claims.ExpectedCR`
-  (`Security/Definitions/Claims.lean`).
+  (`Security/Definitions/Core/Interaction.lean`).
 - A3, the coins: `FlockSoundness.Assumptions.UniformRandomBytes` (the same file).
 - Record custody: under `--zk`, `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`
   (`Security/Proofs/Flock/Soundness/Assumptions/Zk.lean`) and `Zk.RecordCustodyZKLaw` and its forms

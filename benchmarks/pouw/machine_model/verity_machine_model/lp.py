@@ -1,4 +1,4 @@
-"""The price-vector LP (rs-machine-model §8): a convex combination B_θ = Σ θ_r·row_r of the machine's rows.
+"""The price-vector LP: a convex combination B_θ = Σ θ_r·row_r of the machine's rows.
 
 Charnes–Cooper over λ ≥ 0 with p_MMA = 4096 (a tensor MAC costs 1); every constraint is homogeneous:
 
@@ -10,8 +10,8 @@ Stage 1 minimizes the honest GEMM's non-MMA price (U/F_low - 1); stage 2 minimiz
 U/F_low - 1 ≤ infl_max; stage 3 is stage 2 without the cap (τ alone). Kinds with no coefficient on the vector's rows are
 refused, not gated: they leave (i) and every attack that uses them.
 
-The arithmetic, constraint order and solver calls are those of the legacy `rs-price-99.py` `solve`, which every published
-vector came from, so a vector re-solves to the same vertex.
+The arithmetic, constraint order and solver calls are fixed, so every published vector re-solves to the vertex it was
+published at (tests/test_vectors.py).
 """
 from __future__ import annotations
 
@@ -32,7 +32,6 @@ class Solution:
     infl: float                    # U/F_low - 1
     tau: float                     # 1 / (σ · honest_real)
     tau_max: float                 # stage 3's τ
-    lam_tau_max: dict[str, float]
     infl_at_tau_max: float
     attacks: tuple[Attack, ...]    # the attacks the LP constrained
     refused: tuple[str, ...]       # kinds with no coefficient on the rows
@@ -102,6 +101,6 @@ def solve(model: Model, census: Census, status: dict[str, str], attacks: list[At
     return Solution(
         lam=lam, theta={r: x / sig for r, x in lam.items()}, sigma=sig,
         infl=sum(h * x for h, x in zip(hon, s2.x)) / MACS, tau=1 / (sig * model.honest_real),
-        tau_max=1 / (sum(lam3.values()) * model.honest_real), lam_tau_max=lam3,
+        tau_max=1 / (sum(lam3.values()) * model.honest_real),
         infl_at_tau_max=sum(v * price(census, lam3, k) for k, v in model.honest.items() if k != "MMA") / MACS,
         attacks=used, refused=tuple(sorted(set(census) - priced)))

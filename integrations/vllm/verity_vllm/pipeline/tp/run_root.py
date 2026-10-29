@@ -4,16 +4,18 @@
     tp_run_root = SHA-512("verity/tp-run-root/v2" || u32 world || (u32 rank_r || root_r) for r in 0..world-1)
 
 A 32-byte rank root is a vllm-v1 (SHA-256) root and is refused by name.  `tp_run_root_sha256` is the SHA-256 form over 32-byte
-vllm-v1 rank roots (``verity/tp-run-root/v1``): a TP Commit run under ``--commit-scheme vllm-v1`` and the records committed before
-v2; `combine` takes the form a record's ``root_tag`` names."""
+vllm-v1 rank roots (``verity/tp-run-root/v1``), only to reread the records committed before v2 (a TP Commit refuses
+``--commit-scheme vllm-v1``); `combine` takes the form a record's ``root_tag`` names."""
 from __future__ import annotations
 
 import hashlib
 import struct
 
+from verity.ml.commitments.scheme import DIGEST_BYTES
+
 TP_ROOT_TAG = b"verity/tp-run-root/v2"
 TP_ROOT_TAG_V1 = b"verity/tp-run-root/v1"
-RANK_ROOT_BYTES = 64
+RANK_ROOT_BYTES = DIGEST_BYTES["sha512"]
 
 
 def _ranks(world: int, roots: dict[int, bytes]) -> None:

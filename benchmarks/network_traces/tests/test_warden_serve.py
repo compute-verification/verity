@@ -311,6 +311,18 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     assert not (tmp_path / "run").exists()
 
 
+def test_the_warden_always_paces_and_serve_and_rehearse_refuse_a_release_within_the_slack(tmp_path):
+    """`serve` and `rehearse`, the deployed warden and the gate's rehearsal of it, always pace: `--paced-ms 0` (once the
+    loop's write) and a release within the slack or past the next boundary are refused before anything runs."""
+    serve = ["serve", "--upstream", "127.0.0.1:9", "--listen", "127.0.0.1:0", "--key", str(tmp_path / "key"),
+             "--session", "00" * 32, "--windows", "1", "--out", str(tmp_path / "run")]
+    for paced in ("0", "25", "100"):
+        for argv in (serve, ["rehearse", "--fake", "--out", str(tmp_path / "run")]):
+            with pytest.raises(SystemExit, match="the warden always paces"):
+                ws.main([*argv, "--paced-ms", paced])
+    assert not (tmp_path / "run").exists()
+
+
 def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_group_windows(tmp_path):
     """The bound `group_windows` rests on, on the warden itself at the scan's schedule: a group of `lanes` id requests
     admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the loop's
@@ -687,10 +699,10 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
     """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the warden's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
-    (`monitor-unavailable`) and the check refuses it. In `serve`'s `PublisherProcess` the same commit runs in the
-    spawned process, which signs and commits from the rows released to it: every tick is on time, and the check
-    accepts every link-window, certified and registered. A commit that fails there fails `close`, and the warden's
-    process doesn't wait on it."""
+    (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
+    `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
+    it: every tick is on time, and the check accepts every link-window, certified and registered. A commit that fails
+    there fails `close`, and the warden's process doesn't wait on it."""
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     runs = {name: tmp_path / name for name in ("inline", "process", "refusing")}
@@ -700,8 +712,11 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
     inline = _run(runs["inline"], tmp_path / "inline-key", requests, responses, windows=2, commit=slow_commit)
     late = [t for t, x in enumerate(inline.lateness) if x > inline.slack]
     assert late[0] == PARAMS.window and max(inline.lateness) > SLOW_COMMIT_S
-    problems = ws.check(runs["inline"])["problems"]
-    assert {f"{name} window 1: {Reason.MONITOR_UNAVAILABLE.value}" for name in ws.CERTIFIED} <= set(problems)
+    result = ws.check(runs["inline"])
+    assert {f"{name} window 1 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
+    assert {(x["record"], x["status"]) for x in result["windows"] if x["window"] == 1} == \
+        {(name, Reason.MONITOR_UNAVAILABLE.value) for name in ws.CERTIFIED}
+    assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [1] * len(ws.CERTIFIED)
 
     process = _run(runs["process"], tmp_path / "process-key", requests, responses, windows=2, commit=slow_commit,
                    process=True)

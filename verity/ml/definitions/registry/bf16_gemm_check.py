@@ -16,7 +16,7 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
-  `verity_vllm/pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
+  `device_pins/`), measured by `served routes`' probe, which the predicted served Program reads too.  The routes hold
   under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
   Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
   (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import json
 from functools import cache
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
@@ -102,29 +101,27 @@ def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     return run[2] if run else None
 
 
-def _pins():
-    """Each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
-    library versions and cuBLAS routes.  They are the integration's, read when asked for, so loading the Definitions imports
-    nothing of it."""
-    return resources.files("verity_vllm") / "pins"
+#: each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
+#: library versions and cuBLAS routes
+DEVICE_PINS = Path(__file__).with_name("device_pins")
 
 
 @cache
 def device_pin(device: str) -> dict[str, Any]:
     """The pin of the device that reports `device` (`torch.cuda.get_device_name`)."""
-    path = _pins() / f"{device.replace(' ', '_')}.json"
+    path = DEVICE_PINS / f"{device.replace(' ', '_')}.json"
     if not path.is_file():
-        raise KeyError(f"no device pin {path.name} in verity_vllm/pins")
+        raise KeyError(f"no device pin {path.name} in {DEVICE_PINS.name}/")
     return json.loads(path.read_text())
 
 
 @cache
 def capability_pin(cc: tuple[int, int]) -> dict[str, Any]:
     """The one pinned device of compute capability `cc`."""
-    pins = [json.loads(p.read_text()) for p in _pins().iterdir() if p.name.endswith(".json")]
+    pins = [json.loads(p.read_text()) for p in sorted(DEVICE_PINS.glob("*.json"))]
     got = [p for p in pins if tuple(p["compute_capability"]) == tuple(cc)]
     if len(got) != 1:
-        raise KeyError(f"{len(got)} device pins of compute capability {cc} in verity_vllm/pins; one is required")
+        raise KeyError(f"{len(got)} device pins of compute capability {cc} in {DEVICE_PINS.name}/; one is required")
     return got[0]
 
 
@@ -319,7 +316,7 @@ def cublas_serial_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int) -> np.
 
 
 def cublas_aligned_splitk_rows(x: np.ndarray, w: np.ndarray, SPLIT_K: int, ALIGN: int, TILE_K: int) -> np.ndarray:
-    """`CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, HopperBF16WgmmaDot16_v2}` of every row of x (M, K)
+    """`CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, HopperBF16WgmmaDot16_v3}` of every row of x (M, K)
     against w (N, K): `cublas_bf16.aligned_bounds`' chunks, each chunk's k16 chain over its k-tiles residue first
     (`cublas_bf16.residue_first`), partials rounded to bf16 and widened, a serial increasing-order f32 reduction and one bf16
     rounding: bf16 words (M, N)."""

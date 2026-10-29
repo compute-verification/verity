@@ -30,7 +30,7 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
 **The hypotheses** are each over the configuration, the trace or the device's outputs, and each is checkable on them:
 
 * the configuration's: `Ticking` (both grids have buckets), `FieldsFit` (what a record encodes fits its field), `Distinct`
-  (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canon` is well-founded recursion, which the
+  (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canonUtf8` is well-founded recursion, which the
   kernel does not evaluate, so this is a fact about the configuration that only running it shows), `ValidKey` of the
   issuer's key, `SessionFits` (its session's id is 32 bytes) and `SaltsFit` (each salt its coins give is 64 bytes);
 * the run's: `Closed` (both grids ran all their ticks), `NoFault` (every record published is complete), `SyncsDeclared`
@@ -60,7 +60,7 @@ def declaredSyncs (c : Config) (tr : List Event) : Array NetworkCertifier.ClockS
 /-- **The host's assembly**: each record, in order, certified by `Issuer.certify` under the next salt of the certifier's
 coins `salts`, at the reserved leaf, under its link's direction, grid and parameters digest; the certificates issued, in
 order. -/
-def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List Record →
+def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List BlockGrid →
     Except String (Issuer × List CertifiedRecord)
   | i, _, _, [] => pure (i, [])
   | i, next, salts, r :: rs => do

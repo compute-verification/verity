@@ -20,6 +20,7 @@ is checked, so no coin after a refused opening is handed on.
 -/
 import Flock.CoinTree
 import Flock.Hm96
+import Flock.JsonParse
 
 namespace Flock.Firewall.Coins
 
@@ -128,7 +129,7 @@ structure Hello where
 /-- **The session's `Hello`**, as the prover sent it: its nonce (`coins.nonce`, 64 lowercase hex digits, `coin_tree::hello_nonce`),
 the tree it names (`CoinTree.ofHello`) and its link points. -/
 def Hello.parse (h : String) : Except String Hello := do
-  let j ← (Json.parse h).mapError (s!"{STOP}Hello is not JSON: {·}")
+  let j ← (JsonParse.parse h).mapError (s!"{STOP}Hello is not JSON: {·}")
   let some n := (j.getObjVal? "coins").toOption.bind (·.getObjValAs? String "nonce" |>.toOption)
     | throw s!"{STOP}Hello carries no coin-tree nonce (coins.nonce)"
   if !CoinTree.isHex 64 n then throw s!"{STOP}Hello's coin-tree nonce is not 64 lowercase hex digits"
@@ -139,21 +140,21 @@ def Hello.parse (h : String) : Except String Hello := do
 
 /-- A session past `Hello`'s answer: its `Hello`, the answer's key and root, and the streams of the rounds opened so far,
 in order (a stream's next round is how often it appears). -/
-structure Session where
+structure Release where
   hello : Hello
   key : ByteArray
   root : List UInt8
   opened : List Nat
 
 /-- The session once `Hello`'s answer `a` checks. -/
-def Session.start (h : Hello) (a : List UInt8) : Except String Session :=
+def Release.start (h : Hello) (a : List UInt8) : Except String Release :=
   match answer a with
   | .ok (key, root) => .ok { hello := h, key, root, opened := [] }
   | .error e => .error e
 
 /-- **The next opening** `m`, of `n` coins of `stream`: the stream's next round must open (`check`). The session stream's
 count is `Hello`'s link points, whatever the request says. The coins, and the session with the round counted. -/
-def Session.open (S : Session) (stream : String) (n : Nat) (m : List UInt8) : Except String (Session × List UInt8) :=
+def Release.open (S : Release) (stream : String) (n : Nat) (m : List UInt8) : Except String (Release × List UInt8) :=
   let s := S.hello.spec.streams.toList.idxOf stream
   if s < S.hello.spec.streams.size then
     match check S.hello.spec S.hello.nonce S.key S.root s (S.opened.count s)
@@ -164,7 +165,7 @@ def Session.open (S : Session) (stream : String) (n : Nat) (m : List UInt8) : Ex
 
 /-- **A session's openings** `os`, each `(stream, n, m)` as `open` takes it, in order: the session after them all, or the
 first refusal. `cmd` answers them one at a time, so it hands on a round's coins only when this passes up to it. -/
-def Session.openAll (S : Session) : List (String × Nat × List UInt8) → Except String Session
+def Release.openAll (S : Release) : List (String × Nat × List UInt8) → Except String Release
   | [] => .ok S
   | (stream, n, m) :: os =>
     match S.open stream n m with
@@ -187,9 +188,9 @@ where
 
 /-- `flock-firewall coins`: one session's opening checks, served on stdin and stdout. `hello LEN` followed by the `LEN`
 bytes of the prover's `Hello` (`Hello.parse`), then `answer LEN` followed by the `LEN` bytes of `Hello`'s answer, the
-`Resp::Coins` frame (`Session.start`), each answered `ok`. Then `open STREAM N LEN` followed by the `LEN` bytes of the
+`Resp::Coins` frame (`Release.start`), each answered `ok`. Then `open STREAM N LEN` followed by the `LEN` bytes of the
 answer to the prover's request for `N` coins of `STREAM` (`Resp::Coins`' frame) is answered `ok N'` followed by the
-`16 N'` bytes of the coins it opens (`Session.open`). A refusal is answered `stop WHY` and ends the session: nothing after
+`16 N'` bytes of the coins it opens (`Release.open`). A refusal is answered `stop WHY` and ends the session: nothing after
 it is checked. Anything else (a request out of order, a malformed line) is answered `err WHY` and ends it too. -/
 def cmd (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
@@ -204,7 +205,7 @@ def cmd (_ : List String) : IO UInt32 := do
     say s!"stop {why}"
     return (0 : UInt32)
   let mut hello : Option Hello := none
-  let mut session : Option Session := none
+  let mut session : Option Release := none
   repeat
     let line := (← stdin.getLine).replace "\n" ""
     if line.isEmpty then break
@@ -224,7 +225,7 @@ def cmd (_ : List String) : IO UInt32 := do
       let b ← readExact "coins" stdin len
       let some h := hello | return (← refuse "Hello's answer before the Hello")
       if session.isSome then return (← refuse "a second answer to Hello")
-      match Session.start h b.data.toList with
+      match Release.start h b.data.toList with
       | .ok S =>
         session := some S
         say "ok"

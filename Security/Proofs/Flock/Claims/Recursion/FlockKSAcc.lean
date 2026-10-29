@@ -526,13 +526,6 @@ def TableBoundθOnAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
           ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p
 
-omit [Nonempty Coin] in
-theorem tableBoundθ_of_onAcc {H : Msg → Msg} {D : Flock.Deploy Coin Col T} {N : Msg → ℕ} {Ok : Msg → Col → Prop}
-    (h : TableBoundθOnAcc H D N Ok) : TableBoundθ H D N Ok := by
-  intro x Ω _ _ P
-  obtain ⟨e, -, hf, hb⟩ := h x Ω P
-  exact ⟨e, hf, hb⟩
-
 /-- **The refuser's escapes read at the runs as they abort**: the same rounds and weights, each event a collision among
 the aborted runs' verifier calls. -/
 abbrev Escapes.toAbortD {Ω A : Type} {H : Msg → Msg} {P : Prover Ω} {V : Verifier Coin} {x : Msg}

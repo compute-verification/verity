@@ -46,7 +46,7 @@ def PT():
 
 @pytest.fixture(scope="module")
 def PTW():
-    """partition with widths: `validate_width` / `validate_vu_partition` call `boundary` at run time."""
+    """partition with widths: `validate_width` / `validate_block_partition` call `boundary` at run time."""
     _mod("boundary")
     return _mod("partition")
 
@@ -422,21 +422,21 @@ def test_readiness_32bit_reports_the_64_bit_constants(PT):
     assert not getattr(r0, "violators", None)
 
 
-def test_vu_partition_default32_is_exact_and_narrow(GS, PTW):
+def test_block_partition_default32_is_exact_and_narrow(GS, PTW):
     """`default(32)` is a partition by construction and every member's w_out <= 32 (out of a single call / member is a
     subset of its declared returns), except where a primitive gate itself is wider than 32."""
     PT = PTW
-    validate_vu = need(PT, "validate_vu_partition")
+    validate_block = need(PT, "validate_block_partition")
     default = need(GS, "default")
     for name in FX.VLLM_FAMILY_FIXTURES + ("tiny_io", "fan_out", "dead_return", "dead_param", "scan_carry"):
         P = FX.fixture(name)
-        v = validate_vu(P, default(32), 32)
+        v = validate_block(P, default(32), 32)
         assert v.partition.status == "exact", f"{name}: {v.partition.status} {v.partition.codes}"
         assert not v.width.violators, f"{name}: width violators {v.width.violators}"
         assert not v.width.unsupported, f"{name}: width unsupported {v.width.unsupported}"
         assert v.count > 0
     # the 64-bit case: partition exact, width NOT passed, readiness lists the constants, overall status not pass
-    v = validate_vu(FX.gumbel_program(), default(32), 32)
+    v = validate_block(FX.gumbel_program(), default(32), 32)
     assert v.partition.status == "exact"
     assert v.width.violators and v.width.max_seen == 64
     assert getattr(v.readiness_32, "violators", None)

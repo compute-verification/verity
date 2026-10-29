@@ -60,7 +60,8 @@ The team's agents run these remotely (the team skill).
 The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
-  every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
+  every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
+  committed, each under a hiding leaf; the values inside a proof block never are.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
@@ -76,7 +77,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  named premise H-μ⁺, not yet in a lock.
+  named premise H-μ⁺, not yet in a lock. Transport has one more: ML-KEM-1024, for a cableless remote party's sessions
+  only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
   inside a window, from the window's live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
@@ -203,6 +205,10 @@ reverted on `checked` (how a PR lands: the team skill).
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
+  do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
+  baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
+  run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a

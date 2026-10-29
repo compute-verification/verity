@@ -38,7 +38,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses), the served path's SHA-512 commitment library (`lib/`), and vLLM's int8-exact linear kernels (`exactlin/`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the staging decode with bandwidth receipts (`p2_stage`, `s8_dec_linear`), the decoder's non-matmul ops (`units`), attention (`attn_bf16`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
+| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the staging decode with bandwidth receipts (`p2_stage`), the decoder's non-matmul ops (`units`), attention (`attn_bf16`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, the served vLLM path and its audits, and the ACCEL model (`machine_model/`); `contents.py` lists the rest | maintained |
 | `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and cheaper multipliers (sparse, Strassen, lookup tables) priced against dense NVFP4 | maintained |
@@ -53,6 +53,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, C-Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `multi_unit/` | an FP8 GEMM's proof blocks staged as C-Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
+| `flock_s8_block/` | C-Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
 | `proof_throughput/` | the proof blocks a second C-Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |

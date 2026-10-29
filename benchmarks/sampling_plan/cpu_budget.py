@@ -6,7 +6,7 @@ each template's units the budget certifies.
 
 * **A statement** holds up to `UNITS` drawn units of one template, at no more cost than one, since C-Flock pads a
   statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
-  rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_LOG_MAX`, so a unit with more
+  rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_MAX`, so a unit with more
   ANDs is drawn whole and proved as its least number of parts under it, each part a template of its own (a row cut
   where a partial sum is committed).
 * **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
@@ -27,6 +27,7 @@ from math import ceil, log, log2
 from pathlib import Path
 
 from verity.core.protocols.pous import wipe_monitoring
+from verity.ml.windows.interface import K_MAX
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`wipe_monitoring`)
 DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
@@ -43,9 +44,6 @@ CALIBRATION = {25: (21.0, 34, 5.0, 9.5, 0.8, "r20261026-005203-c613"),
                30: (384.1, 42, 107.4, 276.8, 39.4, "r20261025-234304-229c")}
 #: the least k_log a statement takes: a unit of 21,963 ANDs (ScaledMm K=128) and one of 139,283 (K=1024) both prove at 22
 K_LOG_MIN = 22
-#: `Stmt.InRange`'s k_log bound (`live/src/circuit.rs`'s IN_RANGE_K_LOG, `verity_flock.circuit.K_MAX`): C-Flock refuses an
-#: instance past it, so a unit with more proved ANDs is cut into parts, each its own template.
-K_LOG_MAX = 27
 
 
 def k_log(proved_ands: int) -> int:
@@ -69,7 +67,7 @@ def statement(m: int) -> dict:
 def window(t: dict, k: int, windows: int) -> dict:
     n = t["units"]
     k = min(n, ceil(k / UNITS) * UNITS)
-    parts = ceil(t["proved_ands"] / 2 ** K_LOG_MAX)
+    parts = ceil(t["proved_ands"] / 2 ** K_MAX)
     st = statement(k_log(ceil(t["proved_ands"] / parts)) + 3)
     count = parts * ceil(k / UNITS)
     K0 = {str(d): min(ceil(log(windows / d) * n / k), n - k + 1) for d in DELTAS}
@@ -142,7 +140,7 @@ def render(r: dict) -> str:
                      f"{'' if w['measured'] else '*'} | {w['slots_each']} | {w['wall_each_s']:.0f} | {w['slot_s']:.4g} | "
                      f"{w['K0']['0.01']:,} | {w['share']['0.01']:.3g} | {w['K0']['1e-06']:,} | {w['share']['1e-06']:.3g} |")
     lines += ["", f"\\* m outside the calibration ({min(CALIBRATION)} to {max(CALIBRATION)}): extrapolated.", "",
-              "Faulty proof blocks over a period, summed over the templates: pooled over all its blocks (`IntegrityHorizon`, "
+              "Incorrect proof blocks over a period, summed over the templates: pooled over all its blocks (`IntegrityHorizon`, "
               "with its share of the period's units), and in every block at once (delta split over the period's windows, "
               "with its share of a block's units).", "",
               "| period | fleet | blocks | pooled at 1% | share | pooled at 1e-6 | share | each block at 1% | at 1e-6 |",

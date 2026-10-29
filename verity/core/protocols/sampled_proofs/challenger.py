@@ -28,6 +28,13 @@ the coin was released after it: that rests on the challenger releasing coin i on
 challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
 `trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
+**A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
+`withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
+challenger releases each coin's raw bytes and nothing else (no root, salt or path), and once its signed close is written
+it releases the commitment and every opened coin's salt and path.  So nothing the prover sees before a coin depends on a
+coin not yet released, and soundness takes no hiding premise on the root.  One-stage's draw reads only a withheld
+session's coins (`withheld_on`, in `coins.draw_coins`).
+
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
 recorded, in order: coin i opened after root i, each once, none before its root is recorded, and every recorded root's
 coin opened.  `LiveRecord` is the verifier's side of one family: it records a root and only then asks for that root's
@@ -65,12 +72,30 @@ own (`record_message`), which binds the close to the commitment and host.  `sess
 session: the record under its key, the close signed under it, the log the one the close signs, line for line, and a
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
 
+**A recursive run's interactive-run record** (`RunRecord`, `RUN_KIND`) is the challenger's log of one recursive
+statement's run, which `flock-verify rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
+parts' sessions are proved separately, each on its own keyed coin tree, so only this record shows they are one run:
+
+    record  = {events, kind}                                       kind: RUN_KIND
+    stage   = {event: "stage", rec_rows_sha512, rec_shared}        first, once: V*'s shared rows and the shared set
+    open    = {event: "open", session, rec_part, coin_key}         each Hello answered for the run's parts, in order
+    close   = {event: "close"}                                     last, once
+
+The challenger stages before any session opens, logs every session it opens for the run's parts at the prover's
+`Hello`, before the answer that carries the session's fresh coin key, a retry's as any other's, and closes the record
+when the run ends.  `rec-compose` refuses unless each part has exactly one session and the sessions are the composed
+parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
+coin tree's, drawn at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
+The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
+it answers is the auditor-trusted challenger's (`trusted-host`).  No live challenger keeps one yet: C-Flock's `serve`
+answers each `Hello` without a `RunRecord`.
+
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
 entry, under the
-challenger's key, when a lane reserves a window (its request, start and expiry), when it opens the reserved session for
-the window's root, before its first coin, and when the session ends; a window gets one session.  A lane's period is two
-more entries, its `period-open` and `period-close`:
+challenger's key, when a prover reserves a window (its request, start and expiry), when it opens the reserved session for
+the window's root, before its first coin, and when the session ends; a window gets one session.  A prover's period is two
+more entries, its `period-open` and `period-close`, which name the prover in their body's `lane`:
 
     entry   = {body, kind, prev, schema, seq, session, sig}        seq from 0; prev: SHA-512 of the previous line (128
                                                                    zeros first); schema v1 or v2, no v1 after a v2
@@ -94,13 +119,14 @@ too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
 binding its session's reserve and carrying its request after the first reserve, one end a session after its open, each
-record's leaf between its session's open and end and no entry's, and every period's close listing exactly its lane's
+record's leaf between its session's open and end and no entry's, and every period's close listing exactly its prover's
 windows, counted at their reserves.  The window's session must be
 opened under v2, ended and closed, its end naming its record's leaf and commitment and how many hellos it refused, and
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  Infra publishes the ledger's heads;
+window it opens no session for, so one session's coins pass for one window only.  The auditor host's operator publishes
+the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
 new one.  `ledger_line` writes an entry as the auditor does.
@@ -111,12 +137,12 @@ circuit the window's sessions prove, its canonical JSON without annotations (the
 check is one SHA-512 over the descriptor, never a walk over the circuit it unrolls to (`circuit_reason`).  A window in
 no period, in a period that committed no circuit, or whose descriptor hashes to another circuit counts toward none.
 
-**A session runs main's code** only when the host's pins log records its pin (`pinned_session`, RT4-INT-40).  The open's
+**A session runs main's code** only when the host's pins log records its pin (`pinned_session`).  The open's
 `pinned` is the commit the host's tree was pinned to.  The host keeps an append-only pins log, a line per pin as the
 auditor writes it (`pin_line`):
 
     pin     = {commit, main, pinned_utc}        commit: the pin; main: the origin/main commit whose history held it
-                                                 when vy-challenger-pin pinned it (each 40 lowercase hex)
+                                                 when the host was pinned to it (each 40 lowercase hex)
     open    = body {..., pinned, pins: {lines, sha512}}        the pins log as it stood when the gate admitted the open
 
 and each open seals the log as it stood (`pins_seal`), under the open's signature.  The session counts only when the
@@ -758,7 +784,8 @@ def leaf_of(sig: Any) -> int:
 
 
 def lane_of(e: dict) -> str:
-    """A reserve's or an open's prover: the lane vy-admin reserved or opened it for (`for`), else its requester (`by`)."""
+    """A reserve's or an open's prover: the one the auditor's operator reserved or opened it for (`for`), else its
+    requester (`by`)."""
     return e["body"].get("for") or e["body"]["by"]
 
 
@@ -817,8 +844,9 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
 
 def verify_periods(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> dict[str, dict]:
     """The ledger's periods once `verify_ledger` passes: period -> {"lane", "open", "close" (None while open), "windows":
-    [session, ...], "cap", "circuit"}. A period's name is used once; a lane has one period open at a time; its windows are
-    exactly the reserves (and one-step v2 opens) whose prover is its lane (`lane_of`) between its period-open and its
+    [session, ...], "cap", "circuit"}, "lane" being the period's prover. A period's name is used once; a prover has one
+    period open at a time; its windows are exactly the reserves (and one-step v2 opens) whose prover (`lane_of`) is the
+    period's, between its period-open and its
     period-close, counted at the reserve, so a reserve that expired unopened is one, at most its `cap` (a positive
     integer, with `circuit` committed beside it before window 0's first coin; both None only for a period opened before
     they were required, which a reader of the cap refuses), and the close lists each of them, in order, with its root
@@ -1035,6 +1063,20 @@ def _ledger_entry(line: Any) -> dict | None:
     return e if ok else None
 
 
+WITHHELD = ("the session the auditor's ledger opens on the window does not withhold its coin commitment until it closes "
+            "(its open's body has no `withheld: true`: `remote.open_session(..., withhold=True)`)")
+
+
+def withheld_on(ledger: Any, window: str) -> bool:
+    """Lean `Challenger.withheldOn`: the ledger `ledger` (its lines) opens `window` (its open root), and every open of it
+    marks its session withheld (`withheld: true` in its body): a session whose challenger released only its coins' raw
+    bytes while it ran, and its commitment, salts and paths once it closed (`remote.serve`)."""
+    opens = [e for e in map(_ledger_entry, ledger if type(ledger) is list else []) if e is not None
+             and e["kind"] == "open" and isinstance(e["body"].get("window"), dict)
+             and e["body"]["window"].get("root") == window]
+    return bool(opens) and all(e["body"].get("withheld") is True for e in opens)
+
+
 def _checked(ledger: Any, key: ChallengerKey, verify: Verify) -> tuple[dict[str, dict], dict[str, dict]]:
     """`ledger` (its lines) as `verify_ledger` and `verify_periods` read it, under the pinned key `key`, each line first
     refused unless it is its own `ledger_text` of the ledger's form and names no other key."""
@@ -1122,26 +1164,43 @@ def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tu
                    b["refused_hellos"], o["body"]["pinned"], name, p["cap"], p["circuit"]), o["body"]
 
 
-def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
+class Ledger(NamedTuple):
+    """The auditor's ledger as `ledger_of` reads it: its lines, the longest published head, and that head's tables,
+    `verify_ledger`'s (window root -> its reserve, open and end) and `verify_periods`' (period -> its lane, open, close,
+    windows, cap and circuit)."""
+    lines: list[str]
+    windows: dict[str, dict]
+    periods: dict[str, dict]
+
+
+def ledger_of(heads: Any, key: ChallengerKey, verify: Verify) -> Ledger:
     """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
-    the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
-    rewritten between two publications is refused whichever head a verifier is shown."""
+    the longest, with its tables from that one check.  Raises `CoinError` naming why (and which head, when there are
+    several), so a ledger forked, cut or rewritten between two publications is refused whichever head a verifier is
+    shown."""
     if heads is None or heads == []:
         raise CoinError(NO_AUDIT)
     if type(heads) is not list:
         raise CoinError(HEADS_FORM)
+    tables = []
     for i, head in enumerate(heads):
         try:
-            _checked(head, key, verify)
+            tables.append(_checked(head, key, verify))
         except CoinError as e:
             raise (e if len(heads) == 1 else CoinError(f"the auditor's published head {i} is refused: {e}")) from None
     for i, j in itertools.combinations(range(len(heads)), 2):
         if not (extends(heads[i], heads[j]) or extends(heads[j], heads[i])):
             raise CoinError(f"the auditor's published heads {i} and {j} don't extend one another: its ledger was forked "
                             "or rewritten")
-    return max(heads, key=len)
+    k = max(range(len(heads)), key=lambda i: len(heads[i]))
+    return Ledger(heads[k], *tables[k])
+
+
+def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
+    """`ledger_of`'s lines: the longest published head, every head checked and any two extending one another."""
+    return ledger_of(heads, key, verify).lines
 
 
 def log_digest(lines: Sequence[str]) -> str:
@@ -1280,15 +1339,15 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take infra's newest published pins log")
+                "take the auditor host's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
     pinned = opened.get("pinned")
     if pinned not in commits[:n]:
         return (f"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's "
-                "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-                "window there")
+                "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+                "rerun the window there")
     return None
 
 
@@ -1305,7 +1364,7 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
         return (f"session {session} ran commit {pinned}, which the host's pins log records but which is not on main's "
                 "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                 "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-                "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+                "commit on main's first-parent line (with its pin command) and rerun the window there")
     return None
 
 
@@ -1354,6 +1413,7 @@ class LiveChallenger:
         self._tree = MerkleTree(live_domain(scheme, epoch, families),
                                 {p: live_leaf(scheme, *c) for p, c in enumerate(self._coins)}, lambda _: scheme)
         self.commitment = LiveCommitment(scheme, epoch, families, self._tree.commitment.root)
+        self.families = families
         self._opened: set[tuple[str, int]] = set()
         self.record: ChallengerRecord | None = None
 
@@ -1385,13 +1445,22 @@ class LiveChallenger:
         return [self.open(label, index, after) for label, index, after in requests]
 
 
+def _count(challenger: Any, label: str) -> int | None:
+    """How many coins family `label` of `challenger`'s layout holds: from its commitment, or from its layout while a
+    withheld session's commitment is still on the challenger's host (`remote.RemoteChallenger`)."""
+    if challenger.commitment is not None:
+        return challenger.commitment.family(label)
+    return next((n for name, n in challenger.families if name == label), None)
+
+
 class LiveRecord:
     """The verifier's record of one family of an epoch's coins, in order: `record(root)` records the family's next root and
     only then asks the challenger for its coin, after that root; `reason` is `order_reason` over the record.  `clock` is
-    the record's clock in seconds, and `log` the release order on it."""
+    the record's clock in seconds, and `log` the release order on it.  On a withheld session (`remote.serve`) its openings
+    are the coins' raw bytes until the session closes, and `reason` waits for the close."""
 
     def __init__(self, challenger: LiveChallenger, label: str, clock: Callable[[], float] = time.monotonic) -> None:
-        if challenger.commitment.family(label) is None:
+        if _count(challenger, label) is None:
             raise CoinError(f"the epoch's coins have no {label} family")
         self.challenger, self.label, self._clock = challenger, label, clock
         self.roots: list[bytes] = []
@@ -1412,7 +1481,7 @@ class LiveRecord:
         return opening
 
     def _root(self, root: bytes) -> tuple[str, int, bytes]:
-        if len(self.roots) == self.challenger.commitment.family(self.label):
+        if len(self.roots) == _count(self.challenger, self.label):
             raise CoinError(f"every {self.label} coin of the epoch is open")
         i = len(self.roots)
         self.roots.append(bytes(root))
@@ -1426,7 +1495,11 @@ class LiveRecord:
                           "released_at": self._clock()})
 
     def reason(self) -> str | None:
-        return order_reason(self.challenger.commitment, self.label, self.roots, self.openings)
+        if self.challenger.commitment is None:
+            return "the challenger withholds its coin commitment until its session closes"
+        opened = getattr(self.challenger, "opened", None) or {}
+        return order_reason(self.challenger.commitment, self.label, self.roots,
+                            [opened.get((o.label, o.index), o) for o in self.openings])
 
 
 def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
@@ -1440,7 +1513,7 @@ def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
     if any(r.challenger is not challenger for r, _ in asks):
         raise CoinError("a batch's coins are one challenger's")
     for r, _ in asks:
-        if len(r.roots) + sum(q is r for q, _ in asks) > challenger.commitment.family(r.label):
+        if len(r.roots) + sum(q is r for q, _ in asks) > _count(challenger, r.label):
             raise CoinError(f"every {r.label} coin of the epoch is open")
     requests = [r._root(root) for r, root in asks]
     openings = challenger.open_many(requests)
@@ -1449,18 +1522,86 @@ def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
     return openings
 
 
+#: the interactive-run record of one recursive run (module docstring), which `flock-verify rec-compose --rec-run` reads
+RUN_KIND = "verity/rec-run/v1"
+
+
+class RunRecord:
+    """The challenger's interactive-run record of one recursive run (module docstring, "A recursive run's interactive-run
+    record"): `stage` once, before any session opens; `open` at each `Hello` the challenger answers for the run's parts,
+    before the answer; `close` once the run ends.  It refuses what would make the log not one run's: a second staging, a
+    session before the staging or after the close, a session id or coin key twice.  It never refuses a second session
+    for a part: that is the retry the record exists to show, and `rec-compose` refuses it."""
+
+    def __init__(self) -> None:
+        self._events: list[dict[str, Any]] = []
+        self._sessions: set[str] = set()
+        self._keys: set[str] = set()
+        self.closed = False
+
+    def stage(self, rows_sha512: str, shared: dict[str, Any]) -> None:
+        """V*'s statements staged: the SHA-512 of the shared rows file (`--rec-rows`) and the shared set every part reads
+        (`rec_shared`, as `verify --rec-part` names it)."""
+        if self._events:
+            raise CoinError("a run's statements are staged once, before its first session's Hello")
+        if not _digest_hex(rows_sha512) or not isinstance(shared, dict):
+            raise CoinError("a staging is the rows file's SHA-512, 128 lowercase hex, and the shared set's object")
+        self._events.append({"event": "stage", "rec_rows_sha512": rows_sha512, "rec_shared": json.loads(json.dumps(shared))})
+
+    def open(self, session: str, part: int, coin_key: str) -> None:
+        """Session `session` opened for part `part` at its prover's `Hello`, whose answer carries the fresh coin key
+        `coin_key` (the session's `coin_tree.key`, 256 bytes in lowercase hex)."""
+        if not self._events:
+            raise CoinError("a session opens only after the run's statements are staged")
+        if self.closed:
+            raise CoinError("the run's record is closed: no session opens after it")
+        if not _session_id(session):
+            raise CoinError(f"a session id is 1 to {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
+        if type(part) is not int or part < 0:
+            raise CoinError("a session's part is a natural number")
+        if not _digest_hex(coin_key, 512):
+            raise CoinError("a session's coin key is 256 bytes in lowercase hex")
+        if session in self._sessions:
+            raise CoinError(f"session {session} is already in the run's record")
+        if coin_key in self._keys:
+            raise CoinError("a session key is never reused")
+        self._sessions.add(session)
+        self._keys.add(coin_key)
+        self._events.append({"event": "open", "session": session, "rec_part": part, "coin_key": coin_key})
+
+    def close(self) -> dict[str, Any]:
+        """The run ended: no session opens after this.  The record."""
+        if not self._events:
+            raise CoinError("a run's record closes after its staging")
+        if self.closed:
+            raise CoinError("the run's record is closed once")
+        self.closed = True
+        self._events.append({"event": "close"})
+        return self.to_json()
+
+    def to_json(self) -> dict[str, Any]:
+        return {"events": [dict(e) for e in self._events], "kind": RUN_KIND}
+
+    def write(self, path: str | os.PathLike) -> None:
+        """The closed record, on the challenger's host."""
+        if not self.closed:
+            raise CoinError("a run's record is written once it is closed")
+        Path(path).write_text(json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")) + "\n")
+
+
 __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "CLOSE_ROLE", "COIN_BYTES",
            "COMMITMENT_FORM", "COMMITMENT_TAG", "ChallengerClose", "ChallengerKey", "ChallengerRecord", "CoinError",
            "DESCRIPTOR_FORM", "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
-           "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
+           "LOG_MALFORMED", "LOG_TAG", "Ledger", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
            "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
+           "RUN_KIND", "RunRecord",
            "RECORD_FORM", "RECORD_ROLE",
-           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "audited_session",
+           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
            "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
-           "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
+           "leaf_of", "ledger_head", "ledger_line", "ledger_of", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
-           "verify_periods", "write_record"]
+           "verify_periods", "withheld_on", "write_record"]

@@ -633,6 +633,54 @@ def test_a_moe_layer_records_every_expert_gemm_in_static_order_and_not_its_route
     assert run.shapes_ == [(32, K), (32, K), (K, 16), (32, K), (K, 16)]
 
 
+def test_the_settings_unit_and_ks_are_h1s_and_ks_keeps_the_linears_at_those_ks():
+    """The pouw settings ``unit`` (v1 or j10r) and ``ks`` (each K once, sorted) parse, anything else is refused, and either
+    is refused under another scheme. `pouw_h1_hooks.layers` with ``ks`` keeps the linears whose K is one of them, a MoE
+    layer's sites each by its own K, and refuses a model with none at those K's."""
+    assert (pouw.Settings.of({}).unit, pouw.Settings.of({}).ks) == (None, None)
+    got = pouw.Settings.of({"unit": "j10r", "ks": [K, 16, K]})
+    assert (got.unit, got.ks) == ("j10r", (16, K))
+    with pytest.raises(ValueError, match="'unit' is one of v1, j10r"):
+        pouw.Settings.of({"unit": "v5"})
+    for bad in ([], [0], [str(K)], [True], K):
+        with pytest.raises(ValueError, match="'ks' is the contractions K"):
+            pouw.Settings.of({"ks": bad})
+    other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",),
+                       settings={"pouw": {"coins": Challenger(0, CH.entropy(0)), "unit": "j10r"}})
+    assert any("'unit' and 'ks' are H1's" in r for r in PO.refusals(other))
+    moe = MoE(2, 5)
+    dense = Linear(32, 1)
+    model = Model(dense, moe, moe.router, moe.runner)
+    gate_up, down = moe.runner.quant_method.sites[0::2], moe.runner.quant_method.sites[1::2]
+    assert PHK.layers(model, (Linear,), (K,)) == [dense, *gate_up]
+    assert PHK.layers(model, (Linear,), (16,)) == down
+    assert PHK.layers(model, (Linear,), (16, K)) == PHK.layers(model, (Linear,))
+    with pytest.raises(ValueError, match=r"no linear layer at K \[32\]"):
+        PHK.layers(model, (Linear,), (32,))
+
+
+def test_an_install_under_ks_commits_and_hooks_the_linears_at_those_ks_and_names_the_rest_uncovered():
+    """With ``ks`` the install commits and hooks only the linears at those K's; a MoE layer's down sites (K 16) serve on
+    their arm unhooked, and the run's ``details["uncovered"]`` names them (`pouw_h1_hooks.wire`)."""
+    moe = MoE(2, 5)
+    dense = Linear(32, 1)
+    model = Model(dense, moe, moe.router, moe.runner)
+    gate_up, down = moe.runner.quant_method.sites[0::2], moe.runner.quant_method.sites[1::2]
+    ctx = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(ks=[K]))
+    comp = PO.install(model, ctx)
+    try:
+        run = pouw.h1_run(_entry())
+        assert run.shapes_ == [(32, K)] * 3
+        assert run.details["uncovered"].endswith(f"outside the pouw setting 'ks' {[K]}, which serves on its arm unrecorded")
+        owners = {id(p.owner) for p in hooks.live(_entry())}
+        assert all(id(m.quant_method) in owners for m in (dense, *gate_up))
+        assert not any(id(m.quant_method) in owners for m in down)
+        assert pouw.commit_weights(PH.SCHEME, SimpleNamespace(model=model, context=ctx))["shapes"] == {
+            str(w): [32, K] for w in range(3)}
+    finally:
+        comp.close()
+
+
 def test_a_linear_the_checkpoint_keeps_bf16_is_not_recorded():
     """A linear ``modules_to_not_convert`` names (`engine.int8_vllm.Int8KeptLinearMethod`, bf16) is no call, as a router;
     an unmarked bf16 linear is still refused."""
@@ -1348,3 +1396,20 @@ def test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream(n, w
     want = commit_rows(SALT, 5, values, hash=HM96, salt_key=key, nonce=nonce)
     got = RQ.hiding_rows(SALT, 5, values, key, nonce)
     assert got.commitment == want.commitment and all(got.open(i) == want.open(i) for i in range(n))
+
+
+def test_a_rounds_request_and_slot_tables_are_core_commit_rows():
+    """A round's request table (entries of their own lengths, then `EMPTY_REQUEST` again and again) and slot table (each
+    owner over its rows, then `EMPTY_SLOT`), whose repeated preimages `hiding_rows` digests once, are `audit.commit_rows`'
+    trees of the same leaves: the root and every opening."""
+    from verity.core.protocols.pouw.audit import HM96, commit_rows
+    rng, t, r = random.Random(7), 40, 3
+    entries = [RQ.RequestEntry(i, r, 5 * i, 16, tuple(rng.randrange(1 << 17) for _ in range(1 + 3 * i))) for i in range(4)]
+    owners = [0] * 5 + [1] * 5 + [2] * 5 + [3] * 7 + [None] * 3
+    for got, values, binding, nonce in (
+            (RQ.request_table(SALT, r, t, entries, KEY), [e.row() for e in entries] + [RQ.EMPTY_REQUEST] * (t - 4),
+             RQ.requests_binding(SALT, r), RQ.REQUESTS_NONCE + r),
+            (RQ.slot_table(SALT, r, t, owners, KEY), [RQ.slot_leaf(o) for o in owners] + [RQ.EMPTY_SLOT] * (t - 25),
+             RQ.slots_binding(SALT, r), RQ.SLOTS_NONCE + r)):
+        want = commit_rows(binding, r, values, hash=HM96, salt_key=KEY, nonce=nonce)
+        assert got.commitment == want.commitment and all(got.open(i) == want.open(i) for i in range(t))

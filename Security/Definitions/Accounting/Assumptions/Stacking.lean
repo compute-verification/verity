@@ -108,7 +108,7 @@ def CircuitCarriers {n P N ρ S Lk q G T M : ℕ} {ι Y : Type}
     (store : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → RateSketch.SketchStore N 128)
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → Fin N ↪ Fin T × Fin M)
     (joined : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
-    (X L B εnum εden : ℕ) (W : Gates.Dag ι) (Aud : Gates.Audit) : Prop :=
+    (X L B εnum εden : ℕ) (W : Gates.IntDag ι) (Aud : Gates.Audit) : Prop :=
   RateSketch.LifetimeCapped layout joined L →
   ∀ (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (g : Fin G) (y : Y),
     ∃ (K : RateSketch.Carrier N 128) (I : Finset ℕ),
@@ -133,11 +133,11 @@ is what the schedule check bounds (`Accounting.ScheduleDeterministic`): the veri
 unless every pass's plan is its own plan (`RemoteAudit.Schedule.plan`) of the schedule the prover publishes (when each
 block is written and freed, and each pass's step), and that schedule is within the cap on its bits the prover
 committed before the session's first coin (`audit.Params.schedule_cap`), which is what it credits
-(`audit.Ledger.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
+(`audit.GammaTerms.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
 published after the coins, whose length can follow them. A layout the check accepts at cap `a` at every coin is
-`SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, under
-`Properties.RemoteAudit.ScheduleLayoutGap`: the model's layout is the verifier's positions of the plan the pass
-sent), and a layout that follows a
+`SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, at the verifier's own layout,
+`Properties.RemoteAudit.sessionLayout`: its positions of the plan the pass sent, where it checks each opened block),
+and a layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
 schedule holds the run inputs and arrival steps the prover chose after the coins of the blocks the pass holds
 (arrivals, lengths, prefix-cache hits and preemptions, and every run input that moves them), and more: the whole

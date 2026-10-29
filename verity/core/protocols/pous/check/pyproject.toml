@@ -27,6 +27,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/difftest", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/protocols/interface", "verity/core/primitives/identity", "verity/core/primitives/randomness", "verity/core/service/flock/Flock",
@@ -39,4 +40,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
           "benchmarks/pous/band_gpu/__init__.py",
           "benchmarks/pous/band_gpu/memory_challenger.py", "benchmarks/pous/band_gpu/harness.py",
-          "verity/core/devices/memory_challenger/lean", "verity/core/primitives/lms/lean"]
+          "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean", "verity/core/primitives/lms/lean"]

@@ -153,13 +153,20 @@ Landing:
 Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
-  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
-  finds a reason this is wrong floats it at once.
+  exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (PoUW's) also
+  needs values that read live noise and SAK's lower bound, so SAK is a premise of compute credit as well as of exclusion
+  (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights, served activations, un-noised
+  outputs), and an un-noised call earns no compute credit (ASK-174).
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
+- `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
+  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet. ML-KEM-1024
+  is the one-hash rule's exception for transport only: a cableless remote party's, its secret always XORed with a
+  SHA-512 one and never on pair links (`ind-cca/ml-kem-1024`).
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the

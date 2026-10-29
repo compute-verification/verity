@@ -21,7 +21,7 @@ records its proof's recursive caps, each request is below the schedule's levels 
 the positions of the coins of round `plainLevelRound`, one opened level-`ℓ` row per position. -/
 theorem accepts_reqsDJK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ} (h : AcceptsAtDJK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (r : ℕ), r < 2 →
@@ -88,7 +88,7 @@ model leaf `lf` are its reps' deployed ones**, at every level `ℓ ≥ 1`: each 
 its level-`ℓ` openings its `plainLevelColsOf` entries (`accepts_reqsDJK`). -/
 theorem accepts_opensLDLfJK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
     {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ} (h : AcceptsAtDJK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -149,7 +149,7 @@ reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's r
 `plainLevelColsOf` entries (`accepts_reqsDJK`); `accepts_opensLDLfJK` at `leaf512`. -/
 theorem accepts_opensLDJK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ} (h : AcceptsAtDJK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -203,7 +203,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **Two of one rep's level-`ℓ` entries at one position with different columns**, in `t` at the setup at `d`, the
 session the record decodes to through `keep` (`LaterEntriesClash`). -/
 def LaterEntriesClashJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : TranscriptJ) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch ∧ ∃ r < 2, ∃ s : StreamRec,
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r) = some s ∧
@@ -217,7 +217,7 @@ def LaterEntriesClashJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t :
 session the record decodes to through `keep` (`LaterEntriesAt`). -/
 def LaterEntriesAtJK (keep : Bool → Bool) (sch : Accounting.Schedule) (I : Exec.Inputs) (d : Json)
     (t : TranscriptJ) (out : Model.OutCL 𝔽 Dig (List UInt8)) (r : ℕ) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch' : _root_.Flock.Schedule),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch' : _root_.Flock.Schedule),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch' ∧ schedOf sch' = sch ∧ ∃ (s : StreamRec) (p : Proof),
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r) = some s ∧

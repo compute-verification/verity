@@ -87,7 +87,7 @@ EXPECT = {
     "answer-commitment-type": "evidence: answer.commitment: not a string",
     "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
     "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
-    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset or stratified draw",
+    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work draw",
     "answer-public": "evidence: public: keys are not draw",
     "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",
@@ -107,7 +107,8 @@ EXPECT = {
     "answer-public-null": "evidence: answer: an accept has no reason",
     "answer-reject-public": "evidence: answer: a reject has a reason, and neither",
     "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "draw: bernoulli:1/2 over",
-    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over", "answer-public-stratified": "draw: stratified:",
+    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over",
+    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "draw: stratified:",
     "answer-public-work": "draw: work:", "answer-public-work-bare": "draw: work:",
     "answer-public-law-other": "evidence: public.draw.law: not subset, bernoulli, stratified or work",
     "answer-public-law-type": "evidence: public.draw.law: not a string",
@@ -137,7 +138,7 @@ EXPECT = {
     "case-commitment-type": "case: the case.commitment: not a string", "case-not-object": "case: the case: params missing",
     "noncanonical-record": "commitment: not canonical JSON",
     "noncanonical-answer": "evidence: not canonical JSON", "float-answer": "evidence: canonical JSON: a non-integer number",
-    "utf8-record": "commitment: not UTF-8", "honest": None,
+    "utf8-record": "commitment: not ASCII without DEL", "honest": None,
     **{n: f"params: {CC.LIVE_PARAMS}" for n in ("live-missing", "live-null", "live-keys", "live-seeded")},
     "live-other-key": "salt: the challenger's session is not trusted: ",
     "live-incomplete": f"salt: {CC.INCOMPLETE}", "live-unreserved": f"salt: {CC.NO_RESERVE}",
@@ -446,8 +447,10 @@ def test_the_pinned_tiles_are_their_templates():
 
 def test_canonical_json_is_leans():
     assert CC.canonical(b'{"a":[1,null,true],"b":"x"}') == {"a": [1, None, True], "b": "x"}
+    assert CC.canonical(b'{"drawn":1,"d\\u007f":"d\\u00e9\\ud83d\\ude00"}') == {"drawn": 1, "d\x7f": "dé😀"}
     for b, why in ((b'{"b":1,"a":2}', "not canonical"), (b'{"a": 1}', "not canonical"), (b'{"a":1.5}', "non-integer"),
-                   (b"\xff", "not UTF-8"), (b"{", "not JSON")):
+                   (b"\xff", "not ASCII without DEL"), (b"{", "not JSON"), ('"dé"'.encode(), "not ASCII without DEL"),
+                   (b'"\x7f"', "not ASCII without DEL"), (b'"\\u00E9"', "not canonical"), (b'"\\u007e"', "not canonical")):
         with pytest.raises(CC.Refused, match=why):
             CC.canonical(b)
 

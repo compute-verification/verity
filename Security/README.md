@@ -455,7 +455,7 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
-| Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
+| Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Accounting/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
 | PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
@@ -479,7 +479,13 @@ commitment binds them (`Properties.Composition`, proved), and only when all thre
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
-  `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
+  `CoinsConfidential` and `OneClock`, are onsite's and prose only (`verity/core/protocols/sampled_proofs/README.md`).
+  Remote's coin path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
+  `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
+  (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
+  reads coins only from that log (`VerifierReadsLog`). Under them a sample drawn with a logged coin misses a set fixed
+  before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); for
+  `CoinsConfidential` and `OneClock`, no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a

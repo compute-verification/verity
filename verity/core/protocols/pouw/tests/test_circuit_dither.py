@@ -119,7 +119,7 @@ def test_values_are_16_bit_prefix_sums_and_o_at_32_bits():
 def test_default_shape_is_nofold_opts_pick_and_its_layout_is_4993s():
     """L = 1,024 and L′ = 128 (t = 8) with 16 KiB rows: per tile P = 2(S − 1) + 4 rows, the words of s = 1 .. S − 1 and
     then O (T_S is implied by O); every value's leaf and offset is the one `leaf_of` lists it at. A filler's tile commits
-    all S segments' words and no O, and a call of one segment commits O alone."""
+    all S segments' words and no O, and a call of one segment commits O alone, which earns no credit."""
     sh = D.Shape(256, 128, 4096)
     assert (sh.L, sh.lp, sh.t, sh.row, sh.S, sh.W, sh.row_w, sh.row_o, sh.lpt, sh.leaves) == \
         (1024, 128, 8, 16384, 4, 3, 2, 4, 10, 20)
@@ -330,7 +330,7 @@ def test_shape_refuses(bad):
 
 def test_shape_refuses_t_past_8():
     """t = min(L, K) / L′ is at most 8: L 8,192 at L′ 256 is refused at K 16,384, and L′ 1,024 passes, as do the default
-    and L ≥ K with L′ ≥ K / 8."""
+    and L ≥ K with L′ ≥ K / 8, a shape that commits O alone and earns no credit."""
     with pytest.raises(ValueError, match="at most 8"):
         D.Shape(128, 128, 16384, lp=256, L=8192)
     assert D.Shape(128, 128, 16384, lp=1024, L=8192).t == 8

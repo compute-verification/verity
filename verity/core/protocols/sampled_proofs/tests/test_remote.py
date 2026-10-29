@@ -24,6 +24,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
@@ -41,9 +42,8 @@ WINDOW = {"root": "11" * 64}
 #: 1018753ee5, whose second parent is 882770e600
 MAIN = R.main_lines(Path(__file__).parent / "fixtures" / "main-first-parent.txt")
 PIN = "c81c31e6d51f9c481cdead96221d65ad6d7afd2c"
-#: the host's pins log as its operator published it when it repinned vy-challenger-1 to `PIN`; every open seals it
-#: unless a
-#: test says otherwise
+#: the host's pins log as its operator published it when it repinned the challenger host to `PIN`; every open seals it
+#: unless a test says otherwise
 HOST_PINS = ['{"commit":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c","main":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c",'
              '"pinned_utc":"2026-10-22T11:07:28Z"}']
 #: the challenger key the window's deployment pins: sixteen leaves, four a session (the ledger's open, the record, the
@@ -154,19 +154,19 @@ class Host:
     (a new ledger in `tmp_path` unless `ledger`), whose record `open_session` signed with `sign` and wrote to
     `directory` naming the host the ledger opens it on (or `record_host`), serving one session on a loopback port;
     `reason` is how `serve` ended it, and the ledger's end says the session closed when its client closed it (or as
-    `closed` says)."""
+    `closed` says). With `withhold`, the session is a withheld one, and the ledger's open says so."""
 
     def __init__(self, tmp_path, sign, session: str = "s-1", seed: str = "host", ledger: Ledger | None = None,
                  window: dict = WINDOW, closed: bool | None = None, record_host: str | None = None,
-                 secret: bytes | None = None) -> None:
+                 secret: bytes | None = None, withhold: bool = False) -> None:
         self.secret = secret
         self.directory = tmp_path / session
         self.directory.mkdir(parents=True)
         self.ledger, self.closed = ledger or Ledger(tmp_path / "windows.jsonl", sign), closed
-        self.ledger.open(session, window)
+        self.ledger.open(session, window, **({"withheld": True} if withhold else {}))
         self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy(seed))
         self.session = R.open_session(self.challenger, pinned_key(), record_host or f"{HOST}.{session}", sign,
-                                      self.directory, session)
+                                      self.directory, session, withhold=withhold)
         (self.directory / R.HELLOS).write_text("")
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = "127.0.0.1:%d" % self.listener.getsockname()[1]
@@ -498,6 +498,63 @@ def test_open_many_releases_and_logs_the_coins_as_opening_them_one_at_a_time_doe
     events = [json.loads(line)["event"] for line in many.decode().splitlines()]
     assert events == ["commitment"] + ["root", "release"] * 3
     assert C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")).open_many(BATCH) == batched
+
+
+def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_path, signer):
+    """A withheld session (`open_session(..., withhold=True)`) answers the hello with the layout alone and each open with
+    the coin's raw bytes alone: no frame before the close carries the root, a salt or a path. Its close, once signed,
+    releases the commitment and every coin's opening, which open against it after the root each followed. The client
+    (`RemoteChallenger`, `ChallengerCoins`) reads the raw coins as it runs and settles the full openings at the close; a
+    session served without `withhold` answers the hello with the commitment, as before."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, tmp_path, "s-1", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    b.sendall(frame({"type": "hello"}))
+    before = [reply(b)]
+    for label, index, after in BATCH:
+        b.sendall(frame({"type": "open", "label": label, "index": index, "after": after.hex()}))
+        before.append(reply(b))
+    b.sendall(frame({"type": "close"}))
+    released = reply(b)
+    b.close()
+    t.join()
+    a.close()
+    assert before[0] == {"type": "layout", "layout": {"epoch": 0, "families": [list(f) for f in FAMILIES], "scheme": SCHEME}}
+    assert [sorted(x["coin"]) for x in before[1:]] == [["after", "coin", "epoch", "index", "label"]] * len(BATCH)
+    assert not any(ch.commitment.root.hex() in json.dumps(x) for x in before)
+    assert released["type"] == "released" and released["released"]["commitment"] == ch.commitment.to_json()
+    openings = [C.LiveOpening.from_json(o) for o in released["released"]["openings"]]
+    assert [o.coin.hex() for o in openings] == [x["coin"]["coin"] for x in before[1:]]
+    assert all(C.live_reason(ch.commitment, o, label, index, after) is None
+               for o, (label, index, after) in zip(openings, BATCH))
+    assert (tmp_path / R.CLOSE).is_file()
+
+    directory = tmp_path / "client"
+    directory.mkdir()
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, directory, "s-2", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    client = R.RemoteChallenger(b)
+    assert client.withheld and client.commitment is None
+    coins = ChallengerCoins(C.LiveRecord(client, "positions"))
+    coins.commit(root(7))
+    read = coins(100)
+    assert all(o.salt == b"" and o.path == () for o in coins.segments[0].openings)
+    client.close()
+    t.join()
+    a.close()
+    coins.settle()
+    assert client.commitment == ch.commitment
+    assert read == b"".join(o.coin for o in coins.segments[0].openings)[:100]
+    assert all(C.live_reason(ch.commitment, o, "positions", i, root(7)) is None
+               for i, o in enumerate(coins.segments[0].openings))
+    assert coins.record.reason() is None
+    _, got, _ = _served(tmp_path / "plain", signer, lambda c: c.commitment)
+    assert got is not None
 
 
 def _scripted(n: int, answer):
@@ -885,7 +942,7 @@ def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, sign
 
 
 def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
-    """RT4-INT-24: a v1 open names its window by Commit and a period label; a v2 open of the same root later would give
+    """A v1 open names its window by Commit and a period label; a v2 open of the same root later would give
     it a second draw of coins, so the ledger is refused for both. A v1 open alone is refused too: it names no prover and
     seals no refused hellos. And no v1 entry follows a v2 one."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer, schema=C.LEDGER_SCHEMA_V1)
@@ -910,7 +967,7 @@ def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
 
 @pytest.mark.parametrize("leaves", [[3, 3], [5, 2], [4, 6, 6, 7]])
 def test_a_ledger_that_reuses_or_goes_back_on_a_leaf_is_refused(leaves):
-    """RT4-INT-27: a host whose key state and ledger are restored signs its next entry at a leaf it has signed at
+    """A host whose key state and ledger are restored signs its next entry at a leaf it has signed at
     already; the key signs at increasing leaves, so a ledger whose leaves don't increase was forked."""
     key_sha512 = hashlib.sha512(lms.public_key(PINNED)).hexdigest()
 
@@ -1058,7 +1115,7 @@ def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-
 def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is_refused(tmp_path, signer):
     """The operator's signed `period-open` and `period-close` entries pass through the ledger's check
     (`verify_periods`): a
-    period's windows are the opens of its lane between them, and a close that lists other windows or outcomes is
+    period's windows are the opens of its prover between them, and a close that lists other windows or outcomes is
     refused, as is a period entry under another key or under v1."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     _period_open(ledger)
@@ -1263,7 +1320,7 @@ def _pinned_host(tmp_path, pinned: str, **seal) -> Host:
 
 
 def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(tmp_path):
-    """RT4-INT-40: the open names the commit its host ran and seals the host's pins log as it stood, and
+    """The open names the commit its host ran and seals the host's pins log as it stood, and
     `pinned_session` takes the session only when one of the sealed lines pins that commit. An honest session at a main
     commit is read under any later extension of the log; a commit pinned off main, or only after the open, is refused
     naming the fix; so are a missing, malformed, cut or edited pins log and an open that seals none."""
@@ -1281,14 +1338,14 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
         off = R.ledger_lines(_pinned_host(tmp_path / pin, pin).ledger.path)
         refused(off, later, f"session {RESERVED_SESSION} ran commit {pin}, which the host's pins log doesn't record "
                             "as a commit of main's history: repin the challenger host to a commit origin/main "
-                            "contains (vy-challenger-pin) and rerun the window there")
+                            "contains (with its pin command) and rerun the window there")
     refused(lines, None, C.NO_PINS)
     refused(lines, "\n".join(PINS), f"the host's pins log is malformed: {C.PINS_FORM}")
     for bad in (PINS[1].replace("c0", "C0"), PINS[1].replace(":", ": "), PINS[1][:-1] + ',"x":1}',
                 C.ledger_text({"commit": MAIN_PIN, "main": "e1" * 20, "pinned_utc": "2026-02-30T13:00:00Z"}), 5):
         refused(lines, [PINS[0], bad], f"the host's pins log line 1 is malformed: {C.PINS_FORM}")
     refused(lines, PINS[:1], f"the host's pins log has 1 lines, fewer than the 2 the open of session "
-                             f"{RESERVED_SESSION} sealed: take infra's newest published pins log")
+                             f"{RESERVED_SESSION} sealed: take the auditor host's operator's newest published pins log")
     edited = [PINS[0], C.pin_line(MAIN_PIN, "e2" * 20, "2026-10-21T13:00:00Z")]
     for log in (edited, PINS[::-1]):
         refused(lines, log, f"the host's pins log is not the one the open of session {RESERVED_SESSION} sealed: its "
@@ -1319,7 +1376,7 @@ MERGE = "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
 
 def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_line(tmp_path, signer):
     """`credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
-    A session whose open names `PIN`, main's tip when vy-challenger-1 was repinned and the one line of the pins log it
+    A session whose open names `PIN`, main's tip when the challenger host was repinned and the one line of the pins log it
     published, sealed in the open, is credited against the auditor's own first-parent list of main. Refused, each with
     its reason and no fallback to `audited_session`: a pin on main's first-parent line the log doesn't record, an absent
     log, an open that seals none, no copy of main or a malformed one, and a logged pin that is in main's history but not
@@ -1348,7 +1405,7 @@ def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_l
                                "which is not on main's first-parent line in the verifier's copy (`git rev-list "
                                "--first-parent origin/main`): a branch commit merged into main is in main's history but "
                                "no tree main's check ran on; repin the challenger host to a commit on main's "
-                               "first-parent line (vy-challenger-pin) and rerun the window there")
+                               "first-parent line (with its pin command) and rerun the window there")
     for pin in BRANCH_PINS:
         assert "not on main's first-parent line" in C.first_parent_reason(RESERVED_SESSION, pin, MAIN)
     assert C.first_parent_reason(RESERVED_SESSION, PIN, MAIN) is None
@@ -1370,8 +1427,8 @@ def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_l
     assert C.pins_reason(RESERVED_SESSION, opened, HOST_PINS) is None
     assert C.pins_reason(RESERVED_SESSION, {k: v for k, v in opened.items() if k != "pinned"}, HOST_PINS) == (
         f"session {RESERVED_SESSION} ran commit None, which the host's pins log doesn't record as a commit of main's "
-        "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window "
-        "there")
+        "history: repin the challenger host to a commit origin/main contains (with its pin command) and rerun the "
+        "window there")
 
 
 def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_others(tmp_path, signer):
@@ -1401,6 +1458,16 @@ def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_
     for heads, why in ((None, C.NO_AUDIT), ([], C.NO_AUDIT), ("lines", C.HEADS_FORM)):
         with pytest.raises(C.CoinError, match=re.escape(why)):
             C.ledger_head(heads, pinned_key(), lms_verify)
+    heads = [R.ledger_lines(early), R.ledger_lines(first.ledger.path)]
+    read = C.ledger_of(heads, pinned_key(), lms_verify)
+    raw = [line.encode() for line in heads[1]]
+
+    def verifies(m: bytes, s: bytes) -> bool:
+        return lms_verify(pinned_key(), m, s) is True
+
+    assert read.lines == heads[1] == C.ledger_head(heads, pinned_key(), lms_verify)
+    assert read.windows == C.verify_ledger(raw, pinned_key().public[:16], verifies)
+    assert read.periods == C.verify_periods(raw, pinned_key().public[:16], verifies)
 
 
 def test_an_end_whose_reason_is_past_ascii_is_read_escaped(tmp_path, signer):
@@ -1428,7 +1495,7 @@ def test_the_pin_is_read_from_the_operators_key_record():
 
 
 def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
-    """RT4-INT-26: the round roots in the release log rewritten after the session's end, to roots chosen after every
+    """The round roots in the release log rewritten after the session's end, to roots chosen after every
     coin: the log is no longer the one the ledger's end sealed (nor the one the close signs)."""
     host = Host(tmp_path, signer)
     honest(host)

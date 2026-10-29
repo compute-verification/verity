@@ -107,7 +107,7 @@ def pous_answer(case: Mapping[str, Any], *, schemes: Mapping[str, mc.Verify] = m
     commitment, ev = _shape(case)
     p = case["params"]
     try:
-        published, session = R.Setup.from_json(commitment), R.Session.from_json(ev["session"])
+        published, session = R.Setup.from_json(commitment), R.ChallengerRecord.from_json(ev["session"])
         point, sid = period.point_of(p["point"]), bytes.fromhex(p["session_id"])
         trusted, digests = [bytes.fromhex(t) for t in p["trusted"]], bytes.fromhex(ev["digests"])
         inputs = period.setup_inputs(ev["setup"])
@@ -210,7 +210,8 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
         _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
         store = pous._encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
         try:
-            _need(store.point == point, f"C* is at {store.point}, not the run's point {point}")
+            _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
+                  f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
             _need(store.root == published.root, "C* encoded at the kept salt has another root than setup published")
             _need(store.digests == digests, "C* encoded at the kept salt is not the memory challenger's table")
             return commitment, published.salt, store.segments()
@@ -235,7 +236,7 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     try:
         digests = (private / "digests.bin").read_bytes()
         inner, published, point = run["answer"], R.Setup.from_json(run["published"]), period.point_of(run["point"])
-        session, sid = R.Session.from_json(run["session"]), bytes.fromhex(run["session_id"])
+        session, sid = R.ChallengerRecord.from_json(run["session"]), bytes.fromhex(run["session_id"])
         trusted = [bytes.fromhex(t) for t in run["trusted"]]
         op = advice.Opening(opening["index"], bytes.fromhex(opening["row"]), bytes.fromhex(opening["salt"]),
                             tuple(bytes.fromhex(p) for p in opening["path"]))

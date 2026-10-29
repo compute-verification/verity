@@ -36,15 +36,15 @@ def RsExtrasAt (o : Run H rel) : Prop :=
     dot (wOf (o.extras i)[k]!) (switchVec (traces o.sts o.w)[i]! (o.extras i)[k]!) = (o.extras i)[k]!.value
 
 /-- **The masked ring switch replays** at every table and rep of a run, given the extra claims' algebra there. -/
-theorem ringSwitchJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
+theorem ringSwitchJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
     (hR : RepShapedAt o.toCase) (hX : RsExtrasAt o) :
     ∀ i < o.tabs.size, ∀ r < 2,
       (ringSwitchWith o.hs o.tabs[i]!.m (ringClaimsZk (o.rp i r).1 (o.zp i r).proof ++ o.extras i)
         (o.zp i r).proof.ringSwitches).run (o.rp i r).2 = .ok (o.sw i r) := by
   intro i hi r hr
-  have hRp := replayJ S h64 o hS hR i hi r hr
+  have hRp := replayJ h64 o hS hR i hi r hr
   have hi' := Run.lt_sts hi
-  obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ S h64 o hS hR
+  obtain ⟨schs, cms, streams, hss, hbytes, -, -, hrep⟩ := Run.walkJ h64 o hS hR
   obtain ⟨htabi, -, -, hreps⟩ := hrep i hi'
   obtain ⟨hstream, p, ic, l, t', l', prior, ws, -, hzp, hst', -, -, hrun⟩ := hreps r hr
   have h25 := (o.toCase.tables.2.2.2 i hi').1
@@ -114,7 +114,7 @@ theorem Run.sess_points (o : Run H rel) : ∀ p ∈ o.sess.points.toList, p.size
   cases h : Record.decodeWith o.hs o.spec o.record with
   | error e =>
     intro p hp
-    rw [show (val (Except.error e : Except String Session)).points = #[] from rfl] at hp
+    rw [show (val (Except.error e : Except String RunRecord)).points = #[] from rfl] at hp
     simp at hp
   | ok s => exact decodeWith_points o.hs h
 
@@ -156,32 +156,32 @@ structure LgInnerAt (o : Run H rel) : Prop where
       (repConsZk (o.rp i r).1 (o.zp i r).proof ++ o.lanes i r)).run (o.lg i r).2 = .ok (o.inner i r)
 
 /-- **The rep's checks at a run**, from the extra claims' algebra, the masked Ligerito and the inner proof there. -/
-theorem repChecksAt_of (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
+theorem repChecksAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase)
     (hR : RepShapedAt o.toCase) (hX : RsExtrasAt o) (hC : LgInnerAt H rel o) : RepChecksAt H rel o :=
-  { ringSwitch := ringSwitchJ S h64 o hS hR hX
+  { ringSwitch := ringSwitchJ h64 o hS hR hX
     ligerito := hC.ligerito
     inner := hC.inner }
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, from the per-table premises at every good case (`StmtAt`, `ProverRunsAt`, `RepShapedAt`), the
 extra claims' algebra (`RsExtrasAt`), and per rep the masked Ligerito and the inner proof (`LgInnerAt`). -/
-theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) (S : JsonRT.JsonSpec)
+theorem completeR (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) 
     (h64 : JsonRT.Out64 H) (hS : ∀ c : Case H rel, StmtAt c) (hPR : ∀ c : Case H rel, ProverRunsAt c)
     (hR : ∀ c : Case H rel, RepShapedAt c) (hX : ∀ o : Run H rel, RsExtrasAt o)
     (hC : ∀ o : Run H rel, LgInnerAt H rel o) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) :
     Claims.Flock.Complete H (deployZk rel) :=
-  completeAll H rel S h64 hS hPR hR (fun o => repChecksAt_of S h64 o (hS o.toCase) (hR o.toCase) (hX o) (hC o)) hMR
+  completeAll H rel h64 hS hPR hR (fun o => repChecksAt_of h64 o (hS o.toCase) (hR o.toCase) (hX o) (hC o)) hMR
     hMF
 
 /-- **Flock's masked verifier is complete at the deployed relation** for the honest masked prover on each table's
 share, with error `δc H`, at any number of tables: the statement's premise at one table (`StmtOkZk`), the prover's
 pieces and the rep proofs' shapes per table (`ProverRunsAt`, `RepShapedAt`), and per rep the masked Ligerito and the
 inner proof (`LgInnerAt`). -/
-theorem completeRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+theorem completeRel (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hPR : ∀ c : Case H Readable.relation, ProverRunsAt c)
     (hR : ∀ c : Case H Readable.relation, RepShapedAt c) (hC : ∀ o : Run H Readable.relation, LgInnerAt H _ o)
     (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
-  completeR H Readable.relation S h64 (stmtAt_of S hS) hPR hR Run.rsExtras hC hMR maskFree_relation
+  completeR H Readable.relation h64 (stmtAt_of hS) hPR hR Run.rsExtras hC hMR maskFree_relation
 
 variable (H rel) in
 /-- **The rep's checks but the ring switch, at every run of several tables.** -/
@@ -191,7 +191,7 @@ def LgInnerJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → LgInnerAt H rel o
 share, with error `δc H`, at any number of tables: from `complete_zk_relation`'s premises, and at
 several tables the prover's pieces (`ProverRunsJ`), the proof files' (`RepShapedJ`), and per rep the masked Ligerito
 and the inner proof (`LgInnerJ`). -/
-theorem completeJRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H)
+theorem completeJRel (H : Claims.Msg → Claims.Msg) (h64 : JsonRT.Out64 H)
     (hS : JsonRT.StmtOkZk H Readable.relation) (hR : JsonRT.RepShapedZk H Readable.relation)
     (hPR : JsonRT.ProverRunsZk H Readable.relation) (hLg : FlockComplete.LigeritoZk H Readable.relation)
     (hIn : FlockComplete.Inner H Readable.relation) (hPRJ : ProverRunsJ H Readable.relation)
@@ -199,8 +199,8 @@ theorem completeJRel (H : Claims.Msg → Claims.Msg) (S : JsonRT.JsonSpec) (h64 
     Claims.Flock.Complete H (deployZk Readable.relation) :=
   have hP : JsonRT.ProverOkZk H Readable.relation :=
     JsonRT.proverOkZk h64 (JsonRT.repRoundsZk_goal H Readable.relation)
-  completeJS H Readable.relation S h64 hS hR hPR (ringSwitchZk_goal S h64 hS hP hR (rsExtrasZk H)) hLg hIn hPRJ hRJ
-    (fun o hc => repChecksAt_of S h64 o (stmtOkJ S o.toCase hc) (hRJ o.toCase hc) o.rsExtras (hCJ o hc)) hMR
+  completeJS H Readable.relation h64 hS hR hPR (ringSwitchZk_goal h64 hS hP hR (rsExtrasZk H)) hLg hIn hPRJ hRJ
+    (fun o hc => repChecksAt_of h64 o (stmtOkJ o.toCase hc) (hRJ o.toCase hc) o.rsExtras (hCJ o hc)) hMR
     maskFree_relation
 
 end FlockComplete.ZkTables

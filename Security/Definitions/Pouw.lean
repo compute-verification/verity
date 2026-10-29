@@ -40,6 +40,7 @@ import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
 import Definitions.Pouw.NCP.Witness
 import Definitions.Pouw.NCP.Word
+import Definitions.Pouw.OnsiteFreed
 import Definitions.Pouw.PearlC.Accum
 import Definitions.Pouw.PearlC.Completeness
 import Definitions.Pouw.PearlC.Deadline
@@ -60,6 +61,8 @@ import Definitions.Pouw.PearlC.Fp4
 import Definitions.Pouw.PearlC.Fp4Chain
 import Definitions.Pouw.PearlC.Fp4Skip
 import Definitions.Pouw.PearlC.Fp4Vectors
+import Definitions.Pouw.PearlC.FlockTile.Bridge
+import Definitions.Pouw.PearlC.FlockTile.Audit
 import Definitions.Pouw.PearlC.Game
 import Definitions.Pouw.PearlC.Hidden
 import Definitions.Pouw.PearlC.HiddenTileGame
@@ -99,6 +102,7 @@ import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
 import Definitions.Pouw.Window
+import Definitions.Pouw.Witness
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 

@@ -1,8 +1,9 @@
 """Network certificates: the network certifier's signed record of each link-window, on SHA-512 (record v2).
 
 The network certifier is the auditor-trusted device on a node's uplink that shapes each link into the grid
-(`grid.Certifier`). Once per link-window it signs one **network certificate**: a signature over a hiding digest of the
-window's record, salted by the certifier. The record head and the salt are witness: they enter proofs and never reach
+(`grid.Certifier`). Once per link-window whose record is complete it signs one **network certificate**: a signature
+over a hiding digest of the window's record, salted by the certifier. A link-window whose record isn't complete gets
+none (`Issuer`), so it fails closed. The record head and the salt are witness: they enter proofs and never reach
 the auditor in the clear, so the record's own hashes are unsalted, and what the certificate signs is the salted digest.
 
 **The record (v2).** The record is still exactly the grid and one status (W5), encoded with padding elided:
@@ -89,7 +90,7 @@ from typing import Protocol
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
+from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, BlockGrid, Status, row_left_packed
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
 RECORD_TAG = "verity-network-certifier/record/v2"
@@ -423,7 +424,7 @@ class Certificate:
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
         certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
-        head."""
+        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
         if self.key_id != key.key_id:
             return False
         try:
@@ -498,22 +499,24 @@ class CertifiedClock:
         return self.certificate.window
 
     def refusal(self, key: PublicKey, session: bytes) -> str | None:
-        """Why the opening fails under `key` in certifier session `session`, or None when it holds: the certificate is
-        an egress one of `key`'s, the sync and the salt open the digest it signs, and its signature verifies over its
-        message in the session (`Certificate.verify`), which binds the link and the window."""
+        """Why the opening fails under `key` in certifier session `session`, by the Lean's code
+        (`NetworkCheck.Period.openingRefusal`), or None when it holds: ``egress`` unless the certificate is an egress
+        one, ``key`` unless it is `key`'s, ``opening`` unless the sync and the salt open the digest it signs, and
+        ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
+        binds the link and the window."""
         c = self.certificate
         if type(c) is not Certificate or c.direction is not Direction.EGRESS:
-            return "it isn't an egress certificate, and a clock is an egress window's"
+            return "egress"
         if c.key_id != key.key_id:
-            return f"another key's, not {key.key_id.hex()[:16]}…"
+            return "key"
         try:
             opened = clock_commitment(self.salt, self.sync)
         except ValueError:
             opened = None
         if c.digest != opened:
-            return "its sync and salt don't open the salted digest it signs"
+            return "opening"
         if not c.verify(key, session):
-            return "its signature doesn't verify under the key in its session for the link-window it names"
+            return "signature"
         return None
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
@@ -526,7 +529,10 @@ class Issuer:
     in certifier session `session`. Before its first signature it starts the session on its signer, which refuses a
     session its state has already started. A refusal, of the start or of a leaf, leaves the link-window without a
     certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next link-window, and
-    refused again. Each record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
+    refused again. **It certifies only a complete record**: a record whose status isn't complete is refused the same
+    way, before the session's start or a leaf, so a link-window that isn't covered has no certificate and fails closed
+    (`no-verdict`), and a certificate that verifies under the key is of a complete record unless it is a forgery. Each
+    record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
     randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its signed
     clock certificates have taken, none of which it takes again."""
 
@@ -537,14 +543,20 @@ class Issuer:
     coins: Callable[[int], bytes] = field(default=secrets.token_bytes, repr=False)
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
 
-    def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
+    def certify(self, record: BlockGrid, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
         head = record_head(record.link, direction, record.window, record.grid, record.status, params, parameters,
                            deadline=deadline)
-        certificate = self.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+        digest = certificate_digest(salt, head.digest())
+        if not record.status.complete:
+            # formed as `sign` forms it, so what `sign` raises on (a session id not 32 bytes) raises here too
+            certificate_message(self.signer.key_id, self.session, record.link, direction, record.window, digest)
+            self.refused.append((record.link, direction, record.window))
+            return None
+        certificate = self.sign(record.link, direction, record.window, digest)
         return None if certificate is None else CertifiedRecord(head, salt, certificate)
 
     def salted_clock(self, link: str, window: int, sync: ClockSync) -> CertifiedClock | None:

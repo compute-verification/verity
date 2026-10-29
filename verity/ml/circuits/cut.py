@@ -82,7 +82,8 @@ included, to check the cut on it.
    its activation), or a member or iteration of a batch or scan node.  Its outputs are its computing gates `g` with
    `last[g] >= hi` (read after the piece, or returned): the layout is topological, so nothing before `lo` reads inside it, and
    this is `parts.out(S)` for S the piece's computing gates.  w_out is their summed declared widths.
-4. **Cut** (`call_units`), from the Call down, depth first in layout order: a piece without computing gates is no unit; one
+4. **Cut**, the term `each(instances("@*"), frontier(X))` (`query_ast`'s `Frontier`; one Call's sets `frontier_pieces`), from
+   the Call down, depth first in layout order: a piece without computing gates is no unit; one
    with w_out <= X is one unit; otherwise its children are the pieces, in order -- a composite activation's (the Call's, a call
    node's callee, a composite member's) body nodes; a batch or scan node's members or iterations.  A primitive piece is one
    gate of at most X bits, so it always fits, and the cut ends.  A unit is (`lo`, `hi`, path): the path is its steps from the
@@ -99,8 +100,8 @@ included, to check the cut on it.
    else its own, `("g", j)`.  A program's data reaches the Call through its parameters, from registered or run input gates, so it
    is compared by leaf, never by value.
 
-**Cost.**  O(n) to build `CallGates` (one pass over the gates and their operands), O(n · depth) for the cut, each piece's w_out
-one scan of its interval.
+**Cost.**  O(n) to build `CallGates` (one pass over the gates and their operands); the cut is structural, each Definition with a
+given set of returns read resolved once, its pieces' w_out from the description, never gate by gate.
 """
 from __future__ import annotations
 
@@ -110,6 +111,7 @@ from typing import Any, Iterable, Iterator, Sequence
 
 from .layout import resolve
 from .partition import INPUT_UNIT, CutVerdict, validate_unit_cut
+from .query_ast import frontier_pieces
 from .refs import Affine, Strided
 
 #: primitives that only rearrange bits (each output bit a constant or a copy of one input bit): wiring, like constants, is
@@ -645,48 +647,6 @@ class CallGates:
         return any(self.computing[lo:hi])
 
 
-def call_units(G: CallGates, X: int) -> list[tuple[int, int, tuple[tuple[int, ...], ...]]]:
-    """Step 4: the Call's units, (lo, hi, path) in layout order (see the module docstring)."""
-    units: list[tuple[int, int, tuple[tuple[int, ...], ...]]] = []
-    # a pending piece: (lo, hi, path, children) where children() lists the pieces it splits into
-    stack: list[tuple[int, int, tuple, Any]] = [(0, G.n, (), ("activation", G.fn, 0))]
-    while stack:
-        lo, hi, path, how = stack.pop()
-        if not G.any_computing(lo, hi):
-            continue
-        if G.w_out(lo, hi, X) <= X:
-            units.append((lo, hi, path))
-            continue
-        kids = list(_children(how, path))
-        stack.extend(reversed(kids))
-    return units
-
-
-def _children(how: tuple, path: tuple) -> Iterator[tuple[int, int, tuple, Any]]:
-    """A piece's children (step 4): an activation's body nodes; a call node's callee's body nodes; a batch or scan's members."""
-    kind, fn, off = how
-    if kind == "activation":
-        body = fn.body
-        for k, node in enumerate(body.nodes):
-            lo = off + body.offsets[k]
-            hi = off + body.offsets[k + 1]
-            if node.form == "primitive":
-                yield lo, hi, path + ((k,),), ("gate", node.fn, lo)
-            elif node.form == "call":
-                yield lo, hi, path + ((k,),), ("activation", node.fn, lo)
-            else:
-                yield lo, hi, path + ((k,),), ("members", node, lo)
-        return
-    if kind == "members":
-        node, g = fn, fn.fn.gates
-        step = path[-1][0]
-        for m in range(node.n):
-            lo = off + m * g
-            yield lo, lo + g, path[:-1] + ((step, m),), (("gate", node.fn, lo) if not hasattr(node.fn, "body") else ("activation", node.fn, lo))
-        return
-    raise AssertionError(f"a {kind} piece always fits")
-
-
 class CallCut:
     """`Q_call{X}`'s cut of one Definition: `units` [(lo, hi, path)] over its local gates (`CallGates`), and `owner()`, the unit of
     each computing gate in compact order."""
@@ -712,7 +672,8 @@ def call_gates(fn: Any, memo: dict | None = None) -> CallGates:
 
 def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut:
     """`Q_call{X}` on one activation of `fn` (steps 0, 2-4): `QueryInapplicable` (`gate-too-wide`) when a computing gate is wider than
-    X bits.  Memoised by Definition id."""
+    X bits; the proof blocks are the term's sets (`query_ast.frontier_pieces`), each computing gate in exactly one.  Memoised by
+    Definition id."""
     memo = {} if memo is None else memo
     key = ("Q_call", fn.id, X)
     got = memo.get(key)
@@ -723,7 +684,7 @@ def evaluate_call(fn: Any, X: int = CALL_X, memo: dict | None = None) -> CallCut
     if j is not None:
         raise QueryInapplicable(f"{fn.id}: gate {j} ({G.prim[j]}) is {G.width[j]} bits, wider than Q_call's X = {X}",
                                 {"definition": fn.id, "gate": j, "primitive": G.prim[j], "width": G.width[j], "X": X, "why": "gate-too-wide"})
-    units = call_units(G, X)
+    units = frontier_pieces(fn, X, memo)
     owner = [-1] * G.nc
     for u, (lo, hi, _path) in enumerate(units):
         for g in range(lo, hi):
@@ -777,4 +738,4 @@ def check_call_cut(G: CallGates, owner: Sequence[int], X: int, committed: Iterab
 
 __all__ = ["WIRING", "WIDE_FAN_IN", "WIDTH_RULE", "RECOMPUTE", "QueryInapplicable", "call_scope", "member_refs", "wide_operands", "CallGraph", "fits", "boundary_widths", "derived_committed", "check_cut",
            "separable", "targets", "owners", "cut_word", "DefinitionCut", "evaluate_definition",
-           "CALL_X", "CallGates", "call_gates", "call_units", "CallCut", "evaluate_call", "call_committed", "check_call_cut"]
+           "CALL_X", "CallGates", "call_gates", "CallCut", "evaluate_call", "call_committed", "check_call_cut"]

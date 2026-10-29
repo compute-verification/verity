@@ -14,7 +14,7 @@ from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
 from verity_flock import rec_sparse as RS
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-rec-sparse"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-rec-sparse"
 
 #: the staged shapes: the binding's, one template and one slot, two slots of one template, four of two templates
 SHAPES = [(2, 6, 1, 1), (2, 6, 0, 0), (1, 6, 2, 0), (2, 6, 0, 1)]

@@ -102,8 +102,8 @@ running after `STEP_BUDGET_S`, is stopped the same way (SIGTERM, then SIGKILL) a
 budget`, so a hung test can't hold a check slot for a day; each suite is bounded first by its own `--timeouts`.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
-as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
-completes the root), the frozen shape the observability watcher reads.  A SIGTERM
+as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step a child as it starts that its
+record completes, the run's end completes the root), the frozen shape the observability watcher reads.  A SIGTERM
 (`research cancel`, a runner's timeout) stops the steps the same way (a step it reaches first and kills is `stopped` too, not
 failed), and a recorded run still writes its result, validation `not_run`, and the pack of the passes its steps stored before
 it, then exits 143: a cancelled check's passes are reused.
@@ -947,7 +947,7 @@ def landable(base: str) -> bool:
 
 def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     """The `research run` options that put a `--record --on MACHINE --pool NAME` check in a slot of MACHINE's NAME pool, the
-    pool `research run --pool NAME` takes (`slot_only.POOLS`), rather than its merge-check slots, which on the CPU nodes are
+    pool `research run --pool NAME` takes (`slot_only.pool_slots`), rather than its merge-check slots, which on the CPU nodes are
     only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
     not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
     commit.  ValueError when the pool can't be taken so."""
@@ -955,14 +955,15 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
         return []
     from research.pods.nebius import slot_only
 
-    if pool not in slot_only.POOLS:
-        raise ValueError(f"{pool}: no such pool; the pools are {', '.join(sorted(slot_only.POOLS))}")
+    if not slot_only.POOL_NAME.fullmatch(pool):
+        raise ValueError(f"{pool}: no such pool; a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
+                         f"{', '.join(sorted(slot_only.POOLS))}; a node's own are under {slot_only.LOCKS})")
     if not on or on == "auto" or "," in on:
         raise ValueError(f"{pool} needs --on MACHINE, the one machine whose pool it waits in (`--on {LANE_POOL[0]} --pool "
                          f"{LANE_POOL[1]}`); --on auto and lists choose among merge-check slots")
     if priority:
         raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
-    return ["--env", f"CHECK_SLOTS={slot_only.POOLS[pool]}"]
+    return ["--env", f"CHECK_SLOTS={slot_only.pool_slots(pool)}"]
 
 
 def nested_record(argv: list[str]) -> str:
@@ -1990,6 +1991,7 @@ class Steps:
             if self.stopping:
                 return None
             self.running[name] = p = subprocess.Popen(argv, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
+            self.spans.open(name)
             return p
 
     def end(self, rec: dict) -> dict:

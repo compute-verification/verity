@@ -164,7 +164,7 @@ theorem innerOk_iff {inner : Msg} : innerOk inner = .ok () ↔
 
 /-- **At every statement the reader parses, Flock's plain verifier sets the inner statement up, its statement check
 passes and it carries a draw** (`readX_inner`'s `innerOk`). -/
-theorem parse_innerOk {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+theorem parse_innerOk {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ∃ s spec sts, FlockDeploy.setupOf false (xIOf x) = some (s, spec, sts) ∧ s.read.check = .ok () ∧
       s.read.draw.isSome = true := by
   obtain ⟨r, hr, hx⟩ := readX_of_parse hst
@@ -175,7 +175,7 @@ theorem parse_innerOk {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = so
 /-- **At every statement the reader parses, at one table the session's draw is the statement's** (`innerOk`'s
 `drawTiedB`): the inner setup reads the session's `unitDraw` from the public file's header, and the reader refuses a
 header whose draw is not the record's. -/
-theorem parse_drawTiedOne {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) :
+theorem parse_drawTiedOne {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) :
     ∀ s spec sts, FlockDeploy.setupOf false (xIOf x) = some (s, spec, sts) → s.read.check = .ok () →
       sts.size = 1 → FlockDeploy.drawEq (drawOfU spec.unitDraw) s.read.draw = true := by
   intro s spec sts hs _ h1
@@ -225,13 +225,13 @@ theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (
 /-- **`admitted_acc` at `Readable.relation`**, where Flock's completeness is `FlockComplete.Replay.complete_plain`, under its
 hypotheses. -/
 theorem admitted_acc_plain (hA : PlainLeavesAdmitted Flock.Readable.relation)
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (h64 : Claims.Out64 FlockDeploy.sha512)
+    (h64 : Claims.Out64 FlockDeploy.sha512)
     (hfin : FlockComplete.Replay.LgFinal FlockDeploy.sha512 Flock.Readable.relation) :
     ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner),
       FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms :=
-  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hfin) h64
+  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 h64 hfin) h64
 
 /-! ## The inner readiness the deployed stop reads -/
 
@@ -366,14 +366,14 @@ theorem innerAccSha_iff_run {x : Msg} {s₀ : FlockDeploy.Ins} {spec₀ : Flock.
 /-- **The parts' cut of the inner run** (a code fact about the compiled statement at the shape): wherever every part's
 inner check holds at a statement the reader parses, of the shape, the inner verifier's run conditions hold. -/
 def RunCut (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < nS x, chk s x c ms) → InnerRun (xIOf x) c ms
 
 /-- **The inner statement is drawn wherever the parts' inner checks all hold**: at a statement the reader parses, of
 the shape, where some coins and inner messages pass every part's inner check, Flock's plain verifier reads a draw off
 the inner statement. It holds at the checked reader (`innerDrawn_checked`). -/
 def InnerDrawn (shape : Claims.Recursion.Form → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ms : List Msg),
     (∀ s < nS x, chk s x c ms) →
       ∃ s spec sts, FlockDeploy.setupOf false (xIOf x) = some (s, spec, sts) ∧ s.read.draw.isSome = true
 

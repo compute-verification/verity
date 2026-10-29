@@ -396,6 +396,21 @@ class Linear:
         p = self.gql("mutation($i: ProjectCreateInput!) { projectCreate(input: $i) { project { url } } }", {"i": i})
         return f"project {name} created: {said({**shown, **opt})} {p['projectCreate']['project']['url']}"
 
+    def project_teams(self, project: str, teams: list[str]) -> str:
+        """Add `teams` (keys or names) to the active `project` (a prefix of its name), so their issues can be placed in it;
+        the teams it has stay. A line naming what was added, or that it had them all."""
+        if not teams:
+            raise LinearError("project edit: give the team to add, --team KEY (more: repeat it)")
+        p = self.project(project)
+        have = self.gql("query($id: String!) { project(id: $id) { teams { nodes { id key } } } }",
+                        {"id": p["id"]})["project"]["teams"]["nodes"]
+        new = [t for t in (self.team(x) for x in teams) if t["id"] not in {h["id"] for h in have}]
+        if not new:
+            return f"{p['name']}: has every team given already"
+        self.gql("mutation($id: String!, $i: ProjectUpdateInput!) { projectUpdate(id: $id, input: $i) { success } }",
+                 {"id": p["id"], "i": {"teamIds": [h["id"] for h in have] + [t["id"] for t in new]}})
+        return f"{p['name']}: added teams {' '.join(t['key'] for t in new)}"
+
     def milestone(self, project: str, name: str, date: str | None = None, description: str | None = None,
                   rename: str | None = None, create: bool = False) -> str:
         """Make the milestone `name` in the active `project` (a prefix of its name), or (`create=False`) change the one whose
