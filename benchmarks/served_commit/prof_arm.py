@@ -220,8 +220,6 @@ class NativeDrainArm(RootsArm):
 class RowsArm(NativeDrainArm):
     """`NativeDrainArm` committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
 
-    commit_scheme = "rows-sha512"
-
 
 class RowsBaseArm(RowsArm):
     batch_copies = host_fast = False
@@ -344,12 +342,6 @@ class HiPrioArm(NativeDrainArm):
             del os.environ["VERITY_HI_PRIO"]
 
 
-class RowsHiPrioArm(HiPrioArm):
-    """`HiPrioArm` committing under rows-sha512."""
-
-    commit_scheme = "rows-sha512"
-
-
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
 SERVED_COMMIT_ROWS_BASE = RowsBaseArm("served-commit-rows-base", retain="none")
 SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none")
@@ -362,5 +354,5 @@ SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none
 SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
 SERVED_COMMIT_ROWS_4K_CAP = Rows4kCapArm("served-commit-rows-4k-cap", retain="none")
 SERVED_COMMIT_ROWS_LAYER_CAP = RowsLayerCapArm("served-commit-rows-layer-cap", retain="none")
-SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
+SERVED_COMMIT_ROWS_HIPRIO = HiPrioArm("served-commit-rows-hiprio", retain="none")
 STOCK_PROF = StockProfArm("stock-prof")
