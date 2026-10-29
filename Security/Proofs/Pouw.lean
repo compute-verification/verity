@@ -36,6 +36,7 @@ import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
 import Proofs.Pouw.Dimension.PipeProofs
+import Proofs.Pouw.Dimension.PointwiseAdaptiveProofs
 import Proofs.Pouw.Dimension.PointwiseProofs
 import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.Dimension.RouteUPipeProofs
