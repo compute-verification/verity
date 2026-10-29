@@ -572,7 +572,7 @@ def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends
 
 def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server_gets_nothing():
     """A client that never ends fails at s + D with nothing sent to its server, and takes no place in the order: the
-    next request's N is 0. Each warden draws its own run id."""
+    next request's N is 0. Each warden samples its own run id."""
     slow = (cell(DATA, 0, b"a" * P, B), False)
     warden, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
     log = {e["ordinal"]: e for e in warden.log}
