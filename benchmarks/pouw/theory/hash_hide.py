@@ -14,10 +14,12 @@ Five parts:
   forward's words tree under one hm96 instance (layout L1): hm96 with the forced salt derivation (a), the pad
   b = x xor SHA-512(ks || salt || pos), the keyed digest, and the keyed leaf (SHA-512 started from the window's secret
   midstate S), each with the value's own frame leaf where the mechanism needs one. As a share of the lead's hashing a
-  useful MAC, one hidden value every M useful MACs costs 992 c / M for c compressions, since the lead hashes 4 bytes a
-  word and a word carries 31 useful MACs.
+  useful MAC, one hidden value every M useful MACs costs 888 c / M for c compressions, since the lead hashes 4 bytes a
+  word and a word carries 27.75 useful MACs (the HASH card's basis lead).
 - ``sketch``: h over the lead's h for a b-byte sketch committed in place of every s words, inside the words tree (no
-  hiding cost beyond its bytes), and with each sketch hidden on its own under each mechanism of ``per_value``.
+  hiding cost beyond its bytes), and with each sketch hidden on its own under each mechanism of ``per_value``; and h in
+  W1 a useful MAC for a 4-byte keyed-fold receipt every s words, with the fold's own work (its registers written a word,
+  counted from its word form: an estimate) beside the receipt's hashing.
 - ``rounds``: chained rounds, R commit-then-coin rounds a call. Each round publishes one hiding root before its coin: under
   L1 + (a) one hm96 instance, so the hiding term (T1's honest-only part) is R times L1's term at one instance a call (the
   inputs are L1's term at each point); under the keyed leaf every root is a keyed digest and costs nothing.
@@ -34,9 +36,13 @@ import sys
 from pathlib import Path
 
 R_WORDS = 3515.38                    # ShaWrites' registers a compression for the words' form
-H_LEAD = {"low": 119.5, "high": 233.0}   # the lead's h, both readings of stock in W1
-WORD_BYTES, MACS_WORD, BLOCK = 4, 31, 128
-LEAD_C_MAC = WORD_BYTES / BLOCK / MACS_WORD   # compressions a useful MAC in the lead: 1/992
+H_LEAD = {"basis": 127.5, "low": 119.5, "high": 233.0}   # the lead's h, W1 a useful MAC: the card's basis and two readings
+WORD_BYTES, MACS_WORD, BLOCK = 4, 27.75, 128
+LEAD_C_MAC = WORD_BYTES / BLOCK / MACS_WORD   # compressions a useful MAC in the lead: 1/888
+REG = 32
+# registers written a word absorbed, from each fold's word form: duo u = y^p^k, y = u a + z, z = rotl(u, r) + y; xin one
+# rotl, xor and multiply-add a half step of two words; li one xor and multiply-add a half step of two words
+FOLD_REGS = {"duo": 4.0, "xin": 1.5, "li": 1.0}
 PRF_SHARE = 53_568 / 58_120          # a compression from round 8 over a whole one (hm96's PRF)
 MASK_REGS = 16 * (12 * (20 + 10 + 3) + 37 + 32)   # M_key·y in the H200 byte-table form, registers written a salt
 PAD_XOR_REGS = 16
@@ -73,7 +79,7 @@ def ands() -> dict:
     out.update({k: {"ands_a_word": v, "label": "estimate"} for k, v in est.items()})
     for v in out.values():
         v["over_sha"] = v["ands_a_word"] / (sha / 32)
-    unit = {"words recomputed (31 MACs a word)": UNIT_WORDS * MACS_WORD * ANDS_MAC,
+    unit = {"words recomputed (32 MACs a word)": UNIT_WORDS * 32 * ANDS_MAC,
             "SHA-512 over the unit's words": UNIT_WORDS * sha / 32}
     unit.update({f"{k} over the unit's words": UNIT_WORDS * v["ands_a_word"] for k, v in out.items() if "fold" in k})
     unit.update({f"a {c // 1024} KiB chunk opened whole": blocks(c) * sha for c in (16384, 65536, 262144)})
@@ -111,6 +117,14 @@ def sketch(pv: dict) -> dict:
                 row[f"each hidden on its own: {name}"] = base + v["total"] / (s * MACS_WORD) / LEAD_C_MAC
             out[f"{b} B a sketch, one sketch every {s} words"] = {
                 "h_over_lead": row, "h": {k: {r: x * h for r, h in H_LEAD.items()} for k, x in row.items()}}
+    folds = {}
+    for f, regs in FOLD_REGS.items():
+        work = regs * REG / MACS_WORD
+        folds[f] = {"fold_w1_a_mac": work, "by_s": {
+            s: {"h": H_LEAD["basis"] / s + work, "cut": H_LEAD["basis"] / (H_LEAD["basis"] / s + work)}
+            for s in (4, 8, 16, 32, 64, 256)},
+            "s_for_10x": H_LEAD["basis"] / (H_LEAD["basis"] / 10 - work) if work < H_LEAD["basis"] / 10 else None}
+    out["keyed-fold receipt, 4 B every s words, in the words tree"] = folds
     return out
 
 
@@ -190,6 +204,9 @@ def main() -> None:
     for k, v in out["sketch"].items():
         if k.startswith("4 B"):
             print(f"  {k}: " + ", ".join(f"{n.split(': ')[-1][:18]} {x:.3f}" for n, x in v["h_over_lead"].items()))
+    for f, v in out["sketch"]["keyed-fold receipt, 4 B every s words, in the words tree"].items():
+        print(f"  {f} receipt: fold {v['fold_w1_a_mac']:.2f} W1 a MAC, s for 10x {v['s_for_10x']}; "
+              + ", ".join(f"s {s}: h {x['h']:.2f} ({x['cut']:.1f}x)" for s, x in v["by_s"].items()))
     print("chained rounds:", json.dumps(out["rounds"], indent=None)[:2000])
     print("leak: all recovered =", out["leak"]["all_recovered"])
 
