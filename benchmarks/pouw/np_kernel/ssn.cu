@@ -364,6 +364,10 @@ extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* r
                                             cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level,
                                          uint64_t base, int n_levels, cudaStream_t st);
+extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_out, int level,
+                                        uint64_t first_index, uint64_t max_blocks, cudaStream_t st);
+extern "C" int verity_rows_frame_launch(const void* params, const uint8_t* hs, uint64_t n_h, uint64_t first, uint64_t m,
+                                        uint64_t n_total, uint8_t* out, uint64_t max_blocks, cudaStream_t st);
 
 // frame-v3-sha512's message heads (verity.ml.commitments.merkle): a leaf's before its 64-byte value (169 to 173 bytes by the
 // leaf's index) and a node's before its left child; with what follows them, 2 and 3 compressions
@@ -395,7 +399,7 @@ static uint8_t* dev_fill(u64 bytes, u64 seed, int slot = 0, int len = 0) {
 //           thread a row, x = SHA-512(Q || the row's segment digests), the hm96 leaf under the row's salt and the frame
 //           leaf; its tree by sz_level, a launch a level, or in sz_finish's one CTA for at most 256 rows.
 // The constants (prefixes, keys, tables, salts, message heads) are stand-ins of the schemes' lengths: they set no
-// compression count. A level of odd width reads a pad node from the slot past it.
+// compression count.
 struct Hasher {
   int rb = 0;
   u64* mids = nullptr;
@@ -419,8 +423,10 @@ struct Hasher {
       for (size_t i = 0; i < t.size(); i++) t[i] = (uint8_t)mix64(i + 5);
       tn = up(t);
       const size_t rows = max_bytes / rb + 2;
-      CK(cudaMalloc(&leaves, rows * 64));
-      CK(cudaMalloc(&lv, (rows + 128) * 64));
+      size_t width = 1;
+      while (width < rows) width <<= 1;
+      CK(cudaMalloc(&leaves, width * 64));
+      CK(cudaMalloc(&lv, width * 64));
       CK(cudaMalloc(&scratch, rows * 192));
       return;
     }
@@ -444,7 +450,7 @@ struct Hasher {
     CK(cudaMalloc(&dig, std::max<u64>(max_bytes, rows * 1024) / 16 + 64));
     CK(cudaMalloc(&x, rows * 64));
     CK(cudaMalloc(&bc, rows * 128));
-    CK(cudaMalloc(&tree, (2 * rows + 128) * 64));
+    CK(cudaMalloc(&tree, (4 * rows + 128) * 64));
     CK(cudaFuncSetAttribute(sz_segments, cudaFuncAttributeMaxDynamicSharedMemorySize, 8 * 32 * 33 * 4));
   }
   // sz_finish over rows rows of s segments each (their digests in dig): frame leaves into tree's level 0; one CTA (at most
@@ -492,36 +498,48 @@ struct Hasher {
     finish(rows, s, 1, false, st);
     return rows;
   }
-  // The frame tree above n leaves (the last leaves_of's)
+  // The frame tree above n leaves (the last leaves_of's), its width the power of two at or above n. rb > 0 as the served
+  // committer builds it (native_collect.cpp's rows_levels_above): pad leaves by its frame kernel, a level wider than 2^16
+  // nodes a launch of a thread a parent, the narrower ones ten levels a launch. Row-seg as served_zk's rows_bench.py: its pads
+  // are constants of the shape (not hashed a call), and a launch of sz_level a level.
   void tree_of(u64 n, cudaStream_t st) {
+    u64 w = 1;
+    while (w < n) w <<= 1;
     if (!rb) {
-      for (u64 off = 0, w = n; w > 1; w = (w + 1) / 2) {
+      for (u64 off = 0; w > 1; off += w, w /= 2) {
         Args a{};
         a.p[0] = (unsigned long long)tree;
         a.p[1] = (unsigned long long)nheads;
         a.i[0] = (int)off;
-        a.i[1] = (int)((w + 1) / 2);
-        sz_level<<<(unsigned)((w + 1) / 2 + 127) / 128, 128, 0, st>>>(a);
+        a.i[1] = (int)(w / 2);
+        sz_level<<<(unsigned)((w / 2 + 127) / 128), 128, 0, st>>>(a);
         CK(cudaGetLastError());
-        off += w + (w & 1);
       }
       return;
     }
+    int rc = w > n ? verity_rows_frame_launch(params.data(), nullptr, 0, n, w - n, n, leaves + 64 * n, 0, st) : 0;
     const uint8_t* in = leaves;
     uint8_t* out = lv;
-    for (int level = 0; n > 1;) {
-      const u64 w = n + (n & 1);
-      int L = 0;
-      while (L < 10 && !((w >> L) & 1)) L++;
-      const int rc = verity_rows_levels_launch(params.data(), in, out, w, level, 0, L, st);
-      if (rc) {
-        fprintf(stderr, "ERR verity_rows_levels_launch %d\n", rc);
-        exit(2);
+    for (int level = 0; !rc && w > 1;) {
+      if (w > (1u << 16)) {
+        rc = verity_rows_level_launch(params.data(), in, out, w / 2, level, 0, 0, st);
+        in = out;
+        out += 64 * (w / 2);
+        w /= 2;
+        level++;
+        continue;
       }
-      n = w >> L;
-      in = out + 64 * (w - 2 * n);
-      out += 64 * (w - n + 1);
-      level += L;
+      int k = 0;
+      while (k < 10 && (1ull << k) < w) k++;
+      rc = verity_rows_levels_launch(params.data(), in, out, w, level, 0, k, st);
+      in = out + 64 * (w - 2 * (w >> k));
+      out += 64 * (w - (w >> k));
+      w >>= k;
+      level += k;
+    }
+    if (rc) {
+      fprintf(stderr, "ERR the frame tree's launches: %d\n", rc);
+      exit(2);
     }
   }
   // The hash pass over an exported run: a row an exported block (row-seg) or rb bytes; with_tree, the tree above them too
