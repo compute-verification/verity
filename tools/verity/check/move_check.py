@@ -8,10 +8,15 @@ Every path git sees changed must be one of:
 - an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
   after a variable such as `$REPO/`) is rewritten to where it is now or, in a line, left as it was (a top-level directory's
   name is also a word: `examples` in prose, a JSON key, a function's name), in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
-  the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. Each changed
-  line left may only rewrite a moved path as written below a directory its old and new places share
-  (`verity_vllm/program/predict/`), or a dotted name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a
-  renamed module was to where it is now; in any of them, the modules a run of import lines binds each name to
+  the file's own directory first, in a `*.py` file a pathlib chain `ROOT / "a" / "b"` read as `"a/b"`. A changed line
+  may also, the rest of it kept byte for byte, rewrite each place it names from the file's own to name, from where the
+  file now is, where that place moved (`placed`): a relative path from the file's directory (`../../verity/x/`, in a
+  comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
+  `benchmarks/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
+  (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
+  moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or a dotted
+  name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
+  to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
   past the change; in a heredoc, or in a string literal `"from a import m\n"` whose quotes the move keeps); in a
   `*.py` file, also the module of an `import M` /
@@ -31,8 +36,8 @@ Every path git sees changed must be one of:
   `proved_in` (each entry a Lake package at HEAD) and `dependencies` (the fetched modules the package imports, which a
   split shares out and the Lean check holds to the build), and changes any other field only by moved paths and module
   names; a `runs` entry may move to another lock the range touches (a proofs package's new one), its runner module
-  renamed and its package-relative paths following the move, and must end up in exactly one, otherwise unchanged
-  (`runs_moved`);
+  renamed, its package-relative paths following the move and its `why` changed only by moved paths from the root, and
+  must end up in exactly one, otherwise unchanged (`runs_moved`);
 - a new `lakefile.toml`, `lakefile.lean`, `lake-manifest.json`, `lean-audit.json` or `lean-toolchain` at the root of a new
   Lake package that the range moved `.lean` files into from one source package, which is a copy of the source package's
   file (`copy_change`): a lakefile may differ only in package and library names, `roots`, `globs`, `defaultTargets`,
@@ -98,6 +103,13 @@ ROOT = Path(__file__).resolve().parents[3]
 IMPORT = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\b.*)$|^(\s*import\s+)([\w.]+)(.*)$")
 LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$")
 RELATIVE = re.compile(r"""(["'])(\.\.?(?:/[^"'\s]*)?)\1""")
+#: a place a line names from its own file's (`placed`): a pathlib join on a name (`HERE.parent / "rho"`), a relative path
+#: (`../../verity/x/`), or a path with a `/` in it (`rho/circuits.py`)
+SPOT = re.compile(r'(?<![\w.])(?P<var>[A-Za-z_]\w*)(?P<up>(?:\.parent\b)*|\.parents\[\d+\])\s*/\s*"(?P<rest>[^"]+)"'
+                  r"|(?<![\w.\-/~$*:@\\])(?P<path>(?:\.\.?/)+(?:[\w.\-*]*[\w\-*](?:/[\w.\-*]*[\w\-*])*/?)?"
+                  r"|[\w\-*][\w.\-*]*(?:/[\w.\-*]*[\w\-*])+/?)")
+#: a module-level binding, which `places` reads for a name bound to the file's own place
+BIND = re.compile(r"^([A-Za-z_]\w*)\s*=\s*(.+?)\s*(?:#.*)?$", re.M)
 #: the lines a destination package's lakefile may change from the source package's
 LAKE_LINE = re.compile(r"""^\s*(
     | \#.* | --.*
@@ -448,6 +460,79 @@ def anchor_rewrite(old: str, new: str, at_old, at_new, pmap: dict[str, str]) -> 
         if x.group("head") != y.group("head") or dx is None or dy is None or map_path(dx, pmap) != dy:
             return False
     return True
+
+
+def rebinds(text: str, v: str) -> int:
+    """How often ``text`` binds the name ``v``: an assignment (also in a tuple or a call's keyword), a loop, `with` or
+    import target, a `global`, a parameter."""
+    e = re.escape(v)
+    return len(re.findall(rf"(?<![\w.]){e}\s*(?:,[\w\s,]*)?(?::=|[-+*/%&|^@]?=(?!=))"
+                          rf"|\b(?:as|for|global|nonlocal|import)\s+(?:[\w\s,]*,\s*)?{e}\b"
+                          rf"|\bdef\s+\w+\s*\([^)]*?(?<![\w.]){e}\b|\blambda\b[^:]*?(?<![\w.]){e}\b", text))
+
+
+def places(text: str, path: str) -> dict[str, str]:
+    """The names ``text`` (the file at ``path``) binds at module level to a directory from its own place
+    (`HERE = Path(__file__).resolve().parent`) and nowhere else, each to that directory."""
+    out = {}
+    for v, rhs in BIND.findall(text):
+        m = ANCHOR.fullmatch(rhs)
+        if m and m.group("mod") is None and rebinds(text, v) == 1 and (d := anchored(m, path)) is not None:
+            out[v] = d
+    return out
+
+
+def ancestor(d: str, n: int) -> str | None:
+    parts = [p for p in d.split("/") if p]
+    return None if n > len(parts) else "/".join(parts[:len(parts) - n])
+
+
+def spot_moved(x: re.Match, y: re.Match, old: str, new: str, pmap: dict[str, str], base: Tree,
+               binds: tuple[dict[str, str], dict[str, str]]) -> bool:
+    """Whether the place ``y`` names from ``new`` is where the place ``x`` named from ``old`` moved (`placed`)."""
+    if x["var"] is not None or y["var"] is not None:
+        if x["var"] is None or y["var"] is None or x[0][:x.start("rest") - x.start()] != y[0][:y.start("rest") - y.start()]:
+            return False
+        n = int(x["up"][9:-1]) + 1 if x["up"].startswith(".parents[") else x["up"].count(".parent")
+        do, dn = (b.get(x["var"]) for b in binds)
+        do, dn = (None if d is None else ancestor(d, n) for d in (do, dn))
+        if do is None or dn is None:
+            return False
+        p, q = (posixpath.normpath(posixpath.join(d, m["rest"])) for d, m in ((do, x), (dn, y)))
+        return not p.startswith("..") and map_path(p, pmap) == q and (p != q or do != dn)
+    t, u = x["path"], y["path"]
+    if t.endswith("/") != u.endswith("/"):
+        return False
+    if substitute(t, pmap) == u:
+        return True
+    if t.startswith(("./", "../")):
+        if not u.startswith(("./", "../")):
+            return False
+        p, q = (posixpath.normpath(posixpath.join(posixpath.dirname(f), s)) for f, s in ((old, t), (new, u)))
+        return not p.startswith("..") and map_path(p, pmap) == q and (p != q or old != new)
+    d = posixpath.dirname(old)
+    while d:
+        to = map_path(d, pmap)
+        p, q = posixpath.normpath(posixpath.join(d, t)), posixpath.normpath(posixpath.join(to, u))
+        if (to != d and (new.startswith(to + "/")) and p.startswith(d + "/") and q.startswith(to + "/")
+                and (p in base.set or base.has_dir(p)) and map_path(p, pmap) == q):
+            return True
+        d = posixpath.dirname(d)
+    return False
+
+
+def placed(x: str, y: str, old: str, new: str, pmap: dict[str, str], base: Tree,
+           binds: tuple[dict[str, str], dict[str, str]]) -> bool:
+    """Whether the line ``y`` (of ``new``) is the line ``x`` (of ``old``) with nothing changed but places named from the file's
+    own (`SPOT`), each rewritten to name, from ``new``, where the place it named from ``old`` moved: a pathlib join on a name
+    the file binds to its own place (``binds``, `places` at BASE and at HEAD), a relative path from its directory, a path
+    below a moved directory the file is in and still is (a file of the package that moved, which BASE has), or a moved path
+    from the root. Any other change to the line, a place that moved elsewhere or one that did not move, is refused."""
+    a, b = list(SPOT.finditer(x)), list(SPOT.finditer(y))
+    if not a or len(a) != len(b) or SPOT.sub("\0", x) != SPOT.sub("\0", y):
+        return False
+    diff = [(s, t) for s, t in zip(a, b) if s[0] != t[0]]
+    return bool(diff) and all(spot_moved(s, t, old, new, pmap, base, binds) for s, t in diff)
 
 
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`), as `tools/move/layout.py` writes it
@@ -1115,8 +1200,9 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
             def block(xs: list[str], ys: list[str]) -> bool:
                 return import_block(xs, ys, modules, old, new)
+            binds = (places(a, old), places(b, new)) if py else ({}, {})
             h = first_unexplained(al, bl, na, nb, pair=pair, added=lambda y: registered(new, y), block=block,
-                                  left=lambda i, y: partly(n0[i], y, pmap))
+                                  left=lambda i, y: partly(n0[i], y, pmap) or placed(n0[i], y, old, new, pmap, B, binds))
             why = h and ("relative path now resolves elsewhere" if same else "edit beyond moved paths and module names", h)
             if why and not same and old == new and name == "lakefile.toml":
                 why = lakefile_in_place(a, b, new, moves, new_lake) and why
@@ -1187,6 +1273,9 @@ def runs_moved(entries: list[dict], B: Tree, H: Tree, pmap: dict[str, str], lmod
                 claimed.add((hits[0], new_name))
                 want = move_run(entry, posixpath.dirname(lock), posixpath.dirname(hits[0]), pmap, B)
                 got = head[hits[0]][new_name]
+                if (isinstance(want, dict) and isinstance(got, dict) and isinstance(w := want.get("why"), str)
+                        and isinstance(g := got.get("why"), str) and partly(w, g, pmap)):
+                    want = {**want, "why": g}           # its prose's moved paths from the root, rewritten or left
                 if want != got:
                     refuse(hits[0], f"`runs` entry {name} changed beyond moved paths and its module's name",
                            field_hunk("runs", json.dumps({new_name: want}), json.dumps({new_name: got})))
