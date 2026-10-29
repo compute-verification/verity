@@ -72,15 +72,15 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
     fresh input, which is anything outside θ;
   - loc_j : gates(E_j) → registered devices × ticks, the placement.
 
-  a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. The declared circuit is D = E_1 ‖ … ‖ E_n.
+  a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. The registered circuit is D = E_1 ‖ … ‖ E_n.
   Since E_j's structure is a function of a_j, the advice is fresh information: an inference block whose structure
   depends on k_a bits of a_j reads them as fresh input.
 - **Derived quantities**, none assumed:
   - F, the faulty proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
     the **faulty share** φ, the share of credited work that lies in F;
-  - Φ_cred, the rate PoUW credits as declared work, and the **declared utilization** u = Φ_cred/Φ_R;
+  - Φ_cred, the rate PoUW credits as registered work, and the **credited utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
-  - Φ_D, the rate of correct credited declared work;
+  - Φ_D, the rate of correct credited registered work;
   - q_I, the most of the weighted count inference block I computes whole (part 2); ζ̄ and the counts below use the same
     convention.
 - **Updated state.** The trained model's parameter slots i, each with its eligible versions (one per optimizer step
@@ -97,7 +97,7 @@ Remote, for each execution block E_j, in five steps:
 
 1. **Commitment.** The developer commits E_j's values under hiding leaves (every value crossing a proof-block boundary,
    its inputs and outputs), a_j, 𝒫_j and 𝓘_j, before any of E_j's coins.
-2. **Challenge.** The challenger, on an auditor host, draws live coins: the sample of proof blocks (by size class) and
+2. **Challenge.** The challenger, on an auditor host, flips live coins: the sample of proof blocks (by size class) and
    PoUW's noise and check coins.
 3. **Proof.** The developer proves each sampled proof block in zero knowledge and answers PoUW's challenges in time.
 4. **Validation.** The verifier checks the proofs, the partitions' public rules, 𝓘_j's budgets (c, k) and PoUW's
@@ -304,10 +304,10 @@ guarantees to read first"):
 **The accounting**, deterministic. Every counted multiplication of a successful computation inside A goes to exactly
 one of two parts:
 
-- an inference block I of correct credited declared computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
+- an inference block I of correct credited registered computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
   (its own fresh input, the bits faulty proof blocks inject into it, and the advice bits its structure depends on) is
   within the range of part 2's assembly, contributing q_I;
-- the remainder: unregistered hardware, registered hardware not running credited declared work, the faulty proof
+- the remainder: unregistered hardware, registered hardware not running credited registered work, the faulty proof
   blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
 
 Credit isn't counted twice, and padding isn't evidence that hardware ran anything. The remainder does at most ζ̄
@@ -325,20 +325,24 @@ reaches the target with probability above η, and **fleet-time** elapsed time ti
 the plain count). The good blocks do at most Σ_I q_I (part 2), and the remainder at most Q_rem (part 3). Replacing the
 sum by (q/c)·Φ_D·|J| needs the accounting to show that the qualifying blocks have exactly c gates and correspond one to
 one to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform
-cap q, and f = 1 − Φ_D/Φ the share of capacity outside correct credited work of the registered circuit,
+cap q, and f = 1 − Φ_D/Φ the **free share**: the part of the whole fleet's capacity, unregistered hardware included,
+not doing correct credited work of the registered circuit (1 − f is the part that does),
 
 $$ \Omega_* \;\le\; \Big(\frac{q}{c}\,\Phi_D + \bar\zeta\,(\Phi - \Phi_D)\Big)\,|J|
    \quad\Longrightarrow\quad
    \Phi\,|J| \;\ge\; \frac{\Omega_*}{\bar\zeta\,f + (q/c)\,(1 - f)}. $$
 
-A demonstrated execution reaching the target in fleet-time C_ref gives T_𝒢(η; 𝓕) ≤ C_ref. If f is bounded uniformly
-over 𝒜 (the utilization policy bounds it),
+The denominator is measured: C_ref is the fleet-time at which the reference training algorithm reaches the target with
+probability above η, which takes a seed sweep, not one run. It stands in for T_𝒢(η; 𝓕), which it bounds from above,
+so the bound is relative to that reference. If f is bounded uniformly over 𝒜 (the utilization policy bounds it),
 
 $$ \rho \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
 
-up to probability η: by coverage, computations without the covered structure reach the target below T_max with probability
-at most η (`Nci.Guarantees.CapabilityFloor`). Let Ω_ref be the reference's count in the same convention and
-ζ_ref = Ω_ref/C_ref. Under the required-count floor Ω_* ≥ Ω_ref/α,
+and the bound holds except with probability η + δ: an accepted run reaches the target in less fleet-time only if it
+lacks the covered structure, which coverage allows below T_max with probability at most η
+(`Nci.Guarantees.CapabilityFloor`), or lies outside 𝒜, which protocol soundness allows with probability at most δ
+(part 3). Let Ω_ref be the reference's count in the same convention and ζ_ref = Ω_ref/C_ref. Under the required-count
+floor Ω_* ≥ Ω_ref/α,
 
 $$ \rho \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, \qquad
    y = \frac{q}{c\,\zeta_{\mathrm{ref}}}\,(1 - f), $$
@@ -351,8 +355,8 @@ the bound falls to Ω_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps 
 
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
 most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S of the weighted count,
-declared and residual together. When k_S is large enough for a server block to hold a token's whole path, the cap is
-void, and the available onsite bound reduces to the remote bound.
+its inference blocks and its remainder together. When k_S is large enough for a server block to hold a token's whole
+path, the cap is void, and the available onsite bound reduces to the remote bound.
 
 ### What the argument doesn't assume
 

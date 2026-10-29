@@ -11,7 +11,7 @@ enter the security argument is `Security/README.md`, part 2.
 
 | Object | Symbol | Lean | Meaning |
 |---|---|---|---|
-| Committed declaration | R | `Verity.Committed` | the declared circuit, the registered values θ, and a partition into B blocks |
+| Committed declaration | R | `Verity.Committed` | the registered circuit, the registered values θ, and a partition into B blocks |
 | Block | I | `Verity.Partition.IsCK` | c gates, at most k fresh bits; its **view** is those bits and its index |
 | Decoder budget | t | `Verity.LDL` | the time a reconstruction may take |
 | Item family | X | `Nci.Capability.Items` | things a block may hold; each item has **cells** (the gates of one version of its value) and a **price** p_i in bits |
@@ -181,10 +181,11 @@ hardness.
 
 ## The frontier
 
-- **One meaningful instantiation.** The witnesses so far show the premises consistent, at a decoder that compresses
-  nothing. The next advance is one instance satisfying them simultaneously: a block-extraction capability at the
-  protocol's decoder budget, a positive information rate, a checked dependency certificate, and parameters giving a
-  nontrivial cap. A failed instantiation says concretely which premise breaks.
+- **One meaningful instantiation.** The witnesses so far are a four-gate toy: they show the premises consistent, each
+  parameter spent, against a decoder that compresses one string. The next advance is one instance on a training
+  circuit satisfying them simultaneously: a block-extraction capability at the protocol's decoder budget, a positive
+  information rate, a checked dependency certificate, and parameters giving a nontrivial cap. A failed instantiation
+  says concretely which premise breaks.
 - **A use's import cost.** The dependency bounds charge one fresh bit per imported use. A justified joint input cost of
   b bits per use gives h_w·(k/b + c/g), and without reconstruction about k²/b: a larger b improves the coefficient, not
   the quadratic growth. A cap linear in k needs another structural fact, such as fan-out limiting products by the

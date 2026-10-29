@@ -142,13 +142,13 @@ else is a theorem or a named gap.
 | Enforcement | Sampled proofs catch each faulty proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
 | The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
-| Learning, 2: no cheap way around it | Any way of reaching the target, at a cost worth ruling out, repeatedly combines freshly trained weights with fresh per-token values. | `Nci.Assumptions.CoversEfficientMethods` | Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
+| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Nci.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
 reaches, inside that use's own upstream computation, the operand the use reads. It is named in the lock
 (`Nci.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the slowdown bound assumes
-about learning, and they are where its scientific content lies; the second is the least certain.
+about learning, and they are where its scientific content lies; the second, the floor, is the open part.
 
 ### 1. The proofs of the sampled proof blocks
 
@@ -161,7 +161,7 @@ commitments' hiding gap.
 **Assumes.**
 
 - SHA-512 collision resistance (`cr/sha-512`, `ecr/sha-512`).
-- The verifier's coins are uniform. Part 1's statements pick them in their own law; `SampledKSLiveV3` and
+- The verifier's coins are uniform. Part 1's statements pick them in their own sampling design; `SampledKSLiveV3` and
   `IntegrityHorizon` take `FlockSoundness.Assumptions.UniformRandomBytes`.
 - The challenger's session record the verifier reads is the live run's (`FlockSoundness.Assumptions.Zk.RecordCustodyZKJ`).
 - The hiding commitments' gap at their pinned key, which is below 2^-193 for all but 2^-64 of keys but not proved small
@@ -301,16 +301,16 @@ takes per-period guarantees as hypotheses; no theorem yet instantiates it with p
 
 ### 6. The slowdown bound
 
-**Establishes, conditionally.** The slowdown bound: training a new frontier model on the monitored fleet takes at
-least
+**Establishes, conditionally.** The slowdown bound: under the protocols, training a new frontier model takes at least
 
 $$ \rho(\mathcal G, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]} $$
 
-times the fleet-time it takes unmonitored (elapsed time times the whole fleet's capacity, registered and
-unregistered), up to probability η. **This is the argument's one endpoint.** No Lean
-states it: it is derived in prose (`Security/README.md`, part 4) from the local bounds, `Verity.Guarantees.Counting`
-and `Nci.Guarantees.CapabilityFloor`. The Lean bound `DampenerRemote` is a different, older formula (below), and the
-Results table comes from a third route, the calculator's.
+times the fleet-time the reference training algorithm takes with no protocol (fleet-time: elapsed time times the whole
+fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
+η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
+endpoint.** No Lean states it: it is derived in prose (`Security/README.md`, part 4) from the local bounds,
+`Verity.Guarantees.Counting` and `Nci.Guarantees.CapabilityFloor`. The Lean bound `DampenerRemote` is a different,
+older formula (below), and the Results table comes from a third route, the calculator's.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
 
@@ -322,8 +322,11 @@ neither does the total. With e the per-phase sum, a week, a month and a year (n 
 verification phase an hour) give η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8,766·e.
 
 - Ω_* is the weighted count of analysed computation any covered method needs.
-- C_ref is a demonstrated reference run's fleet-time.
-- f is the share of capacity outside correct credited work of the registered circuit, and ζ̄ the rate at which work can be done there.
+- C_ref is measured: the fleet-time at which the reference training algorithm reaches the target with probability
+  above η, which takes a seed sweep, not one run. It stands in for the unrestricted training cost, which it bounds from
+  above, so the bound is relative to that reference.
+- f is the free share: the part of the whole fleet's capacity, unregistered hardware included, not doing correct
+  credited work of the registered circuit; ζ̄ is the rate at which work can be done there.
 - q/c is the most of that count one verified inference block of c gates can do, per gate. The canonical form keeps
   the sum of the blocks' caps; replacing it by (q/c)(1 − f) needs the accounting to tie each qualifying block to
   credited actual computation.
@@ -337,7 +340,7 @@ verification phase an hour) give η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8
 
 - the inference-only policy's guarantee doesn't reach the local bounds yet (part 4, links 1, 2, 5 and 6);
 - there is no utilization policy, so nothing bounds f uniformly over accepted runs;
-- the rate ceiling ζ̄ is a hypothesis: reference efficiency, ζ̄ equal to the reference run's rate, is open.
+- the rate ceiling ζ̄ is a hypothesis: reference efficiency, ζ̄ equal to the reference's measured rate ζ_ref, is open.
 
 **The mechanism, in words.** Learning repeatedly combines freshly learned weights with fresh per-token information. The
 inference-only policy divides the registered circuit into inference blocks of c gates, each taking in at most k fresh bits. A
@@ -371,7 +374,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
   (`Verity.Guarantees.Counting`): **proved**.
 
-The Lean overhead bounds, and the composed soundness they would rest on (the last column is the chain's status in
+The Lean slowdown bounds, and the composed soundness they would rest on (the last column is the chain's status in
 `benchmarks/prove_path/e2e_chains/README.md`):
 
 | Piece | Lean declaration | Lock | End to end |
@@ -388,8 +391,8 @@ The Lean overhead bounds, and the composed soundness they would rest on (the las
 
 That the registered circuit computes what the served model computes is completeness: it says an honest developer's run is
 accepted. No security claim rests on it. A wrong circuit costs the developer acceptance; it never makes the auditor
-accept a false claim. Likewise the slowdown's numbers depend on measured and assumed parameters (the reference run, the
-unregistered share, the prices), each labelled with its source in the calculator.
+accept a false claim. Likewise the slowdown's numbers depend on measured and assumed parameters (the reference's
+measured cost, the unregistered share, the prices), each labelled with its source in the calculator.
 
 ### What's open
 
@@ -410,15 +413,16 @@ unregistered share, the prices), each labelled with its source in the calculator
   result instead of assuming `Complies`.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
-- **The utilization policy.** Nothing bounds the uncredited share f over every accepted run.
+- **The utilization policy.** Nothing bounds the free share f over every accepted run.
 - **The rate ceiling.** Reference efficiency, which sets ζ̄, is a hypothesis.
 - **Part 6's premises.**
   - No update price has been measured at a decoder budget.
   - The wiring property hasn't been checked on a named training circuit.
-  - Coverage is untested.
-  - The caps and the floor are proved, but their honest witnesses hold `DescriptionHard`, `SourceHard`, `Recovers` and
-    coverage only degenerately (a decoder that compresses nothing, coverage of every computation): that the premises
-    hold together at a decoder that compresses, and with coverage that excludes some computation, isn't shown yet.
+  - Coverage, the floor every efficient method is assumed to meet, is the open part: it is untested.
+  - The caps and the floor are proved, and their witnesses are toys: at a four-gate circuit, `DescriptionHard`,
+    `SourceHard` and `Recovers` hold against a decoder that compresses one string, each parameter spent (at 0 it
+    fails); at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
+    premises on a training circuit.
   - The displayed slowdown bound has no Lean statement; `DampenerRemote` is the older threaded slowdown bound.
 
 ### Promising directions
@@ -479,7 +483,8 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 - `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
   accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.
 - `Accounting.Assumptions.TS.WindowLaw`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
-  the sample follows its stated law, the served checks hold, and the served roots are linked to the registered ones.
+  the sample follows its stated sampling design, the served checks hold, and the served roots are linked to the
+  registered ones.
 - The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditPeriod`,
@@ -506,8 +511,9 @@ The local bounds (part 6):
 
 - `Nci.Assumptions.DescriptionHard` (in the lock): every selection of an item
   family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
-- `Nci.Assumptions.CoversEfficientMethods` (in the lock): every sufficiently cheap successful method carries at least
-  the covered work Ω_*, except with probability η.
+- `Nci.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
+  way of reaching the target below T_max carries some local bound's covered structure, with at least its weighted
+  count Ω_*, except with probability η. It is the open part, untested.
 
 ## Results per monitoring period
 
