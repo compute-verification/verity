@@ -29,6 +29,12 @@ compressions and the distinct compression inputs (chaining value ‖ block) with
 position) nowhere (`frame-v3`, which binds them in the tree leaf, outside the digest), in a block after the row
 (`suffix`), or in the prefix block (`prefix`).
 
+*Served layouts.* Over `SERVED_ROWS` random rows, the registers that stay constant, which no count can credit, in the
+row digests the served kernels compute a row: `sha512/row/v2` (`registered_rows.cuh`'s `row_digest`, 16 KiB rows),
+`sha512/row-seg/v1` (`row_table.cuh`'s `seg_digest` and `outer_digest`, K = 8,192 codes and a 4-byte scale), and
+NCP2's tagged row (`ncp2.cuh`'s `row_digest`, k = 8,192); and the v2 digest with (salt, forward, position) bound in its
+prefix block (`v2+prefix`), or there and after the row (`v2+both`), the salt redrawn with the row.
+
 Exit 0 iff every check passes. `--json OUT` writes the counts.
 """
 
@@ -47,6 +53,7 @@ M64 = (1 << 64) - 1
 ROWS = 48
 BLOCKS = 2
 REPEAT = 8
+SERVED_ROWS = 3
 PREFIX = bytes(range(128))
 
 K = [
@@ -290,6 +297,54 @@ def repeats(rng: random.Random) -> dict:
     return out
 
 
+def hashed(p: Prog, msg: bytes) -> bytes:
+    """SHA-512 of `msg` with its writes in `p` (message words are loads, not writes); the digest."""
+    H = [const(v) for v in IV]
+    for blk in padded(msg):
+        H = compress(p, H, [const(int.from_bytes(blk[8 * t:8 * t + 8], "big")) for t in range(16)], "", False)
+    return b"".join(big(x).to_bytes(8, "big") for x in H)
+
+
+def block(*parts: bytes) -> bytes:
+    b = b"".join(parts)
+    return b + bytes(128 - len(b))
+
+
+def served_digest(layout: str, row: bytes, bind: bytes) -> tuple[Prog, bytes, bytes]:
+    """One row's digest under `layout`: the program, its digest and hashlib's."""
+    p, n = Prog(), len(row)
+    if layout.startswith("v2"):
+        msg = block(b"verity/sha512-row/v2\0", (8 * n).to_bytes(8, "big"), bind if layout != "v2" else b"") + row
+        msg += bind if layout == "v2+both" else b""
+        return p, hashed(p, msg), hashlib.sha512(msg).digest()
+    if layout == "ncp2":
+        msg = b"ncp2/row" + row
+        return p, hashed(p, msg), hashlib.sha512(msg).digest()
+    s = -(-n // 1024)
+    segs = [row[1024 * j:1024 * (j + 1)] for j in range(s)]
+    heads = [block(b"verity/sha512-row-seg/v1/segment\0", j.to_bytes(8, "big"), s.to_bytes(8, "big"),
+                   (8 * len(seg)).to_bytes(8, "big")) for j, seg in enumerate(segs)]
+    q = block(b"verity/sha512-row-seg/v1\0", (8 * n).to_bytes(8, "big"), s.to_bytes(8, "big"), (1024).to_bytes(4, "big"))
+    d = hashed(p, q + b"".join(hashed(p, h + seg) for h, seg in zip(heads, segs)))
+    ref = hashlib.sha512(q + b"".join(hashlib.sha512(h + seg).digest() for h, seg in zip(heads, segs))).digest()
+    return p, d, ref
+
+
+SERVED = {"v2": 16384, "v2+prefix": 16384, "v2+both": 16384, "row-seg": 8196, "ncp2": 8192}
+
+
+def served(rng: random.Random) -> dict:
+    out = {}
+    for layout, n in SERVED.items():
+        progs = [served_digest(layout, rng.randbytes(n), rng.randbytes(64) + bytes(8) + (5).to_bytes(8, "big"))
+                 for _ in range(SERVED_ROWS)]
+        V = np.array([p.regs for p, _, _ in progs], dtype=np.uint64)
+        const_regs = int(np.all(V == V[0], axis=0).sum())
+        out[layout] = {"registers": V.shape[1], "constant": const_regs, "constant_share": const_regs / V.shape[1],
+                       "digest_ok": all(d == ref for _, d, ref in progs)}
+    return out
+
+
 def bswap_checks(rng: random.Random) -> dict:
     bad_shift = 0
     for _ in range(200000):
@@ -358,6 +413,16 @@ def main() -> int:
     checks.append(("repeats: a prefix binding makes every compression input distinct",
                    all(rep[f"{n}/prefix"]["distinct"] == rep[f"{n}/prefix"]["compressions"] == per_row * REPEAT
                        for n in ("random", "zero"))))
+    sv = out["served"] = served(rng)
+    per_comp, sched, round0 = res["be"]["per_block"]["b0"]["writes"], 64 * 22, 28
+    checks.append(("served: every digest equals hashlib's", all(r["digest_ok"] for r in sv.values())))
+    checks.append(("served: v2's constant registers are its prefix block, its padding block's schedule and round 0 "
+                   "on the constant midstate", sv["v2"]["constant"] == per_comp + sched + round0))
+    checks.append(("served: row-seg leaves over a tenth of its registers constant", sv["row-seg"]["constant_share"] > 0.1))
+    checks.append(("served: a prefix binding leaves less than one compression constant",
+                   sv["v2+prefix"]["constant"] < per_comp))
+    checks.append(("served: a binding after the row as well makes the padding block's schedule move",
+                   sv["v2+both"]["constant"] < sched < sv["v2+prefix"]["constant"]))
     out["writes"] = {v: res[v]["registers"] for v in res}
     out["live"] = {v: res[v]["live"] for v in res}
     out["distinct_live"] = {v: res[v]["distinct_live"] for v in res}
@@ -372,7 +437,7 @@ def main() -> int:
     for n, ok in checks:
         print(f"{'ok  ' if ok else 'FAIL'} {n}")
     print(json.dumps({k: out[k] for k in ("writes", "live", "distinct_live", "per_block", "sha_carriers",
-                                          "sha_encoders", "repeats")}, indent=1))
+                                          "sha_encoders", "repeats", "served")}, indent=1))
     for v in res:
         for j in sorted(set(m0) | {2, 33}):
             print(f"{v:8s} word {j:2d}: carriers {res[v]['carriers'][j]}  encoders {res[v]['encoders'][j]}")
