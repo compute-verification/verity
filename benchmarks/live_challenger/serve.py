@@ -152,8 +152,8 @@ class WindowChallenger:
 
     def open(self, label: str, index: int, after: bytes):
         if is_salt(label) and bytes(after) != self._root:
-            raise CoinError(f"a {label} coin opens only after the window's Commit root {self._root.hex()[:16]}…, not "
-                            f"{bytes(after).hex()[:16]}…")
+            raise CoinError(f"a {label} coin opens only after the window's Commit root {self._root.hex()[:16]}..., not "
+                            f"{bytes(after).hex()[:16]}...")
         return self._challenger.open(label, index, after)
 
 
