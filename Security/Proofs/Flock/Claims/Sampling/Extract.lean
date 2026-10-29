@@ -114,12 +114,6 @@ theorem sum_map_eq_count {ι : Type} [Fintype ι] [DecidableEq ι] (l : List ι)
   · intro i _ hi
     rw [List.count_eq_zero.2 (fun h => hi (List.mem_toFinset.2 h)), Nat.cast_zero, zero_mul]
 
-theorem sum_count_eq_length {ι : Type} [Fintype ι] [DecidableEq ι] (l : List ι) :
-    ∑ i, (l.count i : ℝ) = l.length := by
-  have := sum_map_eq_count l fun _ => 1
-  simp only [mul_one, List.map_const', List.sum_replicate, nsmul_eq_mul, mul_one] at this
-  exact this.symm
-
 
 /-! ## Flock's waits -/
 
