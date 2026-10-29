@@ -269,7 +269,7 @@ def test_the_move_on_a_toy_tree(toy, capsys):
     head = git(toy, "rev-parse", "HEAD:")
     capsys.readouterr()
     assert M.main(["--root", str(toy)]) == 0
-    assert "files rewritten: 0, files moved: 0, TRUSTED.sha256 files repinned: 0" in capsys.readouterr().out
+    assert "files rewritten: 0, files moved: 0, pins repinned: 0" in capsys.readouterr().out
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
 
 
@@ -304,6 +304,32 @@ def test_a_file_lands_where_another_leaves(toy):
     assert (toy / "S/Area/Check.lean").read_text() == "import S.Area.Check.Check\n"
     assert (toy / "S/Area/Check/Check.lean").read_text() == "theorem t : True := trivial\n"
     assert not (toy / "S/Area.lean").exists()
+
+
+def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy):
+    """A JSON pin `pins.py` lists gets a rewritten manifest's new digest, since a move changes where a path package sits,
+    which no pinned output reads; any other file it pins and the move rewrites (the README) stays stale, for its command."""
+    manifest = '{"packages": [{"type": "path", "dir": "../../w/warden"}]}\n'
+    readme = (toy / "README.md").read_text()
+
+    def sha(t: str) -> str:
+        return hashlib.sha256(t.encode()).hexdigest()
+    pin = {"inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(manifest)}, "out": [1]}
+    (toy / "tools/verity/check").mkdir(parents=True)
+    (toy / "tools/verity/check/pins.py").write_text(
+        "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
+        "    path: str\n    key: str | None\n"
+        '    under: str\n\n\nPINS = (Pin("fix/vec.json", "inputs", ""), Pin("pous/TRUSTED.sha256", None, "pous"))\n')
+    (toy / "Sec/Proofs/lake-manifest.json").write_text(manifest)
+    (toy / "fix").mkdir()
+    (toy / "fix/vec.json").write_text(json.dumps(pin, indent=2) + "\n")
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "a pin")
+    assert M.main(["--root", str(toy)]) == 0
+    moved = (toy / "Sec/Proofs/lake-manifest.json").read_text()
+    assert moved == manifest.replace("w/warden", "w/certifier")
+    assert json.loads((toy / "fix/vec.json").read_text()) == {
+        "inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(moved)}, "out": [1]}
 
 
 def test_it_refuses_a_dirty_worktree(toy):
