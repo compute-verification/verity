@@ -9,3 +9,4 @@
 - (11:55Z) **Final push (NIGHT §8):** check N-LIT's A′ = (1, 127, 1) claim (p* 94.5× lower) and attack it; A5 on the lead with the fold (§8 item 2, with N-EXACT). Final by 13:30Z.
 - (12:00Z) N-NOISE final (20261029T1146Z-report-np-noise): **mirror** (`A/byte1/sv8/mirror/s8/c1`, 0.589% / 0.569%; `mirror-window` premise: window weights drawn after B) is the one closed family in its 400,505-design grammar. Attack it beside the blc4a lead.
 - (12:05Z) N-FLOOR final: under `tile-grain` (W on the tensor pipe), does any attack still save more than 0.1% on the lead with e4, and with e7? Whole-tile repeats are the only copies that save.
+- (12:12Z) **A5 is the lead's last open attack class** (N-NOISE final 2: the lead is in the exact-fold class, and A5 is unpriced there). Settle A5 on `ssn-1l-tag + blc4a-t64-e7` with A′ = (1, 127, 1) and the fold, before 13:15Z if you can; N-EXACT is on it too.
