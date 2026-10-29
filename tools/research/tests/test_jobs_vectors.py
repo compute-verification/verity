@@ -181,10 +181,12 @@ def test_the_repositorys_own_check_declaration_parses_to_what_importing_it_decla
     gate silently read no merge_requires.  This reads the file itself, so a layout the gate can't parse fails here first."""
     from research.merge import declaration
 
-    text = (Path(__file__).resolve().parents[3] / trains.TOOL_PY).read_text()
+    here = Path(__file__).resolve().parents[3] / trains.TOOL_PY
+    text = here.read_text()
     # imported from a copy: importing the real file reads its tools/verity/check/__pycache__, which the suite's inputs don't cover
     (tmp_path / trains.TOOL_PY).parent.mkdir(parents=True)
     (tmp_path / trains.TOOL_PY).write_text(text)
+    (tmp_path / trains.TOOL_PY).with_name("ops.py").write_text(here.with_name("ops.py").read_text())
     tool = declaration(tmp_path, "check")
     assert trains.declared(text) == (tool.produces, tool.merge_requires)
     assert tool.produces and tool.merge_requires

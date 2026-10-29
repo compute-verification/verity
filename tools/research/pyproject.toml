@@ -29,7 +29,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # and verity/ml/circuits/ops/tests/fixtures). test_pythonpath and test_notes derive every workspace member's import root from the
 # workspace's pyproject.toml files (research/pythonpath.py) and find each package in an untraced child, so those files are
 # listed: moving a member's root selects this suite. tools/verity/check/tool.py stays: the train gate parses it on main, and
-# test_jobs_vectors checks that it still can. infra/cluster: the console computes its usage rows with cluster.usage, and
+# test_jobs_vectors checks that it still can, importing it beside the ops.py it takes `Tool` through. infra/cluster: the console computes its usage rows with cluster.usage, and
 # `research usage` runs `cluster usage`. tools/verity/check/slot.py and lean_slot.py: the quick tier and the Lean sandbox ship
 # them to the node (test_queue, test_merge_gate, test_nebius_lean_sandbox). tools/verity/lean/merge.py and check.py: test_queue
 # commits them into its origin so the queue's clone runs the `lean-audit` record driver it configures. tools/verity/check/suites.py:
@@ -38,7 +38,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # runs the Markdown caps' landing gate on the caps it reads. tools/verity/check/pins.py: test_queue commits it into its origin, so
 # the sync's pin rebuild (`repinned`) reads the real `PINS`.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
-          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "benchmarks/tc_probe",
+          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/ops.py", "benchmarks/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/circuit_check/pyproject.toml",
