@@ -193,7 +193,7 @@ from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
-from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
+from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, theta_root, weights_root
 from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
@@ -2874,6 +2874,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     if not (isinstance(entries, list) and all(isinstance(e, dict) for e in entries)):
         return no(ENTRIES_FORM)
     roots: dict[int, bytes] = {}
+    held: list[dict] = []
     for e in entries:
         v = e.get("value")
         if not is_held(v):
@@ -2892,11 +2893,12 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
                 and e["domain"] == G.domain(program, v, w, x * n).domain_id.hex()):
             return no(other_weights_entry(v, k, n))
         roots[k] = h
+        held.append(e)
     for k in sorted(rows):
         if k not in roots:
             return no(f"the window registers no weights {prefix}b/{k} of K = {k}: each K's B rows, their codes and s_w, "
                       "are registered under the weights' root its open root binds, before its salt")
-    w = weights_root(roots)
+    w = theta_root(held, prefix)
     if PS.window_open_root(w, t, session) != r:
         return no(OTHER_WEIGHTS)
     return w, None
@@ -2910,4 +2912,4 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
-           "window"]
+           "weights_root", "window"]
