@@ -5,9 +5,15 @@ Checks (exact integer arithmetic, small shapes, seeded):
              only block 1's prefix sums outputs every committed word at density L: a third of the honest MACs.
   ssn_zero   ssn_1l (31 data lanes + 1 coin lane a k32 step, step 1 28 + 4 against a column code) at zero data: every
              committed word is the code term plus the row's coin prefix sum, computed without the GEMM.
-  ortho      an exact design's zero-data operands have orthogonal row spans, dims summing to at most the stack width.
-Pricing (estimates, W1 units): the best SAK-U-only design, a uniform side product with final words committed, and the
-zero-data gap of NCP and ssn_1l at commit density L, for Llama-3.2-1B's block linears and a V4-like dense layer.
+  ortho      an exact design's zero-data operands (NCP, ncp3) have orthogonal row spans, dims summing to at most the
+             stack width, so a uniform instance embedded in the noise is at most half the width.
+  exact_skip the middle-segment adversary on ncp3 (forward, then backward from the known total) outputs every committed
+             word without computing one segment, at zero data and with A.B as advice.
+  dch_linear prover-chosen data (zero, random, rank 1, zero halves, repeated rows, constant, Gram, one side zero) never
+             gives ncp3's segment products a linear relation beyond the total.
+Pricing (estimates, W1 units, moves free): the best SAK-U-only design, a uniform side product with final words committed;
+the zero-data gap of NCP, ssn_1l and served designs with q noise lanes a step at commit density L; the skip, L/K; and
+ncp3 at sparse L in M0, for Llama-3.2-1B's block linears and a V4-like dense layer.
 
 usage: saku.py [OUT.json]
 """
@@ -142,8 +148,9 @@ def skip_adversary(x, y, total, L, skip):
 
 
 def exact_skip(rng, m=24, n=20, k=128, L=64, zero=True):
-    """The middle-segment adversary on ncp3: the final word is A.B (0 at zero data), so one segment of width L is never
-    computed. Checked against the honest words at zero data and, with A.B as advice, at random data."""
+    """The middle-segment adversary on ncp3: the final word is A.B (0 at zero data, a move), so one segment of width L
+    is never computed; the backward segments accumulate into the known total at the forward ones' price. Checked
+    against the honest words at zero data and, with A.B as advice, at random data."""
     a = np.zeros((m, k), dtype=np.int64) if zero else rng.integers(-63, 64, (m, k))
     b = np.zeros((n, k), dtype=np.int64) if zero else rng.integers(-63, 64, (n, k))
     e1, f1 = rng.integers(-31, 33, (m, k)), rng.integers(-31, 33, (k, n))
@@ -157,20 +164,95 @@ def exact_skip(rng, m=24, n=20, k=128, L=64, zero=True):
             "saved_share_of_gemm": 1 - macs / (s * L * m * n)}
 
 
-def ortho(rng, m=24, n=20, k=48, draws=6):
+def ncp3_zero_stack(rng, m, n, k, r):
+    e1, f1 = rng.integers(-31, 33, (m, k)), rng.integers(-31, 33, (k, n))
+    return ncp3_stack(np.zeros((m, k), dtype=np.int64), np.zeros((n, k), dtype=np.int64), e1, f1, r)
+
+
+def ortho(rng, design="ncp", m=24, n=20, k=48, draws=6):
+    """Zero-data row spans of an exact stack at fixed public structure (ncp3's permutation R drawn once). A uniform
+    instance embedded in the noise coordinates is at most min(dim_x, dim_y) <= width / 2 wide."""
     rows_x, rows_y, zero = [], [], True
+    r = block_perm(rng, k)
     for _ in range(draws):
-        r = rng.integers(-64, 64, (m, k))
-        s = rng.integers(-64, 64, (n, k))
-        x0, y0 = ncp_stack(np.zeros_like(r), np.zeros_like(s), r, s)
+        if design == "ncp":
+            r = rng.integers(-64, 64, (m, k))
+            s = rng.integers(-64, 64, (n, k))
+            x0, y0 = ncp_stack(np.zeros_like(r), np.zeros_like(s), r, s)
+        else:
+            x0, y0 = ncp3_zero_stack(rng, m, n, k, r)
         zero &= bool((x0 @ y0.T == 0).all())
         rows_x.append(x0)
         rows_y.append(y0)
     dx = int(np.linalg.matrix_rank(np.concatenate(rows_x).astype(float)))
     dy = int(np.linalg.matrix_rank(np.concatenate(rows_y).astype(float)))
     cross = bool((np.concatenate(rows_x) @ np.concatenate(rows_y).T == 0).all())
-    return {"width": 3 * k, "dim_x": dx, "dim_y": dy, "final_zero": zero, "spans_orthogonal": cross,
-            "dims_le_width": dx + dy <= 3 * k}
+    return {"design": design, "width": 3 * k, "dim_x": dx, "dim_y": dy, "final_zero": zero,
+            "spans_orthogonal": cross, "dims_le_width": dx + dy <= 3 * k, "embed_max": min(dx, dy)}
+
+
+def rank_mod_p(a, p=2_147_483_647):
+    """Rank over GF(p), a lower bound on the rank over Q."""
+    a = [[int(v) % p for v in row] for row in a]
+    rank, cols = 0, len(a[0]) if a else 0
+    for c in range(cols):
+        piv = next((i for i in range(rank, len(a)) if a[i][c]), None)
+        if piv is None:
+            continue
+        a[rank], a[piv] = a[piv], a[rank]
+        inv = pow(a[rank][c], p - 2, p)
+        a[rank] = [v * inv % p for v in a[rank]]
+        for i in range(len(a)):
+            if i != rank and a[i][c]:
+                f = a[i][c]
+                a[i] = [(v - f * w) % p for v, w in zip(a[i], a[rank])]
+        rank += 1
+    return rank
+
+
+def ncp3_data(rng, kind, m, n, k):
+    """Prover-chosen data for the DataCantHelp search, int7 like ncp3's activations."""
+    full = lambda r, c: rng.integers(-63, 64, (r, c))
+    if kind == "zero":
+        return np.zeros((m, k), dtype=np.int64), np.zeros((n, k), dtype=np.int64)
+    if kind == "random":
+        return full(m, k), full(n, k)
+    if kind == "rank1":
+        return np.outer(rng.integers(-7, 8, m), rng.integers(-7, 8, k)), np.outer(rng.integers(-7, 8, n), rng.integers(-7, 8, k))
+    if kind == "zero_half":
+        a, b = full(m, k), full(n, k)
+        a[:, : k // 2] = 0
+        b[:, k // 2:] = 0
+        return a, b
+    if kind == "repeated_rows":
+        return np.repeat(full(1, k), m, 0), np.repeat(full(1, k), n, 0)
+    if kind == "constant":
+        return np.full((m, k), 63, dtype=np.int64), np.full((n, k), -63, dtype=np.int64)
+    if kind == "gram":
+        a = full(m, k)
+        return a, a[:n].copy()
+    if kind == "a_only":
+        return full(m, k), np.zeros((n, k), dtype=np.int64)
+    raise ValueError(kind)
+
+
+def segment_relations(rng, kind, m=6, n=5, k=64, L=8, draws=8):
+    """Linear relations sum_t c_t S_t = const(data) among ncp3's segment products S_t, holding for every noise draw at
+    fixed prover-chosen data: the null space of the products' differences across draws, its dimension by an exact
+    rank (GF(p) lower bound, plus the known all-ones relation). One relation, the total, is the middle-segment skip;
+    more would be data helping a linear skip. The bilinear noise part of S_t doesn't depend on the data, so data can
+    only remove relations zero data has."""
+    a, b = ncp3_data(rng, kind, m, n, k)
+    s = 3 * k // L
+    prods = []
+    for _ in range(draws):
+        e1, f1 = rng.integers(-31, 33, (m, k)), rng.integers(-31, 33, (k, n))
+        x, y = ncp3_stack(a, b, e1, f1, block_perm(rng, k))
+        prods.append(np.stack([(x[:, t * L:(t + 1) * L] @ y[:, t * L:(t + 1) * L].T).ravel() for t in range(s)], 1))
+    diffs = np.concatenate([p - prods[0] for p in prods[1:]])
+    rank = rank_mod_p(diffs.tolist())
+    total_ok = all(bool((p.sum(1) == (a @ b.T).ravel()).all()) for p in prods)
+    return {"data": kind, "segments": s, "rank": rank, "relations": s - rank, "total_relation": total_ok}
 
 
 def usp_row(name, m, k, n, h, c):
@@ -196,17 +278,41 @@ def zero_gap(design, L, alpha_ssn=1.044):
     return max(0.0, honest - adv)
 
 
+def served_zero_gap(L, q, depth=32, alpha=1.0):
+    """Zero-data gap, in units of stock, of a served design whose noise fills q of a k32 step's 32 lanes on both
+    operands: at zero data a segment's L lanes hold q L / 32 noise lanes, packed into the narrowest MMA the noise's
+    alphabet allows (depth 32 for s8, 64 for s4, 256 for b1) at H32 a register written."""
+    return max(0.0, alpha * (1.0 - H32 * math.ceil(q * L / 32 / depth) / L))
+
+
+def ncp3_sparse(L, m, shapes, c1):
+    """ncp3 at a committed word every L stacked lanes, M0 (prover-chosen data), MAC-weighted over `shapes`: the skip
+    L/K (it replaces SW-NOISE's final word, 32/K at L 32), forming 32/n + 32/m (8/n + 8/m left once C1 forces 24),
+    and the coins, 6 bits an entry of E1 and F1 at SW-NOISE's 2,101 units a byte, when uncredited."""
+    f = 8.0 if c1 else 32.0
+    w = [m * k * n for _, k, n in shapes]
+    terms = {"skip": [L / k for _, k, n in shapes], "forming": [f / n + f / m for _, k, n in shapes],
+             "coins": [COIN_B["sw-noise"] * 6 / 8 * (1 / n + 1 / m) for _, k, n in shapes]}
+    agg = {key: sum(v * wi for v, wi in zip(vals, w)) / sum(w) for key, vals in terms.items()}
+    agg["T1_credited_coins"] = agg["skip"] + agg["forming"]
+    agg["T1_uncredited_coins"] = agg["T1_credited_coins"] + agg["coins"]
+    return agg
+
+
 def main():
     rng = np.random.default_rng(20261029)
     checks = {"ncp_zero": [ncp_zero(rng, L=L) for L in (32, 64, 128)],
               "ssn_zero": [ssn_zero(rng, L=L) for L in (32, 64, 128)],
-              "ortho": ortho(rng),
-              "exact_skip": [exact_skip(rng, L=L, zero=z) for L in (32, 64, 128) for z in (True, False)]}
+              "ortho": [ortho(rng), ortho(rng, "ncp3")],
+              "exact_skip": [exact_skip(rng, L=L, zero=z) for L in (32, 64, 128) for z in (True, False)],
+              "dch_linear": [segment_relations(rng, kind, L=L)
+                             for kind in ("zero", "random", "rank1", "zero_half", "repeated_rows", "constant", "gram",
+                                          "a_only") for L in (4, 8, 16)]}
     ok = all(r["exact"] and r["zero_data_words_match"] for r in checks["ncp_zero"])
     ok &= all(r["exact"] and r["words_match"] for r in checks["exact_skip"])
     ok &= all(r["zero_data_words_match"] and r["served_noise_is_coins_only"] for r in checks["ssn_zero"])
-    o = checks["ortho"]
-    ok &= o["final_zero"] and o["spans_orthogonal"] and o["dims_le_width"]
+    ok &= all(o["final_zero"] and o["spans_orthogonal"] and o["dims_le_width"] for o in checks["ortho"])
+    ok &= all(r["total_relation"] and r["relations"] == 1 for r in checks["dch_linear"])
 
     pricing = {}
     for t in (64, 512, 8192):
@@ -223,12 +329,17 @@ def main():
             pricing[f"v4 dense m{t} hash-{hk} coin-sw-noise"] = {"aggregate": r, "rows": [r]}
 
     zero = {f"{d} L{L}": zero_gap(d, L) for d in ("ncp", "ssn") for L in (32, 64, 128, 256, 1024)}
+    served = {f"{fmt} q{q} L{L}": served_zero_gap(L, q, depth)
+              for fmt, depth in (("s8", 32), ("s4", 64), ("b1", 256)) for q in (1, 16, 17, 24, 25, 32) for L in (64, 128)}
     llama_macs = sum(k * n for _, k, n in LLAMA)
     skip = {}
-    for L in (32, 48, 64, 96, 128, 256, 1024):
-        skip[f"llama linears L{L}"] = sum((L - H32) / k * k * n for _, k, n in LLAMA) / llama_macs
-        skip[f"v4 dense L{L}"] = (L - H32) / 7168
-    skip_max_L = {"K 2048": H32 + 0.01 * 2048, "K 7168": H32 + 0.01 * 7168, "K 8192": H32 + 0.01 * 8192}
+    for L in (32, 64, 96, 128, 256, 1024):
+        skip[f"llama linears L{L}"] = sum(L / k * k * n for _, k, n in LLAMA) / llama_macs
+        skip[f"v4 dense L{L}"] = L / 7168
+    skip_max_L = {f"K {k}": 0.01 * k for k in (2048, 7168, 8192, 16384)}
+    sparse = {f"{wl} m{m} L{L}{' C1' if c1 else ''}": ncp3_sparse(L, m, shapes, c1)
+              for wl, shapes in (("llama", LLAMA), ("v4 dense", V4)) for m in (64, 512, 8192)
+              for L in (32, 64, 128) for c1 in (False, True)}
 
     for name, rs in checks.items():
         print(name, json.dumps(rs))
@@ -238,14 +349,20 @@ def main():
               f"T2(W1) {a['T2_w1']:.2f}x hash {a['hash_share']:.3f} coins {a['coin_share']:.3f}")
     for key, g in zero.items():
         print(f"zero-data gap {key:18s} {100 * g:.1f}% of stock")
+    for key, g in served.items():
+        print(f"served design, zero-data gap {key:10s} {100 * g:.1f}% of stock (alpha 1)")
     for key, g in skip.items():
         print(f"exact design, middle-segment skip {key:20s} {100 * g:.3f}% of stock")
     for key, v in skip_max_L.items():
         print(f"exact design: largest L with skip <= 1% at {key}: {v:.1f} lanes")
+    for key, a in sparse.items():
+        print(f"ncp3 M0 {key:24s} T1 {100 * a['T1_credited_coins']:.3f}% (skip {100 * a['skip']:.3f}, forming "
+              f"{100 * a['forming']:.3f}; coins uncredited {100 * a['T1_uncredited_coins']:.2f}%)")
     print("PASS" if ok else "FAIL", "checks")
     if len(sys.argv) > 1:
-        json.dump({"checks": checks, "pricing": pricing, "zero_data_gap": zero, "exact_skip_gap": skip,
-                   "exact_skip_max_L": skip_max_L, "pass": ok}, open(sys.argv[1], "w"), indent=1, default=float)
+        json.dump({"checks": checks, "pricing": pricing, "zero_data_gap": zero, "served_zero_gap": served,
+                   "exact_skip_gap": skip, "exact_skip_max_L": skip_max_L, "ncp3_sparse_m0": sparse, "pass": ok},
+                  open(sys.argv[1], "w"), indent=1, default=float)
     sys.exit(0 if ok else 1)
 
 
