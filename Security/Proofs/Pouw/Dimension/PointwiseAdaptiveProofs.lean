@@ -28,6 +28,9 @@ point, as in `adaptive_pairs_le`. Each bound reads only the targets an outcome r
   plus a write for each instruction priced below a write and for each read the class shares across entries.
   Select-floor and copy-floor (a selection on the lane's own bit and a copy each cost at least a write) leave only the
   shared reads, and a class over which no two entries' values agree everywhere shares none.
+* **Premises per path** (`Prog.mem_cls_iff`, `small_cls_le`). A class is the outcomes that take its path, and the
+  outcomes in classes of fewer than `c` number at most `c` a path, so a premise stated on every path's share of the
+  coins of at least `c` outcomes holds at all others.
 -/
 
 namespace Pouw.Dimension.Pointwise
@@ -629,6 +632,36 @@ theorem prog_credit_le [DecidableEq E] [DecidableEq V] (cb cw cc cs : ℕ) (P : 
   have h := credit_le_cost cw cc cs (P.cls ω) m₀ (P.stream ω)
     (fun ω' hω' => P.stream_eq ω ω' hω' ▸ hc ω') ω (P.mem_cls ω)
   omega
+
+/-- The decisions `ω`'s path takes. -/
+def Prog.path : Prog Ω A V E → Ω → List Bool
+  | .leaf _, _ => []
+  | .branch d p q, ω => d ω :: if d ω then p.path ω else q.path ω
+
+omit [DecidableEq A] in
+/-- A class is the outcomes that take its path. -/
+theorem Prog.mem_cls_iff : ∀ (P : Prog Ω A V E) (ω ω' : Ω), ω' ∈ P.cls ω ↔ P.path ω' = P.path ω
+  | .leaf _, _, _ => by simp [Prog.cls, Prog.path]
+  | .branch d p q, ω, ω' => by
+    have hp := p.mem_cls_iff ω ω'
+    have hq := q.mem_cls_iff ω ω'
+    simp only [Prog.cls, Prog.path, Set.mem_inter_iff, Set.mem_ofPred_eq]
+    cases hω : d ω <;> cases hω' : d ω' <;> simp [hp, hq]
+
+omit [DecidableEq A] in
+/-- **Few outcomes sit in small classes**: the outcomes of `O` whose class (its path's outcomes, `Prog.mem_cls_iff`)
+holds fewer than `c` of `O`'s number at most `c` a path taken. So a premise stated on every path's share of the coins,
+for each share of at least `c` outcomes, holds on all of `O` but at most `c` times the paths, `2^p` of them for a
+program `p` branches deep. -/
+theorem small_cls_le (P : Prog Ω A V E) (O : Finset Ω) (c : ℕ) :
+    (O.filter fun ω => (O.filter fun ω' => P.path ω' = P.path ω).card < c).card ≤ c * (O.image P.path).card := by
+  set s := O.filter fun ω => (O.filter fun ω' => P.path ω' = P.path ω).card < c
+  calc s.card ≤ c * (s.image P.path).card := card_le_mul_card_image s c fun κ hκ => by
+        obtain ⟨ω, hω, rfl⟩ := mem_image.1 hκ
+        exact le_trans (card_le_card fun x hx => by
+          rw [mem_filter] at hx ⊢
+          exact ⟨(mem_filter.1 hx.1).1, hx.2⟩) (mem_filter.1 hω).2.le
+    _ ≤ c * (O.image P.path).card := Nat.mul_le_mul_left _ (card_le_card (image_subset_image (filter_subset _ _)))
 
 end Priced
 
