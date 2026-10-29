@@ -1,0 +1,9 @@
+description = "served sparse noise, one lane (SSN-1L, 1-bit lanes): stock int8 (activations one scale per token, weights one per output row, both rounded to ±127), then the integer product plus a1 C + rowsum(l) less rint(0.5 (sum C + S - 1)) per column, S = 1 + ceil((k - 28) / 31), a1 fresh bits m x 4 against C (SSN-A's step-0 column code on the fused linear's columns) and l fresh bits m x (S - 1), one lane a row a later step, every call, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l"

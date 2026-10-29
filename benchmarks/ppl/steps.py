@@ -968,9 +968,10 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 
 #: the noise rules `served` adds to the integer product and serves
-SERVED_RULES = ("ssn_a", "ssn2", "raw_byte")
-#: data entries in a k32 step (the other 4 are noise)
+SERVED_RULES = ("ssn_a", "ssn_1l", "ssn2", "raw_byte")
+#: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
+SSN_1L_DATA = 31
 
 
 def fused_offset(name: str, k: int, n: int) -> int:
@@ -1000,20 +1001,30 @@ def ssn_a_w0(n: int, k: int, offset: int = 0) -> torch.Tensor:
 def _check_served(p):
     if p["rule"] not in SERVED_RULES:
         raise ValueError(f"served.rule is one of {SERVED_RULES}")
-    if p["bits"] not in (1, 2, 4) or (p["rule"] != "ssn_a" and p["bits"] != 1):
-        raise ValueError("served.bits is 1, 2 or 4, and widens only ssn_a's mask")
+    if p["bits"] not in (1, 2, 4) or (p["rule"] not in ("ssn_a", "ssn_1l") and p["bits"] != 1):
+        raise ValueError("served.bits is 1, 2 or 4, and widens only ssn_a's mask and ssn_1l's lanes")
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
 def served_linear(mm, nxt, *, rule: str, bits: int = 1):
     """Noise added to the exact integer product and served, never subtracted, fresh every call, over S = ceil(k / 28)
     k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
-    {0, ..., 2^bits - 1}^(m x S x 4); `ssn2` adds a b - S, a and b bits (m x S x 4 and S x 4 x n); `raw_byte` adds
-    sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred."""
+    {0, ..., 2^bits - 1}^(m x S x 4); `ssn_1l` (S = 1 + ceil((k - 28) / 31)) adds a1 C + rowsum(l) less
+    rint(sum C / 2 + (2^bits - 1) (S - 1) / 2) per column, C step 0 of W0, a1 bits (m x 4) and l uniform on
+    {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn2` adds a b - S, a and b bits (m x S x 4 and
+    S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
+    torch.round rounds half to even, as rint does."""
     acc = nxt(mm).double()
     (m, k), n = mm.x.shape, acc.shape[1]
     s = -(-k // SSN_DATA)
-    if rule == "raw_byte":
+    if rule == "ssn_1l":
+        s = 1 + -(-(k - SSN_DATA) // SSN_1L_DATA)
+        off = fused_offset(mm.name, k, n)
+        code = mm.shared(("ssn_code", n, off, str(acc.device)), lambda: ssn_a_w0(n, SSN_DATA, off)[0].to(acc.device))
+        lanes = mm.coins((m, s - 1), 2 ** bits).double().sum(1, keepdim=True)
+        noise = (mm.coins((m, 4), 2).double() @ code + lanes
+                 - torch.round(code.sum(0) / 2 + (2 ** bits - 1) * (s - 1) / 2))
+    elif rule == "raw_byte":
         noise = (mm.coins((m, s), 256) - 128).double().sum(1, keepdim=True).expand(m, n)
     elif rule == "ssn2":
         noise = mm.coins((m, 4 * s), 2).double() @ mm.coins((4 * s, n), 2).double() - s

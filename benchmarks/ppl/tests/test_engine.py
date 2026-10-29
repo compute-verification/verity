@@ -186,7 +186,7 @@ def test_ssn_a_w0_is_the_formats_pattern():
 
 def test_served_noise_stays_in_the_product(llama, ids):
     stock = spec.parse({"linear": [{"step": "int8"}]}, "stock")
-    rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn2", 1), ("raw_byte", 1))
+    rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn_1l", 1), ("ssn_1l", 4), ("ssn2", 1), ("raw_byte", 1))
     arms = [stock] + [spec.parse({"linear": [{"step": "int8"}, {"step": "served", "rule": r, "bits": b}]}, f"{r}-{b}")
                       for r, b in rules]
     r = evaluate(llama, ids[:4], arms)
@@ -194,7 +194,7 @@ def test_served_noise_stays_in_the_product(llama, ids):
     nll = {a.name: r["nll"][f"{a.name}/s0"] for a in arms}
     assert all(not np.array_equal(nll[a.name], nll["stock"]) for a in arms[1:])
     rise = {a.name: abs(ppl(nll[a.name]) / ppl(nll["stock"]) - 1) for a in arms[1:]}
-    assert rise["ssn_a-1"] < rise["raw_byte-1"]
+    assert max(rise["ssn_a-1"], rise["ssn_1l-1"]) < rise["raw_byte-1"]
 
 
 def test_seeds(llama, ids, calib):
