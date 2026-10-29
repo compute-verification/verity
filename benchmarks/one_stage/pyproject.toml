@@ -14,14 +14,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
+# `verity/core/protocols/network/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
+# that package's `inference-only` check, which its tests `lake build` there, beside v2's case through
+# `sampled-proofs-one-stage-zk`; its slow test builds the 4,32,4 class's window circuit (`integrations/vllm/verity_vllm`).
 # `benchmarks/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
 # `integrations/vllm/verity_vllm`, `benchmarks/network_traces`: a5_warden's window, committed as serving commits it, over the
 # cells of a network certifier run its tests drive tick by tick (`test_warden_serve._run`).
-# `verity/core/protocols/network/nci/lean/lakefile.toml`, named on its own: served_cases' inference-only case goes through
-# that package's `inference-only` check, which its tests `lake build` there, beside v2's case through
-# `sampled-proofs-one-stage-zk`; its slow test builds the 4,32,4 class's window circuit (`integrations/vllm/verity_vllm`).
 # `examples/h200/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema) and prove_bundle's
 # bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
