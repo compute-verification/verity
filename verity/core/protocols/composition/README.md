@@ -1,7 +1,7 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
 Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
-hold them, each on C-Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
+hold them, each on Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
 subprotocols' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
@@ -84,10 +84,10 @@ Lean to:
   unverified), whose Lean their packages' difftests hold to those verifiers (`../pous/check/tests/test_run_protocol.py`,
   `../remote_bandwidth/lean/tests/test_protocol.py`).
 
-Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
+Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
+(one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
 composition's inputs or the case itself are often broken. `test_a_reference_without_reject_dominance_is_caught` shows the
-difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a case where
+difftest tells the rule above from one in which a rejection need not reject the whole: such a reference disagrees with the Lean on a case where
 one subprotocol rejects and another is undecided.
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
