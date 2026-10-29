@@ -84,7 +84,7 @@ only P's own line serves P, and a reserve for a node with no line is refused (`A
 with its /etc/vy/peers entry). The client may run on any node, the served one included: the root is the network
 certifier's, and the gate opens it once and logs every coin it releases. ``--challenger local`` is a dry run's, a
 session on this machine under a key of its own. ``--main`` is the verifier's copy of main's first-parent history,
-fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does; ``--challenger-key`` is the
+fetched from the tree's origin into KEEP/RUN by default (`first_parent`); ``--challenger-key`` is the
 deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. A gate, peer, key or
 main that fails, or a session's evidence that doesn't hold, fails the round: nothing falls back to other coins. The
 CR_K=V may not name the challenger (CR_CHALLENGER, CR_MAIN, CR_PEER, CR_CHALLENGER_KEY, CR_GATE_KEY), and

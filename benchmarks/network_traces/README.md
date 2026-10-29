@@ -159,13 +159,12 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
-The job's environment picks what it runs: `CR_CHALLENGER` (`local` or `gate:…`, required whenever a round draws) is the
-auditor's challenger every drawing round takes a session of, each scan round and each member of N2's sampled period
-(`CR_N2_DRAW`, or `--draw K` in `CR_N2_ARGS`); the scan of the gate's own rows is `CR_WARDEN_RUN` with
-`CR_SCAN_ARGS="--draw K"` (`scan_zk.py prove --warden-run`), and the client's `certificates.jsonl` and `clocks.jsonl` are
-`CR_CLIENT`, by default the network certifier rehearsal's own `client/`. A step on a stand-in (the scan on its own
-synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report accepted, and a step that fails or doesn't run
-says why.
+The job's environment picks what it runs: N2's sampled draw on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
+--warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
+rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the
+client's `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own
+`client/`. A step on a stand-in (the scan on its own synthetic run) never makes the report accepted, and a step that
+fails or doesn't run says why.
 
 **The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
 each gate sent under `inputs/` to the quarantine once it is unpacked, writes every output (its own stdout and stderr
