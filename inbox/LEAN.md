@@ -58,8 +58,8 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
 - **No run ids, PR numbers, tracker ids, dates or lane names in Lean docstrings or comments** (`tests/lint/test_repo_lane_text.py`).
   The coordinator's earlier "with run ids" was wrong. Evidence goes in your checkpoint note or the PR body.
 - **`verity lean try` from a worktree builds the checkout the installed tool lives in,** not your worktree. Run the
-  worktree's own copy: `uv run --project WORKTREE verity lean try ...` or `python3 WORKTREE/tools/verity/...`, and
-  check that the run's tree is your head.
+  worktree's own copy of the tool, as N-W1 did (its note 20261029T1630Z-report-lean-mh100w has the command), and check
+  that the run's tree is your head.
 
 ## Lanes
 
