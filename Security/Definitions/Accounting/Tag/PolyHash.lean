@@ -12,9 +12,9 @@ statement about it certifies bandwidth. A device with memory to spare can keep a
 random oracle's (`Bandwidth.Guarantees.AuditRO`). The statements about this hash are inputs to a possible version in
 the joint model, under a capacity bound.
 
-A chunk of the store (`Chunk W`, a block in `digest.py`) is `W` little-endian `uint32` words (`WORDS = 16384` for a
-64 KiB chunk). Its hash at a key point `g` is Horner's rule over the words' residues mod `p = 2^31 − 1`
-(`reference_block_hash`), and the hashes of `R` chunks are folded at a second point `z` (`reference_digest`).
+A chunk of the store (`digest.py`'s block) is `W` little-endian `uint32` words (`WORDS = 16384` for 64 KiB). Its
+hash at a key point `g` is Horner's rule over the words' residues mod `p = 2^31 − 1` (`reference_block_hash`), and the
+hashes of `R` chunks are folded at a second point `z` (`reference_digest`).
 
 A word enters the field as its residue: `int(w) % MOD` in the reference, one Mersenne fold `(w & p) + (w >> 31)` on the
 GPU, which agrees mod `p`. Since `2^32 > 2p`, every word has another word with its residue (`w` and `w ± p`), so the
@@ -31,7 +31,7 @@ abbrev P : ℕ := 2147483647
 /-- A 32-bit word, as `digest.py` reads a block (little-endian `uint32`). -/
 abbrev Word : Type := Fin (2 ^ 32)
 
-/-- A chunk of the store: `W` words, what `digest.py` calls a block. -/
+/-- A chunk of the store: `W` words (`digest.py`'s block). -/
 abbrev Chunk (W : ℕ) : Type := Fin W → Word
 
 /-- A word's residue mod `P`, the value the hash reads (`int(w) % MOD`). -/
