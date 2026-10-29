@@ -8,11 +8,11 @@ lane, the lane index public) and ``combine`` (`h1zy.combine`), the statements `h
 * ``lower K R C OUT [--unit tile|lane|combine] [--form structural|flat] [--staging fast|library] [--path FILE]``: a tile
   through `pouw_h1_circuits._lower` itself (the ``--lower`` command's body, ``HZ_STAGE`` set to the staging), a lane or
   combine through `h1unit.stager` with `h1_lanes`' rows, in this process, bound to `BIND`; at ``fast`` (the default)
-  `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class,
-  the unrolled ANDs, rows and references, the template's Definitions, rows and calls), its seconds and peak RSS before
-  compose and at the end, and the file's bytes, SHA-512 and META block fields; or the refusal, before lowering (`refusal`)
-  or compose's (a block past ``K_MAX``, ``k_log`` the block it needs) with the lowering's counts. The file goes to FILE,
-  else to a scratch directory removed at exit.
+  `fast_stage` patches the library first, for the same bytes. OUT (JSON): the lowering (its class; the rows C-Flock
+  proves below the root, the commits among them and the ANDs, `_counts`; the template's Definitions, rows and calls), its
+  seconds and peak RSS before compose and at the end, and the file's bytes, SHA-512 and META block fields; or the
+  refusal, before lowering (`refusal`) or compose's (a block past ``K_MAX``, ``k_log`` the block it needs) with the
+  lowering's counts. The file goes to FILE, else to a scratch directory removed at exit.
 * ``agree K R C OUT``: the flat and the structural tile stager at one shape, their units evaluated on the same rows
   (honest leaves, a record off in one bit, random words): each output word of the template (`TmplLowering.evaluate`)
   against the flat unit's (`ir_lower.Lowering.evaluate`) and both against `h1zy.reference`, the word reference; then
@@ -123,13 +123,47 @@ def stage(U, unit: str, k: int, r: int, c: int, path: Path, staging: str) -> Non
     U.stager(d, NAMES[unit], rows, [(V2, (0,))], U.layout(), circuit=path, bind=BIND)
 
 
-def _counts(low) -> dict:
-    out = {"lowering": type(low).__name__, **{k: int(v) for k, v in low.layout.counts.items() if isinstance(v, (int, np.integer))}}
+def _flat_commits(lay) -> int | None:
+    """A flat unit's commit rows (`Circuit.commit`'s ``A = form, B = 1``; an AND of two gates has no constant operand,
+    `Circuit.AND`): its rows whose B is the constant column alone, less the assertions', the output copies' and the
+    constant's own (`ir_lower.layout`); None when it reads tables, whose plain rows can have that B too."""
+    if lay.counts.get("reads") or not hasattr(lay, "rows_b"):
+        return None
+    ones = sum(b is not None and len(b) == 1 and b[0] == lay.const for b in lay.rows_b)
+    return int(ones) - lay.counts["asserts"] - sum(lay.out_bits) - 1
+
+
+def _keep_totals(CS, got: dict) -> None:
+    """`struct_lower.lower` as `class_statement.unit_lowering` calls it, its unit's unrolled totals below the root
+    (`_Lowerer.total`: rows, commits, refs, copies) kept in ``got["struct"]``."""
+    lower_tmpl = CS.SL.lower
+
+    def kept(*a, **k):
+        t, lw, top = lower_tmpl(*a, **k)
+        got["struct"] = lw.total(top.key)
+        return t, lw, top
+
+    CS.SL.lower = kept
+
+
+def _counts(low, struct: dict | None = None, commits: int | None = None) -> dict:
+    """The lowering's counts. ``rows``: the rows C-Flock proves below the root (a template's from ``struct``, its
+    `_Lowerer.total`; a flat unit's AND and table-read rows). ``commits``: those of them that commit a linear form rather
+    than AND two (``A = form, B = 1``: `struct_lower`'s past ``support`` at a call boundary, `Circuit.commit`'s).
+    ``ands``: a template's rows less its commits; a flat unit's layout count, its commits included, as the harness counts
+    it. The layout's own ``ands`` and ``rows`` are ``layout_ands`` and ``layout_rows``; a template's ``layout_ands``
+    (`class_statement._TmplLayout`) is its rows below the root, ``rows_agree`` whether it is ``struct``'s."""
+    c = low.layout.counts
+    out = {"lowering": type(low).__name__, "layout_ands": int(c["ands"]), "layout_rows": int(c["rows"]),
+           **{k: int(v) for k, v in c.items() if k not in ("ands", "rows") and isinstance(v, (int, np.integer))}}
     t = getattr(low, "template", None)
-    if t is not None:
-        out |= {"template_defs": len(t.defs), "template_rows": sum(len(d.rows) for d in t.defs),
-                "template_calls": sum(len(d.calls) for d in t.defs),
-                "template_refs": sum(len(a) + len(b) for d in t.defs for _c, a, b in d.rows)}
+    if t is None:
+        return out | {"rows": out["layout_ands"], "commits": commits, "ands": out["layout_ands"]}
+    out |= {"template_defs": len(t.defs), "template_rows": sum(len(d.rows) for d in t.defs),
+            "template_calls": sum(len(d.calls) for d in t.defs),
+            "template_refs": sum(len(a) + len(b) for d in t.defs for _c, a, b in d.rows)}
+    if struct is not None:
+        out |= {**struct, "ands": struct["rows"] - struct["commits"], "rows_agree": struct["rows"] == out["layout_ands"]}
     return out
 
 
@@ -153,8 +187,9 @@ def _file(path: Path) -> dict:
 def _done(args, rec: dict) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(rec, indent=1))
-    print("LOWER " + json.dumps({k: rec.get(k) for k in ("k", "r", "c", "unit", "form", "lowering", "ands", "k_log",
-                                                         "bytes", "seconds", "peak_gib", "refused")}), flush=True)
+    print("LOWER " + json.dumps({k: rec.get(k) for k in ("k", "r", "c", "unit", "form", "lowering", "rows", "commits",
+                                                         "ands", "rows_agree", "k_log", "bytes", "seconds", "peak_gib",
+                                                         "refused")}), flush=True)
     return 0
 
 
@@ -177,6 +212,8 @@ def lower(args) -> int:
         t = time.time()
         low, out_words = library(*a, **k)
         got.update(low=low, lower_s=round(time.time() - t, 2), lower_peak_gib=peak_gib())
+        if not hasattr(low, "template"):
+            got["flat_commits"] = _flat_commits(low.layout)
         return low, out_words
 
     def meta_captured(text):
@@ -186,6 +223,7 @@ def lower(args) -> int:
         return m
 
     CS.unit_lowering, FC.meta_of = captured, meta_captured
+    _keep_totals(CS, got)
     scratch = None if args.path else tempfile.TemporaryDirectory(prefix="unit-lowering-")
     path = Path(args.path) if args.path else Path(scratch.name) / f"k{args.k}.circuit.txt"
     t0 = time.time()
@@ -199,7 +237,7 @@ def lower(args) -> int:
     rec |= {"seconds": round(time.time() - t0, 2), "peak_gib": peak_gib()}
     if "low" in got:
         low = got.pop("low")
-        rec |= _counts(low)
+        rec |= _counts(low, got.pop("struct", None), got.pop("flat_commits", None))
         del low
     rec |= got.pop("meta", {}) | got
     if rec["written"]:
@@ -269,13 +307,17 @@ def agree(args) -> int:
         raise SystemExit(why)
     shape = U.Shape(args.k, args.r, args.c)
     name = NAMES["tile"]
+    from verity_flock import class_statement as CS
     rec = {"k": args.k, "r": args.r, "c": args.c, "layout": U.layout()}
+    got: dict = {}
+    _keep_totals(CS, got)
     t = time.time()
     flat = shape.stager(name, flat=True)
-    rec |= {"flat_s": round(time.time() - t, 2), "flat": _counts(flat.low)}
+    rec |= {"flat_s": round(time.time() - t, 2), "flat": _counts(flat.low, commits=_flat_commits(flat.low.layout))}
     t = time.time()
     tm = shape.stager(name)
-    rec |= {"structural_s": round(time.time() - t, 2), "structural": _counts(tm.low), "class_flat": flat.class_sha512,
+    rec |= {"structural_s": round(time.time() - t, 2), "structural": _counts(tm.low, got.get("struct")),
+            "class_flat": flat.class_sha512,
             "class_structural": tm.class_sha512}
     if not hasattr(tm.low, "template"):
         raise SystemExit(f"H1_TMPL=structural gave the flat statement at {args.k, args.r, args.c}")
