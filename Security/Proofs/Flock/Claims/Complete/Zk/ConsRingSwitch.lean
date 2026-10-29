@@ -62,7 +62,7 @@ theorem cClaim_mem (m kLog : ℕ) (zc : ZcOut) (lc : LcOut) (extras : Array Clai
 its value: on the masked lincheck proof, for any claim `c'` at the clear claim's skip weights and first coordinate
 (the replay's, whose value it leaves at `0`), at any pads. -/
 theorem rsAb_zero (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
-    (full : Array F128) (cs : Lc.Coins) (c' : Claim) (sv : Array F128)
+    (full : Array F128) (cs : Lc.Challenges) (c' : Claim) (sv : Array F128)
     (hs : c'.skip = skipWeights (cs.cf 0))
     (hx : c'.x[0]! = (abClaim m c.kLog zc (Lc.out c m tr zc cs)).x[0]!)
     (hsw : dot (wOf (abClaim m c.kLog zc (Lc.out c m tr zc cs))) sv = (Lc.out c m tr zc cs).w) :
@@ -75,7 +75,7 @@ theorem rsAb_zero (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : �
 /-- **`ring switch c` vanishes at the masked prover's pads**, wherever the plain check of the clear `c` claim meets
 its value: on the masked zerocheck proof, for any claim `c'` at the clear claim's skip weights and first coordinate,
 at any pads. -/
-theorem rsC_zero (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (zcs : Zc.Coins) (tr : Trace) (c' : Claim)
+theorem rsC_zero (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (zcs : Zc.Challenges) (tr : Trace) (c' : Claim)
     (sv : Array F128) (hs : c'.skip = skipWeights zcs.z) (hx : c'.x[0]! = (zcs.r m)[0]!)
     (hsw : dot (wOf (cClaim (Zc.out m zcs tr))) sv = (Zc.out m zcs tr).vC) :
     evalL ((ZerocheckMasked.fcL lay (ZcZ.proof lay h m zcs tr)).addConst (Zk.claimCheck c' sv)) h = 0 := by
@@ -91,7 +91,7 @@ theorem rsC_zero (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (zcs : Zc.Coins
 whose bits satisfy its statement (`claims_switch`'s hypotheses, verbatim). -/
 theorem rsAb_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.Witness st.m)
     (hsat : (stmtOf st hwf (regionsOf st)).Satisfies w) (tr : Trace)
-    (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Coins) (cs : Lc.Coins)
+    (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Challenges) (cs : Lc.Challenges)
     (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts)
     (lay : Zk.PadLayout) (h : Array F128) (full : Array F128) (c' : Claim)
     (hs : c'.skip = skipWeights (cs.cf 0))
@@ -108,7 +108,7 @@ theorem rsAb_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22
 whose bits satisfy its statement (`claims_switch`'s hypotheses, verbatim). -/
 theorem rsC_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.Witness st.m)
     (hsat : (stmtOf st hwf (regionsOf st)).Satisfies w) (tr : Trace)
-    (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Coins) (cs : Lc.Coins)
+    (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Challenges) (cs : Lc.Challenges)
     (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts)
     (lay : Zk.PadLayout) (h : Array F128) (c' : Claim) (hs : c'.skip = skipWeights zcs.z)
     (hx : c'.x[0]! = (zcs.r st.m)[0]!) :
