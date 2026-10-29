@@ -1,7 +1,7 @@
 import Definitions.Pouw.Guarantees.Writes
 import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Dimension.PointwiseProofs
-import Proofs.Pouw.Dimension.SsnProofs
+import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
+import Proofs.Pouw.Lead.Tags.SsnProofs
 
 /-!
 # Proofs of what writing distinct words costs (draft semantics, pending review)

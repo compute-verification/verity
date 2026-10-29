@@ -1,4 +1,4 @@
-import Proofs.Pouw.Dimension.SsnProofs
+import Proofs.Pouw.Lead.Tags.SsnProofs
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
 
 /-!
