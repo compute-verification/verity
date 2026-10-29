@@ -13,7 +13,7 @@ trap 'rm -rf "$WORK"' EXIT
 lscpu >"$OUT/cpu.txt"
 gcc --version | head -1 >"$OUT/gcc.txt"
 openssl version >>"$OUT/gcc.txt" 2>&1 || true
-gcc -O3 -march=sapphirerapids -fopenmp "$HERE/host.c" -lcrypto -o "$WORK/host"
+gcc -O3 -march=sapphirerapids -fopenmp "$HERE/host.c" -o "$WORK/host"
 objdump -d "$WORK/host" | grep -c -E 'tdpbssd' | xargs echo "tdpbssd sites:" >>"$OUT/gcc.txt"
 objdump -d "$WORK/host" | grep -c -E 'vpdpbusd' | xargs echo "vpdpbusd sites:" >>"$OUT/gcc.txt"
 "$WORK/host" 1 "$SECS" | tee "$OUT/host-1.json"
