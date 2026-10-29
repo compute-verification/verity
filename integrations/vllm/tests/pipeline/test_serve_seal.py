@@ -506,6 +506,21 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     assert ADV.registered_compiler("inner-compiler").cap_bits == ADV.CAP_BITS
 
 
+def test_bs_builder_item_is_what_the_registration_log_registers_once():
+    """B's entry in the registration log: the inner compiler's digest, advice v0 and ℓ, read back as the log's builder; a
+    second builder is refused."""
+    from verity.core.protocols import registration as REG
+    from verity.core.protocols.certifier import advice as I1
+
+    item = ADV.builder_item(ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=4096))
+    assert item == {"advice": I1.SCHEMA, "cap": 4096, "digest": "cd" * 64, "kind": "builder"}
+    auditor = REG.Auditor()
+    assert REG.check(auditor, "onsite", REG.chain("onsite", [REG.Information((item,))])).view().builder == item
+    other = ADV.builder_item(ADV.registered_compiler("other-compiler", "ab" * 64))
+    with pytest.raises(REG.Refused, match="entry 1: duplicate-information"):
+        REG.check(auditor, "onsite", REG.chain("onsite", [REG.Information((item,)), REG.Information((other,))]))
+
+
 @pytest.mark.parametrize("cap", [0, 7, True, "8"])
 def test_a_cap_that_is_not_a_bit_count_is_refused(cap):
     with pytest.raises(ValueError, match="whole number of bits"):
