@@ -51,15 +51,15 @@ unmeasured on the H200.
 | 1 | **NCP + the rank bound** (Theorem D / DistinctWrites under H32, MH100/MH100w): the noise cancels inside one 3K-wide product, so O′ = AB exactly; every k32 step's accumulator (each dot product's running sum) is committed | 1 (H32, measured on the H100 only) + 3 (W1 faithfulness) + certified checkpoint independence; no A1, no A2, no SAK | In work: 32/(3K), so 0.52% at K 2,048. It fails at K < 1,067 (attention, K 64: 17%). In time it's open: up to 1/3 in the generous model, unless non-tensor pipes' word rate is bounded or H uses those pipes too | 3× MACs + SHA-512 of every k32 word (about 0.375 B per useful MAC); order 10²× at T 8,192 by GD-HASH's rule (estimate); ? | int7 activations: +4.66% on a 70B (EPS1); ? on Llama-1B | `perWordMH100` and `embedMH100` proved (draft semantics); `H32` def locked; `A2WordsIff` locked | served in vLLM (`ncp-v1`/`v2`); modelled on the 4090 |
 | 2 | NCP + Forest / open pipe (Theorem D with MinRank ≥ 5) | 1 + MinRank (certified) | as 1 | as 1 | as 1 | quadratic forest proved; `A1_nonquad` open | 4090-class |
 | 3 | Dither-2S LI-CP-W p=1 (the machine model's H200 headline) | 4 (SAK, TS polytope, FOLD-OPT, SCALAR-ROUTE) | headline ε 0.86% (sheet), 1.022% (measured, DC-90-ri) | γ 2.34–2.41 (modelled) | ? | Dither WorkSound and the H200 instance proved and locked | not served |
-| 4 | Pearl-C (FP8), TT_OUT at ρ = 1/400 on the H200 | 5 (TT_OUT) | ≤ ρ = 0.25% under TT_OUT | slowdown in panels (sm_120 end to end; sm_90 GLM) | FP8 | — | served on sm_120 (`-h3`) |
+| 4 | Pearl-C (FP8), TT_OUT at ρ = 1/400 on the H200 | 5 (TT_OUT) | ≤ ρ = 0.25% under TT_OUT | slowdown in panels (sm_120 end to end; sm_90 GLM) | FP8 | — | served on sm_120 and on the H200 (`-h3`; GLM-5.3, whole step 4.52×) |
 | 5 | NCP under TT_NCP(0.5%) | 5 | 0.51% (4090 milestone); 0.69% at 4k² | as 1 | as 1 | `gammaFromTTNCP` | — |
 | 6 | D1 KW transcript (rank-16 noise) | 5 (TT 0.5%) | 0.85% milestone; 2.5–7% on LLMs | 131× hashing (4090) | exact | — | superseded |
 | 7 | Dither-C peel fx1 | 4 | 0.54%, sm_120 only | γ 2.14 (sm_120) | `co32c` arm | — | served on sm_120 (`eps1-sm120-h1fx1`) |
 | 8 | Dither v3.2 no-fold | 4 (SAK) | floor G/2 at t = 8 (gap 50%); 0.80 at t = 3 in v3.2's layout | γ 1.40–2.15 (H200, modelled) | ? | WorkSound locked | not served |
 
 Out:
-- **H-1T** (genuine FP8): DistinctLiveH1T is refuted in Lean (EncodeChainRefuted).
-- **D-3s/m** (genuine FP8): NO-GO at the measured FADD price of 32.11.
+- **H-1T** (genuine FP8): fails T1 at served shapes on its own H100 numbers. DistinctLiveH1T is an open conjecture, not refuted; EncodeChainRefuted refutes a different premise (CORE-RANK).
+- **D-3s/m** (genuine FP8): NO-GO. An f32 block value costs 64 + FADD, so at FADD 32.00 (Round 10) nothing clears 1% below 16,384³ (CORE-RANK).
 - **A second product on uniform noise:** a 50% gap.
 - **J10-R / H1 as served:** commits the un-noised product, so it earns 0; the RelSec floors are 0.854.
 - **C2-O:** 2.2–9.6%.
@@ -76,3 +76,24 @@ Out:
 3. **T2.** NCP's measured honest overhead on the H200 with SHA-512 of every k32 word.
 4. **T3.** NCP's perplexity on Llama-3.2-1B with int7 activations.
 5. **Coverage.** What to do with matmuls whose K is below 1,067 (attention).
+
+## 5. Interim (01:40Z)
+
+- **T1's clock (coordinator's default; CORE-SMELL C1).** T1 is in SM-clocks. The clock, under load and beside SHA-512, is a
+  separate term ε_clock that we report but don't fold into T1. In seconds the clock alone moves 1.8–18.5%.
+- **Hashing in T1 (pending Daniel; C2).** At k32 words, hashing is 98–99% of t_H, so in total time T1 would turn on
+  SHA-512's speed (ShaSpeed, algorithmic knowledge about SHA-512). The proposal is that T1 counts the matmul's forced work
+  and hashing is T2 overhead.
+- **#1 in time (CORE-TIME, estimates).**
+  - The tensor pipe makes 127.99 k32 words/SM/clk.
+  - Beside it, the lane pipes add up to 6.20 (IDP4A 4.10, DFMA 2.11).
+  - A tensor-only honest kernel (all there is today) has a gap of 4.4–5.1% at K 2,048, so it fails.
+  - An honest kernel that also runs IDP4A and DFMA words has a gap of 1.28% under a products-only premise (holds from
+    K ≈ 4,530), or 0.52% with an operand-delivery premise (rank 3–4).
+  - The co-issue placements decide it; their probes wait on an H200.
+- **#1 T2 (CORE-NCP, estimates):** 160–193× at T 8,192 (fails; 99% hashing, 2,989 GB a forward) and 15–31× at T 512
+  (passes).
+- **#1 T3 (CORE-NCP, measured, WikiText-2):** int7 linears are +3.68% at 2K and +3.48% at 8K over stock int8 (passes).
+  Coverage is 78% of a decode token's MACs (QKᵀ and the lm_head are outside).
+- **The served `ncp-v1/v2` is a different design (C3):** depth-16 words, SHAKE / SHA-256, noise reused per epoch, host numpy.
+- **No new H200 measurement yet.** vy-dc-h200-5 has refused SSH since 00:24Z, and infra has been asked.

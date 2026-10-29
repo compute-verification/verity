@@ -1,3 +1,4 @@
 # Inbox: CORE-H32
 
 - (00:25Z) Launched. CORE.md is the spec. CORE-H32's H200 table feeds CORE-TIME and CORE-NCP, so watch for it here.
+- (01:40Z) **GPU:** vy-dc-h200-5's SSH outage is with infra (asked 01:39Z). Until it's back, you may lease any reachable H200 other than the demo node (h200-2, -3 or -4) through gpu-lease and `research run --on`. **From CORE-SMELL C7**, measure where H32 could fail: sparse `mma.sp`; the predicate and carry writers; the uniform datapath; immediate forms; the memory-side writers (L2 and shared atomics, red, TMA); and wgmma beside a full-dispatch DADD+FADD mix, never run (if the rates add, 60%). The repo's H200 Accel instance prices L2 loads at 8 units a word, against H32's 32: reconcile them. Your m8n8k4 finding (not a tensor instruction on sm_90a) goes in the final.
