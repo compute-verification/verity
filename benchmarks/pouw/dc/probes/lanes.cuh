@@ -179,6 +179,27 @@ DC_DEV void lane_ops(L& l) {
   }
 }
 
+// R IDP.4A with an LDS.128 after every D of them, its words folded into a chain (mem_ops' LDS.128 lines, two a load):
+// honest's IDP.4A route, 8 IDP.4A and half an LDS.128 a word, is D 16.
+template <int R, int D, int SX>
+DC_DEV void idp4a_lds_ops(Lane2& l, uint32_t sb, int n) {
+  static_assert(R % D == 0 && SX / 512 >= 2 * (R / D), "an IDP.4A + LDS.128 lane needs two lines of scratch a load");
+  const uint32_t lane = threadIdx.x & 31;
+#pragma unroll
+  for (int q = 0; q < R; q++) {
+    l.op<L_IDP4A>(q);
+    if (q % D == D - 1) {
+      const int j = q / D;
+      uint32_t w0, w1, w2, w3;
+      asm volatile("ld.shared.v4.u32 {%0,%1,%2,%3},[%4];"
+                   : "=r"(w0), "=r"(w1), "=r"(w2), "=r"(w3)
+                   : "r"(sb + (((n & 1) * (R / D) + j) % (SX / 512)) * 512 + lane * 16)
+                   : "memory");
+      l.r[j & 7] ^= w0 ^ w1 ^ w2 ^ w3;
+    }
+  }
+}
+
 // The memory lanes: R accesses a trip, each one warp instruction whose 32 lanes touch 32 consecutive words (LDS.128: 4
 // words a lane). lde: ld.u32 through a generic address (LD.E, which no census class names); atome: red.relaxed.gpu.xor
 // through a generic address (ATOM.E, ATOME32); redg: the same to a global address (REDG.E, REDG32); atoms:
