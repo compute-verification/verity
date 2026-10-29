@@ -11,6 +11,8 @@ import Proofs.Pouw.Lead.Tags.Tile
 
 Its proofs are in `Lead/Tags/`, its new declarations in `Pouw.SecurityProofs.Lead.Tags`.
 
+* `Distinct`: the lead's stubs `repeats_le` and `word_exact`. `word_exact` is `Exact`'s bound at `K ≤ 65,536`;
+  `not_repeats_le` refutes `repeats_le` as stated, at `K = 0`.
 * `Exact`: with data in range, every committed word fits a 32-bit register for at most 4,588 steps; at the lead, for an
   inner dimension of at most 128,460.
 * `Fold`: the epilogue's IADD3 and FFMA give stock's word while `|A·Bᵀ| ≤ 2^22`, whatever the row and column sources.
