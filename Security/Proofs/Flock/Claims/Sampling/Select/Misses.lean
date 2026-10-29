@@ -292,7 +292,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
       refine le_trans (Claims.Pr_mono fun src ⟨units, read, hu, hm⟩ => ⟨units, read, hu, fun v hv => ?_⟩)
         (strata_bound _ _ (Or.inl ⟨k, rfl⟩) _ W L) |>.trans_eq ?_
       · rw [hns, Option.getD_some, stratified_Pa_map k S (fun p => if bases.any (Flock.Draw.ofBase p.1) then rsSize p.2
-          else Flock.Draw.wholeK k (rsSize p.2) (strataSize S)) W (Or.inr fun p _ => by (try dsimp only); split <;> simp)]
+          else Flock.Draw.wholeK k (rsSize p.2) (strataSize S)) W (Or.inr fun p _ => by split <;> simp)]
         simp [stratum_size, Function.comp_def]
       · simpa [popUnits, List.flatMap_map] using hm v hv
 
