@@ -45,7 +45,7 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
 - **No Slack and no Linear.** Report to the coordinator by finishing your task. Each checkpoint is a note under
   `lanes/compute-research` (`kind: report`), published with `research notes sync --path lanes/compute-research`.
 - GPU work only on vy-dc-h200-5, through gpu-lease, and only once the coordinator confirms a window. Never touch
-  vy-dc-h200. **Window booked (infra, INF-367, 16:08Z): vy-dc-h200-5 from about 18:15Z to 20:45Z.** Start once infra
+  vy-dc-h200. **Window UP (infra, 18:09Z): vy-dc-h200-5, one H200, GPU 0, through gpu-lease; lease to 20:40Z, hard stop 20:45Z.** Earlier: start once infra
   posts that it is up; the coordinator relays it. Have GPU runs done by 20:30Z.
 
 ## Settled during the program
