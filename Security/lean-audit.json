@@ -39281,9 +39281,8 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "a48de96864a7dcde534648f7903863e22414fe24c0ce16b283e0d10339f00ff5",
+   "digest": "386a3da63576977588ef227808b741638d0880b26eca05120d9c92210e6c149c",
    "definitions": {
-    "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
     "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
@@ -43131,10 +43130,10 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5Honest"]
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "afca5e3018a45fe2b0fd64b647dfe28c368d4f6a2d3cda875b91af5a18fee51f",
+   "digest": "139ea220dabc70c828a97aeefd8bb988acf5e0e87503b161ef3e2a617faab6b7",
    "definitions": {
     "Flock.Bridge.constsOfP": "e29422384f4deb1a8ab2f9e0eb98bc0c4ce04cda9533f8419e7c74349231e1c9",
-    "Flock.Guarantees.SampledKSLiveV5": "458411dec6b6b59924fb7bd268e8238cd34e65921a65b7cdc8f305cfbe63d45f"
+    "Flock.Guarantees.SampledKSLiveV5": "8688e02a59a22ee7d3ff2908efad87afe84fc9fe8bcc732bdc030cc98e4ac009"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
