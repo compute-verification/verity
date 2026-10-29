@@ -108,7 +108,7 @@ def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_pat
     sessions = []
     for name, schedule, reqs in cases() + placements():
         salts = iter(SALTS)
-        s = FT.Session(schedule, _coins, lambda salts=salts: next(salts))
+        s = FT.InnerRun(schedule, _coins, lambda salts=salts: next(salts))
         for r in reqs:
             s.handle(r)
         sessions.append((name, s))
@@ -290,7 +290,7 @@ def test_no_salt_repeats_across_a_thousand_sessions():
     from every other: the ZK server's tapes and the challenger's openings, within and across sessions."""
     salts: list[str] = []
     for _ in range(1000):
-        s = FT.Session(FA.SCHEDULE, commit=True)
+        s = FT.InnerRun(FA.SCHEDULE, commit=True)
         for r in FA.requests():
             s.handle(r)
         t = s.transcript()
