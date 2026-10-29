@@ -428,12 +428,9 @@ def lake_sources(pkg: str) -> list[str] | None:
     d = ROOT / pkg
     if not (d / "lakefile.toml").is_file() or (d / "lakefile.lean").exists():
         return None
-    try:
-        reqs = [r for r in tomllib.loads((d / "lakefile.toml").read_text()).get("require", []) if isinstance(r, dict)]
-        m = d / "lake-manifest.json"
-        entries = [e for e in json.loads(m.read_text()).get("packages", []) if isinstance(e, dict)] if m.is_file() else []
-    except (OSError, ValueError, UnicodeDecodeError):
-        return None
+    reqs = [r for r in tomllib.loads((d / "lakefile.toml").read_text()).get("require", []) if isinstance(r, dict)]
+    m = d / "lake-manifest.json"
+    entries = [e for e in json.loads(m.read_text()).get("packages", []) if isinstance(e, dict)] if m.is_file() else []
     pinned = {e.get("name") for e in entries if e.get("type") == "git" and e.get("rev")}
     if any(not isinstance(r.get("path"), str) and r.get("name") not in pinned for r in reqs):
         return None
@@ -658,7 +655,11 @@ def lean_on_path() -> None:
     p = subprocess.run(["bash", "-c", ELAN + "command -v lake"], capture_output=True, text=True)
     lake = p.stdout.strip().splitlines()[-1] if p.returncode == 0 and p.stdout.strip() else ""
     if lake and shutil.which("lake") is None:
-        os.environ["PATH"] = os.pathsep.join([str(Path(lake).parent), os.environ.get("PATH", "")])
+        _on_path(Path(lake).parent)
+
+
+def _on_path(d: Path) -> None:
+    os.environ["PATH"] = os.pathsep.join([str(d), os.environ.get("PATH", "")])
 
 
 def lean_build(log: Path) -> str | None:
@@ -687,18 +688,19 @@ def platform_id() -> dict:
     return {"system": platform.system(), "machine": platform.machine(), "image": base_image()}
 
 
-def gpus() -> bool:
-    """Whether this process may use a GPU: `nvidia-smi` is on the PATH and `CUDA_VISIBLE_DEVICES` doesn't hide every GPU, which is
-    what a GPU test runs or skips on. A run on a node whose GPUs gpu-lease hands out sees none (`research run` sets the variable
-    empty, and check passes it to its steps), so it keys its suites as a run on a node without GPUs does."""
-    return shutil.which("nvidia-smi") is not None and os.environ.get("CUDA_VISIBLE_DEVICES") != ""
+def gpus(env) -> bool:
+    """Whether a process with environment ``env`` may use a GPU: `nvidia-smi` is on the PATH and `CUDA_VISIBLE_DEVICES` doesn't
+    hide every GPU, which is what a GPU test runs or skips on. A run on a node whose GPUs gpu-lease hands out sees none (`research
+    run` sets the variable empty, and check passes it to its steps), so it keys its suites as a run on a node without GPUs does."""
+    return shutil.which("nvidia-smi") is not None and env.get("CUDA_VISIBLE_DEVICES") != ""
 
 
 def cargo_on_path() -> None:
-    """Put rustup's `cargo` on this process's PATH where rustup installed it and the PATH lacks it (a login shell's profile puts it
-    there, `uv run` from a runner doesn't), so the key's `cargo` says whether the machine has it, not how the run was started."""
-    if shutil.which("cargo") is None and (b := Path(os.environ.get("CARGO_HOME") or Path.home() / ".cargo") / "bin").joinpath("cargo").is_file():
-        os.environ["PATH"] = os.pathsep.join([str(b), os.environ.get("PATH", "")])
+    """Put rustup's `cargo` on this process's PATH where rustup installs it (~/.cargo/bin, which flock's `check_build.sh` puts first
+    too) and the PATH lacks it (a login shell's profile puts it there, `uv run` from a runner doesn't), so the key's `cargo` says
+    whether the machine has it, not how the run was started."""
+    if shutil.which("cargo") is None and (b := Path.home() / ".cargo" / "bin").joinpath("cargo").is_file():
+        _on_path(b)
 
 
 def keyed_variables(env) -> dict[str, str]:
@@ -713,7 +715,7 @@ def environment() -> dict:
     this process may use a GPU (`gpus`), which tests skip on, and the variables they switch on (`keyed_variables`). Nothing that
     names the machine, the checkout's path or the run."""
     return {"python": platform.python_version(), **platform_id(),
-            "tools": {**{t: shutil.which(t) is not None for t in TOOLS}, "gpus": gpus()}, "variables": keyed_variables(os.environ)}
+            "tools": {**{t: shutil.which(t) is not None for t in TOOLS}, "gpus": gpus(os.environ)}, "variables": keyed_variables(os.environ)}
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
