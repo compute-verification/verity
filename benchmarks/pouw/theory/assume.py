@@ -82,6 +82,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fold_routes as FR
+import network_terms as NT
 
 T1 = 0.01
 M32 = 0xFFFFFFFF
@@ -571,11 +572,6 @@ def swar_alt(rng: np.random.Generator, trials: int, T: int) -> dict:
 
 # ---- COUNTER's decomp against the alternating fold (lead:rot zero-data words) ---------------------------------------
 
-def steps_for(K: int) -> int:
-    """The lead's committed words a cell at inner dimension K (one word a k32 step, the first 21 lanes, 28 after)."""
-    return 1 + math.ceil((K - 21) / 28)
-
-
 def lead_rot_words(rng: np.random.Generator, m: int, n: int, S: int, e: int = 7):
     """COUNTER's `lead:rot` Draw, replicated: the zero-data running words of a 64-row coin tile under `add`.
 
@@ -676,7 +672,7 @@ def fold_decomp(rng: np.random.Generator, trials: int, Ks=(2048, 8192),
     rows = {}
     exact = True
     for K in Ks:
-        S = steps_for(K)
+        S = NT.steps(K)
         hit = 0
         counts = None
         for _ in range(max(1, trials // 20)):
@@ -701,7 +697,15 @@ def fold_decomp(rng: np.random.Generator, trials: int, Ks=(2048, 8192),
             "counts_a_cell": counts, "by_column_price": by_col,
             "break_even_col_ops": round((honest - core) * tile / (S * npat), 2),
             "exact": hit == max(1, trials // 20)}
-    return {"cases": rows, "bit_exact": exact, "mutations": fold_decomp_mutations(rng, m, n, steps_for(Ks[0])),
+    macs = {K: sum(n_ * k for _, n_, k in NT.CALLS if k == K) for K in Ks}
+    tot = sum(macs.values())
+    weighted = {}
+    for label in next(iter(rows.values()))["by_column_price"]:
+        g = sum(macs[K] / tot * rows[f"K {K} (S {NT.steps(K)})"]["by_column_price"][label]["gap_vs_foldmaterial"]
+                for K in Ks)
+        weighted[label] = {"gap_vs_foldmaterial": round(g, 4), "per_period_AND": NT.per_period(g)}
+    return {"cases": rows, "bit_exact": exact, "mac_share_by_K": {str(K): round(macs[K] / tot, 4) for K in Ks},
+            "mac_weighted": weighted, "mutations": fold_decomp_mutations(rng, m, n, NT.steps(Ks[0])),
             "note": "FoldMaterial credits cost(H); the IADD3 steps decompose (2·retained + P + Q), so the prover "
                     "materialises only the XOR3 words. Under credit = stock it survives (C0 > stock), as the XOR "
                     "fold does under packing."}
@@ -874,8 +878,8 @@ def main() -> int:
     for s in res["swar_alt"]:
         if s["decode_exact"] != s["packed_runs"]:
             fails.append(f"alternating-fold packed route not exact at T {s['T']}: {s['decode_exact']}/{s['packed_runs']}")
-    if (steps_for(2048), steps_for(8192)) != (74, 293):
-        fails.append(f"steps_for: {steps_for(2048)}, {steps_for(8192)}, expected 74 and 293")
+    if (NT.steps(2048), NT.steps(8192)) != (74, 293):
+        fails.append(f"steps: {NT.steps(2048)}, {NT.steps(8192)}, expected 74 and 293")
     cc = res["alt_carry_couples"]
     if not (cc["bit_k+1_is_x_xor_r_and_c"] and cc["and_is_non_affine_at_every_k"]):
         fails.append(f"carry coupling: {cc}")
