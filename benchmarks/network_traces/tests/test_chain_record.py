@@ -7,7 +7,7 @@ kept certificate's the Lean check's, which refuses the changed one's window besi
 window's sync the Lean's read of the clock openings, which leaves no window one beside a reference that signs a changed
 clock certificate;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
-several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
 the scan's class doesn't serve; the job's copy of the
@@ -294,9 +294,9 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     n2s = got["steps"]["n2"]
     assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
-    assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
+    assert n2s["members"]["moved"]["escaped_the_draw"] == {"incorrect_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
-    assert n2s["eps_at_delta"]["wrong_units_at_delta"]["0.5"] == 1
+    assert n2s["eps_at_delta"]["incorrect_at_delta"]["0.5"] == 1
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
@@ -477,6 +477,19 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
 
 
+def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negative(tmp_path):
+    def rnd(accepted):
+        return {"audit": {"window_accepted": accepted}}
+
+    def scan(block):
+        return {"ok": True, "T": 1, "rounds": {"block": rnd(block), "honest": rnd(True), "chain": rnd(False)}}
+
+    got = cr.scan_step(scan(True), "g1/warden")
+    assert got["verdict"] == "accepted" and got["negatives"] == {"chain": True}, got
+    got = cr.scan_step(scan(False), "g1/warden")
+    assert (got["verdict"], got["why"]) == ("failed", "block: window refused")
+
+
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     import math
     from dataclasses import asdict
@@ -516,7 +529,7 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
-    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    # one incorrect proof block of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
     assert cr.subset_bound(4, 2, 0.5) == 1
 
 

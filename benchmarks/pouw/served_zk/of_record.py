@@ -1,4 +1,4 @@
-"""Lean is the served window's verifier of record (`verity.core.protocols.pouw.verifier`). Each of PoUW's checks on the
+"""Lean is the served window's verifier (`verity.core.protocols.pouw.verifier`). Each of PoUW's checks on the
 challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered`);

@@ -16,10 +16,10 @@ unit `u`'s lowered gates needs the descriptor-to-circuit-file lowering, which is
 * `popOf_size`, `popOf_unit`: at `PopMatches`, the population has `n` slots, and slot `u` is unit `u`.
 * `popCount Pt`: the number of replay units in a claims partition's first class, its population.
 * `popCount_slotPartition`: the claims' partition of a layout (`slotPartition`) has `popOf`'s slots as its population.
-* `popCount_partOf`: at `PopMatches`, that population has as many slots as the game's partition `partOf P`'s population
+* `popCount_partOf`: at `PopMatches`, that population has as many slots as the game's partition `partOf P κ`'s population
   (`popCount_partOf_eq`): N = n.
 * `popCount_regMatches`: where `RegMatches` names a statement's registration and `PopMatches` holds at the statement's
-  descriptor and the registration's query, the statement's partition has `popCount (partOf P)` population slots.
+  descriptor and the registration's query, the statement's partition has `popCount (partOf P κ)` population slots.
 -/
 
 namespace Flock.Bridge
@@ -106,31 +106,31 @@ theorem popCount_slotPartition (l : SampledProofs.Slots.Layout) : popCount (slot
   | nil => rfl
   | cons c cs => simp [popCount, slotPartition, popOf, List.length_flatten, Function.comp_def]
 
-/-- `partOf P`'s population has one slot per unit (the input class comes after it). -/
-theorem popCount_partOf_eq {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
-    popCount (partOf P) = n := by
+/-- `partOf P κ`'s population has one slot per unit. -/
+theorem popCount_partOf_eq {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+    (κ : Fin C.N → Option Bool) : popCount (partOf P κ) = n := by
   simp [popCount, partOf]
 
 /-- **N = n**: at `PopMatches`, the claims' partition of the deployed layout has as many population slots as the
-game's partition `partOf P` has population slots. -/
+game's partition `partOf P κ` has population slots. -/
 theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
     {l : SampledProofs.Slots.Layout} (h : PopMatches desc q n)
     (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) :
-    popCount (slotPartition l) = popCount (partOf P) := by
+    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) :
+    popCount (slotPartition l) = popCount (partOf P κ) := by
   rw [popCount_slotPartition, popOf_size h hp hl, popCount_partOf_eq]
 
 /-- **N = n at the registration**: where `RegMatches` names the statement's registration, and `PopMatches` holds at
 the statement's descriptor and that registration's query, the statement's partition has as many population slots as
-`partOf P` has population slots. -/
+`partOf P κ` has population slots. -/
 theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Claims.Msg → Option SamplingDeploy.Reg}
     (hreg : SamplingDeploy.RegMatches c reg) {x : Claims.Msg} {s : Claims.Sampling.AuditStatement}
     {Pt : Claims.Sampling.Partition} (hx : c.parse x = some s) (hP : c.partition s = some Pt) {n : ℕ}
     (hpop : ∀ g, reg x = some g → PopMatches s.desc g.query n)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) :
-    popCount Pt = popCount (partOf P) := by
+    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) :
+    popCount Pt = popCount (partOf P κ) := by
   obtain ⟨g, l, hg, hd, hl, hPt, -⟩ := hreg x s Pt hx hP
   rw [hPt]
-  exact popCount_partOf (hpop g hg) hd hl P
+  exact popCount_partOf (hpop g hg) hd hl P κ
 
 end Flock.Bridge

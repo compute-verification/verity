@@ -16,7 +16,7 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.annotations import definition_digest
+from verity.ml.circuits.metadata import definition_digest
 from verity.ml.circuits.codec import encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program

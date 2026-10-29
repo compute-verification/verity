@@ -110,7 +110,7 @@ runs the chain's warden path on that fetch with the serve dir's endpoint records
 beside the fetch, and answers with `network-period check` on the rows form of the scan's
 link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
-its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
+its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
@@ -149,7 +149,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.LinkWindow.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
 | endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
-| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
+| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
@@ -205,7 +205,7 @@ failures `NetTiming.periodLeak_le_sum` sums by a union bound (`Security/Proofs/N
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
 (`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
-datacenter at δ takes each link at δ / links, and each link pays its own faulty proof blocks (`datacenter`'s
+datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
 
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
@@ -248,7 +248,7 @@ K charges to the sampling block's term (`tiedAudits`). The egress tie moves the 
 tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
 
 The two forms:
-- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ faulty proof blocks of b = NS + NV bits, and
+- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and
   Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block drawn.

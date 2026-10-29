@@ -24,7 +24,7 @@ trace's (`AdviceIn`); `sampledLeak_reg` proves that for every circuit at the inp
 registered inputs `reg` and `false` off the free inputs (`AsReg`), with `c` the number of free inputs not in `reg`.
 `SampledLeakAccepted` is that bound as a guarantee, with `SampledAuditAccepted` its one open hypothesis.
 `SampledLeakRegistered` is the same bound with the registered inputs at the registration's values (`regVal`), which it
-opens under the statement's roots (`RegOpens`), and binding (`Commitment.Binds`) in place of the trace's: the values the
+opens under the statement's roots (`RegOpens`), and binding (`CommitmentScheme.Binds`) in place of the trace's: the values the
 count leaves out are then the registration's, and an extracted trace that disagrees with them is a collision `B_reg`
 finds (`NetTiming.sampledLeak_registered`).
 
@@ -89,7 +89,7 @@ def SampledLeakAccepted : Prop :=
                 Dj ^ k s : ℕ) : ℕ∞)
 
 /-- **An accepted sampled audit bounds the leak at the registration's values, given `SampledAuditAccepted`.** As
-`SampledLeakAccepted`, where the trace's commitment also binds (`Commitment.Binds`) and each statement's registration
+`SampledLeakAccepted`, where the trace's commitment also binds (`CommitmentScheme.Binds`) and each statement's registration
 opens its registered inputs `reg` under the statement's roots (`RegOpens`, openings `ops`), on the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind + Pr[B_reg]`, with the inputs besides the ingress pinned at the registration's

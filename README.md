@@ -21,7 +21,7 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 
 | Subprotocol | What an accepted run establishes | Where |
 | --- | --- | --- |
-| Sampled proofs | The auditor samples proof blocks of a committed circuit with live coins, and C-Flock proves each sampled proof block's values in the committed trace right. The result bounds how many proof blocks are faulty. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
+| Sampled proofs | The auditor samples proof blocks of a committed circuit with live coins, and C-Flock proves each sampled proof block's values in the committed trace right. The result bounds how many proof blocks are incorrect. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
 | Proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
 | Proof of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
 | The bandwidth audit | A lower bound on the bits read from PoUS's store. | [`verity/core/protocols/bandwidth`](verity/core/protocols/bandwidth/PROTOCOL.md) |
@@ -103,7 +103,7 @@ Not yet:
 - **PoUW under the ACCEL model**: Dither's [protocol](verity/core/protocols/pouw/dither/PROTOCOL.md) and the Lean's
   `Pouw.Dither`.
 - **Inference versus training**: the [inference-only policy](verity/core/protocols/network/nci/README.md), the
-  feasible set, the admissible set and the overhead lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
+  feasible set, the admissible set and the slowdown lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
   [`benchmarks/rho`](benchmarks/rho/README.md).
 
 ## Demos
