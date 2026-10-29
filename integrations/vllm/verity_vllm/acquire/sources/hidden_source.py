@@ -22,7 +22,7 @@ launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equa
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Mapping
 
 from verity_vllm.engine import hooks
 
@@ -95,8 +95,19 @@ def plan_fa2_tap_groups(b: int, words_per_seq: int, cap_words: int) -> list[tupl
 
 def tap_row3(ns: Any) -> int:
     """What word 3 of the build's ROW entries holds (`verity_tap_row3`): 0 = never written (builds before the op included), 1 = the guarded
-    max (`query.guarded_max`)."""
+    max (`TAP_ROW3`)."""
     return int(ns.verity_tap_row3()) if hasattr(ns, "verity_tap_row3") else 0
+
+
+#: `verity_tap_row3()` of the tap build a manifest built under the guarded-max policy needs (ROW word 3 the guarded max of each key
+#: block after a row's first, and the MS class after FIN); no manifest is built under it since the M1 stream left the manifest
+TAP_ROW3 = 1
+
+
+def guarded_max_policy(manifest: Mapping[str, Any] | None) -> bool:
+    """Whether a manifest was built under the guarded-max policy (its query header has a `guarded_max` record)."""
+    q = (manifest or {}).get("query")
+    return isinstance(q, dict) and isinstance(q.get("guarded_max"), dict)
 
 
 def tap_ms(src: int) -> bool:
@@ -146,10 +157,9 @@ class HiddenM1Source:
         self.time_launch = None
 
     def require_row3(self, guarded_max: bool) -> None:
-        """Refuse a build whose ROW word 3 or MS class is not the manifest's: the guarded-max policy needs a build that writes the guarded
-        max and the MS class, any other manifest one that writes neither (the stream bytes of record)."""
-        from verity_vllm.query.guarded_max import TAP_ROW3
-
+        """Refuse a build whose ROW word 3 or MS class is not the manifest's: a manifest built under the guarded-max policy
+        (`guarded_max_policy`) needs a build that writes the guarded max and the MS class, any other manifest one that writes neither
+        (the stream bytes of record)."""
         want = TAP_ROW3 if guarded_max else 0
         policy = "is under the guarded-max policy" if guarded_max else "has no guarded-max policy"
         if self.stats["row3"] != want:
@@ -447,8 +457,9 @@ def hidden_class_for(flash_attn_version: int | None) -> str:
 
 def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
     """The attention hidden class this Commit binds, `{"family": class | None, "why": ...}`: None when the model instantiated no
-    FlashAttention impl (`engine.build.flash_attn_versions`; MLA / DSA sparse MLA, GLM-5.3: no `varlen_fwd`, no M1 tap fires); else the
-    hidden family the required-value `manifest`'s identities name, or without one (or none named) the impls' FA version's class."""
+    FlashAttention impl (`engine.build.flash_attn_versions`; MLA / DSA sparse MLA, GLM-5.3: no `varlen_fwd`, no M1 tap fires) or the
+    required-value `manifest` names none (`query.required`: the M1 stream is no Value of the Program); else the hidden family its
+    identities name, or without a manifest the impls' FA version's class."""
     from verity_vllm.engine.build import flash_attn_versions
 
     vs = flash_attn_versions(model)
@@ -459,6 +470,8 @@ def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
         raise ValueError(f"required manifest names two attention hidden families {fams}")
     if fams:
         return {"family": fams[0], "why": "required manifest identities"}
+    if manifest is not None:
+        return {"family": None, "why": "the required manifest names no attention hidden stream"}
     return {"family": hidden_class_for(int(next(iter(vs))) if len(vs) == 1 and None not in vs else None),
             "why": f"the attention impls' vllm_flash_attn_version {sorted(vs, key=str)}"}
 
@@ -508,7 +521,5 @@ def make_hidden_source(committer, so_path: str, ns: str | None = None, flash_att
     cls = (fa3_cls or HiddenM1SourceFA3) if is_fa3 else (fa2_cls or HiddenM1Source)     # a committer may supply its native (C++) twins
     src = cls(committer, so_path, ns=ns)
     if manifest is not None:
-        from verity_vllm.query.guarded_max import policy_of
-
-        src.require_row3(policy_of(manifest))
+        src.require_row3(guarded_max_policy(manifest))
     return src
