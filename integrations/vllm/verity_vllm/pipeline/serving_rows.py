@@ -5,7 +5,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
   a Commit whose replay is deferred to its bundle (``--replay-deferred``, not slim) commits it at its C2 site, before the bundle is
-  sealed and any draw (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
+  sealed and before sampling (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before sampling.  The profile makes no claim that they
   hold the values under the Commit's roots.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
@@ -17,9 +17,9 @@ through an opened reader, registered weights for weight slices), committed in M0
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | "work:K" | {...},
 "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?: {<descriptor id>:
-cap}, "row_tables"?: true, "partition_digest"?}``.  A ``work:K`` window draws by the work table `work_table_of` derives from the
+cap}, "row_tables"?: true, "partition_digest"?}``.  A ``work:K`` window samples by the work table `work_table_of` derives from the
 registered compiler's transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest
-drawn as the stratified law draws it.  The members are its templates in order, each instance count read off the Build's
+sampled as the stratified law samples it.  The members are its templates in order, each instance count read off the Build's
 Programs; the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
 templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
@@ -30,7 +30,7 @@ to those steps of each request.  A chunked template's units (``CHUNKED``: a ``Sc
 a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk or a ``SPLITS`` split part or combine; and a row template or
 whole ``PARTS`` part the file's ``chunk_cap`` names, its rows its Definition's own ports, `chunked`) are split
 into consecutive chunks of at most its ``chunk_cap`` (flock-circuit's spec shape, as ``benchmarks/one_stage/a6.py`` computes
-it; ``chunk_caps`` writes the entry), each chunk a member on C-Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
+it; ``chunk_caps`` writes the entry), each chunk a member on Flock's bit rows (`chunk_rows.unit_rows`) with its public file of global unit indices;
 ``row_tables`` puts the ``ScaledMmS8Coordinate`` chunks in the row-table layout (``with_row_tables``).
 
 A template is read through its word link (:func:`template`): a Boolean Definition (the definition) names the word Definition it
@@ -136,7 +136,7 @@ from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, 
                                                     Template, _bind, part, template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
 
-#: the layouts whose units are bit rows as C-Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
+#: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "split")
 #: the chunked layouts read by a module of their own: a row's unit count, and the reader of a member's rows
 READERS = {"slice": (SL.extent, SL.read), "kchunk": (KC.units, KC.read), "split": (SP.units, SP.read)}
@@ -382,10 +382,10 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
 def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_gates: Sequence[str] = ()) -> dict[str, Any] | None:
     """The verifier's work table (`draw.work_table`) for a window of ``counts`` (template -> its units, in the partition's order)
     under ``law``: under ``work:K``, each transfer-gate template (the units holding transfer gates, which the registered compiler
-    lists) works 0 with its floor all its units, so its stratum draws every one of them (`draw.work_k`: selection All, never
-    sampled), and every other template works 1 with floor 1, its draw the stratified law's share of K; None for any other law.
+    lists) works 0 with its floor all its units, so every one of them is in the sample (`draw.work_k`: selection All, never
+    sampled), and every other template works 1 with floor 1, its sample the stratified law's share of K; None for any other law.
     Refused when the compiler lists transfer gates under another law, when one of its transfer-gate templates is not among the
-    window's (its units would be left out of the proved set), or when every template is one (nothing is drawn: that window's
+    window's (its units would be left out of the proved set), or when every template is one (nothing is sampled: that window's
     selection is all)."""
     tg = list(dict.fromkeys(transfer_gates))
     if law.get("law") != "work":
@@ -397,7 +397,7 @@ def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_ga
         raise ValueError(f"the compiler's transfer-gate template {missing[0]} is not among the partition's templates {list(counts)}: "
                          "its units would be left out of the proved set")
     if all(t in tg for t in counts):
-        raise ValueError(f"every template of the window ({list(counts)}) holds transfer gates: nothing is drawn, so its selection is "
+        raise ValueError(f"every template of the window ({list(counts)}) holds transfer gates: nothing is sampled, so its selection is "
                          "all, not a work law")
     return {t: {"work": 0, "floor": int(n)} if t in tg else {"work": 1, "floor": 1} for t, n in counts.items()}
 

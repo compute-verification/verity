@@ -10,8 +10,8 @@
 # Needs on the node what served_verdicts.sh does: vLLM's venv /workspace/cp/venv312, the int8 checkpoint in /workspace/hf, the
 # sm_90 taps of r20261026-185144-3ccb under /workspace/research/vllm-composed-h200int8 and gpu-lease (the row leases the GPU for
 # its Match capture and its Commit's engine only). The uv venv, Lean's verifiers and M0's flock-circuit build in the background
-# while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node under
-# `research keep`; $OUT keeps the row's records, the window's public files, a5.sh's out ($OUT/a5) and summary.txt, whose A5 line
+# while the GPU stages run (M0 in A5_ROOT/flock-work, kept for a rerun). The row dir and the window stay on the node, kept
+# there; $OUT keeps the row's records, the window's public files, a5.sh's out ($OUT/a5) and summary.txt, whose A5 line
 # is the audit's verdict and whose REGISTERED line the window's kind, commitment and run root length.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
@@ -73,8 +73,6 @@ records() {  # the row's records into $OUT (never the bundle, the store or the c
     commit.log match.log build.log replay.log manifest.log; do cp "$D/$f" "$OUT/" 2>/dev/null; done
   mkdir -p "$OUT/commit"
   find "$D/commit" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/commit/" \; 2>/dev/null
-  [ -d "$D/commit/replay_bundle_p0" ] && mkdir -p "$OUT/commit/replay_bundle_p0" \
-    && cp "$D/commit/replay_bundle_p0/MANIFEST.json" "$D/commit/replay_bundle_p0/context.json" "$OUT/commit/replay_bundle_p0/" 2>/dev/null
   du -sh "$D" "$D"/* "$WD" 2>/dev/null > "$OUT/sizes.txt"
 }
 window_off() {  # the Commit's window out of the run dir (custody uploads it), its public files and error into $OUT

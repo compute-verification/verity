@@ -1,6 +1,6 @@
 """(e') [T1] The sampled-replay PARTITION reproduces: `commit/sampled_replay_p<k>.json`'s population (every Program row classified: the VUs
 by family, the not-evaluable rows by name, the strata and their sizes, the window-lifetime split), its `not_executed_by_rule` split,
-the seeded stratified draw (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
+the seeded stratified sample (the per-stratum sample counts, the round-robin cap, the picks per (request, request-relative step)) and the
 per-request phase anchors -- recomputed with `verity_vllm.check.replay`'s own pure functions (`ProgramIndex`, `population`,
 `executed_prefix_of_record`, `phase_anchor`, `split_not_executed`, `sample`) over the row's request Programs under the v2 query's address
 rule + the facts the record states (seed, per-stratum count, cap, targets, ring depth, arrivals, the executed-prefix facts of record).
@@ -132,6 +132,8 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
 
 
 def actual(row: resolver.Row) -> dict:
+    if kept := resolver.kept_on_the_node(row, "commit/sampled_replay_p0.json"):
+        return kept
     cand = row.candidate("commit/sampled_replay_p0.json")
     if cand is not None:
         sr = _body(json.load(open(cand)))

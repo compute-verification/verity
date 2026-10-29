@@ -1,4 +1,4 @@
-"""The C-Flock ZK rewinding statistics (``zk_rewind_stats.py``) on synthetic dumps: matching real and simulated views pass; a simulator whose
+"""The Flock ZK rewinding statistics (``zk_rewind_stats.py``) on synthetic dumps: matching real and simulated views pass; a simulator whose
 views end elsewhere, or whose online values do not depend on the prover's randomness, fails. The dumps from
 ``flock-circuit zkrewind`` run on a VM; this checks the analysis itself."""
 from __future__ import annotations
@@ -103,7 +103,7 @@ def test_independent_rewinds_pass_and_reused_ones_are_told_apart():
 
 
 def test_rewinds_on_one_dummy_opening_fail():
-    """red-team-m2-zk G1: rewinds that reuse the extraction run's dummy opening complete at the gate's epsilon."""
+    """Rewinds that reuse the extraction run's dummy opening complete at the gate's epsilon."""
     assert not _gk(21, 2)["pass"]
 
 

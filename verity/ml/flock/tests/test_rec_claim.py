@@ -33,7 +33,7 @@ U = (0, 1)
 
 # --- the honest opening ------------------------------------------------------------------------------------------------------
 
-class _Draw(A.Coins):
+class _Draw(A.CoinSource):
     """The verifier's coins drawn as the prover goes, in the rounds `rec_algebra.run` reads them."""
 
     def __init__(self, g: random.Random):
@@ -402,7 +402,7 @@ def test_a_padded_coordinate_that_is_not_zero_is_refused():
         A.run(OPEN, A._dummy_coins(OPEN), M, [ok[0], bad])
     with pytest.raises(ValueError, match="fixed at zero"):
         A.run(OPEN, A._dummy_coins(OPEN), M, [ok[0], dataclasses.replace(ok[1], pad=OPEN.m - 5)])
-    c = RS.Coins(alpha=0, z=0, x_rest=(), y_rest=(), zeta_c=(), pre=(), rounds=pt(SPARSE.NU + SPARSE.S_LOG),
+    c = RS.SparsePublics(alpha=0, z=0, x_rest=(), y_rest=(), zeta_c=(), pre=(), rounds=pt(SPARSE.NU + SPARSE.S_LOG),
                  zeta_p=pt(SPARSE.P_LOG), rho=pt(SPARSE.T_LOG), U=())
     assert RS.registered_claim(SPARSE, c, 0).pad == 0 and RS.registered_claim(SPARSE, c, 0, pad_to=25).pad == 3
 

@@ -18,7 +18,7 @@ own Commit.
   and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
   period open``) goes out before the server starts, ahead of window 0's reserve at startup.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
-  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
+  challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.ChallengerGate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and window
   k+1's while window k serves, off the engine loop (`GateSessions.take`); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
@@ -286,7 +286,7 @@ def listening(port: int) -> bool:
 
 class GateSessions:
     """H1's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
-    `commit_coins.Gate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
+    `commit_coins.ChallengerGate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
     pouw setting ``gate``) opens it on the window's open root and `ended` waits for its end entry. ``held`` is each
     session reserved, as the gate answered it, under the window it was reserved for; one no window opened says why
     (``unused``). With ``ahead`` (a `worker`), a window's session is reserved there before it opens (`ahead_of`, `take`).
@@ -413,7 +413,7 @@ def sessions_of(opts: Any) -> GateSessions | None:
         return None
     from verity_vllm.pipeline import commit_coins as CC
 
-    return GateSessions(CC.Gate(opts.gate.challenger_gate), opts.gate.challenger_peer, opts.window_steps,
+    return GateSessions(CC.ChallengerGate(opts.gate.challenger_gate), opts.gate.challenger_peer, opts.window_steps,
                         ahead=worker("h1-reserve"))
 
 
@@ -594,7 +594,7 @@ class H1Windows:
 
     def _release(self, window: int, comp: Any, run: Any, held: dict[str, Any] | None, seconds: dict[str, float],
                  error: str | None, queued: float, off: bool = False) -> dict[str, Any]:
-        """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the draw coin
+        """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the sampling coin
         opened and its session closed), with ``draws`` its draw put (`drawn`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
         one of the windows ``releasing``."""
