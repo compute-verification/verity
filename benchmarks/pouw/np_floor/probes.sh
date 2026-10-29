@@ -7,7 +7,8 @@
 #   research run --on vy-dc-h200-5 --project verity --campaign pouw-night --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=n-floor -- bash benchmarks/pouw/np_floor/probes.sh [SOURCE.cu...]
 # SOURCE.cu... replaces the list (every probe of each is timed): race.cu, the honest wgmma against the word programs.
-# Writes $OUT/build.log, gate-build.{txt,json}, sass/, smi.csv and one probe.py run directory a binary.
+# Writes $OUT/build.log, gate-build.{txt,json}, sass/, smi.csv and one probe.py run directory a binary. GATE_ONLY=1
+# stops after the gate, with no lease.
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -49,6 +50,7 @@ for b in "${bins[@]}"; do cuobjdump -sass "$b" >"$OUT/sass/$(basename "$b").sass
 python3 "$OP/probe.py" gate "${bins[@]}" --json "$OUT/gate-build.json" >"$OUT/gate-build.txt" 2>&1
 grep -c '^PASS' "$OUT/gate-build.txt" | xargs echo "probes.sh: gate-build PASS"
 grep -A2 '^REFUSED' "$OUT/gate-build.txt" >&2 || true
+[ -z "${GATE_ONLY:-}" ] || exit 0
 
 gpu-lease 1 --wait --max-min 20 -- bash -c '
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,clocks_throttle_reasons.active \
