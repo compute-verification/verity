@@ -81,7 +81,7 @@ def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkey
     steps = "pytest,circuit-check,flock-rust-tests"
     rc, only = _main(monkeypatch, tmp_path, ["--deferred", steps, "--shard", "3/3", "--keep-going"])
     whole = CHECK.deferred_parts(steps)
-    assert rc == 0 and only == [p for p in CHECK.shard("3/3")["parts"] if p in whole]
+    assert rc == 0 and only == [p for p in CHECK.shard("3/3", gated=False)["parts"] if p in whole]
     assert {p.partition(":")[0] for p in only} == {"circuit-check", "flock-rust-tests", "flock-circuit-build"}
     doc = json.loads((tmp_path / "result.json").read_text())
     assert doc["kind"] == CHECK.DEFERRED_KIND and (doc["deferred"]["k"], doc["deferred"]["n"]) == (3, 3)

@@ -998,7 +998,7 @@ def record(argv: list[str]) -> int:
     deferred = rest[rest.index("--deferred") + 1] if "--deferred" in rest[:-1] else None
     try:
         if "--shard" in rest[:-1]:
-            parts = shard(rest[rest.index("--shard") + 1])["parts"]
+            parts = shard(rest[rest.index("--shard") + 1], gated=deferred is None)["parts"]
             if deferred is not None:
                 parts = [p for p in parts if p in deferred_parts(deferred)]
         elif deferred is not None:
@@ -1307,10 +1307,11 @@ def deferred_parts(steps: str) -> list[str]:
     return [p for p in shard_parts() if p.partition(":")[0] in chosen]
 
 
-def shard(spec: str) -> dict:
+def shard(spec: str, gated: bool = True) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
-    gate, "all": every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages
-    (`declaration.resolve`).  DeclarationError when there is no such plan or shard, or the tree can't be listed."""
+    gate unless ``gated`` is False (an after-landing `--deferred` shard runs them), "all": every part a recorded unsharded
+    check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no
+    such plan or shard, or the tree can't be listed."""
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
     plans = DECLARATION.plans()
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
@@ -1318,7 +1319,8 @@ def shard(spec: str) -> dict:
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
     return {"k": k, "n": n,
-            "parts": [p for p in DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1] if p.partition(":")[0] not in OFF_GATE],
+            "parts": [p for p in DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1]
+                      if not gated or p.partition(":")[0] not in OFF_GATE],
             "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
 
 
@@ -2181,7 +2183,7 @@ def main(argv: list[str]) -> int:
     if "--shard" in rest and rest.index("--shard") + 1 < len(rest):
         i = rest.index("--shard")
         try:
-            sharded = shard(rest[i + 1])
+            sharded = shard(rest[i + 1], gated="--deferred" not in rest)
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2

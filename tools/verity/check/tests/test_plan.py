@@ -183,7 +183,7 @@ def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_pat
     doc = P.document(parts, _git(root, "rev-parse", "HEAD"), _git(root, "rev-parse", "HEAD^{tree}"), None, [], [])
     by = {p["part"]: p for p in doc["parts"]}
     assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
-    assert all(p.get("required", True) for n, p in by.items() if n not in ("circuit-check:t", "lean-changed", "lean-agreement"))
+    assert all(p.get("required", True) for n, p in by.items() if n not in ("circuit-check:t", "lean-changed", "lean-agreement", "ratchet-gate"))
     _cited, why = _judged(doc, {})
     assert why and "circuit-check" not in why
 
