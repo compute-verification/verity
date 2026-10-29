@@ -16,18 +16,21 @@ a committed, pairwise-distinct, noise-dependent 32-bit word, and nothing else. N
   (an estimate carried from the core's smell check, not computed here).
 - `decode`: below N 64 a k32 register costs honest more than H32's 32 (`DECODE_PRICE`), while the floor stays 32.
 - `uncommitted(L)`: committing a word every L > 32 leaves L/32 − 1 of every L/32 tensor writes unforced: 3(1 − 32/L).
+  With every instruction class semantic and algebraic sufficiency at L (rank 3), the counting sketch credits a running
+  word 64 − 1024/L of honest's L (`uncommitted_semantic(L)`); only a matmul lower bound credits all of L (rank 4 to 5).
 - `sign_fix`: the u8 × s8 wgmma takes one operand signed, and one IADD3 can't form signed bytes of B + F (the carry out
   of a byte depends on its noise for 63 of the 127 int7 values), so honest writes that operand's registers twice where
   a forced-write bound charges once. Per linear honest takes the cheaper route: U, Y signed, 3p·nK more; or U′, X
   signed, 3p·mK more plus the row init's sum of A, p·mK (an estimate). No premise set closes it.
 
 The premise sets are cumulative (`SETS`): S0 today; S1 adds the atomic call (the free values are the call's own words,
-not their span; with every device of the period counted); S2 adds TensorSemantics (a tensor instruction computes the
-captured exact product of its operand tiles, output (i, j) from row i and column j only, at its measured price at its
-shape; memory moves are oblivious) with its forming counting lemma; S3 adds lane semantics and the one-instruction
-minimality of the noise's derivation (a CPU check over the lane instructions' semantics); S4 adds OwnProducts at
-interval L (a committed L-sum costs L/32 tensor writes; rank 4 until a counting lemma), which also divides hashing by
-L/32. Each set's residual is the sum of the terms it leaves open, at every shape (`SHAPES`) and T.
+not their span; with every device of the period counted); S2 makes every instruction class semantic: TensorSemantics
+(a tensor instruction computes the captured exact product of its operand tiles, output (i, j) from row i and column j
+only, at its measured price at its shape), lane semantics with fan-in, oblivious memory moves and algebraic
+sufficiency, with the forming counting lemma (the tensor class alone buys nothing: one `other` instruction still writes
+any word at 32); S3 adds the one-instruction minimality of the noise's derivation (a CPU check over the lane
+instructions' semantics) with its sharing lemma. Each set's residual is the sum of the terms it leaves open, at every
+shape (`SHAPES`) and T.
 
 Committing closes the same two terms without a premise (a committed, salt-moving register that equals no coin word is
 a DistinctWrites target): X and Y in place of TensorSemantics' counting lemma, E₁ and F₁ in place of
@@ -91,8 +94,9 @@ PERIODS = ("window", "week", "month", "year")
 SETS = {
     "S0 today (H32, DistinctWrites)": ((), ()),
     "S1 + atomic call": (("atomic call", "PeriodInventory"), ("final_word", "before_noise")),
-    "S2 + TensorSemantics": (("TensorSemantics", "MemoryMovesOblivious", "forming counting lemma"), ("forming", "decode")),
-    "S3 + lane semantics, minimal derivation": (("LaneSemantics", "OneInstructionMinimal"), ("derivation",)),
+    "S2 + every class semantic": (("TensorSemantics", "LaneSemantics", "FanIn", "MemoryMovesOblivious",
+                                   "algebraic sufficiency", "forming counting lemma"), ("forming", "decode")),
+    "S3 + minimal derivation": (("OneInstructionMinimal", "sharing lemma"), ("derivation",)),
 }
 
 
@@ -117,6 +121,10 @@ def residual(t: dict[str, float], closed: set[str], noise: bool = True) -> float
 
 def uncommitted(L: int) -> float:
     return 3 * (1 - FLOOR / L)
+
+
+def uncommitted_semantic(L: int) -> float:
+    return 3 * (1 - (2 * FLOOR - FLOOR * FLOOR / L) / L)
 
 
 def t2(L: int, base: float) -> float:
@@ -185,7 +193,7 @@ def main() -> int:
                  f"{s1['llama-3.2-1b fused, T 8192']:.2%}")
     s2 = {k: row["residual"][s[2]] for k, row in table.items()}
     t1_s2 = sorted(k for k, v in s2.items() if v <= 0.01)
-    checks.check("with TensorSemantics (S2) T1 holds at T 8,192 on Llama-3.2-1B fused and apart and on V4's dense "
+    checks.check("with every class semantic (S2) T1 holds at T 8,192 on Llama-3.2-1B fused and apart and on V4's dense "
                  "linear; the derivation's 8/m still breaks it on a routed expert's 256 rows, at T 512's 64 rows and "
                  "at decode", t1_s2 == ["llama-3.2-1b apart, T 8192", "llama-3.2-1b fused, T 8192",
                                         "v4-like dense, T 8192"],
@@ -193,7 +201,7 @@ def main() -> int:
                  f"{s2['llama-3.2-1b fused, T 512']:.2%}; V4 expert T 8,192 {s2['v4-like routed expert, T 8192']:.2%}")
     s3 = {k: row["residual"][s[3]] for k, row in table.items()}
     over_s3 = sorted(k for k, v in s3.items() if v > 0.01)
-    checks.check("with lane semantics and the derivation's minimality (S3) only the sign fix remains; it meets T1 "
+    checks.check("with the derivation's minimality and its sharing lemma (S3) only the sign fix remains; it meets T1 "
                  "fused and on V4's shapes, but Llama-3.2-1B served apart (k and v at n 512) misses at T 512 and below",
                  all(v == table[k]["terms"]["sign_fix"] for k, v in s3.items())
                  and over_s3 == ["llama-3.2-1b apart, T 512", "llama-3.2-1b apart, T 64", "llama-3.2-1b apart, T 8"],
@@ -217,6 +225,12 @@ def main() -> int:
     checks.check("committing every L > 32 under H32 alone leaves 3(1 − 32/L) of stock unforced: 150% at L 64; "
                  "OwnProducts (rank 4) is what closes it", unc[32] == 0 and unc[64] == 1.5,
                  "  ".join(f"L {L} {v:.0%}" for L, v in unc.items()))
+    unc_sem = {L: uncommitted_semantic(L) for L in LS}
+    checks.check("with every class semantic and algebraic sufficiency (rank 3) a running word is credited 64 − 1024/L: "
+                 "32 at L 32, and 75%, 169% and 230% of stock still unforced at L 64, 128 and 256, so at rank ≤ 3 the "
+                 "commit stays every k32 and T2's L buy is rank 4 to 5",
+                 unc_sem[32] == 0 and unc_sem[64] == 0.75 and all(unc_sem[L] > 0.01 for L in LS if L > 32),
+                 "  ".join(f"L {L} {v:.0%}" for L, v in unc_sem.items()))
     t2s = {mode: {L: t2(L, b) for L in LS} for mode, b in T2_K32.items()}
     tol = {L: (sha_tolerance(L, HASH_UNITS[1]), sha_tolerance(L, HASH_UNITS[0])) for L in LS}
     checks.check("hashing at k32 makes ShaSpeed's tolerance 0.00125–0.0015% of the hashing price; L 64 doubles it and "
@@ -251,7 +265,7 @@ def main() -> int:
     if out:
         with open(out, "w") as f:
             json.dump({"sets": {k: {"adds": v[0], "closes": v[1]} for k, v in SETS.items()}, "table": table,
-                       "uncommitted": unc, "t2": t2s, "sha_tolerance": tol, "periods": periods,
+                       "uncommitted": unc, "uncommitted_semantic": unc_sem, "t2": t2s, "sha_tolerance": tol, "periods": periods,
                        "commit_instead_hashing": commit_alt,
                        "estimates": {"before_noise": BEFORE_NOISE, "hash_units": HASH_UNITS, "hash_share": HASH_SHARE,
                                      "t2_k32": T2_K32, "expert_share": EXPERT_SHARE, "derivation_price": P_DERIVE,
