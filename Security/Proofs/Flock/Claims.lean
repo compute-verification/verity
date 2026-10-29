@@ -20,6 +20,7 @@ import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 import Proofs.Flock.Claims.Recursion.DeployInputs
 import Proofs.Flock.Claims.Recursion.DeployOuter
 import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Flock.Claims.Recursion.ComposeParts
 import Proofs.Flock.Claims.Recursion.DeployComplete
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeployFacts
@@ -93,7 +94,6 @@ import Proofs.Flock.Claims.Recursion.VStarParts
 import Proofs.Flock.Claims.Recursion.VStarPartsHolo
 import Proofs.Flock.Claims.Recursion.VStarPartsDense
 import Proofs.Flock.Claims.Recursion.DeployReg
-import Proofs.Flock.Claims.Recursion.BoundRouteLin
 import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 import Proofs.Flock.Claims.Recursion.VStarLinks

@@ -25,7 +25,8 @@ guarantee imports.
 
 An honest budget for `valueFinder` counts the audit's run and, at each read the search tests, what `valueColl`
 recomputes: at most `7n + 2D + 5` SHA-512 evaluations for `n` rows and `D = log2ceil n` (`3n + 2^(D+1) + 2D + 7`, and
-`2^D < 2n`), plus the `n` salts' SHAKE256 (`RecCoins.verifierSalt`), which are not SHA-512.
+`2^D < 2n`), plus the `n` salts' `3n` (`RecCoins.verifierSalt`, three SHA-512 each, `RecCoins.saltOf`): `10n + 2D + 5`
+in all.
 -/
 
 namespace FlockSoundness.Discharge.Recursion
