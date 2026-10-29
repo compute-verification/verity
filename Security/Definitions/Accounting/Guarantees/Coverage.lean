@@ -28,12 +28,14 @@ def CapabilityFloor : Prop :=
 /-- **`CapabilityFloor`'s premises hold together** at the toy task (`Accounting.Slowdown.Toy`), with the covered
 structure at least two gates, the cost a run's gate count, `Tmax = 10`, `η = 1/2` and `Lc = 2`: coverage holds, and
 every covered computation costs at least `2`. Coverage is not empty: the guess, one gate, lacks the structure and
-reaches the target on half the coins, so coverage fails at `η = 0`. -/
+reaches the target on half the coins, so coverage fails at `η = 0`. The floor's hypothesis is the covered structure
+written out, not `Toy.covered`: the lock's witnesses rule refuses an honest witness's hypothesis headed by a definition
+outside an assumptions module. -/
 def CapabilityFloorHonest : Prop :=
   Assumptions.CoversEfficientMethods Accounting.Slowdown.Toy.task Set.univ Accounting.Slowdown.Toy.covered
       Accounting.Slowdown.Toy.cost 10 2⁻¹ ∧
-    (∀ C x, (C, x) ∈ (Set.univ : Accounting.Slowdown.Class Unit Unit) → Accounting.Slowdown.Toy.covered C x →
-      2 ≤ Accounting.Slowdown.Toy.cost (C x)) ∧
+    (∀ (C : Unit → Accounting.Actual.Run Unit) x, (C, x) ∈ (Set.univ : Accounting.Slowdown.Class Unit Unit) →
+      2 ≤ (C x).A.N → 2 ≤ Accounting.Slowdown.Toy.cost (C x)) ∧
     ¬ Assumptions.CoversEfficientMethods Accounting.Slowdown.Toy.task Set.univ Accounting.Slowdown.Toy.covered
       Accounting.Slowdown.Toy.cost 10 0
 

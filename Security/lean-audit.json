@@ -8629,11 +8629,8 @@
    "assumptions": [],
    "type_hash": "609acaf2de910ac349982b6369bfb32fd0f50a2a5f9bfc4e0ac24514a863f24e"
   },
-  "Nci.SecurityProofs.OperandCapNontrivial": {
-   "owner": "@training",
-   "signature": ["Nci.SecurityProofs.OperandCapNontrivial : Nci.Guarantees.OperandCapNontrivial"],
-   "assumptions": [],
-   "type_hash": "3c8e9dd0fad8581cb6ed04e51ef4b051d03a2c601804f3db9ac1fba269f73015"
+  "Nci.SecurityProofs.OperandCapJointNontrivial": {
+   "owner": "@training"
   },
   "Nci.SecurityProofs.OperandCapSeparate": {
    "owner": "@training",
@@ -8646,6 +8643,9 @@
    "signature": ["Nci.SecurityProofs.OperandCapSeparateHonest : Nci.Guarantees.OperandCapSeparateHonest"],
    "assumptions": [],
    "type_hash": "888eb033ef290fa62199879f739e2fcbea93a7f2ca4fb696db1d4ac95c40509a"
+  },
+  "Nci.SecurityProofs.OperandCapSeparateNontrivial": {
+   "owner": "@training"
   },
   "Nci.SecurityProofs.OtherPositions": {
    "owner": "@lean",
@@ -12733,20 +12733,21 @@
    "Nci.SecurityProofs.StatHeldBudgetHonest": "completeness: StatHeldBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, every run in the support of μ (the token drawn uniformly) is honest, and MinEntropyHard holds for Y 1 at Λ = 0, all proved; it is not degenerate: the product's value is a uniform bit, so StatHeldBudget's premises hold together there and StatHeldBudget is not vacuous.",
    "Nci.SecurityProofs.StatHeldBudgetNontrivial": "completeness: StatHeldBudget's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product's value priced 3 bits, above its one bit of entropy so MinEntropyHard fails, is held above k + Λ = 1, so StatHeldBudget's conclusion is not a tautology.",
    "Nci.SecurityProofs.RecoveredBudgetHonest": "completeness: RecoveredBudget's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the evaluator [true, true, true] has three bits, SourceHard holds with the value of gates 2 and 3 as the source (ℓz = 2, δ = 1) and Recovers with one eligible output per block and a one-bit complement (βv = 2, amb = 1), all proved, under the toy decoder M, which compresses; both are spent: SourceHard fails at δ = 0, since M describes 11 in one bit, and Recovers at amb = 0, since the recovery needs its bit picking the source, also proved, so RecoveredBudget's premises hold together there, not degenerately, and RecoveredBudget is not vacuous.",
-   "Nci.SecurityProofs.RecoveredBudgetNontrivial": "completeness: RecoveredBudget's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at βv = 7, more than the two-bit source can supply so Recovers fails, βv·J = 7 exceeds k + clog2 B + aBlk + δ + amb = 6; the conclusion there is arithmetic in the parameters, so RecoveredBudget's conclusion is not a tautology.",
+   "Nci.SecurityProofs.RecoveredBudgetNontrivial": "completeness: RecoveredBudget's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), R1 is a (2,1)-partition, the evaluator [true, true, true] has three bits and SourceHard holds at δ = 1, as in its honest witness (proved), Recovers fails at βv = 7, more than the two-bit source can supply, and βv·J = 7 exceeds k + clog2 B + aBlk + δ + amb = 6, so RecoveredBudget's conclusion is not a tautology and needs the recovery.",
    "Nci.SecurityProofs.IncidenceCapHonest": "completeness: IncidenceCap's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the one counted product reads its slot and its operand (SlotsRead and the operand reads, proved), with at most one product per slot-operand pair and per operand, so IncidenceCap's premises hold together there and IncidenceCap is not vacuous.",
-   "Nci.SecurityProofs.IncidenceCapNontrivial": "completeness: IncidenceCap's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at r = aout = 0, below the one product per pair so the incidence premises fail, the product's gate completes one product, above min(r|U||V|, aout|V|) = 0, so IncidenceCap's conclusion is not a tautology.",
+   "Nci.SecurityProofs.IncidenceCapNontrivial": "completeness: IncidenceCap's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at most one product uses the operand (aout = 1), the pair premise fails at r = 0, below the one product of its slot-operand pair, and the product's gate completes one product, above min(r|U||V|, aout|V|) = 0, so IncidenceCap's conclusion is not a tautology and needs its pair premise.",
    "Nci.SecurityProofs.OperandCapSeparateHonest": "completeness: OperandCapSeparate's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), slots and operands priced one bit each, the incidence at r = aout = 1, the proof block holding slots and operands priced at most one bit each (HeldPriceAtMost, proved) and Q = 1 bounding min(rxy, aout y) on the budget, so OperandCapSeparate's premises hold together there and OperandCapSeparate is not vacuous.",
+   "Nci.SecurityProofs.OperandCapSeparateNontrivial": "completeness: OperandCapSeparate's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most one bit each, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapSeparate's conclusion is not a tautology and needs its premise on Q.",
    "Nci.SecurityProofs.OperandCapJointHonest": "completeness: OperandCapJoint's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), slots and operands priced one bit each, the incidence at r = aout = 1, the proof block holding slots and operands priced at most two bits together (HeldPriceAtMost of W.sum O, proved) and Q = 2, so OperandCapJoint's premises hold together there and OperandCapJoint is not vacuous.",
-   "Nci.SecurityProofs.OperandCapNontrivial": "completeness: OperandCapSeparate and OperandCapJoint's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the proof block completes one product, above Q = 0, which bounds min(rxy, aout y) on no budget that holds the product's slot and operand (the premise on Q dropped), so OperandCapSeparate and OperandCapJoint's conclusion is not a tautology.",
+   "Nci.SecurityProofs.OperandCapJointNontrivial": "completeness: OperandCapJoint's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most two bits together, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapJoint's conclusion is not a tautology and needs its premise on Q.",
    "Nci.SecurityProofs.ImportOrRecomputeHonest": "completeness: ImportOrRecompute's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K (the product's use, its region and required gate the token) are upstream and carry overlap weight 1, both proved, so ImportOrRecompute's premises hold together there and ImportOrRecompute is not vacuous.",
-   "Nci.SecurityProofs.ImportOrRecomputeNontrivial": "completeness: ImportOrRecompute's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at weight 2, above what the use's regions allow so OverlapWeights fails, the block finishes weight 2, above its one unregistered input bit and the zero weight it recomputes, so ImportOrRecompute's conclusion is not a tautology.",
+   "Nci.SecurityProofs.ImportOrRecomputeNontrivial": "completeness: ImportOrRecompute's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K are upstream (proved), OverlapWeights fails at weight 2, above what the use's region allows, and the block finishes weight 2, above its one unregistered input bit and the zero weight it recomputes, so ImportOrRecompute's conclusion is not a tautology and needs overlap weights.",
    "Nci.SecurityProofs.RecomputeByGatesHonest": "completeness: RecomputeByGates's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K carry overlap weight 1 and each requires at least one gate (g = 1), both proved, so RecomputeByGates's premises hold together there and RecomputeByGates is not vacuous.",
-   "Nci.SecurityProofs.RecomputeByGatesNontrivial": "completeness: RecomputeByGates's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at g = 2, above the consumer's one required gate, the gates S = {1} recompute weight 1, above |S|/g, so RecomputeByGates's conclusion is not a tautology.",
+   "Nci.SecurityProofs.RecomputeByGatesNontrivial": "completeness: RecomputeByGates's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the consumers K carry overlap weight 1 (proved), the gate count fails at g = 2, above the consumer's one required gate, and the gates S = {1} recompute weight 1, above |S|/g, so RecomputeByGates's conclusion is not a tautology and needs its gate count.",
    "Nci.SecurityProofs.RecomputeByStateHonest": "completeness: RecomputeByState's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with two proof blocks (R2), each holding one computed gate's value priced one bit (HeldPriceAtMost R2 W2 1, proved), the consumer K2 requiring both gates requires state 1 (RequiresState, proved); it is not degenerate, so RecomputeByState's premises hold together there and RecomputeByState is not vacuous.",
-   "Nci.SecurityProofs.RecomputeByStateNontrivial": "completeness: RecomputeByState's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with one proof block holding both gates (R1), priced 2 together so HeldPriceAtMost at h = 1 fails, the block contains the consumer's required gates, so RecomputeByState's conclusion is not a tautology.",
+   "Nci.SecurityProofs.RecomputeByStateNontrivial": "completeness: RecomputeByState's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with one proof block holding both gates (R1), the block holds their values priced at most h = 2 (HeldPriceAtMost R1 W2 2, proved), RequiresState fails at h = 2, since the values are priced 2 in all, and the block contains the consumer K2's required gates, so RecomputeByState's conclusion is not a tautology and needs required state.",
    "Nci.SecurityProofs.WeightedProductCapHonest": "completeness: WeightedProductCap's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product reads its slot (SlotsRead, proved), its use has weight 1, and the proof block holds slots priced at most one bit (HeldPriceAtMost, proved), so WeightedProductCap's premises hold together there and WeightedProductCap is not vacuous.",
-   "Nci.SecurityProofs.WeightedProductCapNontrivial": "completeness: WeightedProductCap's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at h = 0, below the slot the block holds so HeldPriceAtMost fails, its weighted products, 1, exceed h times the weight it serves, so WeightedProductCap's conclusion is not a tautology.",
+   "Nci.SecurityProofs.WeightedProductCapNontrivial": "completeness: WeightedProductCap's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product reads its slot (SlotsRead, proved) and its use has weight 1, HeldPriceAtMost fails at h = 0, below the slot the block holds, and its weighted products, 1, exceed h times the weight it serves, so WeightedProductCap's conclusion is not a tautology and needs its budget.",
    "Nci.SecurityProofs.CapabilityFloorHonest": "completeness: CapabilityFloor's honest witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), a hidden coin ω sets the target, [ω] at one output position, the covered structure is at least two gates and the cost a run's gate count; CoversEfficientMethods holds at Tmax = 10 and η = 1/2, since a position holds one gate so a run reaches at most one of the two targets, and every covered computation costs at least Lc = 2, both proved; coverage is not empty: the one-gate guess lacks the covered structure and reaches the target on half the coins, so CoversEfficientMethods fails at η = 0, also proved, so CapabilityFloor's premises hold together there, not degenerately, and CapabilityFloor is not vacuous.",
    "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), the one-gate guess, costing 1, below min(Lc, Tmax) = 2, reaches the target on half the coins, a positive probability, above η = 0, where coverage fails, so CapabilityFloor's conclusion is not a tautology.",
    "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet.",
@@ -60256,31 +60257,38 @@
   },
   "Nci.SecurityProofs.ImportOrRecompute": {
    "honest": ["Nci.SecurityProofs.ImportOrRecomputeHonest"],
-   "nontrivial": "Nci.SecurityProofs.ImportOrRecomputeNontrivial"
+   "nontrivial": "Nci.SecurityProofs.ImportOrRecomputeNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.IncidenceCap": {
    "honest": ["Nci.SecurityProofs.IncidenceCapHonest"],
-   "nontrivial": "Nci.SecurityProofs.IncidenceCapNontrivial"
+   "nontrivial": "Nci.SecurityProofs.IncidenceCapNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.OperandCapJoint": {
    "honest": ["Nci.SecurityProofs.OperandCapJointHonest"],
-   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
+   "nontrivial": "Nci.SecurityProofs.OperandCapJointNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.OperandCapSeparate": {
    "honest": ["Nci.SecurityProofs.OperandCapSeparateHonest"],
-   "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
+   "nontrivial": "Nci.SecurityProofs.OperandCapSeparateNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.RecomputeByGates": {
    "honest": ["Nci.SecurityProofs.RecomputeByGatesHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecomputeByGatesNontrivial"
+   "nontrivial": "Nci.SecurityProofs.RecomputeByGatesNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.RecomputeByState": {
    "honest": ["Nci.SecurityProofs.RecomputeByStateHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecomputeByStateNontrivial"
+   "nontrivial": "Nci.SecurityProofs.RecomputeByStateNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.RecoveredBudget": {
    "honest": ["Nci.SecurityProofs.RecoveredBudgetHonest"],
-   "nontrivial": "Nci.SecurityProofs.RecoveredBudgetNontrivial"
+   "nontrivial": "Nci.SecurityProofs.RecoveredBudgetNontrivial",
+   "kind": "exclusion"
   },
   "Nci.SecurityProofs.StatHeldBudget": {
    "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
@@ -60288,7 +60296,8 @@
   },
   "Nci.SecurityProofs.WeightedProductCap": {
    "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
-   "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial"
+   "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial",
+   "kind": "exclusion"
   }
  }
 }
