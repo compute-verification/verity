@@ -308,6 +308,46 @@ def entry_credit(words: np.ndarray, lanes: int = 32) -> dict:
             "model_w_excess": lanes * (per_group - pooled_w) / words.size}
 
 
+def masked_rows(words: np.ndarray, sources: int, levels: np.ndarray | None = None) -> dict:
+    """Masked cross-row copies: each row-step copies, column by column under a predicate, the words it shares with up
+    to `sources` earlier row-steps (greedy), at one word a source for its address, and writes the rest. Masks and
+    predicates are free, as when predicate-only writes are free; a share of the honest words saved.
+
+    With `levels` (m × S, the row's coin level), sources are earlier rows at the same step and level, whose shared
+    columns are where two per-row vectors the prover holds compare equal: a mask from predicates alone."""
+    m, s, n = words.shape
+    vecs = words.transpose(1, 0, 2).reshape(s * m, n)
+    flat = None if levels is None else levels.T.reshape(s * m)
+    paid = n
+    for r in range(1, s * m):
+        cand = np.arange(r) if flat is None else np.arange(r - r % m, r)[flat[r - r % m:r] == flat[r]]
+        if cand.size == 0:
+            paid += n
+            continue
+        hit = vecs[cand] == vecs[r]
+        left = np.ones(n, dtype=bool)
+        cost = 0
+        for _ in range(sources):
+            gain = (hit & left).sum(axis=1)
+            best = int(gain.argmax())
+            if gain[best] <= 1:
+                break
+            left &= ~hit[best]
+            cost += 1
+        paid += int(left.sum()) + cost
+    return {f"masked_saving_{sources}{'' if levels is None else '_level'}": 1 - paid / words.size}
+
+
+def row_levels(design: str, a, co: dict, s: int) -> np.ndarray:
+    """Each row's coin level W_t: the cumulative row-lane term and chosen lane, which every column shares."""
+    d1, dl = first_data(design), later_data(design)
+    lanes = step_lanes(design, co)
+    inc = np.zeros((a.shape[0], s), dtype=np.int64)
+    for t in range(1, s):
+        inc[:, t] = a[:, d1 + dl * (t - 1)] + lanes[:, t]
+    return np.cumsum(inc, axis=1)
+
+
 def rows_sweep(seed: int = 13, ms: tuple[int, ...] = (48, 512, 4096), n: int = 64, s: int = 67) -> list[dict]:
     """`fix2`'s ball share and pooled distinct tiles as one call's rows grow, for identical rows and zero tails."""
     rng = np.random.default_rng(seed)
@@ -340,6 +380,12 @@ def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[di
                                                               row["forest_saving_copy_0"])})
             checks.append({"name": f"{design}/{case} check (b) ≤ model W's payment + excess (adaptive_lanes_le)",
                            "ok": row["credit_b"] <= row["model_w_pays"] + row["model_w_excess"] + 1e-12})
+            if design in ("tag", "blc"):
+                for k in (1, 4, 16):
+                    row |= masked_rows(words, k)
+                row |= masked_rows(words, 16, row_levels(design, a, co, s))
+                checks.append({"name": f"{design}/{case} masked copies pay at least the pooled values (run_values_le)",
+                               "ok": 1 - row["masked_saving_16"] >= row["model_p_pays"] - 1e-12})
             if design in ("tag", "hw") and case in ("cancel", "walk"):
                 adv, writes, pointers = adversary(design, case, a, b, pub, co, s)
                 ok = bool(np.array_equal(adv, words))
