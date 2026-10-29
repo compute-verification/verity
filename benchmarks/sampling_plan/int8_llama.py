@@ -32,8 +32,7 @@ from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressur
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (SHA512_ROWS, Candidate, TensorCommit, CostModel,  # noqa: E402
                                                            Objective, ReplayDomain, for_budget, for_target, frontier,
-                                                           needs_benchmark, overlaps, perturb, row_ands, structure,
-                                                           weigh)
+                                                           needs_benchmark, overlaps, perturb, structure, weigh)
 
 DELTA = 2.0 ** -40
 CHUNKS = (2048, 1024, 512, 256, 128, 64, 32)

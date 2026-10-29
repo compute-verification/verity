@@ -47,13 +47,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
 
+from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, for_target, grain_costs, leak_count, loc_bits,
                                                            row_ands, sqrt_grain)
 
-DELTA = 2.0 ** -40
+DELTA = float(WINDOW_DELTA)
 LAMBDA = log(1 / DELTA)
 EPS = 0.01
 LEAK_BITS = 2.0 ** 30
