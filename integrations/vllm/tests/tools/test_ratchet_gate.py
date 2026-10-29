@@ -1224,7 +1224,8 @@ DOCS_A = {"file": "docs/a.md", "count": 1}
 
 @pytest.fixture
 def lane_linted(repo) -> Repo:
-    """``repo`` with the repository's real lane-text lint: docs/a.md's ``#1234`` is its one site, which the list allows."""
+    """``repo`` with the repository's real lane-text lint: docs/a.md's pull request number is its one site, which the list
+    allows."""
     repo.commit("lane text", {REPO_LANE_LINT: (SCRIPT.parents[3] / REPO_LANE_LINT).read_text(),
                               REPO_LANE_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nSee #1234.\n"})
     repo.git("checkout", "-q", "-b", "pr")
