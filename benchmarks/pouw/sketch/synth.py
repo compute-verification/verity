@@ -17,6 +17,10 @@ instances, by counterexample-guided synthesis (z3): the falsification test for a
   sketch on every input? z3 synthesizes on a growing set of examples and verifies over all inputs (CEGIS); SAT is a fold
   (a cheaper program, printed), UNSAT at every L below honest's means none exists in this component set at this size.
   The linear sketches are positive controls: their fold must be found.
+- **Widths.** With `--ring`, `shf` shifts left only, and every component (and every sketch here) commutes with reduction
+  mod 2^b: a 32-bit program correct on every input, reduced mod 2^b, is a b-bit program correct on every input. UNSAT at
+  a small width then rules out the same length at 32 bits. SAT at a small width may be a coincidence of the width.
+  Without `--ring`, right shifts and rotates don't commute, and a width's UNSAT holds only at that width.
 """
 from __future__ import annotations
 
@@ -113,24 +117,38 @@ class Program:
     """L symbolic instructions over n free inputs: opcode, three operand selectors (an input, an earlier result or the
     immediate), immediates, the lop3 truth table, the shift kind and amount, the lin coefficients and the add3 signs."""
 
-    def __init__(self, n, L, b):
-        self.n, self.L, self.b = n, L, b
-        self.op = [z3.Int(f"op{i}") for i in range(L)]
-        self.sel = [[z3.Int(f"s{i}_{j}") for j in range(3)] for i in range(L)]
+    def __init__(self, n, L, b, ring=False):
+        self.n, self.L, self.b, self.ring = n, L, b, ring
+        self.op = [z3.BitVec(f"op{i}", 3) for i in range(L)]
+        self.sel = [[z3.BitVec(f"s{i}_{j}", 8) for j in range(3)] for i in range(L)]
         self.imm = [[z3.BitVec(f"k{i}_{j}", b) for j in range(3)] for i in range(L)]
         self.lut = [z3.BitVec(f"lut{i}", 8) for i in range(L)]
         self.sh = [z3.BitVec(f"sh{i}", b) for i in range(L)]
-        self.shk = [z3.Int(f"shk{i}") for i in range(L)]
+        self.shk = [z3.BitVec(f"shk{i}", 2) for i in range(L)]
         self.lc = [[z3.BitVec(f"c{i}_{t}", b) for t in range(n + 1)] for i in range(L)]
         self.neg = [[z3.Bool(f"n{i}_{j}") for j in range(2)] for i in range(L)]
 
     def wf(self):
         c = []
+        zero = z3.BitVecVal(0, self.b)
         for i in range(self.L):
-            c += [self.op[i] >= 0, self.op[i] < len(OPS), self.shk[i] >= 0, self.shk[i] < 3, z3.ULT(self.sh[i], self.b)]
+            op, sel = self.op[i], self.sel[i]
+            c += [z3.ULT(op, len(OPS)), z3.ULT(self.shk[i], 1 if self.ring else 3), z3.ULT(self.sh[i], self.b)]
             for j in range(3):
                 # selector n + i means the immediate; below it an input or an earlier result
-                c += [self.sel[i][j] >= 0, self.sel[i][j] <= self.n + i]
+                c.append(z3.ULE(sel[j], self.n + i))
+            # fields an opcode doesn't read are zero, and operand orders it can't tell apart are sorted (lop3 absorbs a
+            # permutation into its table, imad's product commutes): neither removes a distinct program
+            c += [z3.Implies(op == 0, z3.And(sel[0] == 0, sel[1] == 0, sel[2] == 0)),
+                  z3.Implies(op != 0, z3.And([lc == zero for lc in self.lc[i]])),
+                  z3.Implies(op != 1, z3.And(z3.Not(self.neg[i][0]), z3.Not(self.neg[i][1]))),
+                  z3.Implies(op == 2, z3.ULE(sel[0], sel[1])),
+                  z3.Implies(op != 3, self.lut[i] == 0),
+                  z3.Implies(op == 3, z3.And(z3.ULE(sel[0], sel[1]), z3.ULE(sel[1], sel[2]))),
+                  z3.Implies(op != 4, z3.And(self.sh[i] == 0, self.shk[i] == 0)),
+                  z3.Implies(op == 4, z3.And(sel[1] == 0, sel[2] == 0))]
+            for j in range(3):
+                c.append(z3.Implies(sel[j] != self.n + i, self.imm[i][j] == zero))
         # the last instruction is the sketch, and every earlier one is read by a later non-lin one (a minimal program
         # has no dead code, so this prunes nothing it needs)
         for i in range(self.L - 1):
@@ -198,13 +216,13 @@ class Program:
         return lines
 
 
-def synth(name, T, b, L, timeout_s, seed=1):
+def synth(name, T, b, L, timeout_s, seed=1, ring=False):
     """CEGIS for a program of exactly L instructions; returns ('sat', lines) | ('unsat', None) | ('unknown', None)."""
     import random
     rng = random.Random(seed)
     n = T * SKETCHES[name][2]
-    prog = Program(n, L, b)
-    syn = z3.Solver()
+    prog = Program(n, L, b, ring)
+    syn = z3.SolverFor("QF_BV")
     syn.set("timeout", int(timeout_s * 1000))
     syn.add(prog.wf())
     mask = (1 << b) - 1
@@ -225,7 +243,7 @@ def synth(name, T, b, L, timeout_s, seed=1):
         if r != z3.sat:
             return "unknown", None, len(examples)
         m = syn.model()
-        ver = z3.Solver()
+        ver = z3.SolverFor("QF_BV")
         ver.set("timeout", int(max(left, 1) * 1000))
         out = z3.substitute(prog.run(xs), *[(v, m.eval(v, model_completion=True)) for v in _vars(prog)])
         ver.add(out != target)
@@ -255,6 +273,9 @@ def main():
     ap.add_argument("--max-len", type=int, default=0, help="search lengths up to this (default: honest's - 1)")
     ap.add_argument("--honest", action="store_true", help="also synthesize at honest's length (a completeness check)")
     ap.add_argument("--timeout", type=float, default=600.0, help="seconds per (sketch, T, L) query")
+    ap.add_argument("--ring", action="store_true",
+                    help="shifts left only, so every component commutes with reduction mod 2^width: UNSAT at this width "
+                         "then holds at 32 bits")
     ap.add_argument("--json")
     a = ap.parse_args()
     names = list(SKETCHES) if a.sketch == "all" else a.sketch.split(",")
@@ -269,8 +290,8 @@ def main():
                 top = max(top, honest)
             for L in range(1, top + 1):
                 t0 = time.time()
-                r, lines, nex = synth(name, T, a.width, L, a.timeout)
-                row = {"sketch": name, "T": T, "width": a.width, "len": L, "honest_len": honest, "result": r,
+                r, lines, nex = synth(name, T, a.width, L, a.timeout, ring=a.ring)
+                row = {"sketch": name, "T": T, "width": a.width, "ring": a.ring, "len": L, "honest_len": honest, "result": r,
                        "examples": nex, "seconds": round(time.time() - t0, 2), "program": lines}
                 rows.append(row)
                 print(json.dumps(row), flush=True)
@@ -292,7 +313,7 @@ def main():
               f" unknown at {v['unknown']}", file=sys.stderr)
     if a.json:
         with open(a.json, "w") as f:
-            json.dump({"rows": rows, "verdicts": verdict, "width": a.width}, f, indent=1)
+            json.dump({"rows": rows, "verdicts": verdict, "width": a.width, "ring": a.ring}, f, indent=1)
 
 
 if __name__ == "__main__":
