@@ -513,6 +513,14 @@ def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
     return out
 
 
+def _num_den(p: str, ctx: str) -> str:
+    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s), kept as written."""
+    parts = p.split("/")
+    if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and str(int(t)) == t for t in parts):
+        return p
+    raise Refused(f"{ctx}.p: not num/den")
+
+
 def unit_draw(j: Any) -> dict:
     """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s),
     and a live window's ``salt``, an object (`window_salt` reads it)."""
@@ -525,7 +533,7 @@ def unit_draw(j: Any) -> dict:
     _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
     out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
     if law == "bernoulli":
-        out["p"] = _str_at(d, "p", ctx)
+        out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
     else:
         out["k"] = _nat_at(d, "k", ctx)
     if law in ("stratified", "work"):
