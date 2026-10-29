@@ -35,6 +35,7 @@ import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.Dimension.RouteUPipeProofs
 import Proofs.Pouw.Dimension.RouteUProofs
 import Proofs.Pouw.Exact
+import Proofs.Pouw.FoldDyn
 import Proofs.Pouw.Fp8Atom.Checks
 import Proofs.Pouw.Fp8Atom.Checks.Ada
 import Proofs.Pouw.Fp8Atom.Checks.Add
