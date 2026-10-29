@@ -100,8 +100,9 @@ def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
 
 /-- How Flock's plain verifier is told to set the inner statement up, as the verifier holds it
 (`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id,
-whether its coins are the coin server's (`os`), its lookup tables, and its draw's bytes. `RecSetup.checkForm` holds
-them to the setup the inner statement's files give it. -/
+whether it names per-round OS coins (`os`, which `RecSetup.checkForm` refuses: the inner statement is on the challenger's
+coin tree), its lookup tables, and its draw's bytes. `RecSetup.checkForm` holds them to the setup the inner statement's
+files give it. -/
 structure InnerForm where
   statement : String
   os : Bool
@@ -133,8 +134,8 @@ structure Inner where
   /-- the inner circuit's unit range (META's `ranges`, the unit net's), whose slots the sparse phase's layout factors weigh -/
   unitRange : V Range := .error "the verifier's inner coins hold no unit range"
 
-/-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- A recursive session's inner statement (PROTOCOL.md §16.16), on the challenger's coin tree (`RecVStar.innerTree`). -/
+def innerTags : Tags := RecVStar.innerTags
 
 /-- The inner circuit's unit range: META's one range of its unit net, whose slots the sparse phase's layout factors weigh. -/
 def unitRangeOf (st : Stmt) : V Range :=
@@ -142,9 +143,9 @@ def unitRangeOf (st : Stmt) : V Range :=
   | #[r] => .ok r
   | rs => .error s!"the inner circuit has {rs.size} ranges of its unit net, not one"
 
-/-- The inner statement, set up from its circuit and public files on the coin server's coins, and its session's spec. -/
+/-- The inner statement, set up from its circuit and public files on the challenger's coin tree, and its session's spec. -/
 def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
-  let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
+  let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := some f.partition) with
     | .ok x => pure x
     | .error e => throw s!"rec-coins: {unit}: the inner statement: {e}"
   let some st := sts[0]? | throw s!"rec-coins: {unit}: the inner statement has no table"
@@ -176,7 +177,8 @@ def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (reco
 
 /-- `drawnSpec` at the inner files: the inner statement set up at the record's draw as `Files.stmt` sets it up without one. -/
 def Files.drawnSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
-  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub Coins.os [] (some d) (some f.partition) none)
+  RecCoins.drawnSpec
+    (fun d => Stmt.setupHidden innerTags f.circuit f.pub RecVStar.innerTree [] (some d) (some f.partition) none)
     spec st f.record
 
 /-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
@@ -772,8 +774,9 @@ def tablesIn (dir : String) : IO (List (String × ByteArray)) := do
     if (← p.pathExists) then out := out ++ [(t.name, (← IO.FS.readBinFile p))]
   return out
 
-/-- `--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]`:
-how Flock's plain verifier is told to set the inner statement up (`InnerForm`; coins `seed` unless given), or none. -/
+/-- `--rec-inner-statement ID [--rec-inner-statement-coins seed] [--rec-inner-tables DIR] [--rec-inner-draw F]`:
+how Flock's plain verifier is told to set the inner statement up (`InnerForm`), or none. `os` is refused: the inner
+statement is on the challenger's coin tree (`RecVStar.innerTree`), never on per-round OS coins. -/
 def formInput (args : List String) : IO (Except String (Option InnerForm)) := do
   let some s := argOf args "--rec-inner-statement"
     | return if (argOf args "--rec-inner-statement-coins").isSome || (argOf args "--rec-inner-tables").isSome ||
@@ -782,8 +785,9 @@ def formInput (args : List String) : IO (Except String (Option InnerForm)) := do
       else .ok none
   let os ← match argOf args "--rec-inner-statement-coins" with
     | none | some "seed" => pure false
-    | some "os" => pure true
-    | some c => return .error s!"--rec-inner-statement-coins {c}: not os or seed"
+    | some "os" => return .error ("--rec-inner-statement-coins os: refused: the inner statement is on the challenger's " ++
+        "coin tree (RecVStar.innerTree), never on per-round OS coins")
+    | some c => return .error s!"--rec-inner-statement-coins {c}: not seed"
   try
     let tables ← match argOf args "--rec-inner-tables" with
       | some d => tablesIn d

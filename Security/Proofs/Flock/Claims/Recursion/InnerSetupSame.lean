@@ -234,7 +234,7 @@ theorem innerSetup_same {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScop
   obtain ⟨hst', hspec'⟩ := files_stmt hstm
   obtain ⟨hs1, hs2, hs3, b, d, D, hb, hjd, hD, hpr⟩ := checkForm_ok hform
   have hs1 : r.innerRaw.statement = Tags.circuitPlainLeaves.name := hs1
-  have hs2 : r.innerRaw.osCoins = true := hs2
+  have hs2 : r.innerRaw.osCoins = false := hs2
   have hs3 : r.innerRaw.tables = [] := hs3
   have hb : r.innerRaw.draw = some b := hb
   obtain ⟨hdec, -, hok⟩ := readX_inner hr

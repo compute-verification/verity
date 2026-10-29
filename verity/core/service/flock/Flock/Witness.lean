@@ -15,7 +15,7 @@ meets is found by a run rather than by reading. Each check here is one of them, 
 reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the model's predicate.
 
 * `inner --circuit F --public F [--partition F] [--program F] [--registered F] [--record F]`: the inner statement.
-  `acceptsStmt` (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags`, the coin server's coins and the statement's
+  `acceptsStmt` (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags`, the challenger's coin tree and the statement's
   partition object and program returns one table, and `Zk.schedule` accepts its `m`), `acceptsDescription`
   (`AcceptsDescription`, at each of the verifier's own registered reads), and with `--record` the recorded inner
   session's Σ (its `hello`'s `link.sigma`) against the statement's, at the record's full draw when it has one
@@ -122,7 +122,7 @@ def one (sts : Array Stmt) : V Stmt :=
 
 /-- The inner statement's setup, as `RecVStar.innerOf` makes it. -/
 def innerSetup (cf pf : ByteArray) (partition : Option Json) (program : Option ByteArray) : V (SessionSpec × Array Stmt) :=
-  Stmt.setupTables RecVStar.innerTags cf pf Coins.os 1 (partition := partition) (program := program)
+  Stmt.setupTables RecVStar.innerTags cf pf RecVStar.innerTree 1 (partition := partition) (program := program)
 
 /-- `acceptsStmt` at a setup already made. -/
 def acceptsStmtAt (r : V (SessionSpec × Array Stmt)) : V Stmt := do
@@ -276,8 +276,8 @@ def innerCmd (args : List String) : IO UInt32 := do
     let record ← readJson rf
     let want : V SessionSpec := do
       let (spec, _) ← r
-      RecCoins.drawnSpec (fun d => Stmt.setupHidden RecVStar.innerTags circuitFile publicFile Coins.os [] (some d) partition
-        program) spec st text
+      RecCoins.drawnSpec (fun d => Stmt.setupHidden RecVStar.innerTags circuitFile publicFile RecVStar.innerTree [] (some d)
+        partition program) spec st text
     let ok : V Unit := do
       let s ← record >>= recordSigma
       let w := hexOf (← want).sigma
