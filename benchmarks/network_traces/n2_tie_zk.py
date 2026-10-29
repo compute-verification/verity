@@ -158,12 +158,12 @@ def advice(prompt_lens, got) -> TS.LinkAdvice:
     return TS.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
 
 
-def served(prompt_lens, arrivals, rates) -> Q.Link:
+def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
     """The requests through the warden's own ingress over the class's windows."""
     return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=WINDOWS * T)
 
 
-def received(link: Q.Link) -> tuple[int, ...]:
+def received(link: Q.ServedIngress) -> tuple[int, ...]:
     cells = TS.window_cells(link.releases, T)
     return tuple(cells.get(w, 0) for w in range(len(link.records)))
 

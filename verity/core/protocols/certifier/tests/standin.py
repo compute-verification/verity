@@ -28,7 +28,7 @@ def _bc(data: bytes, bits: int, salt: bytes) -> bytes:
     return _INST.commit_string(_INST.default_key, sha512_row_v2_digest(data, bits), salt)
 
 
-def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
+def prove(lw: SVC.LinkWindows, opening: SVC.Hidden, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
           program: str | None = None, accepted: bool = True, word: int | None = None, root: bytes | None = None,
           salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None) -> SVC.Delivered:
     """The delivered proof of the drawn unit on `opening` under the registered root (or `root`): the statement's public
