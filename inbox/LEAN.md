@@ -138,6 +138,17 @@ kernel serves), stated in the Pouw area's `Guarantees` module and proved in `sec
     statement, against live coins only. `Coins` stays as stated. The coin feed changes before the freeze, and
     N-KERNEL writes its spec.
 
+- **19:37Z, Daniel decided two things:**
+  - **The copy model is tile grain, restated to what's measured** ("Sure"). N-RED's restatement, backed to the letter,
+    replaces `TileGrain`'s wording.
+  - **Hiding is A, the keyed leaf** (ASK-192, "A sounds fine"). The per-call commitments are keyed leaves,
+    SHA-512 from S_w = f(IV, ks_w ‖ salt_w), not hm96 leaves with L1 + (a) salts.
+    - The lead's hiding term goes to 0 (N-PREM drops it).
+    - `Pouw.Salt.keyed_leaf_hides` is stated in Lean and locked (N-SALT).
+    - The committer (kernels) and the kernel's seed path (N-KERNEL) change.
+    - The AGENTS.md line becomes "Commitments are hm96 rows or keyed leaves in frame-v3-sha512 trees" in the PR that
+      builds it.
+
 ## Owners' answers on landing the code (18:32Z)
 
 - **compute-accounting (CMP-295):** the lead is a new protocol id, `verity/pouw/v2`, in the `PouwCheck` package beside
