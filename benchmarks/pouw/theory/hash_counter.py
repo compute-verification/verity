@@ -49,6 +49,12 @@ lanes of g registers, b the narrowest signed width holding every word, so g IADD
 σ's bits above a lane are its sign bit. `gap_claimed` is (honest − cheapest)/stock: the gap against a design that
 credits everything its honest prover does (C₀ = cost(H)), beside `gap_share` against stock.
 
+`agg` `nh2:p` is NH over adjacent column pairs, S += w(j)·w(j+1), one IMAD a pair and one 32-bit value a p pairs of a
+row over the committed steps; `nh:c` pairs consecutive committed words of an entry, c entries a value. `decomp` takes
+either apart over separable words: row-only and column-only sums are shared (column terms by the rows of a class in a
+`TILE`-row coin tile, as the lead's column coins are drawn a tile), and each value's cross term Σ_t R_t(i)·Ĉ_t(g) is
+u8-digit IMMA chains, so its products are batched 32 a write.
+
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B hash_counter.py OUT.json
 [--quick] [--mutations] [--aggs=...] [--bits=...]` (from this directory).
 """
@@ -72,6 +78,7 @@ TRANSPOSE_WB = (2 * 2 + 3 * 5) * 16 / 1024
 T1 = 0.01
 CALL_M = CALL_N = 4096
 BLOCK = 8
+TILE = 64
 
 MAC_S_H200 = 0.4 * 9.89e14
 WORLD_MAC_YR = 4.68e30
@@ -211,7 +218,32 @@ def aggregate(rule: Rule, d: Draw, fields):
         return fields
     if rule.agg.startswith("xor"):
         return xor_blocks(rule, fields)
+    if nh_kind(rule):
+        return nh_sketch(rule, fields)
     return mulmod(g_of(rule, d, fields), d.r[None, None, :]).sum(axis=2) & M32
+
+
+def nh_kind(rule: Rule) -> tuple[str, int] | None:
+    """`nh2:p`: S += w(j)·w(j+1) over adjacent column pairs of a row, p pairs (2p entries) a value; `nh:c`:
+    S += w_(2k)·w_(2k+1) over consecutive committed words of an entry (an odd last word added), c entries a value."""
+    kind, _, size = rule.agg.partition(":")
+    return (kind, int(size)) if kind in ("nh2", "nh") else None
+
+
+def nh_sketch(rule: Rule, fields):
+    kind, size = nh_kind(rule)
+    m, n, nP = fields.shape
+    if kind == "nh2":
+        per = mulmod(fields[:, 0::2], fields[:, 1::2]).sum(axis=2)
+        return per.reshape(m, n // (2 * size), size).sum(axis=2) & M32
+    k2 = nP // 2
+    per = mulmod(fields[:, :, 0:2 * k2:2], fields[:, :, 1:2 * k2:2]).sum(axis=2) + (fields[:, :, -1] if nP % 2 else 0)
+    return (per & M32).reshape(m, n // size, size).sum(axis=2) & M32
+
+
+def entries_a_value(rule: Rule) -> int:
+    kind, size = nh_kind(rule)
+    return 2 * size if kind == "nh2" else size
 
 
 def xor_block(rule: Rule) -> int | None:
@@ -236,6 +268,8 @@ def common_hash(rule: Rule, nP: int) -> float:
         return nP * rule.k * WB
     if xor_block(rule):
         return -(-nP // xor_block(rule)) * 32 * WB
+    if nh_kind(rule):
+        return 32 * WB / entries_a_value(rule)
     return (64 if rule.agg == "xor" else 32) * WB
 
 
@@ -245,6 +279,8 @@ def commit_ops(rule: Rule, nP: int) -> float:
         return nP * e
     if rule.agg.startswith("xor"):
         return nP * e + xor_lop3s(rule, nP)
+    if nh_kind(rule):
+        return nP * e + (nP / 2 if nh_kind(rule)[0] == "nh2" else nP // 2 + nP % 2)
     if rule.agg == "lin":
         return nP * (e + 1)
     if degree(rule):
@@ -412,7 +448,7 @@ def four_russians(rule, inst, d):
 def bsketch(rule, inst, d):
     """A sketch over 1-bit fields is affine in the bits: Σ r_t g(b_t) = g(0)·Σ r_t + (g(1) − g(0))·Σ_β 2^β popc(r_β & b),
     one b1 IMMA (K 256) against r's 32 bit planes after the bitslice's fields are transposed entry-major."""
-    if rule.agg == "hash" or rule.agg.startswith("xor") or not (rule.low and rule.k == 1):
+    if rule.agg == "hash" or rule.agg.startswith("xor") or nh_kind(rule) or not (rule.low and rule.k == 1):
         return None
     sub = Rule(rule.pos, rule.bits, "hash")
     res = bitslice(sub, inst, d)
@@ -462,6 +498,98 @@ def expand(rule, inst, d):
     return cost, s, f"row and column powers + {D - 1} cross-term IMMA chains"
 
 
+def separable(inst, d):
+    """At zero data under `add`, w_t = w0 + R_t(i) + C_t(class(i), j) when each coin lane's V is constant across the
+    columns (a row lane) or its U takes at most four row patterns (the classes): (R, C, class, patterns, row lanes)."""
+    m, S = inst.m, inst.S
+    rowlane = np.all(d.V == d.V[:1], axis=(0, 1))
+    pats, cls = np.unique(d.U[:, :, ~rowlane].reshape(m, -1), axis=0, return_inverse=True)
+    if len(pats) > 4:
+        return None
+    R = np.cumsum(np.einsum("itl,tl->it", d.U[:, :, rowlane], d.V[0][:, rowlane]), axis=1)
+    C = np.stack([np.cumsum(np.einsum("tl,jtl->jt", p.reshape(S, -1), d.V[:, :, ~rowlane]), axis=1) for p in pats])
+    return R, C, cls.reshape(-1), pats, rowlane
+
+
+def digit_dot(Rd, Cd, cls, nR):
+    """Σ_t R(i, t)·Ĉ(class(i), g, t) mod 2³² from u8 digits, as IMMA would: one chain a digit pair of weight ≤ 3.
+    Returns the product and the chains' writes an output."""
+    m, nP = Rd.shape
+    out = np.zeros((m, Cd.shape[1]), np.int64)
+    for c in range(Cd.shape[0]):
+        rows = cls == c
+        for x, y in itertools.product(range(nR), range(4)):
+            if x + y <= 3:
+                out[rows] += np.einsum("it,gt->ig", (Rd[rows] >> (8 * x)) & 0xFF, (Cd[c] >> (8 * y)) & 0xFF) << (8 * (x + y))
+    pairs = [sum(1 for x in range(nR) if 0 <= w - x < 4) for w in range(4)]
+    return out & M32, sum(math.ceil(p * nP / 32) for p in pairs) + 3
+
+
+def decomp(rule, inst, d):
+    """An `nh2` or `nh` sketch over separable words, w = x + R_t(i) + C_t(class, j), taken apart. Each product is
+    x·x′ + x·(R + C′) + x′·(R + C) + R² + R·(C + C′) + C·C′, summed:
+    - row-only sums (Σ R, Σ R², Σ R_u R_v), shared by the call's columns;
+    - column-only sums (Σ C, Σ C·C′ over the value's pairs, Ĉ_t = Σ over its entries of C_t), shared by the rows of a
+      class in a coin tile (`TILE`);
+    - per value, the cross term Σ_t R_t(i)·Ĉ_t(g) as u8-digit IMMA chains, and per entry a few IMADs with x.
+    Zero data, `add`, 32-bit words."""
+    kind = nh_kind(rule)
+    if not kind or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
+        return None
+    parts = separable(inst, d)
+    if parts is None:
+        return None
+    R, C, cls, pats, rowlane = parts
+    (kind, size), m, n, P = kind, inst.m, inst.n, d.P
+    nP, npat, e = len(P), len(pats), entries_a_value(rule)
+    x = d.w0 & M32
+    if kind == "nh2":
+        Rp, Cp = R[:, P] & M32, C[:, :, P] & M32
+        Ca, Cb = Cp[:, 0::2], Cp[:, 1::2]
+        G = n // e
+        Chat = (Ca + Cb).reshape(npat, G, size, nP).sum(axis=2) & M32
+        K = mulmod(Ca, Cb).sum(axis=2).reshape(npat, G, size).sum(axis=2) & M32
+        colsum = Cp.sum(axis=2) & M32
+        cs = colsum[cls]
+        xa, xb = x[:, 0::2], x[:, 1::2]
+        per = mulmod(xa, (mulmod(xb, nP) + cs[:, 1::2]) & M32) + mulmod(xb, cs[:, 0::2])
+        sx = (xa + xb).reshape(m, G, size).sum(axis=2) & M32
+        rowterm = mulmod(mulmod(Rp, Rp).sum(axis=1) & M32, size)
+        rowsum = Rp.sum(axis=1) & M32
+        Rcat, Ccat = Rp, Chat
+        alu = 4 * size + 3
+    else:
+        k2 = nP // 2
+        u, v = P[0:2 * k2:2], P[1:2 * k2:2]
+        Ru, Rv, Cu, Cv = R[:, u] & M32, R[:, v] & M32, C[:, :, u] & M32, C[:, :, v] & M32
+        G = n // size
+
+        def grp(a):
+            return a.reshape(npat, G, size, -1).sum(axis=2) & M32
+
+        Chu, Chv = grp(Cu), grp(Cv)
+        K = mulmod(Cu, Cv).sum(axis=2).reshape(npat, G, size).sum(axis=2)
+        cs = (Cu.sum(axis=2) + Cv.sum(axis=2)) & M32
+        rowterm = mulmod(mulmod(Ru, Rv).sum(axis=1) & M32, size)
+        rowsum = (Ru.sum(axis=1) + Rv.sum(axis=1)) & M32
+        if nP % 2:
+            K = K + grp(C[:, :, P[-1:]] & M32)[:, :, 0]
+            rowterm = rowterm + mulmod(R[:, P[-1]] & M32, size)
+            rowsum = rowsum + 1
+        K, rowterm, rowsum = K & M32, rowterm & M32, rowsum & M32
+        per = mulmod(x, (mulmod(x, k2) + cs[cls]) & M32)
+        sx = x.reshape(m, G, size).sum(axis=2) & M32
+        Rcat, Ccat = np.concatenate([Ru, Rv], axis=1), np.concatenate([Chv, Chu], axis=2)
+        alu = 2.5 * size + 3
+    nR = max(1, math.ceil(int(Rcat.max(initial=0)).bit_length() / 8))
+    cross, chains = digit_dot(Rcat, Ccat, cls, nR)
+    s = (per.reshape(m, G, -1).sum(axis=2) + mulmod(sx, rowsum[:, None]) + rowterm[:, None] + K[cls] + cross) & M32
+    tile = TILE if inst.coins.startswith("lead:") else CALL_M
+    col_ops = int((~rowlane).sum()) + 3 + 4 / e
+    cost = (chains + alu) / e + col_ops * nP * npat / tile + (nR + 4) * nP / CALL_N
+    return cost, s, f"row and column sums + {chains} IMMA writes a value for Σ R·Ĉ ({nR}×4 digits)"
+
+
 def pack(rule, inst, d):
     """An `xor` fold over words w = d0(i, j) + R_t(i) + C_t(j) at zero data: each lane's V is constant across the
     columns (a row term), or its U takes at most four row patterns (a column term a row class, as the lead's
@@ -473,13 +601,10 @@ def pack(rule, inst, d):
     if not rule.agg.startswith("xor") or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
         return None
     m, n, S = inst.m, inst.n, inst.S
-    rowlane = np.all(d.V == d.V[:1], axis=(0, 1))
-    pats, cls = np.unique(d.U[:, :, ~rowlane].reshape(m, -1), axis=0, return_inverse=True)
-    cls = cls.reshape(-1)
-    if len(pats) > 4:
+    parts = separable(inst, d)
+    if parts is None:
         return None
-    R = np.cumsum(np.einsum("itl,tl->it", d.U[:, :, rowlane], d.V[0][:, rowlane]), axis=1)
-    C = np.stack([np.cumsum(np.einsum("tl,jtl->jt", p.reshape(S, -1), d.V[:, :, ~rowlane]), axis=1) for p in pats])
+    R, C, cls, pats, rowlane = parts
     W = d.w0[:, :, None] + R[:, None, :] + C[cls]
     need = int(np.abs(W).max()).bit_length() + 1
     nrow, ncol, P = int(rowlane.sum()), int((~rowlane).sum()), d.P
@@ -551,8 +676,8 @@ def table(rule, inst, d):
 
 
 STRATEGIES = {"honest": honest, "skip": skip, "fold": fold, "bitslice": bitslice, "four_russians": four_russians,
-              "bsketch": bsketch, "expand": expand, "pack": pack, "copy": copy, "table": table}
-LEAD_STRATEGIES = ("honest", "pack", "copy", "table")
+              "bsketch": bsketch, "expand": expand, "pack": pack, "decomp": decomp, "copy": copy, "table": table}
+LEAD_STRATEGIES = ("honest", "pack", "decomp", "copy", "table")
 
 
 def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
@@ -624,7 +749,7 @@ def instances(quick: bool):
     lead = [("lead:e7", 5), ("lead:e4", 3), ("lead:w127", 5), ("lead:rot", 5)]
     for S, (coins, q), data, seed in itertools.product([67] if quick else [67, 265], lead, ["zero", "random"], [0, 1]):
         if not (quick and seed):
-            yield Inst(64, 24, S, q, data, "add", seed, coins)
+            yield Inst(64, 48, S, q, data, "add", seed, coins)
 
 
 def mutations(checks: Checks):
@@ -676,6 +801,19 @@ def mutations(checks: Checks):
     d5.P = d5.P[:-1]
     _, out5, _ = pack(rule5, inst5, d5)
     checks.mutation("pack folding one word fewer", not np.array_equal(out5, ref5))
+    for agg in ("nh2:2", "nh:4"):
+        rule6, inst6 = Rule("all", "32", agg), Inst(64, 16, 67, 5, "zero", "add", 7, "lead:rot")
+        d6 = Draw(inst6, rule6)
+        _, ref6, _ = honest(rule6, inst6, d6)
+        d6.w0 = d6.w0.copy()
+        d6.w0[3, 5] += 1
+        _, out6, _ = decomp(rule6, inst6, d6)
+        checks.mutation(f"decomp {agg} with one cell's offset off by one", not np.array_equal(out6, ref6))
+        d6 = Draw(inst6, rule6)
+        d6.U = d6.U.copy()
+        d6.U[1::2, :, 2:] = d6.U[0::2, :, 2:]
+        _, out6, _ = decomp(rule6, inst6, d6)
+        checks.mutation(f"decomp {agg} with the row-parity classes merged", not np.array_equal(out6, ref6))
 
 
 def main() -> int:
@@ -727,6 +865,12 @@ def main() -> int:
         checks.check("pack at lead:w127 and lead:rot (words past 16 bits) uses two-register lanes",
                      bool(wide) and all("2 register" in r["strategies"].get("pack", {}).get("how", "") for r in wide),
                      [(r["inst"]["S"], r["strategies"].get("pack", {}).get("how"), r["gap_claimed"]) for r in wide])
+    nh = [r for r in results if nh_kind(Rule(*r["rule"].split("/"))) and r["inst"]["data"] == "zero"
+          and r["rule"].startswith("all/32/") and (r["inst"]["coins"].startswith("lead:") or r["inst"]["coins"] == "sep")]
+    if nh:
+        checks.check("decomp is cheapest and breaks T1 on every zero-data separable all/32/nh instance",
+                     all(r["cheapest"] == "decomp" and r["breaks_T1"] for r in nh),
+                     sorted({(r["rule"], r["inst"]["coins"], r["inst"]["S"], round(r["gap_share"], 3)) for r in nh})[:8])
     if checks.mutations:
         mutations(checks)
     by_rule = {}
