@@ -351,6 +351,95 @@ def rfp4_check(m: int = 8, k: int = 16, n: int = 8, seg: int = 4, seed: int = 2)
             "final_known": bool(np.all(seg_words[-1] == 0))}
 
 
+def _runs_saving(groups: np.ndarray) -> tuple[int, int]:
+    """Over each row of `groups`, the values met k ≥ 2 times: Σ (k − 2)⁺, a sketch's saving, and Σ (k − 1), a hashed
+    design's duplicates."""
+    srt = np.sort(groups, axis=1)
+    start = np.ones(srt.shape, dtype=bool)
+    start[:, 1:] = srt[:, 1:] != srt[:, :-1]
+    ids = np.cumsum(start.ravel()) - 1
+    k = np.bincount(ids)
+    return int(np.maximum(k - 2, 0).sum()), int((k - 1).sum())
+
+
+def sketch_pools(m: int, n: int, s: int, lanes: int, r0: int, salt_bits: int, tile: int = 64, seed: int = 4) -> dict:
+    """Equal words an adversary can share in mirror-π's sketch at zero data, on chosen identical rows (the data
+    cancels; code and tags are left out, which only adds collisions). A pool of k equal values costs it one word, one
+    square and k adds against honest's 2k, so it saves k − 2 eq; a hashed design's duplicates save k − 1 words. Counted
+    within an output (A2r), within a (64-row tile, column) and a 64 × 64 block over every step, and within a whole
+    column or row over every step. Salts ρ_i + c_j of `salt_bits` each enter at step 0 and are folded out with the
+    output (the stock epilogue's two IADD3 sources). The final word is left out (M1). Shares are over stock."""
+    rng = np.random.default_rng(seed)
+    w = np.cumsum(_edge_noise(m, n, s, lanes, r0, rng), axis=0)[:-1]
+    if salt_bits:
+        w += rng.integers(0, 1 << salt_bits, size=m)[None, :, None]
+        w += rng.integers(0, 1 << salt_bits, size=n)[None, None, :]
+    w %= 1 << 32
+    words = w.size
+    pools = {"A2r": w.transpose(1, 2, 0).reshape(m * n, s - 1),
+             "tile": w.reshape(s - 1, m // tile, tile, n).transpose(1, 3, 0, 2).reshape(m // tile * n, -1),
+             "column": w.transpose(2, 0, 1).reshape(n, -1),
+             "row": w.transpose(1, 0, 2).reshape(m, -1)}
+    if n % tile == 0:
+        pools["block"] = (w.reshape(s - 1, m // tile, tile, n // tile, tile).transpose(1, 3, 0, 2, 4)
+                          .reshape(m // tile * (n // tile), -1))
+    out: dict = {"m": m, "n": n, "s": s, "lanes": lanes, "r0": r0, "salt_bits": salt_bits}
+    for name, g in pools.items():
+        sk, hs = _runs_saving(g)
+        out[name] = {"sketch": sk / (words * STOCK_EQ), "hash": hs / (words * STOCK_EQ)}
+    return out
+
+
+def pools_grid(shapes: tuple = ((512, 64), (8192, 64), (64, 8192)), salts: tuple = (0, 18, 24, 31)) -> list[dict]:
+    """`sketch_pools` over rows × columns, one lane (mirror's) and four (with and without the step-0 block), and salt
+    widths."""
+    rows = []
+    for m, n in shapes:
+        for lanes, r0 in ((1, 0), (4, 0), (4, MIRROR_PI_STEP0)):
+            for salt in salts:
+                rows.append(sketch_pools(m, n, 74, lanes, r0, salt))
+    return rows
+
+
+#: N-EGRESS's network term for the lead at cap 32 (floor and bar W_mac), at its n_max.
+NET_LEAD = {"term": (0.00037, 0.00072), "n_max": 85, "cap": 32}
+MIRROR_PI_STEP0 = 4
+
+
+def network_terms(lanes: int = 4, r0: int = MIRROR_PI_STEP0, coin_bits: int = 8, tile: int = 64,
+                  rows: tuple = (1, 16, 64, 512, 8192)) -> dict:
+    """N-EGRESS's network term β·E over stock for mirror-π's sketch, scaled from the lead's figure (checked arithmetic).
+    β = n_max · W_mac. n_max is the most data MACs one exchanged coin bit carries: a row coin shared by `a_cols`
+    columns, or a column weight shared by `b_rows` rows, each read at its step and again at its replay, over ℓ lanes
+    of `coin_bits`. W_mac is the honest block's cost a MAC, so it scales by the honest eq a word, 2 + SHA_WORD/S,
+    over the lead's 1 + SHA_WORD. Layouts: `rows` (a byte a row and step, a weight a column and step: mirror's),
+    `a-tiled` (row coins a 64-column tile), and `tiled` (row coins a column tile, weights a row tile). Also returns
+    the coin stream a token (bytes, Llama's linears, the r0 block included), and mirror with whole words hashed."""
+    out: dict = {}
+    calls = {name: (n, k) for name, (n, k) in ns.LLAMA.items()}
+    layers = 16
+    for layout in ("rows", "a-tiled", "tiled"):
+        res = {}
+        for t in rows:
+            beta, stream = 0.0, 0.0
+            for name, (ncols, k) in calls.items():
+                s = nsp.blc_steps(k)
+                a_cols = ncols if layout == "rows" else min(tile, ncols)
+                b_rows = t if layout != "tiled" else min(tile, t)
+                n_max = 2 * max(a_cols, b_rows) * nsp.BLC_DATA_LANES[1] / (lanes * coin_bits)
+                ratio = (2 + SHA_WORD / s) / (1 + SHA_WORD)
+                beta = max(beta, n_max * ratio)
+                per_step = lanes * (s // 2) + r0
+                stream += layers * per_step * (ncols / a_cols + ncols / b_rows) * coin_bits / 8
+            res[t] = {"beta_over_lead": beta / NET_LEAD["n_max"], "stream_bytes_a_token": stream,
+                      **{f"cap{cap}": tuple(x * beta / NET_LEAD["n_max"] * cap / NET_LEAD["cap"]
+                                            for x in NET_LEAD["term"]) for cap in (32, 320)}}
+        out[layout] = res
+    n_gate_up = ns.LLAMA["gate_up"][0]
+    out["mirror_hashed_check"] = NET_LEAD["term"][0] * (31 * n_gate_up / 8) / NET_LEAD["n_max"]
+    return out
+
+
 def checks(m: int = 128, n: int = 128, s: int = 74, seed: int = 0) -> dict:
     """The CPU checks this module's scores read."""
     rng = np.random.default_rng(seed)
@@ -483,7 +572,16 @@ def main() -> None:
     ap.add_argument("--size", type=int, default=128, help="rows and columns of the lead's simulated words")
     ap.add_argument("--steps", type=int, default=74)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--pools", help="write mirror-π's network terms and its sketch pools here, and stop")
     args = ap.parse_args()
+    if args.pools:
+        res = {"network": network_terms(), "pools": pools_grid()}
+        for r in res["pools"]:
+            print(r["m"], r["n"], f"l{r['lanes']}", f"r0={r['r0']}", f"salt={r['salt_bits']}",
+                  {k: f"{v['sketch']:.4%} / {v['hash']:.3%}" for k, v in r.items() if isinstance(v, dict)}, flush=True)
+        with open(args.pools, "w") as fh:
+            json.dump(res, fh, indent=1, default=str)
+        return
     chk = checks(args.size, args.size, args.steps, args.seed)
     scores = {pr: score(chk, pr) for pr in ("w1", "dataflow")}
     for pr, rows in scores.items():
