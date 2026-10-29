@@ -1,6 +1,6 @@
 """The proof system's own run of C-Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
 session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
-one loopback session under a subset draw of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
+one loopback session under a subset sample of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
 verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
