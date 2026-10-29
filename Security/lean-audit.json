@@ -2462,7 +2462,6 @@
    "Claims.Json.Wf": "a helper the claims read: a well-formed JSON value, which `JsonSpec` reads",
    "Claims.Out64": "a hypothesis `Complete` reads (the oracle's outputs are 64 bytes, SHA-512's whole output), no claim",
    "Claims.Recursion.Bound.Binds": "a premise of `Bridge` on the bound record (its row digest input is injective), a condition on the record like `decOK`, no claim",
-   "Claims.Recursion.Bound.LastBinds": "P4 as first stated, superseded by `Bound.LastBindsEC` with `Bound.LastCoinFree` (card ef47c02e): two accepted last messages that `final` keeps apart, after the same rounds and coins, give a collision; false at the deployed bound record before S0 (a trailing space in the record's text, which S0 refuses: `RecDeploy.LastGap.check_space`), kept because `RecDeploy.KSBoundRoute` reads it, a premise, no claim",
    "Claims.Recursion.Bound.PlainKSAbort": "a premise of `KSBound`'s route on the bound record (P1: the element-level Flock's KS against aborting provers at plain leaves, `Inner.KSAbort` at `DE`), which `Bridge` takes at each decoder and Flock's table bound at `DE` is to give, no claim",
    "Claims.Recursion.Bound.WeightCovers": "a premise of `Bridge` on the bound record (`γ`'s weight covers the bridge's loss, `N_I · k_I · √Pr[B]`: `√C_DE + N_I · √(k_I/32) ≤ √C_IVStar`), a condition on the record like `decOK`, no claim",
    "Claims.Recursion.Bridge": "option (d)'s inner claim (`KSBound` rests on it), a statement over every bound record, proved from Flock's KS at `DE`, `Bound.Binds` and `Bound.WeightCovers` wherever a decoder inverts the record's answers (`Bound.bridge_of_dec`), the deployed record among them (`RecDeploy.bridge_bdDeployed`); it reads no deployed record, so it has no antecedent there to witness, no claim",
@@ -21012,7 +21011,7 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Claims.Recursion": {
-   "digest": "5df4ed7ada1850ae5199f5f0786ab2b9146758a6959f58683c5f0c00b966fbb0",
+   "digest": "a1fd2633b4de3ed66fea0b223cfd0d3015e9b3c7aff24196fa76671c54b4bce5",
    "definitions": {
     "Claims.Recursion.BAbort": "cc6d1eae158f7e9353eed3e76a1d0be441485fa6b07023915a3bfb5b17d469a6",
     "Claims.Recursion.Be": "144f16201ad772e1f10447efc6a7622c61aa6d25922226b932a9556d5f11051b",
@@ -21022,7 +21021,6 @@
     "Claims.Recursion.Bound.Binds": "2ee03ed4a887a97066a0177b12207460142f7ce938fefbbfbfb929bc0ec82118",
     "Claims.Recursion.Bound.DE": "327f27b2237460428939b9e3f6b6ad7d5668817d2ad47b04705847e64eeede2f",
     "Claims.Recursion.Bound.IVStar": "137185c636e2d70008f163623204e09d545ee6f84b00bef985d3b712a748a51a",
-    "Claims.Recursion.Bound.LastBinds": "5167cb9e4d264b017e58940bf2d6c97f379eb03198c659d263b53d25a0a1ac7d",
     "Claims.Recursion.Bound.LastBindsEC": "3d767acc16d6d4f014d90e4a649c18e0ca082980bfb8cbf5c8ffafc8ce3d6c42",
     "Claims.Recursion.Bound.LastCoinFree": "df7477989f22a2a0a7c3f84c5027773632ef1905cc0b528b484f4421170a2c40",
     "Claims.Recursion.Bound.PlainKSAbort": "f47c0563127f50809311f993df9976a067d626327d299d7e006aca87de994f34",
@@ -24500,9 +24498,9 @@
    "guarantees": ["Flock.SecurityProofs.ClaimsStated"]
   },
   "Definitions.Flock.Guarantees.RecursionClaims": {
-   "digest": "d74ea79c3f4baad9c5d4932482d42d8efaeb09d1e5a0608fe6387ed7e34f0e83",
+   "digest": "84dc05e13c76c6dce1ba770fcd1c61e1c304d5788c81cfe2178a73cae38f2e0f",
    "definitions": {
-    "Flock.Guarantees.RecursionClaimsStated": "8fa79c38773ee5457812a887297fa85b2e1991fffd6eca41c4889a34e3bf1324"
+    "Flock.Guarantees.RecursionClaimsStated": "7a0ce0f29431cabe93c94f81cf6c9999e9d8945fccb8b47e066e542aac298d1a"
    },
    "guarantees": ["Flock.SecurityProofs.RecursionClaimsStated"]
   },
