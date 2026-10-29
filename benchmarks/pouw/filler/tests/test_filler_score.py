@@ -382,7 +382,7 @@ def sass(*functions):
 
 
 DFILL = "_Z7dfill_kILi8EEvmmyiiPy"
-#: pfill-k's tile as cursor/hc-proved-ea24@fe2fdb5bf compiles it, abridged: fresh s32 words, folded by rotations
+#: pfill-k's tile as ptxas compiles it, abridged: fresh s32 words, folded by rotations
 K_TILE = ["LOP3.LUT R4, R2, 0x1010101, RZ, 0xc0, !PT", "IMMA.16832.S8.S8 R28, R12.ROW, R40.COL, RZ",
           "SHF.L.W.U32.HI R9, R28, 0x7, R28", "IADD3 R9, R9, R10, RZ", "@P0 BRA 0x80d0", "EXIT"]
 

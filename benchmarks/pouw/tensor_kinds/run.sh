@@ -5,7 +5,7 @@
 #
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source /workspace --cwd clone --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=tensor -- bash benchmarks/pouw/tensor_kinds/run.sh
-#   research run --on vy-dc-l40s --project verity --campaign cmp-13 --source /workspace --cwd source --custody-ttl 12h \
+#   research run --on vy-dc-l40s --project verity --source /workspace --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=ada --env TK_ARCH=89 -- bash benchmarks/pouw/tensor_kinds/run.sh
 #   research run --on vy-dc-b200 --project verity --campaign eps1 --cwd source --mem-gb 8 \
 #     --env GPU_LEASE_WHO=LANE --env TK_ARCH=100 -- bash benchmarks/pouw/tensor_kinds/run.sh
