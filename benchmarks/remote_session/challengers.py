@@ -1,5 +1,5 @@
 """Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof system's one challenger
-(`coins.Coins`, `sampled_proofs.challenger`):
+(`coins.SessionCoins`, `sampled_proofs.challenger`):
 
 - `Local`: a `LiveChallenger` in the verifier's process, drawing from `secrets.token_bytes`.
 - `Serve`: the challenger's own process, `benchmarks/live_challenger/serve.py`, started for the session on the

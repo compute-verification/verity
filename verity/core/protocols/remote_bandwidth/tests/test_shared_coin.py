@@ -21,7 +21,7 @@ SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_
 """`SCHEDULE` over eight windows: passes (4, 3, 3, 3, 4, 3, 3, 3), so each draw of four holds 13 passes."""
 
 
-def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.Coins]:
+def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.SessionCoins]:
     """Parameters of `windows` windows drawn `g` a coin, and a challenger in this process committed to their coins."""
     p = params(windows=windows, groups_per_coin=g, **kw)
     return p, coins.local(store.registration.digest, 0, windows, Entropy(b"coins"), appends=APPENDS, per_coin=g)
@@ -89,7 +89,7 @@ def test_a_session_refuses_coins_drawn_another_number_of_windows_a_coin(store) -
     assert coins.layout_reason(c.commitment, 0, 8, 4) is None
     assert "openings 8" in coins.layout_reason(c.commitment, 0, 8)
     with pytest.raises(coins.CoinError, match="openings 3"):
-        coins.Coins(c.challenger, store.registration.digest, 0, 8, per_coin=3)
+        coins.SessionCoins(c.challenger, store.registration.digest, 0, 8, per_coin=3)
 
 
 def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
