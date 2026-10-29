@@ -22,9 +22,12 @@ import re
 from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
-TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system"}
+TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system",
+         "faulty outputs, faulty ANDs, faulty step, faulty ingress": "incorrect outputs, incorrect ANDs, incorrect step, "
+                                                                  "an incorrect ingress proof block"}
 _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
-_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b", re.I)
+_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}(?:outputs?|ANDs|steps?|ingress))\b",
+                   re.I)
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
@@ -91,6 +94,8 @@ ALLOWED: dict[str, str] = {
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
     "report-proof-service-": "a cited note's id",
+    "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
+                                            "it; renamed after it lands",
     "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
 }
 
@@ -202,7 +207,7 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
     out, used = [], set()
     for f in scanned(files):
         text = read(f)
-        if text is None or not ("unit" in text.lower() or "service" in text.lower()):
+        if text is None or not any(w in text.lower() for w in ("unit", "service", "faulty")):
             continue
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
@@ -280,6 +285,17 @@ def test_the_scan_reads_each_form():
                      ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
                      ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services")]
     assert used == {"N, the round's proof units", "verity/proof-service/"}
+
+
+def test_the_scan_reads_the_incorrect_outputs():
+    """Rho's incorrect outputs and sampling_plan's incorrect ANDs, on toy files: a faulty node, link or device stays."""
+    docs = {
+        "a.py": '"""Faulty outputs, the faulty-outputs channel, 9 faulty ANDs and a faulty\n    step."""\n'
+                "# a faulty ingress unit; a faulty node, link or device, the faulty AND gate\n",
+    }
+    assert offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.py", 1, "Faulty outputs"), ("a.py", 1, "faulty-outputs"), ("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty step"),
+        ("a.py", 3, "faulty ingress")]
 
 
 def test_the_doc_scan_reads_each_form():
