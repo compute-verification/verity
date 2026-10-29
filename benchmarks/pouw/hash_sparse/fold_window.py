@@ -40,8 +40,8 @@ Modes (transformed-state loops):
 
 An `unsat` proves something only if every example is an input a call can reach. The `window` set draws R_t and C_t
 freely at each step: it covers coin layouts whose prefixes take every residue. The `layout` set draws them as the
-lead's walks truncated to W bits: a row increment is an 8-bit coin b in [0, 254] (a u8 lane 1 + b beside a -1 lane), a
-column increment is odd (three odd coin lanes at odd weights, at most 16,383), so C_t's parity is t's. A window there
+lead's walks truncated to W bits: a row increment is the 8-bit row coin (any byte; drawn from [0, 254]), a column
+increment is odd (three odd coin lanes at odd weights, at most 16,383), so C_t's parity is t's. A window there
 starts at a step t0 of parity `phase` (each instance runs at both, as a program may depend on t), or at the call's
 start, where N_0 is
 
