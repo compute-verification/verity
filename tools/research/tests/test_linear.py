@@ -585,7 +585,7 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
 
 
 def asked(ident: str, state: str = "In Progress", kind: str = "started", labels=(), comments=(), dates=(), **kw) -> dict:
-    """A person's ask as `asks` reads it: Daniel's, filed a day before AUDIT_NOW, with nothing to find; `dates` are its due
+    """A person's ask as `asks` reads it: filed a day before AUDIT_NOW, with nothing to find; `dates` are its due
     dates in the order they were set (the first set on an undated issue)."""
     moves = [{"createdAt": f"2026-10-19T0{n}:00:00Z", "fromDueDate": f"{a}T00:00:00.000Z" if a else None,
               "toDueDate": f"{b}T00:00:00.000Z"} for n, (a, b) in enumerate(zip((None, *dates), dates))]

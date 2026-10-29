@@ -32,8 +32,9 @@ seen.
    <state dir>/linear-audit.jsonl, with the counts by lane and kind and #agent-coordination's last 24 h (`traffic --volume`:
    posts, words, posts over 80 words). Each lane with findings, once per LANE_RING_S, with its counts and the command that
    lists them (findings with no lane: @top); a person's ask off track (`linear.ASK_KINDS`) rings its lane every hour, naming
-   the issues (a slip only once per new date), and @top with the counts by lane, until it holds; once a day after 15:00Z, @top with the totals and their
-   change from the line 24 h earlier, and the registry's teams the app can't read (`unread`), which the audit skips.
+   the issues (a slip only once per new date), and top with the counts by lane, until it holds; once a day after 15:00Z,
+   @top with the totals and their change from the line 24 h earlier, and the registry's teams the app can't read
+   (`unread`), which the audit skips.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for

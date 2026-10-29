@@ -356,7 +356,7 @@ class Linear:
         return issue
 
     def tag(self, issue: str, name: str, remove: bool = False) -> str:
-        """Add the label `name` to the issue (an identifier such as CMP-92), or remove it: the issue's labels after."""
+        """Add the label `name` to the issue (its identifier), or remove it: the issue's labels after."""
         verb = "issueRemoveLabel" if remove else "issueAddLabel"
         r = self.gql(f"mutation($id: String!, $l: String!) {{ {verb}(id: $id, labelId: $l) {{ issue {{ labels {{ nodes {{ name }} }} }} }} }}",
                      {"id": self.issue_id(issue), "l": self.label(name)})
