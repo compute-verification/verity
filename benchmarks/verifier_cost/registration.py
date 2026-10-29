@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "verity/core/service/sampled_proofs/tests"))
+sys.path.insert(0, str(ROOT / "verity/core/proof_system/sampled_proofs/tests"))
 
 import test_difftest as T  # noqa: E402
 

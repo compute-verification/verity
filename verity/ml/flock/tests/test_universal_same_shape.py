@@ -46,7 +46,7 @@ from verity_flock import rec_vstage as S
 
 SPEC = "q-template-instance"
 N = 4
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 BC = 128
 FULL = "VERITY_FLOCK_SAME_SHAPE_FULL"

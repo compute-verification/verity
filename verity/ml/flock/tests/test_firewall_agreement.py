@@ -17,7 +17,7 @@ from verity_flock import rec_live as RL
 
 from test_rec_live import CAP0, CAP1, HELLO, SCHEDULE, _binding_round, _bytes, _content, _domain, _hdr, _label, _obs, _sq
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 SALTS = [hashlib.shake_256(b"firewall-salt" + i.to_bytes(8, "little")).digest(192) for i in range(64)]
 

@@ -394,7 +394,7 @@
     {"file": "verity/core/protocols/sampled_proofs/remote.py", "count": 5},
     {"file": "verity/core/protocols/sampled_proofs/service.py", "count": 1},
     {"file": "verity/core/protocols/sampled_proofs/tests/test_remote.py", "count": 1},
-    {"file": "verity/core/service/sampled_proofs/tests/test_difftest.py", "count": 11},
+    {"file": "verity/core/proof_system/sampled_proofs/tests/test_difftest.py", "count": 11},
     {"file": "verity/ml/circuits/codec.py", "count": 1},
     {"file": "verity/ml/circuits/ops/tests/test_mufu.py", "count": 1},
     {"file": "verity/ml/circuits/ops/tests/test_prims.py", "count": 2},

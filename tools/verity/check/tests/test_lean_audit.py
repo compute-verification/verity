@@ -792,7 +792,7 @@ def test_the_real_packages_and_their_inputs():
     pkgs = LA.packages(files)
     assert "Security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/verity/lean")]
     got = LA.inputs("Security/Proofs", files)
-    assert "Security/lean-audit.json" in got and "verity/core/service/flock/FlockVerify.lean" in got
+    assert "Security/lean-audit.json" in got and "verity/core/proof_system/flock/FlockVerify.lean" in got
     assert "tools/verity/lean/check.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/verity/lean/Replay.lean" in got and "tools/verity/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/verity/lean/tests/")]

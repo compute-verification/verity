@@ -206,7 +206,7 @@ def _sent(inputs: Path | None, sha256: str) -> bool:
 def cpu(root: Path, inputs: Path | None, cpuinfo: Path) -> tuple[list[str], list[str]]:
     """avx512f, when the run carries the pinned upstream build (lean-agreement runs) and that build needs it."""
     pin = root / "verity" / "ml" / "flock" / "verifier" / "upstream.json"
-    if not pin.is_file() or not (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").exists():
+    if not pin.is_file() or not (root / "verity" / "core" / "proof_system" / "flock" / "lakefile.toml").exists():
         return ["cpu: no lean-agreement on this tree"], []
     up = json.loads(pin.read_text())["upstream"]
     flags = up.get("rustflags") or "the build host's own (target-cpu=native)"
@@ -314,7 +314,7 @@ def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
         usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None, shared: bool = False) -> tuple[list[str], list[str]]:
-    lean = (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").exists()
+    lean = (root / "verity" / "core" / "proof_system" / "flock" / "lakefile.toml").exists()
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
     urls = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}

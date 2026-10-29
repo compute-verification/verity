@@ -11,7 +11,7 @@ relaxedAutoImplicit = false
 
 [[require]]
 name = "flock_verifier"
-path = "../../service/flock"
+path = "../../proof_system/flock"
 
 [[require]]
 name = "core_protocol"
@@ -24,7 +24,7 @@ path = "../composition"
 # The ported components: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
 [[require]]
 name = "core_sampled_proofs"
-path = "../../service/sampled_proofs"
+path = "../../proof_system/sampled_proofs"
 
 [[require]]
 name = "pouw_check"

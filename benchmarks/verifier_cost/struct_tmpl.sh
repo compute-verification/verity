@@ -16,7 +16,7 @@
 # under 1 GB is kept as unit-SHAPE.tmpl.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
-L=$PWD/verity/core/service/flock
+L=$PWD/verity/core/proof_system/flock
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
