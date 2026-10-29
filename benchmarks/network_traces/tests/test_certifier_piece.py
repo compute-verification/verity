@@ -11,7 +11,10 @@ rejects are rejects; a rehearsal the gate's check failed (each request late) and
 report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the piece's DIR
 against the run's witness, and the case is written only from the period files it left. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
-asked, and the pick passes over those windows for the group's."""
+asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
+tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there;
+a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
+gate is asked."""
 from __future__ import annotations
 
 import argparse
@@ -315,12 +318,17 @@ def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 
-def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):
+def _stub_gate(tmp_path: Path, monkeypatch) -> None:
+    """`test_served_session.STUB` as ssh: the gate it reaches writes its request to tmp_path/request."""
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin" / "ssh").write_text(STUB)
     (tmp_path / "bin" / "ssh").chmod(0o755)
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
     monkeypatch.setenv("STUB_DIR", str(tmp_path))
+
+
+def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):
+    _stub_gate(tmp_path, monkeypatch)
     serve, out = tmp_path / "serve", tmp_path / "out" / "certifier-front"
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
@@ -334,6 +342,63 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+
+
+def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
+                                                                                                   monkeypatch):
+    """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
+    at it, and the warden's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
+    rehearsal's check accepting."""
+    real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
+
+    def command(req, work, url):
+        ran.append(CP.SS.A.warden_command(req, work, url))
+        return [sys.executable, "-c", "import sys; open(sys.argv[1], 'w').write(sys.argv[2])", str(work / "check.json"),
+                check]
+
+    def certifier_run(*args, **kw):
+        ran.append(kw["tunnel_argv"]([], 1))
+        return real(*args, **kw | {"tunnel_argv": lambda ssh, port: [sys.executable, "-c", ""]}, command=command,
+                    up=lambda tunnel, port: True)
+
+    monkeypatch.setattr(CP.SS.A, "certifier_run", certifier_run)
+    monkeypatch.setattr(CP.SS, "pinned", lambda: "unpinned")
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--gate", "local", "--bucket-ms", "4000"]) == 0
+    minutes = CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT, 4000) + CP.SS.MARGIN
+    assert minutes > CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT) + CP.SS.MARGIN
+    (req,) = [json.loads(p.read_text()) for p in (serve / CP.PRIVATE).rglob("request.json")]
+    assert {k: req.get(k) for k in ("bucket_ms", "scan", "prompts", "window_per_group", "minutes")} == {
+        "bucket_ms": 4000, "scan": True, "prompts": {"count": CP.PROMPTS, "ids": CP.PROMPTS * CP.PROMPT_IDS},
+        "window_per_group": True, "minutes": minutes}
+    relay, warden = ran
+    assert relay[-5:] == ["relay", "--listen", "1", "--to", "18190"]
+    at = warden.index("--ids")
+    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000)]
+    assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
+    doc = json.loads((out / "session.json").read_text())
+    assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200 --port 18190 --minutes {minutes} --requests 4 "
+                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --window-per-group")
+    assert (doc["rc"], doc["verdict"]["accepted"]) == (0, True)
+
+
+@pytest.mark.parametrize("tick, scan, why", [
+    ("99", True, "--bucket-ms '99': 100 to 4000"),
+    ("4001", True, "--bucket-ms '4001': 100 to 4000"),
+    ("4000", False, "--bucket-ms: the scan's tick, with --scan"),
+])
+def test_a_tick_the_gate_refuses_refuses_the_front_before_the_gate_is_asked(tmp_path, monkeypatch, tick, scan, why):
+    """The front's check is this tree's gate's: a tick past the gate's range, or one on a request that isn't the scan
+    rehearsal (the front's always is: here its scan flags are dropped), is refused with the gate's reason."""
+    _stub_gate(tmp_path, monkeypatch)
+    if not scan:
+        words = CP.SS.words
+        monkeypatch.setattr(CP.SS, "words", lambda a: [w for w in words(a)
+                                                       if w not in ("--scan", "--prompts", "--window-per-group")])
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), "--bucket-ms", tick]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"] == f"the gate refuses it: {why}"
+    assert not (tmp_path / "request").exists()
 
 
 def _serve_windows(d: Path, windows: list[list[str]]) -> Path:
@@ -390,11 +455,7 @@ class _Endpoint(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture
 def endpoint(tmp_path, monkeypatch):
-    (tmp_path / "bin").mkdir()
-    (tmp_path / "bin" / "ssh").write_text(STUB)
-    (tmp_path / "bin" / "ssh").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
-    monkeypatch.setenv("STUB_DIR", str(tmp_path))
+    _stub_gate(tmp_path, monkeypatch)
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Endpoint)
     srv.seen, srv.status, srv.record, srv.serve, srv.stub_dir = [], 200, True, tmp_path / "serve", tmp_path
     threading.Thread(target=srv.serve_forever, daemon=True).start()
