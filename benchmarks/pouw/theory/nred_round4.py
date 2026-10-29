@@ -362,6 +362,11 @@ def wide_draws(seeds: range = range(200, 210), m: int = 256, n: int = 64) -> dic
     return out
 
 
+def weighted_lane_same_xrow(wd: dict) -> bool:
+    a, b = wd["blc4a-t64-e7+wide/a2r/v4_dense"]["per_seed"], wd["blc4a-t64-e7-w127+wide/a2r/v4_dense"]["per_seed"]
+    return all(a[s]["P/xrow"] == b[s]["P/xrow"] for s in a)
+
+
 def tile_rows(seed: int = 113) -> dict:
     """Tile grain against rows (A2r, Llama): a column's free-search pool fills as rows × steps approach the range its
     words span, so a fix that holds at 256 rows can fail at more."""
@@ -633,16 +638,22 @@ def check(rep: dict) -> list[dict]:
     ww = [r[f"blc4a-t64-e7-w127+wide/{p}/{sh}"]["shares"] for p in ("a2c", "a2r") for sh in SHAPES]
     ok("wide tag + weighted lane: P′ at the floor pays at no grain (Llama and V4 dense)",
        max(v[f"P'32/{g}"] for v in ww for g in ("lag1", "entry", "xrow", "tilecol", "column")) <= 0)
-    ok("wide tag + weighted lane, literal P: lag-1, within-entry and cross-row close; the free-search tile-column "
-       "pool still pays > 1% (N-LEAN §4)", max(v[f"P/{g}"] for v in ww for g in ("lag1", "entry", "xrow")) < 0.001
+    ok("wide tag + weighted lane, literal P: lag-1 and within-entry close; the free-search tile-column pool still "
+       "pays > 1% (N-LEAN §4)", max(v[f"P/{g}"] for v in ww for g in ("lag1", "entry")) < 0.001
        and min(v["P/tilecol"] for v in ww) > 0.01, [[v["P/tilecol"], v["P/column"]] for v in ww])
     lead_m = [r[f"blc4a-t64-e7/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
     wide_m = [r[f"blc4a-t64-e7+wide/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
     ok("N-ADAPT's masked cross-row prover in this harness: > 5% of stock under bare P on the lead (its ≈ 8.9%), "
-       "< 0 at N-FLOOR's measured selection and copy prices, < 0.25% under bare P with the wide tag (at the 0.1% "
-       "line, by draw)", min(v["P/masked"] for v in lead_m) > 0.05 and max(v["M/masked"] for v in lead_m) < 0
-       and max(v["P/masked"] for v in wide_m) < 0.0025,
-       [[v["P/masked"], v["M/masked"]] for v in lead_m] + [v["P/masked"] for v in wide_m])
+       "< 0 at N-FLOOR's measured selection and copy prices, on the lead and with the wide tag",
+       min(v["P/masked"] for v in lead_m) > 0.05 and max(v["M/masked"] for v in lead_m + wide_m) < 0,
+       [[v["P/masked"], v["M/masked"]] for v in lead_m + wide_m])
+    wd = rep["wide_draws"]
+    ok("wide tag across ten seeds (256 rows): P′ at the floor never pays cross-row or column and M never pays the "
+       "masked prover, while bare P's masked prover passes 0.1% (a draw residual inside the free-search pools)",
+       max(v["range"][g][1] for v in wd.values() for g in ("P'32/xrow", "P'32/column", "M/masked")) < 0
+       and max(v["range"]["P/masked"][1] for v in wd.values()) > 0.001, {key: v["range"] for key, v in wd.items()})
+    ok("the weighted lane leaves the wide tag's cross-row as it is, seed by seed (so its closure is a draw's)",
+       weighted_lane_same_xrow(wd))
     e4s = [r[f"blc1a-t128-e4/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
     e7s = [r[f"blc4a-t64-e7/{p}/llama"]["shares"] for p in ("a2c", "a2r")]
     ok("measured decision prices (61.8, 71.7 a lane): e4's lag-1 pays under 1% but above 0.1%; e7's pays at no "
@@ -753,8 +764,7 @@ def main() -> None:
     args = ap.parse_args()
     if args.wide_draws:
         wd = wide_draws()
-        same = all(wd["blc4a-t64-e7+wide/a2r/v4_dense"]["per_seed"][s]["P/xrow"]
-                   == wd["blc4a-t64-e7-w127+wide/a2r/v4_dense"]["per_seed"][s]["P/xrow"] for s in range(200, 210))
+        same = weighted_lane_same_xrow(wd)
         for key, v in wd.items():
             print(f"{key:36s} " + "  ".join(f"{g}=[{100 * lo:.2f}, {100 * hi:.2f}]% >1%:{v['above_1pct'][g]} "
                                             f">0.1%:{v['above_0.1pct'][g]}" for g, (lo, hi) in v["range"].items()))
@@ -765,7 +775,8 @@ def main() -> None:
         return
     rep = {"runs": runs(), "scaling": scaling(), "ordering": ordering(),
            "identical_columns": {t: identical_columns(tag=t) for t in ("narrow", "wide")},
-           "mirror": mirror_runs(), "a5": a5_lead(), "mask": mask_blocks(), "tile_rows": tile_rows()}
+           "mirror": mirror_runs(), "a5": a5_lead(), "mask": mask_blocks(), "tile_rows": tile_rows(),
+           "wide_draws": wide_draws()}
     lead = rep["runs"]["blc4a-t64-e7/a2r/llama"]["shares"]
     mir = rep["mirror"]["narrow/m8192"]["shares"]
     rep["periods"] = {"P/xrow": ne.periods(lead["P/xrow"]), "P'32/xrow": ne.periods(lead["P'32/xrow"]),
@@ -790,6 +801,9 @@ def main() -> None:
     for key, v in rep["tile_rows"].items():
         print(f"tile rows {key}: W/whole={100 * v['W/whole']:.4f}%  " + "  ".join(
             f"{kk}: {t['whole_repeats']}/{t['tiles']} held={t['held_words']:.3f}" for kk, t in v["per_k"].items()))
+    for key, v in rep["wide_draws"].items():
+        print(f"wide draws {key:36s} " + "  ".join(f"{g}=[{100 * lo:.2f}, {100 * hi:.2f}]%"
+                                                  for g, (lo, hi) in v["range"].items()))
     print("A5: " + "  ".join(f"{k}={100 * v['gap_share_of_stock']:.2f}%"
                              for part in rep["a5"].values() for k, v in part.items()))
     for kk, v in rep["scaling"].items():
