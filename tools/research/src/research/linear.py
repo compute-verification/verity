@@ -53,6 +53,7 @@ ASK_RECENT_D = 7                                                 # a person's as
 SENDER = r"\s*(?:@[\w./-]+:\s*)?"                                # a personal key's comment starts `@sender: `
 ASKED_AGAIN_RE = re.compile(SENDER + r"asked again\b", re.I)    # a comment recording that the asker restated it
 POSTMORTEM_RE = re.compile(SENDER + r"postmortem\b", re.I)      # a comment answering one restatement
+SLIP_RE = re.compile(SENDER + r"slip\b", re.I)                  # a comment answering the slips up to it
 ASKER_RE = re.compile(r"[a-z][a-z0-9-]{0,30}")
 ASK_KINDS = ("parked", "unstaffed", "slipped", "repeated")
 AUDIT_KINDS = ("orphan", "milestone", "undated", "overdue", "quiet", "stale", "title", "landed", "lane", *ASK_KINDS)
@@ -214,7 +215,7 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
     - parked: in Backlog, or canceled, without ASKER_OK: only its asker parks or cancels it.  A duplicate isn't parked: the
       ask goes on in the issue it duplicates.
     - unstaffed: in Triage or Todo ASK_START_H after it was filed: In Progress means its worker is on it.
-    - slipped: not closed, and its date moved later ASK_SLIPS times or more.
+    - slipped: not closed, its date moved later ASK_SLIPS times or more, and no `slip:` comment since its last move.
     - repeated: not done, and restated (`asked again` comments) more often than answered (`postmortem` comments)."""
     out = []
     for a in asks:
@@ -228,9 +229,9 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
             and f"{who}'s ask, filed {(now - a['created']) / 3600:.0f} h ago, has no worker: move it to In Progress (`research msg "
                 f"linear state {ident} In Progress`) with a comment naming its worker (a `bc-` id, or the lead) and the date its "
                 "outcome lands",
-            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS
-            and f"its date moved later {a['slips']} times ({' -> '.join(a['dates'])}): comment what missed each date and what holds "
-                "the next; top hears of it",
+            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS and not a["explained"]
+            and f"its date moved later {a['slips']} times ({' -> '.join(a['dates'])}): comment `slip:` what missed each date and "
+                f"what holds the next (`research msg linear comment {ident} 'slip: ...' --as ME`); top hears of it",
             "repeated": t != "completed" and a["again"] > a["postmortems"]
             and f"{who} asked for it again ({a['again']} `asked again`, {a['postmortems']} `postmortem` comments): comment "
                 "`postmortem:` why it isn't delivered and the change that stops that recurring, today",
@@ -578,9 +579,9 @@ class Linear:
              days: float = ASK_RECENT_D) -> list[dict]:
         """Every issue a person asked for (an `asker:` label) that is open, in Backlog, or closed within `days`, of `teams` or
         every team, oldest first: {issue, url, title, team, lane, asker, state, type (its state's), due, created, closed
-        (epochs), dates (each due date it was given, in order), slips (moves to a later date), again (`asked again`
-        comments), postmortems (`postmortem` comments), ok (it carries ASKER_OK)}.  Delivered is `type` completed; filing it,
-        dating it or starting it is not."""
+        (epochs), dates (each due date it was given, in order), slips (moves to a later date), explained (a `slip:` comment
+        follows its last slip), again (`asked again` comments), postmortems (`postmortem` comments), ok (it carries
+        ASKER_OK)}.  Delivered is `type` completed; filing it, dating it or starting it is not."""
         now, owners = self.now() if now is None else now, owners or {}
         since = datetime.fromtimestamp(now - days * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         f: dict = {"labels": {"some": {"name": {"startsWith": ASKER_LABEL}}},
@@ -590,19 +591,21 @@ class Linear:
             f["team"] = _team_filter(teams)
         out = []
         for i in self._paged("identifier title url dueDate createdAt completedAt canceledAt state { name type } team { key } "
-                             "labels { nodes { name } } comments(first: 100) { nodes { body } } "
+                             "labels { nodes { name } } comments(first: 100) { nodes { body createdAt } } "
                              "history(first: 100) { nodes { createdAt fromDueDate toDueDate } }", f):
             labels = [x["name"] for x in i["labels"]["nodes"]]
             moves = sorted((h for h in i["history"]["nodes"] if h.get("fromDueDate") or h.get("toDueDate")), key=lambda h: h["createdAt"])
+            slips = [h["createdAt"] for h in moves if h.get("fromDueDate") and h.get("toDueDate")
+                     and h["toDueDate"][:10] > h["fromDueDate"][:10]]
             bodies = [c.get("body") or "" for c in i["comments"]["nodes"]]
+            noted = [c["createdAt"] for c in i["comments"]["nodes"] if SLIP_RE.match(c.get("body") or "")]
             closed = i.get("completedAt") or i.get("canceledAt")
             out.append({"issue": i["identifier"], "url": i["url"], "title": i["title"], "team": i["team"]["key"],
                         "lane": _lane(i, owners), "asker": next(x[len(ASKER_LABEL):] for x in labels if x.startswith(ASKER_LABEL)),
                         "state": i["state"]["name"], "type": i["state"]["type"], "due": i.get("dueDate"),
                         "created": _epoch(i["createdAt"]), "closed": _epoch(closed),
                         "dates": [h["toDueDate"][:10] for h in moves if h.get("toDueDate")],
-                        "slips": sum(bool(h.get("fromDueDate") and h.get("toDueDate") and h["toDueDate"][:10] > h["fromDueDate"][:10])
-                                     for h in moves),
+                        "slips": len(slips), "explained": bool(slips) and any(_epoch(t) >= _epoch(slips[-1]) for t in noted),
                         "again": sum(bool(ASKED_AGAIN_RE.match(b)) for b in bodies),
                         "postmortems": sum(bool(POSTMORTEM_RE.match(b)) for b in bodies), "ok": ASKER_OK in labels})
         return sorted(out, key=lambda a: (a["created"] or 0, a["issue"]))
