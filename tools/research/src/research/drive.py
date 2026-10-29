@@ -141,7 +141,8 @@ RATCHET_FAILED_RE = re.compile(r"^  (\S+) \(([0-9a-f]{12})\): failed: (.*)$", re
 REVIEWED = "a land verdict at each head"
 #: the keys of drive's state that only train landing kept, dropped from a state that has them
 TRAIN_STATE = ("launched", "deferred", "resent", "base", "bisect", "orphans", "per_pr", "prewarm")
-#: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none)
+#: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the
+#: merge gate (`gate = false`: circuit-check, ratchet-gate) among them, which no check before landing runs
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
@@ -215,11 +216,11 @@ def authed(auth: tuple[str, ...]):
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
-                 detached: bool = False, circuit_cache: bool = False, base: str | None = None,
-                 shard: str | None = None) -> tuple[list[str], str] | dict:
-    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard K/N]` from the queue's clone: (the run ids it printed, its
-    output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its own
-    path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
+                 detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
+                 base: str | None = None) -> tuple[list[str], str] | dict:
+    """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--shard K/N]` from the queue's clone: (the run ids it printed,
+    its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
+    own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
     password at the tty)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
@@ -711,9 +712,9 @@ class Driver:
         #: (`_started`); an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
-                    base=None, shard=None:
+                    shard=None, base=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
-                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, base=base, shard=shard))
+                          no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a Lean change's Lean check before a review landing: `train.sh TOP MACHINES --deferred lean-audit`, detached
         self.launch_lean: Callable[[Path, str, str], tuple[list[str], str] | dict] = (

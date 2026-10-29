@@ -12,6 +12,12 @@ you ask it to. The jobs it runs are data in `ci.toml`: each has an owner, a part
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
 
+A job with `gate = false` in `ci.toml` is off the merge gate: a recorded check and its shards leave it out, and `research
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
+checks `main`'s tip, and a red there reverts its culprit as any other after-landing red does. `circuit-check` goes back on the
+gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports without
+blocking a merge.
+
 ## Suites and reuse
 
 A suite is a directory whose `pyproject.toml` configures pytest. Each runs in its own process from its own directory. A pass is
@@ -50,6 +56,6 @@ the checkout.
 
 PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
 `queue.toml`. Before a PR lands, the landing gates `drive.toml` names (`gates/markdown_caps.py` among them) judge its
-merge. After each landing, one run checks `main`'s tip (`train.sh --deferred`), and `post_train.py` runs the vLLM
-regression's rebuilds. AGENTS.md "Checking and merging" is the procedure. A pure move that `move_check.py` certifies
-(`verity check move BASE HEAD`) lands ahead of the queue.
+merge. After each landing, one run checks `main`'s tip with every job, those off the gate too (`train.sh --deferred`), and
+`post_train.py` runs the vLLM regression's rebuilds. AGENTS.md "Checking and merging" is the procedure. A pure move that
+`move_check.py` certifies (`verity check move BASE HEAD`) lands ahead of the queue.

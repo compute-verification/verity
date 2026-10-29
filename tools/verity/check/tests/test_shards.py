@@ -1,5 +1,6 @@
-"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once, each shard holds what its jobs
-need, a shard runs only its parts (lean-audit on its packages), and its result names what it ran."""
+"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's, off the gate and
+in no plan), each shard holds what its jobs need, a shard runs only its parts (lean-audit on its packages), and its result names
+what it ran."""
 from __future__ import annotations
 
 import importlib.util
@@ -35,24 +36,26 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 
 def test_the_plans_are_the_documented_ones():
     assert D.plans() == {
-        3: ((*SECURITY, "pytest", "ratchet-gate"),
+        3: ((*SECURITY, "pytest"),
             ("lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests")),
         4: ((*SECURITY, "circuit-check:1/4"),
             ("lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"),
-            ("pytest", "ratchet-gate", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*")),
+            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*")),
         5: (SECURITY, ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"),
-            ("pytest", "ratchet-gate"), ("flock-circuit-build", "circuit-check", "flock-rust-tests"))}
+            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests"))}
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_every_part_of_this_tree_exactly_once_and_the_same_way_each_time(n):
+    """Every part but ratchet-gate's, which is off the gate and in no plan: circuit-check, off the gate too, stays planned."""
     every = D.all_parts(CHECK.JOBS, {"lean-audit": PACKAGES})
     assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and "lean-audit" not in every
     assert {p.partition(":")[0] for p in every} == {j.name for j in CHECK.JOBS}
     shards = _resolved(n)
     flat = [p for s in shards for p in s]
-    assert len(shards) == n and all(shards) and sorted(flat) == sorted(every) and len(set(flat)) == len(flat)
+    planned = [p for p in every if p != "ratchet-gate"]
+    assert len(shards) == n and all(shards) and sorted(flat) == sorted(planned) and len(set(flat)) == len(flat)
     assert _resolved(n) == shards == _resolved(n, list(reversed(PACKAGES))), "deterministic, whatever order git lists"
     assert all(s == [p for p in every if p in s] for s in shards), "each shard's parts in the unsharded check's order"
 
@@ -79,6 +82,22 @@ def _plans(shards: str):
 def test_a_well_formed_plan_parses_and_resolves():
     plan = _plans('[["a", "b", "lean-audit:x"], ["lean-audit:*", "c"]]')[2]
     assert D.resolve(plan, JOBS, {"lean-audit": ["y", "x", "z"]}) == [["a", "b", "lean-audit:x"], ["lean-audit:y", "lean-audit:z", "c"]]
+
+
+def test_a_plan_may_leave_out_a_job_off_the_gate_but_no_job_on_it():
+    jobs = [*JOBS, D.Job("d", "ci", 3, gate=False)]
+
+    def plans(shards: str):
+        return D.parse_plans(f'schema = "ci/v0"\n[[plan]]\nshards = {shards}\n', jobs)
+
+    left_out = plans('[["a", "b", "lean-audit:*"], ["c"]]')[2]
+    assert D.resolve(left_out, jobs, {"lean-audit": ["x"]}) == [["a", "b", "lean-audit:x"], ["c"]]
+    kept = plans('[["a", "b", "lean-audit:*"], ["c", "d"]]')[2]
+    assert D.resolve(kept, jobs, {"lean-audit": ["x"]}) == [["a", "b", "lean-audit:x"], ["c", "d"]]
+    with pytest.raises(D.DeclarationError, match="no shard runs c"):
+        plans('[["a", "b", "lean-audit:*"], ["d"]]')
+    with pytest.raises(D.DeclarationError, match="d is in more than one shard"):
+        plans('[["a", "b", "lean-audit:*", "d"], ["c", "d"]]')
 
 
 @pytest.mark.parametrize("shards, why", [
@@ -135,8 +154,9 @@ def test_a_shard_no_plan_declares_is_refused(spec):
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_its_packages(tmp_path, n):
-    for k, parts in enumerate(_resolved(n), 1):
-        assert CHECK.shard(f"{k}/{n}") == {"k": k, "n": n, "parts": parts, "all": D.all_parts(CHECK.JOBS, {"lean-audit": PACKAGES})}
+    for k, planned in enumerate(_resolved(n), 1):
+        parts = [p for p in planned if p.partition(":")[0] not in CHECK.OFF_GATE]
+        assert CHECK.shard(f"{k}/{n}") == {"k": k, "n": n, "parts": parts, "all": D.all_parts(D.gated(CHECK.JOBS), {"lean-audit": PACKAGES})}
         gs = CHECK.groups(tmp_path, 16, only=parts)
         ran = [name for g in gs for name, _, _ in g]
         assert sorted(ran) == sorted({p.partition(":")[0] for p in parts})
@@ -149,6 +169,18 @@ def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_it
         audit = [argv for g in gs for name, argv, _ in g if name == "lean-audit"]
         want = [p.partition(":")[2] for p in parts if p.startswith("lean-audit:")]
         assert [[argv[i + 1] for i, x in enumerate(argv) if x == "--package"] for argv in audit] == ([want] if want else [])
+
+
+@pytest.mark.parametrize("n", sorted(D.plans()))
+def test_a_shard_skips_circuit_check_which_its_plan_names_and_the_shards_cover_every_job_on_the_gate(n):
+    def cc(parts):
+        return [p for p in parts if p.partition(":")[0] == "circuit-check"]
+
+    shards = [CHECK.shard(f"{k}/{n}") for k in range(1, n + 1)]
+    assert any(cc(s) for s in _resolved(n)), "the plan keeps it, so putting it back on the gate is one line"
+    assert not any(cc(s["parts"]) for s in shards)
+    assert sorted(p for s in shards for p in s["parts"]) == sorted(shards[0]["all"]) == sorted(CHECK.gated_parts())
+    assert not cc(shards[0]["all"])
 
 
 def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
@@ -263,8 +295,9 @@ def test_combine_records_the_steps_the_gates_reading_of_the_shards_gives_and_fai
 
 def test_circuit_check_s_parts_are_its_shards_and_a_check_runs_only_those_it_holds(tmp_path):
     """circuit-check's parts are its `shards`, ``circuit-check:K/4``: a check that holds all four (unsharded, the 3- and 5-pod
-    plans) runs `--all` whole; the 4-pod plan gives each pod one, run as ``--shard K/4`` into ``CC_SHARDS/K``; a check that
-    holds some but not all runs each in turn and fails when any does."""
+    plans) runs `--all` whole; the 4-pod plan gives each pod one (in the after-landing run's shards, as a recorded check skips
+    circuit-check), run as ``--shard K/4`` into ``CC_SHARDS/K``; a check that holds some but not all runs each in turn and fails
+    when any does."""
     [cc] = [j for j in CHECK.JOBS if j.name == "circuit-check"]
     assert cc.shards == 4 and D.job_parts(cc, {}) == ["1/4", "2/4", "3/4", "4/4"]
     every = D.all_parts(CHECK.JOBS, {"lean-audit": PACKAGES})
@@ -277,6 +310,9 @@ def test_circuit_check_s_parts_are_its_shards_and_a_check_runs_only_those_it_hol
         assert whole[2:4] == ["circuit_check", "--all"] and "--shard" not in whole and "--shard-dir" not in whole
     for k, parts in enumerate(_resolved(4), 1):
         assert [p for p in parts if p.startswith("circuit-check")] == [f"circuit-check:{k}/4"]
+        after_landing, gated = CHECK.shard(f"{k}/4", gated=False)["parts"], CHECK.shard(f"{k}/4")["parts"]
+        assert [p for p in after_landing if p.startswith("circuit-check")] == [f"circuit-check:{k}/4"]
+        assert not [p for p in gated if p.startswith("circuit-check")]
         a = argv(parts)
         assert a[2:4] == ["circuit_check", "--all"] and a[-4:] == ["--shard", f"{k}/4", "--shard-dir", str(tmp_path / CHECK.CC_SHARDS / str(k))]
     script = argv(["circuit-check:1/4", "circuit-check:3/4"])
@@ -387,4 +423,4 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     monkeypatch.setattr(subprocess, "run", run)
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
-    assert parts == [[list(SECURITY)], [["pytest", "ratchet-gate"]], [[]], []], "an unsharded check sends none"
+    assert parts == [[list(SECURITY)], [["pytest"]], [[]], []], "an unsharded check sends none"

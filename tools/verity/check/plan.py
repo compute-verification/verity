@@ -30,7 +30,9 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           skips its Lean group there): a skip passes nothing
     lean-changed          no verdict, never required: it vouches for nothing, the audit decides
     ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
-                          the train's check runs it
+                          is off the merge gate
+
+A job off the merge gate (ci.toml's `gate = false`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes
@@ -453,6 +455,10 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
             parts.append(Part(j, j, None, "implied"))
         elif j != "pytest":
             parts.append(Part(j, j, None, "unkeyed", why="the plan doesn't know this job's key"))
+    off = {j.name for j in C.JOBS if not getattr(j, "gate", True)}
+    for p in parts:
+        if p.step in off:
+            p.required = False
     by = {p.part: p for p in parts}
     for p in parts:
         if p.state == "implied":

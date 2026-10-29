@@ -33,7 +33,7 @@
 set -euo pipefail
 [ $# -ge 2 ] || { sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen= below= shard=
+pass=() deferred= nocache= ccache= noregen= shard= below=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -42,10 +42,10 @@ while [ $# -gt 0 ]; do
     --no-regenerate) noregen=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
-    --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
-      below=$2; shift ;;
     --shard) [[ $# -ge 2 && $2 =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || { echo "train: --shard needs K/N" >&2; exit 2; }
       shard=$2; shift ;;
+    --base) [ $# -ge 2 ] || { echo "train: --base needs REF" >&2; exit 2; }
+      below=$2; shift ;;
     *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS, --base REF and --shard K/N alone" >&2; exit 2 ;;
   esac
   shift

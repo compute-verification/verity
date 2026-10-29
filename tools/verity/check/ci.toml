@@ -28,6 +28,11 @@ group = 2
 # `circuit-check --all` whole; one that holds some runs `--all --shard K/4` for each, and `check.py --combine` joins the shards
 # (`circuit-check --combine`), whose verdict is the unsharded run's
 shards = 4
+# Off the merge gate: a recorded check, whole or a shard, skips it (the plans keep it, so putting it back is deleting this line),
+# and `research merge` requires it of no check. It runs after landing, in drive's after-landing run on `main`'s tip
+# (`--deferred`, every job), where a red reverts its culprit as any after-landing red does. It returns to the gate once
+# `circuit-check --all` fits inside the rest of the check (under 30 minutes).
+gate = false
 
 [[job]]
 name = "flock-rust-tests"
@@ -94,6 +99,9 @@ name = "ratchet-gate"
 owner = "vllm"
 part = "tests"
 group = 7
+# Off the merge gate and out of the plans: it reports and blocks no merge. It runs in drive's after-landing run on `main`'s
+# tip (`--deferred`, every job, its base the last verified `main`), where a red reverts the landing whose merge it names.
+gate = false
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
@@ -107,7 +115,7 @@ group = 7
 # 3 pods: the security analysis's audit beside the suites; the rest of the Lean; the Rust build and the circuits.
 [[plan]]
 shards = [
-    ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest", "ratchet-gate"],
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
 ]
@@ -118,7 +126,7 @@ shards = [
 shards = [
     ["lean-audit:Security", "lean-audit:Security/Proofs", "circuit-check:1/4"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"],
-    ["pytest", "ratchet-gate", "circuit-check:3/4"],
+    ["pytest", "circuit-check:3/4"],
     ["flock-circuit-build", "flock-rust-tests", "circuit-check:*"],
 ]
 
@@ -128,6 +136,6 @@ shards = [
     ["lean-audit:Security", "lean-audit:Security/Proofs"],
     ["lean-audit:*", "lean-changed"],
     ["lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"],
-    ["pytest", "ratchet-gate"],
+    ["pytest"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
 ]
