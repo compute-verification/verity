@@ -372,10 +372,12 @@ open Bandwidth.AuditRO (card_sample)
 theorem RateAuditSketch : Accounting.Guarantees.RateAuditSketch := by
   classical
   intro N m ρ h S L q w s k F cTag cEnc g X Sig Dg _ _ _ _ _ dig A
+  rw [Bandwidth.pr_coins_flat]
+  dsimp only
   rcases Nat.eq_zero_or_pos k with rfl | hk0
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp [floor] at hx), Finset.card_empty, zero_mul, zero_mul]
-  have hsplit : ∀ x : Data N m ρ X × Coins N ρ h s X Sig Dg,
+  have hsplit : ∀ x : Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N)),
       (A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
         A.footprint x.2.1 x.2.2.1 x.1 * cEnc < floor m w ρ S L F cTag cEnc k) →
       ((((queried A dig x.2.1 x.2.2.1 x.1).card < k ∧ ∀ i, x.2.2.2 i ∈ queried A dig x.2.1 x.2.2.1 x.1) ∨
@@ -408,11 +410,11 @@ theorem RateAuditSketch : Accounting.Guarantees.RateAuditSketch := by
       refine Or.inr ⟨⟨_, hlt.trans_le (A.bounded σ _ O D).2⟩, hfib, ⟨p, ?_⟩, _, hget, rfl⟩
       simp only [unobtained, Finset.mem_filter, Finset.mem_univ, true_and]
       exact ⟨hp, _, hget, hrel⟩
-  have hC : Fintype.card (Coins N ρ h s X Sig Dg) =
+  have hC : Fintype.card ((Sig × Oracle N ρ h X Dg × (Fin s → Fin N))) =
       Fintype.card Sig * (Fintype.card (Oracle N ρ h X Dg) * N ^ s) := by
     rw [Fintype.card_prod, Fintype.card_prod]
     simp
-  have hΩ : Fintype.card (Data N m ρ X × Coins N ρ h s X Sig Dg) =
+  have hΩ : Fintype.card (Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N))) =
       Fintype.card (Data N m ρ X) * (Fintype.card Sig * (Fintype.card (Oracle N ρ h X Dg) * N ^ s)) := by
     rw [Fintype.card_prod, hC]
   by_cases hN : N ^ s = 0
@@ -422,7 +424,7 @@ theorem RateAuditSketch : Accounting.Guarantees.RateAuditSketch := by
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans
     (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)) ?_)
   · -- the sample misses the tiles never queried
-    have hc := pr_le_of_card (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
+    have hc := pr_le_of_card (fun x : Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N)) =>
         (queried A dig x.2.1 x.2.2.1 x.1).card < k ∧ ∀ i, x.2.2.2 i ∈ queried A dig x.2.1 x.2.2.1 x.1)
         (N ^ s) ((k - 1) ^ s) hN (by
       rw [hΩ]
@@ -440,7 +442,7 @@ theorem RateAuditSketch : Accounting.Guarantees.RateAuditSketch := by
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed tag
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
+    have hi : ∀ i : Fin s, pr (fun x : Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N)) =>
         x.2.2.2 i ∉ queried A dig x.2.1 x.2.2.1 x.1 ∧
           A.tags x.2.1 x.2.2.1 x.1 (x.2.2.2 i) =
             x.2.2.1 (x.1.stream, x.2.2.2 i, dig x.2.1 (x.1.tile (x.2.2.2 i)))) ≤
@@ -471,7 +473,7 @@ theorem RateAuditSketch : Accounting.Guarantees.RateAuditSketch := by
       convert rfl
   · -- a correct query for a tile not obtained whole
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin q, pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
+    have hi : ∀ i : Fin q, pr (fun x : Data N m ρ X × (Sig × Oracle N ρ h X Dg × (Fin s → Fin N)) =>
         Bad A dig x.2.1 x.2.2.1 x.1 i g) ≤ ((g : ℕ) : ℝ≥0∞) / ((Fintype.card X : ℕ) : ℝ≥0∞) := by
       intro i
       by_cases hX : Fintype.card X = 0
