@@ -316,7 +316,7 @@ def _words(types_, values) -> list[int]:
 @pytest.mark.parametrize("side", ["a", "b"])
 @pytest.mark.parametrize("shape", [SHAPES[1], SHAPES[-1]], ids=["sm120", "pc4"])
 def test_the_head_commits_the_row_its_readers_read(shape, side):
-    """C-Flock commits each output port zero-padded to whole u16 words and reads an input row as its parameters' bits
+    """Flock commits each output port zero-padded to whole u16 words and reads an input row as its parameters' bits
     run together (`class_statement.unit_lowering`).  So on every row, admitted or refused (Pearl-C's at every pair of
     finite and floor bits), the head's pc8-head (pc4-head) ports, each padded, are `leaves.words_pc8_head`
     (`words_pc4_head`) of its values: the very words the first form, each form and the tail read from that row."""
@@ -381,7 +381,7 @@ def test_each_row_is_its_elements_bits():
 
 def test_each_cut_row_is_short_or_whole_blocks():
     """At the deployed row_k each cut row is one SHA-512 block with its padding (at most 55 words) or whole blocks (64 |
-    words), the v2 rows C-Flock's widened scope takes."""
+    words), the v2 rows Flock's widened scope takes."""
     for row in ("pc8-head", "pc8-carry", "fp8-codes", "pc4-head", "pc4-carry", "nvfp4-codes"):
         n = L.ROW_WORDS[row](rowk.ROW_K)
         assert 2 * n + 17 <= 128 or n % 64 == 0, (row, n)
