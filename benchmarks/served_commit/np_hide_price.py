@@ -3,7 +3,7 @@ honest prover alone does to hide its committed values, as a share of stock at T 
 commitment layout and each way of forcing it, the proof's cost to open what it draws, and SSN's bytes, t_H/t_S and ShaSpeed's
 precision. Stdlib only, no GPU.
 
-    python3 benchmarks/served_commit/np_hide_price.py SASS_JSON BEST_SASS_JSON ROWS_JSON OUT_JSON [LATENCY_JSON]
+    python3 benchmarks/served_commit/np_hide_price.py SASS_JSON BEST_SASS_JSON ROWS_JSON OUT_JSON [LATENCY_JSON [MASK_SASS_JSON]]
 
 SASS_JSON and ROWS_JSON are sw_hash_price.py's inputs: a SHA-512 compression's W1 work in the committer's build, and each row
 size's leaf kernels' GPU time (the salt kernel's derived and given salts, a compression's time). BEST_SASS_JSON is the build
@@ -13,13 +13,15 @@ sha512_latency.cu's output: a call's seed path (A's hash, the seed and its first
 is priced at a compression's latency on one thread and at the build's issue floor (an estimate), for each of CHAINS' layouts
 of A's leaves and subtree. GEMM j can't start before seed_j and A_j is call j−1's output, so the chain bounds T2 from below at
 1 + its time over the stock step, and it enters every T2 in place of the coins' floor (a launch and a noise block), which
-the two sheet-clock readings keep.
+the two sheet-clock readings keep. MASK_SASS_JSON, if given, is mask_sass.py's output: M_key·y's W1 a salt from its SASS, the
+committer's rolled build as the price and the unrolled build beside it.
 
 An hm96 instance is one salt: y = PRF_ks(pos) (three compressions from round 8), c = SHA-512(salt_prefix ‖ y) (two) and
 b = x ⊕ M_key·y. A prover that reuses one salt skips all three, and nothing the gadget checks changes, so they are honest-only
 work, priced a salt:
   unforced: the PRF, c and M_key·y; at the floor and alone each compression at its SASS W1, M_key·y at its registers written
-    (the H200 byte-table form, counted from the source) at 32 (floor) or one LOP3's measured price (alone); "time" is the salt
+    (the H200 byte-table form: from MASK_SASS_JSON, else counted from the source at 32 (floor) or one LOP3's measured price
+    (alone)), and with the unrolled mask build when MASK_SASS_JSON is given; "time" is the salt
     kernel's measured time a salt less the frame leaf's first block, in MAC-times;
   forced (a): the drawn unit's proof checks y = PRF_ks(pos) against a committed ks and checks c, so ShaSpeed credits both
     and M_key·y alone remains (time: the salt kernel from given salts less c and the frame leaf's first block);
@@ -118,17 +120,24 @@ def segs(k: int) -> int:
     return 9 * s + (64 * s + 17 + 127) // 128
 
 
-def instance_prices(sass: dict, rows: S.Rows) -> dict:
+def instance_prices(sass: dict, rows: S.Rows, mask_sass: dict | None = None) -> dict:
     """W1 units a salt: the honest-only work, unforced and with the PRF and c forced."""
     w1c = {"floor": sass["w1_floor"], "alone": sass["w1_alone"]}
     r = rows.by[S.ROWS_16K]
     mt = N.RULER * r["mhz"] * 1e6 * 1e-9
     prf = {p: 3 * PRF_SHARE * w for p, w in w1c.items()}
     c = {p: 2 * w for p, w in w1c.items()}
-    mask = {p: MASK_REGS * PRICE_REG[p] for p in w1c}
+    if mask_sass:
+        mask = {p: mask_sass["rolled"][f"w1_{p}"] for p in w1c}
+        best = {p: mask_sass["unrolled"][f"w1_{p}"] for p in w1c}
+        regs = mask_sass["rolled"]["registers_written"]
+    else:
+        mask, best, regs = {p: MASK_REGS * PRICE_REG[p] for p in w1c}, None, MASK_REGS
     b1 = {p: MASK_REGS_B1 * PRICE_REG[p] for p in w1c}
+    by_best = {"unforced, unrolled mask": {p: prf[p] + c[p] + best[p] for p in w1c},
+               "forced (a), unrolled mask": dict(best)} if best else {}
     return {
-        "parts": {"prf": prf, "c": c, "mask": mask, "mask_registers": MASK_REGS, "b1_mask": b1, "b1_mask_registers": MASK_REGS_B1,
+        "parts": {"prf": prf, "c": c, "mask": mask, "mask_registers": regs, "b1_mask": b1, "b1_mask_registers": MASK_REGS_B1,
                   "mask_time": (r["salt_given_ns_leaf"] - (2 + 65 / 80) * r["c_ns"]) * mt,
                   "salt_kernel_ns": r["salt_ns_leaf"], "given_ns": r["salt_given_ns_leaf"], "compression_ns": r["c_ns"]},
         "unforced": {**{p: prf[p] + c[p] + mask[p] for p in w1c}, "time": (r["salt_ns_leaf"] - 65 / 80 * r["c_ns"]) * mt},
@@ -136,6 +145,7 @@ def instance_prices(sass: dict, rows: S.Rows) -> dict:
         "unforced, b1 mask (estimate)": {p: prf[p] + c[p] + b1[p] for p in w1c},
         "forced (a), b1 mask (estimate)": dict(b1),
         "forced (a), SHA-512 mask (e2)": {"floor": 0.0, "alone": 0.0, "time": 0.0},
+        **by_best,
         "compression": {**w1c, "time": r["c_ns"] * mt},
     }
 
@@ -294,7 +304,8 @@ def main() -> None:
     sass = json.loads(Path(sys.argv[1]).read_text())["compression"]
     best = json.loads(Path(sys.argv[2]).read_text())["compression"]
     rows = S.Rows(Path(sys.argv[3]))
-    price = instance_prices(sass, rows)
+    mask_sass = json.loads(Path(sys.argv[6]).read_text()) if len(sys.argv) > 6 else None
+    price = instance_prices(sass, rows, mask_sass)
     excess = {"registers": sass["registers_written"] - best["registers_written"],
               "floor": sass["w1_floor"] - best["w1_floor"], "alone": sass["w1_alone"] - best["w1_alone"]}
     lat = latency(Path(sys.argv[5])) if len(sys.argv) > 5 else None
@@ -310,7 +321,7 @@ def main() -> None:
     comps_byte = {"L0 16 KiB rows": (S.blocks(16384) + 12) / 16384, "L0 64 KiB rows": (S.blocks(65536) + 12) / 65536,
                   "L1 16 KiB chunks": (S.blocks(16384) + 5) / 16384}
     out: dict = {"inputs": {"sass": sass, "best_sass": best, "committer_excess_a_compression": excess, "rows_16k": r16,
-                            "l1_time_ratio": l1_ratio, "rates_units_byte": rates, "mask_registers": MASK_REGS,
+                            "l1_time_ratio": l1_ratio, "rates_units_byte": rates, "mask_registers": price["parts"]["mask_registers"],
                             "mask_registers_b1_estimate": MASK_REGS_B1, "units_s": UNITS_S, "latency": lat},
                  "instance": price, "designs": {}}
     sizes = sorted(rows.by)
@@ -403,7 +414,7 @@ def main() -> None:
                 f: {sc: {p: {"share_floor": h[f]["floor"], "ands_floor": mac * S.ANDS_MAC * h[f]["floor"],
                              "ands_alone": mac * S.ANDS_MAC * h[f]["alone"]}
                          for p, mac in ps.items()} for sc, ps in scopes.items()}
-                for f in ("unforced", "forced (a)")}
+                for f in ("unforced", "forced (a)", "unforced, unrolled mask", "forced (a), unrolled mask") if f in h}
     pt = out["designs"]["ssn_1l"]["points"]["T 8,192"]
     for name, share in (("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"]),
                         ("hashing before the noise, L1 1 KiB segment leaves of the call's domain",
@@ -416,10 +427,11 @@ def main() -> None:
     p = price
     print(f"a salt, W1 floor / alone / time: unforced {p['unforced']['floor']:,.0f} / {p['unforced']['alone']:,.0f} / "
           f"{p['unforced']['time']:,.0f}; forced (a) {p['forced (a)']['floor']:,.0f} / {p['forced (a)']['alone']:,.0f} / "
-          f"{p['forced (a)']['time']:,.0f}; M_key·y {MASK_REGS} registers (b1 estimate {MASK_REGS_B1}); "
+          f"{p['forced (a)']['time']:,.0f}; M_key·y {p['parts']['mask_registers']} registers (b1 estimate {MASK_REGS_B1}); "
           f"L1 time a byte {l1_ratio:.4f} of 16 KiB rows'; committer's build over the best {excess['registers']} registers, "
           f"{excess['floor']:,.0f} / {excess['alone']:,.0f} W1 a compression")
-    shown = ("unforced", "unforced, b1 mask (estimate)", "forced (a)")
+    shown = [f for f in ("unforced", "unforced, unrolled mask", "unforced, b1 mask (estimate)", "forced (a)",
+                         "forced (a), unrolled mask") if f in p]
     for design, d in out["designs"].items():
         bb = d["bytes"]
         print(f"\n{design}: α {bb['alpha']:.4f}, words {bb['words_bpm']:.5f} + A {bb['a_bpm']:.6f} = {bb['bpm']:.5f} B a useful MAC")
