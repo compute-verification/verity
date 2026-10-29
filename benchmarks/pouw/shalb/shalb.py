@@ -6,7 +6,8 @@
   variable or compile-time constant and constants propagated: Σ/σ 8 registers (6 SHF, 2 LOP3), Ch and Maj 2 (a LOP3 a
   half), an add of m terms 2·⌈(m − 1)/2⌉ (IADD3 / IADD3.X; constants fold into one immediate), each round's T1 either
   materialized or folded into e′ and a′, whichever writes fewer, and e₈₀ and a₈₀ folded into the feed-forward. COUNTS_JSON
-  (shalb_sass.sh's counts.json) gives the compiled counts beside it.
+  (shalb_sass.sh's counts.json) gives the compiled counts beside it. A chain's blocks in chain form (`chain`) write
+  4 fewer a pair.
 - **hm96's leaf** (verity/ml/commitments/hm96/PROTOCOL.md), compression by compression and form by form.
 - **The bound ladder**: what each rank's premise proves about any program's registers written a compression, and the
   check its fan-in rungs read: every output register of the compression depends on every input register (a witness
@@ -97,6 +98,18 @@ def compression(cv_var: bool, words_var: list[bool]) -> dict:
     return {"SHF": c.shf, "LOP3": c.lop3, "adds": c.add, "registers": c.total}
 
 
+CHAIN_PAIR_SAVING = 4
+
+
+def chain(n: int) -> int:
+    """Registers a chain of n compressions from a constant chaining value saves in chain form (sha512_min.cuh's CHAIN):
+    a pair of consecutive blocks leaves the first's H3 and H7 + K_0 as two terms each, read by the second only in adds
+    with a free IADD3 slot, so 4 fewer registers a pair. The constant chaining value takes K_0 into H7 as an immediate
+    and a trailing unpaired block takes it out in its feed-forward; an even chain longer than 2 has no such block and
+    pays an add (2 registers) to take it out."""
+    return CHAIN_PAIR_SAVING * (n // 2) - (2 if n % 2 == 0 and n > 2 else 0)
+
+
 def and_gates() -> int:
     """AND gates of one compression as a Boolean circuit (Ch and Maj one AND a bit, an n-bit add n − 1)."""
     return ROUNDS * (7 * AND_PER_ADD64 + 2 * 64) + SCHEDULE * 3 * AND_PER_ADD64 + 8 * AND_PER_ADD64
@@ -128,6 +141,8 @@ def hm96_leaf(row_bytes: int) -> list[dict]:
          **compression(True, [i < 8 for i in range(16)])},
         {"what": "leaf: b ‖ c (constant midstate of leaf_prefix(key))", "n": 1, **compression(False, var16)},
         {"what": "leaf: padding block", "n": 1, **compression(True, [False] * 16)},
+        {"what": "chain form: x's, c's and the leaf's chains in pairs of blocks", "n": 1,
+         "registers": -(chain(blocks) + chain(2) + chain(2))},
     ]
     return rows
 
@@ -258,9 +273,12 @@ def main() -> None:
              "variable chaining value, constant block (padding)": compression(True, [False] * 16)}
     out["structural"] = forms
     honest = forms["variable chaining value and block"]["registers"]
+    out["chain_pair"] = 2 * honest - CHAIN_PAIR_SAVING
     print("## Structural count (derived)")
     for k, v in forms.items():
         print(f"- {k}: {v['registers']} registers ({v['SHF']} SHF, {v['LOP3']} LOP3, {v['adds']} adds)")
+    print(f"- a pair of a chain's blocks in chain form: {out['chain_pair']} registers, {out['chain_pair'] / 2:g} a "
+          "compression")
     if args.counts:
         counts = json.loads(Path(args.counts).read_text())
         out["compiled"] = {k: v["compression"]["registers_written"] for k, v in counts.items()}
