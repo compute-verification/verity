@@ -2,7 +2,8 @@
 // library holds both and shares its pass constants kC and kSketchMid):
 //
 //   payload leaf j   x = SHA512(P(32768) ‖ payload_j) (sha512/row/v2 of the 4 KiB block), then the reader's hm96 leaf
-//                    under salt_j = SHAKE256(D(store salt) ‖ key ‖ label ‖ u64be j) and its frame-v3-sha512 leaf
+//                    under salt_j = XOF(D(store salt) ‖ key ‖ label ‖ u64be j)[0 : 192] (reader.cu's salt_of,
+//                    SHA-512 in counter mode) and its frame-v3-sha512 leaf
 //                    digest at position j: the driver's `receipts.hidden(payload_j, salt_j)` in `audit.payload_tree`
 //   gather           64-byte rows from a list of device addresses (a window's openings, across its passes' kept
 //                    levels, their recomputed subtrees and the payload tree)
