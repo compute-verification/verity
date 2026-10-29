@@ -659,6 +659,7 @@ theorem params_of_own {tags : Tags} {c : Circuit} (P : FlockSoundness.ParseFacts
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
 theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
@@ -839,6 +840,7 @@ theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
 held at that rep's `k`-th message round. -/

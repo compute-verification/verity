@@ -92,8 +92,9 @@ structure PartX where
 
 /-- **What the compiled verifier holds before the run**: the inner statement's bytes, the verifier's own inner shape
 (`--rec-inner`), the circuit registration (`--rec-inner-registration`), the V* parts, each with its own bindings, and
-the inner population's link table as its root and row count (`--rec-links`), which every part's session refuses
-(`linksOf`). -/
+the inner population's link table as its root and row count (`--rec-links`), which every part's session reads
+(`linksOf`) and holds to the inner shape (`RecLinkPart.checkShape`), and the link table's part checks
+(`RecLinkPart.check`). -/
 structure RecX where
   inner : Claims.Msg
   recInner : ByteArray

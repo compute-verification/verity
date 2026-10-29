@@ -225,6 +225,7 @@ theorem partIn_ok {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar
   | recOpenStacked _ _ _ _ => exact False.elim h
   | sparse _ _ => exact False.elim h
   | opening _ _ _ _ _ _ => exact False.elim h
+  | link _ _ _ => exact False.elim h
 
 /-- **The honest source's message rounds** (`msgsOf`): each of the schedule's message rounds holds two rows. -/
 theorem msgsOf_getElem? (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) {i : ℕ}

@@ -548,6 +548,7 @@ theorem ownPorts_held {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
   | cap _ _ => simp [Flock.RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [Flock.RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds: a row a statement's own port reads, at the port's index among its circuit's ports. -/
 theorem mem_heldRows {r : XR} {s : ℕ} {sv : VStar.Stmt} {c : Flock.Circuit}
