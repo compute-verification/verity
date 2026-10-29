@@ -1,4 +1,4 @@
-"""The proof service's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
+"""The proof system's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 

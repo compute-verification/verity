@@ -49,7 +49,7 @@ def pous_spot_reads(store: Store, reads: int, seed: bytes) -> dict:
         if decode_block(store.prefix, j, store.block(j)) != want:
             bad.append(j)
     return _entry("pous", "fixture", reads=len(picks), mismatched_blocks=bad,
-                  stands_in_for="the PoUS challenger's timed spot reads on vy-auditor-2")
+                  stands_in_for="the PoUS challenger's timed spot reads on the auditor host")
 
 
 def wipe_reload(store: Store, recommit: Callable[[], bytes], root: bytes) -> dict:
@@ -77,7 +77,7 @@ def certifier(prompts: np.ndarray, outputs: np.ndarray) -> dict:
                   requests_in_sha512=hashlib.sha512(prompts.astype(np.uint8).tobytes()).hexdigest(),
                   bytes_out_sha512=hashlib.sha512(outputs.astype(np.uint8).tobytes()).hexdigest(),
                   stands_in_for="the network certifier's signed records of the requests in and the bytes out (network's "
-                                "H200-GATE stand-in serves demo_endpoint from e2e_h200.engine)")
+                                "stand-in serves demo_endpoint from e2e_h200.engine)")
 
 
 def not_run(name: str, reason: str) -> dict:

@@ -67,7 +67,7 @@ lib.open_launch(plan.ptr, tables.data_ptr(), None, bc.data_ptr(), None, levels.d
 openings = vclib.parse_openings(out.cpu().numpy().tobytes(), n, m)
 ~~~
 
-From C it is the same sequence: fill a `vc_spec` with the reference's prefix chunks (`vclib.py`'s spec builders show where each comes
+From C it is the same sequence: fill a `vc_spec` with the reference's prefix chunks (`vclib.py`'s spec helpers show where each comes
 from), `vc_plan_build`, `cudaMalloc` the tables and `vc_tables_launch`, then `vc_commit_rows_launch` on each step's rows
 (`bench/rows.cu` does exactly this against commit_gpu's parameter file).
 
@@ -116,7 +116,7 @@ past 768 segments, keep the two launches.
 ## Files
 
 - `vc.h`, `vc.cu`: the library. `build.sh OUT` builds `OUT/libvc.so` (`ARCHS="90 100 120"`: sm_90a, sm_100a, sm_120a).
-- `vclib.py`: the binding, the spec builders and `parse_openings`; `Cuda`, a minimal libcudart wrapper for the tests.
+- `vclib.py`: the binding, the spec helpers and `parse_openings`; `Cuda`, a minimal libcudart wrapper for the tests.
 - `conformance.py`: every entry point against the references on fixed vectors and random cases, one JSON line a case and a
   summary line; ragged leaf counts, every salt source, every form (wide trees too), chunked launches, graph capture and
   replay, openings checked with `verify_opening` and `verify_multiproof`, the empty tree through the one-call commit and
@@ -139,8 +139,7 @@ past 768 segments, keep the two launches.
   checks on reference-built records).
 
 ~~~text
-research run --on vy-dc-h200 --project verity --campaign hash-loop --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  [--env BENCH=1] [--env QUICK=1] [--env LEASE_ARGS=--preemptible] -- bash benchmarks/hash/lib/gpu.sh
+OUT=DIR GPU_LEASE_WHO=WHO [BENCH=1] [QUICK=1] [LEASE_ARGS=--preemptible] bash benchmarks/hash/lib/gpu.sh   # each GPU
 uv run tools/verity/check/suites.py benchmarks/hash/lib      # the CPU suite
 ~~~
 

@@ -4,7 +4,7 @@ run's coins opened after that run's root; the verifier holds them to the one cha
 for the Commit's root (`challenger.ledger_head`, `challenger.pinned_session`), run from a commit the host's pins log
 records on the verifier's first-parent history of main, ended closed, and to the roots the challenger's signed release log shows it received.
 
-A Commit whose openings come from the challenge phase opened on its own root passes. Refused: openings drawn before their run's
+A Commit whose openings come from the challenge phase opened on its own root passes. Refused: openings sampled before their run's
 root, a challenge phase opened on another Commit's root, a second challenge phase for the Commit's root, coins held in the Commit's
 process, a ledger cut before the challenge phase's end, and a challenge phase read with no pins log or one that doesn't record its
 tree, or with no first-parent history of main or one without its pin."""
@@ -240,8 +240,8 @@ def test_a_ledger_cut_before_the_sessions_end_is_refused(tmp_path, monkeypatch):
 
 def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     """The gate and the peer go together, the gate is one source of the C2 replay's challenge, a Commit with no
-    instrumented run reserves nothing, a vllm-v1 root draws no coins, the challenge phase draws one coin of each family a run
-    and no more, a run's draws read only coins drawn after its own root, and a gate refusal names itself. The gate's
+    instrumented run reserves nothing, a vllm-v1 root draws no coins, the challenge phase flips one coin of each family a run
+    and no more, a run's samples read only coins flipped after its own root, and a gate refusal names itself. The gate's
     ``ledger`` reads as its lines."""
     for kw, match in (({"challenger_peer": None}, "go together"), ({"challenger_gate": None}, "go together"),
                       ({"replay_challenge": "ab"}, "two sources")):

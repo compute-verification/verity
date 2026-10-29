@@ -5,10 +5,11 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 /-!
 # The decoder at the hidden-output headline's draws: statements
 
-`flock_headline_exec_hidden`'s open guarantee is `hdec : DecodesOn …` at the hidden tables `tablesAtH`. #862's
-`DecodesOnExec` (`Discharge/DecodeZL`) is the same guarantee at #828's tables, under `Stmt.setupH`; the decoder `decAt`,
-the number of extra claims `nX`, `RecordsLive` and the chunk lemmas (`zl_carries`, `op_carries` at `wOP`, `lig_carries`
-at `wLIG`) are generic in the table or the setup and are DecodeZL's. What changes is where the draw is set up:
+`flock_headline_exec_hidden`'s open guarantee is `hdec : DecodesOn …` at the hidden tables `tablesAtH`.
+`DecodesOnExec` (`Discharge/DecodeZL`) is the same guarantee at the plain headline's tables, under `Stmt.setupH`; the
+decoder `decAt`, the number of extra claims `nX`, `RecordsLive` and the chunk lemmas (`zl_carries`, `op_carries` at
+`wOP`, `lig_carries` at `wLIG`) are generic in the table or the setup and are DecodeZL's. What changes is where the draw
+is set up:
 
 * `TagsOkH`: DecodeZL's `TagsOk` with hidden outputs (`hiddenOutputs = true`); `TagsOkHL` also admits plain SHA-512
   leaves.

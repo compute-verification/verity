@@ -312,7 +312,7 @@ class Engine:
 
 class Committer:
     """`NativeHostCommitter` as `CommitWindows` uses it: its patches of the runner begin a step at ``execute_model`` and
-    commit the embedding's input ids there, and the sampled ids at ``sample``, where its sources bind the draw's inputs
+    commit the embedding's input ids there, and the sampled ids at ``sample``, where its sources bind the sample's inputs
     (`served_record.SamplerInputsSource`), all host-retained; ``flip`` changes one committed sampled id, at (step, row) of
     the first window that reaches that step."""
 
@@ -532,7 +532,7 @@ def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_pa
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier's leg (certifier_serve, straight to the
+    """The same endpoint under ``--protocol ids`` for the network certifier (certifier_serve, straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""
@@ -800,7 +800,7 @@ def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict],
 
 
 def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp_path):
-    """At each close, before the close is announced (and so before anything can draw over the window), its windows.jsonl
+    """At each close, before the close is announced (and so before anything can sample over the window), its windows.jsonl
     line holds the public record of the rows it ran, bound to its run root: exactly step_trace.jsonl's rows under the
     requests' arrival ids, as `served_rows.register` commits them, each slice window's registered row the slice's ``srv``
     row, its b‖c a leaf of the published root. The record holds no row or salt."""

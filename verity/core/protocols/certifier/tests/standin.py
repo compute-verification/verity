@@ -1,5 +1,5 @@
 """A stand-in for N2's proof of a link-window, and for the ingress tie's of an ingress link-window (`prove_tie`), for
-tests: what C-Flock's prover behind the firewall would deliver, and a stand-in for the verifier's own run of C-Flock's
+tests: what Flock's prover behind the ZK server would deliver, and a stand-in for the verifier's own run of Flock's
 Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in prover writes.
 The proof's output word is the unit's on the prover's opening by each gate's reference (`LinkWindows.outputs`,
 `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim another. So the tests
@@ -31,7 +31,7 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequen
           program: str | None = None, accepted: bool = True, word: int | None = None, root: bytes | None = None,
           salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None,
           advice: Any = None) -> SVC.Delivered:
-    """The delivered proof of the drawn unit on `opening` under the registered root (or `root`), on an advised link of
+    """The delivered proof of the sampled proof block on `opening` under the registered root (or `root`), on an advised link of
     `advice`: the statement's public file, its one instance's rows committed under `SALTS` (``pub``, ``wit``, ``o0``),
     one session naming `program` (default: the link's registered Program) that the stand-in Lean `accepted`, and the
     circuit file. Where the unit takes no instance, the rows are zero and the output 0. `word` forges the output word,
@@ -74,7 +74,7 @@ def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, prog
     """The delivered proof of the drawn ingress-tie units (`tie_service.IngressTie`) on the warden's opening `cells`
     (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: unit t's ``wit`` row its
     bucket row under the warden's salt and its header's registered read of the warden's root (`Cells.statement`), its
-    ``pub`` row its lanes and its output bit by IoTieRequest's reference (`io_request.reference`), which IO-TIE's tests
+    ``pub`` row its lanes and its output bit by IoTieRequest's reference (`io_request.reference`), which the tests
     hold to the circuit. `rows` are the rows the prover proves on instead, under the warden's salts and paths; where a
     unit takes no instance of its lanes, its public row is zero and its output 0. `words` forges output words, `salts`
     the salts delivered for ``pub`` and ``o0``, and `units` the public file's unit indices. The public file is a

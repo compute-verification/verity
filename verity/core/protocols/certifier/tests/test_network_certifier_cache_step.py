@@ -1,5 +1,5 @@
 """`cache_step`'s CacheStep_v1: the circuit against its specification (`reference`) on random tables and rows, at a small
-size class, and on the difftest vectors: two slices of real traces through ENC-DERIVED's `Prefixes`
+size class, and on the difftest vectors: two slices of real traces through the derived encoding's `Prefixes`
 (`benchmarks/network_e2e/encodings/cache_vectors.py`), whose every call the reference must reproduce."""
 from __future__ import annotations
 
@@ -173,7 +173,7 @@ def test_the_difftest_vectors(name) -> None:
 
 
 def test_size() -> None:
-    """Each pinned class's ANDs (`cache_step.circuit-check.json`, its C-Flock lowering's, which merges the ANDs a unit
+    """Each pinned class's ANDs (`cache_step.circuit-check.json`, its Flock lowering's, which merges the ANDs a unit
     repeats on identical operands) within 3% of the Definition's, and a unit's growth in N: a comparison against each
     entry and a masked write to it, 2·(U·TW + EW) + 2·RW ANDs and a few more."""
     pins = json.loads((Path(CS.__file__).with_name("cache_step.circuit-check.json")).read_text())["definitions"]

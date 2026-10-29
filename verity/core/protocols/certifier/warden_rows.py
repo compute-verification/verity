@@ -18,7 +18,7 @@ its S·B/2 little-endian u16 words (`words`), which the unit's port carries.
 **The wiring** (`Wiring`, read off the record by `wiring`) says which connection holds which slots. Connection q, live
 in `cells`/r rows from row `first`, holds slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live
 connections; its cell k of the link-window (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r)
-(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it draws for the link-window:
+(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it samples for the link-window:
 
     wiring = tagged_sha512(WIRING_TAG, salt ‖ u32be count ‖ (u32be q ‖ u32be first ‖ u32be cells) by q)
 
@@ -64,7 +64,7 @@ root, leaves, words, word bits, domain and row schema, and `reads`: unit `reads_
 and the schedule's (ordinals and first rows in admission order, r cells a row, at most `lanes` connections a row), and
 refuses a read of a connection it doesn't hold, of a cell past the connection's, or of a cell another read opens. So a
 read opens its own connection's cell and no other: never an empty slot, a foreign connection's cell or a cell twice.
-The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (IO-TIE's)
+The unit's cell is at its slot's words of the row (`Wiring.place`). A population of one unit a bucket (the I/O tie's)
 reads whole rows instead (`bucket_port`): unit `reads_from + t` opens row t, every slot held or not, and no wiring.
 
 **The units' wiring is the Program's** (`Units`): which cell each unit reads is pinned with the Program, from public
@@ -78,7 +78,7 @@ statement's positions are all it can vary, and Lean's registered reads hold each
 
 **The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
 connection's first row and cells. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it,
-from 0, is q = k + 1, as the active certifier's `Requests` streams it and IO-TIE's map puts advice request k
+from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice request k
 (`order[k] + 1`).
 """
 
@@ -333,7 +333,7 @@ class Cells:
     @classmethod
     def commit(cls, link: str, direction: Direction, window: int, rows: Sequence[bytes], wiring: Wiring,
                params: WardenParams, session: bytes, salts: Sequence[bytes] | None = None) -> Cells:
-        """`rows` and `wiring` as the link-window's (`of` reads both off a record). `salts`: one a row, drawn once
+        """`rows` and `wiring` as the link-window's (`of` reads both off a record). `salts`: one a row, sampled once
         (default: fresh from the operating system) and never for another row."""
         rows = tuple(bytes(r) for r in rows)
         if len(rows) != rows_of(params) or any(len(r) != row_bytes(params) for r in rows):
@@ -501,7 +501,7 @@ def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | 
 
 
 def bucket_port(head: CellsHead, params: WardenParams, reads_from: int = 0) -> dict[str, Any]:
-    """The verifier's own `--registered` port of a population of one unit a bucket (IO-TIE's `IoTieBucket`): unit
+    """The verifier's own `--registered` port of a population of one unit a bucket (`IoTieBucket`): unit
     `reads_from + t` opens row t, its bucket's every slot, held or not. It names no connection, so it reads no
     wiring, and the head's rows alone fix its reads, so there is no units' wiring to name: the port names the head's
     value."""
