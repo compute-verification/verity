@@ -42,7 +42,7 @@ def inhomogeneous_weights(monkeypatch):
     return wt
 
 
-def _weight_nodes(oracle_dir: str) -> tuple[C.Prog, list[int]]:
+def _weight_nodes(oracle_dir: str) -> tuple[C.RootView, list[int]]:
     B = C.load_oracle(oracle_dir, "oracle")
     return B, sorted(B.inputs)
 
