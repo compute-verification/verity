@@ -83,10 +83,12 @@ h1u_build() {
 }
 
 # s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), given as files in LIBS: its build.sh run unchanged
-# from a scratch copy, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
+# from a scratch copy, with this tree's harness gate (benchmarks/pouw/harness/sass_gate.py, its sass_gate.py's mma_gate)
+# beside it, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
-  local w=$S/s8/benchmarks/torch_gpu/s8_linear nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-  mkdir -p "$w" && cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
+  local w=$S/s8/benchmarks/torch_gpu/s8_linear h=$S/s8/benchmarks/pouw/harness nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+  mkdir -p "$w" "$h" && cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
+  cp "$ROOT/benchmarks/pouw/harness/sass_gate.py" "$h/" || return 2
   CUDA=$(dirname "$(dirname "$nv")") PY=/nonexistent bash "$w/build.sh" "$OUT/s8ship" >&2 || return 2
   echo "$w"
 }
