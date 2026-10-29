@@ -44,7 +44,8 @@ tile's A and B ports at its K's values and their registered roots); its mutation
 a call the manifest lacks, prove units the prover chose under its own stream, fail or drop a drawn unit, break K's form
 or give one past the window's units, pass a `credited` refusal through, and break the descriptor (`DESC_NAMES`): its
 form, its program function's record, a template, a K no linear has, the root's nodes, the record's layout, a record
-naming another layout over the same nodes (``alt-layout``), or an H1 window's whole descriptor with a linear, so a
+naming another layout over the same nodes (``alt-layout``), a template's A or B row of bits reading the root's 16-bit
+input words (``reinterpret``, the decoder's ``E_REINTERPRET``), or an H1 window's whole descriptor with a linear, so a
 tile, at a K the tile's proof doesn't cover (``tile-k``: 2^17 or past, or no multiple of 32). Its mutations of the
 composed check present a round log the challenger never received (``never-received``, its coins carried as if opened
 after its roots and its draw root over it, so only `core_check.rounds` refuses it), a round coin opened after another
@@ -921,6 +922,14 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
             desc["program_fn"] = record(tiles, _alt_layout(rng, lay))
         case "tile-k":
             desc = window_desc(rng, _off_k(lay, rng))
+        case "reinterpret":
+            words = [i for i, x in enumerate(root) if desc["callees"][x["fn"]] == "Input16_v1"]
+            x = rng.choice([x for x in root if desc["callees"][x["fn"]] == tid])
+            arg = x["args"][rng.randrange(2)]
+            (space, i, at, *_s, n), word = arg["refs"]["strided"], ["n", rng.choice(words), 0]
+            bits = {"strided": [space, i, at, 1, 0, 0, n - 1]}
+            arg["refs"] = rng.choice([{"strided": [*word, 1, 0, 0, n]}, {"concat": [bits, {"affine": [*word, 1]}]}])
+            return desc_bytes(desc).hex()
         case _:
             raise ValueError(name)
     return desc_bytes(_wired(desc)).hex()
@@ -928,7 +937,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
 
 #: each way a window's committed descriptor is no H1 window's, or not the one its record says
 LAYOUT_DESC_NAMES = ["descriptor-form", "not-window", "template", "tile-ks", "body", "layout-form", "record-layout",
-                     "alt-layout"]
+                     "alt-layout", "reinterpret"]
 #: and an H1 window's, its record and its nodes alike, with a tile at a K its proof doesn't cover
 DESC_NAMES = [*LAYOUT_DESC_NAMES, "tile-k"]
 

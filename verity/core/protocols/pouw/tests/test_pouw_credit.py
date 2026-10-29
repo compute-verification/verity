@@ -552,6 +552,18 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
                                                "weights once")
 
 
+def test_a_word_read_at_another_width_refuses():
+    """A descriptor whose template's A or B row of bits reads the root's 16-bit input words is one C-Flock's decoder
+    refuses (``E_REINTERPRET``), so `credit.layout_of` refuses it as no descriptor (`credit.DESCRIPTOR_FORM`), and
+    accepts the same window wired at each leaf's own width; the difftest's ``reinterpret`` cases hold the Lean to it."""
+    for seed in SEEDS:
+        rng = random.Random(f"reinterpret/{seed}")
+        lay = cases.layout(rng)
+        assert Cr.layout_of(bytes.fromhex(cases.descriptor(rng, lay)))[1] is None
+        assert Cr.layout_of(bytes.fromhex(cases._break_desc(rng, lay, "reinterpret"))) == (
+            None, ("layout", Cr.DESCRIPTOR_FORM))
+
+
 def test_an_alternative_layout_with_the_same_descriptor_refuses():
     """The layout is the committed circuit's, never the window's evidence: a window presenting a layout beside its
     descriptor is not a window's evidence; a compiled descriptor whose record names another layout (another slot,
