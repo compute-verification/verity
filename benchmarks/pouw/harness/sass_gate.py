@@ -1507,7 +1507,7 @@ def posix_semaphore(path: str) -> str | None:
     return "a POSIX semaphore (one page, no ELF or fatbin), not a library"
 
 
-class Gate:
+class SassChecker:
     """The run's gate: every binary it has checked, and the mapped ones it didn't scan (NVIDIA's). `check` raises
     SassGateFailed naming the first failing binary, its function and instruction; `report` goes into the run's JSON."""
 
@@ -1631,7 +1631,7 @@ def main(argv: list[str] | None = None) -> int:
         text = json.dumps(rec, indent=1)
         (args.json.write_text(text) if args.json else print(text))
         return 0
-    g = Gate(log=lambda s: print(s, file=sys.stderr))
+    g = SassChecker(log=lambda s: print(s, file=sys.stderr))
     code, error = 0, None
     for b in args.binaries:
         try:
