@@ -1,0 +1,9 @@
+{
+  "_Z6copy_k": {"loop": 1, "ops": {"IADD3": 5, "LDG": 1, "STG": 1}},
+  "form1_kILb0E": {"loop": 1, "ops": {"IADD3": 11, "LDG": 2, "STG": 1}},
+  "form1_kILb1E": {"loop": 1, "ops": {"LOP3": 16, "IADD3": 7, "LDG": 2, "STG": 1}},
+  "formncp_k": {"loop": 1, "ops": {"IADD3": 13, "LOP3": 8, "LDG": 4, "STG": 3}},
+  "_Z7coins_k": {"loop": 1, "ops": {"SHF": 384, "LOP3": 192, "IADD3": 160}},
+  "coinsform1_k": {"loop": 1, "ops": {"SHF": 384, "LOP3": 192, "IADD3": 160}},
+  "coinsncp_k": {"loop": 1, "ops": {"SHF": 384, "LOP3": 192, "IADD3": 160}}
+}
