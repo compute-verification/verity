@@ -1308,9 +1308,8 @@ def main() -> int:
     (out / "pouw_space.json").write_text(json.dumps(blob, indent=1, default=str) + "\n")
     with (out / "ranking.csv").open("w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["point", "position", "design", "N", "D", "F", "density", "operands", "rows", "hiding", "final", "forming",
-                    "derivation", "rank_matmul", "rank_hashing", "rank", "rank_effective", "t1", "t1_coins_uncredited",
-                    *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
+        w.writerow(["point", "position", "design", *(f"{a}.{s}" for a, s in card["space"]["slots"]), "rank_matmul",
+                    "rank_hashing", "rank", "rank_effective", "t1", "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
                     "hash_bytes_per_mac", "open"])
         for p, res in results.items():
             if p.startswith("_"):
