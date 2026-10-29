@@ -333,15 +333,16 @@ def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | N
     if where != "python":
         _kernel_tables(run, call, a, s_a, zy if m and records is not None else None, where)
         if run.prover is not None and m:
-            PV.keep_call(run.prover, call.index, row_words(a, m, "i1"), row_words(s_a, m, "<f4"), records)
+            PV.keep_call(run.prover, call.index, row_words(a, m, "i1"), row_words(s_a, m, "<f4"), ZR.host(records))
         return
     if a is not None and m:
         av, sv = row_words(a, m, "i1"), row_words(s_a, m, "<f4")
     else:
         av = sv = np.zeros((0, 1), "i1")
     out: dict[str, str | None] = {"a": _table(run, call, "a", table_leaves(t, call.k + 4, m, av, sv))}
-    leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if records is None else [r.tobytes() for r in records]
+    held = ZR.host(records)
+    leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if held is None else [r.tobytes() for r in held]
     out["z"] = None if leaves is None else _table(run, call, "z", leaves)
     run._roots[call.index] = out
     if run.prover is not None and m:
-        PV.keep_call(run.prover, call.index, av, sv, records)
+        PV.keep_call(run.prover, call.index, av, sv, held)
