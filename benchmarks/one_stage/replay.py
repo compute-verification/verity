@@ -1593,7 +1593,7 @@ for ell in levels:
     out["levels"][str(ell)] = {"n": n, "program": encode_program(PT.population_program(t, n)), "ports": SC.ports(params, ell)}
 print(json.dumps(out))
 '''
-#: served_zk's registered scheme before the proof service (`served_commit.SCHEME`); in it, the service's (`SCHEME`)
+#: served_zk's registered scheme before the proof system (`served_commit.SCHEME`); in it, the service's (`SCHEME`)
 SERVED_ZK_SCHEME = "verity/pouw/served-zk/window/hm96-sha512+frame-v3-sha512/v1"
 SERVED_ZK_W_DOMAIN = "verity/pouw/served-zk/weights-domain/v0"
 #: served windows' recorded refusals that are not the protocol's, by name, with why
@@ -1618,12 +1618,12 @@ SERVED_OUTSIDE = (
 
 
 def served_window(run: Run) -> Iterator[Case]:
-    """served_zk's window through the proof service (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
+    """served_zk's window through the proof system (`benchmarks/pouw/served_zk`): the request's registration of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the law of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
     (`outcome-<case>/`: honest, the selftest build's cases, the other request's proof), each its own audit record of the
-    request's registration (a stream of its own, order 0). Before the proof service (`verity/one-stage/audit/v0`) the
+    request's registration (a stream of its own, order 0). Before the proof system (`verity/one-stage/audit/v0`) the
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served draw or the sessions' roots, and
     no verdict of record reports registered reads."""
@@ -1704,7 +1704,7 @@ def served_window(run: Run) -> Iterator[Case]:
     first = run.json(outcomes[0])
     service = first.get("format") == "verity/proof-service/outcome/v0"
     scheme = SCHEME if service else SERVED_ZK_SCHEME
-    prov["scheme"] = "the proof service's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof service)"
+    prov["scheme"] = "the proof system's `SCHEME`" if service else "served_commit's `SCHEME` (before the proof system)"
     p = params(program, query, law, ports, None, delta_of(pv["delta"]), partition=partition, scheme=scheme)
     base = None
     for path in outcomes:
@@ -1723,7 +1723,7 @@ def served_window(run: Run) -> Iterator[Case]:
         c = Case(run.id, "served-window", first.get("format", ""), name, "audit" if honest else "negative", program, p,
                  rec, e, recorded_audit(a, path),
                  {**prov, "evidence": f"{path}; instances the proved units; sessions "
-                                      + ("the delivered ones" if service else "none (before the proof service)")})
+                                      + ("the delivered ones" if service else "none (before the proof system)")})
         if stubs:
             c.provenance["opaque"] = stubs
         base = base or (c if name == "outcome-honest" else None)

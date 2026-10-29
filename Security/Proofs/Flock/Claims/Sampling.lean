@@ -11,7 +11,7 @@ import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 import Proofs.Flock.Claims.Sampling.EndToEndDraw
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
-import Proofs.Flock.Claims.Sampling.HorizonPr
+import Proofs.Flock.Claims.Sampling.PooledPr
 import Proofs.Flock.Claims.Sampling.InputSlot
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Sampling.Leaf
@@ -30,7 +30,7 @@ import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.Claims.Sampling.ZK
 
 /-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
-executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), the audit layer's horizon escape (`Sampling.HorizonPr`) and every law's live draw's (`Sampling.Live`); each
+executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), the audit layer's pooled escape (`Sampling.PooledPr`) and every law's live draw's (`Sampling.Live`); each
 design's acceptance probability as its model draw's miss probability, the nested escape and the classes' product
 (`Sampling.Escape`), and the deployed count bound at the claims' designs (`Sampling.Count`); `P_a` antitone and `M_δ`
 closed downward at a one-class uniform subset design (`Sampling.Down`); the extractor's rerun

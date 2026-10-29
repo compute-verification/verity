@@ -12,8 +12,8 @@ digests), so a concatenation of digests splits back into them.
 A collision of `H` is two different messages with one image (`Collision`), and `H` has one when some pair is
 (`HasCollision`). The claims (`Claims.Collision`) and C-Flock's Merkle trees (`FlockSoundness.Merkle.Collision`) read
 these. A collision *among* a list of inputs (`CollisionIn`) has both inputs in the list, read on a digest's bytes: that is
-how a statement ties a break to the inputs a run itself hashed: every `∃` in a break is bounded by something the run
-carries.
+how a statement ties a break to the inputs a run itself hashed (every `∃` in a break is bounded by
+something the run carries).
 
 The encodings are the formats' own: `be k n`, `n` big-endian in `k` bytes (u32be, u64be); `uint n`, `n` big-endian in
 the fewest bytes, one byte for 0 (`merkle.py`'s `uint`); `cstr s`, a tag's bytes and its terminating zero byte; and
