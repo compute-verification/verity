@@ -52,8 +52,8 @@ nothing else but Lean core.
   each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`.
 
 The check's agreement with `Nci.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
-compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict that complies, every block meets the
-(c, k) budgets at c = `gamma` and k = α·c (`NciCheck.Properties.Refines`). What is open is the step from the check's
+compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict of the unrolled check that complies,
+every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
 accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 

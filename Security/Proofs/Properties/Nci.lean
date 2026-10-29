@@ -242,11 +242,18 @@ theorem Witnesses : Properties.Witnesses := by
   obtain ⟨U, hU⟩ := exists_partition h3 h4 hL
   exact ⟨dv.n, U, (Reports j out hev i' P d dv.n U hpar hdec hL hθ hU).2.2.1.1 hc⟩
 
-/-- **The check's rate refines the policy's budgets**: a block of at most `c` gates with at most `α` fresh input bits
-per gate has at most `k = α c`, as `α ≥ 0`, and a partition's blocks hold every computed gate. -/
-theorem Refines : Properties.Refines := by
-  intro j out hev i P d n U hpar hdec hL hθ hU hc
-  dsimp only
+/-- **The check's rate refines the policy's budgets**, a lemma of `Reports`: when the verdict `out` on `j` has
+`complies` `true`, the owners cover every declaration the Program lays out with the registered information `theta`
+names by inference blocks within the policy's budgets at `c = gamma` and `k = α c`, `α = num / den`. A block of at
+most `c` gates with at most `α` fresh input bits per gate has at most `k`, as `α ≥ 0`, and a partition's blocks hold
+every computed gate. -/
+theorem refines {j out : Json} (hev : evaluate j = .ok out) {i : Instance} {P : Prog} {d : Verity.Declaration}
+    {n : ℕ} {U : Verity.Partition d.D n} (hpar : Parses j i) (hdec : Flock.Program.decode i.program.toUTF8 = .ok P)
+    (hL : LaysOut P d.D) (hθ : Names i.theta d.θ) (hU : Divides i.owner U)
+    (hc : out.getObjVal? "complies" = .ok (.bool true)) :
+    (∀ u, d.D.size (U.gates u) ≤ i.gamma ∧
+        (Nci.novelReads d (U.gates u) : ℝ) ≤ (i.num : ℝ) / i.den * i.gamma) ∧
+      ∀ g, d.D.isInput g = false → ∃ u, g ∈ U.gates u := by
   refine ⟨fun u => ?_, fun g hg => ?_⟩
   · obtain ⟨hs, hr⟩ := (Reports j out hev i P d n U hpar hdec hL hθ hU).2.2.1.1 hc u
     exact ⟨hs, hr.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast hs)

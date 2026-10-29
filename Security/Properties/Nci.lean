@@ -45,8 +45,6 @@ widths, input gates and reads, which is all `size` and `Nci.novelReads` read, an
   with the rule it breaks first.
 * `Witnesses`: a verdict whose `complies` is `true` means the declaration complies at the rate,
   `Nci.CompliesRate c α d`, with the owners as the witness.
-* `Refines`: on such a verdict the owners' blocks cover the circuit within the policy's budgets at `c` and `k = α c`:
-  at most `c` gates and at most `k` fresh input bits each, and every computed gate in one.
 
 No statement takes an assumption. What is not proved about the decoder (its `Prog.gate` is `partial`) is not needed:
 the statements read the decoder only through what it returns.
@@ -270,25 +268,5 @@ def Witnessed (j out : Json) : Prop :=
 /-- **A verdict of compliance witnesses the policy.** On every instance with a verdict, the verdict is `Witnessed`. -/
 def Witnesses : Prop :=
   ∀ (j out : Json), evaluate j = .ok out → Witnessed j out
-
-/-- When the verdict `out` on `j` has `complies` `true`, the owners cover every declaration the Program lays out with
-the registered information `theta` names by inference blocks within the policy's budgets at `c = gamma` and
-`k = α c`, `α = num / den`: each block has at most `c` gates and at most `k` fresh input bits, and every computed gate
-is in a block. -/
-def Refined (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration) (n : ℕ) (U : Verity.Partition d.D n),
-    Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
-    Divides i.owner U → out.getObjVal? "complies" = .ok (.bool true) →
-    let c : ℕ := i.gamma
-    let α : ℝ := (i.num : ℝ) / i.den
-    let k : ℝ := α * c
-    (∀ u, d.D.size (U.gates u) ≤ c ∧ (Nci.novelReads d (U.gates u) : ℝ) ≤ k) ∧
-      ∀ g, d.D.isInput g = false → ∃ u, g ∈ U.gates u
-
-/-- **The check's rate refines the policy's budgets.** On every instance with a verdict, the verdict is `Refined`: a
-block with at most `c` gates and at most `α` fresh input bits per gate has at most `k = α c` fresh input bits, and the
-blocks cover the circuit's computed gates. -/
-def Refines : Prop :=
-  ∀ (j out : Json), evaluate j = .ok out → Refined j out
 
 end NciCheck.Properties

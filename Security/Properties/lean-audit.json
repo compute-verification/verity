@@ -718,9 +718,6 @@
    "assumptions": [],
    "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b"
   },
-  "NciCheck.Properties.SecurityProofs.Refines": {
-   "owner": "@lean"
-  },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
    "signature": ["NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"],
@@ -2485,10 +2482,6 @@
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.RejectsExactly": {
-    "function": "NciCheck.evaluate",
-    "outcome": "accept"
-   },
-   "NciCheck.Properties.SecurityProofs.Refines": {
     "function": "NciCheck.evaluate",
     "outcome": "accept"
    },

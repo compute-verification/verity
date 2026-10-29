@@ -271,8 +271,9 @@ part 6's premises say why that shape trains little.
 3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.CompliesRate Γ α_f` of the laid-out registered circuit (a `Verity.Declaration`), on every
    expansion:*
    `NciCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
-   is the definition's), and each block within (Γ, α_f·Γ) (`Refines`), **proved**. `DampenerRemote` takes
-   `Complies c k d`, exactly c gates a block, which a verdict gives only padded (link 4): links 1, 2 and that step are open.
+   is the definition's), and on the unrolled check's verdict each block within (Γ, α_f·Γ) (the lemma `refines`),
+   **proved**. `DampenerRemote` takes `Complies c k d`, exactly c gates a block, which a verdict gives only padded
+   (link 4): links 1, 2 and that step are open.
 4. *`CompliesRate` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
