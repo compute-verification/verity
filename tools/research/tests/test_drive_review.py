@@ -1633,7 +1633,7 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
 
 
 def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
-    """A marked PR can wait on another's unmarked commits, and that one's owner is told.  Its owner hears once per
+    """A marked PR can wait on another's unmarked commits, and that one's owner is told, the marked one's beside it.  They hear once per
     (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""
     _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
     h = Review(world, monkeypatch)
@@ -1652,24 +1652,50 @@ def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pai
     h.tick()
     five = world.gh.prs[5].head
     assert told() == [
-        f"@ci @lane-5 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
+        f"@ci @lane-5 @lane-7 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
         f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #7 carries it",
-        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
+        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
         f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #9 carries it"], told()
     h.tick()
     assert len(told()) == 2                                     # once per pair of heads
     world.gh.put(7, world.change({"k.txt": "kernels 2\n"}, base=world.gh.prs[7].head))
     h.tick()
-    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5")
+    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5")
     world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=five), ready=False)
     h.tick()
     # #9 holds #5's older head now; it only shares `old` with #8, which waits for nothing of #9's or #7's (`Queue.entries`)
     assert [p.split(": mark")[0] for p in told()[3:]] == [
-        f"@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
-        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
+        f"@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
+        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
     world.gh.ready.add((5, world.gh.prs[5].head))
     h.tick()
     assert len(told()) == 5 and h.q.status()[7].state != "waiting"
+
+
+def test_a_marked_pr_left_out_for_an_ejected_pr_it_holds_an_older_head_of_is_told_once_with_the_fix(world, monkeypatch):
+    """#7 branched from #6, which moved on and was ejected at its new head: #7 holds #6's commits at an older head, so the sync
+    leaves it off `next`.  Both owners hear once per pair of heads, with the fix, and nothing at the same heads after."""
+    _registry(world, "lane-6", "lane-7")
+    h = Review(world, monkeypatch)
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(6, old, ready=False)
+    h.tick()                                                                    # drive sees #6 at `old`
+    world.gh.put(6, new := world.change({"x.txt": "x = 2\n"}, base=old))
+    world.gh.put(7, seven := world.change({"k.txt": "kernels\n"}, base=old))
+    h.q.eject(6, "breaks circuits", "ci")
+    world.gh.ready.discard((6, new))
+
+    def told() -> list[str]:
+        return [p for p in h.posts if "is out of `next`" in p]
+
+    h.tick()
+    assert told() == [
+        f"@ci @lane-7 @lane-6 queue: #7 at {seven[:8]} is out of `next`: it contains #6's commits (at an older head), and #6 at "
+        f"{new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready mark re-admits it)). Fix: mark #6 "
+        f"ready at {new[:8]}, drop #6's commits from #7, or ask @top to close #6"], told()
+    assert h.q.status()[7].state == "waiting"
+    h.tick()
+    assert len(told()) == 1
 
 
 def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:
