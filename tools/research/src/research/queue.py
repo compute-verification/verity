@@ -2862,9 +2862,10 @@ class RecordsRun:
         return sorted(top) + sorted(p for p in self.files if REQUIRER_AUDIT.search(p))
 
     def reports_of(self, pkg: str) -> list[str]:
-        """The per-package reports (`audit-<name>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
-        beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report."""
-        each = (posixpath.join(posixpath.dirname(a), f"audit-{posixpath.basename(pkg)}", "report.json") for a in self.audits())
+        """The per-package reports (`audit-<slug>/report.json` beside an `audit.json`, the slug of the package's path as
+        `check.py` writes it) that may be ``pkg``'s: a package audited beside PKG or a requirer, its `proved_in` one
+        (`audit-Security_Proofs` in a run of `Security`); its path is in the report."""
+        each = (posixpath.join(posixpath.dirname(a), f"audit-{_slug(pkg)}", "report.json") for a in self.audits())
         return [p for p in each if p in self.files]
 
 
