@@ -391,15 +391,14 @@ def circuit_parts(C, sources: list[Source]) -> list[Part]:
 def required_agreement(commit: str, base: str | None, repo: Path = ROOT) -> bool:
     """Whether lean-agreement's `merge_requires` (in COMMIT's ci.toml) covers a file the change from ``base`` changes, as
     `research merge`'s `required_steps` reads it."""
-    from research.merge import rule_touches
-
-    r = subprocess.run(["git", "show", f"{commit}:tools/verity/check/ci.toml"], cwd=repo, capture_output=True, text=True)
+    ci = _load("plan_declaration", HERE / "declaration.py").CI
+    r = subprocess.run(["git", "show", f"{commit}:{ci}"], cwd=repo, capture_output=True, text=True)
     rule = next((j.get("merge_requires") for j in tomllib.loads(r.stdout).get("job", []) if j.get("name") == "lean-agreement"),
                 None) if r.returncode == 0 else None
     if not rule or not base:
         return False
     d = subprocess.run(["git", "diff", "--no-renames", "--name-only", "-z", base, commit], cwd=repo, capture_output=True, text=True)
-    return bool(rule_touches(list(rule), [p for p in d.stdout.split("\0") if p]))
+    return bool(_load("plan_ops", HERE / "ops.py").rule_touches(list(rule), [p for p in d.stdout.split("\0") if p]))
 
 
 def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = False, circuit=circuit_parts,
@@ -536,8 +535,7 @@ def gather(C, d: Path, a, notes: list[str], commit: str | None = None) -> list[t
     """The packs to look passes up in: what `gather_verdicts` would take (unless --no-gather); both packs of each recorded check
     of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
     big to take from every check); each --verdicts-in PACK."""
-    from research.store.local import LocalStore
-
+    LocalStore = _load("plan_ops", HERE / "ops.py").LocalStore
     packs: list[tuple[str | None, Path]] = []
     store = None
     try:

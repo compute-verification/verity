@@ -222,9 +222,7 @@ def test_a_shards_lean_slot_counts_only_its_own_packages(tmp_path, monkeypatch):
 
 
 def test_a_shards_result_names_its_plan_commit_config_and_each_steps_parts(tmp_path, monkeypatch):
-    from research import result as RES
-    from research.merge import SHARD_KIND
-
+    RES, SHARD_KIND = CHECK.OPS.result, CHECK.OPS.SHARD_KIND
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20260927-010000-abcd")
     sh = CHECK.shard("2/5")
     done = [{"step": "preflight-lock", "status": "passed", "seconds": 1.0},
@@ -244,9 +242,6 @@ def test_a_shards_result_names_its_plan_commit_config_and_each_steps_parts(tmp_p
 def _combine_tree(tmp_path: Path, monkeypatch, steps: list[dict], store) -> tuple[Path, str, list]:
     """A clean one-commit checkout with a check tool, `shard_set` answering ``steps`` for the shards r1 and r2 (and refusing
     any other set), ``store`` as the store, and a recorded run's id: (tree, its commit, what `shard_set` was asked)."""
-    import research.merge
-    import research.store.local
-
     tree = tmp_path / "tree"
     (tree / "tools" / "verity" / "check").mkdir(parents=True)
     (tree / "tools" / "verity" / "check" / "tool.py").write_text(
@@ -262,8 +257,8 @@ def _combine_tree(tmp_path: Path, monkeypatch, steps: list[dict], store) -> tupl
         return (steps, None) if ids == ["r1", "r2"] else (None, "shard 2/2 is not among them")
 
     monkeypatch.setattr(CHECK, "ROOT", tree)
-    monkeypatch.setattr(research.merge, "shard_set", shard_set)
-    monkeypatch.setattr(research.store.local, "LocalStore", store)
+    monkeypatch.setattr(CHECK.OPS.merge, "shard_set", shard_set)
+    monkeypatch.setattr(CHECK.OPS.store_local, "LocalStore", store)
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261004-000000-ffff")
     return tree, head, asked
 
@@ -271,8 +266,7 @@ def _combine_tree(tmp_path: Path, monkeypatch, steps: list[dict], store) -> tupl
 def test_combine_records_the_steps_the_gates_reading_of_the_shards_gives_and_fails_what_it_refuses(tmp_path, monkeypatch):
     """Inside a recorded run, a `check/v1` of `shard_set`'s steps (which the gate compares with its own reading); a failed one when
     the set is refused or the checkout is dirty; outside a run it only says."""
-    from research import result as RES
-
+    RES = CHECK.OPS.result
     class Store:
         remote = None
 
@@ -328,8 +322,7 @@ def test_combine_joins_circuit_check_s_shards_and_fails_unless_they_join_to_the_
     files and gives them to `circuit-check --combine`, and fails when that fails (a by-calls root whose callee another shard
     checked, a known failure that no longer fails) or refuses them; a shard that held every part ran `--all` whole, and nothing
     is joined."""
-    from research import result as RES
-
+    RES = CHECK.OPS.result
     fetched, joined, rc = [], [], [0]
 
     class Store:
@@ -369,8 +362,6 @@ def test_combine_joins_circuit_check_s_shards_and_fails_unless_they_join_to_the_
 
 
 def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch):
-    import research.store.local
-
     real, launched, urls = subprocess.run, [], []
 
     def run(cmd, *a, **k):
@@ -390,7 +381,7 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
 
     (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u"}, "inputs": {"art": "art:i"}}))
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
-    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(CHECK.OPS.store_local, "LocalStore", Store)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", url_file)
     monkeypatch.setattr(subprocess, "run", run)

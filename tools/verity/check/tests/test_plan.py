@@ -15,6 +15,9 @@ HERE = Path(__file__).resolve().parents[1]
 REPO = HERE.parents[2]
 #: the command the fake store's attempts ran, held to itself (`research.merge.invocation`)
 COMMAND = ("uv", "run", "python", "tools/verity/check/check.py")
+spec = importlib.util.spec_from_file_location("plan_test_ops", HERE / "ops.py")
+OPS = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(OPS)
 
 
 @pytest.fixture
@@ -105,9 +108,7 @@ class _Store:
 
 
 def _judged(doc: dict, packs: dict[str, Path]) -> tuple[list[str], str | None]:
-    from research.merge import plan_refusal
-
-    return plan_refusal(doc, _Store(packs), doc["commit"], doc["tree"], "check", COMMAND, {})
+    return OPS.plan_refusal(doc, _Store(packs), doc["commit"], doc["tree"], "check", COMMAND, {})
 
 
 @pytest.mark.slow
@@ -234,8 +235,7 @@ def test_the_plan_takes_both_packs_of_each_check_of_the_commit_and_of_each_run_g
             assert params[0] == "c0ffee" and "source_commit" in query
             return [("r-mine", "check")]
 
-    import research.store.local as local
-
+    local = OPS.store_local
     old, local.LocalStore = local.LocalStore, Store
     try:
         notes = []

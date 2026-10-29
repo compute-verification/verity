@@ -1968,9 +1968,10 @@ def known_red(rev: str, store=None) -> dict:
     walk = [(c, int(t)) for c, t in (ln.split() for ln in
                                      _git("log", "--first-parent", "-n", str(KNOWN_RED_WALK), "--format=%H %ct", sha).splitlines())]
     if store is None:
-        from research.store.local import LocalStore
-
-        store = LocalStore()
+        spec = importlib.util.spec_from_file_location("suites_ops", HERE / "ops.py")
+        ops = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ops)
+        store = ops.LocalStore()
     spec = importlib.util.spec_from_file_location("suites_plan", HERE / "plan.py")
     plan = sys.modules[spec.name] = importlib.util.module_from_spec(spec)      # dataclasses resolve their module by name
     spec.loader.exec_module(plan)

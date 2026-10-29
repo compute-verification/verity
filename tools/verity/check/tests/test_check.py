@@ -186,9 +186,7 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
 
 def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
     """A run of anything else, or a check that ends before `check.py` starts, leaves them in inputs/ for custody to delete."""
-    from research.store.custody import CREDENTIALS
-
-    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
+    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CHECK.OPS.custody.CREDENTIALS
 
 
 def test_the_agreement_leaves_memory_for_the_steps_beside_it(monkeypatch):
@@ -262,8 +260,7 @@ def test_the_recorded_check_takes_cpu_only_torch():
 
 
 def test_a_recorded_run_writes_a_valid_result(tmp_path, monkeypatch):
-    from research import result as RES
-
+    RES = CHECK.OPS.result
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20260927-010000-abcd")
     (tmp_path / "circuit-check.json").write_text("{}")
     done = [{"step": "pytest", "status": "passed", "rc": 0, "seconds": 1.0}, {"step": "circuit-check", "status": "failed", "rc": 1, "seconds": 2.0}]
@@ -546,7 +543,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     import sys
     import tempfile
 
-    import research.store.local
+    store_local = CHECK.OPS.store_local
 
     def git(*args):
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
@@ -581,7 +578,7 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(store_local, "LocalStore", Store)
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "HEAD^"]) == 0
@@ -782,8 +779,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
 
 def test_the_agreement_is_not_required_for_docs_alone():
     """README.md and PROTOCOL.md under verity/ml/flock/ are docs the agreement never reads: alone they do not require it."""
-    from research.merge import rule_touches
-
+    rule_touches = CHECK.OPS.rule_touches
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
@@ -1300,8 +1296,7 @@ def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_t
     import json
     import subprocess
 
-    from research.store.fixtures import fixture_id
-
+    fixture_id = CHECK.OPS.fixture_id
     good, gone, small, local = ("art:" + c * 64 for c in "abce")
     (tmp_path / "big").mkdir()
     (tmp_path / "big" / "there.bin").write_bytes(b"exact bytes")
@@ -1368,8 +1363,7 @@ def test_preflight_alone_runs_every_step_and_fails_if_any_does(tmp_path, monkeyp
 def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch):
     import json
 
-    from research import result as RES
-
+    RES = CHECK.OPS.result
     (tmp_path / "suites.json").write_text(json.dumps([{"suite": "pkg", "contradicts": ["tests/test_a.py::test_a"]}, {"suite": "b"}]))
     (tmp_path / "suites-lean.json").write_text(json.dumps([{"suite": "lean", "nondeterministic": ["tests/test_b.py::test_b"]}]))
     bad, flaky = CHECK.contradictions(tmp_path), CHECK.contradictions(tmp_path, "nondeterministic")
@@ -1390,14 +1384,14 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     import sys
     import tempfile
 
-    from research.store import local
-
+    local = CHECK.OPS.store_local
     def git(*args: str) -> None:
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
                        check=True, capture_output=True)
 
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
-    shutil.copy(ROOT / "tools" / "verity" / "check" / "tool.py", tmp_path / "tools" / "verity" / "check" / "tool.py")
+    for f in ("tool.py", "ops.py"):
+        shutil.copy(ROOT / "tools" / "verity" / "check" / f, tmp_path / "tools" / "verity" / "check" / f)
     git("init", "-q", "-b", "main")
     git("add", "-A")
     git("commit", "-q", "-m", "base")
@@ -1449,8 +1443,7 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
     """A file of the Lean verifier's own package, wherever the layout puts it (`FLOCK_LEAN`), needs the agreement to merge and
     is read by the agreement (so a change to it misses a cached pass): a rule that still named the package's old place would
     pass such a change unchecked."""
-    from research.merge import rule_touches
-
+    rule_touches = CHECK.OPS.rule_touches
     rel = CHECK.FLOCK_LEAN.relative_to(ROOT).as_posix()
     changed = [f"{rel}/Flock/Gate.lean"]
     spec2 = importlib.util.spec_from_file_location("check_tool_lean", ROOT / "tools" / "verity" / "check" / "tool.py")
@@ -1464,8 +1457,7 @@ def test_every_file_the_agreement_reads_needs_the_agreement_to_merge():
     """The rule `check.py --record` sends the upstream build by, and the gate refuses by, covers each tracked file the agreement
     reads (`agreement_closure`: its scripts and the Lean package `flock-verify` is built from) but the docs, so a change to any
     of them can't land on a check that skipped it (13 Oct: the rule was read as covering verity/ml/flock/ alone)."""
-    from research.merge import rule_touches
-
+    rule_touches = CHECK.OPS.rule_touches
     spec2 = importlib.util.spec_from_file_location("check_tool_reads", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)

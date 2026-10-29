@@ -212,10 +212,15 @@ from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
 RULES = "ci/queue.toml"
+#: where the configuration drive and the queue read is, from the root of the repository they land on (each reader takes that
+#: root, `repo`): the rules, drive's flags and the check's jobs; the check's `declaration.HOME` names the same directory
+CHECK_HOME = "tools/verity/check"
 #: where the rules are until the repository move puts `tools/verity/check/` at `ci/`
-RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
+RULES_BEFORE_MOVE = f"{CHECK_HOME}/queue.toml"
 #: drive's flags of record (`DriveFlags`, `--config`)
-DRIVE_FLAGS = "tools/verity/check/drive.toml"
+DRIVE_FLAGS = f"{CHECK_HOME}/drive.toml"
+#: the jobs a check runs, which ones are on the merge gate among them (`merge.declared_jobs`)
+CI_JOBS = f"{CHECK_HOME}/ci.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
 PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")

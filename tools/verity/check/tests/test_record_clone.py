@@ -9,12 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from research import clone
-
 ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("repo_check_record_clone", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
+clone = CHECK.OPS.clone
 SHA = "6b3d704c8" * 4 + "abcd"
 
 

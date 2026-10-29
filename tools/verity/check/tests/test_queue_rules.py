@@ -2,15 +2,18 @@
 per-head grant.  `drive.toml`, drive's flags of record, parses as `research queue drive --config` reads it."""
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
-from research.queue import DRIVE_FLAGS, DriveFlags, Rules
-
 ROOT = Path(__file__).resolve().parents[4]
+spec = importlib.util.spec_from_file_location("queue_rules_ops", ROOT / "tools" / "verity" / "check" / "ops.py")
+OPS = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(OPS)
+DRIVE_FLAGS, DriveFlags, Rules = OPS.DRIVE_FLAGS, OPS.DriveFlags, OPS.Rules
 
 
 def test_the_rules_parse_and_name_the_hold_label():
-    rules = Rules.parse((ROOT / "tools" / "verity" / "check" / "queue.toml").read_text(), "tools/verity/check/queue.toml")
+    rules = Rules.parse((ROOT / OPS.RULES_BEFORE_MOVE).read_text(), OPS.RULES_BEFORE_MOVE)
     assert rules.hold_label == "hold"
 
 

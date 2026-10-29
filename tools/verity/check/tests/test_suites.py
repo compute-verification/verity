@@ -14,6 +14,9 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location("suites_test_ops", HERE / "ops.py")
+OPS = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(OPS)
 
 
 def _suites(monkeypatch, root: Path):
@@ -379,7 +382,6 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
     assert touched() == ["a", "b"]
     _lock(tmp_path, numpy="2.0", pytest="8.0")
     assert touched() == []
-    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
     keys = _keys(S)
     (tmp_path / "tools" / "verity" / "check" / "check.py").write_text("# check, which runs the runner\n")
     assert touched() == [] and _keys(S) == keys                     # check's own code decides no other suite's verdict
@@ -712,8 +714,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
     (root / "pkg" / "tests" / "test_a.py").write_text(
         "from pathlib import Path\n\ndef test_reads_its_fixture():\n"
         "    assert (Path(__file__).parent / 'fixtures' / 'small.json').read_text() == '{\"n\": 1}\\n'\n")
-    from research.store.fixtures import fixture_id
-
+    fixture_id = OPS.fixture_id
     reg = {fixture_id(root / "pkg" / "tests" / "fixtures" / "small.json"): "pkg/tests/fixtures/small.json"}
     if absent:
         reg["art:" + hashlib.sha256(b"never shipped").hexdigest()] = "pkg/tests/fixtures/big.proof"
@@ -1935,8 +1936,7 @@ def _red_row(suite: str, *tests: str) -> dict:
 def test_known_red_is_the_newest_check_of_mains_first_parent_commits_that_reported_its_suites(tmp_path, monkeypatch):
     """CI-173: a quick tier failed on tests already red on `main`, and its owner triaged them as the PR's. What is red there is read
     from the newest post-landing run (or recorded check) of `main`'s first-parent commits that published its suite reports."""
-    from research.store.local import LocalStore
-
+    LocalStore = OPS.LocalStore
     _git(tmp_path, "init", "-q", "-b", "main")
     old = (_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "old"), _git(tmp_path, "rev-parse", "HEAD"))[1]
     checked = (_git(tmp_path, "commit", "-q", "--allow-empty", "-m", "checked"), _git(tmp_path, "rev-parse", "HEAD"))[1]
@@ -1984,11 +1984,11 @@ def test_a_changed_run_fails_nothing_on_a_test_red_on_main_and_check_s_own_run_s
     import json
     import shutil
 
-    from research.store.local import LocalStore
-
+    LocalStore = OPS.LocalStore
     root = tmp_path / "tree"
     _per_test_workspace(root)
-    shutil.copy(HERE / "plan.py", root / "tools" / "verity" / "check" / "plan.py")
+    for f in ("plan.py", "ops.py"):
+        shutil.copy(HERE / f, root / "tools" / "verity" / "check" / f)
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "plan")
     main = _git(root, "rev-parse", "HEAD")
@@ -2032,8 +2032,7 @@ def test_the_red_list_merges_every_part_of_mains_newest_after_landing_run_found_
     so all the commit's parts are merged and named. A cold catalog refreshes `KNOWN_RED_WINDOWS_H` before the whole walk; a commit
     counts in a window only once it landed inside it, so a newer commit whose run started before the window still wins over an
     older commit's recent run."""
-    from research.store.local import LocalStore
-
+    LocalStore = OPS.LocalStore
     _git(tmp_path, "init", "-q", "-b", "main")
     tip_t = 1_800_000_000
     old = _landed(tmp_path, "old", tip_t - 30 * 3600)
@@ -2070,11 +2069,11 @@ def test_a_recorded_runs_custody_key_reaches_the_lookup_on_a_machine_with_no_sto
     import json
     import shutil
 
-    from research.store.local import LocalStore
-
+    LocalStore = OPS.LocalStore
     root = tmp_path / "tree"
     _per_test_workspace(root)
-    shutil.copy(HERE / "plan.py", root / "tools" / "verity" / "check" / "plan.py")
+    for f in ("plan.py", "ops.py"):
+        shutil.copy(HERE / f, root / "tools" / "verity" / "check" / f)
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "plan")
     main = _git(root, "rev-parse", "HEAD")

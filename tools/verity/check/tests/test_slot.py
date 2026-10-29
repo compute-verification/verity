@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("check_slot", ROOT / "tools" / "verity" / "check" / "slot.py")
 SLOT = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(SLOT)
+spec = importlib.util.spec_from_file_location("slot_test_ops", ROOT / "tools" / "verity" / "check" / "ops.py")
+OPS = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(OPS)
 NOW = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
 
 
@@ -665,8 +668,7 @@ def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypa
     spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    import research.store.local as local
-
+    local = OPS.store_local
     calls = []
 
     def run(cmd, **kw):
@@ -1026,8 +1028,7 @@ def test_a_slot_with_mem_holds_a_research_mem_reservation_that_research_mem_coun
     admitted work beside two full checks until the node ran out of memory. A slot with mem=GB writes `check-NAME.json` in
     research.mem's format, naming the check's own pid (CMD's, after the exec) and run; research.mem counts it as live, the GB in
     its 10^9-byte units less what the process tree holds, and not once the run has ended. A slot without mem= reserves nothing."""
-    from research import mem
-
+    mem = OPS.mem
     (tmp_path / "slots").write_text("a 0 mem=500\nb 1\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)

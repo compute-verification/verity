@@ -268,7 +268,7 @@ def _load(name: str, d: Path | None = None):
 
 DECLARATION = _load("declaration")
 #: the jobs `tools/verity/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS`)
-JOBS = DECLARATION.load()
+JOBS = DECLARATION.load(ROOT)
 
 
 #: the verdict packs (`verdicts.py`)
@@ -279,6 +279,8 @@ COMMON = _load("common")
 SPANS = _load("spans")
 #: the test runner (`suites.py`), for where the steps' Python imports this tree's packages from
 SUITES = _load("suites")
+#: what the check takes from research (`ops.py`)
+OPS = _load("ops")
 cache_dir = COMMON.cache_dir
 cores = COMMON.cores
 _sha256 = COMMON.sha256
@@ -419,8 +421,7 @@ def slots_payload() -> bytes:
 def reach(name: str, machines: dict | None = None) -> list[str]:
     """The argv that runs `python3 -` on machine ``name`` as `research run --on` reaches it: its registry entry, bound to project
     verity, and its ssh target (`research.remote`)."""
-    from research import remote
-
+    remote = OPS.remote
     t = remote.pod_target(remote.resolve_machine(name, "verity", machines))
     return [*remote.ssh_argv(t["host"], t["port"], user=t["user"]), "python3 -"]
 
@@ -949,8 +950,7 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     commit.  ValueError when the pool can't be taken so."""
     if pool is None:
         return []
-    from research.pods.nebius import slot_only
-
+    slot_only = OPS.slot_only
     if pool not in slot_only.POOLS:
         raise ValueError(f"{pool}: no such pool; the pools are {', '.join(sorted(slot_only.POOLS))}")
     if not on or on == "auto" or "," in on:
@@ -1045,9 +1045,7 @@ def record(argv: list[str]) -> int:
               f"other than its own, so `research merge` won't take this check)")
     changed = [p for p in subprocess.run(["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"], cwd=ROOT, capture_output=True,
                                          text=True, errors="surrogateescape", check=True).stdout.split("\0") if p]   # a rename names its source too
-    from research.merge import rule_touches
-
-    need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
+    need = [s for s, rule in tool.CHECK.merge_requires.items() if OPS.rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
     # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
@@ -1058,10 +1056,8 @@ def record(argv: list[str]) -> int:
            *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else [])]
     env = dict(os.environ)
     if "lean-agreement" in need:
-        from research.store.local import LocalStore
-
         pin = json.loads(UPSTREAM_PIN.read_text())
-        store = LocalStore()
+        store = OPS.LocalStore()
         files = {k: Path(store.fetch(pin[k]["art"])) for k in ("upstream", "inputs")}
         print(f"check: changes under {', '.join(r for r in tool.CHECK.merge_requires['lean-agreement'] if not r.startswith('!'))} "
               f"against {base}: sending the pinned "
@@ -1129,8 +1125,7 @@ def gather_verdicts(d: Path, store=None, limit: int = GATHER, given: Path | None
     flag turns reuse off but `--no-cache`.  A recorded run's pack that `combine` would refuse is passed over by name, so its
     verdicts are recomputed, never reused; a refused pack given is an error.  None when there is no pack at all (the check then
     runs on its own cache)."""
-    from research.store.local import LocalStore
-
+    LocalStore = OPS.LocalStore
     if given is not None and not given.is_file():
         raise SystemExit(f"check: --verdicts-in {given}: no such pack")
     if given is not None and (why := VERDICTS.refusal(given)):
@@ -1361,7 +1356,7 @@ def shard(spec: str, gated: bool = True) -> dict:
     check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no
     such plan or shard, or the tree can't be listed."""
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
-    plans = DECLARATION.plans()
+    plans = DECLARATION.plans(ROOT)
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
@@ -1403,10 +1398,8 @@ def combine(ids: list[str], run_dir: Path | None) -> int:
     """`--combine RUN...`: whether the shard Attempts ``ids`` are together a passing check of this clean commit, as `research
     merge` judges them (`research.merge.shard_set`); inside a recorded run (`--record --combine`), its result (`check/v1`): their
     steps, each part once, which the gate admits after reading the shards again itself."""
-    from research.merge import shard_set
-    from research.store.local import LocalStore
-
-    store = LocalStore()
+    shard_set = OPS.shard_set
+    store = OPS.LocalStore()
     if store.remote is not None:
         try:
             store.refresh(attempts_only=True)
@@ -1630,10 +1623,9 @@ def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, sto
     store keeps a train moving before the export.  Raises when the public export is needed and there is none."""
     from concurrent.futures import ThreadPoolExecutor
 
-    from research.store.fetchset import public_url
-    from research.store.fixtures import _is_tracked, entries, fixture_id, load_map, tracked
-    from research.store.local import LocalStore, manifest_key
-    from research.store.remote import HttpRemote
+    public_url, _is_tracked, entries, fixture_id, load_map, tracked = (OPS.public_url, OPS._is_tracked, OPS.entries, OPS.fixture_id,
+                                                                       OPS.load_map, OPS.tracked)
+    LocalStore, manifest_key, HttpRemote = OPS.LocalStore, OPS.manifest_key, OPS.HttpRemote
 
     git = tracked(root)
     arts = {a: path for a, path in entries(load_map(root)).items() if not _is_tracked(path, git)}
@@ -2227,10 +2219,8 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
 
 def main(argv: list[str]) -> int:
     if argv == ["--agreement-files"]:
-        from research.store.local import LocalStore
-
         pin = json.loads(UPSTREAM_PIN.read_text())
-        print(" ".join(f"--send {LocalStore().fetch(pin[k]['art'])}" for k in ("upstream", "inputs")))
+        print(" ".join(f"--send {OPS.LocalStore().fetch(pin[k]['art'])}" for k in ("upstream", "inputs")))
         return 0
     if argv == ["--lean-deps-files"]:
         urls = lean_deps_url_file(Path(tempfile.mkdtemp(prefix="check-lean-deps-")))

@@ -204,8 +204,7 @@ def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_ca
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
     """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots. The quick
     tier takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
-    from research import queue as Q
-
+    Q = CHECK.OPS.queue
     n1 = machine([slot("a", HOLDER), slot("c", HOLDER)], [waiter() for _ in range(10)], pools=lean())
     n2 = machine([slot("d"), slot("e", HOLDER)], pools=lean(free=0, waiting=2))
     got, why = Q.place("auto", ROOT, read=lambda names: {N1: n1, N2: n2})
@@ -218,8 +217,7 @@ def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_
 
 
 def test_read_slots_runs_the_payload_on_each_machine_and_names_why_one_can_t_be_read():
-    from research.remote import Refused
-
+    Refused = CHECK.OPS.Refused
     good = machine([slot("d")])
     answers = {"m-ok": subprocess.CompletedProcess([], 0, json.dumps(good).encode(), b""),
                "m-down": subprocess.CompletedProcess([], 255, b"", b"Warning: ...\nssh: connect to host 10.0.0.1 port 22: No route to host\n"),
@@ -250,9 +248,7 @@ def test_read_slots_runs_the_payload_on_each_machine_and_names_why_one_can_t_be_
 
 def test_a_machine_is_reached_as_research_run_reaches_it(tmp_path, monkeypatch):
     """The registry entry `research run --on` resolves (bound to project verity), over its ssh target, with no prompt."""
-    from research.pods import runpod
-    from research.remote import Refused
-
+    runpod, Refused = CHECK.OPS.runpod, CHECK.OPS.Refused
     monkeypatch.setattr(runpod, "SSH_KEY", tmp_path / "key")
     monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "known_hosts")
     monkeypatch.delenv("RUNPOD_SSH_KEY_B64", raising=False)

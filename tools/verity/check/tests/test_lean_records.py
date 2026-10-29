@@ -145,9 +145,7 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     """In a recorded run the reports go to the run's `lean-audit/` and the result is of kind `lean-fast/v1`, written into the
     reports and into `result.json`, the Attempt's result: check's lean-audit step fails on exactly this `audit.json`, and
     research merge refuses that result kind."""
-    from research import result
-    from research.merge import REFUSED_KINDS
-
+    result, REFUSED_KINDS = CHECK.OPS.result, CHECK.OPS.REFUSED_KINDS
     run, tree = tmp_path / "run", tmp_path / "cache" / "lean-records" / "tree"
     run.mkdir()
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))

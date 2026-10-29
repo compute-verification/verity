@@ -155,8 +155,7 @@ def test_a_deferred_landing_labels_the_attempt_drive_names_and_refuses_one_it_di
 
 
 def test_source_of_reads_the_run_record_when_the_store_has_no_attempt(monkeypatch):
-    import research.store.local as L
-
+    L = PT.OPS.store_local
     monkeypatch.setattr(L, "LocalStore", lambda: (_ for _ in ()).throw(OSError("no store")))
     monkeypatch.setattr(PT, "research", lambda *a, **_k: subprocess.CompletedProcess(
         a, 0, json.dumps({"runs": [{"id": a[1], "state": "running", "tree_sha": "a" * 40}]}), ""))
@@ -217,8 +216,7 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
     monkeypatch.setattr(PT, "git", lambda *a, **k: SHA if a[0] == "rev-parse" else "")
     monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, **_k: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
     monkeypatch.setattr(PT, "untouched", lambda tree, rev: untouched and rev == f"{SHA}^1")
-    import research.runs
-    monkeypatch.setattr(research.runs, "runs_root", lambda: runs)
+    monkeypatch.setattr(PT.OPS.runs, "runs_root", lambda: runs)
     return calls, sleeps
 
 

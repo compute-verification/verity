@@ -38,8 +38,12 @@ from pathlib import Path
 
 SCHEMA = "ci/v0"
 ROOT = Path(__file__).resolve().parents[3]
-PATH = ROOT / "tools" / "verity" / "check" / "ci.toml"
-REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
+#: where the check's configuration is, from the root of the repository it reads: ci.toml, and drive.toml and queue.toml beside it
+#: (research.queue's `CHECK_HOME` names the same directory for drive and the queue, `tests/test_ops.py` holds them equal)
+HOME = "tools/verity/check"
+CI = f"{HOME}/ci.toml"
+#: the handle registry, whose handles are the owners ci.toml may name
+REGISTRY = ".agents/skills/using-slack/registry.json"
 FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
           "after": str, "part": str, "gate": bool, "shards": int}
 REQUIRED = ("name", "owner", "group")
@@ -254,13 +258,15 @@ def resolve(plan: Plan, jobs: list[Job], parts_of: dict[str, list[str]]) -> list
     return out
 
 
-def plans(path: Path = PATH, registry: Path = REGISTRY) -> dict[int, Plan]:
-    return parse_plans(path.read_text(), load(path, registry), str(path.relative_to(ROOT) if path.is_relative_to(ROOT) else path))
+def plans(root: Path = ROOT) -> dict[int, Plan]:
+    """ci.toml's shard plans, as the repository at ``root`` has it."""
+    return parse_plans((root / CI).read_text(), load(root), CI)
 
 
-def handles(registry: Path = REGISTRY) -> set[str]:
-    return {h["handle"] for h in json.loads(registry.read_text())["handles"]}
+def handles(root: Path = ROOT) -> set[str]:
+    return {h["handle"] for h in json.loads((root / REGISTRY).read_text())["handles"]}
 
 
-def load(path: Path = PATH, registry: Path = REGISTRY) -> list[Job]:
-    return parse(path.read_text(), handles(registry), str(path.relative_to(ROOT) if path.is_relative_to(ROOT) else path))
+def load(root: Path = ROOT) -> list[Job]:
+    """ci.toml's jobs, as the repository at ``root`` has it."""
+    return parse((root / CI).read_text(), handles(root), CI)

@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("merge_map_under_test", ROOT / "tools" / "verity" / "check" / "merge_map.py")
 MM = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(MM)
+spec = importlib.util.spec_from_file_location("merge_map_ops", ROOT / "tools" / "verity" / "check" / "ops.py")
+OPS = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(OPS)
 
 A, B, C, D = (f"art:{c * 64}" for c in "abcd")
 
@@ -37,10 +40,8 @@ def test_a_refresh_on_each_side_merges_previous_by_path_and_two_ids_for_one_path
 
 
 def test_the_merged_map_is_written_as_refresh_fixtures_writes_it():
-    from research.store.fixtures import dump_map
-
     doc = {"previous": {C: [A]}, C: "f/ä.json", B: "f/b.json"}
-    assert MM.dump(doc) == dump_map(doc)
+    assert MM.dump(doc) == OPS.dump_map(doc)
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:

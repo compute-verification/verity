@@ -10,14 +10,12 @@ import sys
 from pathlib import Path
 
 import pytest
-from research import auto
-from research.merge import post_landing, unlike
-from research.pods.nebius import slot_only
 
 ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("repo_check_record_pool", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
+auto, post_landing, unlike, slot_only = CHECK.OPS.auto, CHECK.OPS.post_landing, CHECK.OPS.unlike, CHECK.OPS.slot_only
 TOOL = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", "tools/verity/check/check.py"]
 CPU1 = "vy-nebius-cpu-1"
 

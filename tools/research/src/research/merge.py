@@ -198,18 +198,18 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     after-landing run, whose red reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
     import tomllib
 
+    from .queue import CI_JOBS
     from .store import tools_registry
 
-    path = tools_registry.resolve("tools/verity/check/ci.toml",
-                                  lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
-    r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
+    path = tools_registry.resolve(CI_JOBS, lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
+    r = _git(repo, "show", f"{commit}:{path or CI_JOBS}", check=False)
     try:
         jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", []) if t.get("gate", True) is not False] \
             if r.returncode == 0 else None
     except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
         jobs = None
     if not jobs or not all(isinstance(j, str) for j in jobs):
-        return f"{commit[:12]}'s tools/verity/check/ci.toml can't be read for the jobs a check runs"
+        return f"{commit[:12]}'s {CI_JOBS} can't be read for the jobs a check runs"
     return jobs
 
 

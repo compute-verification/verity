@@ -2,6 +2,7 @@
 checkout, and `--explain` names a miss's files there from git's trees.  The machine is a local `sh -c`, as in `research`'s tests."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -9,9 +10,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from research import remote
-
 HERE = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location("shipped_checkout_ops", HERE / "ops.py")
+OPS = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(OPS)
+remote = OPS.remote
 LOCAL = ["sh", "-c"]
 
 

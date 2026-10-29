@@ -11,11 +11,18 @@ or its Lean mirror (`VStar.In`, `core_vstar`) needs `lean-suites` passed, whose 
 `research run --on` refuses a machine that fails `preflight.py` (the pod setup, the Lean dependencies, a store read, AVX-512
 when needed, free disk) before the run is claimed.  Once `research merge --push`
 has pushed a landing, it starts `post_train.py` on it, detached (`after_land`): the vLLM reference regression's manifest rebuilds,
-which check leaves out, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
+which check leaves out, and their label on the attempt.  Nothing here imports anything but `research.store.tool`, through
+`ops.py` beside it.
 """
 from __future__ import annotations
 
-from research.store.tool import Tool
+import importlib.util
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location("check_tool_ops", Path(__file__).with_name("ops.py"))
+_ops = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_ops)
+Tool = _ops.Tool
 
 CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python",
                                                      "tools/verity/check/check.py"],

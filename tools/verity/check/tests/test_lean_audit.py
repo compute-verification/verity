@@ -16,8 +16,6 @@ import tarfile
 import types
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("check_lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 LA = importlib.util.module_from_spec(spec)
@@ -882,7 +880,7 @@ def test_setup_takes_a_cold_packages_pinned_bundle_from_the_store_and_replaces_n
     pin = LA.bundle(tmp_path / "made", tmp_path / f"{k}.tar.gz")
     pins = lambda p: (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": p}))
     pins({k: {"package": "pkg/a", **pin, "run": "r1"}})
-    monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote",
+    monkeypatch.setattr(CHECK.OPS.store_remote, "load_remote",
                         lambda: types.SimpleNamespace(presign=lambda key, ttl: (tmp_path / f"{k}.tar.gz").as_uri()))
     logs, deps = [], root / "pkg/a/.lake/packages"
     assert LA.restore_into("pkg/a", logs.append) == 0
@@ -942,7 +940,7 @@ def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch
         "0" * 64: {"package": "pkg/a", "sha256": "cd" * 32, "bytes": 5, "run": "r0"}}}))
     signed = []
     remote = types.SimpleNamespace(presign=lambda key, ttl: signed.append((key, ttl)) or f"https://r2/{key}?sig")
-    monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote", lambda: remote)
+    monkeypatch.setattr(CHECK.OPS.store_remote, "load_remote", lambda: remote)
     monkeypatch.setattr(LA, "shared_bundles", lambda: ["ef" * 32])
     p = LA.url_file(tmp_path, ttl_s=60)
     assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig",

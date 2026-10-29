@@ -157,10 +157,7 @@ def store(targets: list[dict], urls: dict[str, str], custody: Path | None) -> tu
         return [], ["store: this tree pins nothing to read, so nothing shows the store answers here"]
     facts, fails = [], []
     if custody is not None and (custody / "cred.json").is_file():
-        from research.store.custody import custody_env
-        from research.store.local import object_key
-        from research.store.remote import load_remote
-
+        custody_env, object_key, load_remote = CHECK.OPS.custody_env, CHECK.OPS.object_key, CHECK.OPS.load_remote
         try:
             with custody_env(custody):
                 remote = load_remote()

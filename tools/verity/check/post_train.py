@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import importlib.util
 import json
 import re
 import shlex
@@ -45,6 +46,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+_spec = importlib.util.spec_from_file_location("post_train_ops", Path(__file__).with_name("ops.py"))
+#: what the rebuilds take from research (`ops.py`)
+OPS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(OPS)
 #: node 2: its two 560 GB check slots hold all 120 of its cores, so the rebuilds run unpinned at nice 19 beside them, in the
 #: ~480 GB of its 1600 GB slice the slots leave
 MACHINE = "vy-nebius-2"
@@ -132,9 +137,7 @@ def source_of(rid: str) -> str | None:
     """The commit run ``rid`` checked: its attempt's clean source in the store, else its run record's (`research status RID
     --json`'s `tree_sha`), for a check still running or one whose attempt hasn't reached the store."""
     try:
-        from research.store.local import LocalStore
-
-        store = LocalStore()
+        store = OPS.LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
         rows = store.index.sql("SELECT source_commit FROM attempts WHERE id = ? AND source_dirty = 0", (rid,))
@@ -152,9 +155,7 @@ def passed(sha: str) -> str | None:
     """The newest `check` attempt that passed on ``sha``'s clean tree, as the merge gate reads the store; None when the store
     can't be read."""
     try:
-        from research.store.local import LocalStore
-
-        store = LocalStore()
+        store = OPS.LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
         rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND source_commit = ? AND source_dirty = 0 "
@@ -331,7 +332,7 @@ def _land(a: argparse.Namespace, sha: str, attempt: str | None) -> int:
             print(f"post-train: {attempt} ({sha[:12]}): note={c['value']} (ref {c['ref']}), carried from {c['from']}: the change from "
                   f"{sha[:12]}^1 touches none of {SUITE}'s inputs")
             return 0 if lab.returncode == 0 and c["value"] == PASS else 1
-        from research.runs import new_run_id, runs_root
+        new_run_id, runs_root = OPS.new_run_id, OPS.runs_root
         rid = a.run or new_run_id()
         if not a.run:
             print(f"post-train: {sha[:12]} (check {attempt}) on {a.on}, cores {a.cores or 'any'}: run {rid}", flush=True)
