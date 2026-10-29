@@ -3,7 +3,7 @@ import Proofs.Flock.Claims.RootFindPoly
 /-!
 # Berlekamp's trace root finder: the algorithm
 
-The definitions `RootFind` states its correctness and step count for (`Proofs.Flock.Claims.RootFind` has the overview).
+The definitions whose correctness and step count `Proofs.Flock.Claims.RootFindCorrect` states.
 -/
 
 namespace Claims.RootFind

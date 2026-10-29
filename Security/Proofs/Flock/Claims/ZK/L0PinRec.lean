@@ -173,14 +173,14 @@ theorem ptsAt_claims_x {m kLog kL : ℕ} {coin : ℕ → ℕ → F128} {L : ℕ}
     (Replay.abc_x (h.1.trans h'.1.symm) (h.2.1.trans h'.2.1.symm) (h.2.2.trans h'.2.2.symm)).2 he
 
 /-- **The switched claims read each claim's seven `r''` and the claims' `γ`** only. -/
-theorem sws_coins_congr (claims : Array _root_.Flock.Claim) {cs cs' : Replay.Rs.Coins}
+theorem sws_coins_congr (claims : Array _root_.Flock.Claim) {cs cs' : Replay.Rs.Challenges}
     (hr : ∀ k < claims.size, ∀ i < 7, cs.cr k i = cs'.cr k i) (hg : ∀ k < claims.size, cs.cg k = cs'.cg k) :
     Replay.Rs.sws claims cs = Replay.Rs.sws claims cs' := by
   have hpc : Replay.Rs.perClaim claims cs = Replay.Rs.perClaim claims cs' := by
     unfold Replay.Rs.perClaim
     refine pushes_congr fun k hk => ?_
     have e : cs.rpp k = cs'.rpp k := by
-      unfold Replay.Rs.Coins.rpp
+      unfold Replay.Rs.Challenges.rpp
       apply Array.ext (by simp)
       intro i hi _
       simp only [Array.size_map, Array.size_range] at hi

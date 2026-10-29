@@ -3,7 +3,6 @@ import Proofs.Flock.Soundness.Discharge.Composed.Base
 import Proofs.Flock.Soundness.Discharge.Composed.Coined
 import Proofs.Flock.Soundness.Discharge.Composed.Headline
 import Proofs.Flock.Soundness.Discharge.Composed.Coins
-import Proofs.Flock.Soundness.Discharge.Composed.Geometry
 import Proofs.Flock.Soundness.Discharge.Composed.Pads
 import Proofs.Flock.Soundness.Discharge.Composed.Inner
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
@@ -16,7 +15,6 @@ import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.Composed.RegWords
-import Proofs.Flock.Soundness.Discharge.Composed.Refine
 import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
 import Proofs.Flock.Soundness.Discharge.Composed.Custody
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
