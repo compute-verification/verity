@@ -113,7 +113,11 @@ def llama_gap() -> dict:
     """`gapShare` of Llama-3.2-1B's own calls (K = 2,048 on three of them, below `GapAt`'s range) at the points' rows
     and at decode, against the points' claims."""
     out = {}
-    for name, (t, m, lim32, lim320) in [*cp.GAP_POINTS.items(), ("decode", (1, 1, Q(232, 100000), Q(252, 100000)))]:
+    lim320s = cp.HEAD.get("lim320", (None,) * 3)
+    decode = {cap: share for cap, share, _ in cp.HEAD["decode"]}
+    points = [(name, (t, m, lim32, lim320s[p] or lim320)) for p, (name, (t, m, lim32, lim320))
+              in enumerate(cp.GAP_POINTS.items())]
+    for name, (t, m, lim32, lim320) in [*points, ("decode", (1, 1, decode[32], decode[320]))]:
         for cap, lim in ((32, lim32), (320, lim320)):
             gs = {f"{n}x{k}": cp.gap(cp.layout(t, m, n, k, cap)) for n, k in LLAMA}
             fwd = sum(g["gap"] for g in gs.values()) / sum(g["stock"] for g in gs.values())
@@ -127,9 +131,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--k-max", type=int, default=200000)
     ap.add_argument("--m-max", type=int, default=8192)
+    ap.add_argument("--head", choices=sorted(h for h in cp.HEADS if cp.HEADS[h]["network"] == "bits"),
+                    default="ebe1fcd968")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
-    cp.use_head("ebe1fcd968")
+    cp.use_head(args.head)
     rep = {"port": cs.check_port()}
     assert rep["port"]["mismatches"] == 0
     rep["lead_cells_rot"] = cells_rot(args.k_max, 7)
