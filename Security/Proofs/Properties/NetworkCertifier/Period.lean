@@ -81,7 +81,7 @@ theorem opening_ok {p : Params} {l : ClockLink} {w : Nat} {reg : Json} {certs : 
         .ok (some row) ∧
       NetworkCheck.LinkWindow.opened (linkCase p l w (rootOf reg) certs e.base.provedUnits (some file) s) (some row) =
         some 3 := by
-  simp only [opening, refuse, bind, Except.bind, pure, Except.pure] at h
+  simp only [opening, refuse, pure, Except.pure] at h
   split at h
   case h_2 => cases h
   rename_i file hfile
@@ -118,7 +118,7 @@ theorem windowCheck_ok {p : Params} {l : ClockLink} {earlier : Array ByteArray} 
             rename_i dom hdom
             obtain ⟨ps, hps⟩ : ∃ ps, windowParams l dom log = .ok ps := by
               rcases hps : windowParams l dom log with err | ps
-              · simp only [hps] at h <;> cases h
+              · simp only [hps] at h; cases h
               · exact ⟨ps, rfl⟩
             simp only [hps] at h
             split at h
@@ -128,7 +128,7 @@ theorem windowCheck_ok {p : Params} {l : ClockLink} {earlier : Array ByteArray} 
                 ∃ pub prof, SampledProofs.OneStageZk.checkBlobs ps ⟨reg, d⟩ ev bs = .accept pub prof := by
               rcases hv : SampledProofs.OneStageZk.checkBlobs ps ⟨reg, d⟩ ev bs with ⟨pub, prof⟩ | r | r
               · exact ⟨pub, prof, rfl⟩
-              all_goals (simp only [hv] at h <;> cases h)
+              all_goals (simp only [hv] at h; cases h)
             simp only [hv] at h
             split at h
             · rename_i c6
@@ -429,7 +429,7 @@ theorem opening_of {p : Params} {l : ClockLink} {w : Nat} {reg : Json} {certs : 
     (hop : NetworkCheck.LinkWindow.opened (linkCase p l w (rootOf reg) certs e.base.provedUnits (some file) s)
       (some row) = some 3) :
     opening p l w reg certs s e bs = .ok () := by
-  simp [opening, hfile, hrow, hop, refuse, bind, Except.bind, pure, Except.pure]
+  simp [opening, hfile, hrow, hop, pure, Except.pure]
 
 theorem windowCheck_of_accepted {p : Params} {l : ClockLink} {earlier : Array ByteArray} {log : Array Json} {w : Nat}
     {reg : Json} {x : Window} {bs : Core.Blobs} (ha : PeriodWindowAccepted p l earlier log w reg x bs) :
@@ -445,13 +445,11 @@ theorem windowCheck_of_accepted {p : Params} {l : ClockLink} {earlier : Array By
   cases hx₃
   have hop' := opening_of hfile hrow hop
   rw [hc] at hop'
-  have hl' := hl
   have hdr' := hdr
-  try simp only [beq_iff_eq] at hl'
   try simp only [beq_iff_eq] at hdr'
   simp only [windowCheck, hx, hp', hw, hc, beq_self_eq_true, Bool.and_true, Bool.true_and, Array.size,
     List.length_cons, List.length_nil]
-  simp [Array.zip, Array.all, heg, hig, hcl, hclear', hearlier', hdom, hps, hd, hv, hl, hdr, hl', hdr', hop', bind,
+  simp [Array.zip, Array.all, heg, hig, hcl, hclear', hearlier', hdom, hps, hd, hv, hl, hdr', hop', bind,
     Except.bind, pure, Except.pure, Id.run]
 
 theorem check_one {p : Params} {l : ClockLink} {reg : Json} {x : Window} {r : ByteArray} {bs : Core.Blobs}
