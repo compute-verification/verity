@@ -1,4 +1,4 @@
-"""The SASS opcodes a binary holds, counted by architecture: the census RT-ISA diffs against A7's menu.
+"""The SASS opcodes a binary holds, counted by architecture: the census diff_menu.py diffs against A7's menu.
 
 `count` reads `cuobjdump -sass` (or `nvdisasm`) text on stdin and writes one JSON object: for each architecture a
 section names (`arch = sm_90a`, `code for sm_100a`), its functions, its instructions, and each dotted opcode's count

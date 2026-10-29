@@ -1,6 +1,6 @@
 """run.py prepare|summarize|cost: one served H1 leaf (32 × 32, at a small K: 448 by default; `h1zy.combine` takes K >= 384,
 the least whose partial row compresses before its last SHA-512 block, which C-Flock's circuit needs of a combine row)
-proved as its 32 lanes and its combine (PRF-134, option A:
+proved as its 32 lanes and its combine (option A:
 `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
 statement reading the leaf's lane partials, a value committed after the draw (`one_stage.produced`), and the negatives.
 
@@ -10,8 +10,9 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
   ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
   `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
-  is what the prover's ``flock-tmpl-unit`` places). The Lean verifier refuses a templated statement once every other
-  check has passed (`TMPL_WHY`), until its proof lands (PRF-133). Such a check is labelled `TEMPLATED`, never ACCEPT, and
+  is what the prover's ``flock-tmpl-unit`` places). The soundness proof covers a templated statement only without the
+  verifier's registered reads, so the Lean verifier refuses these, once every other check has passed (`TMPL_WHY`).
+  Such a check is labelled `TEMPLATED`, never ACCEPT, and
   counts as passing in place of an expected ACCEPT (summary's ``templated``; ``lean_accepts`` counts the real ones).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
@@ -43,7 +44,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   ``other-leaf-in-tree-lane5`` and ``other-leaf-in-tree``: the other leaf's partial committed at row 5 of this leaf's tree,
   which opens, and lane 5's and the combine's ok are 0 (REJECT). ``lane5-partial-off-tree``: on that tree, lane 5 given
   its honest partial, so its ok is 1, opened in the honest leaf's tree rather than the registered one: the partials are
-  registered reads of every statement, never free rows (RT4-LOGIC-29c), so it opens at no position (REJECT).
+  registered reads of every statement, never free rows, so it opens at no position (REJECT).
   ``receipt-mismatch``: a registered receipt one bit off
   the lanes' XOR, the partials recommitted under its registration: the combine's ok is 0 (REJECT). ``lane3-index4``: lane
   3 whose ``pub`` row holds index 4, which opens no root but lane 4's (REJECT). ``ok-from-public``: the combine whose
@@ -137,11 +138,13 @@ HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
 #: the templated statement (`circuit.TMPL_STATEMENT`), and the Lean verifier's verdict on one whose every other check
-#: passed: it refuses the form last, until the templated statement's proof lands (`Tags.templated`, `ProvedScope.refusal`)
+#: passed: the soundness proof covers a templated statement only without the verifier's registered reads
+#: (`ProvedScope.scopeOkT`), so it refuses these, which read ``--registered``, for their form (`ProvedScope.scopeWhyT`)
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
-TMPL_WHY = f"refused: {TMPL_STATEMENT}, a templated statement: a statement form the soundness proof does not cover"
+TMPL_WHY = ("refused: a templated statement with the verifier's registered reads (--registered): a statement form the "
+            "soundness proof does not cover")
 #: the verdict word of a templated check refused only for its form (`TMPL_WHY`): never ACCEPT
-TEMPLATED = "templated: Lean refuses this form until PRF-133"
+TEMPLATED = "templated: Lean refuses this form with --registered"
 
 
 def tile(k: int):

@@ -109,6 +109,7 @@ theorem dirsCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
   have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
   have hc0 := partCircuit_staged hS hx ht' hpi hr hpc h0
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨u, -, hupv, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0).1
   have hpar := FlockVBridge.params_of_check P.recNet hn
@@ -500,6 +501,7 @@ theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   have hp : p = { i0.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx htyp hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0p).1
   have hpar := FlockVBridge.params_of_check P.recNet hn
   rw [e0] at hpar
@@ -732,6 +734,7 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
   have hpc : r.w.parts[s]?.bind partCircuit = some cc := by rw [hpt, Option.bind_some]; exact hcc
   have hc0 := partCircuit_staged hS hxp htyp hpi hr hpc h0p
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hxp htyp hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hn : p.sts[0].c.unit.name = Flock.RecOpen.unitName LANES HH := (htab 0 h0p).1
   have hpar := FlockVBridge.params_of_check P.recNet hn
   have hrk := (FlockC3.RegLevels.check_rows P.recNet (.inl hpar)).1
