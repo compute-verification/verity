@@ -165,7 +165,7 @@ def test_the_lifted_workload_is_gp01s_compose_over_lifted_components_with_a_fixe
     assert lifted_compose.lifted_workload(_requests(component, (0, 2)), EOS, lag=0, boundary_prefix=BOUNDARY).digest != d0  # arrivals are declared
     with pytest.raises(ValueError, match="never from a served length"):
         lifted_compose.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP, 0, component, T=3)], EOS, lag=0, boundary_prefix=BOUNDARY)
-    with pytest.raises(ValueError, match="F-pad-15"):  # a component of a smaller cap under a larger declaration
+    with pytest.raises(ValueError, match="never lift the served length"):  # a component of a smaller cap under a larger declaration
         lifted_compose.lifted_workload([W.WorkloadRequest("A", 0, LP, CAP + 1, 0, component)], EOS, lag=0, boundary_prefix=BOUNDARY)
     with pytest.raises(TypeError):
         lifted_compose.lifted_workload(_requests(component), EOS, boundary_prefix=BOUNDARY)  # type: ignore[call-arg]  # the lag is declared
@@ -453,7 +453,7 @@ def test_f_pad_19_the_hook_takes_one_cap_per_request_and_refuses_a_served_length
         wl_u = W.WorkloadProgram(reqs, lag=lag)
         # ONE cap for both is refused by name -- 9 would read B's out[4..8] (an UNNAMED IndexError), 4 would truncate A's schedule
         for one_cap in (CAP, CAP_B):
-            with pytest.raises(ValueError, match="F-pad-19"):
+            with pytest.raises(ValueError, match="never a served length"):
                 Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=one_cap))
         with pytest.raises(ValueError, match="one cap per request"):
             Program(bind(LWorkloadS, WL=wl.fn, EOS=EOS, LAG=lag, SMS=SMS, ARR=(0, 0), CAP=(CAP,)))
