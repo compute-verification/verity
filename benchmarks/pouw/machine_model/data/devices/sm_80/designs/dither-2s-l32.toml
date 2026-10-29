@@ -42,11 +42,11 @@ p = 0.75
 checks = 48000
 source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IDP4A = 8, LDS128 = 0.5 }
 source = "dp4a at 8 IDP4A a word at L = 32 (IDP4A on the IMAD pipe's row I on sm_80, with FFMA and IMAD), its loads 2(a + b)/(ab) LDS.128 a word at a = b = 8, scaled by L/32"
 
 [routes]
 lanes = true
-uniform = false     # no uniform-datapath line on sm_80: the uniform datapath is unmeasured (EPS1 AMPERE)
+uniform = false     # no uniform-datapath line on sm_80: the uniform datapath is unmeasured
