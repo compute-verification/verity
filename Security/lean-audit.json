@@ -12944,7 +12944,7 @@
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
    "Pous.SecurityProofs.ObligationWide320": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) at every block count from 2^19 to 2^27, 320 reads with the state at most S0 at each, by 2^-20, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
-   "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
+   "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20, and the registered point's 2^19 blocks are in its range; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
    "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Flock.SecurityProofs.IntegrityHorizonCarried": "frozen (hash,world-unlisted,scope): It is IntegrityHorizonBlocks with the state a block carries across a wipe read at its carried leaves, so it takes what IntegrityHorizonBlocks takes (TableCRZ, LinkCRZC, A3, RecordCustodyZKJ, hscope) and, at each carried leaf, ecr/sha-512 (SHA512CRExpected) at the leaf's finder, whose cost the bound states."
@@ -15443,6 +15443,12 @@
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": {
     "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pous.SecurityProofs.ObligationWide320": {
+    "instLENat.le (instHPow.hPow 2 19) N": "a bound that is no plain range, inline on next when the rule came (#5622, above #6037 there, under this PR): name it or state it as a guarantee's conclusion",
+    "instLENat.le N (instHPow.hPow 2 27)": "a bound that is no plain range, inline on next when the rule came (#5622, above #6037 there, under this PR): name it or state it as a guarantee's conclusion",
+    "Function.Injective tag": "an injectivity, inline on next when the rule came (#5622, above #6037 there, under this PR): name it or state it as a guarantee's conclusion",
+    "∀ (j : Nat), instLTNat.lt j 320 → instLENat.le (Sz j) ((Pous.p2ring N 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065) 16432).stateBound Pous.Params.ρ)": "a bound that is no plain range, inline on next when the rule came (#5622, above #6037 there, under this PR): name it or state it as a guarantee's conclusion"
    }
   }
  },

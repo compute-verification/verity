@@ -189,10 +189,13 @@ theorem ObligationWide320 : Pous.Guarantees.ObligationWide320 := by
   rw [lowBoundaries_of_le hSz] at hb
   exact hb.trans hnum
 
-/-- **`ObligationWide320`'s premise holds at P2's floor**: `p = 0.043` and `ε₀ = 2^-137` meet `RoundsBound` at 320
-rounds and `2^-20` (`PousP2Rounds.floor_043_eps_320`). -/
+/-- **`ObligationWide320`'s premises hold at P2's floor and the registered point**: `p = 0.043` and `ε₀ = 2^-137` meet
+`RoundsBound` at 320 rounds and `2^-20` (`PousP2Rounds.floor_043_eps_320`), and the registered point's `2^19` blocks
+are in its range. -/
 theorem ObligationWide320_honest :
-    Pous.Guarantees.RoundsBound (43 / 1000) ((2⁻¹ : ℝ≥0∞) ^ 137) 320 ((2⁻¹ : ℝ≥0∞) ^ 20) := by
+    Pous.Guarantees.RoundsBound (43 / 1000) ((2⁻¹ : ℝ≥0∞) ^ 137) 320 ((2⁻¹ : ℝ≥0∞) ^ 20) ∧
+      (2 ^ 19 : ℕ) ≤ 2 ^ 19 ∧ (2 ^ 19 : ℕ) ≤ 2 ^ 27 := by
+  refine ⟨?_, le_rfl, by norm_num⟩
   unfold Pous.Guarantees.RoundsBound
   rw [Nat.cast_ofNat]
   exact PousP2Rounds.floor_043_eps_320
