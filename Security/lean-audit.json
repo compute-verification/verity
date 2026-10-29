@@ -8969,17 +8969,17 @@
    "assumptions": [],
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b"
   },
+  "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe"],
+   "assumptions": [],
+   "type_hash": "6d31f6c0ea7cbc7af3d253da83db6fb2a9feda44b50fd9a3644da87ec193e733"
+  },
   "NetTiming.SecurityProofs.PooledLeakAccepted": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted"],
    "assumptions": [],
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455"
-  },
-  "NetTiming.SecurityProofs.PooledWrongUnitsLe": {
-   "owner": "@network-accounting",
-   "signature": ["NetTiming.SecurityProofs.PooledWrongUnitsLe : NetTiming.Guarantees.PooledWrongUnitsLe"],
-   "assumptions": [],
-   "type_hash": "4b11601f70dff05cee40e380db457b79380461d4bb512fd7a54931a34a305d38"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -17699,8 +17699,8 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.SecurityProofs.PooledIncorrectBlocksLe",
     "NetTiming.SecurityProofs.PooledLeakAccepted",
-    "NetTiming.SecurityProofs.PooledWrongUnitsLe",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
@@ -24152,11 +24152,11 @@
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
-   "digest": "0c710e269de692c12a11c02f884cfe19c18e788a9a0c9f3cb17cec263f715795",
+   "digest": "54fea0a567a4758143eeefd5ddfa44f6ff75b5659e11d867439071d9d3d95129",
    "definitions": {
-    "NetTiming.Guarantees.PooledWrongUnitsLe": "2479825a2b6337a11abc5de68cbb76376f2ae0d5995c3a3ec874f4e84d1c1f17"
+    "NetTiming.Guarantees.PooledIncorrectBlocksLe": "7e28ebfc0eae39bdaf8800e10ac51aa019ccc54478d2d83f551caafab61838b1"
    },
-   "guarantees": ["NetTiming.SecurityProofs.PooledWrongUnitsLe"]
+   "guarantees": ["NetTiming.SecurityProofs.PooledIncorrectBlocksLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.PooledLeak": {
    "digest": "fc63151d201db3d516d46d91b5c444b53ec5b9f0c0991761ea4b99348011daf7",
