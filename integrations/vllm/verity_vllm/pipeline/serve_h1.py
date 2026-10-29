@@ -62,8 +62,8 @@ from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
 from verity_vllm.pipeline.serve_h1_draw import drawn_reads, drawn_units, units
+from verity_vllm.config import option
 from verity_vllm.protocols.pouw.h1 import SCHEME
 
 ENTRY = f"pouw:{SCHEME}"
@@ -81,6 +81,8 @@ POLLS = 300
 MARGIN = timedelta(minutes=5)
 #: the subprotocol H1's draw of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
+#: an s_a's bytes a row (f32)
+S_A_BYTES = 4
 
 
 def _cuda_device() -> int | None:
@@ -488,7 +490,7 @@ class H1Windows:
                 raise ValueError(f"its close failed ({error})")
             k, stream, source = self.draw_of(run, held)
             units = drawn_units(run.commits, self.layout(), k, stream)
-            reads = drawn_reads(run.served.tap, self.layout(), units)
+            reads = drawn_reads(run.served.tap, self.layout(), units, S_A_BYTES)
             self.draws.put(window, DRAWER, reads)
         except (ValueError, KeyError, IndexError, TypeError, RuntimeError, OSError) as e:   # a seal never waits on a draw not coming
             why = f"{ENTRY}: window {window}'s draw: {type(e).__name__}: {e}"[:500]

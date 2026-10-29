@@ -7,9 +7,6 @@ import bisect
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-#: an s_a's bytes a row (f32)
-S_A_BYTES = 4
-
 
 def units(shapes: Any, rows: int, steps: int) -> int:
     """The tile units of the window Program `served.declared` builds over ``shapes`` (each ``(n, K)``) at T ``rows`` and S
@@ -41,13 +38,14 @@ def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, s
     return list(got)
 
 
-def drawn_reads(tap: Any, layout: Mapping[str, Any], drawn: Sequence[int]) -> list[tuple[int, str, int, int]]:
+def drawn_reads(tap: Any, layout: Mapping[str, Any], drawn: Sequence[int],
+                s_a_bytes: int) -> list[tuple[int, str, int, int]]:
     """What the proof blocks ``drawn`` of the window ``layout`` open of the server's Commit, as the draw-gated release takes
     them (`serve_release.Read`: engine step, member, byte lo, hi): unit u, tile t of call c, opens A rows R·I .. R·I + R - 1
     of its call, I = t // (n/C) its row block (`h1window.table_reads`), which are the Commit's x_q (K bytes a row) and s_a
-    rows of the call's site at the engine step its step maps to, as H1's tap ``tap`` registered them (``where``), under
-    the member names the Commit acquired them by (``acquired``), cut to the rows it acquired; a call of an empty step
-    opens none. KeyError on a drawn call the Commit registered no rows of."""
+    (``s_a_bytes`` a row) rows of the call's site at the engine step its step maps to, as H1's tap ``tap`` registered them
+    (``where``), under the member names the Commit acquired them by (``acquired``), cut to the rows it acquired; a call of
+    an empty step opens none. KeyError on a drawn call the Commit registered no rows of."""
     (r, cw), m = layout["tile"], int(layout["m"])
     ks = {name: (int(k), int(n)) for name, k, n in layout["linears"]}
     firsts, at = [0], 0
@@ -73,5 +71,5 @@ def drawn_reads(tap: Any, layout: Mapping[str, Any], drawn: Sequence[int]) -> li
         if j is None or hi <= lo:
             continue
         x_q, s_a = (tap.acquired[(int(j), site, port)] for port in ("0", "1"))
-        out |= {(int(j), x_q, lo * k, hi * k), (int(j), s_a, lo * S_A_BYTES, hi * S_A_BYTES)}
+        out |= {(int(j), x_q, lo * k, hi * k), (int(j), s_a, lo * s_a_bytes, hi * s_a_bytes)}
     return sorted(out)
