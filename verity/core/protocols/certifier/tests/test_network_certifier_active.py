@@ -1244,7 +1244,7 @@ def test_a_requests_frames_and_signed_records_are_its_token_counts_whatever_its_
 
 
 def registration(window: int, provenance: dict | None = None) -> Registration:
-    """A stand-in for the proof service's registration of PoUW window `window` (`Stream.register`'s): a record whose
+    """A stand-in for the proof system's registration of PoUW window `window` (`Stream.register`'s): a record whose
     provenance names the window, with its receipt and digest."""
     record = {"window": {"kind": "served", "window": window} if provenance is None else provenance}
     return Registration(record, R.receipt(record, "test", received=str(window)), R.digest(record), window)
@@ -1360,7 +1360,7 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
 
 
 def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
-    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof service returned for p.
+    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof system returned for p.
     It refuses none, another window's, a receipt or digest that isn't the record's, a receipt of another format, a
     provenance the reader (`registered`) doesn't read as p, and anything that isn't a `Registration`; a window whose
     last ingress record is unpublished; and one whose salt a proxy back from maintenance never drew. A reader the

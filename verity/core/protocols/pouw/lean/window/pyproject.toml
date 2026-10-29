@@ -17,11 +17,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # Test-only: the harness (`verity_difftest`, which the workspace installs, and the Lean `lake` builds through the path require);
 # the Python held to the Lean: `window.py` (with the switch, `verifier.py`, and its pinned vectors), `h1zy.py`
 # (`test_lanes.py`), and h1_lanes' known rows (`test_known_rows.py`: `benchmarks/pouw/h1_lanes/run.py` with
-# `benchmarks/pouw/h1_prove/h1unit.py`, which import most of PoUW's protocol and the proof service's one-stage modules,
+# `benchmarks/pouw/h1_prove/h1unit.py`, which import most of PoUW's protocol and the proof system's one-stage modules,
 # so both trees are named whole), with the core they import (the integrity profile, `verity.ml`'s circuits, commitments,
 # crypto, randomness and kernels' tensor-core reference, and `verity.errors`), and C-Flock's Python (`verity_flock`),
 # which lowers the statements whose input wires it holds `PouwWindow.Lanes` to; what `lake` reads through the path
-# requires: PoUW's commitments (`pouw_commit`, in PoUW's tree), the proof service's Lean (`core_sampled_proofs`) with the
+# requires: PoUW's commitments (`pouw_commit`, in PoUW's tree), the proof system's Lean (`core_sampled_proofs`) with the
 # core protocol interface and the LMS verifier, core's identity and randomness, and C-Flock's verifier with its
 # configuration.
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
@@ -39,7 +39,7 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/core/primitives/lms/lean/Lms",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
           "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock",
-          # `test_lanes.py` holds `leaf_lanes.py`'s reads and known rows to `PouwWindow.Lanes`, with the proof service's
+          # `test_lanes.py` holds `leaf_lanes.py`'s reads and known rows to `PouwWindow.Lanes`, with the proof system's
           # one-stage modules it imports
           "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",
