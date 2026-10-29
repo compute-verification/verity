@@ -223,21 +223,23 @@ def test_cover_says_whether_a_part_run_reads_the_forged_coin(capsys, kind, parts
 
 
 # `flock-verify rec-compose`'s rule (`RecCompose.check`, whose #guards are `Flock/Test/RecCompose.lean`), for the wiring:
-# one log per V* statement, every VERDICT accepted at the SHA-512 of the one rows file and of the one inner shape file.
+# one log per V* statement, every VERDICT accepted at the SHA-512 of the one rows file and of the one inner shape file, and
+# at the inner session record's and transcript's the first part names.
 COMPOSER = r'''
 import hashlib, json, sys
 a = sys.argv[1:]
 assert a[0] == "rec-compose", a
 flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows")}
 logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.values()]
-digest = hashlib.sha512(open(flags["--rec-rows"], "rb").read()).hexdigest()
-inner = hashlib.sha512(open(flags["--rec-inner"], "rb").read()).hexdigest()
+pins = {"rec_rows_sha512": hashlib.sha512(open(flags["--rec-rows"], "rb").read()).hexdigest(),
+        "rec_inner_sha512": hashlib.sha512(open(flags["--rec-inner"], "rb").read()).hexdigest()}
 n = json.load(open(flags["--rec-inner"]))["n"]
 parts, ok = [], True
 for f in logs:
     vs = [json.loads(ln[8:]) for ln in open(f).read().splitlines() if ln.startswith("VERDICT ")]
-    ok = ok and bool(vs) and all(v.get("accepted") is True and v.get("rec_rows_sha512") == digest
-                                 and v.get("rec_inner_sha512") == inner for v in vs)
+    if vs and len(pins) == 2:
+        pins |= {k: vs[0].get(k) for k in ("rec_inner_session_sha512", "rec_inner_transcript_sha512")}
+    ok = ok and bool(vs) and all(v.get("accepted") is True and all(h and v.get(k) == h for k, h in pins.items()) for v in vs)
     parts.append(vs[0].get("rec_part") if vs else None)
 ok = ok and sorted(parts, key=str) == list(range(n))
 print("REC-COMPOSE " + json.dumps({"accepted": ok, "parts": len(logs)}))
@@ -268,11 +270,14 @@ def _inner(d: Path) -> str:
     return hashlib.sha512((d / "rec-inner.json").read_bytes()).hexdigest()
 
 
-def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None) -> None:
-    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked and the inner
-    shape it read (``d``'s ``rec-inner.json`` unless ``inner``)."""
+def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,
+           session: str = "ee" * 64, transcript: str = "11" * 64) -> None:
+    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the inner
+    shape it read (``d``'s ``rec-inner.json`` unless ``inner``), and the inner session record and transcript it was held
+    to."""
     v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j, "rec_rows_sha512": digest,
-         "rec_inner_sha512": inner or _inner(d)}
+         "rec_inner_sha512": inner or _inner(d), "rec_inner_session_sha512": session,
+         "rec_inner_transcript_sha512": transcript}
     (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
     (d / f"time-{name}.txt").write_text(f"\tExit status: {rc}\n")
     (d / f"own-{name}.txt").write_text("--rec-rows rows.json")
@@ -311,6 +316,21 @@ def test_a_part_under_another_inner_shape_is_refused(tmp_path, capsys):
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+
+
+@pytest.mark.parametrize("other", [{"session": "ff" * 64}, {"transcript": "22" * 64}])
+def test_parts_from_different_inner_sessions_are_refused(tmp_path, capsys, other):
+    """Two parts verified over different inner sessions (85's `$REC_INNER`, `--rec-inner-session`) or transcripts of one
+    (`--rec-inner-transcript`) name different `rec_inner_session_sha512` or `rec_inner_transcript_sha512`, each accepting
+    alone, and the composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
+    binary, h = _composer(tmp_path, 3)
+    _vpart(tmp_path, "L0", 0, h)
+    _vpart(tmp_path, "alg-p0", 1, h)
+    _vpart(tmp_path, "cap", 2, h, **other)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+    assert out[-1] == "lean: 3/3 accepted: the step fails"
 
 
 def test_a_staged_rows_file_with_other_rows_is_refused(tmp_path, capsys):
