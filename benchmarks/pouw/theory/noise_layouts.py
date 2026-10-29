@@ -4,8 +4,9 @@ At zero data the lead's words are x + R_t(i) + C_t(class(i), j) (`hash_counter.s
 that decomposes over those sums is cheap. This module builds lane-form instances (U, V, w0, as `hash_counter.Draw`) for
 a grammar of layouts and runs every prover on them, bit for bit against the honest commitment:
 
-- `lead`: the lead's lanes (COUNTER's `lead:rot`); `lead-salt` adds full-width salts ρ_i + γ_j; `lead-tile` draws the
-  column coins a τ-row tile (τ = m rows; below 16 rows a tile needs its own lanes, which the stock reads);
+- `lead`: the lead's lanes (COUNTER's `lead:rot`); `lead-salt` adds full-width salts ρ_i + γ_j; `lead-wide` adds
+  TENSOR's wide rank-2 step-0 term U(i)·V(j) (16- and 15-bit live coins, removed exactly in the epilogue); `lead-tile`
+  draws the column coins a τ-row tile (τ = m rows; below 16 rows a tile needs its own lanes, which the stock reads);
 - `bilinear`: ℓ byte row coins a (row, step) times nonzero int8 column weights a (column, step) on the same lanes, so a
   step's noise has rank ℓ (coins that multiply); served, so it fails T3;
 - `mirror`, `mirror-pi`: the second half replays the first half's coins negated, in order or in a coin-drawn order
@@ -35,8 +36,11 @@ Provers beyond COUNTER's:
   several entries), at ranks measured mod a prime on the layout's zero-data words. Features are free (the in-class
   bound) or tiled: a row feature is shared by a 64-column tile's values and a column feature by a 64-row tile.
 
-`wire` gives each layout's coin stream a token, n_max and network term (N-EGRESS's term scaled by n_max and W_mac,
-as `commit_space.network_terms`), and T3. `gap_claimed` is the gap against credit = cost(H), `gap_stock` against credit =
+`wire` gives each layout's coin entropy a token, n_max and network term (N-EGRESS's term scaled by n_max and W_mac,
+as `commit_space.network_terms`), and T3. `feed` sets the deployed lead's coin feed (layout.h's u32 words, as the
+certifier's `release_bytes` counts them) beside its coins' entropy and N-EGRESS's spread layout (`egress.py`'s
+`lane_counts`, which coins only ⌈3·S·m/64⌉ lane slots of a tile under 64 rows), a token at each point; `lever_wire`
+prices the wide step-0 term's coins a token. `gap_claimed` is the gap against credit = cost(H), `gap_stock` against credit =
 stock, both over stock; `gap_claimed_tile_priced` prices COUNTER's `pack` with its column terms shared by a coin tile's
 rows of a class (`pack@tile`) rather than the call's.
 
@@ -120,6 +124,11 @@ def _salts(m: int, n: int, g: np.random.Generator) -> np.ndarray:
     return g.integers(0, 1 << 32, m)[:, None] + g.integers(0, 1 << 32, n)[None, :]
 
 
+def _wide(m: int, n: int, g: np.random.Generator) -> np.ndarray:
+    """TENSOR's wide step-0 term U·V, rank 2: U 16-bit and V 15-bit signed live coins a row and a column."""
+    return g.integers(-(1 << 15), 1 << 15, (m, 2)) @ g.integers(-(1 << 14), 1 << 14, (2, n))
+
+
 def _finish(d, rule: hc.Rule, g: np.random.Generator, S: int):
     d.P = rule.positions(S)
     d.r = g.integers(0, 1 << 32, len(d.P), dtype=np.int64)
@@ -139,8 +148,10 @@ def build(lay: Layout, m: int, n: int, S: int, rule: hc.Rule, seed: int):
         inst = hc.Inst(m, n, S, 5, "zero", "add", seed, "lead:rot")
         d = hc.Draw(inst, rule)
         d.n0 = int(np.random.default_rng(seed + 977).integers(0, 1 << 32))
-        if lay.family == "lead-salt":
-            d.w0 = (d.w0 + _salts(m, n, np.random.default_rng(seed + 991))) & M32
+        if lay.family in ("lead-salt", "lead-wide"):
+            g = np.random.default_rng(seed + 991)
+            add = _salts(m, n, g) if lay.family == "lead-salt" else _wide(m, n, g)
+            d.w0 = (d.w0 + add) & M32
             d.w = (d.w0[:, :, None] + np.cumsum(np.einsum("itl,jtl->ijt", d.U, d.V), axis=2)) & M32
         return inst, d
     g = np.random.default_rng(seed)
@@ -579,6 +590,8 @@ def _column_steps() -> float:
 WIRE = {
     "lead": {"ar": 0.0, "ac": 21.0, "drawn": 1.0, "t3": "exact: the noise's total is row + column, folded by the epilogue"},
     "lead-salt": {"ar": 0.0, "ac": 21.0, "drawn": 1.0, "t3": "exact, as lead; the salts fold in the epilogue's two sources"},
+    "lead-wide": {"ar": 0.0, "ac": 21.0, "drawn": 1.0,
+                  "t3": "exact, as lead; U·V is removed mod 2³² in the epilogue (two IMADs a cell)"},
     "lead-tile": {"ar": 0.0, "ac": 21.0, "drawn": 1.0, "t3": "exact, as lead (a correction a tile and column)"},
     "bilinear": {"ar": 8.0, "ac": 8.0, "drawn": 1.0, "t3": "FAILS: the noise total has rank ℓS and is served"},
     "mirror": {"ar": 8.0, "ac": 8.0, "drawn": 0.5, "t3": "exact: the replay cancels the first half"},
@@ -607,8 +620,71 @@ def wire(lay: Layout, agg: str, S: int = 74) -> dict:
     lead_n = 256 / 3
     terms = {f"cap{cap}": tuple(round(x * n_max / lead_n * ratio * cap / cs.NET_LEAD["cap"], 7)
                                 for x in cs.NET_LEAD["term"]) for cap in (32, 320)}
-    return {"stream_MB": {"64+": round(stream(64), 3), "1": round(stream(1), 3)}, "n_max": round(n_max, 1),
+    return {"coin_entropy_MB": {"64+": round(stream(64), 3), "1": round(stream(1), 3)}, "n_max": round(n_max, 1),
             "W_mac_over_lead": round(ratio, 5), **terms, "t3": w["t3"]}
+
+
+#: Llama-3.2-1B's linears (K, n) and layers, and the rows of each point.
+LINEARS = ((2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048))
+LAYERS = 16
+POINTS = (1, 16, 64, 512, 8192)
+
+
+def _cdiv(a: int, b: int) -> int:
+    return -(-a // b)
+
+
+def _spread(steps: int, coined: int) -> list[bool]:
+    return [t * coined // steps > (t - 1) * coined // steps for t in range(steps)]
+
+
+def feed(m: int) -> dict:
+    """Bytes a token at m rows, by part, for the deployed feed, its coins' entropy and N-EGRESS's spread layout.
+
+    - `deployed`: m·H row words over 16⌈m/16⌉ rows, n G words, and a 64-row tile at a time S·n lane-coin words (three
+      int8 coins and a public byte) and 2n column sources (layout.h; the certifier's `release_bytes`).
+    - `entropy`: the same coins' bits: S + 3 a row, 4·log₂7 a column's G, 21 a (tile, step, column).
+    - `spread`: `egress.py`'s blc4a-t64-e7-rot. Under 64 rows a tile coins ⌈S·m/64⌉ steps' three lanes, one lane a
+      step, so 3⌈S·m/64⌉ steps carry a lane word and the rest an 8-bit row coin and the window coin; column sources a
+      row class present."""
+    out = {k: dict.fromkeys(("rows", "G", "lanes", "sources"), 0.0) for k in ("deployed", "entropy", "spread")}
+    R, T = 16 * _cdiv(m, 16), _cdiv(m, 64)
+    for K, n in LINEARS:
+        S = 1 + _cdiv(K - 21, 28)
+        H = _cdiv(S + 3, 32)
+        dep, ent, spr = out["deployed"], out["entropy"], out["spread"]
+        dep["rows"] += 4 * R * H
+        dep["G"] += 4 * n
+        dep["lanes"] += 4 * T * S * n
+        dep["sources"] += 8 * T * n
+        ent["rows"] += R * (S + 3) / 8
+        ent["G"] += n * 4 * math.log2(7) / 8
+        ent["lanes"] += T * S * n * 21 / 8
+        slots = 3 * _cdiv(S * min(m, 64), 64)
+        lane = [True] * S if slots >= S else _spread(S, slots)
+        coined = sum(lane)
+        later = sum(lane[1:])
+        spr["rows"] += m * 32 * _cdiv(later + 8 * (S - 1 - later) + 4, 32) / 8
+        spr["G"] += 4 * n
+        spr["lanes"] += 4 * T * coined * n
+        spr["sources"] += 4 * T * n * min(m, 64, 2) if coined > 1 else 0
+    res = {}
+    for k, parts in out.items():
+        parts = {p: v * LAYERS / m for p, v in parts.items()}
+        res[k] = {"total_bytes": round(sum(parts.values()), 1), "total_MB": round(sum(parts.values()) / 1e6, 4),
+                  **{p: round(v / 1e6, 4) for p, v in parts.items()}}
+    return res
+
+
+def lever_wire(m: int) -> dict:
+    """The wide step-0 term's coins a token at m rows: U, two 16-bit values a committed row (16⌈m/16⌉), and V, two
+    15-bit values a column, a call; packed, and one value a 4-byte word as the feed carries its coins."""
+    R = 16 * _cdiv(m, 16)
+    bits = sum(2 * (16 * R + 15 * n) for _, n in LINEARS) * LAYERS / m
+    words = sum(2 * (R + n) for _, n in LINEARS) * LAYERS / m
+    dep = feed(m)["deployed"]["total_MB"]
+    return {"packed_MB": round(bits / 8 / 1e6, 4), "u32_MB": round(4 * words / 1e6, 4),
+            "share_of_feed": round(bits / 8 / 1e6 / dep, 5)}
 
 
 ANALYTIC = [
@@ -637,7 +713,8 @@ ANALYTIC = [
 
 # ---- the runs ---------------------------------------------------------------------------------------------------------
 
-LAYOUTS = [Layout("lead"), Layout("lead-salt"), Layout("lead-tile", tile=16), Layout("lead-tile", tile=8),
+LAYOUTS = [Layout("lead"), Layout("lead-salt"), Layout("lead-wide"), Layout("lead-tile", tile=16),
+           Layout("lead-tile", tile=8),
            Layout("bilinear", 1), Layout("bilinear", 4), Layout("bilinear", 4, salt=True),
            Layout("mirror", 4, 4, True), Layout("mirror-pi", 1, 0, True), Layout("mirror-pi", 2, 4, True),
            Layout("mirror-pi", 3, 4, True), Layout("mirror-pi", 4, 0, True), Layout("mirror-pi", 4, 4, True),
@@ -675,6 +752,14 @@ def mutations(checks: Checks):
     d.r[5] ^= 1
     _, out, _ = decomp_sq(rule, inst, d, inst.m)
     checks.mutation("decomp_sq with one sketch coin flipped", not np.array_equal(out, ref))
+    for agg, prover in (("thin", mma_pairsum), ("sq", lambda r, i, d: decomp_sq(r, i, d, i.m))):
+        rule = hc.Rule("all", "32", agg)
+        inst, d = build(Layout("lead-wide"), 64, 48, 74, rule, 7)
+        _, ref, _ = honest(rule, inst, d)
+        d.w0 = build(Layout("lead"), 64, 48, 74, rule, 7)[1].w0
+        _, out, _ = prover(rule, inst, d)
+        checks.mutation(f"{agg} on lead-wide with the wide term dropped from the start value",
+                        not np.array_equal(out, ref))
     for lay in (Layout("lead"), Layout("mirror-pi", 4, 4, True)):
         rule = hc.Rule("all", "32", "mulxor:live")
         inst, d = build(lay, 64, 48, 74, rule, 7)
@@ -683,11 +768,11 @@ def mutations(checks: Checks):
         checks.mutation(f"edge from N₀ = 0 against a live N₀ ({lay})", not np.array_equal(out, ref))
 
 
-def run_grid(quick: bool) -> list[dict]:
+def run_grid(quick: bool, layouts: list[Layout] = LAYOUTS) -> list[dict]:
     shapes = [(64, 48, 74)] if quick else [(64, 48, 74), (64, 48, 292)]
     seeds = [0] if quick else [0, 1]
     out = []
-    for lay in LAYOUTS:
+    for lay in layouts:
         for (m, n, S), seed in [(sh, s) for sh in shapes for s in seeds]:
             for agg in AGGS:
                 out.append(evaluate(lay, hc.Rule("all", "32", agg), m, n, S, seed))
@@ -716,12 +801,28 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--quick", action="store_true")
-    ap.add_argument("--part", choices=("grid", "ranks", "all"), default="all")
+    ap.add_argument("--part", choices=("grid", "lever", "ranks", "all"), default="all")
     args, rest = ap.parse_known_args()
     checks = Checks(rest + (["--mutations"] if "--mutations" not in rest else []))
     res: dict = {"schema": "noise-layouts/v1"}
-    if args.part in ("grid", "all"):
-        grid = run_grid(args.quick)
+    res["feed"] = {str(m): feed(m) for m in POINTS}
+    res["lever_wire"] = {str(m): lever_wire(m) for m in POINTS}
+    f1, f64 = res["feed"]["1"], res["feed"]["64"]
+    checks.check("the deployed feed at one row is the certifier's release, 144,788,480 bytes a forward",
+                 f1["deployed"]["total_bytes"] == 144_788_480, f1["deployed"])
+    checks.check("the spread layout agrees with the deployed feed at 64 rows and above",
+                 all(res["feed"][str(m)]["spread"]["total_bytes"] == res["feed"][str(m)]["deployed"]["total_bytes"]
+                     for m in POINTS if m >= 64), f64["spread"])
+    checks.check("the lead's coin entropy at one row is wire's figure (21 bits a tile, step and column)",
+                 abs(f1["entropy"]["lanes"] - wire(Layout("lead"), "thin")["coin_entropy_MB"]["1"]) < 1e-3,
+                 f1["entropy"])
+    for m in POINTS:
+        f, lw = res["feed"][str(m)], res["lever_wire"][str(m)]
+        print(f"feed m {m:5d}: deployed {f['deployed']} | entropy {f['entropy']['total_MB']} | spread "
+              f"{f['spread']['total_MB']} | lever {lw}", flush=True)
+    if args.part in ("grid", "lever", "all"):
+        grid = run_grid(args.quick, LAYOUTS if args.part != "lever" else
+                        [Layout("lead"), Layout("lead-salt"), Layout("lead-wide")])
         res["grid"] = grid
         for name in ("pack", "pack@tile", "decomp", "edge", "edge_any", "decomp_sq", "pairsum", "mma_pairsum", "copy",
                      "table"):
