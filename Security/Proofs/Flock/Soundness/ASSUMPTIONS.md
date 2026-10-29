@@ -266,7 +266,7 @@ which guarantees take it.
 
 ## Other named assumptions
 
-Not soundness's: the PoUW window's keyed sample takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
+Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
 prove. Completeness takes none on the record's JSON: that the verifier's total parser (`Flock.JsonParse.parse`) reads
 back what the honest prover's printer (`printJ`) and `canon` print is proved
 (`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
