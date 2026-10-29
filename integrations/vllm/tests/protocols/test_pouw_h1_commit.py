@@ -56,7 +56,8 @@ PROMPTS = {"a": [5, 6, 7], "b": [8, 9]}
 
 class Arm:
     """`engine.int8_vllm.Int8PlainLinearMethod`'s apply under H1 (``zy_rows`` set): ``int8_ops.linear_zy``, whose
-    ``row_quant`` the Commit acquires, then ``observe``, handed the codes ``edit`` makes of them (call order, codes)."""
+    ``row_quant`` the Commit acquires, then ``observe``, handed the codes ``edit`` makes of them (call order, codes). A
+    linear H1 leaves out (``zy_rows`` None) serves through ``int8_ops.linear``, as the plain arm does."""
 
     int8_arm = E.ARM
     zy_rows: int | None = None
@@ -65,7 +66,10 @@ class Arm:
         self.edit, self.calls = edit, calls if calls is not None else [0]
 
     def apply(self, layer, x, bias=None):
-        xq, s_a, y, zy = int8_ops.linear_zy(x, layer.weight, layer.weight_scale, self.zy_rows)
+        if self.zy_rows is None:
+            (xq, s_a, y), zy = int8_ops.linear(x, layer.weight, layer.weight_scale), None
+        else:
+            xq, s_a, y, zy = int8_ops.linear_zy(x, layer.weight, layer.weight_scale, self.zy_rows)
         served = xq if self.edit is None else self.edit(self.calls[0], xq.clone())
         self.calls[0] += 1
         self.observe(layer, served, s_a, y, zy)
@@ -213,16 +217,16 @@ def _ids(run, s):
     return out
 
 
-class _Laid(dict):
-    """`Served`'s open step tables (``_a``, each call's block by call) laid out by ``lay`` when a step's table of K is
+def _laid(served, lay):
+    """``served``'s step tables of K (`Served._a_rows`, each call's block in call order) laid out by ``lay`` when one is
     taken whole: the rows the window registers and hands the tap as its table, the Commit's own rows untouched."""
+    whole = served._a_rows
 
-    def __init__(self, lay):
-        super().__init__()
-        self.lay = lay
+    def laid(call, value, mine, codes, scales):
+        table = whole(call, value, mine, codes, scales)
+        return None if table is None else np.concatenate(lay(np.split(table, len(mine))))
 
-    def pop(self, key, *default):
-        return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
+    served._a_rows = laid
 
 
 #: the server's step-input port's T (`served_record.StepInputPort`: whole 4096-byte chunks of i64 ids)
@@ -274,7 +278,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
         port = next(s for s in com.sources if isinstance(s, StepInputPort))
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
-        served._a = _Laid(lay)
+        _laid(served, lay)
     kw = {"transcript_dir": str(tmp_path / "w"), "served": served}
     settings = (_remote(rows=ROWS, steps=STEPS, **kw) if coins is None
                 else coins(SimpleNamespace(runner=Runner()), {**kw, "admission": "round-0"}))
