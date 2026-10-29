@@ -63,6 +63,9 @@ ALLOWED = {
     # commits in a `verity.ml.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.claims": set(),
     # An auditor party's signed period roots and liveness records,
     # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
