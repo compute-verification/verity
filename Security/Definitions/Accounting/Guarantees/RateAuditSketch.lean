@@ -70,8 +70,8 @@ def RateAuditSketch : Prop :=
   ∀ (N m ρ h S L q w s k F cTag cEnc g : ℕ) (X Sig Dg : Type) [Fintype X] [DecidableEq X] [Fintype Sig]
     [Fintype Dg] [DecidableEq Dg] (dig : Sig → (Fin m → X) → Dg) (A : RateSketch.Device N m ρ h S L q w X Sig Dg),
     pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
-        A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
-          A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
+        A.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
+          A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : Sig => g < fib dig σ) +
         ((q * g : ℕ) : ℝ≥0∞) / Fintype.card X
 
@@ -99,8 +99,8 @@ def RateAuditSketchInteractiveRO : Prop :=
     [Fintype Dg] [DecidableEq Dg] (dig : Sig → (Fin m → X) → Dg)
     (A : RateSketch.InteractiveDevice N m ρ h S L q w X Sig Dg),
     pr (fun x : Data N m ρ X × Coins N ρ h s X Sig Dg =>
-        A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
-          A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
+        A.Accepts dig x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
+          A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < RateSketch.floor m w ρ S L F cTag cEnc k)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : Sig => g < fib dig σ) +
         ((q * g : ℕ) : ℝ≥0∞) / Fintype.card X
 
@@ -158,8 +158,8 @@ def RateAuditTensorSketch : Prop :=
   ∀ (N m ρ h S L q s k F cTag cEnc ks : ℕ)
     (A : RateSketch.Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))),
     pr (fun x : Data N m ρ Sector × Coins N ρ h s Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) =>
-        A.Accepts sketch x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
-          A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m 256 ρ S L F cTag cEnc k)
+        A.Accepts sketch x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
+          A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < RateSketch.floor m 256 ρ S L F cTag cEnc k)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + pr (fun σ : SketchSigns ks m => ¬ SectorsBind σ) +
         (q : ℝ≥0∞) / 2 ^ 256
 
@@ -181,8 +181,8 @@ def RateAuditTensorSketchRank : Prop :=
   ∀ (N m ρ h S L q s k F cTag cEnc ks r : ℕ)
     (A : RateSketch.Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))), r ≤ 32 →
     pr (fun x : Data N m ρ Sector × Coins N ρ h s Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) =>
-        A.Accepts sketch x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
-          A.footprint x.2.1 x.2.2.1 x.1 * cEnc < RateSketch.floor m 256 ρ S L F cTag cEnc k)
+        A.Accepts sketch x.2.1.1 x.2.1.2 x.1 x.2.2 ∧ A.compute cTag cEnc x.2.1.1 x.2.1.2 x.1 ≤ F ∧
+          A.footprint x.2.1.1 x.2.1.2 x.1 * cEnc < RateSketch.floor m 256 ρ S L F cTag cEnc k)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h +
         pr (fun σ : SketchSigns ks m => ∃ u, ((Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) +
         (q : ℝ≥0∞) / 2 ^ (8 * r)
