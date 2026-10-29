@@ -62,7 +62,7 @@ def drive(store: p2.Store, p: audit.Params, run=None):
     clock = Clock()
     s = p2.Session(p, store.registration, coins.local(store.registration.digest, 0, p.windows, Entropy(b"coins")),
                    not_before_ns=0, clock=clock)
-    prover = p2.Prover(store, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = p2.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
