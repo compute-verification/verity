@@ -181,3 +181,70 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
   and 12:00Z from what the interims show.
 
 FINAL MESSAGE: a 10-line summary, your note id, art ids and branch.
+
+## 7. Interim 1 synthesis and re-targets (coordinator, 09:40Z)
+
+The platform paused every worker at about 09:21Z. All are resumed at 09:40Z on the rows below. Interim 2 is due by 11:30Z,
+the final by 13:30Z.
+
+### Where we are
+
+- **The lead is now `ssn-1l-tag`** (N-CARD interim 1). It is ssn_1l plus N-RED's four row-tag lanes in step 1, against a
+  coin-drawn private G.
+  - T1 is 0.000% (0.420% with coins uncredited).
+  - ssn_1l's kernel is built and measured (N-KERNEL; the tag kernel isn't built yet). T2 at T 8,192 is 57.5× beside and
+    65.8× serial; at T 512 it is 11.1× / 30.4× with 64 rows and 36.0× / 61.6× with 512 rows. Every word is exact.
+  - T3 is unmeasured for the tag lanes; ssn_1l's is −0.09% / −0.02%.
+  - Runners-up: N-PREM's `ssn-1l-hw` (a 16-bit hash code a row, with no tag and no G), and N-NOISE's
+    `AorB/rgap1/sv4+tag+nz` (0.030% / 0.012%).
+- **Attacks that re-ranked everything:**
+  - **The coin branch** (N-RED A1/A2, N-PREM). A prover that branches on the coins copies repeated rows, and on chosen
+    inputs ssn_1l loses 19–100% of stock. Row tags fix it.
+  - **The middle-segment skip** (N-SAKU, proved premise-free): every exact-output design fails on Llama in M0.
+  - N-LEAN: SW-NOISE's g·n bound is false, and against a coin-reading prover today's fixed-program bound is vacuous.
+  - **So `adaptive-dw` (DistinctWrites for programs that branch on the coins) is the lead's critical open premise.**
+    It ranks 5 until proved.
+- **N-FLOOR's incidents:**
+  - The host CPU is uncounted: it can take 4.83× stock of credited hashing. Fix: PeriodInventory with HostsCounted, in T1.
+  - SHA-512 is credited at 3,632 registers a compression where 3,532 suffice for chained compressions (N-SHALB). Fix:
+    credit at the best known count.
+  - Otherwise no route on the card is under the floor (N-W1: 58 probes; N-FLOOR: every engine, NVDEC at ≥ 353k a word).
+- **Roads:** (a) is closed at rank ≤ 3 (N-SHALB: MH100w's bound for SHA-512 is 16 registers). (b) is closed at rank ≤ 3
+  (N-DENSE: neither L 64 nor L 128). (c) is closed (N-SAKU). (d) gives R1 / R1b and the egress term (N-ALT).
+  - So the lead is rank 4a through **ShaWrites**. N-COMPOSE proved hash-compose as a counting theorem given ShaWrites,
+    which is strictly stronger than ShaSpeed, and the rank-3 premise CarriedWords.
+- **Hiding:** N-HIDE's **L1** (one hm96 instance a call, over a subtree root) plus **(a)** (the PRF checked in the
+  drawn unit's proof) passes at every point, 0.025% / 0.050% at 64 rows. **L2** (private roots, one instance a window)
+  is ≈ 0 everywhere, but it is a protocol change. N-LIT's counter-mode pad (H20) drops M_key·y and c; that is an
+  argument, not yet checked.
+- **Exactness for free:** de-noising inside stock's epilogue costs no extra instruction (N-EXACT, proved). A served
+  design can serve A·Bᵀ exactly, with its committed words still noisy.
+- **Floating point:** FP8 fails (N-FP8): no pinned design passes both T1 and T3.
+- **The lead's open premises** (N-CARD), each to an owner: adaptive-dw, PeriodInventory with hosts, ssn-tag-distinct,
+  g-private, copy-floor, ssn-success-set, salt-forced, mask-optimal, lane-semantics and one-instruction-minimal; and
+  ShaWrites (4a), CarriedWords (3) and W1 (3).
+
+### Re-targets (09:40Z)
+
+| worker | until 11:30Z |
+|---|---|
+| **N-DENSE → N-ADAPT** | `adaptive-dw`: state and prove DistinctWrites for programs that branch on the coins (branches, predicates and copies priced as N-W1 / N-FLOOR measure), for the tag lead and `ssn-1l-hw`. Lean with N-LEAN. Or the exact obstruction, and the premise that closes it |
+| **N-LEAN** | `ssn-tag-distinct` and `ssn-success-set` for the tag lead and hw; the adaptive lifting with N-ADAPT; the locking path |
+| **N-RED** | Attack `ssn-1l-tag`, `ssn-1l-hw` and `AorB/rgap1/sv4+tag+nz`: G's privacy, tile-level copies (`copy-floor`), adaptive branches, the epilogue de-noise, L1 hiding |
+| **N-FLOOR** | Measure what the adaptive and copy premises need on the H200: the price of branching and predicates per coin bit read, TMA / bulk tile copies per committed word (`copy-floor`), and the host's θ rows (HostsCounted) |
+| **N-KERNEL** | Build the tag lead (4 tag lanes + G) with L1 hiding and (a)'s PRF in the drawn unit; measure T2; fix root(A_j)'s latency |
+| **N-PPL** | T3 for `ssn-1l-tag`, `ssn-1l-hw`, `AorB/rgap1/sv4+tag+nz`, and the epilogue-de-noised lead (should equal stock exactly) |
+| **N-EXACT** | Apply your epilogue de-noise to the served lead: exact served output, noisy committed words. Show the skip doesn't apply and the adversary gains nothing; price it |
+| **N-HIDE** | Settle L1 + (a) as the lead's hiding module (spec, what the proof checks, premises), with L2 as the protocol option; with N-SALT on the pad |
+| **N-SALT** | N-LIT's counter-mode pad (H20): construction, hiding argument, what the proof checks, cost; against L1 + (a) |
+| **N-SHALB** | Road (a) is closed at rank ≤ 3. Make 4a sharp: ShaWrites' constant (3,532 chained), sharing across leaves under L1 (midstates, ASICBoost-style), and the premise text with its δ |
+| **N-COMPOSE** | PeriodInventory with HostsCounted inside T1 (N-FLOOR's incident 1), the atomic call, CarriedWords; proofs |
+| **N-W1** | lane-semantics and one-instruction-minimal; finish the census and the Lean bridge; prices for predicates and branches |
+| **N-PREM** | The lead's premise ledger with owners; minimal sets for tag / hw / AorB; the rank verdict |
+| **N-CARD** | Re-rank with hashing credited at 3,532 (chained), the host term, L1 + (a) hiding, epilogue de-noise and the network column. Ranked frontier by 11:15Z |
+| **N-NOISE** | Interim 2 with tiles; tag and hw dominance; the best A1/A2-closed design; the densest coins for N-EGRESS |
+| **N-COVER** | The whole step with the tag lead and epilogue de-noise; attention; decode with N-FP8 |
+| **N-FP8** | Finish the BF16 verdict and the int8-served FP8 route; then the lead at decode on the H200 (m 1–64, mma.sync against padded wgmma; T1's shape term and T2) |
+| **N-EGRESS** | As tasked |
+| **N-LIT** | Adaptive lower bounds (decision trees, branching programs, adaptive algorithms with oracle access); the pad's literature |
+| **N-SMELL** | As tasked; a pre-read of the final's claims by 13:00Z |
