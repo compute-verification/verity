@@ -1206,7 +1206,7 @@ def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma:
     where gamma is given, else |x_i|_inf |w_j|_1; it is returned as (rows, cols), its product under "sep_ij" beside
     the oracle's own `partial_ij`. Every one is returned, with the chosen one under "dmax"."""
     m, k = xv.shape
-    s, step = ssnfp_layout(fmt, k)
+    s, _ = ssnfp_layout(fmt, k)
     ax, aw = xv.abs(), wv.abs()
     out = {"l1": ax @ aw.amax(0), "cs": xv.norm(dim=1) * wv.norm(dim=1).max(),
            "holder": ax.amax(1) * aw.sum(1).max()}
@@ -1225,20 +1225,20 @@ def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma:
         else:
             out["rms"] = t.max().expand(m).clone()
             out["sep"] = (torch.ones(m, dtype=torch.float64, device=xv.device), t)
+    n = wv.shape[0]
     part = (ax * aw.amax(0)).amax(1)
-    part_ij = torch.zeros(m, wv.shape[0], dtype=torch.float64, device=xv.device) if bound == "sep" else None
-    rows = max(1, SSNFP_BLOCK // max(1, wv.shape[0] * s))
+    part_ij = torch.zeros(m, n, dtype=torch.float64, device=xv.device) if bound == "sep" else None
+    # step 0's `first` entries padded in front to `later` (as `ssnfp_product`), so the steps are one batched product
+    c = SSNFP[fmt]
+    pad = c["later"] - c["first"]
+    xs = torch.nn.functional.pad(xv, (pad, s * c["later"] - pad - k)).reshape(m, s, c["later"])
+    ws = torch.nn.functional.pad(wv, (pad, s * c["later"] - pad - k)).reshape(n, s, c["later"]).permute(1, 2, 0)
+    rows = max(1, SSNFP_BLOCK // max(1, n * s))
     for a in range(0, m, rows):
-        xb = xv[a:a + rows]
-        acc = torch.zeros(xb.shape[0], wv.shape[0], dtype=torch.float64, device=xv.device)
-        best = torch.zeros(xb.shape[0], dtype=torch.float64, device=xv.device)
-        for t in range(s):
-            sel = step == t
-            acc += xb[:, sel] @ wv[:, sel].T
-            best = torch.maximum(best, acc.abs().amax(1))
-            if part_ij is not None:
-                part_ij[a:a + rows] = torch.maximum(part_ij[a:a + rows], acc.abs())
-        part[a:a + rows] = torch.maximum(part[a:a + rows], best)
+        acc = torch.bmm(xs[a:a + rows].transpose(0, 1), ws).cumsum_(0).abs_().amax(0)
+        part[a:a + rows] = torch.maximum(part[a:a + rows], acc.amax(1))
+        if part_ij is not None:
+            part_ij[a:a + rows] = acc
     out["partial"] = part
     if part_ij is not None:
         out["partial_ij"] = part_ij
