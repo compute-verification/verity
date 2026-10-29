@@ -133,8 +133,8 @@ def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
       | _ => none) | return none
   let some j := (String.fromUTF8? d).bind Credit.loads? | return none
   let .str fn := get j "program_fn" | return none
-  let defs := get j "definitions"
   unless fn.startsWith (Credit.WINDOW_FN ++ "{") do return some (notH1 nm i fn)
+  let .ok P := Credit.programOf d | return none
   let some tiles := ((Flock.Program.recordPairs fn).find? (·.1 == "TILES")).bind (Credit.loads? ·.2) | return none
   let .arr ts := tiles | return none
   let mut ks : List Nat := []
@@ -142,10 +142,10 @@ def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
     let .arr p := t | return none
     let [kj, f] := p.toList | return none
     let (some k, some tid) := (nat? kj, str? (get f "fn")) | return none
-    let dj := get defs tid
-    let some (_, _, j10r) := Credit.tileOf dj tid k | return none
+    let some dt := Credit.defn? P tid | return none
+    let some (_, _, j10r) := Credit.tileOf dt k | return none
     unless j10r do return some (perUnit nm i k)
-    let u := (SampledProofs.PyJson.canonical (get (get dj "bindings") "UNIT")).toOption.getD ""
+    let u := ((Flock.Program.recordPairs dt.key).toList.lookup "UNIT").getD ""
     unless 0 < count u TILE_ID && count u TILE_ID == count u COVERED_TILE do return some (notV5 nm i k)
     ks := ks ++ [k]
   if 1 < ks.length then return some (manyStrata nm i ks)

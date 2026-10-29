@@ -5,7 +5,13 @@
  },
  "layers": {
   "CoreRemote": {
-   "imports": ["CoreComposition.Blobs", "CoreComposition.Cases", "PouwCheck.Protocol", "SampledProofs.OneStageZk"],
+   "imports": [
+    "CoreComposition.Blobs",
+    "CoreComposition.Cases",
+    "NciCheck.Protocol",
+    "PouwCheck.Protocol",
+    "SampledProofs.OneStageZk"
+   ],
    "except": [],
    "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }

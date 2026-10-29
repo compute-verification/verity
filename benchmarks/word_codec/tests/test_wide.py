@@ -1,5 +1,5 @@
 """The wide word codecs' reference (`wide.py`): ρ over p = 3 mod 4 and p = 5 mod 8, round trips at each field, the
-fused GEMM's store layout, the tags over the encoded words, and `wide.cu`'s constants."""
+fused GEMM's store layout, and `wide.cu`'s constants."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_a_full_width_word_holds_any_bytes_but_a_top_0xff(bits):
 
 
 def small(p: int) -> W.Field:
-    return W.Field("t", p.bit_length(), p, 1, 3)
+    return W.Field("t", p.bit_length(), (1 << p.bit_length()) - p)
 
 
 @pytest.mark.parametrize("p", [7, 11, 19, 23, 127, 1019, 13, 29, 37, 53, 61, 101, 1013])
@@ -140,42 +140,6 @@ def test_layout(bits):
         assert store[at:at + 4] == W.limbs(lanes[32 * q + lane][wi], f)[e].to_bytes(4, "little")
 
 
-def test_tags_are_ro_blake3_over_the_encoded_words():
-    from verity.core.protocols.bandwidth import tags as T
-    from verity.ml.crypto import blake3
-
-    f = W.FIELDS[521]
-    n, kd = 16, 512
-    lanes = W.fragment_payloads(W.random_weights(n, kd, 4), n, kd, f)
-    words = W.encode_store(lanes, W.key(f, SEED, 1))
-    ys = W.tags_of(words, f, SEED, base=64)
-    key = hashlib.sha512(T.prefix(T.TAG_DOMAIN, "ro-blake3/v1", SEED)).digest()[:32]
-    for j in (0, 17, 31):
-        block = W.block(words, j, f)
-        assert len(block) == f.lane_words() * f.word_bytes
-        assert ys[j] == blake3.keyed(key, (64 + j).to_bytes(8, "big") + block)
-    assert len(W.leaves_of(ys, SEED)) == 2 and len(W.root_of(ys, SEED)) == 64
-
-
-def test_batched_tags_cover_a_lane_of_adjacent_tasks():
-    from verity.core.protocols.bandwidth import tags as T
-    from verity.ml.crypto import blake3
-
-    f = W.FIELDS[521]
-    n, kd = 16, 1024
-    words = W.encode_store(W.fragment_payloads(W.random_weights(n, kd, 5), n, kd, f), W.key(f, SEED, 1))
-    ys = W.tags_of(words, f, SEED, base=32, tb=2)
-    assert len(ys) == 32
-    key = hashlib.sha512(T.prefix(T.TAG_DOMAIN, "ro-blake3/v1", SEED)).digest()[:32]
-    for lane in (0, 13, 31):
-        block = W.block(words, lane, f, tb=2)
-        assert block == W.block(words, lane, f) + W.block(words, 32 + lane, f)
-        assert len(block) == 552 - 8  # one BLAKE3 chunk: 9 compressions, the last over 40 bytes
-        assert ys[lane] == blake3.keyed(key, (32 + lane).to_bytes(8, "big") + block)
-    with pytest.raises(AssertionError):
-        W.tags_of(words[:W.LANES], f, SEED, tb=2)
-
-
 def test_kernel_constants_match():
     src = (HERE.parent / "wide.cu").read_text()
     for bits, f in W.FIELDS.items():
@@ -200,10 +164,8 @@ def make_vectors() -> dict:
                 words.append({"k": k, "i": i, "m": hex(m), "y": hex(W.encode_word(m, i, key))})
         n, kd = 16, 512
         enc = W.encode_store(W.fragment_payloads(W.random_weights(n, kd, bits), n, kd, f), W.key(f, SEED, 1))
-        ys = W.tags_of(enc, f, SEED)
         out["fields"][f.name] = {"p": hex(f.p), "c": [hex(c) for c in k2.c], "tau": hex(k2.tau), "words": words,
-                                 "store_sha256": hashlib.sha256(W.store_bytes(enc, f)).hexdigest(),
-                                 "tag0": ys[0].hex(), "root": W.root_of(ys, SEED).hex()}
+                                 "store_sha256": hashlib.sha256(W.store_bytes(enc, f)).hexdigest()}
     return out
 
 

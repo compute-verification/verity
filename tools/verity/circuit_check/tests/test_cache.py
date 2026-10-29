@@ -1090,7 +1090,8 @@ def test_each_enumerator_only_imports_what_it_lists():
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
     """A circuit-check that reuses every target would still spend most of its time building the catalog to find them: the
     task list is reused whole when every target is as recorded.  An edit no target read (a registry module none resolves, a new
-    binding entry) still rebuilds the list, which it may change, and every target is reused as before."""
+    binding entry, a new pin, which keeps its target: `targets.pinned`) still rebuilds the list, which it may change, and every
+    target is reused as before."""
     root = _tree(tmp_path)
     assert "task_list" not in _run(root)["stats"]
     again = _run(root)
@@ -1105,6 +1106,10 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
     out = _run(root)
     assert out["hits"] == ["SynOther_v1"] and "task_list" not in out["stats"] and out["stats"]["stored"] == 1
+    assert _run(root)["stats"]["task_list"]
+    _set_pin(root, "SynNew_v1", {"and": 1})
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and "task_list" not in out["stats"]
     assert _run(root)["stats"]["task_list"]
 
 

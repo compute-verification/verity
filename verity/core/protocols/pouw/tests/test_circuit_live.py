@@ -348,7 +348,7 @@ def test_an_honest_fixed_length_round_is_accepted(s, slot):
     (1, [1, 4, 0, 0, 0, 0, 0, 0], lambda r: r[:3] + [[3, 0, 3, 2, 1]] + r[4:]),
 ])
 def test_a_swapped_request_to_row_assignment_is_refused(s, slot, edit):
-    """The rows a round serves are the public schedule's count (#3590, #3827's `credit._length`), and v1 holds each
+    """The rows a round serves are the public schedule's count (`credit._length`), and v1 holds each
     request to its hidden header's cap and round. A prover who keeps the counts but rewrites those headers moves a decode
     row from one request to another, and v1 accepts it; v2 reads the public caps and refuses it."""
     req, cap = _fixed()

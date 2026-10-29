@@ -149,7 +149,7 @@ def layout(t: T.Type) -> list[tuple[int, ...]]:
         return ([(1,) * t.n] if t.n else []) if t.elem == BL.BIT else layout(t.elem) * t.n
     if isinstance(t, T.Tuple):
         return [e for f in t.fields for e in layout(f)]
-    if isinstance(t, T.Record):
+    if isinstance(t, T.RecordType):
         return [e for _, f in t.fields for e in layout(f)]
     raise TypeError(t)
 
@@ -379,7 +379,7 @@ _committed: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def committed(program: Program) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
     """The rows a run commits: the census values' elements (`rows`), what the Program's nodes pass each other, each once
-    in value order. A Call's own wires are witness of its proof blocks, whose commitments are the proof service's."""
+    in value order. A Call's own wires are witness of its proof blocks, whose commitments are the proof system's."""
     if program not in _committed:
         seen: dict[tuple[int, ...], tuple[int, ...]] = {}
         for v in values(program):

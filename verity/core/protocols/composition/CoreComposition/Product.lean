@@ -101,7 +101,7 @@ private def keysOf : Json → List String
   | _ => []
 
 /-- `j` is an object with exactly the keys `want` (sorted, as canonical JSON writes them). -/
-def exactly (j : Json) (want : List String) (ctx : String) : V Unit :=
+private def exactly (j : Json) (want : List String) (ctx : String) : V Unit :=
   match j with
   | .obj _ => if keysOf j == want then pure () else throw s!"{ctx}: the keys must be {want}, not {keysOf j}"
   | _ => throw s!"{ctx}: not an object"
@@ -110,26 +110,20 @@ private def entries (j : Json) (ctx : String) : V (List Json) := do
   exactly j ["components"] ctx
   pure (← Flock.J.arr j "components" ctx).toList
 
-/-- One entry of the parameters, `{"id":ID,"params":PARAMS}`; `what` says whose. -/
-def decodeNamed (what : String) (x : Json) : V Named := do
-  exactly x ["id", "params"] s!"{what}'s params"
-  pure { id := ← Flock.J.str x "id" what, params := ← Flock.canon (← Flock.J.get x "params" what) }
-
 def decodeParams (j : Json) : V (List Named) := do
-  (← entries j "the composition's params").mapM (decodeNamed "a component")
+  (← entries j "the composition's params").mapM fun x => do
+    exactly x ["id", "params"] "a component's params"
+    pure { id := ← Flock.J.str x "id" "a component", params := ← Flock.canon (← Flock.J.get x "params" "a component") }
 
 def decodeCommitment (b : ByteArray) : V ByteArray :=
   if b.size = 64 then .ok b else .error s!"the binding of the components' digests is 64 bytes, not {b.size}"
 
-/-- One case of the evidence, `{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS}`; `what` says whose. -/
-def decodeCase (what : String) (x : Json) : V Case := do
-  exactly x ["commitment", "evidence", "id", "params"] s!"{what}'s case"
-  pure { id := ← Flock.J.str x "id" what, params := ← Flock.canon (← Flock.J.get x "params" what),
-         commitment := ← Flock.unhex (← Flock.J.str x "commitment" what),
-         evidence := ← Flock.unhex (← Flock.J.str x "evidence" what) }
-
 def decodeEvidence (b : ByteArray) : V (List Case) := do
-  (← entries (← canonicalJson b) "the composition's evidence").mapM (decodeCase "a component")
+  (← entries (← canonicalJson b) "the composition's evidence").mapM fun x => do
+    exactly x ["commitment", "evidence", "id", "params"] "a component's case"
+    pure { id := ← Flock.J.str x "id" "a case", params := ← Flock.canon (← Flock.J.get x "params" "a case"),
+           commitment := ← Flock.unhex (← Flock.J.str x "commitment" "a case"),
+           evidence := ← Flock.unhex (← Flock.J.str x "evidence" "a case") }
 
 /-- The composition `id` of the components `cs`, which must be listed in the order of their ids, each once. -/
 def product (id : String) (cs : List Protocol) : Protocol where

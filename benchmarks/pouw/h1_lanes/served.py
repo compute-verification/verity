@@ -5,9 +5,9 @@ registered tables at the rows the verifier reads them.
 
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
   (``pouw-h1-calls.json``: its manifest checked by `pouw_h1_challenger.manifest_reason`, so the served trees' entries
-  are the ones its ``calls_root`` binds), the drawn units (``--drawn``, `h1_prove/served.py`'s), the period's
+  are the ones its ``calls_root`` binds), the sampled proof blocks (``--drawn``, `h1_prove/served.py`'s), the period's
   descriptor and the prover's private directory (``--prover``, `pouw_h1_prover`: its salt key, each call's kept values
-  and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the drawn unit's call
+  and the saved window ``state/`` `pouw_h1_handoff.FILE`): the verifier's own reads of the sampled proof block's call
   (`credit.registered_file` at the record's roots, the window's root, steps and Program salt), and for each of its data
   ports (the unit's 32 A rows, its 32 B rows and its z/y record; ``pub`` and ``o1`` are the verifier's own rows, which no
   lane reads) the prover's opening of that row in the tree the window registered, each held to the entry's root and
@@ -17,14 +17,14 @@ registered tables at the rows the verifier reads them.
   the unit, the entries and the checks.
 * **prepare** (hidden_zk's venv): the unit's leaf from those rows, the lane statement's Program (`h1window.leaf_program`
   of the window Program rebuilt from ``--descriptor`` and held to its bytes, run.py's `derived`; without one, run.py's
-  one-call window: each statement is unit 0 of it), the lanes' partials committed after the draw
+  one-call window: each statement is unit 0 of it), the lanes' partials committed after the sample
   (`produced`, under a registration record of the lane Program that names the window's three entries), and each lane
   staged with its ports read through ``--registered`` at the window's rows: ``a<s>`` row M·j + 32 rb + i of
   ``h1/a/<K>@<s>`` (j the call's place among its step's calls of K), ``b<t>`` row b0 + 32 cb + j of ``h1/b/<K>``,
   ``zy`` row t of ``h1/zy@<c>`` (the window's roots and
   domains, `credit.registered_file`'s), ``partials`` row l of the produced tree, and ``pub``, ``admit`` and ``o0`` known
   rows (run.py's `known_rows`). The lane's public values are conventions of this harness, named in its report: salt
-  `pouw_h1_challenger.program_salt_of` of the window's commitment, position the drawn unit u, roots (root of the call's
+  `pouw_h1_challenger.program_salt_of` of the window's commitment, position the sampled proof block u, roots (root of the call's
   A table, root of ``h1/b/<K>``), admit bit i 1 exactly when slot 32 rb + i is one of the call's served rows.
   The negatives, each proved and checked like the lanes: ``tampered-zy`` (lane 0 given the record with cell 2's z low
   bit flipped, a cell lane 0 doesn't check, so its ok is still 1, under the honest salt and path, its public
@@ -258,7 +258,7 @@ def smoke(a) -> None:
 
 @dataclass
 class Served:
-    """The verifier's view of the drawn unit: its leaf, the roots its seeds read, the produced partials and the window's
+    """The verifier's view of the sampled proof block: its leaf, the roots its seeds read, the produced partials and the window's
     ports (``ports``: port name -> its entry and the prover's opening)."""
 
     leaf: L.Leaf

@@ -11,19 +11,20 @@ The phases, each a function here:
    checked against the layout its prefix folds to before anything is placed on what it adds.
 2. **Registration** (`register`, `check_baseline`): the builder B by its descriptor (its advice cap and its static
    placement plan) and the registered information, theta's and the initial state's hiding commitments, before any coin.
-3. **Operation** (`operate`): the developer serves a declaration period's requests through the model (`forward`),
+3. **Operation** (`operate`): the developer serves an execution phase's requests through the model (`forward`),
    realizing what only run time decides: the batching.
-4. **Declaration k** (`declare`, `check_declaration`): the developer reports the declared advice a_k; B appends the
-   declaration block to the declared circuit C = B(a_1 || ... || a_k) (`Builder.grow`: B is prefix-extending, so the
+4. **Declaration k** (`declare`, `check_declaration`): the developer reports the advice a_k; B appends the
+   execution block to the registered circuit C = B(a_1 || ... || a_k) (`Builder.grow`: B is prefix-extending, so the
    blocks before are unchanged) and places it (`placement`: its units on device leaves, theta on a memory leaf, naming
    the layout's head); the block's values are committed; and its record binds the previous record and that placement.
-5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`): live coins after the commitment, sampled
-   proofs' draw at PoUW's size K', each drawn unit proved behind the firewall and checked by the verifier.
+5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`, `inference_only`): live coins after the
+   commitment, sampled proofs' draw at PoUW's size K', each sampled proof block proved behind the ZK server and
+   checked by the verifier; and the inference-only policy's check of the execution block, which reads no coins.
 6. **Accounting** (`compose`, `account`): each declaration's composite verdict by the composition's rule, the monitoring
    period's, its pooled bound, and its credit against the compute the layout holds: each subprotocol's accounting is a
    projection of the layout (`Layout.accounting`).
 
-`prove` and `verify` are a stand-in for C-Flock behind the firewall: the proof is the drawn unit's opening, which `verify`
+`prove` and `verify` are a stand-in for Flock behind the ZK server: the proof is the sampled proof block's opening, which `verify`
 checks against the commitments and re-evaluates in the clear. It is sound for the example and not zero-knowledge.
 """
 
@@ -43,11 +44,14 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.core.protocols.pous import wipe_monitoring, wipe_period
+from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
+from verity.core.protocols.sampled_proofs import parties
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
-from verity.core.protocols.sampled_proofs.parties import IDS
+from verity.core.protocols.sampled_proofs.one_stage.proofs import V2
 from verity.core.wire import Body, Int, Message, Schema
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
@@ -156,10 +160,16 @@ def unit_ands() -> int:
 
 
 @cache
+def block_program(n: int) -> str:
+    """An execution block's Program, as descriptor text (`verity.ml.circuits.codec`): its input state wires are the
+    previous block's output state wires, and theta is a registered input."""
+    return json.dumps(codec.encode_program(Program(bind(BLOCK, N=n), registered=("w1", "w2"), theta=("w1", "w2"))))
+
+
+@cache
 def block_digest(n: int) -> str:
-    """A declaration block's Program digest (`verity.ml.circuits.codec`): its input state wires are the previous block's
-    output state wires, and theta is a registered input."""
-    return codec.program_digest(codec.encode_program(Program(bind(BLOCK, N=n), registered=("w1", "w2"), theta=("w1", "w2"))))
+    """An execution block's Program digest."""
+    return codec.program_digest(json.loads(block_program(n)))
 
 
 def s8(v: int) -> int:
@@ -527,8 +537,8 @@ class Placement:
 
 @dataclass(frozen=True)
 class Block:
-    """Declaration k's block of the declared circuit: its real units' placements, its units padded to PoUW's grid (`n`,
-    fillers after the real units), its Program's digest and its declared advice's length."""
+    """Declaration k's block of the registered circuit: its real units' placements, its units padded to PoUW's grid (`n`,
+    fillers after the real units), its Program's digest and its advice's length."""
 
     index: int
     units: tuple[Placement, ...]
@@ -550,7 +560,7 @@ class Block:
 
 @dataclass(frozen=True)
 class Builder:
-    """B, the registered builder: declared advice to the declared circuit. A declaration's advice is self-delimiting (its
+    """B, the registered builder: advice to the registered circuit. A declaration's advice is self-delimiting (its
     unit count, then each unit's batch), so B(a_1 || ... || a_k) parses declaration by declaration and extends
     B(a_1 || ... || a_{k-1}): B is prefix-extending. Placement is B's and static, not the advice's: from declaration k on,
     `plan` names the device leaves B places units on, unit j on the (j mod their number)-th, and `store` the memory
@@ -606,7 +616,7 @@ class Builder:
         return out
 
     def build(self, advice: str) -> list[Block]:
-        """B(advice): every declaration block, from the concatenated declared advice."""
+        """B(advice): every execution block, from the concatenated advice."""
         out = []
         for k, a in enumerate(self.declarations(advice), 1):
             batches = [int(a[j:j + self.BATCH_BITS], 2) for j in range(self.COUNT_BITS, len(a), self.BATCH_BITS)]
@@ -622,7 +632,7 @@ class Builder:
         return out
 
     def grow(self, circuit: Sequence[Block], advice: str, a_k: str) -> Block:
-        """Declaration k's block: B(advice || a_k)'s last, which must extend the declared circuit so far."""
+        """Declaration k's block: B(advice || a_k)'s last, which must extend the registered circuit so far."""
         if len(a_k) > self.cap:
             raise Refusal("advice-cap", f"declaration {len(circuit) + 1}'s advice is {len(a_k)} bits, over the cap of "
                                         f"{self.cap}")
@@ -638,7 +648,7 @@ class Builder:
 @dataclass(frozen=True)
 class Baseline:
     """The registration: the product, B's descriptor and the registered information, theta's and the initial state's hiding
-    commitments: public digests and roots, no value. With the declaration blocks it is Lean's `Declaration` (d.D, d.θ)
+    commitments: public digests and roots, no value. With the execution blocks it is Lean's `Declaration` (d.D, d.θ)
     so far: B's blocks are d.D, and the gates theta and the initial state are committed to are d.θ."""
 
     product: str
@@ -684,7 +694,7 @@ def check_baseline(j: Mapping[str, Any]) -> tuple[Baseline, Builder]:
 
 @dataclass(frozen=True)
 class Served:
-    """One declaration period as served: each request's input, output, the state after it and its batch."""
+    """One execution phase as served: each request's input, output, the state after it and its batch."""
 
     xs: tuple[tuple[int, ...], ...]
     ys: tuple[tuple[int, ...], ...]
@@ -693,7 +703,7 @@ class Served:
 
 
 def operate(requests: Sequence[Sequence[int]], theta: Theta, state: int, tape: Tape, k: int) -> Served:
-    """Phase 3: serve the declaration period's requests in arrival order, batched as they come: a batch closes when it is
+    """Phase 3: serve the execution phase's requests in arrival order, batched as they come: a batch closes when it is
     full or when the developer's tape says the next request came late."""
     late = tape.bytes(f"batching/{k}", len(requests))
     ys, states, batches, b, size = [], [], [], 0, 0
@@ -712,7 +722,7 @@ def operate(requests: Sequence[Sequence[int]], theta: Theta, state: int, tape: T
 
 @dataclass(frozen=True)
 class Declaration:
-    """What declaration k posts: its declared advice and its record, whose digest the audit commits to."""
+    """What declaration k posts: its advice and its record, whose digest the audit commits to."""
 
     k: int
     advice: str
@@ -735,7 +745,7 @@ THETA_BYTES = THETA_ROWS * D
 
 
 def placement(builder: Builder, blk: Block, head: str) -> dict[str, Any]:
-    """B's placement of a declaration block (`Requirement.Placement`): each unit's device leaf and theta's memory leaf,
+    """B's placement of an execution block (`Requirement.Placement`): each unit's device leaf and theta's memory leaf,
     naming the layout they are placed on by its head."""
     return {"layout": head, "units": [p.device for p in blk.units], "theta": builder.store}
 
@@ -760,7 +770,7 @@ def check_placement(layout: Layout, p: Mapping[str, Any]) -> None:
 
 def declare(k: int, served: Served, prev: str, layout: str, builder: Builder, circuit: Sequence[Block], advice: str,
             state: int, tape: Tape) -> tuple[Declaration, Block, R.Registered]:
-    """Phase 4, the developer's side: the declared advice, B's block and its placement on the layout so far (`layout`, its
+    """Phase 4, the developer's side: the advice, B's block and its placement on the layout so far (`layout`, its
     head), its values committed and the record."""
     a_k = builder.encode(served.batches)
     blk = builder.grow(circuit, advice, a_k)
@@ -818,7 +828,7 @@ def draw(coins: bytes, blk: Block) -> list[int]:
 
 @dataclass(frozen=True)
 class Statement:
-    """A drawn unit's public statement: the declaration it is in, its index, whether it is a filler, where its values,
+    """A sampled proof block's public statement: the declaration it is in, its index, whether it is a filler, where its values,
     its input state and theta are committed, and onsite the certifier's commitments to its frames."""
 
     declaration: str
@@ -831,12 +841,12 @@ class Statement:
 
 
 def prove(statement: Statement, witness: Mapping[str, Any]) -> dict[str, Any]:
-    """STAND-IN for C-Flock behind the firewall: the proof is the unit's opening."""
+    """STAND-IN for Flock behind the ZK server: the proof is the unit's opening."""
     return dict(witness)
 
 
 def verify(statement: Statement, proof: Mapping[str, Any]) -> dict[str, str | None]:
-    """STAND-IN for C-Flock's verifier: each opening against its commitment, then the unit's circuit evaluated in the
+    """STAND-IN for Flock's verifier: each opening against its commitment, then the unit's circuit evaluated in the
     clear on the opened inputs and held to the opened outputs; onsite, the opened I/O held to the frames the certifier
     committed to. The reason for each failure, by check (`values`, `io`), None where it holds."""
     out: dict[str, str | None] = {"values": None, "io": None}
@@ -879,6 +889,16 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
     return hashlib.sha512(b"lifecycle/frame/v1\0" + salt + data).hexdigest()
 
 
+IDS = {**parties.IDS, "sampled-proofs": V2, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL}
+"""Each subprotocol's id as the composites run it (`products`): integrity is one-stage v2 (`SampledProofs.OneStageZk`) in
+both, onsite's work is PoUW's period, and onsite's memory challenger also runs a wipe."""
+
+
+def label(seed: str, i: int) -> str:
+    """Label i of the wipe stand-in's fill: SHA-512 over the memory challenger's seed and i, its first 8 bytes."""
+    return hashlib.sha512(b"lifecycle/wipe/v1\0" + bytes.fromhex(seed) + i.to_bytes(4, "big")).hexdigest()[:16]
+
+
 def answer(protocol: str, verdict: str, commitment: str | None, reason: str | None = None,
            public: Any = None, profile: Any = None) -> dict[str, Any]:
     """`Core.Protocol`'s outcome (`verity/core/protocols/interface`): public outputs and a profile on acceptance only."""
@@ -889,7 +909,7 @@ def answer(protocol: str, verdict: str, commitment: str | None, reason: str | No
 
 def sampled_proofs(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]]
                    ) -> dict[str, Any]:
-    """Sampled proofs' answer for the declaration: every drawn unit's values check held."""
+    """Sampled proofs' answer for the declaration: every sampled proof block's values check held."""
     bad = [f"unit {u}: {checks[u]['values']}" for u in units if u not in checks or checks[u]["values"]]
     law = {"law": "subset", "k": len(units)}
     return answer(IDS["sampled-proofs"], "reject" if bad else "accept", d.digest, "; ".join(bad) or None,
@@ -897,17 +917,70 @@ def sampled_proofs(d: Declaration, blk: Block, units: Sequence[int], checks: Map
                   {"law": law, "population": blk.n, "delta": str(DELTA)})
 
 
-def pouw_window(sp: Mapping[str, Any], blk: Block) -> dict[str, Any]:
+def pouw_window(sp: Mapping[str, Any], blk: Block, protocol: str = IDS["pouw"]) -> dict[str, Any]:
     """PoUW's window check over sampled proofs' answer: sampled proofs accepted the declaration's registration, at
-    subset:K' over the grid's n units; it publishes the credited work at ε and δ."""
+    subset:K' over the grid's n units; it publishes the credited work at ε and δ. Remote's work is the window's
+    (`verity/pouw/v1`); onsite's is PoUW's period (`verity/pouw/period/v1`), answered here a declaration at a time, over
+    its one window."""
     work = pouw_window_rules.bucket(blk.real)
     if sp["verdict"] != "accept":
-        return answer(IDS["pouw"], sp["verdict"], sp["commitment"], "sampled proofs did not accept the window")
+        return answer(protocol, sp["verdict"], sp["commitment"], "sampled proofs did not accept the window")
     d = sp["public"]["draw"]
     if (d["law"], d["k"], d["population"]) != ("subset", draw_size(blk), work.n):
-        return answer(IDS["pouw"], "reject", sp["commitment"], "the draw is not subset:K' over the window's grid")
-    return answer(IDS["pouw"], "accept", sp["commitment"], public={"work": work.credited * MACS, "tiles": work.credited,
-                                                                   "eps": str(EPS), "delta": str(DELTA)})
+        return answer(protocol, "reject", sp["commitment"], "the draw is not subset:K' over the window's grid")
+    return answer(protocol, "accept", sp["commitment"], public={"work": work.credited * MACS, "tiles": work.credited,
+                                                                "eps": str(EPS), "delta": str(DELTA)})
+
+
+GAMMA, ALPHA = 1 << 15, Fraction(1, 256)
+"""The inference-only policy's budgets, the verifier's own params: inference blocks of at most Γ gates, each reading at
+most α bits of fresh input per gate. One request is 19,620 gates reading 48 bits of fresh input (its input and the state
+word), theta being registered."""
+
+
+def _nci() -> Any:
+    """The inference-only policy's Python check (`verity/core/protocols/network/nci/lean/scripts/nci_reference.py`), the
+    reference its Lean check, `NciCheck`, is held to."""
+    name = "lifecycle_nci_reference"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            name, ROOT / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
+        m = importlib.util.module_from_spec(spec)
+        sys.modules[name] = m
+        spec.loader.exec_module(m)
+    return sys.modules[name]
+
+
+@cache
+def policy(n: int, gamma: int, alpha: tuple[int, int]) -> dict[str, Any]:
+    """The policy's check (`check_desc`) on an n-unit execution block: theta the root's registered input nodes (w1 and
+    w2), and the division B makes, each unit (one request) an inference block of its own."""
+    nci, text = _nci(), block_program(n)
+    inputs, registered, _ = nci.root_nodes(text)
+    owner, u = [], 0
+    for i in inputs:
+        owner.append("input" if i else u)
+        u += not i
+    theta = [k for k, (i, r) in enumerate(zip(inputs, registered)) if i and r]
+    return nci.check_desc({"program": text, "theta": theta, "owner": owner, "gamma": gamma, "alpha": list(alpha)})
+
+
+def inference_only(d: Declaration, blk: Block) -> dict[str, Any]:
+    """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `NciCheck.Protocol`): the
+    record, the one sampled proofs' answer commits to, names the block's Program, and the policy's check finds that the
+    block's division into inference blocks complies. It has no rounds and reads no coins. Theta's provenance is the
+    registration's check (`check_baseline`: theta committed under the registered builder)."""
+    if d.record.get("circuit") != blk.program:
+        return answer(IDS["inference-only"], "reject", d.digest, "the record does not name the declared circuit")
+    out = policy(blk.n, GAMMA, (ALPHA.numerator, ALPHA.denominator))
+    if "error" in out:
+        return answer(IDS["inference-only"], "reject", d.digest, out["error"])
+    if not out["complies"]:
+        u, rule = out["failure"]
+        over = "has more than Γ gates" if rule == "size" else "reads more than α bits of fresh input per gate"
+        return answer(IDS["inference-only"], "reject", d.digest, f"the division does not comply: inference block {u} {over}")
+    return answer(IDS["inference-only"], "accept", d.digest, public={},
+                  profile={"blocks": out["ius"], "gates": out["gates"]})
 
 
 # --- 6. accounting -----------------------------------------------------------------------------------------------------
@@ -934,32 +1007,35 @@ def products() -> dict[str, tuple[str, tuple[str, ...]]]:
 
 def compose(protocol: str, answers: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """A declaration's composite verdict: the composition's rule over exactly the product's subprotocols (any reject
-    rejects, then any undecided leaves it undecided), and its commitment the binding of their digests
+    rejects, then any undecided leaves it undecided), after its record tie (`Core.Composition.same`: the subprotocols it
+    ties committed to one record, or it rejects), and its commitment the binding of their digests
     (`Core.Composition.bind`)."""
     ref = _reference()
     pid, ids = products()[protocol]
     missing = [i for i in ids if i not in answers]
     verdicts = [answers[i]["verdict"] if i in answers else "undecided" for i in ids]
-    rule = ref.verdict(verdicts)
+    stray = {"onsite": ref.ONSITE, "remote": ref.REMOTE}[protocol].strays([(i, answers[i]) for i in ids if i in answers])
+    rule = "reject" if stray else ref.verdict(verdicts)
     digests = [(i, bytes.fromhex(answers[i]["commitment"])) for i in ids if i in answers and answers[i]["commitment"]]
     bound = ref.bind(pid, digests).hex() if len(digests) == len(ids) else None
-    reason = " | ".join(f"{i}: {answers[i]['reason']}" for i in ids if i in answers and answers[i]["verdict"] == "reject"
-                        ) or (f"no answer from {missing}" if missing else None)
+    reason = stray or " | ".join(f"{i}: {answers[i]['reason']}" for i in ids
+                                 if i in answers and answers[i]["verdict"] == "reject"
+                                 ) or (f"no answer from {missing}" if missing else None)
     return {"product": pid, "verdict": rule, "commitment": bound, "reason": None if rule == "accept" else reason,
             "components": {i: v for i, v in zip(ids, verdicts)}}
 
 
 DECLARATION_SECONDS = 60
-"""A stated parameter: a declaration period's length in a deployment, which scales a monitoring period's declarations and
+"""A stated parameter: an execution phase's length in a deployment, which scales a monitoring period's declarations and
 the layout's capacity in each."""
 TICKS_PER_SECOND = 10 ** 9
-PERIODS = {"week": 7 * 24 * 3600, "month": 30 * 24 * 3600, "year": 365 * 24 * 3600}
+PERIODS = dict(wipe_monitoring.PERIODS)
 
 
 def pooled(lines: Sequence[Mapping[str, Any]]) -> tuple[Fraction, int, int]:
     """The period's pooled bound, from its declarations' draws: (q, N, W). A wrong unit escapes a subset:K' draw of n with
     probability at most q = 1 - K'/n, and w wrong units in one block escape together with at most q^w, so on independent
-    coins W wrong units escape every draw with probability at most q_max^W. N is the period's credited units and
+    coins W wrong units escape every sample with probability at most q_max^W. N is the period's credited units and
     W = ceil(eps N): a share eps of the credited work wrong escapes with probability at most q_max^W."""
     q = max((Fraction(x["draw"]["population"] - x["draw"]["k"], x["draw"]["population"]) for x in lines),
             default=Fraction(1))
@@ -975,8 +1051,8 @@ def account(baseline: str, declarations: Sequence[Mapping[str, Any]], lines: Seq
             ) -> dict[str, Any]:
     """Phase 6 over the monitoring period's declarations: the chain from the registration through every declaration's
     record, each declaration's composite verdict, the period's (the same rule over the declarations), the credited AND
-    gates and multiply-adds against the compute the layout registered in each declaration period held (its PoUW
-    projection), the pooled bound, each subprotocol's projection of `layout` over a declaration period, and the same
+    gates and multiply-adds against the compute the layout registered in each execution phase held (its PoUW
+    projection), the pooled bound, each subprotocol's projection of `layout` over an execution phase, and the same
     scaled to monitoring periods of a week, a month and a year of declarations like these on `layout`."""
     ref = _reference()
     prev, broken = baseline, None
@@ -1049,10 +1125,10 @@ class Declared:
 
 
 class Developer:
-    """The developer: registers its hardware and its registered information, serves each declaration period's
-    requests, declares, and proves the drawn proof blocks behind the firewall. Its capabilities: `theta`, `state0`, `layout` (its first hardware
+    """The developer: registers its hardware and its registered information, serves each execution phase's
+    requests, declares, and proves the sampled proof blocks behind the ZK server. Its capabilities: `theta`, `state0`, `layout` (its first hardware
     registration entry), `later` (the one it adds after its first declaration), `plan` (B's placement), `product`, `load`
-    (remote: its declaration periods' requests; onsite they arrive through the certifier) and `cheat`, the one way it
+    (remote: its execution phases' requests; onsite they arrive through the certifier) and `cheat`, the one way it
     deviates, if any (`CHEATS`)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -1075,6 +1151,7 @@ class Developer:
         self.blocks: list[Declared] = []
         self.pending: list[list[int]] = []
         self.held: list[Send] = []
+        self.fill: list[str] = []
         return [Send("coins", Message("CoinsDraw", {"n": 64}))]
 
     def on(self, r: Received) -> list[Any]:
@@ -1108,11 +1185,16 @@ class Developer:
             out = self._serve_and_declare(xs)
             self.blocks[-1].frames = {int(i): f for i, f in body(m)["frames"].items()}
             return out
+        if m.type == "Fill":
+            f = body(m)
+            self.fill = ["00" * 8] * f["n"] if self.cheat == "foreign" else [label(f["seed"], i) for i in range(f["n"])]
+            return []
         if m.type == "Challenge":
             rows = [opening(self.private.theta, i) for i in body(m)["rows"]]
             if self.cheat == "lost-theta":
                 rows[0] = {**rows[0], "row": [(c + 1) & 0xFF for c in rows[0]["row"]]}
-            reply = Send(CHALLENGER, msg("Answer", m.fields["k"], {"rows": rows}))
+            labels = [self.fill[i] for i in body(m)["reads"]]
+            reply = Send(CHALLENGER, msg("Answer", m.fields["k"], {"rows": rows, "labels": labels}))
             if self.cheat == "off-node":
                 self.held.append(reply)
                 return [Timer(r.at + OFF_NODE_TICKS)]
@@ -1173,7 +1255,7 @@ class Developer:
         return out
 
     def statement(self, k: int, u: int) -> tuple[Statement, dict[str, Any]]:
-        """Unit u of declaration k: its statement and the witness the firewall proves it from."""
+        """Unit u of declaration k: its statement and the witness the ZK server proves it from."""
         b = self.blocks[k - 1]
         if u > 0:
             src, pos = b.values, u - 1
@@ -1195,9 +1277,12 @@ class Developer:
 
 class Verifier:
     """The verifier: checks each hardware registration, the registration, and each declaration; draws on its live coins
-    after the commitment; checks the drawn proof blocks' proofs; runs PoUW's window check; composes each declaration's verdict
+    after the commitment; checks the sampled proof blocks' proofs; runs PoUW's window check; composes each declaration's verdict
     with the subprotocols the composite lists (onsite: network certification and the memory challenger's report); and
     accounts for the monitoring period. Its outcome is every phase's public output."""
+
+    work = IDS["pouw"]
+    """The composite's PoUW subprotocol, which answers the window check."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.protocol, self.total = params["protocol"], params["declarations"]
@@ -1222,7 +1307,7 @@ class Verifier:
             self.public["refused"] = {"name": refused, "detail": detail}
         self.public["lines"] = self.lines
         out = [Send(p, msg("Done", 0)) for p in self.peers()]
-        return [*out, Record(self.public, "output"), Finish(self.public, refused)]
+        return [*out, LogEntry(self.public, "output"), Finish(self.public, refused)]
 
     def on(self, r: Received) -> list[Any]:
         try:
@@ -1296,8 +1381,8 @@ class Verifier:
         return "proofs" in self.parts[k]
 
     def answers(self, k: int, checks: Mapping[int, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-        """The subprotocols' answers for declaration k beyond sampled proofs and PoUW (onsite: the certifier, PoUS and the
-        bandwidth audit)."""
+        """The subprotocols' answers for declaration k beyond sampled proofs, PoUW and the inference-only policy (onsite:
+        the certifier, PoUS, the bandwidth audit and the wipe)."""
         return {}
 
     def _advance(self) -> list[Any]:
@@ -1312,8 +1397,11 @@ class Verifier:
     def _decide(self, k: int) -> list[Any]:
         d, blk, proofs = self.declarations[k - 1], self.circuit[k - 1], self.parts[k]["proofs"]
         checks = {u: verify(self.statement(k, u), proofs.get(str(u), {})) for u in self.draws[k]}
-        sp = sampled_proofs(Declaration(k, d["advice"], d["record"]), blk, self.draws[k], checks)
-        answers = {sp["protocol"]: sp, IDS["pouw"]: pouw_window(sp, blk), **self.answers(k, checks)}
+        dk = Declaration(k, d["advice"], d["record"])
+        sp = sampled_proofs(dk, blk, self.draws[k], checks)
+        answers = {sp["protocol"]: sp, self.work: pouw_window(sp, blk, self.work),
+                   IDS["inference-only"]: inference_only(dk, blk),
+                   **self.answers(k, checks)}
         line = {"k": k, "record": d["digest"], "advice": d["advice"], "advice_bits": len(d["advice"]),
                 "layout": d["record"]["placement"]["layout"], "placement": d["record"]["placement"]["units"],
                 "theta_leaf": d["record"]["placement"]["theta"],
@@ -1323,7 +1411,7 @@ class Verifier:
                 "answers": {i: {"verdict": a["verdict"], "reason": a["reason"]} for i, a in answers.items()},
                 "composite": compose(self.protocol, answers)}
         self.lines.append(line)
-        return [Record(line, "output")]
+        return [LogEntry(line, "output")]
 
     def statement(self, k: int, u: int) -> Statement:
         """Unit u of declaration k's statement, from what the verifier holds: the record, the previous record and the
@@ -1352,22 +1440,23 @@ def theta_of(seed: int) -> Theta:
 
 
 def load_of(seed: int, sizes: Sequence[int]) -> list[list[list[int]]]:
-    """The example's requests: one list a declaration period, each request D int8 codes."""
+    """The example's requests: one list an execution phase, each request D int8 codes."""
     rng = np.random.default_rng(seed)
     return [[[int(v) for v in rng.integers(-128, 128, D)] for _ in range(n)] for n in sizes]
 
 
 SIZES = (3, 4, 2)
-"""Requests in each declaration period of the example's monitoring period."""
+"""Requests in each execution phase of the example's monitoring period."""
 PLAN = ((1, ("gpu0", "gpu1")), (2, ("gpu0", "gpu1", "gpu2")))
 """B's placement: gpu2 from declaration 2 on, once the later hardware registration holds it."""
 CHEATS = ("hardware", "builder", "placement", "unreported", "advice-cap", "recommit", "wrong-value", "fork")
 """Each way the developer deviates in the tests, by the phase that refuses it: hardware registration (`hardware`: a later
 entry names a device again), registration (`builder`), operation (`placement`: B places a unit on a device before its
 registration; `unreported`), declaration (`advice-cap`, `recommit`), audit (`wrong-value`) and accounting (`fork`)."""
-ONSITE_CHEATS = ("io-mismatch", "lost-theta", "off-node")
+ONSITE_CHEATS = ("io-mismatch", "lost-theta", "off-node", "foreign")
 """The deviations only an onsite composite's own devices see: the wire carrying other outputs than the committed ones,
-answering the memory challenger with a row that isn't theta's, and fetching theta from off the node."""
+answering the memory challenger with a row that isn't theta's, fetching theta from off the node, and keeping other
+content where the memory challenger's fill should be."""
 OFF_NODE_TICKS = 3_000_000
 """`off-node`: the round trip to where a developer that doesn't hold theta on the node keeps it."""
 

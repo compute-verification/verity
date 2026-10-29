@@ -1,10 +1,9 @@
 /-
 Inputs for a composition, which the `#guard`s of the composition and of each product build: a stub's case (its
 parameter k, the units drawn and passed its evidence records, its root), any component's case as its own `serve` reads
-it (`Case`), and the composition's params, evidence and commitment over a list of them, with a registration's case beside
-them for a registered composition (`registered`).
+it (`Case`), and the composition's params, evidence and commitment over a list of them.
 -/
-import CoreComposition.Registered
+import CoreComposition.Product
 
 namespace Core.Composition.Cases
 
@@ -28,22 +27,14 @@ def stubEvidence (x : Stubbed) : String :=
 def Stubbed.case (x : Stubbed) : Case :=
   { id := x.id, params := stubParams x, commitment := x.root, evidence := (stubEvidence x).toUTF8 }
 
-private def named (x : Case) : String := "{\"id\":\"" ++ x.id ++ "\",\"params\":" ++ x.params ++ "}"
+def paramsOfCases (xs : List Case) : String :=
+  "{\"components\":[" ++ ",".intercalate (xs.map fun x =>
+    "{\"id\":\"" ++ x.id ++ "\",\"params\":" ++ x.params ++ "}") ++ "]}"
 
-private def entry (x : Case) : String :=
-  "{\"commitment\":\"" ++ Flock.hexOf x.commitment ++ "\",\"evidence\":\"" ++ Flock.hexOf x.evidence ++
-    "\",\"id\":\"" ++ x.id ++ "\",\"params\":" ++ x.params ++ "}"
-
-def paramsOfCases (xs : List Case) : String := "{\"components\":[" ++ ",".intercalate (xs.map named) ++ "]}"
-
-def evidenceOfCases (xs : List Case) : String := "{\"components\":[" ++ ",".intercalate (xs.map entry) ++ "]}"
-
-/-- A registered composition's params and evidence (`registered`): the registration's case `r` beside the components'. -/
-def paramsOfRegistered (r : Case) (xs : List Case) : String :=
-  "{\"components\":[" ++ ",".intercalate (xs.map named) ++ "],\"registration\":" ++ named r ++ "}"
-
-def evidenceOfRegistered (r : Case) (xs : List Case) : String :=
-  "{\"components\":[" ++ ",".intercalate (xs.map entry) ++ "],\"registration\":" ++ entry r ++ "}"
+def evidenceOfCases (xs : List Case) : String :=
+  "{\"components\":[" ++ ",".intercalate (xs.map fun x =>
+    "{\"commitment\":\"" ++ Flock.hexOf x.commitment ++ "\",\"evidence\":\"" ++ Flock.hexOf x.evidence ++
+    "\",\"id\":\"" ++ x.id ++ "\",\"params\":" ++ x.params ++ "}") ++ "]}"
 
 def paramsOf (xs : List Stubbed) : String := paramsOfCases (xs.map (·.case))
 
@@ -59,10 +50,5 @@ def answer (P : Protocol) (xs : List Stubbed) (ps : List Stubbed := xs) (c : Byt
 /-- `P`'s answer on any components' cases `xs`, under their own params and the commitment `c`. -/
 def answerCases (P : Protocol) (xs : List Case) (c : ByteArray) : Answer :=
   P.answer (paramsOfCases xs).toUTF8 c (evidenceOfCases xs).toUTF8
-
-/-- `P`'s answer, a registered composition's, on the registration's case `r` and the components' cases `xs`, under their
-own params and the commitment `c`. -/
-def answerRegistered (P : Protocol) (r : Case) (xs : List Case) (c : ByteArray) : Answer :=
-  P.answer (paramsOfRegistered r xs).toUTF8 c (evidenceOfRegistered r xs).toUTF8
 
 end Core.Composition.Cases

@@ -1,7 +1,7 @@
 """The KV cache's read and write sides at an HBM-exhaustion shape (HBM holds the encoded weights, the KV cache and
 filler, and every step reads all of it), on one GPU: `kv.cu`'s libraries (`--lib NAME=PATH`, built with
-KV_QHEADS the model's query heads) gated, then timed. Writes `kv-exhaust.json` and `kv.log` under `--out`, and in a
-`research run` its `result.json`.
+KV_QHEADS the model's query heads) gated, then timed. Writes `kv-exhaust.json` and `kv.log` under `--out`, and, with
+`RESEARCH_RUN_DIR` set, its `result.json`.
 
 Nothing is timed before its gate passed:
 - `gate`: kv_bench's codec gate at every k of `--ks`;
@@ -52,11 +52,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import numpy as np  # noqa: E402
-
 import kv as K  # noqa: E402
 import kv_bench as B  # noqa: E402
-import kv_receipt as R  # noqa: E402
 import kv_twin as T  # noqa: E402
 
 MODELS = {
@@ -65,11 +62,8 @@ MODELS = {
     "70b": {"heads": 64, "layers": 80, "shapes": B.SHAPES_70B},
 }
 FORMS = {0: "fma-plain", 1: "fma-phased", 2: "fma-ws", 3: "mma-plain", 4: "mma-phased", 5: "mma-ws",
-         6: "mma-occ-plain", 7: "mma-occ", 8: "mma-pers-plain", 9: "mma-pers", 10: "mma-ws-receipt",
-         11: "mma-ws-bound", 12: "mma-dyn"}
-PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6, 9: 8, 10: 3, 11: 3, 12: 3}
-RECEIPT = {10: 1, 11: 2}  # kv_attn's receipt forms and their rc (kv_receipt.NAMES)
-RC_SEED = hashlib.sha256(b"ra-word-codec/kv-receipt-seed").digest()
+         6: "mma-occ-plain", 7: "mma-occ", 8: "mma-pers-plain", 9: "mma-pers", 12: "mma-dyn"}
+PLAIN_OF = {1: 0, 2: 0, 4: 3, 5: 3, 7: 6, 9: 8, 12: 3}
 SPLITS = (1, 2, 4, 8, 16, 32)
 PERSISTENT = (8, 9)  # forms whose `splits` is the CTAs over the SMs' slots
 PERS_SPLITS = (1, 2, 4)
@@ -86,189 +80,20 @@ FLOOR_CTA_WARPS = 4  # kv.cu's WPB / 32
 def shape(lib: B.Lib) -> dict:
     a = (ctypes.c_int * 10)()
     lib.so.kv_attn_shape(ctypes.cast(a, ctypes.c_void_p))
-    sh = dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part", "mw", "mma", "mt"), a))
-    sh["receipts"] = rc_shape(lib)["forms"]
-    return sh
-
-
-def forms_of(sh: dict, only=None) -> list[int]:
-    """The forms a build runs: the tensor-core ones where whole words fill a head, and a receipt form where its build
-    runs it (form 11 only at 64-byte words)."""
-    mma = [3, 4, 5, 6, 7, 8, 9] + [fm for fm, rc in RECEIPT.items() if sh["receipts"] >> (rc - 1) & 1] + [12]
-    return [f for f in [0, 1, 2] + (mma if sh["mma"] else []) if only is None or f in only]
+    return dict(zip(("heads", "kv_heads", "head_dim", "tlw", "tle", "tt", "part", "mw", "mma", "mt"), a))
 
 
 def rc_shape(lib: B.Lib) -> dict:
+    """kv.cu's receipt shape (`kv_rc_shape`); `forms` & 4 where the build runs form 13 (`codec_tensor/step.py`)."""
     a = (ctypes.c_int * 7)()
     lib.so.kv_rc_shape(ctypes.cast(a, ctypes.c_void_p))
     return dict(zip(("rt", "lag", "zw", "mdw", "mt", "steps", "forms"), a))
 
 
-def rc_setup(lib: B.Lib, seed: bytes) -> dict:
-    """The receipt forms' sign rows and keys under `seed`, each form the build runs; their sign bits by rc."""
-    v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-    so = lib.so
-    so.kv_rc_set.argtypes, so.kv_rc_buffers.argtypes, so.kv_rc_tag.argtypes = [i, v, v], [v, v, v], [i, q, v]
-    so.kv_rc_l2.argtypes, so.kv_rc_tag16.argtypes, so.kv_rc_tag8.argtypes = [q, v, v], [i, q, v], [i, q, v]
-    rs = rc_shape(lib)
-    bits = {}
-    for rc in (rc for rc in (1, 2) if rs["forms"] >> (rc - 1) & 1):
-        bits[rc] = R.sign_bits(seed, rc, 32 * rs["steps"] * rs["rt"])
-        table, key = R.rows(bits[rc], rs["rt"], rc), R.key_words(seed, rc)
-        lib.call("kv_rc_set", rc, table.ctypes.data, key.ctypes.data)
-    so.kv_rc_sha_set.argtypes, so.kv_rc_sha8.argtypes = [ctypes.c_char_p], [q, v]
-    lib.call("kv_rc_sha_set", R.sha_prefix(seed))
-    return bits
-
-
-def sha_equal(sk, tg, nr: int, ends: int) -> bool:
-    """The first and last `ends` of kv_rc_sha8's nr receipts (64 bytes each in the receipt slots) equal kv_receipt's
-    over the same sketches."""
-    skn, tgn = sk.cpu().numpy(), tg.cpu().numpy().view(np.uint8).reshape(-1)
-    return all(R.sha_receipt(RC_SEED, u, skn[8 * u: 8 * u + 8]) == tgn[64 * u: 64 * u + 64].tobytes()
-               for u in sorted(set(range(min(ends, nr))) | set(range(max(0, nr - ends), nr))))
-
-
-def split_tokens(ctx: int, splits: int, tile: int) -> int:
-    """kv_attn's tokens a split at `splits` for a form of `tile` tokens a tile (or a receipt block)."""
-    per = -(-ctx // splits)
-    return -(-per // tile) * tile
-
-
-def receipt_vectors(sh: dict, rs: dict, b: int, ctx: int) -> int:
-    return b * sh["kv_heads"] * -(-ctx // (rs["rt"] * rs["mt"])) * rs["mdw"] * 16
-
-
-def cta_lanes(encl, seq: int, g: int, t0: int, t1: int, rs: dict):
-    """A CTA's raw words as its decoder lanes hold them, (tiles padded to whole blocks, MDW, 32, WB) uint8: lane l of
-    warp i holds word l % HW of token (32 / HW) i + l // HW, its KV head's K words, then its V words."""
-    mt, rt, mdw, wb = rs["mt"], rs["rt"], rs["mdw"], 16 * rs["steps"]
-    kw = 2 * K.HEAD_DIM // wb
-    nt = -(-(t1 - t0) // mt)
-    tp = -(-nt // rt) * rt
-    toks = np.zeros((tp * mt, 2 * kw, wb), np.uint8)
-    words = encl[seq, t0:t1].reshape(t1 - t0, -1, wb)
-    half = K.TOKEN_LAYER_BYTES // wb // 2
-    toks[: t1 - t0] = words[:, [kw * g + j for j in range(kw)] + [half + kw * g + j for j in range(kw)]]
-    return toks.reshape(tp, mdw, R.LANES, wb)
-
-
-def receipt_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: int | None = None) -> dict:
-    """Forms 10 and 11 at each gate cell, k of ks and split count of SPLITS, at layer L - 1: the attention output equals
-    form 5's bit for bit at every split count where the two split the tokens alike; every sketch equals kv_receipt's
-    from the raw words (form 11's from the z it dumped); the z after each CTA's last tile equals its partials bit for
-    bit; the first and last 64 receipts equal kv_receipt's; and so do the first and last 32 block receipts
-    (kv_rc_tag16 over the same sketches), half-block receipts (kv_rc_tag8) and SHA-512 half-block receipts
-    (kv_rc_sha8). Form 11 runs only at 64-byte words."""
-    sh, rs, f = shape(lib), rc_shape(lib), lib.field
-    hw = 4 * K.HEAD_DIM // f.word_bytes
-    if not sh["mma"] or sh["kv_heads"] != K.KV_HEADS or rs["mdw"] * R.LANES != rs["mt"] * hw or not sh["receipts"]:
-        return {}
-    layers = layers_override or m["layers"]
-    layer, st, tl, tle = layers - 1, B.stream(torch), K.TOKEN_LAYER_BYTES, sh["tle"]
-    mt, rt, zw, mw, group = rs["mt"], rs["rt"], rs["zw"], sh["mw"], sh["heads"] // sh["kv_heads"]
-    bits = rc_setup(lib, RC_SEED)
-    zl = group // 2
-    w_, gid, t4, mt_, e = np.meshgrid(np.arange(mw), np.arange(8), np.arange(zl), np.arange(8), np.arange(4),
-                                      indexing="ij")
-    z_word = ((w_ * 8 * zl + gid * zl + t4) * 32 + 4 * mt_ + e).ravel()
-    z_part = (w_ * sh["part"] + (2 * t4 + (e & 1)) * sh["head_dim"] + 16 * mt_ + gid + 8 * (e >> 1)).ravel()
-    scale = math.log2(math.e) / math.sqrt(K.HEAD_DIM)
-    out = {}
-    for b, ctx in cells:
-        g = torch.Generator(device="cuda").manual_seed(b * 100003 + ctx + 1)
-        plain = torch.randn(b * ctx * layers * tl // 2, dtype=torch.float32, device="cuda", generator=g).to(
-            torch.bfloat16)
-        pad = torch.zeros(b * ctx * layers, tle, dtype=torch.uint8, device="cuda")
-        pad[:, :tl] = plain.view(torch.uint8).view(-1, tl)
-        enc = torch.empty_like(pad)
-        q = (torch.randn(b, sh["heads"], K.HEAD_DIM, device="cuda", generator=g) * scale).to(torch.bfloat16)
-        nvec = receipt_vectors(sh, rs, b, ctx)
-        sk = torch.zeros(nvec, 16, dtype=torch.int32, device="cuda")
-        tg = torch.zeros(nvec, 8, dtype=torch.int32, device="cuda")
-        part = part_buffer(torch, sh, b)
-        o5, orc = (torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda") for _ in range(2))
-        cell = {"batch": b, "context": ctx, "layer": layer, "equal": {}, "sketch": {}, "z": {}, "receipts": {},
-                "block_receipts": {}, "half_block_receipts": {}, "sha_receipts": {}}
-        for k in ks:
-            B.set_key(lib, B.lib_key(lib, k))
-            lib.call("kv_encode", B.ptr(pad), B.ptr(enc), pad.numel() // f.word_bytes, 0, k, 0, st)
-            encl = enc.view(b, ctx, layers, tle)[:, :, layer].cpu().numpy()
-            for sp in SPLITS:
-                per, per5 = split_tokens(ctx, sp, rt * mt), split_tokens(ctx, sp, mt)
-                nsp = -(-ctx // per)
-                attn_call(lib, st, enc, 5, q, o5, part, b, ctx, layers, layer, sp, k)
-                for fm, rc in RECEIPT.items():
-                    if fm not in forms_of(sh):
-                        continue
-                    key = f"{FORMS[fm]}@k{k}"
-                    zd = (torch.zeros(b * nsp * K.KV_HEADS * (per // mt) * zw, dtype=torch.int32, device="cuda")
-                          if rc == 2 else None)
-                    sk.zero_()
-                    tg.zero_()
-                    lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None if zd is None else B.ptr(zd))
-                    orc.fill_(float("nan"))
-                    attn_call(lib, st, enc, fm, q, orc, part, b, ctx, layers, layer, sp, k)
-                    torch.cuda.synchronize()
-                    if per == per5 or min(per, per5) >= ctx:
-                        cell["equal"][key] = cell["equal"].get(key, True) and bool(torch.equal(orc, o5))
-                    skn, zdn = sk.cpu().numpy(), None if zd is None else zd.cpu().numpy().view(np.uint32)
-                    partn = part.cpu().numpy().view(np.uint32)
-                    sk_ok = z_ok = True
-                    for seq in range(b):
-                        for split in range(nsp):
-                            t0, t1 = split * per, min(ctx, (split + 1) * per)
-                            nt = -(-(t1 - t0) // mt)
-                            for hd in range(K.KV_HEADS):
-                                lanes = cta_lanes(encl, seq, hd, t0, t1, rs)
-                                cta = (seq * nsp + split) * K.KV_HEADS + hd
-                                z = None
-                                if zdn is not None:
-                                    zc = zdn.reshape(-1, per // mt, zw)[cta, :nt]
-                                    z = np.zeros((lanes.shape[0], zw), np.uint32)
-                                    z[:nt] = zc
-                                    want = partn[(seq * nsp + split) * mw * sh["part"] + hd * group * sh["head_dim"]
-                                                 + z_part]
-                                    z_ok &= bool(np.array_equal(zc[nt - 1][z_word], want))
-                                ref = R.sketch(lanes, bits[rc], rt, z, rs["lag"], zw)
-                                nb = ref.shape[0]
-                                v0 = ((seq * K.KV_HEADS + hd) * -(-ctx // (rt * mt)) + t0 // (rt * mt)) * rs["mdw"] * 16
-                                got = skn[v0: v0 + nb * rs["mdw"] * 16].reshape(ref.shape)
-                                sk_ok &= bool(np.array_equal(got, ref))
-                    cell["sketch"][key] = cell["sketch"].get(key, True) and sk_ok
-                    if zdn is not None:
-                        cell["z"][key] = cell["z"].get(key, True) and z_ok
-                    tgn = tg.cpu().numpy()
-                    rc_ok = all(R.receipt(RC_SEED, rc, v, skn[v]) == tgn[v].astype("<i4").tobytes()
-                                for v in list(range(64)) + list(range(nvec - 64, nvec)))
-                    cell["receipts"][key] = cell["receipts"].get(key, True) and rc_ok
-                    nblk = nvec // 16
-                    lib.call("kv_rc_tag16", rc, nblk, st)
-                    torch.cuda.synchronize()
-                    tbn = tg[:nblk].cpu().numpy()
-                    blk_ok = all(R.receipt(RC_SEED, rc, u, skn[16 * u: 16 * u + 16]) == tbn[u].astype("<i4").tobytes()
-                                 for u in sorted(set(range(min(32, nblk))) | set(range(max(0, nblk - 32), nblk))))
-                    cell["block_receipts"][key] = cell["block_receipts"].get(key, True) and blk_ok
-                    lib.call("kv_rc_tag8", rc, 2 * nblk, st)
-                    torch.cuda.synchronize()
-                    thn = tg[:2 * nblk].cpu().numpy()
-                    half_ok = all(R.receipt(RC_SEED, rc, u, skn[8 * u: 8 * u + 8]) == thn[u].astype("<i4").tobytes()
-                                  for u in sorted(set(range(min(32, 2 * nblk))) | set(range(max(0, 2 * nblk - 32),
-                                                                                              2 * nblk))))
-                    cell["half_block_receipts"][key] = cell["half_block_receipts"].get(key, True) and half_ok
-                    lib.call("kv_rc_sha8", 2 * nblk, st)
-                    torch.cuda.synchronize()
-                    cell["sha_receipts"][key] = cell["sha_receipts"].get(key, True) and sha_equal(sk, tg, 2 * nblk, 32)
-                    del zd
-        names = ("equal", "sketch", "receipts", "block_receipts", "half_block_receipts", "sha_receipts")
-        cell["ok"] = all(all(cell[n].values()) and cell[n] for n in names) and all(
-            cell["z"].values()) and (bool(cell["z"]) or 11 not in forms_of(sh))
-        log(f"receipt gate {lib.name} B={b} ctx={ctx} L={layers} layer {layer}: {'ok' if cell['ok'] else 'FAIL'}; "
-            + "; ".join(f"{n} " + ", ".join(f"{a} {v}" for a, v in cell[n].items()) for n in names + ("z",)))
-        out[f"b{b}_ctx{ctx}"] = cell
-        del plain, pad, enc, q, sk, tg, part, o5, orc
-        torch.cuda.empty_cache()
-    return out
+def forms_of(sh: dict, only=None) -> list[int]:
+    """The forms a build runs: the tensor-core ones where whole words fill a head."""
+    mma = [3, 4, 5, 6, 7, 8, 9, 12]
+    return [f for f in [0, 1, 2] + (mma if sh["mma"] else []) if only is None or f in only]
 
 
 def attn_occ(lib: B.Lib) -> dict:
@@ -276,8 +101,7 @@ def attn_occ(lib: B.Lib) -> dict:
     if lib.so.kv_attn_occ(ctypes.cast(a, ctypes.c_void_p)) != 0:
         return {}
     return {FORMS[5]: {"ctas_per_sm": a[0], "decoder_warps_per_sm": a[0] * a[1]},
-            FORMS[7]: {"ctas_per_sm": a[2], "decoder_warps_per_sm": a[2] * a[3]},
-            FORMS[10]: {"ctas_per_sm": a[4], "decoder_warps_per_sm": a[4] * a[1]}}
+            FORMS[7]: {"ctas_per_sm": a[2], "decoder_warps_per_sm": a[2] * a[3]}}
 
 
 def attn_call(lib, st, store, form, q, o, part, b, ctx, layers, layer, splits, k) -> None:
@@ -296,7 +120,7 @@ def attn_gate(lib: B.Lib, torch, m: dict, cells, ks, log, layers_override: int |
     st = B.stream(torch)
     tl, tle = K.TOKEN_LAYER_BYTES, sh["tle"]
     scale = math.log2(math.e) / math.sqrt(K.HEAD_DIM)
-    forms = [fm for fm in forms_of(sh) if fm not in RECEIPT]
+    forms = forms_of(sh)
     out = {}
     for b, ctx in cells:
         g = torch.Generator(device="cuda").manual_seed(b * 100003 + ctx)
@@ -361,8 +185,6 @@ def fit(ks, ys) -> dict:
 def prim_gate(lib: B.Lib, torch, log) -> dict:
     """kv_prim's ops at the twin's rare_cases (each op's rare carry or borrow, edges, random words) against
     kv_twin.prim_want, bit for bit."""
-    v, i = ctypes.c_void_p, ctypes.c_int
-    lib.so.kv_prim.argtypes = [i, v, v, v, i, v]
     f = lib.field
     out, st = {}, B.stream(torch)
     for op, cases in T.rare_cases(f, random.Random(f.n + 7)).items():
@@ -398,8 +220,6 @@ def floor_gate(lib: B.Lib, torch, store, n_words: int, k: int, grids, st) -> lis
 def floor_occ(lib: B.Lib, torch, store, n_words: int, k: int, sms: int, reps: int, r: float, st) -> dict:
     """The read-and-decode at OCC_CTAS CTAs an SM, each checksum-gated against one word a thread's; r the read in
     bytes/s."""
-    v, q, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-    lib.so.kv_decode_occ.argtypes = [v, q, q, i, i, v, i, v, v]
     xr = torch.zeros(1, dtype=torch.int64, device="cuda")
     xr.zero_()
     lib.call("kv_decode", B.ptr(store), 0, n_words, 0, k, 0, B.ptr(xr), st)
@@ -466,17 +286,9 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
     q = (torch.randn(b, heads, K.HEAD_DIM, device="cuda") * 0.1).to(torch.bfloat16).contiguous()
     o = torch.empty(b, heads, K.HEAD_DIM, dtype=torch.float32, device="cuda")
     part = part_buffer(torch, sh, b)
-    if any(fm in RECEIPT for fm in forms_of(sh, only)):
-        rc_setup(lib, RC_SEED)
-        nvec = receipt_vectors(sh, rc_shape(lib), b, ctx)
-        sk = torch.empty(nvec, 16, dtype=torch.int32, device="cuda")
-        sk2 = torch.empty_like(sk)
-        tg = torch.empty(nvec, 8, dtype=torch.int32, device="cuda")
     for fm in forms_of(sh, only):
         for k in ([1] if fm in RTOL else ks):
             B.set_key(lib, B.lib_key(lib, k))
-            if fm in RECEIPT:
-                lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
             per = {}
             ctas = (lambda s: b * K.KV_HEADS * s) if fm >= 3 else (lambda s: b * s)
             sweep = PERS_SPLITS if fm in PERSISTENT else [s for s in SPLITS if ctas(s) >= sms] or [max(SPLITS)]
@@ -490,186 +302,6 @@ def exhaust_cell(lib: B.Lib, torch, m: dict, b: int, ctx: int, ks, reps: int, sm
             sp = min(per, key=lambda s: per[s]["s"])
             row = {"splits": sp, "s": per[sp]["s"], "by_splits": per, "over_read": per[sp]["s"] / t_read,
                    "gbps": per_layer / per[sp]["s"] / 1e9}
-            if fm in RECEIPT:
-                lib.call("kv_rc_buffers", B.ptr(sk), None, None)
-
-                def sketch_pass():
-                    for l in range(layers):
-                        attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, l, sp, k)
-
-                def tag_pass():
-                    for _ in range(layers):
-                        lib.call("kv_rc_tag", RECEIPT[fm], nvec, st)
-
-                sketch_pass()
-                ts = [B.queued(lib, torch, sketch_pass, SPIN) / layers for _ in range(reps)]
-                lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
-                tag_pass()
-                tt = [B.queued(lib, torch, tag_pass, SPIN) / layers for _ in range(reps)]
-                row.update({"vectors": nvec, "sketch_only_s": statistics.median(ts), "sketch_only_times_s": ts,
-                            "tag_s": statistics.median(tt), "tag_times_s": tt,
-                            "sketch_only_over_read": statistics.median(ts) / t_read,
-                            "tag_over_read": statistics.median(tt) / t_read})
-                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: at {sp} splits, the sketch alone "
-                    f"{row['sketch_only_s'] * 1e3:.3f} ms ({row['sketch_only_over_read']:.3f}x the read), the receipts' "
-                    f"kernel alone {row['tag_s'] * 1e3:.3f} ms ({row['tag_over_read']:.3f}x), {nvec} vectors a layer")
-                win = (ctypes.c_uint64 * 2)()
-                lib.call("kv_rc_l2", nvec * 64, st, ctypes.cast(win, ctypes.c_void_p))
-                run_pass()
-                tl = [B.queued(lib, torch, run_pass, SPIN) / layers for _ in range(reps)]
-                tt = [B.queued(lib, torch, tag_pass, SPIN) / layers for _ in range(reps)]
-                row["l2"] = {"window_bytes": win[0], "persisting_bytes": win[1], "s": statistics.median(tl),
-                             "times_s": tl, "over_read": statistics.median(tl) / t_read, "tag_s": statistics.median(tt),
-                             "tag_times_s": tt, "tag_over_read": statistics.median(tt) / t_read}
-                lib.call("kv_rc_l2", 0, st, ctypes.cast(win, ctypes.c_void_p))
-                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: with {row['l2']['persisting_bytes'] / 1e6:.0f}"
-                    f" MB of the sketches' {nvec * 64 / 1e6:.0f} MB held in L2, a layer {row['l2']['s'] * 1e3:.3f} ms "
-                    f"({row['l2']['over_read']:.3f}x the read), the receipts' kernel alone {row['l2']['tag_s'] * 1e3:.3f}"
-                    f" ms ({row['l2']['tag_over_read']:.3f}x)")
-                nblk = nvec // 16
-
-                def tag16_pass():
-                    for _ in range(layers):
-                        lib.call("kv_rc_tag16", RECEIPT[fm], nblk, st)
-
-                def blocks_equal(skb=sk, tgb=tg, grp=16) -> bool:
-                    nr = nvec // grp
-                    skn, tgn = skb.cpu().numpy(), tgb[:nr].cpu().numpy()
-                    return all(R.receipt(RC_SEED, RECEIPT[fm], u, skn[grp * u: grp * u + grp])
-                               == tgn[u].astype("<i4").tobytes() for u in list(range(8)) + list(range(nr - 8, nr)))
-
-                tag16_pass()
-                tt = [B.queued(lib, torch, tag16_pass, SPIN) / layers for _ in range(reps)]
-                ok = blocks_equal()
-                row["tag16"] = {"blocks": nblk, "s": statistics.median(tt), "times_s": tt,
-                                "over_read": statistics.median(tt) / t_read, "receipts_equal": ok}
-                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: a receipt a block of 16 vectors, its "
-                    f"kernel alone {row['tag16']['s'] * 1e3:.3f} ms ({row['tag16']['over_read']:.3f}x the read), "
-                    f"{nblk} receipts a layer; the first and last 8 equal kv_receipt's: {ok}")
-                if not ok:
-                    raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt differs from kv_receipt's")
-
-                def block_pass(fn="kv_rc_tag16", nr=nblk):
-                    for l in range(layers):
-                        lib.call("kv_rc_buffers", B.ptr(sk), None, None)
-                        attn_call(lib, st, store, fm, q, o, part, b, ctx, layers, l, sp, k)
-                        lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
-                        lib.call(fn, *(() if fn == "kv_rc_sha8" else (RECEIPT[fm],)), nr, st)
-
-                for l2 in (False, True):
-                    persisting = 0
-                    if l2:
-                        lib.call("kv_rc_l2", nvec * 64, st, ctypes.cast(win, ctypes.c_void_p))
-                        persisting = win[1]
-                    block_pass()
-                    tb = [B.queued(lib, torch, block_pass, SPIN) / layers for _ in range(reps)]
-                    lib.call("kv_rc_l2", 0, st, ctypes.cast(win, ctypes.c_void_p))
-                    ok = blocks_equal()
-                    key = "pass_l2" if l2 else "pass"
-                    row["tag16"][key] = {"s": statistics.median(tb), "times_s": tb, "persisting_bytes": persisting,
-                                         "over_read": statistics.median(tb) / t_read, "receipts_equal": ok}
-                    log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: the sketch, then a receipt a block "
-                        f"of 16 vectors, a layer {row['tag16'][key]['s'] * 1e3:.3f} ms "
-                        f"({row['tag16'][key]['over_read']:.3f}x the read)"
-                        + (f", the sketches held in L2 ({persisting / 1e6:.0f} MB persisting)" if l2 else "")
-                        + f"; the first and last 8 equal kv_receipt's: {ok}")
-                    if not ok:
-                        raise SystemExit(f"{FORMS[fm]} k={k}: a block receipt after the sketch differs from kv_receipt's")
-
-                def tag8_pass():
-                    for _ in range(layers):
-                        lib.call("kv_rc_tag8", RECEIPT[fm], 2 * nblk, st)
-
-                lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
-                tag8_pass()
-                tt = [B.queued(lib, torch, tag8_pass, SPIN) / layers for _ in range(reps)]
-                ok = blocks_equal(grp=8)
-                row["tag8"] = {"receipts": 2 * nblk, "s": statistics.median(tt), "times_s": tt,
-                               "over_read": statistics.median(tt) / t_read, "receipts_equal": ok}
-                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: two receipts a block, 8 vectors each, "
-                    f"their kernel alone {row['tag8']['s'] * 1e3:.3f} ms ({row['tag8']['over_read']:.3f}x the read); "
-                    f"the first and last 8 equal kv_receipt's: {ok}")
-                if not ok:
-                    raise SystemExit(f"{FORMS[fm]} k={k}: a half-block receipt differs from kv_receipt's")
-
-                def half_block_pass():
-                    block_pass("kv_rc_tag8", 2 * nblk)
-
-                half_block_pass()
-                tb = [B.queued(lib, torch, half_block_pass, SPIN) / layers for _ in range(reps)]
-                ok = blocks_equal(grp=8)
-                row["tag8"]["pass"] = {"s": statistics.median(tb), "times_s": tb,
-                                       "over_read": statistics.median(tb) / t_read, "receipts_equal": ok}
-                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: the sketch, then two receipts a block of "
-                    f"8 vectors each, a layer {row['tag8']['pass']['s'] * 1e3:.3f} ms "
-                    f"({row['tag8']['pass']['over_read']:.3f}x the read); the first and last 8 equal kv_receipt's: {ok}")
-                if not ok:
-                    raise SystemExit(f"{FORMS[fm]} k={k}: a half-block receipt after the sketch differs from "
-                                     "kv_receipt's")
-
-                def sha_pass():
-                    for _ in range(layers):
-                        lib.call("kv_rc_sha8", 2 * nblk, st)
-
-                def sha_block_pass():
-                    block_pass("kv_rc_sha8", 2 * nblk)
-
-                lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
-                sha_pass()
-                tt = [B.queued(lib, torch, sha_pass, SPIN) / layers for _ in range(reps)]
-                ok = sha_equal(sk, tg, 2 * nblk, 8)
-                sha_block_pass()
-                tb = [B.queued(lib, torch, sha_block_pass, SPIN) / layers for _ in range(reps)]
-                ok_pass = sha_equal(sk, tg, 2 * nblk, 8)
-                row["sha8"] = {"receipts": 2 * nblk, "s": statistics.median(tt), "times_s": tt,
-                               "over_read": statistics.median(tt) / t_read, "receipts_equal": ok,
-                               "pass": {"s": statistics.median(tb), "times_s": tb,
-                                        "over_read": statistics.median(tb) / t_read, "receipts_equal": ok_pass}}
-                log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: two SHA-512 receipts a block, 8 vectors "
-                    f"each, their kernel alone {row['sha8']['s'] * 1e3:.3f} ms ({row['sha8']['over_read']:.3f}x the "
-                    f"read); the sketch, then them, a layer {row['sha8']['pass']['s'] * 1e3:.3f} ms "
-                    f"({row['sha8']['pass']['over_read']:.3f}x the read); the first and last 8 equal hashlib's: "
-                    f"{ok and ok_pass}")
-                if not (ok and ok_pass):
-                    raise SystemExit(f"{FORMS[fm]} k={k}: a SHA-512 half-block receipt differs from hashlib's")
-
-                hi, lo = torch.cuda.Stream(priority=-1), torch.cuda.Stream(priority=0)
-                bufs, tgs = (sk, sk2), (tg, tg[2 * nblk:])
-
-                for grp, fn, nr in ((16, "kv_rc_tag16", nblk), (8, "kv_rc_tag8", 2 * nblk)):
-                    def overlap_pass():
-                        hashed = [None, None]
-                        for l in range(layers):
-                            if hashed[l % 2] is not None:
-                                hi.wait_event(hashed[l % 2])
-                            lib.call("kv_rc_buffers", B.ptr(bufs[l % 2]), None, None)
-                            attn_call(lib, hi.cuda_stream, store, fm, q, o, part, b, ctx, layers, l, sp, k)
-                            read = torch.cuda.Event()
-                            read.record(hi)
-                            lo.wait_event(read)
-                            lib.call("kv_rc_buffers", B.ptr(bufs[l % 2]), B.ptr(tgs[l % 2]), None)
-                            lib.call(fn, RECEIPT[fm], nr, lo.cuda_stream)
-                            hashed[l % 2] = torch.cuda.Event()
-                            hashed[l % 2].record(lo)
-                        for e in hashed:
-                            hi.wait_event(e)
-
-                    with torch.cuda.stream(hi):
-                        overlap_pass()
-                        to = [B.queued(lib, torch, overlap_pass, SPIN) / layers for _ in range(reps)]
-                    torch.cuda.synchronize()
-                    last = (layers - 1) % 2
-                    ok = blocks_equal(bufs[last], tgs[last], grp)
-                    ov = row["tag16" if grp == 16 else "tag8"]["overlap"] = {
-                        "s": statistics.median(to), "times_s": to, "over_read": statistics.median(to) / t_read,
-                        "receipts_equal": ok}
-                    log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k}: the sketch, with layer l's receipts "
-                        f"of {grp} vectors on a second stream of lower priority beside layer l + 1's attention, a "
-                        f"layer {ov['s'] * 1e3:.3f} ms ({ov['over_read']:.3f}x the read); the last layer's first and "
-                        f"last 8 equal kv_receipt's: {ok}")
-                    if not ok:
-                        raise SystemExit(f"{FORMS[fm]} k={k}: an overlapped receipt of {grp} vectors differs from "
-                                         "kv_receipt's")
             cell["forms"].setdefault(FORMS[fm], {})[k] = row
             log(f"exhaust {lib.name} B={b} ctx={ctx} {FORMS[fm]}" + ("" if fm in RTOL else f" k={k}")
                 + f": a layer {row['s'] * 1e3:.3f} ms at {sp} splits, {row['gbps']:.0f} GB/s, {row['over_read']:.3f}x"
@@ -920,8 +552,7 @@ def main() -> int:
     if a.sanitize:
         for lib in libs:
             g = attn_gate(lib, torch, m, [(2, 100), (24, 100)], ks[:1], log, layers_override=2)
-            rg = receipt_gate(lib, torch, m, [(2, 100)], ks[:1], log, layers_override=2)
-            res["ok"] &= all(c["ok"] for c in g.values()) and all(c["ok"] for c in rg.values())
+            res["ok"] &= all(c["ok"] for c in g.values())
             B.set_key(lib, B.lib_key(lib, ks[0]))
             bad = floor_gate(lib, torch, B.random_words(torch, 5000, lib.field, 1), 5000, ks[0], [3], B.stream(torch))
             log(f"floor gate {lib.name} k={ks[0]}: " + (f"FAIL at grids {bad}" if bad else "ok"))
@@ -935,14 +566,9 @@ def main() -> int:
         q = (torch.randn(b, sh["heads"], K.HEAD_DIM, device="cuda") * 0.1).to(torch.bfloat16).contiguous()
         o = torch.empty(b, sh["heads"], K.HEAD_DIM, dtype=torch.float32, device="cuda")
         part = part_buffer(torch, sh, b)
-        nvec = receipt_vectors(sh, rc_shape(lib), b, ctx)
-        sk, tg = (torch.empty(nvec, w, dtype=torch.int32, device="cuda") for w in (16, 8))
-        rc_setup(lib, RC_SEED)
         for fm in forms_of(sh, only):
             k = 1 if fm in RTOL else ks[0]
             B.set_key(lib, B.lib_key(lib, k))
-            if fm in RECEIPT:
-                lib.call("kv_rc_buffers", B.ptr(sk), B.ptr(tg), None)
             attn_call(lib, st, store, fm, q, o, part, b, ctx, 1, 0, a.ncu_splits, k)
             torch.cuda.synchronize()
             log(f"ncu {lib.name} B={b} ctx={ctx} {FORMS[fm]} k={k} at {a.ncu_splits} splits launched")
@@ -954,10 +580,8 @@ def main() -> int:
         pg = prim_gate(lib, torch, log)
         g = B.gate(lib, torch, ks, 48, 1 << 16, log)
         ag = attn_gate(lib, torch, m, cells_of(a.gate_cells), ks, log)
-        rg = receipt_gate(lib, torch, m, cells_of(a.gate_cells), ks, log)
-        res["libs"][lib.name] = {"occupancy": occ, "prim_gate": pg, "gate": g, "attn_gate": ag, "receipt_gate": rg}
-        res["ok"] &= pg["ok"] and all(v["ok"] for v in g.values()) and all(c["ok"] for c in ag.values()) and all(
-            c["ok"] for c in rg.values())
+        res["libs"][lib.name] = {"occupancy": occ, "prim_gate": pg, "gate": g, "attn_gate": ag}
+        res["ok"] &= pg["ok"] and all(v["ok"] for v in g.values()) and all(c["ok"] for c in ag.values())
     if not res["ok"]:
         log("a gate failed: nothing timed")
     else:

@@ -116,7 +116,7 @@ def shape(built, tmp_path_factory) -> Path:
     return f
 
 
-#: the draw of every one of the inner statement's 64 units, in order, as `--rec-inner-draw` takes it
+#: the sample of every one of the inner statement's 64 units, in order, as `--rec-inner-draw` takes it
 FULL_DRAW = {"law": "subset", "population": 64, "k": 64, "units": list(range(64))}
 
 
@@ -288,7 +288,7 @@ def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, 
 
 def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path):
     """`RecCoins.drawnSpec`: a record whose draw is every unit is decoded against the drawn statement's spec, whose
-    header carries the draw. The honest session ran without one, so its record is refused there, at its parameters."""
+    header carries the sample. The honest session ran without one, so its record is refused there, at its parameters."""
     inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     v = _verify(forged, SET / "L3" / "pub.bin", SET / "L3" / "registered.json", shape, inner,
                 rows=_acc_rows(tmp_path / "rows.json", SET / "L3"))
@@ -341,7 +341,7 @@ def test_a_dirs_registered_one_bit_off_is_refused_at_its_opening(dirs_forged, sh
 
 @pytest.fixture(scope="module")
 def undrawn(tmp_path_factory) -> Path:
-    """Level 3's outer session with its unit draw removed: `verify` sets a part's statement up over its whole population, so
+    """Level 3's outer session with its unit sample removed: `verify` sets a part's statement up over its whole population, so
     the V* checks run on it, and the session, not the part's, is refused after setup."""
     d = tmp_path_factory.mktemp("undrawn") / "session"
     shutil.copytree(SET / "outer-L3" / "session", d)
@@ -818,7 +818,7 @@ def test_a_v_star_file_of_bit_rows_is_refused_under_the_inner_shape(bit_rows, sh
 def test_rec_inner_coins_is_refused(built, tmp_path):
     """`--rec-inner-coins` is refused before any file is read (`RecCoins.refuseCoins`), by `statement` and by `verify`, in
     place of the inner statement's files or beside them: check 5 reads the inner statement's own files, and a record of
-    what it reads binds only the inner session's record, not the coins that session drew."""
+    what it reads binds only the inner session's record, not the coins that session sampled."""
     u = SET / "u" / "stage"
     (tmp_path / "empty").write_bytes(b"")
     (tmp_path / "s").mkdir()
@@ -932,7 +932,7 @@ FORM = "verity/flock-circuit+plain-leaves"
 def test_the_inner_statement_is_set_up_as_its_files_set_it_up(built, tmp_path):
     """`RecSetup.checkForm`, last in `RecSetup.checkShape`: how Flock's plain verifier is told to set the inner statement up
     is how its files set it up (`RecCoins.Files.stmt`), so its `m` and regions are the files' (`innerSetup_files`): a
-    `verity/flock-circuit+plain-leaves` statement on the coin server's coins with no lookup table, at a draw of every one of
+    `verity/flock-circuit+plain-leaves` statement on the coin server's coins with no lookup table, at a sample of every one of
     the files' units in order. The honest form is refused only at the (empty) outer circuit; each other by name."""
     (tmp_path / "tables").mkdir()
     (tmp_path / "tables" / "rsq.u32").write_bytes(b"")

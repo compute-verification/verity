@@ -145,7 +145,7 @@ Landing:
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
 - Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python,
-  as drive lands before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
+  as drive lands on `checked` before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
   list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
   `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
   the PR's base). No new swallowing handler: re-raise, record, or test first.
@@ -179,11 +179,11 @@ Protocols and claims:
   `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
-  are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
+  are for the whole node. PoUB treats the prover's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
+  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
@@ -194,9 +194,9 @@ Protocols and claims:
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
-  checks only padded counts. One key per protecting party, drawn once at setup from the OS before anything else, public
+  checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are drawn from the OS, not expanded by a PRG.
+  are sampled from the OS, not expanded by a PRG.
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
   implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the
