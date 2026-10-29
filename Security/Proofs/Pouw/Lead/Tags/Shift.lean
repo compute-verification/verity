@@ -17,12 +17,12 @@ move alike under every bump (`shift_probe`). The free values (`FreeLead`) are th
 coin: a raw coin, its lane value, or any encoding of it.
 
 **The words are shift-separated** (`leadWords_shift`): no two of a call's words differ by a constant on the coins, and
-none is a free value plus a constant, for at most 28,560 rows and columns, any data and any number of steps, with
-nonzero coin tiles and coin lanes of at least one bit. Step `t ≥ 1`'s words are separated by their rows' tag bits
-`b_t` and, in a row, by the coin lanes of their columns under `-rot`'s weights; step 0's by the row tag against `G`,
-whose digits are distinct and nonzero below 28,560 rows (`rowTag_inj`, `rowTag_ne_zero`), and a step-0 word reads a
-second coin through the column code against `a₁` (`colCode_ne_zero`). From 28,561 columns they are not
-(`leadWords_not_shift`): column 28,560's code is zero, and row 0's step-0 word there is one tag weight plus a constant.
+none is a free value plus a constant, for at most 28,560 rows, any number of columns, any data and any number of steps,
+with nonzero coin tiles and coin lanes of at least one bit. Words of different steps are separated by the later step's
+tag bits `b_t`, and words of one step in different columns by the step's coin lanes under `-rot`'s weights. In one
+column, two rows' step-0 words are separated by the row tag against `G`, whose digits are distinct and nonzero below
+28,560 rows (`rowTag_inj`, `rowTag_ne_zero`), and their later words by the rows' tag bits. Every word reads a coin lane
+and a second coin, `G` at step 0 and the tag bit later, so none is a function of one coin plus a constant.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Tags
@@ -102,19 +102,41 @@ def rowTile (htile : 0 < L.tile) (i : Fin L.m) : Fin L.tiles := ⟨(i : ℕ) / L
 
 /-! ## Each coin's coefficient in a word -/
 
+/-- Two values of the coins with the same coin lanes differ in a coin term only through step 0's tag and code or a
+later step's tag lane. -/
+theorem coinTerm_sub_of_lanes (ω₁ ω₀ : Coins L) (h : ω₁.2.2.2 = ω₀.2.2.2) (i : Fin L.m) (τ : Fin L.S) (j : Fin L.n) :
+    coinTerm L ω₁ i τ j - coinTerm L ω₀ i τ j =
+      (if (τ : ℕ) = 0 then
+        (∑ q : Fin 4, rowTag i q * ω₁.G q j) + ∑ q : Fin 4, ((ω₁.2.1 i q : ℕ) : ℤ) * colCode j q
+      else 1 + ((ω₁.1 i τ : ℕ) : ℤ)) -
+      (if (τ : ℕ) = 0 then
+        (∑ q : Fin 4, rowTag i q * ω₀.G q j) + ∑ q : Fin 4, ((ω₀.2.1 i q : ℕ) : ℤ) * colCode j q
+      else 1 + ((ω₀.1 i τ : ℕ) : ℤ)) := by
+  have : laneTerm L ω₁ i τ j = laneTerm L ω₀ i τ j := by unfold laneTerm Coins.s; rw [h]
+  unfold coinTerm
+  rw [this]
+  ring
+
+/-- Two values of the coins that differ only in the coin lanes differ in a coin term by the lanes. -/
+theorem coinTerm_sub_of_tags (ω₁ ω₀ : Coins L) (h1 : ω₁.1 = ω₀.1) (h2 : ω₁.2.1 = ω₀.2.1) (h3 : ω₁.2.2.1 = ω₀.2.2.1)
+    (i : Fin L.m) (τ : Fin L.S) (j : Fin L.n) :
+    coinTerm L ω₁ i τ j - coinTerm L ω₀ i τ j = laneTerm L ω₁ i τ j - laneTerm L ω₀ i τ j := by
+  unfold coinTerm Coins.G
+  rw [h1, h2, h3]
+  ring
+
 theorem word_bumpB (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (i₀ : Fin L.m) {t₀ : Fin L.S} (h0 : (t₀ : ℕ) ≠ 0)
     (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) :
     word L κ (bumpB i₀ t₀) i t j - word L κ (zeroC L) i t j = if i = i₀ ∧ t₀ ≤ t then 1 else 0 := by
   rw [word_sub, Finset.sum_eq_single t₀]
-  · unfold coinTerm
-    rw [ite_eq_right h0, ite_eq_right h0]
-    simp only [bumpB, zeroC, Coins.s, and_true]
+  · rw [coinTerm_sub_of_lanes (bumpB i₀ t₀) (zeroC L) rfl, ite_eq_right h0, ite_eq_right h0]
+    simp only [bumpB, zeroC, and_true]
     by_cases hi : i = i₀ <;> by_cases ht : t₀ ≤ t <;> simp [hi, ht]
   · intro τ _ hτ
-    unfold coinTerm
+    rw [coinTerm_sub_of_lanes (bumpB i₀ t₀) (zeroC L) rfl]
     by_cases h : (τ : ℕ) = 0
     · simp [h, bumpB, zeroC, Coins.G]
-    · simp [h, bumpB, zeroC, Coins.s, hτ]
+    · simp [h, bumpB, zeroC, hτ]
   · simp
 
 theorem word_bumpA (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (i₀ : Fin L.m) (q₀ : Fin 4) (i : Fin L.m)
@@ -122,16 +144,15 @@ theorem word_bumpA (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (i₀ : Fin L.
     word L κ (bumpA i₀ q₀) i t j - word L κ (zeroC L) i t j = if i = i₀ then colCode j q₀ else 0 := by
   have hS : 0 < L.S := Nat.lt_of_le_of_lt (Nat.zero_le _) t.isLt
   rw [word_sub, Finset.sum_eq_single ⟨0, hS⟩]
-  · rw [ite_eq_left (Fin.le_def.2 (Nat.zero_le _))]
-    unfold coinTerm
+  · rw [ite_eq_left (Fin.le_def.2 (Nat.zero_le _)), coinTerm_sub_of_lanes (bumpA i₀ q₀) (zeroC L) rfl]
     by_cases hi : i = i₀
     · subst hi
       simp [bumpA, zeroC, Coins.G, apply_ite, ite_mul, Finset.sum_ite_eq']
     · simp [hi, bumpA, zeroC, Coins.G]
   · intro τ _ hτ
-    unfold coinTerm
+    rw [coinTerm_sub_of_lanes (bumpA i₀ q₀) (zeroC L) rfl]
     have h : (τ : ℕ) ≠ 0 := fun h => hτ (Fin.ext h)
-    simp [h, bumpA, zeroC, Coins.s]
+    simp [h, bumpA, zeroC]
   · simp
 
 theorem word_bumpG (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (q₀ : Fin 4) (j₀ : Fin L.n) (i : Fin L.m)
@@ -139,26 +160,24 @@ theorem word_bumpG (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (q₀ : Fin 4)
     word L κ (bumpG q₀ j₀) i t j - word L κ (zeroC L) i t j = if j = j₀ then rowTag i q₀ else 0 := by
   have hS : 0 < L.S := Nat.lt_of_le_of_lt (Nat.zero_le _) t.isLt
   rw [word_sub, Finset.sum_eq_single ⟨0, hS⟩]
-  · rw [ite_eq_left (Fin.le_def.2 (Nat.zero_le _))]
-    unfold coinTerm
+  · rw [ite_eq_left (Fin.le_def.2 (Nat.zero_le _)), coinTerm_sub_of_lanes (bumpG q₀ j₀) (zeroC L) rfl]
     by_cases hj : j = j₀
     · subst hj
       simp [bumpG, zeroC, Coins.G, apply_ite, mul_sub, Finset.sum_sub_distrib, Finset.sum_ite_eq']
     · simp [hj, bumpG, zeroC, Coins.G]
   · intro τ _ hτ
-    unfold coinTerm
+    rw [coinTerm_sub_of_lanes (bumpG q₀ j₀) (zeroC L) rfl]
     have h : (τ : ℕ) ≠ 0 := fun h => hτ (Fin.ext h)
-    simp [h, bumpG, zeroC, Coins.s]
+    simp [h, bumpG, zeroC]
   · simp
 
 theorem word_bumpU (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (he : 1 < 2 ^ L.e) (htile : 0 < L.tile)
-    {t₀ : Fin L.S} (h0 : (t₀ : ℕ) ≠ 0) (k₀ : Fin L.tiles) (ℓ₀ : Fin 3) (j₀ : Fin L.n) (i : Fin L.m)
-    (t : Fin L.S) (j : Fin L.n) :
+    (t₀ : Fin L.S) (k₀ : Fin L.tiles) (ℓ₀ : Fin 3) (j₀ : Fin L.n) (i : Fin L.m) (t : Fin L.S) (j : Fin L.n) :
     word L κ (bumpU he t₀ k₀ ℓ₀ j₀) i t j - word L κ (zeroC L) i t j =
       if j = j₀ ∧ rowTile htile i = k₀ ∧ t₀ ≤ t then 2 * rotWeight i ℓ₀ else 0 := by
   rw [word_sub, Finset.sum_eq_single t₀]
-  · unfold coinTerm
-    rw [ite_eq_right h0, ite_eq_right h0]
+  · rw [coinTerm_sub_of_tags (bumpU he t₀ k₀ ℓ₀ j₀) (zeroC L) rfl rfl rfl]
+    unfold laneTerm
     simp only [dite_eq_left (tile_lt htile i)]
     by_cases ht : t₀ ≤ t
     · rw [ite_eq_left ht]
@@ -174,10 +193,8 @@ theorem word_bumpU (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (he : 1 < 2 ^ 
         simp [bumpU, zeroC, Coins.s, this]
     · rw [ite_eq_right ht, ite_eq_right (fun h => ht h.2.2)]
   · intro τ _ hτ
-    unfold coinTerm
-    by_cases h : (τ : ℕ) = 0
-    · simp [h, bumpU, zeroC, Coins.G]
-    · simp [h, bumpU, zeroC, Coins.s, hτ]
+    rw [coinTerm_sub_of_tags (bumpU he t₀ k₀ ℓ₀ j₀) (zeroC L) rfl rfl rfl]
+    simp [laneTerm, bumpU, zeroC, Coins.s, hτ]
   · simp
 
 /-! ## The coins a probe leaves alone -/
@@ -255,18 +272,15 @@ theorem rowTag_ne_zero {i : ℕ} (hi : i < 28560) : ∃ q, rowTag i q ≠ 0 := b
   rw [rowTag_eq]
   exact bal13_ne_zero (by split_ifs <;> omega) (by split_ifs <;> omega) (by split_ifs <;> omega)
 
-theorem colCode_ne_zero {j : ℕ} (hj : j < 28560) : ∃ q, colCode j q ≠ 0 :=
-  bal13_ne_zero (by omega) (by omega) (by omega)
-
 theorem rotWeight_ne_zero (i : ℕ) (ℓ : Fin 3) : rotWeight i ℓ ≠ 0 := by
   unfold rotWeight; split_ifs <;> norm_num
 
 /-! ## Shift separation -/
 
-/-- **The lead's words are shift-separated** on its coins, for at most 28,560 rows and columns, nonzero coin tiles
-and coin lanes of at least one bit. -/
-theorem leadWords_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : L.m ≤ 28560) (hn : L.n ≤ 28560)
-    (he : 0 < L.e) (htile : 0 < L.tile) : ShiftSeparatedOn Set.univ (FreeLead L) (leadWords L κ) := by
+/-- **The lead's words are shift-separated** on its coins, for at most 28,560 rows, any number of columns, nonzero
+coin tiles and coin lanes of at least one bit. -/
+theorem leadWords_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : L.m ≤ 28560) (he : 0 < L.e)
+    (htile : 0 < L.tile) : ShiftSeparatedOn Set.univ (FreeLead L) (leadWords L κ) := by
   have he' : 1 < 2 ^ L.e := Nat.one_lt_two_pow (by omega)
   have cast_sub : ∀ (ω₁ ω₀ : Coins L) (i : Fin L.m) (t : Fin L.S) (j : Fin L.n),
       (word L κ ω₁ i t j : ℚ) - word L κ ω₀ i t j = ((word L κ ω₁ i t j - word L κ ω₀ i t j : ℤ) : ℚ) :=
@@ -284,31 +298,25 @@ theorem leadWords_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : L.m
       rw [word_bumpB κ i' h0, word_bumpB κ i' h0, ite_eq_right (fun h => absurd h.2 (not_le.2 htt)),
         ite_eq_left ⟨rfl, le_rfl⟩] at this
       norm_num at this
-    · by_cases ht0 : (t : ℕ) = 0
-      · by_cases hj : j' = j
-        · subst hj
-          have hi : i ≠ i' := fun h => hne' (by rw [h])
-          obtain ⟨q₀, hq₀⟩ : ∃ q₀, rowTag i q₀ ≠ rowTag i' q₀ := by
+    · by_cases hj : j' = j
+      · subst hj
+        have hi : i ≠ i' := fun h => hne' (by rw [h])
+        by_cases ht0 : (t : ℕ) = 0
+        · obtain ⟨q₀, hq₀⟩ : ∃ q₀, rowTag i q₀ ≠ rowTag i' q₀ := by
             by_contra hc; push Not at hc
             exact hi (Fin.ext (rowTag_inj (by omega) (by omega) (funext hc)))
           have := P (bumpG q₀ j')
           rw [word_bumpG, word_bumpG, ite_eq_left rfl, ite_eq_left rfl] at this
           exact hq₀ (by exact_mod_cast this)
-        · obtain ⟨q₀, hq₀⟩ := rowTag_ne_zero (i := i) (by omega)
-          have := P (bumpG q₀ j)
-          rw [word_bumpG, word_bumpG, ite_eq_left rfl, ite_eq_right hj] at this
-          exact hq₀ (by exact_mod_cast this)
-      · by_cases hi : i' = i
-        · subst hi
-          have hj : j' ≠ j := fun h => hne' (by rw [h])
-          have := P (bumpU he' t (rowTile htile i') 0 j)
-          rw [word_bumpU κ he' htile ht0, word_bumpU κ he' htile ht0, ite_eq_left ⟨rfl, rfl, le_rfl⟩,
-            ite_eq_right (fun h => hj h.1)] at this
-          have h2 : (2 * rotWeight i' 0 : ℤ) = 0 := by exact_mod_cast this
-          exact rotWeight_ne_zero i' 0 (by omega)
         · have := P (bumpB i t)
-          rw [word_bumpB κ i ht0, word_bumpB κ i ht0, ite_eq_left ⟨rfl, le_rfl⟩, ite_eq_right (fun h => hi h.1)] at this
+          rw [word_bumpB κ i ht0, word_bumpB κ i ht0, ite_eq_left ⟨rfl, le_rfl⟩,
+            ite_eq_right (fun h => hi h.1.symm)] at this
           norm_num at this
+      · have := P (bumpU he' t (rowTile htile i) 0 j)
+        rw [word_bumpU κ he' htile, word_bumpU κ he' htile, ite_eq_left ⟨rfl, rfl, le_rfl⟩,
+          ite_eq_right (fun h => hj h.1)] at this
+        have h2 : (2 * rotWeight i 0 : ℤ) = 0 := by exact_mod_cast this
+        exact rotWeight_ne_zero i 0 (by omega)
     · have h0 : (t : ℕ) ≠ 0 := by have := Fin.lt_def.1 htt; omega
       have := P (bumpB i t)
       rw [word_bumpB κ i h0, word_bumpB κ i h0, ite_eq_left ⟨rfl, le_rfl⟩,
@@ -323,18 +331,17 @@ theorem leadWords_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : L.m
         (∀ x, x ≠ y₁ → coord ω₁ x = 0) ∧ word L κ ω₁ i t j - word L κ (zeroC L) i t j ≠ 0 ∧
         ∃ (y₂ : Coord L) (ω₂ : Coins L),
         (∀ x, x ≠ y₂ → coord ω₂ x = 0) ∧ word L κ ω₂ i t j - word L κ (zeroC L) i t j ≠ 0 ∧ y₁ ≠ y₂ := by
+      have hU : word L κ (bumpU he' t (rowTile htile i) 0 j) i t j - word L κ (zeroC L) i t j ≠ 0 := by
+        rw [word_bumpU κ he' htile, ite_eq_left ⟨rfl, rfl, le_rfl⟩]
+        have := rotWeight_ne_zero i 0; omega
       by_cases ht0 : (t : ℕ) = 0
       · obtain ⟨q₀, hq₀⟩ := rowTag_ne_zero (i := i) (by omega)
-        obtain ⟨q₁, hq₁⟩ := colCode_ne_zero (j := j) (by omega)
-        refine ⟨_, bumpG q₀ j, fun x hx => coord_bumpG hx, ?_, _, bumpA i q₁, fun x hx => coord_bumpA hx, ?_,
-          by simp⟩
-        · rw [word_bumpG, ite_eq_left rfl]; exact hq₀
-        · rw [word_bumpA, ite_eq_left rfl]; exact hq₁
+        refine ⟨_, bumpG q₀ j, fun x hx => coord_bumpG hx, ?_, _, bumpU he' t (rowTile htile i) 0 j,
+          fun x hx => coord_bumpU he' hx, hU, by simp⟩
+        rw [word_bumpG, ite_eq_left rfl]; exact hq₀
       · refine ⟨_, bumpB i t, fun x hx => coord_bumpB hx, ?_, _, bumpU he' t (rowTile htile i) 0 j,
-          fun x hx => coord_bumpU he' hx, ?_, by simp⟩
-        · rw [word_bumpB κ i ht0, ite_eq_left ⟨rfl, le_rfl⟩]; norm_num
-        · rw [word_bumpU κ he' htile ht0, ite_eq_left ⟨rfl, rfl, le_rfl⟩]
-          have := rotWeight_ne_zero i 0; omega
+          fun x hx => coord_bumpU he' hx, hU, by simp⟩
+        rw [word_bumpB κ i ht0, ite_eq_left ⟨rfl, le_rfl⟩]; norm_num
     rcases hf with ⟨c, rfl⟩ | ⟨x, hx⟩
     · have := P ω₁
       simp only [sub_self] at this
@@ -348,41 +355,5 @@ theorem leadWords_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : L.m
       · have := P ω₁
         rw [key ω₁ y₁ hy₁ h1, sub_self] at this
         exact hω₁ (by exact_mod_cast this.symm)
-
-theorem rowTag_zero : rowTag 0 = Pi.single 0 1 := by
-  funext q; fin_cases q <;> rfl
-
-theorem colCode_28560 : colCode 28560 = 0 := by
-  funext q; fin_cases q <;> rfl
-
-/-- **From 28,561 columns the words are not shift-separated**: column 28,560's code is zero, and row 0's tag is
-`(1, 0, 0, 0)`, so row 0's step-0 word there is its tag weight `g[0, 28560]` less a constant. -/
-theorem leadWords_not_shift (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (hm : 0 < L.m) (hS : 0 < L.S)
-    (hn : 28561 ≤ L.n) : ¬ ShiftSeparatedOn Set.univ (FreeLead L) (leadWords L κ) := by
-  classical
-  intro h
-  let i₀ : Fin L.m := ⟨0, hm⟩
-  let t₀ : Fin L.S := ⟨0, hS⟩
-  let j₀ : Fin L.n := ⟨28560, by omega⟩
-  have hw : ∀ ω : Coins L,
-      word L κ ω i₀ t₀ j₀ = -bias L.S 28560 + κ i₀ t₀ j₀ + ((ω.2.2.1 0 j₀ : ℕ) : ℤ) - 3 := fun ω => by
-    unfold word
-    rw [Finset.sum_eq_single t₀]
-    · rw [ite_eq_left le_rfl]
-      unfold coinTerm
-      have hi : ((i₀ : Fin L.m) : ℕ) = 0 := rfl
-      have hj : ((j₀ : Fin L.n) : ℕ) = 28560 := rfl
-      rw [ite_eq_left rfl, hi, hj, rowTag_zero, colCode_28560, Fin.sum_univ_four]
-      simp [Coins.G]
-      ring
-    · intro τ _ hτ
-      exact ite_eq_right fun hle => hτ (le_antisymm hle (Fin.le_def.2 (Nat.zero_le _)))
-    · simp
-  refine h.2 _ (Finset.mem_image.2 ⟨(i₀, t₀, j₀), Finset.mem_univ _, rfl⟩) (fun ω => ((ω.2.2.1 0 j₀ : ℕ) : ℚ))
-    (Or.inr ⟨.inr (.inr (.inl (0, j₀))), fun ω ω' hc => by simp only [coord] at hc; simp [hc]⟩)
-    ⟨(bias L.S 28560 : ℚ) - κ i₀ t₀ j₀ + 3, fun ω _ => ?_⟩
-  simp only [hw]
-  push_cast
-  ring
 
 end Pouw.SecurityProofs.Lead.Tags

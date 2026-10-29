@@ -57,7 +57,7 @@ same artifact id; provenance lives on the Attempt (§4), not inside the artifact
  "files": [{"path": "tiles_random.npz", "sha256": "<hex>", "bytes": 100}, ...]}
 ~~~
 
-Tree `files` are sorted by `path`; paths are relative with `/` separators, no `..`, `.` or empty components, no absolute, no
+Tree `files` are sorted by `path`; paths are relative with `/` separators, no `..`, `.` or empty segments, no absolute, no
 duplicates, and no path that is both a file and a directory of another (`a` and `a/b`); `bytes` is the sum; an empty tree is
 legal. A file payload's `name` is a bare file name. Every file (and a file payload) is one blob at `objects/sha256/<hex>`.
 `refs` values are `art:` ids or lists of them (the store checks the syntax, not existence — a ref may point at an artifact that
@@ -167,7 +167,7 @@ replicas(id, location, verified_utc, detail)            verifications, which a r
 replica_checks(id, location, verified)                  which check (§7): etag-md5 | sha256-readback
 ~~~
 
-Flattening: nested objects get dotted keys, lists numeric components (`families.0`), scalars are stored as text (strings raw,
+Flattening: nested objects get dotted keys, lists numeric indices (`families.0`), scalars are stored as text (strings raw,
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
 blob present here; `remote` means pushed (from a listing or a recorded push/verification).
 
@@ -420,10 +420,10 @@ value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `
 prints the table; the groups are:
 
 - **result** — the producing lane about its own result (the r20 ledger import, or `label` by hand): `candidate` (enum: the backend
-  families A-GKR, B-Ligero, C-Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
-  `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
+  families A-GKR, B-Ligero, Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
+  `proof_class` (enum: the contract's classes + `COMPONENT`), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
-  `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: unit | vu | component), `label`, `note`, `assumptions` (list),
+  `overhead`, `seconds_per_vu`, `track` (enum), `scope` (enum: `unit` | `vu` | `component`), `label`, `note`, `assumptions` (list),
   `omitted` (list), `domain` (`total` | `finite-only`: the operand domain the statement covers), `breakthrough` (bool); grouping and configuration a table selects on: `lane`, `row`, `sweep`, `arm`, `stage`,
   `source`, `superseded_by`, `of-record` (bool: the lane's evidence of record for its `goal`), `goal` (the outcome it is evidence for), `run_of_record` (the table record a run or artifact is, by the record's name),
   `interaction_attempt_of` (the cell an interaction attempt belongs to), `hash`, `sharing`, `fold` (int), `pipeline` (int);

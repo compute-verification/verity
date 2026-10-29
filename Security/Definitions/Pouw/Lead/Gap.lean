@@ -16,7 +16,8 @@ Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
   - `coinBranchGap`: what a prover that branches on the coins keeps by copying whole MMA tiles across the call's
     rows and patching the rest (copy-and-patch at tile grain), 0.084% of stock;
   - `pStarGap`: the coin lanes' guess at `-rot`'s weights, 0.0035% of stock;
-  - `networkGap`: work outsourced within the egress cap, 0.036% of stock a 32 bits of cap;
+  - `networkGap`: work outsourced within the call's bits (`Layout.callBits`), `betaLead` a bit: `n_max = 256/3` MACs
+    a coin bit, every step carrying the three coin lanes, at the call's honest W1 work a MAC (`wMac`);
   - `tableGap`: pre-coin tables and the coin stream holding a committed tile, within the node's memory.
 * `gapShare` is the gap over stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points.
 -/
@@ -57,8 +58,17 @@ def coinBranchGap (L : Layout) : ℚ := 84 / 100000 * stockRegs L
 /-- The coin lanes' guess under `-rot`'s weights: 0.0035% of stock. -/
 def pStarGap (L : Layout) : ℚ := 35 / 1000000 * stockRegs L
 
-/-- Work outsourced within the egress cap: 0.036% of stock a 32 bits of cap. -/
-def networkGap (L : Layout) : ℚ := 36 / 100000 * (L.cap / 32 : ℚ) * stockRegs L
+/-- MACs a coin bit at most, where every step carries the three coin lanes under `-rot`'s weights: `256/3`. -/
+def nMax : ℚ := 256 / 3
+
+/-- The call's honest W1 work a MAC: `32 · honestRegs / (m · n · K)`. -/
+def wMac (L : Layout) (C : Commit L) : ℚ := 32 * honestRegs L C / (L.m * L.n * L.K)
+
+/-- The priced W1 work an exchanged bit replaces: `n_max · W_mac`. -/
+def betaLead (L : Layout) (C : Commit L) : ℚ := nMax * wMac L C
+
+/-- Work outsourced within the call's bits, in registers: `betaLead · callBits / 32`. -/
+def networkGap (L : Layout) (C : Commit L) : ℚ := betaLead L C * L.callBits / 32
 
 /-- Pre-coin tables and the coin stream holding a committed tile, in a call of whole tiles: a memory's `2 · mem + 1`
 tile values (the tables', the stream's and zero) against each committed tile's words. A step-0 tile is a given value
@@ -71,7 +81,7 @@ def tableGap (L : Layout) : ℚ :=
 
 /-- **The gap** in registers: the sum of the six terms. -/
 def gapRegs (L : Layout) (C : Commit L) : ℚ :=
-  headGap L C + hidingGap L + coinBranchGap L + pStarGap L + networkGap L + tableGap L
+  headGap L C + hidingGap L + coinBranchGap L + pStarGap L + networkGap L C + tableGap L
 
 /-- The gap as a share of stock. -/
 def gapShare (L : Layout) (C : Commit L) : ℚ := gapRegs L C / stockRegs L

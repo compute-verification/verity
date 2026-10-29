@@ -55,7 +55,7 @@ def adders():
 
 
 def _lay(t, rl, calls=(), reads=(), own=("derive",), ins=(), outs=()):
-    return LY.Layout(t.digest() if t is not None else None, rl, tuple(ins), tuple(outs), own, tuple(calls), tuple(reads))
+    return LY.BlockLayout(t.digest() if t is not None else None, rl, tuple(ins), tuple(outs), own, tuple(calls), tuple(reads))
 
 
 def test_own_sizes_follow_the_v2_rule(adders):
