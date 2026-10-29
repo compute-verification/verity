@@ -2823,7 +2823,8 @@ RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/com
 #: vouches for nothing
 RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 1000, 200, 48
 #: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
-#: `tests/` or `test/` directory of it, Markdown and READMEs; everything else stays, as a build may read any file
+#: `tests/` or `test/` directory of it, Markdown and READMEs, but never a `.lean` file, a lakefile, `lake-manifest.json` or a
+#: lock, wherever it sits (the audit walks every `.lean` file of the package); everything else stays, as a build may read any file
 RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
 _SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -2878,11 +2879,11 @@ class RecordsGate:
 
     Four heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one whose tree is a parent's
     byte for byte (a merge that resolved to its own side, the parent vouched); one whose one parent is vouched and has the
-    package's inputs (`_inputs`, tests and docs aside: a tests-only fix above a record commit); one that commits exactly the
-    record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
-    changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
-    but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
-    for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
+    package's inputs (`_inputs`, non-Lean tests and docs aside: a tests-only fix above a record commit); one that commits
+    exactly the record a records run of its one parent regenerated for a package that passed there (`--update`'s
+    `record/lean-audit.json`), changing nothing but locks; and one that only merged `main` into a vouched commit, every file it
+    changed being main's whole but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast
+    path reports `path: reused` for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
     A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): every file of
     the package's directory, lock included, and of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
@@ -3043,7 +3044,7 @@ class RecordsGate:
 
     def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
         """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
-        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside)."""
+        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside, never Lean)."""
         if not commits:
             return set()
         r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
@@ -3068,7 +3069,9 @@ class RecordsGate:
             p = next((p for p in pkgs if p == "." or tok.startswith(p + "/")), None)
             rel = tok if p in (None, ".") else tok[len(p) + 1:]
             name = posixpath.basename(rel)
-            if not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md") or name.startswith("README")):
+            lean = name.endswith(".lean") or name.startswith("lakefile.") or name in ("lake-manifest.json", LEAN_LOCK)
+            if lean or not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md")
+                            or name.startswith("README")):
                 out.add(at)
         if n != len(commits):                                    # a pair it skipped (an object it couldn't read) is no match
             raise QueueError(f"git diff-tree --stdin compared {n} of {len(commits)} commits")
