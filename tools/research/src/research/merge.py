@@ -19,8 +19,10 @@ be read, passes no gate) and not in `REFUSED_KINDS` (the Lean fast path's `lean-
 the verdict passed and no step listed twice.  A sharded check (`check.py --shard K/N`, one Attempt per shard, its result a
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
-commit's own `tools/verity/check/`, every part once, every job of its `ci.toml`, no step failed) and the combine's steps theirs; a
-shard alone passes nothing.  With a usable remote the catalog's attempts are refreshed first, so an attempt
+commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
+steps theirs; a shard alone passes nothing.  A job off the gate (`gate = false`: circuit-check, ratchet-gate) is required of no
+check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
+there reverts its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
@@ -191,7 +193,9 @@ SHARD_KIND = "check-shard/v1"
 
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
-    """The job names ``commit``'s own `tools/verity/check/ci.toml` declares, or why they can't be read."""
+    """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` puts on the merge gate (every job but those with
+    `gate = false`), or why they can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's
+    after-landing run, whose red reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
     import tomllib
 
     from .store import tools_registry
@@ -200,7 +204,8 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
                                   lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
     r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
-        jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", [])] if r.returncode == 0 else None
+        jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", []) if t.get("gate", True) is not False] \
+            if r.returncode == 0 else None
     except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
         jobs = None
     if not jobs or not all(isinstance(j, str) for j in jobs):
@@ -237,8 +242,9 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     ``command`` with `--shard K/N` (`invocation`), whose own result is a passed `SHARD_KIND` naming that shard, ``commit`` and
     its config (``commit``'s tree of `tools/verity/check/`), with no step but passed or skipped and its steps' parts its shard's parts;
     together, one N with K = 1..N once each, one list of every part, which their parts make exactly once and which covers every
-    job ``commit``'s `ci.toml` declares, and the same steps outside their parts (the preflight), passed in each.  The steps: those
-    once, then each part as its shard's step ran it."""
+    job ``commit``'s `ci.toml` puts on the gate (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing),
+    and the same steps outside their parts (the preflight), passed in each.  The steps: those once, then each part as its
+    shard's step ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
     config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/verity/check", check=False).stdout.strip()
@@ -300,7 +306,7 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
                       f"{', '.join(sorted(set(every) - set(covered))) or 'none'}; not a part: "
                       f"{', '.join(sorted(set(covered) - set(every))) or 'none'})")
     if uncovered := [j for j in jobs if not any(p == j or p.startswith(j + ":") for p in every)]:
-        return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml declares"
+        return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml puts on the gate"
     names = {p.partition(":")[0] for p in every}
     common = [[s["step"] for s in shards[k][2] if not s.get("parts")] for k in sorted(shards)]
     if any(sorted(c) != sorted(common[0]) for c in common) or names & set(common[0]):
@@ -934,13 +940,26 @@ def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
 
 
 def step_status(store, run_id: str, step: str) -> str:
-    """The status ``step`` has in the attempt's result.json ``steps`` ("absent" when it has none)."""
+    """The status ``step`` has in the attempt's result.json ``steps`` ("absent" when it has none).  A job a shard plan splits
+    (lean-audit, by Lake package): in a `--combine` check, its parts' (`STEP:PART`), passed only when each is; in a shard
+    (`SHARD_KIND`, or a deferred run's shard: drive's after-landing shards), "partial" unless that shard ran every part of it,
+    since a shard alone checks only its own."""
     try:
         art = (store.get_attempt(run_id) or {}).get("outputs", {}).get("result")
         doc = store.get_manifest(art).meta if art else {}       # a result artifact's document is its manifest's meta
     except Exception as e:  # noqa: BLE001  (an unreadable result admits nothing)
         return f"unreadable ({type(e).__name__})"
-    return next((s.get("status", "absent") for s in doc.get("steps", []) if s.get("step") == step), "absent")
+    steps = [s for s in doc.get("steps", []) if isinstance(s, dict)]
+    mine = [s for s in steps if s.get("step") == step]
+    sh = next((x for x in (doc.get("shard"), doc.get("deferred")) if isinstance(x, dict) and x.get("all")), None)
+    if sh and any(s.get("parts") for s in mine):
+        every = [p for p in sh["all"] if isinstance(p, str) and p.partition(":")[0] == step]
+        if sorted(p for s in mine for p in s.get("parts") or ()) != sorted(every):
+            return "partial"
+    if mine:
+        return mine[0].get("status", "absent")
+    parts = [s.get("status") or "absent" for s in steps if str(s.get("step", "")).startswith(step + ":")]
+    return next((x for x in parts if x != "passed"), "passed") if parts else "absent"
 
 
 def _record(tree: Path, tool: str, command: list[str], on: str | None, project: str | None, log=print,
@@ -1463,8 +1482,11 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     return [p["number"] for p in done], [p["number"] for p in moved]
 
 
-#: branches no sweep touches: the trunk, drive's train branch and its shadow
-KEEP_BRANCHES = frozenset({"main", "next", "queue-shadow"})
+#: the branch drive's review landing fast-forwards when drive.toml's `land_into` names it, and `main` follows to each commit whose
+#: after-landing run passed every step on the merge gate (`drive.Driver._promote`)
+CHECKED = "checked"
+#: branches no sweep touches: the trunk, drive's landing branch, its train branch and its shadow
+KEEP_BRANCHES = frozenset({"main", CHECKED, "next", "queue-shadow"})
 #: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
 MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
@@ -1939,9 +1961,9 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
 
 
 #: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
-#: and "only drive moves main and next" let only that App move `main` and `next`
+#: and "only drive moves main and next" let only that App move `main` and `next`, and `checked` once infra adds it to them
 DRIVE_ENV = "RESEARCH_DRIVE"
-DRIVE_ONLY = ("main", "next")
+DRIVE_ONLY = ("main", "next", CHECKED)
 
 
 def on_drive() -> bool:
@@ -1949,7 +1971,7 @@ def on_drive() -> bool:
 
 
 def off_drive(ref: str, verb: str) -> str:
-    """Why a push of ``ref`` from here is refused: only drive's App may move `main` and `next`."""
+    """Why a push of ``ref`` from here is refused: only drive's App may move `main`, `checked` and `next`."""
     return (f"`{ref}` is moved only by drive's App (GitHub's rulesets, 23 Oct), and this isn't drive (no {DRIVE_ENV}=1): run it "
             f"on the control pod, `/data/infra/drive.sh {verb}`")
 
