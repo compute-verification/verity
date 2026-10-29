@@ -691,7 +691,8 @@ class Served:
     def close(self, run: Any) -> None:
         """After the run's last round: refuse a window that isn't static, or that left a table its Program reads
         unregistered; else commit its ok rows (`ok`): row u proof block u's, `core_check.OK_ROW` under `core_check.ok_salt` of
-        the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`)."""
+        the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`),
+        the salts a `pouw_h1_registered.PublicSalts` derived where the rows are hashed."""
         self.settle()
         if self.refused:
             return
@@ -706,7 +707,7 @@ class Served:
             n = sum(k for _u0, k in HW.call_units(self.program))
             self.ok = self._tree(run, self.program.fn.bindings["PREFIX"] + HW.OUTPUTS[1],
                                  np.tile(np.array(CC.OK_ROW, np.uint16), (n, 1)), 0, self.root,
-                                 row_salts=b"".join(CC.ok_salt(self.root, u) for u in range(n)))
+                                 row_salts=NR.PublicSalts(CC.OK_SALT_TAG + self.root.encode() + b"\0", 0, n, shake=True))
 
     def tables(self) -> list[str]:
         """Every value the Program's proof blocks open at: each K's ``b/<K>``, then each step's A tables, then each call's z
