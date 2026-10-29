@@ -45,7 +45,8 @@ from typing import Any
 import numpy as np
 
 from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
-from verity.core.protocols.pous import wipe_monitoring, wipe_period
+from verity.core.protocols.pous import wipe_monitoring
+from verity.core.protocols.pous import wipe_period
 from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
 from verity.core.protocols.sampled_proofs import parties
