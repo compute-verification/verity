@@ -13,12 +13,15 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 (`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
 (`Security/Definitions/Nci/Guarantees/Contained.lean`).
 
-The overhead lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one overhead calculator.
-`tiers.py`'s `dampener` is an older calculator of the remote composition's overhead, which the next code change folds
-into rho. Where the two disagree, rho's number is the one to cite: at the remote tiers `dampener` reads 1 at its
-defaults, which bounds nothing, while rho's remote scenarios give a draft bound above the adversary no protocol
-encumbers. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `dampener`, `efficiency` and
-`residual`; `GLOSSARY.md`, Older names).
+The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
+`tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
+`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
+`fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
+`host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
+multiplications (NCI's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02, and rho's
+remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
+`GLOSSARY.md`, Older names).
 
 ## Files
 
@@ -39,10 +42,10 @@ encumbers. The code and its outputs keep the older names (`slowdown.py`, and `ti
 | `covering_priced.py` | Kimi K2's overhead under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
 | `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
 | `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1, theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
-| `tiers.py` | the older calculator of the remote composition's overhead under the verification stack, per tier (its `efficiency` and `dampener`), until it is folded into `benchmarks/rho`; `python benchmarks/nci/tiers.py [--json]` |
+| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
-| `fit.py` | the fit bound: the memory cap when no server block holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
-| `figures.py` | `tiers.py`'s talk figures, to the evidence store |
+| `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
+| `figures.py` | `tiers.py`'s talk figures, with the slowdown from rho's `multiple_bound`, to the evidence store |
 | `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
 
@@ -226,7 +229,7 @@ What registered hardware computes is one circuit, built by appending as it strea
 red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
-would let the partial-sum law apply to the declared circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
+would let the partial-sum law apply to the registered circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
 for the full map.
 
 ## What the literature says now
@@ -324,7 +327,7 @@ Three caps keep the library's lower bounds valid. Each was added because a query
 
 Today the policy puts no limit on θ, the registered information. That matters most for seed-based training.
 A developer may commit a noise table, one entry per parameter per direction, and then decode an update with one
-multiply-add per parameter instead of a PRNG draw.
+multiply-add per parameter instead of a PRNG sample.
 
 - **Without a cap** (`kimi-k2-1m-raw-uncapped`), `zo-seed-pool`, `es-population-30` and `mezo-seed-finetune` cost
   about 1.2, 2 and 3.

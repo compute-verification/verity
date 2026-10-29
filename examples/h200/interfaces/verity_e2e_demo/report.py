@@ -56,7 +56,7 @@ and lists every miss under visible failures. ``proved`` is the drawn-block provi
 ``{"run", "drawn": [the coin's indices], "lines": [its output's VERDICT and PROVEBUNDLE lines, verbatim], "text",
 "rows"}``, rendered as the first section, one row per drawn proof block, then ``rows`` (section rows: the guarantee the
 draw certifies). The first line is `M3_STATUS` only when all `HANDFUL`
-drawn proof blocks have a VERDICT line that says accepted (C-Flock ``--zk``, M0 and Lean) and the final PROVEBUNDLE
+drawn proof blocks have a VERDICT line that says accepted (Flock ``--zk``, M0 and Lean) and the final PROVEBUNDLE
 line is ok with every negative refused; until then it is `FALLBACK_STATUS` (the file's ``status``, which may say
 nothing else), and each block not accepted is a visible failure.
 
@@ -95,7 +95,7 @@ from verity_e2e_demo import block_record
 
 TEMPLATE = Path(__file__).parent / "demo_a.template"
 MEASUREMENTS = "verity/demo-a-measurements/v1"
-DELTA = Fraction(1, 100)
+DELTA = block_record.DELTAS[0]
 #: the share of compute spent on proving in part 3
 BUDGET = Fraction(1, 100)
 #: M3's draw: k units over the whole partition
@@ -105,7 +105,7 @@ SAMPLING_BLOCK_S = 7 * 86400
 WORLD_LABEL = "world-inference-2027"
 #: the first line of M3's report while its drawn H200 proof blocks aren't all proved and accepted
 FALLBACK_STATUS = "M3 fallback: live-drawn, opened, replayed (Python); not proved in C-Flock"
-#: the first line once every drawn H200 proof block is proved in C-Flock and accepted by the Lean verifier
+#: the first line once every drawn H200 proof block is proved in Flock and accepted by the Lean verifier
 M3_STATUS = f"M3: {HANDFUL} live-drawn H200 proof blocks, each proved in C-Flock --zk and accepted by the Lean verifier"
 #: what keeps the CPU demo's ACCEPT from being "no stubs", until the measurements file's ``fixed`` names it
 STUBS = {

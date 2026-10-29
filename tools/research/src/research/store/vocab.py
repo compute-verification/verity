@@ -72,6 +72,7 @@ OF_RECORD = "of-record"
 RUN_OF_RECORD = "run_of_record"
 GOAL = "goal"
 ABANDONED = "abandoned"
+WITHDRAWN = "withdrawn"
 REPLAY_SET = "replay_set"
 REPLAY_EXPECT = "replay_expect"
 INTERACTION_ATTEMPT_OF = "interaction_attempt_of"
@@ -163,7 +164,7 @@ TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 #: Mirrors the Glossary's backend families (`README.md`, "Backend family").  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
-#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not C-Flock), `SP1` (D-SP1 as the frozen ledger and
+#: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
 #: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
@@ -324,6 +325,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
+    _k(WITHDRAWN, GROUP_RESULT, TEXT, "the artifact's blobs were deleted from the shared store (`research data withdraw`) because "
+       "they held values that must never be shared, in a few words; --ref names the issue. Its manifest stays, so a citation "
+       "still resolves and `fetch` reports the payload gone"),
     _k(INTERACTION_ATTEMPT_OF, GROUP_RESULT, TEXT, "on an interaction attempt that is not the cell's figure (refused, or run on an earlier pair): the art: id of "
        "the cell it belongs to; the cell lists every attempt with its deviation (IX1)"),
     _k(HASH, GROUP_RESULT, TEXT, "the operand commitment proven in-circuit: none, poseidon2-babybear-w24, or the leaf's name"),

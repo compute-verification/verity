@@ -1,5 +1,5 @@
-"""The fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`): M0 `--zk` sessions on
-one small A8 unit, staged by C-Flock's `UnitStager` bound to a template query's partition as A8's members are, N instances
+"""The fixture of Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`): M0 `--zk` sessions on
+one small A8 unit, staged by Flock's `UnitStager` bound to a template query's partition as A8's members are, N instances
 with every unit drawn (subset:N), each case's statement on the one circuit:
 
     honest                      the honest statement                                              M0 and Lean accept

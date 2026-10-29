@@ -1,4 +1,4 @@
-# The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`)
+# PoUB v0 (`verity/remote-bandwidth/v0`)
 
 A verifier with no hardware at the site certifies, window by window, how many reads of a node's registered blocks the
 node made. The node's memory is its GPUs' HBM and its host's DRAM. No prover hardware is trusted: the host, its CPUs
@@ -548,8 +548,8 @@ and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
 Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for.
 block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
-sketch-sha512 is `benchmarks/codec_tensor/sketch_receipt.py`'s receipt, byte for byte:
-the suite pins its numpy outputs at both row counts, and `receipts.SketchReceipter` computes the same in pure Python.
+The GPU kernels' sketch-sha512 receipts are held byte for byte to `receipts.SketchReceipter`
+(`benchmarks/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
 Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
 the seed's block: sketch-sha512 hashes \(j\) and the sketch, one compression at 16 rows (64 bytes) and three at 64
 (256 bytes); block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The sketch's signs come from the
@@ -1603,8 +1603,8 @@ squarings. The fixture kernels build against comes from the serving loop over th
 pinned there by its SHA-512):
 a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
 
-**Openings** (`p2.Opening`, `p2.Session.verify`). An opening of unit \(g\) is its four blocks, each with its path to
-`vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
+**Openings** (`p2.Opening`, `audit.AuditRun.verify` over the P2 codec). An opening of unit \(g\) is its four
+blocks, each with its path to `vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
 `vk` under PoUS's leaf (`pous.verifier.leaf_hash`, `payload-path` if one fails; in the Lean, PoUS's own leaf and
 path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p2.check`). It decodes nothing: `vk`'s leaves are of the `C*` the verifier decoded to the committed `W`, so a block on its
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
@@ -1614,8 +1614,8 @@ nothing (`append`).
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
-as above, on the registered vk root. `p2.Session` runs beside it as a veto: where the two differ the session is
-rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
+as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
+differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
 (`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
 values, by name, before the first coin; the Lean reads them from the request.
 
@@ -1631,7 +1631,7 @@ values, by name, before the first coin; the Lean reads them from the request.
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
 - No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
-  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
+  (`lean/tests/test_p2.py`'s `p2_session`) holds `audit.AuditRun` over the P2 codec to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).
 
