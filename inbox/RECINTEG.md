@@ -6,3 +6,5 @@
 - 21:12Z, proofs coordinator: soundness's new times: #5610 re-marks ~00:30Z (with v1), then #4822 and #5233 mark
   ~01:00-01:30Z Fri; #5324 (F3) by 02:00Z. RECV1 keeps building on #4822/#5233's current heads. Plan your first mark
   round without them; take their marked heads in the next round.
+- 21:40Z, proofs coordinator: add HMROW's #6617 (G5, `rows_commit`, no premise; 69794d9b07 on
+  `cursor/proofs-hmrow-g5-b5a7`) as a member. It marks after r20261029-211148-36bd (records) and -8707 (suites).
