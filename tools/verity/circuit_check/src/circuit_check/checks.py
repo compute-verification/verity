@@ -967,7 +967,7 @@ def _export_counts(build: Callable[[], Any], name: str) -> dict:
     disagreement); ``flat_ands`` the circuit's own, fewer by the ANDs it shares across a call (``shared_across_types``)."""
     from verity_flock import boolean_export as BE
 
-    reg = BE.Registry()
+    reg = BE.CircuitTypeTable()
     rid = reg.type_of(build, name, "proof-unit")
     node = reg.nodes[rid]
     _, flat, typed = reg.shared[-1]
