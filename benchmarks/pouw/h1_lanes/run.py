@@ -10,9 +10,10 @@ statement reading the leaf's lane partials, a value committed after the sample (
   its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
   ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
   `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
-  is what the prover's ``flock-tmpl-unit`` places). The soundness proof covers a templated statement only without the
-  verifier's registered reads, so the Lean verifier refuses these, once every other check has passed (`TMPL_WHY`).
-  Such a check is labelled `TEMPLATED`, never ACCEPT, and
+  is what the prover's ``flock-tmpl-unit`` places). The statement check and the soundness proof cover a templated
+  statement with the verifier's registered reads, but the sampled audit's knowledge-soundness form (`KsScope`) reads the
+  circuit as `HmOut.parse` does, which refuses a templated one, so the Lean verifier refuses these, once every other check
+  has passed (`TMPL_WHY`). Such a check is labelled `TEMPLATED`, never ACCEPT, and
   counts as passing in place of an expected ACCEPT (summary's ``templated``; ``lean_accepts`` counts the real ones).
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
@@ -138,13 +139,13 @@ HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
 #: the templated statement (`circuit.TMPL_STATEMENT`), and the Lean verifier's verdict on one whose every other check
-#: passed: the soundness proof covers a templated statement only without the verifier's registered reads
-#: (`ProvedScope.scopeOkT`), so it refuses these, which read ``--registered``, for their form (`ProvedScope.scopeWhyT`)
+#: passed: the knowledge-soundness form (`KsScope.checkOf`) reads the circuit as `HmOut.parse` does, which refuses a
+#: templated statement's (`HmOut.parse`'s `Tags.isTmpl` refusal), so it refuses these for their form
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
-TMPL_WHY = ("refused: a templated statement with the verifier's registered reads (--registered): a statement form the "
-            "soundness proof does not cover")
+TMPL_WHY = (f"refused: a circuit that does not parse ({TMPL_STATEMENT}: a templated statement's circuit is read from its "
+            "template): a statement form the soundness proof does not cover")
 #: the verdict word of a templated check refused only for its form (`TMPL_WHY`): never ACCEPT
-TEMPLATED = "templated: Lean refuses this form with --registered"
+TEMPLATED = "templated: Lean's knowledge-soundness form refuses a templated statement"
 
 
 def tile(k: int):
