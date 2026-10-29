@@ -148,7 +148,7 @@ DC_DEV void wg_until_mem(const OpArgs& a) {
 }
 
 // One wgmma warpgroup beside two lane warps a SMSP on honest's IDP.4A side mix (lanes.cuh's idp4a_lds_ops).
-template <int R, int D>
+template <int R, int D, int U = 32>
 DC_DEV void wg_until_idp4a_lds(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
   constexpr int SX = 1024 * (R / D);
@@ -170,7 +170,7 @@ DC_DEV void wg_until_idp4a_lds(const OpArgs& a) {
     x = fold_acc(d);
   } else {
     Lane2 l(threadIdx.x);
-    OP_UNTIL(n) { idp4a_lds_ops<R, D, SX>(l, sb, n); }
+    OP_UNTIL(n) { idp4a_lds_ops<R, D, SX, U>(l, sb, n); }
     OP_TRIPS(n)
     x = l.fold();
   }
@@ -575,6 +575,8 @@ OP_KERNEL(wgV_r31_r256, 384) { wg_until2<L_R31_IDP4A_FFMA, 256, F_s8_n256, 1>(a)
 OP_KERNEL(wgV_r12_r192, 384) { wg_until2<L_R12_IDP4A_FFMA, 192, F_s8_n256, 1>(a); }
 OP_KERNEL(wgV_idp4a_lds16_r256, 384) { wg_until_idp4a_lds<256, 16>(a); }
 OP_KERNEL(wgV_idp4a_lds8_r256, 384) { wg_until_idp4a_lds<256, 8>(a); }
+OP_KERNEL(wgV_idp4a_lds16b8_r256, 384) { wg_until_idp4a_lds<256, 16, 8>(a); }
+OP_KERNEL(wgV_idp4a_lds16b4_r256, 384) { wg_until_idp4a_lds<256, 16, 4>(a); }
 OP_KERNEL(wgW_idp4a_ffma_r256, 512) { wg_until2<L_P_IDP4A_FFMA, 256, F_s8_n128>(a); }
 OP_KERNEL(wgW_tri_r384, 512) { wg_until2<L_T_IDP4A_FFMA_LOP3, 384, F_s8_n128>(a); }
 OP_KERNEL(wgUu8_idp4a, 384) { wg_until2<L_IDP4A, 64, F_u8s8_n256>(a); }
@@ -692,6 +694,8 @@ static const OpProbe PROBES[] = {
     P_UNTILV(wgV_r12_r192, "IDP.4A*=64,FFMA=128"),
     P_UNTILV(wgV_idp4a_lds16_r256, "IDP.4A*=256,LDS.128=16"),
     P_UNTILV(wgV_idp4a_lds8_r256, "IDP.4A*=256,LDS.128=32"),
+    P_UNTILV(wgV_idp4a_lds16b8_r256, "IDP.4A*=256,LDS.128=16"),
+    P_UNTILV(wgV_idp4a_lds16b4_r256, "IDP.4A*=256,LDS.128=16"),
 #undef P_UNTILV
 #define P_UNTILW(NAME, LPAT)                                                                                      \
   {.name = #NAME, .kernel = (const void*)NAME, .tpb = 512, .expect = "IGMMA.64x128x32.S8.S8*=4;" LPAT, .warps = "8;8", \
