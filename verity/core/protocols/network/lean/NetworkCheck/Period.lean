@@ -238,8 +238,8 @@ accepted, for the tests: no test makes a proof v2 accepts.
 
 What it doesn't check: in the rows form, the records' certificates' digests against the rows (each signs its salted
 record, witness) and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a
-lane to `egress_cells`); and that the audits' answers are the sampled-proofs component's own, which the composition's
-theorem is to bind.
+lane to `egress_cells`); and that the audits' answers are the sampled-proofs component's own,
+which the composition's theorem is to bind.
 -/
 
 namespace NetworkCheck.Period

@@ -323,7 +323,7 @@ def mirror_rows_run(monkeypatch, seed: int) -> tuple[dict, dict, dict, dict, lis
 
 
 def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_the_mirrors_and_accepted(monkeypatch):
-    case, c, e, rw, ws = mirror_rows_run(monkeypatch, 19)
+    case, c, e, rw, ws = mirror_rows_run(monkeypatch, 380)
     p = case["params"]
     assert not p["lms"]["toy"] and len(c["audits"]) == 2 and p["first"] == 3
     scans = {w: (reg, x["answer"], p["scan"]) for w, reg, x in zip(ws, c["windows"], e["windows"])}

@@ -180,7 +180,7 @@ def _canonical(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def to_json(layout: Layout) -> dict[str, Any]:
+def to_json(layout: RowsPerSlot) -> dict[str, Any]:
     """``slots._layout_json(layout)``. A repeated group's object is one object: copy it before editing one."""
     memo: dict[int, dict[str, Any]] = {}
     for g in layout.groups:

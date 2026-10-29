@@ -15,7 +15,7 @@ from verity.ml.crypto import lms
 
 PING = Schema("Ping", 1, "structure", {"n": Int(0, 9), "who": Str(8), "ids": List(Hex(4), 3)}, Body(max=16, unit=2))
 PING2 = Schema("Ping", 2, "output", {"n": Int()})
-R = Registry([PING, PING2])
+R = MessageTypes([PING, PING2])
 OK = Message("Ping", {"n": 3, "who": "é", "ids": ["00ff00ff"]}, b"\x00\x01")
 
 
