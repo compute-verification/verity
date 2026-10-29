@@ -18,6 +18,31 @@ proves; don't coin other names.
 - **The adversary** is any program on the H200 that outputs W correctly. It is given A and B, and any advice computed before
   the noise that fits in device memory.
 
+## 2a. T1 as Daniel ruled it (Thu 29 Oct 02:01Z = Wed 7:01 PM PDT). Supersedes T1 in §2 and the 01:40Z defaults.
+
+- **The honest program is the best possible honest program** (for now). This is decision 74's reading: our kernel's
+  inefficiency is not gap.
+- **Hashing is credited work.** It rests on ShaSpeed: no program computes SHA-512 faster than the best implementation, which
+  the honest program is taken to be.
+- **The gap is additive against stock:** cost(H) − min over adversaries of cost(adv) ≤ 0.01 · cost(stock), where stock is the
+  plain matmul. A relative gap would let a 1000× hashing overhead hide a fully skippable matmul.
+- **Cost is work, not wall time.** It is priced work summed over the card's resources, in MH100 / W1 units (one dense int8
+  MAC = 1 unit; every instruction at its measured price per register written). These are the rank bound's own units. In
+  wall time, a matmul hidden under hashing costs nothing, and the trivial design would pass. Co-issue lowers time but not
+  work. Report the time reading beside it, but don't judge on it.
+- **What follows for #1, NCP + the rank bound (coordinator's estimates; CORE-TIME and CORE-NCP to confirm):**
+  - **The final word of each dot product** is unforced in Theorem D's model, which makes every function of data fixed
+    before the noise free, AB included. That is 32 units a dot product against stock's K: 32/K of stock, so 1.56% at
+    K 2,048 and 0.39% at K 8,192, about 1.24% over Llama-3.2-1B's linears. **Fix (research):** each A·B is atomic
+    (Daniel, 4:49 PM PDT), so charge work done before the noise inside the call. Restate Theorem D with the free values
+    being only linear functions of the call's inputs and noise. The final word is then a target, and that gap closes.
+  - **Forming the noised operands** is linear, so it is free in the rank model and not credited. That is NCP's certificate's
+    8/n, plus 8/m for the per-call weight noise: about 0.5% at T 8,192, and 12.5% or more at T 512 (m = 64), which fails.
+    **Fix (research):** a bound that charges forming, with additions priced as MH100 prices them; or a design whose
+    forming is credited or negligible.
+  - **Hashing and coins** are credited under ShaSpeed, with the honest program taken as best: gap 0.
+  - **Co-issue** is 0 in work units.
+
 ## 2. Targets
 
 - **T1, hard: the gap is at most 1%.** min over adversaries of t_adv ≥ 0.99·t_H.
