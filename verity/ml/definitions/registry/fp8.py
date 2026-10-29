@@ -210,8 +210,8 @@ _EPILOGUE, _BLACKWELL = EVIDENCE["cc12_scaled_mm_epilogue_probe"], EVIDENCE["bla
                        + ((("b", BF16),) if S.BIAS else ())), BF16),
            conformance="exact-model-tested; the RTX PRO 6000's _C.cutlass_scaled_mm (cc 12.0) against this order over the cc 12.0 "
                        "step's chain at K = 4096, per-row/per-column and scalar scales: without a bias 15,728,640 of 15,728,640 "
-                       f"coordinates exact (run {_EPILOGUE['no_bias']}; the swapped order misses 89 of the 125 discriminating ones); "
-                       f"with a bias 786,432 of 786,432 (run {_EPILOGUE['bias']}: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
+                       f"coordinates exact ({_EPILOGUE['no_bias']}; the swapped order misses 89 of the 125 discriminating ones); "
+                       f"with a bias 786,432 of 786,432 ({_EPILOGUE['bias']}: two roundings, the swapped FMA and (s_x*s_w)*acc + b "
                        "miss 8, 9 and 13 of the 17 discriminating ones), and this Definition by the IR reference on 576 sampled "
                        "coordinates, every discriminating one included, exact")
 def ScaledMmFp8NoSwapCoordinate(B, S, xq, sx, wrow, sw, *bias):
@@ -296,8 +296,8 @@ _BLOCK_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED} (vLLM d9105ea80,
                "vs descending k: 160/160 ascending, s = FMUL(sfa, sfb) vs the other associations: 240/240) — out/gen/sweep/evidence/fp8/")
 _QUANT_CONF = (f"exact-model-tested; H100 80GB {_H100_CAPTURED}: _C.per_token_group_fp8_quant vs the model on 290,304 e4m3 words and 2,268 group scales "
                "(seven shapes, rows of varying magnitude with outliers), 0 mismatches — out/gen/sweep/evidence/fp8/check_block_gemm.json; "
-               "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, run "
-               f"{_BLACKWELL['run']}, record {_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases "
+               "all at G = 128; G = 64 (QUANT_GROUPS) and G = 128 on cc 12.0: property blackwell_fp8_capture on an RTX PRO 6000, record "
+               f"{_BLACKWELL['record']} ({_BLACKWELL['run_record']}, harness {_BLACKWELL['commit']}), cases "
                "quant/K4096/G64 and quant/K192/G64 (the fused-MoE experts' inputs, 300 rows each) and quant/K4096/G128 and quant/K1024/G128, "
                "with every quant call its dense and MoE GEMM cases received, 7,941 rows, 0 mismatches")
 
@@ -453,8 +453,8 @@ def ScaledMmFp8BlockSharedScale(B, S, xq, sx, w, ws):
 
 _BLOCK_DOT_CONF = ("exact-model-tested; at DOT = HopperE4m3QgmmaDot32_v1 the function of the version 1 form (tests/program/"
                    "test_fp8_block_dot.py, every word equal), which is exact-model-tested on Hopper; at DOT = BlackwellE4m3QmmaDot32_v1, "
-                   f"G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, run {_BLACKWELL['run']}, record "
-                   f"{_BLACKWELL['record']} (#{_BLACKWELL['pr']} @ {_BLACKWELL['commit']}), cases cutlass/qkv_proj (K 4096, N 1280) "
+                   f"G = 128 (cc 12.0): property blackwell_fp8_capture on an RTX PRO 6000, record {_BLACKWELL['record']} "
+                   f"({_BLACKWELL['run_record']}, harness {_BLACKWELL['commit']}), cases cutlass/qkv_proj (K 4096, N 1280) "
                    "and cutlass/o_proj (K 1024, N 4096) x M in {1, 2, 64, 65, 256, 257, 300}: CutlassFp8BlockScaledMMKernel's blockwise "
                    "_C.cutlass_scaled_mm in all three cc 12.0 dispatch variants, 5,080,320 words, 0 mismatches; Hopper's step, both Triton "
                    "scale orders and an unfused mul + add each refuted (30,354, 13,159, 13,278 and 13,222 words)")
