@@ -33,7 +33,8 @@ through a coupling (`Vocab.Coupling k a`) at each `θ F c σ`:
 * **The verdict at the code** (`Coupling.verdict`): `a`'s component at `k` accepts, every release its check read is the
   device's at the round the coupling assigns it (`pos`, `Logged`), and the coupling's break (`brk`) is absent. The rest
   of the event, a release out of place or a break, is answered for by `a`'s error beyond `δ`: where its finder meets
-  `FinderCR`, its probability is at most `a`'s LMS-forgery term plus its collision term (`Coupling.BreakBound`).
+  `FinderCR` and its forger `Unforgeable`, its probability is at most `a`'s LMS-forgery term plus its collision term
+  (`Coupling.BreakBound`).
 
 `Coupling.bound` gives `ComponentBound`'s event at most `a`'s error from the run at the verdict at the code
 (`Coupling.atCode`) meeting a guarantee within `a`'s published `δ`, and `componentBound_of_coupling` collects it over
@@ -617,28 +618,31 @@ def atCode : PeriodRun d α q.C q.Ω := Subprotocol.atCode q.run q.verdict
 
 /-- **The error beyond `δ` answers for the rest of the event**: the probability over the coins that `a`'s component
 accepts while a release its check read is not the device's at its round, or the coupling's break holds, is at most
-`a`'s LMS-forgery term plus its collision term at the strategy (a release out of place is a forgery of the device's LMS
-signature over its ledger or a session's close, which the forgery term bounds, and a break a collision, which `a`'s
-finder outputs). -/
+`a`'s LMS-forgery term (`epsForge` at the forger's budget and the device's signatures, as `Vocab.error` reads it) plus
+its collision term at the strategy (a release out of place is a forgery of the device's LMS signature over its ledger or
+a session's close, which the forgery term bounds, and a break a collision, which `a`'s finder outputs). -/
 def BreakBound : Prop :=
   ENNReal.ofReal (Pouw.pr fun ξ => ComponentAccepts k (.ofAudit a) (V.outcome θ F c σ q.coins ξ).sent ∧
       (¬ V.Logged (q.pos a) (.ofAudit a) (V.outcome θ F c σ q.coins ξ) ∨ q.brk ξ)) ≤
-    V.forgery θ (.ofAudit a) (V.cost θ F c σ) +
+    ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit a) * V.cost θ F c σ + V.callsAdd θ (.ofAudit a))
+        (V.signatures θ)) +
       V.loss (.ofAudit a) θ (ENNReal.ofReal ((V.finder (.ofAudit a) θ F c σ).Pr sha512Msg))
 
 /-- **A coupled period guarantee bounds the component's event in the game**: where the coupled run at the verdict at
 the code meets a per-period guarantee within `a`'s published `δ` at the strategy's calls, and the error beyond `δ`
-answers for the rest of the event where the finder meets `FinderCR`, `ComponentBound`'s event at `σ` is at most `a`'s
-error. -/
+answers for the rest of the event where the finder meets `FinderCR` and the forger `Unforgeable`, `ComponentBound`'s
+event at `σ` is at most `a`'s error. -/
 theorem bound {δ : ℝ} (hs : q.atCode.Sound (V.certOf θ) q.price a δ)
     (hδ : ENNReal.ofReal δ ≤ V.delta θ (.ofAudit a) (V.cost θ F c σ))
-    (hb : V.FinderCR (.ofAudit a) θ F c σ → q.BreakBound) :
+    (hb : V.FinderCR (.ofAudit a) θ F c σ ∧ V.Unforgeable (.ofAudit a) θ F c σ → q.BreakBound) :
     Game.prob (fun o => ComponentAccepts k (.ofAudit a) o.sent ∧ ¬ V.Holds k θ F c σ (.ofAudit a) o)
       (V.game θ F c) σ ≤ V.error (.ofAudit a) θ F c σ := by
   unfold Vocab.error Accounting.condError
   split_ifs with hcr
   · classical
-    show _ ≤ V.delta θ (.ofAudit a) (V.cost θ F c σ) + V.forgery θ (.ofAudit a) (V.cost θ F c σ) +
+    show _ ≤ V.delta θ (.ofAudit a) (V.cost θ F c σ) +
+      ENNReal.ofReal (V.epsForge θ (V.callsMul θ (.ofAudit a) * V.cost θ F c σ + V.callsAdd θ (.ofAudit a))
+        (V.signatures θ)) +
       V.loss (.ofAudit a) θ (ENNReal.ofReal ((V.finder (.ofAudit a) θ F c σ).Pr sha512Msg))
     rw [add_assoc]
     refine (V.prob_eq_pr θ F c σ q.coins _).trans_le ?_
@@ -684,12 +688,14 @@ end Coupling
 
 /-- **`ComponentBound` from coupled period guarantees**: at every `θ F c σ`, a coupling at composite `k` for `a` whose
 run at the verdict at the code meets a per-period guarantee within `a`'s published `δ` at the strategy's calls, and
-whose error beyond `δ` answers for the rest of the event where the finder meets `FinderCR`. -/
+whose error beyond `δ` answers for the rest of the event where the finder meets `FinderCR` and the forger
+`Unforgeable`. -/
 theorem componentBound_of_coupling (k : Verity.Registration.Composite) (a : Audit)
     (q : ∀ θ F c σ, V.Coupling k a θ F c σ)
     (hs : ∀ θ F c σ, ∃ δ : ℝ, (q θ F c σ).atCode.Sound (V.certOf θ) (q θ F c σ).price a δ ∧
       ENNReal.ofReal δ ≤ V.delta θ (.ofAudit a) (V.cost θ F c σ))
-    (hb : ∀ θ F c σ, V.FinderCR (.ofAudit a) θ F c σ → (q θ F c σ).BreakBound) :
+    (hb : ∀ θ F c σ, V.FinderCR (.ofAudit a) θ F c σ ∧ V.Unforgeable (.ofAudit a) θ F c σ →
+      (q θ F c σ).BreakBound) :
     V.ComponentBound k (.ofAudit a) := by
   intro θ F c σ
   obtain ⟨δ, h1, h2⟩ := hs θ F c σ
@@ -703,21 +709,24 @@ variable {k : Verity.Registration.Composite}
 theorem pouwSound_of_coupling (q : ∀ θ F c σ, V.Coupling k .pouw θ F c σ)
     (hs : ∀ θ F c σ, ∃ δ : ℝ, (q θ F c σ).atCode.Sound (V.certOf θ) (q θ F c σ).price .pouw δ ∧
       ENNReal.ofReal δ ≤ V.delta θ .pouw (V.cost θ F c σ))
-    (hb : ∀ θ F c σ, V.FinderCR .pouw θ F c σ → (q θ F c σ).BreakBound) : V.PouwSound k :=
+    (hb : ∀ θ F c σ, V.FinderCR .pouw θ F c σ ∧ V.Unforgeable .pouw θ F c σ → (q θ F c σ).BreakBound) :
+    V.PouwSound k :=
   V.pouwSound_of (V.componentBound_of_coupling k .pouw q hs hb)
 
 /-- **PoUS's target from coupled period guarantees** (`componentBound_of_coupling`, `pousSound_of`). -/
 theorem pousSound_of_coupling (q : ∀ θ F c σ, V.Coupling k .pous θ F c σ)
     (hs : ∀ θ F c σ, ∃ δ : ℝ, (q θ F c σ).atCode.Sound (V.certOf θ) (q θ F c σ).price .pous δ ∧
       ENNReal.ofReal δ ≤ V.delta θ .pous (V.cost θ F c σ))
-    (hb : ∀ θ F c σ, V.FinderCR .pous θ F c σ → (q θ F c σ).BreakBound) : V.PousSound k :=
+    (hb : ∀ θ F c σ, V.FinderCR .pous θ F c σ ∧ V.Unforgeable .pous θ F c σ → (q θ F c σ).BreakBound) :
+    V.PousSound k :=
   V.pousSound_of (V.componentBound_of_coupling k .pous q hs hb)
 
 /-- **PoUB-P2's target from coupled period guarantees** (`componentBound_of_coupling`, `poubSound_of`). -/
 theorem poubSound_of_coupling (q : ∀ θ F c σ, V.Coupling k .poub θ F c σ)
     (hs : ∀ θ F c σ, ∃ δ : ℝ, (q θ F c σ).atCode.Sound (V.certOf θ) (q θ F c σ).price .poub δ ∧
       ENNReal.ofReal δ ≤ V.delta θ .poub (V.cost θ F c σ))
-    (hb : ∀ θ F c σ, V.FinderCR .poub θ F c σ → (q θ F c σ).BreakBound) : V.BandwidthAuditSound k :=
+    (hb : ∀ θ F c σ, V.FinderCR .poub θ F c σ ∧ V.Unforgeable .poub θ F c σ → (q θ F c σ).BreakBound) :
+    V.BandwidthAuditSound k :=
   V.poubSound_of (V.componentBound_of_coupling k .poub q hs hb)
 
 /-- **The network certifier's target from coupled period guarantees** (`componentBound_of_coupling`,
@@ -725,7 +734,8 @@ theorem poubSound_of_coupling (q : ∀ θ F c σ, V.Coupling k .poub θ F c σ)
 theorem networkSound_of_coupling (q : ∀ θ F c σ, V.Coupling k .network θ F c σ)
     (hs : ∀ θ F c σ, ∃ δ : ℝ, (q θ F c σ).atCode.Sound (V.certOf θ) (q θ F c σ).price .network δ ∧
       ENNReal.ofReal δ ≤ V.delta θ .network (V.cost θ F c σ))
-    (hb : ∀ θ F c σ, V.FinderCR .network θ F c σ → (q θ F c σ).BreakBound) : V.NetworkCertifierSound k :=
+    (hb : ∀ θ F c σ, V.FinderCR .network θ F c σ ∧ V.Unforgeable .network θ F c σ → (q θ F c σ).BreakBound) :
+    V.NetworkCertifierSound k :=
   V.networkSound_of (V.componentBound_of_coupling k .network q hs hb)
 
 end
