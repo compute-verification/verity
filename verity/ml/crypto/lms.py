@@ -154,7 +154,7 @@ ROLES = {"network-certificate": "verity/network-certificate-message/v2",
          "period-root": "verity/period-root/v1",
          "liveness": "verity/liveness/v1"}
 DIRECTIONS = ("egress", "ingress")
-#: the length of a certifier session id, which the challenger draws for each session of the certifier
+#: the length of a certifier session id, which the challenger samples for each session of the certifier
 SESSION_BYTES = 32
 
 

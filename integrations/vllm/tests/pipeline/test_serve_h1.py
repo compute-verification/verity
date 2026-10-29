@@ -389,7 +389,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     def seal() -> None:
         try:
             released.append(draws.release(0, dev))
-        except SL.DrawRefused as e:
+        except SL.Refused as e:
             released.append(e)
     sealer = threading.Thread(target=seal)
     sealer.start()
@@ -444,13 +444,13 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     arm.drawing(draws)
     assert arm.close(3) is None
-    with pytest.raises(SL.DrawRefused, match="window 3's H1 window never opened"):
+    with pytest.raises(SL.Refused, match="window 3's H1 window never opened"):
         draws.wait(window=3)
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
     assert out["tied"] and "joined no period" in out["draw"]["refused"], out
-    with pytest.raises(SL.DrawRefused, match="joined no period"):
+    with pytest.raises(SL.Refused, match="joined no period"):
         draws.wait(window=0)
     assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the draw-gated release"
     srv.src.uninstall()

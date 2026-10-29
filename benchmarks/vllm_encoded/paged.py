@@ -6,8 +6,8 @@ A layer's cache is vLLM's tensor ([blocks][KV heads][slots][K ‖ V] bf16, or th
 reads its physical strides. Codec indices use the registered store instead: after `store_base`, physical slot u and
 layer l are the `store-order/v0` token-layer block u · layers + l.
 
-An encoded cache may hold plaintext slots (deferred residency, remote_bandwidth's PROTOCOL.md §4): a token-layer the
-remote audit appends is written as it is until its append coin arrives, then encoded in place. Its layer's flags, a
+An encoded cache may hold plaintext slots (deferred residency, remote_bandwidth's PROTOCOL.md §4): a token-layer that
+PoUB appends is written as it is until its append coin arrives, then encoded in place. Its layer's flags, a
 uint8 a physical slot on the device (nonzero: plaintext), go to `attn` and `gather` as `plain`, which read such a slot as
 it is and give it no receipt; `append` and `table` set them, `encode` encodes the listed plaintext slots and clears them.
 A token-layer kept past the lifetime cap is re-keyed in its slot (§4): `rekey` moves listed slots from their bound offsets

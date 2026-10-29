@@ -367,7 +367,7 @@ class RejectingPort(D.ProtocolPort):
 def port(name: str, product: R.Product, seen: collections.Counter, kind: type[D.ProtocolPort],
          serve: tuple[str, ...] = ("serve",), package: str | None = None) -> D.ProtocolPort:
     """`name serve` (or `name SERVE`) of the Lake package in `package` (default `name`), on the product's cases and,
-    one draw in ten, any JSON line."""
+    one sample in ten, any JSON line."""
     return kind(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
                 package=PROTOCOLS / (package or name), serve=serve, need_rejects=kind is UndecidedPort)
 

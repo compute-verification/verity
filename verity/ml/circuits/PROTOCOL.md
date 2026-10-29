@@ -20,8 +20,8 @@ Indices are 0-based, `[a, b)` is half-open, and a *leaf* is one scalar position 
 ## 1. Canonical JSON and the program digests
 
 The canonical bytes of a JSON value are its RFC 8785 (JCS) serialization. A descriptor is held to a domain on which JCS is
-short to state and on which `codec.canonical_json` (Python's `json.dumps(v, sort_keys=True, separators=(",", ":"))`,
-its strings held to ASCII without DEL) writes exactly the JCS bytes:
+short to state and on which `codec.canonical_json` (Python's
+`json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`) writes exactly the JCS bytes:
 
 - values are objects with string keys, arrays, strings, integers, `true`, `false` and `null`;
 - every string, keys included, consists of the characters U+0000..U+007E (ASCII without DEL);
@@ -37,9 +37,8 @@ On this domain the bytes are:
   U+000D `\r`, any other character below U+0020 as `\u00xx` (lowercase hex), every other character (`/` included) as itself;
 - an integer is its decimal: `-` for a negative, no leading zeros, `0` for zero.
 
-`canonical_json` refuses a string outside ASCII without DEL, keys included, wherever it is (a `ValueError` naming its
-path), so its bytes are the same whether a writer escapes the rest or writes it as UTF-8. Outside the domain's numbers
-Python and JCS differ: JCS writes 2^53 + 1 as `9007199254740992` and 10^21 as `1e+21`, and `1.0` is `1.0` against `1`.
+Outside the domain Python and JCS differ: Python escapes non-ASCII and DEL as `\uXXXX` where JCS writes UTF-8, JCS writes
+2^53 + 1 as `9007199254740992` and 10^21 as `1e+21`, `1.0` is `1.0` against `1`, and non-BMP keys sort differently.
 `encode_program` and `decode_program` refuse a descriptor whose free-form parts leave the domain (`jcs_domain_error`): every
 top-level field but `definitions` and `annotations`, and each definition's key, `id`, `bindings`, `params`, `ret`, `ports`, and
 its body's `params` and `ret_type`. The rest of a descriptor is integers bounded by the program's own table sizes and leaf counts,
@@ -51,8 +50,8 @@ SHA-512 of the canonical bytes of the descriptor without `annotations`: the Buil
 to the port facts (§12). It carries no domain prefix (the
 partition object's digests do).
 
-Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes or its refusal, the
-JCS bytes, the domain refusal), `program_digest`.
+Vectors: `canonical_json.in_domain` (value, bytes), `canonical_json.outside` (value, Python's bytes, the JCS bytes, the
+refusal), `program_digest`.
 
 ## 2. Types and leaves
 
@@ -451,7 +450,7 @@ descriptor, digest, gate table and truth table on words.
 conventions and v1's Calls, proof blocks, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
 two proof blocks (a recomputed pair whose gates have two owners) is reported in `verify`'s detail (`recomputed_across`), not refused
 (`gate-recomputed`). Every other code and the width rule are v1's, and `validate_unit_cut` and `cut.check_cut` refuse by default.
-v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the faulty proof blocks' size from
+v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the incorrect proof blocks' size from
 above but counts a shared value more than once, and a consumer that credits size (PoUW) does not take `Q_word` v2.
 
 Vectors: `qword_vectors.json` → `v2`: v1's recompute-free evaluation and every verify refusal at v2, and the program v1 refuses
@@ -472,7 +471,7 @@ What carries over from §8 and §10:
 - **Calls.** §8's Calls (the root's non-input nodes, in body order). Each is cut as its Definition's activation in a one-Call
   Program, every returned leaf a designated output, so activations of one Definition share their cut.
 - **Recomputes.** §10's report: a value computed in two proof blocks is `verify`'s `detail["recomputed_across"]`, never a code. The
-  §10 caveat holds: a count of proof blocks bounds the faulty ones' size but counts a shared value more than once, so a
+  §10 caveat holds: a count of proof blocks bounds the incorrect ones' size but counts a shared value more than once, so a
   consumer that credits size (PoUW) does not take `Q_call` v1.
 
 What changes:
@@ -559,7 +558,7 @@ Definition with a receipt port (`"receipt": true`) declares `"sink": true` on it
 `"transfer": true` is a primitive's only (a composite's `ports` never carries it), and never beside a return `interval`: the
 primitive's return interval follows from its operands' by its *transfer* (`Ports(transfer=f)`), a function its registered
 evaluator comes with, as an exact integer step's sum follows from its operands' ranges. Like a primitive's declared interval it
-is a fact about its evaluator, which circuit-check tests on drawn operand intervals within the declared bounds (its `ports`
+is a fact about its evaluator, which circuit-check tests on sampled operand intervals within the declared bounds (its `ports`
 check), and the decoder takes it from the registry, whose `ports` the entry's must equal.
 
 **Facts.** Every leaf of a Program has a fact: an interval (or none: it spans its width), an origin, whether it is a sink, and
@@ -618,7 +617,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   only an untyped input or constant takes the type its reader's port declares. A limb split of a runtime word is a
   registered `LimbSplit` Definition of its own, which reads the word as its producer's type and computes the limbs and the
   carry into each limb past the first (the stacking property budgets those carries at its nodes). Below word types, a leaf
-  read at another width is the Builder's refusal (`E_REINTERPRET`, §4.4).
+  read at another width is `defs.Builder`'s refusal (`E_REINTERPRET`, §4.4).
 - **`E_COIN_FLOW`** (coin flow): a primitive node reads a leaf of origin `coin` at a port that is not `"kind": "coin"`, or a
   Definition, the root included, returns one. A primitive with a coin port is a *noise primitive* when its return is not all
   sinks (it derives noise, or adds it to an operand it takes) and a *receipt fold* when it is (the coin is its key). A
