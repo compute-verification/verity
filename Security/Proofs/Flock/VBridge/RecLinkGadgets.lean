@@ -16,6 +16,8 @@ import Flock.RecLinkRef
   `okRef`: a field's 32 forms are its little-endian u32's bits (`bit_linkField`), its high bits zero exactly when it fits
   (`allZero_dropField`), the row's bytes past the fields zero exactly when `tailZero` (`tailZero_iff`), and the digests'
   XOR zero exactly when they are equal (`allZero_xor`).
+* The input width. `foldl_inWords_link`: the unit's input bits, as `laid_rows` sums them, are `5120 + 2 auxBits`
+  (`auxBits`, an `aux` port's bits).
 * Freshness: each gadget adds rows only as `fresh` does (`fresh_okForms`).
 -/
 
@@ -415,6 +417,21 @@ theorem sound_okForms (UB PB : ℕ) (hUB : UB ≤ 32) (hPB : PB ≤ 32) (row xr 
     (ev z fz) (ev z eq) hF hL htl' hft' hfz' heq')
   rw [hr, hkinds, hfo, hlo, hisF, hisL]
   simp only [ev_xor, ev_one, Bool.xor_true, hisF, hisL]
+
+/-! ## The unit's input width -/
+
+/-- An `aux` port's bits: `16 A(D)`. -/
+abbrev auxBits (UB PB : ℕ) : ℕ := 16 * VStar.auxWords (UB + PB)
+
+theorem auxBits_eq (UB PB : ℕ) : auxBits UB PB = 16 * VStar.auxWords (UB + PB) := rfl
+
+/-- The unit's input bits, summed as `laid_rows` sums them: its seven ports' words, 16 bits each. -/
+theorem foldl_inWords_link {UB PB : ℕ} {U : VStar.UnitC} (hin : U.inPorts = VStar.linkPorts UB PB) :
+    (Array.replicate U.inWords 16).foldl (· + ·) 0 = 5120 + 2 * auxBits UB PB := by
+  rw [OfVStar.foldl_replicate, VStar.UnitC.inWords, hin]
+  simp only [VStar.linkPorts, List.foldl_cons, List.foldl_nil, VStar.LINK_ROW_WORDS, VStar.LINK_X_WORDS,
+    VStar.LINK_Y_WORDS, auxBits]
+  omega
 
 /-! ## Freshness -/
 

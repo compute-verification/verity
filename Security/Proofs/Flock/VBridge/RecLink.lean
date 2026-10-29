@@ -286,9 +286,6 @@ theorem fresh_linkSteps (UB PB : ℕ) (trow xr yr raux xw yw waux : List Lin) :
 
 /-! ## V*'s `RecLink` unit -/
 
-/-- An `aux` port's bits: `16 A(D)`. -/
-abbrev auxBits (UB PB : ℕ) : ℕ := 16 * VStar.auxWords (UB + PB)
-
 /-- The unit's input bits: its seven ports' words, 16 bits each. -/
 def linkIn (UB PB : ℕ) : ℕ := 16 * (VStar.linkPorts UB PB).sum
 
