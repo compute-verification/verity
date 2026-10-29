@@ -10,7 +10,9 @@ size's leaf kernels' GPU time (the salt kernel's derived and given salts, a comp
 with the fewest registers written a compression: ShaSpeed can credit no more than it, so the committer's excess over it is
 honest-only work, and each register a compression is priced as a share of stock at SSN's volume. LATENCY_JSON, if given, is
 sha512_latency.cu's output: a call's seed path (A's hash, the seed and its first noise block, which the call's GEMM waits on)
-is priced at a compression's latency on one thread.
+is priced at a compression's latency on one thread and at the build's issue floor (an estimate), for each of CHAINS' layouts
+of A's leaves and subtree. GEMM j can't start before seed_j and A_j is call j−1's output, so the chain bounds T2 from below at
+1 + its time over the stock step, and it enters the overlap bound in place of the coins' floor (a launch and a noise block).
 
 An hm96 instance is one salt: y = PRF_ks(pos) (three compressions from round 8), c = SHA-512(salt_prefix ‖ y) (two) and
 b = x ⊕ M_key·y. A prover that reuses one salt skips all three, and nothing the gadget checks changes, so they are honest-only
@@ -68,6 +70,11 @@ MASK_REGS_B1 = 24 * 4 * 32 + 8 * 6 * 2 * 32 // 8 + 2 * 512
 PRICE_REG = {"floor": 32.0, "alone": S.PRICE["alone"]}
 TREE_LEAF = 3                                       # sw_hash_price's tree: compressions a leaf beside the row digest
 HM96_LEAF = 2                                       # H(leaf_prefix ‖ b ‖ c): 128 bytes and the padding block
+NODE = {2: 2, 4: 3}                                 # a tree node's compressions: its children's digests, prefix and padding
+# the seed path's layouts: A's leaves (row-seg rows, flat rows, or segments of so many bytes) and the subtree's arity
+CHAINS = {"row-seg rows, binary (L1)": ("row-seg", 2), "flat rows, binary": ("flat", 2), "row-seg rows, 4-ary": ("row-seg", 4),
+          "1 KiB segments as leaves, 4-ary": (1024, 4), "256 B segments as leaves, 4-ary": (256, 4),
+          "256 B segments as leaves, binary": (256, 2)}
 WINDOW_STEP_S = 0.1
 HASH_ALONE = {16384: (2043, 2159), 65536: (1928, 2010)}   # hm96 rows hashed alone, units a byte (low, high readings)
 STEP_BESIDE = 981                                   # beside the served step's GEMM, units a byte, while the step runs
@@ -149,12 +156,26 @@ def opening_ands(layout: str, b: dict, rows: int, R: int, forced: bool) -> dict:
     return {"path depth": depth, "path and gadget": 2 * depth * S.ANDS_COMPRESSION + extra}
 
 
-def seed_path(rows: int, k: int, flat: bool) -> int:
-    """Compressions one after another from a call's A (rows of k bytes) to its first noise block under L1: A's row digest
-    (row-seg's segments side by side, then their outer hash), its subtree and the merge with the words' root, the instance's
-    leaf (its salt, c and M_key·y precomputed), the seed past its fixed prefix, and one noise block."""
-    row = S.blocks(k) if flat else 9 + -(-(64 * -(-k // 1024) + 17) // 128)
-    return row + 1 + 2 * math.ceil(math.log2(max(2, rows))) + 2 + HM96_LEAF + 2 + 1
+def levels(leaves: int, arity: int) -> int:
+    n, d = 1, 0
+    while n < max(2, leaves):
+        n, d = n * arity, d + 1
+    return d
+
+
+def seed_path(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> int:
+    """Compressions one after another from a call's A (rows of k bytes) to its first noise block under L1: A's leaf digests
+    (a row-seg row: its segments side by side, then their outer hash, then the subtree's leaf; a flat SHA-512 row and its
+    leaf; or, for an int `row`, segments of that many bytes as the subtree's leaves), the subtree (NODE[arity] a level) and
+    the merge with the words' root, the instance's leaf (its salt, c and M_key·y precomputed), the seed past its fixed
+    prefix, and one noise block."""
+    if row == "row-seg":
+        leaf, leaves = 9 + -(-(64 * -(-k // 1024) + 17) // 128) + 1, rows
+    elif row == "flat":
+        leaf, leaves = S.blocks(k) + 1, rows
+    else:
+        leaf, leaves = S.blocks(row), rows * -(-k // row)
+    return leaf + NODE[arity] * levels(leaves, arity) + NODE[2] + HM96_LEAF + 2 + 1
 
 
 def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict) -> dict:
@@ -210,6 +231,8 @@ def main() -> None:
     excess = {"registers": sass["registers_written"] - best["registers_written"],
               "floor": sass["w1_floor"] - best["w1_floor"], "alone": sass["w1_alone"] - best["w1_alone"]}
     lat = latency(Path(sys.argv[5])) if len(sys.argv) > 5 else None
+    if lat:
+        lat["per_compression_ns"] = {"measured": lat["tree_ns"], "issue floor (estimate)": sass["instructions"] / CLOCK * 1e9}
     r16 = rows.by[S.ROWS_16K]
     l1_ratio = (r16["leaf_ns"] - r16["salt_ns_leaf"] + 65 / 80 * r16["c_ns"] + (3 - 2) * r16["c_ns"]) / (r16["leaf_ns"] + 3 * r16["c_ns"])
     rates = {"16 KiB low": HASH_ALONE[16384][0], "16 KiB high": HASH_ALONE[16384][1],
@@ -274,13 +297,25 @@ def main() -> None:
             pt["pre_noise"] = pre
             if lat:
                 pt["seed_path"] = {}
-                for lay, flat in (("row-seg rows", False), ("flat rows", True)):
-                    comps = N.LAYERS * sum(seed_path(real, k, flat) for _, k in N.LINEARS.values())
-                    ms = comps * lat["tree_ns"] * 1e-6
-                    ms_launch = ms + CALLS * lat["launch_us"] * 1e-3
-                    pt["seed_path"][lay] = {"compressions_a_forward": comps, "ms": ms, "ms_with_a_launch_a_call": ms_launch,
-                                            "of_stock_step": ms / stock if stock else None,
-                                            "with_launch_of_stock_step": ms_launch / stock if stock else None}
+                launches = CALLS * lat["launch_us"] * 1e-3
+                for lay, (row, arity) in CHAINS.items():
+                    comps = N.LAYERS * sum(seed_path(real, k, row, arity) for _, k in N.LINEARS.values())
+                    v: dict = {"compressions_a_forward": comps, "compressions_a_call": comps / CALLS, "by_latency": {}}
+                    for ln, ns in lat["per_compression_ns"].items():
+                        ms = comps * ns * 1e-6
+                        v["by_latency"][ln] = {"ms": ms, "ms_with_a_launch_a_call": ms + launches, "t2_floor": {
+                            eng: (st + ms + launches) / st for eng, (st, _g, _s) in N.ENGINES.get(pname, {}).items()}}
+                    pt["seed_path"][lay] = v
+                t = pt["t2"]
+                h_bar = t["hash_ms"]["at the bar, L1 16 KiB chunks"]
+                chain = pt["seed_path"]["row-seg rows, binary (L1)"]["by_latency"]["measured"]["ms_with_a_launch_a_call"]
+                for eng, e in t["engines"].items():
+                    st = e["stock_ms"]
+                    e["overlap with the seed path, at the bar"] = max(st + t["gemm_extra_ms"] + t["export_ms"]["fold"] + chain,
+                                                                      h_bar) / st
+                    e["compressions a call for the seed path's T2 floor"] = {
+                        f"≤ {x}, {ln}": max(0.0, ((x - 1) * st * 1e3 / CALLS - lat["launch_us"]) / (ns * 1e-3))
+                        for x in (2, 1.1) for ln, ns in lat["per_compression_ns"].items()}
             d["points"][pname] = pt
         out["designs"][design] = d
     dc_mac_s = S.CENSUS["datacenter GPUs"] * S.CENSUS["H200 int8 dense ops/s"] / 2
@@ -340,9 +375,16 @@ def main() -> None:
                 print(f"    pre-noise {k}: W1 {v['w1']['floor']:.3f} / {v['w1']['alone']:.3f} of stock, ANDs {v['ands_of_stock']:.4%}"
                       + (f", {v['ms']:.2f} ms ({v['of_stock_step']:.1%} of the stock step)" if v["of_stock_step"] else ""))
             for k, v in pt.get("seed_path", {}).items():
-                print(f"    seed path, {k}: {v['compressions_a_forward']} compressions a forward one after another, {v['ms']:.2f} ms, "
-                      f"{v['ms_with_a_launch_a_call']:.2f} ms with a launch a call"
-                      + (f" ({v['of_stock_step']:.1%} / {v['with_launch_of_stock_step']:.1%} of the stock step)" if v["of_stock_step"] else ""))
+                print(f"    seed path, {k}: {v['compressions_a_forward']} compressions a forward one after another "
+                      f"({v['compressions_a_call']:.2f} a call); " + "; ".join(
+                          f"{ln} {x['ms']:.2f} ms ({x['ms_with_a_launch_a_call']:.2f} with a launch a call)"
+                          + "".join(f", T2 floor {eng} {f:.2f}" for eng, f in x["t2_floor"].items())
+                          for ln, x in v["by_latency"].items()))
+            for eng, e in pt["t2"]["engines"].items():
+                if "overlap with the seed path, at the bar" in e:
+                    print(f"    T2 {eng}, overlap with the seed path at the bar {e['overlap with the seed path, at the bar']:.2f}; "
+                          "compressions a call for the seed path's T2 floor " + ", ".join(
+                              f"{k} {n:.1f}" for k, n in e["compressions a call for the seed path's T2 floor"].items()))
 
 
 if __name__ == "__main__":
