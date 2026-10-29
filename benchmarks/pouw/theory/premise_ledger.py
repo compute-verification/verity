@@ -19,9 +19,13 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   card; a call's A packed into big leaves under the big-rows option, at the smallest leaf size that passes).
 - **coin branch**: the adversary may branch on coin bits, and a branch writes no register, so W1 prices it at 0.
   `DistinctWritesMH100On` then charges each path only the words distinct on that path's salts. For each row-step it
-  computes the noise class once and skips every row-step whose n words equal an earlier one at this salt. The term is
-  α times the expected share of row-steps skipped, simulated exactly on the words for ssn_1l and its hardened variant
-  ssn_1l_hw (16 code-lane coin bits, step coins a_t ∈ {1, 3} against public column signs).
+  computes the noise class once and skips every row-step whose n words equal an earlier one at this salt. Within a zero
+  row (or any row, when the weights' columns are equal) it writes one register a class of equal columns and gathers
+  the rest, and copies a word equal to its own column's earlier word; what it can predict is bounded by the tables G1
+  lets it hold (`table_depth`, `return_window`). The term is α times the expected share of words skipped, the worse of
+  the two, simulated exactly on the words for ssn_1l, ssn_a, the hardened variant ssn_1l_hw (16 code-lane coin bits,
+  step coins a_t ∈ {1, 3} against public column signs) and two candidates with a whole coin word against a wide code,
+  cancelled in the last step: ssn_1l_tele4 (signed middle lanes, whose walks return) and ssn_1l_tele4m (monotone).
 
 Other sections: ShaSpeed's precision at each point and what Daniel's 02:01Z ruling covers, what rank ≤ 3 overall would
 take, G1 against advice, energy as a pricing (excluded by AGENTS.md; reported only as what it would change), per-period
@@ -31,6 +35,7 @@ checks must catch.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import functools
 import itertools
 import json
@@ -136,20 +141,33 @@ LEDGER = [
      "against public column signs s_t[j]) are pairwise distinct and non-free as functions of the coin bits",
      "0", "open", "5", "CPU-checked on 7 data cases (this file); a proof extends ssnTargetG to nibble lanes on a "
      "shared coin word and to affine step lanes", "N-LEAN", "ssn_1l_hw's word credit"),
+    ("ssn-tele-distinct", "The candidates' words (coin word 0's 4 signed bytes a₁ against an injective public code in "
+     "[−127, 127]⁴ in step 1, cancelled by −C in the last step; middle lanes 1 + 2b_t against balanced public signs "
+     "(ssn_1l_tele4) or 1 + b_t against public weights in {1, 2} (ssn_1l_tele4m), each column's vector distinct) are "
+     "pairwise distinct and non-free as functions of the coin bits",
+     "0", "open", "5", "CPU-checked on 7 data cases each (this file); a proof extends ssnTargetG to byte lanes, affine "
+     "step lanes and a cancelling last step", "N-LEAN", "the candidates' word credit"),
     ("ssn-success-set", "Fixing g coin bits succeeds with probability 2^−g a try and merges ≤ g·n words", "0", "open",
      "5", "a proof; it bounds a program fixed in advance, not one that branches on the bits (coin-branch)", "N-LEAN",
      "grinding for a fixed program"),
-    ("coin-branch", "The expected words a coin-branching program skips (rows-steps equal at its salt) is bounded by "
-     "the design's per-salt collision share", "0", "open", "5",
-     "this file's exact per-salt simulation; a proof of the per-path bound", "N-PREM",
-     "the coin-branch term (prover-chosen identical or zero rows)"),
+    ("coin-branch", "A coin-branching program skips only words it can predict equal on its path: row-steps equal at "
+     "its salt; a row's columns in classes it indexes from tables G1 bounds; a column's word equal to its own earlier "
+     "word, decided by a window of step coins (zero rows, or equal weight columns); W1 alone, with no bound on a "
+     "program's paths, admits every equal value on the path", "0", "open", "5",
+     "this file's exact per-salt simulation (row-steps; a zero row's words cheap, at G1's table depth and return "
+     "window, and W1 alone); a proof of the per-path bound with G1 bounding a program's paths and tables",
+     "N-PREM / N-LEAN",
+     "the coin-branch term (prover-chosen rows or weights), with G1"),
     ("final-word", "The free values are the call's own words, not their span; the final words are then targets",
      "0", "proved (scratch)", "0", "—", "SW-LEAN", "final word (exact-output designs), given atomic-call"),
     ("formed-charged", "A formed register that moves with the salt, equals no coin word and differs pairwise is "
      "charged 32", "0", "proved (scratch)", "0", "—", "SW-LEAN", "the forced part of forming (C1)"),
-    ("weights-distinct", "The registered weights have no zero or equal columns where a design's words need them distinct",
-     "0", "open", "5", "a check of the committed weights inside the proof (measured: none on Llama-3.2-1B)", "SW-PRICE",
-     "os2's and per2's word credit on degenerate weights"),
+    ("weights-distinct", "The registered weights have no equal columns within any k32 block, checked once at "
+     "registration inside the proof; a self-dealing prover registers its own weights, so without the check it is false",
+     "0", "open", "5", "the registration check on the committed weights (measured: no equal whole columns on "
+     "Llama-3.2-1B)", "SW-PRICE / N-NOISE",
+     "os2's and per2's word credit on equal weight columns (their noise passes through the weights; ssn's is added to "
+     "the accumulator, so for ssn equal columns are the zero rows' column collapse, which this check doesn't close)"),
     ("per2-distinct", "per2's words are pairwise distinct and non-free except the final word", "0", "open", "5",
      "a proof", "N-LEAN", "per2's word credit"),
     ("ncp-indep", "NCP's checked words are linearly independent modulo the free values", "0", "locked (A2WordsIff)",
@@ -166,7 +184,8 @@ LEDGER = [
     ("SheetClock", "0 < clock ≤ f_max = 1,980 MHz", "1", "locked", "1", "clock under load", "lock",
      "none in T1 (time only)"),
     ("G1", "size + held ≤ mem (HBM 141 GB, L2 50 MiB, registers, shared memory)", "1", "locked", "1",
-     "capacity probe", "lock", "none: M0 frees advice of any size (this file's G1 section)"),
+     "capacity probe", "lock", "the coin-branch term's table depth (with coin-branch): a program's paths and tables "
+     "fit HBM; data-dot advice stays free in M0 (this file's G1 section)"),
     ("G2", "Each pipe's use ≤ rate × wall; ≤ 4 warp instructions an SM-clock", "1", "locked", "1", "rate probes",
      "lock", "none in T1 (time only)"),
     ("G3", "Oracle calls × use ≤ use", "1", "locked", "1", "SHA-512 throughput", "lock", "hashing's accounting"),
@@ -205,8 +224,9 @@ LEDGER = [
      "none in T1: the egress layer's (devices off the card, with OutsourceWithinEgress)"),
     ("OutsourceWithinEgress", "Off-card compute is bounded by the egress the certifiers see", "3", "locked", "3",
      "certifiers", "lock", "none in T1 (egress layer)"),
-    ("inputs-natural", "The prover does not choose its inputs (no batches of identical or zero rows)", "F", "false",
-     "F", "a self-dealing prover submits its own requests", "—", "coin-branch on prover-chosen data"),
+    ("inputs-natural", "The prover chooses neither its inputs nor its weights (no zero or identical rows, no equal "
+     "weight columns)", "F", "false", "F", "a self-dealing prover submits its own requests and registers its own "
+     "weights", "—", "coin-branch on prover-chosen data"),
     ("energy", "A measured J per op per class prices work", "X", "excluded (AGENTS.md)", "X",
      "— (no meter enters a premise)", "—", "none: forming and hashing ×r, credit unchanged (this file)"),
 ]
@@ -370,10 +390,10 @@ def pair_collision_ssn1l(s: int) -> float:
 
 
 def coin_branch_terms(data: dict) -> dict:
-    """The coin-branch share of stock at each point: natural data (WikiText scopes) and prover-chosen batches."""
-    d = NS.designs()
-    ssn = next(x for x in d if x.name == "ssn_1l")
-    ssa = next(x for x in d if x.name == "ssn_a")
+    """The coin-branch share of stock at each point: natural data (WikiText scopes) and prover-chosen batches, whole
+    row-steps (`branch_collapse`) and words within a zero row (`col_collapse`). The candidates' identical rows coincide
+    at a salt only when their 32-bit a₁ do, so their row-level share is at most α·2⁻³²."""
+    ssn, ssa, tele = design("ssn_1l"), design("ssn_a"), design("ssn_1l_tele4")
     out = {}
     for point, (shapes, m, share) in POINTS.items():
         rows = max(1, round(m * share))
@@ -384,11 +404,15 @@ def coin_branch_terms(data: dict) -> dict:
         pairc = sum(n * k * pair_collision_ssn1l(NS.steps1l(k)) for n, k in shapes.values()) / w
         natural = alpha * (0.5 * summ["zero_block_share"] + 0.5 * summ["identical_row_share"] * pairc)
         e = {"rows": rows, "alpha": alpha, "scope": scope, "natural_ssn_1l": natural, "natural_ssn_1l_hw": 0.0}
-        for variant, design, steps in (("ssn_1l", ssn, NS.steps1l), ("ssn_1l_hw", ssn, NS.steps1l),
-                                       ("ssn_a", ssa, NS.steps28)):
+        for variant, dsg, steps in (("ssn_1l", ssn, NS.steps1l), ("ssn_1l_hw", ssn, NS.steps1l),
+                                    ("ssn_a", ssa, NS.steps28)):
             for case in ("identical", "zero"):
                 acc = sum(n_ * k * branch_collapse(variant, case, rows, steps(k), salts=2) for n_, k in shapes.values())
-                e[f"chosen_{case}_{variant}"] = weighted_alpha(design, shapes) * acc / w
+                e[f"chosen_{case}_{variant}"] = weighted_alpha(dsg, shapes) * acc / w
+        for x in ("ssn_1l_tele4", "ssn_1l_tele4m"):
+            e[f"chosen_identical_{x}"] = e[f"chosen_zero_{x}"] = weighted_alpha(tele, shapes) * 2.0 ** -32
+            e[f"natural_{x}"] = 0.0
+        e.update(col_collapse_terms(shapes))
         out[point] = e
     return out
 
@@ -399,13 +423,17 @@ def hw_coin_words(s: int) -> int:
 
 
 def hw_noise_std(k: int, n: int = 2048) -> dict:
-    """Served noise std (accumulator units) for ssn_1l and ssn_1l_hw: code lanes' variance plus the steps'."""
+    """Served noise std (accumulator units) for ssn_1l and ssn_1l_hw: code lanes' variance plus the steps'; for
+    ssn_1l_tele4 the middle steps' alone (the code cancels; balanced signs keep the mean 0 to within 2 units)."""
     code = _code(min(n, 28_560)).astype(float)
     c2 = (code ** 2).sum(axis=0)
     s = NS.steps1l(k)
     v1l = c2 / 4 + (s - 1) / 4
     vhw = c2 * (16 ** 2 - 1) / 12 + (s - 1) * 1.0
-    return {"K": k, "ssn_1l": float(np.sqrt(v1l).mean()), "ssn_1l_hw": float(np.sqrt(vhw).mean())}
+    wts = _pos_weights(steps_tele(k) - 2, n).astype(float)
+    return {"K": k, "ssn_1l": float(np.sqrt(v1l).mean()), "ssn_1l_hw": float(np.sqrt(vhw).mean()),
+            "ssn_1l_tele4": math.sqrt(steps_tele(k) - 2),
+            "ssn_1l_tele4m": float(np.sqrt((wts ** 2).sum(axis=0) / 4).mean())}
 
 
 def hw_distinct_check(salts: int = 24, m: int = 4, n: int = 6, s: int = 4, seed: int = 3) -> dict:
@@ -429,16 +457,272 @@ def hw_distinct_check(salts: int = 24, m: int = 4, n: int = 6, s: int = 4, seed:
     return res
 
 
+# ------------------------------------------------------------------- the column collapse, and ssn_1l_tele (candidate)
+TELE_LANES = 4
+
+
+def steps_tele(k: int, lanes: int = TELE_LANES) -> int:
+    """ssn_1l_tele's k32 steps: step 1 and the last hold 32 − L data entries beside L code lanes, every middle step 31
+    data entries and one coin lane."""
+    return 2 + math.ceil(max(0, k - 2 * (32 - lanes)) / 31)
+
+
+def tele_coin_words(s: int, lanes: int = TELE_LANES) -> int:
+    """a₁'s L signed coin bytes (L/4 whole words, no mask), then one bit a middle step."""
+    return lanes // 4 + math.ceil((s - 2) / 32)
+
+
+@functools.cache
+def designs() -> list:
+    """noise_sweep's designs, plus two candidates priced only here. Both: step 1 holds 28 data entries and one whole
+    coin word as 4 signed bytes a₁ against a public injective code C in [−127, 127]⁴; the last step holds 28 data
+    entries and the same a₁ against −C, so the code cancels in the final word; each middle step holds 31 data entries
+    and one coin lane. ssn_1l_tele4: the lane is 1 + 2b_t against balanced public signs (served std √(S − 2), mean 0).
+    ssn_1l_tele4m: the lane is 1 + b_t against public weights w_t[j] ∈ {1, 2}, so a column's words only grow (served
+    std about 0.79·√S after the epilogue subtracts each column's public mean 1.5·Σw)."""
+    d = NS.designs()
+    lead = next(x for x in d if x.name == "ssn_1l")
+    s = steps_tele
+    common = dict(alpha=lambda k: H32 * s(k) / k, form_x=lambda m, n, k: H32 * NS.ssn_1l_forming_writes(s(k)) / (n * k),
+                  forced_x=lambda m, n, k: H32 * s(k) / (n * k), c1_bytes=lambda m, n, k: 4 * s(k) / (n * k), fmt="-",
+                  coin_bits=lambda m, n, k: 32 * tele_coin_words(s(k)) * m)
+    head = "step 1: 28 data + coin word 0's 4 signed bytes against an injective code in [-127,127]^4; last step: 28 " \
+           "data + the same bytes against -C (the code cancels); middle k32 steps: 31 data + 1 lane "
+    tele = dataclasses.replace(
+        lead, name="ssn_1l_tele4", noise=head + "1 + 2b_t against balanced public signs",
+        t3="~ssn_1l's (estimate: served std √(S − 2), 8.1 / 16.2 units at K 2,048 / 8,192)",
+        verdict="candidate: closes the column collapse under G1, not a column's returns", **common)
+    mono = dataclasses.replace(
+        lead, name="ssn_1l_tele4m", noise=head + "1 + b_t against public weights w in {1,2} (words only grow)",
+        t3="~ssn_1l's (estimate: served std ≈ 0.79·√S, 6.5 / 12.9 units at K 2,048 / 8,192, after the public mean)",
+        verdict="candidate: closes the column collapse and a column's returns under G1; distinctness unproved",
+        **common)
+    for x in (tele, mono):
+        NS.DUP_ESTIMATE.setdefault(x.name, NS.DUP_ESTIMATE["ssn_1l"])
+    return d + [tele, mono]
+
+
+def design(name: str):
+    return next(x for x in designs() if x.name == name)
+
+
+@functools.cache
+def _hw_signs(s: int, n: int) -> np.ndarray:
+    return np.random.default_rng(12345).choice(np.array([-1, 1]), size=(s, n))
+
+
+@functools.cache
+def _tele_code(n: int, lanes: int, narrow: bool = False) -> np.ndarray:
+    """ssn_1l_tele's public column code: seeded, injective, digits in [−127, 127] (or [−6, 6], the mutation's)."""
+    rng = np.random.default_rng(2026 + lanes)
+    q = 13 if narrow else 255
+    assert n <= q ** lanes < 2 ** 62, "code space too small or too large to index"
+    idx = np.unique(rng.integers(0, q ** lanes, n))
+    while idx.size < n:
+        idx = np.unique(np.concatenate([idx, rng.integers(0, q ** lanes, n - idx.size)]))
+    idx = rng.permutation(idx)
+    return (idx[None, :] // q ** np.arange(lanes)[:, None]) % q - q // 2
+
+
+@functools.cache
+def _balanced_signs(s: int, n: int) -> np.ndarray:
+    """Public signs for s middle steps: each column's ±1 vector has ⌊s/2⌋ of each sign (its sum is 0 or ±1)."""
+    rng = np.random.default_rng(4242)
+    half = np.array([1] * (s // 2) + [-1] * (s - s // 2))
+    return rng.permuted(np.tile(half, (n, 1)), axis=1).T
+
+
+@functools.cache
+def _pos_weights(s: int, n: int) -> np.ndarray:
+    """ssn_1l_tele4m's public weights for s middle steps, each in {1, 2}."""
+    return np.random.default_rng(4243).integers(1, 3, (s, n))
+
+
+A1_BITS = {"ssn_1l": 4, "ssn_a": 4, "ssn_1l_hw": 16}
+STEP_BITS = {"ssn_a": 4}
+_P64 = np.uint64(0x9E3779B97F4A7C15)
+
+
+def tele_variant(variant: str) -> tuple[int, str]:
+    """ssn_1l_tele<L><flags>: L code lanes; flags m (monotone middle lanes), n (the code's digits in [−6, 6])."""
+    rest = variant.removeprefix("ssn_1l_tele")
+    digits = "".join(ch for ch in rest if ch.isdigit())
+    return int(digits), rest[len(digits):]
+
+
+def a1_bits(variant: str) -> int:
+    return 8 * tele_variant(variant)[0] if variant.startswith("ssn_1l_tele") else A1_BITS[variant]
+
+
+def table_depth(variant: str, shapes: dict, budget: float = HBM_BYTES / 2) -> int:
+    """How many leading steps a coin-branching program can tabulate in `budget` bytes (half of HBM; the other half holds
+    `return_window`'s tables): for each step, the partition of a row's n words into equal values, 2 B a column, one
+    table a shape (shared by every layer of that shape), for every value of the coins up to that step. 0 when a₁'s
+    table alone doesn't fit."""
+    per = 2 * sum(n for n, _ in shapes.values())
+    t0, size = 0, 0.0
+    while t0 < 64:
+        size += 2.0 ** (a1_bits(variant) + STEP_BITS.get(variant, 1) * t0) * per
+        if size > budget:
+            break
+        t0 += 1
+    return t0
+
+
+def return_window(variant: str, shapes: dict, steps, budget: float = HBM_BYTES / 2) -> int:
+    """How many steps back a program can see a column's word return to an earlier value of its own, in `budget` bytes:
+    a table a step and shape, indexed by the window's step-coin bits, naming for each column the earlier step it equals
+    (2 B). Within a column the code's part cancels, so the window's coins alone decide it."""
+    per = 2 * sum(n * steps(k) for n, k in shapes.values())
+    return int(math.log2(budget / per)) // STEP_BITS.get(variant, 1)
+
+
+def _zero_row_noise(variant: str, n: int, s: int, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+    """A zero row's words at a fresh salt (s × n; any row, when the weights' n columns are equal), and each step's public
+    column pattern (s × n): the part of a column's step coefficient a program knows without the step's coins."""
+    pat = np.zeros((s, n), dtype=np.uint64)
+    if variant.startswith("ssn_1l_tele"):
+        lanes, flags = tele_variant(variant)
+        base = rng.integers(-128, 128, lanes) @ _tele_code(n, lanes, "n" in flags)
+        inc = np.zeros((s, n), dtype=np.int64)
+        if "m" in flags:
+            wts = _pos_weights(s - 2, n)
+            inc[1:s - 1] = (1 + rng.integers(0, 2, s - 2))[:, None] * wts
+            pat[1:s - 1] = wts
+        else:
+            signs = _balanced_signs(s - 2, n)
+            inc[1:s - 1] = (1 + 2 * rng.integers(0, 2, s - 2))[:, None] * signs
+            pat[1:s - 1] = signs > 0
+        inc[s - 1] = -base
+        pat[s - 1] = base.view(np.uint64)      # the last step cancels the base, which a program holding the class has
+    else:
+        code = _code(n, n_full=n)
+        if variant == "ssn_1l_hw":
+            base = rng.integers(0, 16, 4) @ code
+            signs = _hw_signs(s, n)
+            inc = (1 + 2 * rng.integers(0, 2, s))[:, None] * signs
+            pat[:] = signs > 0
+        elif variant == "ssn_1l":
+            base = rng.integers(0, 2, 4) @ code
+            inc = np.repeat(rng.integers(0, 2, (s, 1)), n, axis=1)
+        else:
+            base = rng.integers(0, 2, 4) @ code
+            lane = (np.arange(n)[None, :] + np.arange(s)[:, None]) % 4
+            inc = np.take_along_axis(rng.integers(0, 2, (s, 4)), lane, axis=1)
+            pat[:] = lane
+        inc[0] = 0
+        pat[0] = 0
+    return base[None, :] + inc.cumsum(axis=0), pat
+
+
+@functools.lru_cache(maxsize=None)
+def col_collapse(variant: str, n: int, s: int, t0: int, lag: int = 0, salts: int = 2, seed: int = 11) -> float:
+    """The share of a zero row's n·S words a coin-branching program skips (stores and memory-path gathers are free,
+    MemOblivious): it writes one register a class of equal words in a step and gathers the rest, and it copies a word
+    that equals its own column's word up to `lag` steps back.
+
+    Steps before t0 are tabulated (the classes are the step's equal values, from a table indexed by the coins so far);
+    from t0 on, the classes are the table's last classes (or, at t0 = 0, step 1's computed values, written in full)
+    split by the columns' public patterns, which keep equal words equal on every value of the later coins. A column's
+    return is decided by the window's step coins alone (the code's part cancels), except across ssn_1l_tele's last
+    step, which drops the code. t0 < 0 is W1 alone (no bound on a program's paths): every equal value in the row."""
+    rng = np.random.default_rng(seed)
+    shares = []
+    for _ in range(salts):
+        vals, pat = _zero_row_noise(variant, n, s, rng)
+        if t0 < 0:
+            shares.append(1 - np.unique(vals).shape[0] / (n * s))
+            continue
+        skip = np.zeros((s, n), dtype=bool)
+        anchor = max(t0 - 1, 0)
+        key = vals[anchor].view(np.uint64).copy()
+        for t in range(s):
+            if t < t0:
+                k = vals[t]
+            elif t <= anchor:
+                continue
+            else:
+                key = key * _P64 + pat[t] + np.uint64(1)
+                k = key
+            _, first = np.unique(k, return_index=True)
+            skip[t] = True
+            skip[t, first] = False
+        last = s - 1 if variant.startswith("ssn_1l_tele") else s
+        for ell in range(1, min(lag, last - 1) + 1):
+            skip[ell:last] |= vals[ell:last] == vals[:last - ell]
+        shares.append(skip.sum() / (n * s))
+    return float(np.mean(shares))
+
+
+#: (variant, its design in `designs()`, its steps): the designs whose coin-branch term this file simulates
+COL_VARIANTS = (("ssn_1l", "ssn_1l", NS.steps1l), ("ssn_a", "ssn_a", NS.steps28), ("ssn_1l_hw", "ssn_1l", NS.steps1l),
+                ("ssn_1l_tele4", "ssn_1l_tele4", steps_tele), ("ssn_1l_tele4m", "ssn_1l_tele4m", steps_tele))
+#: the cheap reading's window: a return over ≤ 2 steps needs a predicate on ≤ 2 steps' coins (4 code paths a step)
+CHEAP_LAG = 2
+
+
+def col_collapse_terms(shapes: dict) -> dict:
+    """Each variant's zero-row collapse as a share of stock (α times the share of words skipped, weighted by n·K): cheap
+    (a₁'s table, returns over ≤ 2 steps), G1 (the table depth and return window that fit half of HBM each), and W1
+    alone."""
+    w = sum(n * k for n, k in shapes.values())
+    out = {}
+    for variant, name, steps in COL_VARIANTS:
+        d = design(name)
+        t0, lag = table_depth(variant, shapes), return_window(variant, shapes, steps)
+        out[f"t0_{variant}"], out[f"lag_{variant}"] = t0, lag
+        for reading, depth, window in (("static", min(t0, 1), min(lag, CHEAP_LAG)), ("table", t0, lag),
+                                       ("w1_alone", -1, 0)):
+            out[f"col_{reading}_{variant}"] = sum(n * k * d.alpha(k) * col_collapse(variant, n, steps(k), depth, window)
+                                                 for n, k in shapes.values()) / w
+    return out
+
+
+def tele_distinct_check(variant: str = "ssn_1l_tele4", salts: int = 24, m: int = 4, n: int = 6, s: int = 6,
+                        seed: int = 5) -> dict:
+    """A candidate's words as functions on a salt grid (SW-NOISE's DistinctOn reading) on each data case, with the
+    middle steps' public vectors pairwise distinct: ssn_1l_tele4's 6 balanced sign vectors of 4 middle steps, or
+    ssn_1l_tele4m's first 6 weight vectors in {1, 2}⁴ (its lane is then 1 + b_t)."""
+    rng = np.random.default_rng(seed)
+    code = _tele_code(n, 4)
+    mono = "m" in tele_variant(variant)[1]
+    vecs = [v for v in itertools.product((1, 2), repeat=s - 2)] if mono else \
+        [v for v in itertools.product((1, -1), repeat=s - 2) if sum(v) == 0]
+    signs = np.array(vecs).T[:, :n]
+    res = {}
+    for case in NS.CASES:
+        a, b = NS._data(case, m, n, 32 * s, rng)
+        lanes = [(0, 28)] + [(32 * t, 32 * t + 31) for t in range(1, s - 1)] + [(32 * (s - 1), 32 * (s - 1) + 28)]
+        dd = np.stack([a[:, i:j] @ b[i:j] for i, j in lanes], axis=1).cumsum(axis=1)
+        ws, raws = [], []
+        for _ in range(salts):
+            raw = rng.integers(0, 2 ** 32, (m, tele_coin_words(s)))
+            a1 = ((raw[:, :1] >> (8 * np.arange(4))) & 0xFF).astype(np.int64)
+            a1 = np.where(a1 > 127, a1 - 256, a1)
+            bits = rng.integers(0, 2, (m, s - 2))
+            inc = np.zeros((m, s, n), dtype=np.int64)
+            inc[:, 1:s - 1] = ((1 + bits) if mono else (1 + 2 * bits))[:, :, None] * signs[None]
+            inc[:, s - 1] = -(a1 @ code)
+            ws.append(dd + (a1 @ code)[:, None, :] + inc.cumsum(axis=1))
+            raws.append(raw)
+        res[case] = NS._distinct([np.stack(ws)], [np.stack(raws)])
+    return res
+
+
 # ------------------------------------------------------------------------------------------ hitting sets per design
 #: M1 zeroes the final word in noise_sweep: the final-word lemma under the atomic call
 M1 = ("final-word", "atomic-call")
 DESIGNS = [  # (label, noise_sweep name, model, C1, base premises (word credit), coin-branch applies)
     ("ssn_1l", "ssn_1l", "M0", False, ("H32", "W1", "ssn-distinct", "ssn-success-set"), "ssn_1l"),
     ("ssn_1l+C1", "ssn_1l", "M0", True, ("H32", "W1", "ssn-distinct", "ssn-success-set", "formed-charged"), "ssn_1l"),
-    ("ssn_1l_hw", "ssn_1l", "M0", False, ("H32", "W1", "ssn-hw-distinct", "ssn-success-set", "coin-branch"),
+    ("ssn_1l_hw", "ssn_1l", "M0", False, ("H32", "W1", "ssn-hw-distinct", "ssn-success-set", "coin-branch", "G1"),
      "ssn_1l_hw"),
+    ("ssn_1l_tele4", "ssn_1l_tele4", "M0", False,
+     ("H32", "W1", "ssn-tele-distinct", "ssn-success-set", "coin-branch", "G1"), "ssn_1l_tele4"),
+    ("ssn_1l_tele4m", "ssn_1l_tele4m", "M0", False,
+     ("H32", "W1", "ssn-tele-distinct", "ssn-success-set", "coin-branch", "G1"), "ssn_1l_tele4m"),
     ("ssn_a", "ssn_a", "M0", False, ("H32", "W1", "ssn-distinct", "ssn-success-set"), "ssn_a"),
-    ("per2 M1+C1", "per2", "M1", True, ("H32", "W1", "per2-distinct", "formed-charged", *M1), None),
+    ("per2 M1+C1", "per2", "M1", True, ("H32", "W1", "per2-distinct", "weights-distinct", "formed-charged", *M1), None),
     ("os2 M1+C1", "os2", "M1", True, ("H32", "W1", "weights-distinct", "formed-charged", *M1), None),
     ("ncp3 M1+C1", "ncp3", "M1", True, ("H32", "W1", "ncp-indep", "formed-charged", *M1), None),
     ("nsf", "nsf", "M0", False, ("H32", "W1"), "data"),
@@ -458,7 +742,7 @@ OPTIONS = {
 def design_terms(label: str, point: str, data: dict, cb: dict) -> dict:
     name, model, c1 = next((n, mo, c) for lab, n, mo, c, _, _ in DESIGNS if lab == label)
     branch = next(b for lab, _, _, _, _, b in DESIGNS if lab == label)
-    d = next(x for x in NS.designs() if x.name == name)
+    d = design(name)
     shapes, m, share = POINTS[point]
     t = NS.weighted(d, shapes, m, model, c1, share)
     rows = max(1, round(m * share))
@@ -471,7 +755,9 @@ def design_terms(label: str, point: str, data: dict, cb: dict) -> dict:
         w = sum(n * k for n, k in shapes.values())
         chosen, natural = sum(n * k * d.alpha(k) * (1 - H32 / k) for n, k in shapes.values()) / w, 0.0
     elif branch:
-        chosen = max(e.get(f"chosen_identical_{branch}", 0.0), e.get(f"chosen_zero_{branch}", 0.0))
+        # the adversary's best single attack: equal row-steps, or equal columns within zero rows (G1's table depth)
+        chosen = max(e.get(f"chosen_identical_{branch}", 0.0), e.get(f"chosen_zero_{branch}", 0.0),
+                     e.get(f"col_table_{branch}", 0.0))
         natural = e.get(f"natural_{branch}", 0.0)
     else:
         chosen = natural = 0.0
@@ -565,7 +851,7 @@ def rank3_routes() -> dict:
 def g1_advice() -> dict:
     """Advice sizes against HBM: one call's data dots and outputs, and a whole forward's, at the lead's points."""
     out = {}
-    d = next(x for x in NS.designs() if x.name == "ssn_1l")
+    d = design("ssn_1l")
     for point, (shapes, m, share) in POINTS.items():
         rows = max(1, round(m * share))
         layers = NS.LLAMA_LAYERS if shapes is NS.LLAMA else 1
@@ -600,7 +886,7 @@ def periods(data: dict, cb: dict) -> dict:
     that share of stock's AND gates (2,079/16 a MAC); the hashing's own AND count is its own row."""
     t = design_terms("ssn_1l", "llama_T8192", data, cb)
     alpha = cb["llama_T8192"]["alpha"]
-    h = hash_terms(next(x for x in NS.designs() if x.name == "ssn_1l"), NS.LLAMA, 8192, False)
+    h = hash_terms(design("ssn_1l"), NS.LLAMA, 8192, False)
     rows = {"allowance (1%)": ALLOW, "hashing ShaSpeed must price (W1 floor)": h["h_floor"],
             "hashing in AND gates (hm96's AND model, not W1)": h["h_ands"],
             "rank ≤ 3 residual (hashing without ShaSpeed)": h["rank3_residual_floor"],
@@ -608,7 +894,10 @@ def periods(data: dict, cb: dict) -> dict:
             "hiding at 256 KiB, unforced (W1 floor)": t["hiding"],
             "coin branch, WikiText": t["coin_branch_natural"],
             "coin branch, chosen rows (worse of identical and zero)": t["coin_branch_chosen"],
-            "coin branch, ssn_1l_hw, chosen rows": design_terms("ssn_1l_hw", "llama_T8192", data, cb)["coin_branch_chosen"]}
+            "coin branch, ssn_1l_hw, chosen rows (G1)":
+                design_terms("ssn_1l_hw", "llama_T8192", data, cb)["coin_branch_chosen"],
+            "coin branch, ssn_1l_tele4m (candidate), chosen rows (G1)":
+                design_terms("ssn_1l_tele4m", "llama_T8192", data, cb)["coin_branch_chosen"]}
     mac_s = {"one H200": INT8_MAC_S / alpha, "datacenter": INT8_MAC_S / alpha * NS.DATACENTER}
     out = {}
     for scope, rate in mac_s.items():
@@ -652,11 +941,27 @@ def checks(rep: dict) -> list[dict]:
     ok("ssn_1l_hw ≤ 1% on identical rows at every point",
        all(v["chosen_identical_ssn_1l_hw"] <= ALLOW for v in cb.values() if "chosen_identical_ssn_1l_hw" in v),
        str({k: round(v.get("chosen_identical_ssn_1l_hw", -1), 5) for k, v in cb.items()}))
-    ok("ssn_1l_hw ≤ 1% on zero rows at every point",
+    ok("ssn_1l_hw's row-level collapse ≤ 1% on zero rows at every point",
        all(v["chosen_zero_ssn_1l_hw"] <= ALLOW for v in cb.values() if "chosen_zero_ssn_1l_hw" in v))
+    ok("a cheap program (a₁'s table, returns over ≤ 2 steps) skips over 20% of ssn_1l_hw's zero rows at every point",
+       all(v["col_static_ssn_1l_hw"] > 0.2 for v in cb.values()),
+       str({k: round(v["col_static_ssn_1l_hw"], 4) for k, v in cb.items()}))
+    ok("ssn_1l_tele4 (signed middle lanes) exceeds 1% at every point at G1: a column's word returns to its own",
+       all(v["col_table_ssn_1l_tele4"] > ALLOW for v in cb.values()),
+       str({k: round(v["col_table_ssn_1l_tele4"], 4) for k, v in cb.items()}))
+    ok("ssn_1l_tele4m's zero-row collapse ≤ 0.5% at every point at G1's table depth and return window",
+       all(v["col_table_ssn_1l_tele4m"] <= ALLOW / 2 for v in cb.values()),
+       str({k: round(v["col_table_ssn_1l_tele4m"], 5) for k, v in cb.items()}))
+    ok("ssn_1l_hw's a₁ table fits half of HBM at every point and the candidates' don't",
+       all(v["t0_ssn_1l_hw"] >= 1 and v["t0_ssn_1l_tele4"] == v["t0_ssn_1l_tele4m"] == 0 for v in cb.values()))
+    ok("W1 alone (no bound on a program's paths) lets every ssn design skip > 1% of a zero row, so the coin-branch "
+       "term rests on G1", all(v[f"col_w1_alone_{x}"] > ALLOW for v in cb.values() for x, *_ in COL_VARIANTS))
     hw = rep["hw_distinct"]
     ok("ssn_1l_hw words distinct and non-free on every data case", all(v["bad_share"] == 0 for v in hw.values()),
        str({k: v["bad_share"] for k, v in hw.items()}))
+    for x, td in rep["tele_distinct"].items():
+        ok(f"{x} words distinct and non-free on every data case", all(v["bad_share"] == 0 for v in td.values()),
+           str({k: v["bad_share"] for k, v in td.items()}))
     ok("random data never collapses (ssn_1l)", branch_collapse("ssn_1l", "random", 64, 67) == 0)
     ok("pair-collision formula matches simulation", abs(
         branch_collapse("ssn_1l", "pair", 4096, 8, salts=4) - 0.5 * pair_collision_ssn1l(8)) < 0.004)
@@ -666,7 +971,12 @@ def checks(rep: dict) -> list[dict]:
     ok("no design passes at rank ≤ 3 overall", all(
         s["rank_settled"] not in ("0", "1", "2", "3") for d in rep["hitting"].values() for s in d["minimal_sets"]))
     hwset = rep["hitting"]["ssn_1l_hw"]["minimal_sets"]
-    ok("ssn_1l_hw passes without inputs-natural", any("inputs-natural" not in s["premises"] for s in hwset))
+    ok("ssn_1l_hw passes only with inputs-natural (false): its column collapse",
+       all("inputs-natural" in s["premises"] for s in hwset))
+    ok("ssn_1l_tele4 passes only with inputs-natural (false): a column's returns",
+       all("inputs-natural" in s["premises"] for s in rep["hitting"]["ssn_1l_tele4"]["minimal_sets"]))
+    tset = rep["hitting"]["ssn_1l_tele4m"]["minimal_sets"]
+    ok("ssn_1l_tele4m passes without inputs-natural", any("inputs-natural" not in s["premises"] for s in tset))
     ok("ssn_1l passes only with inputs-natural (false)", all("inputs-natural" in s["premises"] for s in lead))
     ok("nsf passes only with inputs-natural (false)",
        all("inputs-natural" in s["premises"] for s in rep["hitting"]["nsf"]["minimal_sets"]))
@@ -674,6 +984,9 @@ def checks(rep: dict) -> list[dict]:
     ok("ssn_1l_hw's S + 15 coin bits a row take as many coin words as ssn_1l's S + 3 at every priced K, so its "
        "coin term is ssn_1l's", all(hw_coin_words(NS.steps1l(k)) == NS.ssn_1l_words(NS.steps1l(k)) for k in ks),
        str({k: (hw_coin_words(NS.steps1l(k)), NS.ssn_1l_words(NS.steps1l(k))) for k in ks}))
+    ok("ssn_1l_tele4 takes ssn_1l's steps and one more coin word a row at every priced K",
+       all(steps_tele(k) == NS.steps1l(k) and tele_coin_words(steps_tele(k)) == NS.ssn_1l_words(NS.steps1l(k)) + 1
+           for k in ks), str({k: (steps_tele(k), tele_coin_words(steps_tele(k))) for k in ks}))
     hid = rep["hiding"]["ssn_1l"]["card"]["llama_T8192"]
     ok("ssn_1l's card hiding, alone, is within 15% of SW-PRICE's 1.18x stock (words, A's rows; measured price)",
        abs(hid["unforced_alone"] / 1.18 - 1) < 0.15, f"{hid['unforced_alone']:.3f}")
@@ -701,6 +1014,16 @@ def mutations() -> list[dict]:
     hwpair = branch_collapse("ssn_1l_hw", "pair", 4096, 8, salts=2)
     res.append({"mutation": "pair formula applied to ssn_1l_hw", "sim": hwpair, "formula": 0.5 * pair_collision_ssn1l(8),
                 "caught": abs(hwpair - 0.5 * pair_collision_ssn1l(8)) > 0.004})
+    s = steps_tele(2048)
+    narrow = col_collapse("ssn_1l_tele4mn", 16_384, s, 0, 14)
+    res.append({"mutation": "ssn_1l_tele4m with the code's digits in [−6, 6] (ssn_1l's range)",
+                "zero-row collapse, n 16,384, K 2,048": narrow, "caught": narrow > ALLOW})
+    tab = col_collapse("ssn_1l_tele4m", 16_384, s, 6, 14)
+    res.append({"mutation": "ssn_1l_tele4m if a₁ were tabulable (depth 6)",
+                "zero-row collapse, n 16,384, K 2,048": tab, "caught": tab > ALLOW / 2})
+    signed = col_collapse("ssn_1l_tele4", 16_384, s, 0, 14)
+    res.append({"mutation": "ssn_1l_tele4m with signed middle lanes (ssn_1l_tele4)",
+                "zero-row collapse, n 16,384, K 2,048": signed, "caught": signed > ALLOW / 2})
     return res
 
 
@@ -711,7 +1034,8 @@ def report(data_path: str | None) -> dict:
         data = NS.DATA
     cb = coin_branch_terms(data)
     rep = {"ledger": ledger(), "coin_branch": cb, "hw_noise_std": [hw_noise_std(k) for k in (2048, 8192, 7168)],
-           "hw_distinct": hw_distinct_check()}
+           "hw_distinct": hw_distinct_check(),
+           "tele_distinct": {v: tele_distinct_check(v) for v in ("ssn_1l_tele4", "ssn_1l_tele4m")}}
     rep["hitting"] = {lab: minimal_sets(lab, data, cb) for lab, *_ in DESIGNS}
     rep["shaspeed"] = shaspeed_precision(data, cb)
     rep["rank3"] = rank3_routes()
@@ -756,7 +1080,14 @@ def table(rep: dict) -> str:
                      "instructions a compression")
     lines.append("\n# coin branch (share of stock)")
     for p, e in rep["coin_branch"].items():
-        lines.append(f"{p}: " + ", ".join(f"{k} {v:.4%}" for k, v in e.items() if isinstance(v, float) and k != "alpha"))
+        lines.append(f"{p}: " + ", ".join(f"{k} {v:.4%}" for k, v in e.items() if isinstance(v, float) and k != "alpha"
+                                          and not k.startswith("col_")))
+    lines.append("\n# a zero row's (or equal weight columns') words skipped, share of stock: cheap (a₁'s table, returns "
+                 "over ≤ 2 steps) / G1 (table depth t0, return window L) / W1 alone")
+    for p, e in rep["coin_branch"].items():
+        lines.append(f"{p}: " + "; ".join(
+            f"{x} {e[f'col_static_{x}']:.3%} / {e[f'col_table_{x}']:.3%} (t0 {e[f't0_{x}']}, L {e[f'lag_{x}']}) / "
+            f"{e[f'col_w1_alone_{x}']:.1%}" for x, *_ in COL_VARIANTS))
     lines.append("\n# minimal premise sets")
     for lab, h in rep["hitting"].items():
         lines.append(f"## {lab}")
