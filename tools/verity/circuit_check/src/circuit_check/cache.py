@@ -1218,7 +1218,7 @@ def _kernels_now(key: str) -> str | None:
         return None
     reg = batch._KERNELS
     keys = sorted(dict.keys(reg)) if key == "*" else [key]
-    got = {k: {n: [kn.domain, kn.version, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
+    got = {k: {n: [kn.domain, kn.version, kn.partial, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
            for k in keys}
     got = {k: v for k, v in got.items() if v}
     return hashlib.sha512(json.dumps(got, sort_keys=True).encode()).hexdigest() if got else None
