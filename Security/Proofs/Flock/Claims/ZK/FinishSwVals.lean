@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.ZK.FinishSwRep
 request's values below `zp 64` and level 0's `l0Clear` above. The views' source is at the workers' clear values, so
 here the chain is restated at any clear values `v`, with the two facts `valsFw` supplied as premises: below `zp 64` the
 masked values are the request's values plus its pads (`hmkV`), and from `zp 64` to `h_ab` they are `l0Clear` at the
-coins plus the pads (`hl0`, which `Loop.swSrcE_l0_live` gives at the views' values). The rest of the chain
+coins plus the pads (`hl0`). The rest of the chain
 (`swSrc_sv`, `swViewMasked`, `swRows_coef`, `swSrcE_sv_rank`, `swSrcE_restart`, `swSrcE_innerSrc_rows`) is already
 at any clear values.
 
@@ -418,7 +418,7 @@ theorem swSrcE_ligHyp_frame_v (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) 
     ((swSrcE x c w v τ j.val).rep r.val) hk0 hn0 hlv rfl hlk hl0 hy1 hybar hsalt
 
 /-- **`swSrcE_ligHyp_E` at any clear values `v`**: as `swSrcE_ligHyp_E`, with level 0's masked values from `zp 64` to
-`h_ab` given (`hl0`, `Loop.swSrcE_l0_live` at the views' values) in place of `valsFw`'s level 0 part and the tape's
+`h_ab` given (`hl0`) in place of `valsFw`'s level 0 part and the tape's
 pads. -/
 theorem swSrcE_ligHyp_E_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hn : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
@@ -457,7 +457,7 @@ theorem swSrcE_ligHyp_E_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : R
 
 /-- **`swSrcE_repCut` at any clear values `v`**: where table `j`'s rows hold at its base at `v`, rep `r`'s masked values
 below `zp 64` are the request's values plus its pads (`hmkV`) and, wherever the source's PIOP returns, from `zp 64` to
-`h_ab` level 0's `l0Clear` at the coins plus the pads (`hl0`, as `Loop.swSrcE_l0_live` gives them), the firewall's
+`h_ab` level 0's `l0Clear` at the coins plus the pads (`hl0`), the firewall's
 rep returning `p` gives the cut from the switched source at `v` the same transcript and log and a proof `p'` with
 `eraseZ p' = eraseZ p`. -/
 theorem swSrcE_repCut_v {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
