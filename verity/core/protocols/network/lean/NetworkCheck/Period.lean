@@ -221,7 +221,8 @@ entries' input node the value it registers as `scan/prog<j>`), which one-stage's
 answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
 `egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
-and that the audits' answers are the sampled-proofs component's own, which the composition's theorem is to bind.
+and that the audits' answers are the sampled-proofs component's own,
+which the composition's theorem is to bind.
 -/
 
 namespace NetworkCheck.Period
