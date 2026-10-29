@@ -15,9 +15,16 @@ Every figure is W1 priced work against stock's mnK (CORE.md §2a), at H32's floo
   DeepSeek-V3's public config, taken for the sweep's "V4-like" shape (not in the tree); the expert widths are SW-GPU's
   v4gu (4,096 × 7,168) and v4dn (7,168 × 2,048). T 64 is the demo's T 512 step (64 real tokens). Below 64 rows a call
   wgmma misses H32's 32 a register (`Shape100`), so there the floor is loose as well.
+- Y's signed bytes on route U (X + β u8, Y s8): B + F crosses zero for small |B|, so the carry out of a byte depends on
+  the noise and no single packed add of a bitwise-derived noise word gives Y's s8 bytes; each Y register takes a second
+  write (a LOP3 xor after a biased add), 24/m more. Route U′ (X s8, Y + γ u8, init −γ·Σ_k A_ik a row) moves that write to
+  X, 24/n, and adds the row sums, 8/n; route UU (both u8) adds the row sums and a per-entry init, 32/K.
+- NCP at k32 words with the pre-noise hashing of A closed by atomicity rather than by the final-word lemma: final word,
+  forming and derivation.
 - per monitoring period, each share times all compute: the world's 9.36e30 FLOP a year
   (`benchmarks/census/adversary.json` world-inference-2027) and a datacenter of 100,000 H200s
   (`deployments.json` dc-12500-machines-600s) at 1,979 TFLOP/s and 0.4 utilization; as if the design covered it all.
+  In AND gates at 2,079/16 an int8 MAC (CORE-TIME's figure, relayed), 2 FLOP a MAC.
 
   python3 benchmarks/pouw/theory/sw_smell_arith.py [--json OUT]
 """
@@ -47,6 +54,26 @@ def terms(linears, m: int) -> dict[str, float]:
         "noise_derivation": sum(8 * k * (m + n) for _, n, k in linears) / stock,
         "xy_commit_bytes_per_mac": sum(3 * k * (m + n) for _, n, k in linears) / stock,
     }
+
+
+def routes(linears, m: int) -> dict[str, float]:
+    stock = sum(m * n * k for _, n, k in linears)
+    mk = sum(m * k for _, n, k in linears)
+    return {
+        "route_u_y_fix": sum(3 * P_FORM * k * n for _, n, k in linears) / stock,
+        "route_u_prime": (3 * P_FORM + 8) * mk / stock,
+        "route_uu": (8 * mk + sum(32 * m * n for _, n, _ in linears)) / stock,
+    }
+
+
+def single_add_lanes() -> list[int]:
+    """The int7 weights B for which no byte constant c ≡ B − 31 (mod 256) keeps c + r's carry fixed over r in 0..63."""
+    bad = []
+    for b in range(-63, 64):
+        cs = [c for c in range(768) if (c - (b - 31)) % 256 == 0]
+        if not any(len({(c + r) // 256 for r in range(64)}) == 1 for c in cs):
+            bad.append(b)
+    return bad
 
 
 def delta(bytes_per_mac: float, h: float) -> float:
@@ -85,8 +112,21 @@ def main() -> int:
                 print(f"V4-like experts, T {T}, {label}: final {t['final_word']:.3%}  forming {t['forming']:.3%}  "
                       f"noise derivation {t['noise_derivation']:.3%}  total after the final-word fix "
                       f"{t['forming'] + t['noise_derivation']:.3%}")
+    out["routes"], out["ncp_k32_atomic"] = {}, {}
+    for m in MS:
+        r = routes(LLAMA_FUSED, m)
+        t = out["llama"][f"fused_m{m}"]
+        out["routes"][m] = r
+        out["ncp_k32_atomic"][m] = t["final_word"] + t["forming"] + t["noise_derivation"]
+        print(f"fused m {m:5d}: route U's Y fix +{r['route_u_y_fix']:.3%}  route U′ +{r['route_u_prime']:.3%}  "
+              f"route UU +{r['route_uu']:.3%}  ncp-k32 with A's pre-noise hashing closed by atomicity "
+              f"{out['ncp_k32_atomic'][m]:.3%}")
+    bad = single_add_lanes()
+    out["single_add_bad_b"] = bad
+    print(f"int7 B with no single-add s8 lane for B + F₁: {len(bad)} of 127, B in [{min(bad)}, {max(bad)}]")
     world_year = 9.36e30
     dc_rate = 100_000 * 1.979e15 * 0.4
+    and_per_mac = 2079 / 16
     periods = {"window 600 s": 600, "week": 7 * 86400, "month (30 d)": 30 * 86400, "year": 365 * 86400}
     shares = {
         "T1's bar, 1% of stock": 0.01,
@@ -96,15 +136,19 @@ def main() -> int:
             out["v4_expert"]["T8192_dense"]["forming"] + out["v4_expert"]["T8192_dense"]["noise_derivation"]),
         "V4-like experts after the final-word fix, T 8,192, routed rows": (
             out["v4_expert"]["T8192_routed"]["forming"] + out["v4_expert"]["T8192_routed"]["noise_derivation"]),
+        "route U's Y fix at T 512's 64 rows, fused": out["routes"][64]["route_u_y_fix"],
+        "route U's Y fix at T 8,192, fused": out["routes"][8192]["route_u_y_fix"],
+        "route U′'s extra writes, any m, fused": out["routes"][64]["route_u_prime"],
+        "A's pre-noise hashing, closed by the final-word lemma in SW-PRICE's card": 14336 / 60817408 * H_BAR,
     }
     out["per_period"] = {}
     for what, s in shares.items():
         row = {p: {"world": s * world_year * sec / (365 * 86400), "datacenter": s * dc_rate * sec}
                for p, sec in periods.items()}
         out["per_period"][what] = {"share": s, **row}
-        print(f"{what} ({s:.3%} of covered compute), FLOP: world " +
-              " / ".join(f"{row[p]['world']:.1e}" for p in periods) + "; datacenter " +
-              " / ".join(f"{row[p]['datacenter']:.1e}" for p in periods))
+        print(f"{what} ({s:.3%} of covered compute), AND gates: world " +
+              " / ".join(f"{row[p]['world'] / 2 * and_per_mac:.1e}" for p in periods) + "; datacenter " +
+              " / ".join(f"{row[p]['datacenter'] / 2 * and_per_mac:.1e}" for p in periods))
     checks = (
         ("final word over the block linears is CORE-TIME's 1.239%", abs(out["llama"]["apart_m8192"]["final_word"] - 0.01239) < 5e-5),
         ("forming apart at T 8,192 is CORE-TIME's 1.10%", abs(out["llama"]["apart_m8192"]["forming"] - 0.01101) < 5e-5),
@@ -112,6 +156,10 @@ def main() -> int:
         ("forming fused at T 8,192 is CORE-SMELL's 0.86%", abs(out["llama"]["fused_m8192"]["forming"] - 0.0086) < 5e-5),
         ("ShaSpeed tolerance at k32 words is C27's 0.0013–0.0015%",
          abs(delta(WORD_BYTES, H_X) - 1.26e-5) < 1e-7 and abs(delta(WORD_BYTES, H_BAR) - 1.50e-5) < 1e-7),
+        ("ncp-k32 at T 8,192 is SW-PRICE's 44.221% less its 41.837% pre-noise term",
+         abs(out["ncp_k32_atomic"][8192] - (0.44221 - 0.41837)) < 5e-5),
+        ("route U's Y fix equals the Y side's forming term (one more write a Y register)",
+         abs(out["routes"][64]["route_u_y_fix"] - out["llama"]["fused_m64"]["forming_y"]) < 1e-12),
     )
     ok = True
     for what, passed in checks:
