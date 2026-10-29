@@ -23,15 +23,15 @@ and its units, from the finest up:
   whose whole row of N/2 code pairs and its scale is over `UNIT_CLASS_MAX`), or recomputes it in each reader
   (`recomputed`); ReLU is a coordinate or a chunk of at most 16,384. The planner chooses (`candidates.cuts`).
 
-The harm is faulty ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
-plan's certificate means the same whatever the cut, where a count of faulty proof blocks falls as the cut coarsens; the
-faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
+The harm is incorrect ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
+plan's certificate means the same whatever the cut, where a count of incorrect proof blocks falls as the cut coarsens; the
+incorrect proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
 (`Serving.replay`). A plan is a stratified law, k units of each subcircuit; the chosen one is the cheapest certifying at
 most `TARGET_SHARE` of the block's ANDs wrong. `recertify` recomputes its certificate from the sizes alone through
-core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the faulty proof blocks over a monitoring period of many
+core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the incorrect proof blocks over a monitoring period of many
 blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a subcircuit, or the block as one
 window under the `work:1` law.
 
@@ -403,7 +403,7 @@ def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut
 
 def chosen(cands: list[Candidate], cm: CostModel, objective: Objective, front: list[Plan],
            target: float) -> Plan | None:
-    """The cheapest plan certifying at most `target` faulty ANDs (`for_target` on the frontier)."""
+    """The cheapest plan certifying at most `target` incorrect ANDs (`for_target` on the frontier)."""
     return for_target(cands, cm, objective, target, plans=front, exact=False)
 
 
@@ -414,7 +414,7 @@ def law(plan: Plan, cands: list[Candidate]) -> Stratified:
 
 
 def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: bool = True) -> dict:
-    """The plan's certificate from its sizes alone: faulty ANDs (each unit's credited work) and faulty proof blocks by core's
+    """The plan's certificate from its sizes alone: incorrect ANDs (each unit's credited work) and incorrect proof blocks by core's
     `Stratified.harm_bound` (and units by `count_bound`, exact, when `exact_count`), and the optimizer's own `certify`
     and `density_bound` of the ANDs."""
     chosen_ = [c for c in cands if c.template in plan.sizes]
@@ -429,8 +429,8 @@ def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: 
 
 
 def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, ands: bool = False) -> float:
-    """Faulty proof blocks (or their ANDs) over `blocks` blocks, each sampled by the plan's law on its own live coins and all
-    accepted, except with probability `delta`: a set of x_{b,s} faulty proof blocks escapes with at most
+    """Incorrect proof blocks (or their ANDs) over `blocks` blocks, each sampled by the plan's law on its own live coins and all
+    accepted, except with probability `delta`: a set of x_{b,s} incorrect proof blocks escapes with at most
     prod exp(-k_s x_{b,s} / n_s), never once x_{b,s} > n_s - k_s, so the total is the knapsack `density_bound` over
     `blocks` copies of each stratum, which the period's length doesn't move (each stratum's rate k_s / n_s is a
     block's).  This relaxation is the optimizer's, not a Lean guarantee; `IntegrityHorizon` proves the
@@ -440,14 +440,14 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
-    """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
+    """`IntegrityHorizon`'s bound on the incorrect proof blocks over any number of windows, each a subcircuit's window of a block
     (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws, ln(1/delta) the planner's `ln_upper`."""
     return float(ln_upper(delta) / min(Fraction(plan.sizes[c.template], c.units) for c in cands
                                        if c.template in plan.sizes))
 
 
 def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int = SERVERS) -> list[dict]:
-    """Per monitoring period (one server, and `servers` of them), at each delta: the pooled bound on faulty proof blocks and
+    """Per monitoring period (one server, and `servers` of them), at each delta: the pooled bound on incorrect proof blocks and
     their ANDs, and beside it each block's own at delta / blocks, so the period's total error is delta."""
     rows = []
     for fleet, count in (("1 server", 1), (f"{servers:,} servers", servers)):
@@ -467,7 +467,7 @@ def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     * `windows`, the form `IntegrityPeriod` reads: one window a subcircuit, its units under `subset:k_s` in
       members of its statement size (the loop's `--law` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
       ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no sample misses), so
-      outside delta every window has fewer than its K0 units wrong;
+      outside delta every window has fewer than its K0 units incorrect;
     * `record`, the block as one window: every subcircuit under the `work:1` law whose work table's floors are the plan's
       k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every subcircuit, so it carries
       the least statement size; `IntegrityPeriod` covers only a uniform subset, not this law.

@@ -5,7 +5,7 @@ certificate's, a kept certificate whose signature is changed, and a key under `l
 each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, and each
 kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
-several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
 the scan's class doesn't serve; the job's copy of the
