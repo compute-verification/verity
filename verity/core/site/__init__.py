@@ -6,10 +6,12 @@ The Site is a tree of locations, each with its owner: the site at the root, its 
 by tier and bytes under a device or a host, and at the site the auditor's devices, its network certifiers and memory
 challengers (`PARENTS`). Links join two ends, each a location or `OUTSIDE`, with a capacity `beta` in bits a tick each
 way and a latency in ticks (`LINKS`). A network certifier is the leaf that splits an uplink: one link from a host to it,
-one from it to the outside. Hosts carry no compute: a device names its SKU's data sheet by digest, and a sheet's figures
-are the device model's (`Sheet`: tensor-core multiply-adds a tick, bits from device memory to the chip a tick, bits of
-on-chip state and bytes of device memory). The auditor's data sheets come from the card files
-(`verity/hardware/cards/<sku>.toml`): `Sheet.of_file` reads one as `verity.hardware.load(sku)` returns it.
+one from it to the outside. Hosts carry no compute: a device names its sheet by digest. A sheet (`Sheet`), a card, is
+the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the tensor clock and the peak
+rate of each operand class) and its memory figures (bits from device memory to the chip a tick, bits of on-chip state and
+bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
+estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
+`Sheet.of_file` reads one as `verity.hardware.load(sku)` returns it.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -22,21 +24,24 @@ it fails (`REFUSALS`, the spec's `Registration.Refusal` in kebab case):
 | `duplicate-id` | no id is registered twice, `outside`'s included, and no sheet twice |
 | `unknown-ref` | each new location's parent and each new link's ends are registered |
 | `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity; each certifier splits exactly one uplink |
-| `sheet-digest` | each new sheet is the auditor's data sheet for its SKU, and each new device names a registered sheet |
+| `sheet-digest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
+| `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
 | `uncertified` | onsite: every boundary link is certified |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `boundary`, `units`, `registered`) are functions of
-the site alone. Digests are SHA-512 over canonical JSON (`verity.core.wire.canonical`) under the registration log's
-tags. Stdlib and the wire only.
+the site alone, but `device`, which reads the auditor's sheet too. Digests are SHA-512 over canonical JSON
+(`verity.core.wire.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
+Stdlib and the wire only.
 """
 
 from __future__ import annotations
 
 import hashlib
 import math
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
@@ -61,16 +66,19 @@ PARENTS: dict[str, tuple[str | None, ...]] = {
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
 """The pairs of kinds a link may join, in either order."""
 AUDITOR_KINDS = ("certifier", "challenger")
-REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "capacity", "owner", "uncertified",
-            "challenger-reach")
+OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
+"""The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands drawn uniformly over
+[-128, 127], [-2, 1], [0, 3] and [0, 15], and the one value 0."""
+REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "figures", "capacity", "owner",
+            "uncertified", "challenger-reach")
 """The checks `check_registration` makes, in the order it makes them."""
 TICK = Fraction(1, 10 ** 9)
 """A tick, in seconds: a nanosecond."""
 
 
 class Malformed(ValueError):
-    """A value no `Site` type can hold: an unknown kind, tier, owner or composite, a negative number, or JSON that isn't
-    what the encoders write."""
+    """A value no `Site` type can hold: an unknown kind, tier, owner, composite or operand class, a negative number, or
+    JSON that isn't what the encoders write."""
 
 
 class Refused(Exception):
@@ -121,27 +129,124 @@ def _list(j: Any, what: str) -> list[Any]:
     return j
 
 
+_RATIONAL = re.compile(r"(0|[1-9][0-9]*)(/[1-9][0-9]*)?")
+
+
+def _rat(v: Any, what: str) -> Fraction:
+    if isinstance(v, bool) or not isinstance(v, (int, Fraction)) or v < 0:
+        raise Malformed(f"{what}: {v!r} is not a nonnegative rational")
+    return Fraction(v)
+
+
+def _rat_json(v: Any, what: str) -> Fraction:
+    """A nonnegative rational as the JSON writes it: the string `n` or `n/d` in lowest terms, Lean's `toString` of a
+    `Rat`, so one rational has one encoding."""
+    if not isinstance(v, str) or not _RATIONAL.fullmatch(v) or str(q := Fraction(v)) != v:
+        raise Malformed(f"{what}: {v!r} is not a rational's string n or n/d in lowest terms")
+    return q
+
+
+def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:
+    """`x` is within relative tolerance `tau` of `e`, in both directions (`WithinTolerance`): `(1 - tau)·e ≤ x ≤
+    (1 + tau)·e`, with `1 - tau` truncated at 0, so a tolerance of 1 or more sets no lower bound."""
+    return max(Fraction(0), 1 - tau) * e <= x <= (1 + tau) * e
+
+
 @dataclass(frozen=True)
-class Sheet:
-    """The auditor's data sheet for an SKU, in the device model's terms at a tick: int8 tensor-core multiply-adds
-    (`tc`), bits from device memory to the chip (`bw`), bits of on-chip state (`chip`) and bytes of device memory
-    (`mem`). A device names its sheet by digest."""
+class DeviceFigures:
+    """A device's compute figures, which its sheet carries (`DeviceFigures`): its SKU, its tensor clock in Hz and the
+    peak rate of tensor-core MACs a second of each operand class (`OPERAND_CLASSES`), each a nonnegative rational.
+    `peak_rate` is given as a mapping from every class to its rate, or as one rate every class shares, and is held in
+    `OPERAND_CLASSES`' order."""
 
     sku: str
-    tc: int
+    clock: Fraction
+    peak_rate: tuple[Fraction, ...]
+
+    def __post_init__(self) -> None:
+        _str(self.sku, "a figure's sku")
+        object.__setattr__(self, "clock", _rat(self.clock, f"{self.sku}'s clock"))
+        r: Any = self.peak_rate
+        if isinstance(r, Mapping):
+            r = tuple(_exactly(r, OPERAND_CLASSES, f"{self.sku}'s peak rates")[c] for c in OPERAND_CLASSES)
+        elif not isinstance(r, (tuple, list)):
+            r = (r,) * len(OPERAND_CLASSES)
+        if len(r) != len(OPERAND_CLASSES):
+            raise Malformed(f"{self.sku}'s peak rates: one for each of {list(OPERAND_CLASSES)}")
+        object.__setattr__(self, "peak_rate", tuple(_rat(x, f"{self.sku}'s peak rate") for x in r))
+
+    def rate(self, c: str) -> Fraction:
+        """The peak rate of operand class `c`."""
+        return self.peak_rate[OPERAND_CLASSES.index(c)]
+
+    def accepted(self, est: DeviceEstimate) -> bool:
+        """**Registration's check of the figures** against the auditor's estimate `est` (`DeviceFigures.Accepted`): the
+        SKU is the estimate's, the clock and every peak rate are within the tolerance of the estimate's in both
+        directions, and every peak rate is positive."""
+        e, tau = est.figures, est.tolerance
+        return (self.sku == e.sku and within_tolerance(tau, e.clock, self.clock)
+                and all(within_tolerance(tau, a, d) for a, d in zip(e.peak_rate, self.peak_rate, strict=True))
+                and all(d > 0 for d in self.peak_rate))
+
+    def bounding(self, est: DeviceEstimate) -> DeviceFigures:
+        """**The figures the bound reads** (`DeviceFigures.bounding`): the larger clock and the larger peak rate of each
+        class, of these and the estimate's. The SKU is these figures'."""
+        e = est.figures
+        return DeviceFigures(self.sku, max(self.clock, e.clock), tuple(map(max, self.peak_rate, e.peak_rate)))
+
+    def to_json(self) -> dict[str, Any]:
+        return {"clock": str(self.clock), "peak_rate": {c: str(r) for c, r in zip(OPERAND_CLASSES, self.peak_rate)},
+                "sku": self.sku}
+
+    @classmethod
+    def of_json(cls, j: Any) -> DeviceFigures:
+        j = _exactly(j, ("clock", "peak_rate", "sku"), "a sheet's figures")
+        rates = _exactly(j["peak_rate"], OPERAND_CLASSES, "the peak rates")
+        return cls(_str(j["sku"], "sku"), _rat_json(j["clock"], "clock"),
+                   tuple(_rat_json(rates[c], f"{c}'s peak rate") for c in OPERAND_CLASSES))
+
+
+@dataclass(frozen=True)
+class DeviceEstimate:
+    """The auditor's estimate of one SKU's figures, with the relative tolerance registration allows around them
+    (`DeviceEstimate`)."""
+
+    figures: DeviceFigures
+    tolerance: Fraction
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "tolerance", _rat(self.tolerance, "a tolerance"))
+
+
+@dataclass(frozen=True)
+class Sheet:
+    """A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`), and its memory
+    figures in the device model's terms at a tick: bits from device memory to the chip (`bw`), bits of on-chip state
+    (`chip`) and bytes of device memory (`mem`). A device names its sheet by digest. The auditor's data sheet for an SKU
+    is a sheet too, whose figures are its estimate of the SKU's."""
+
+    figures: DeviceFigures
     bw: int
     chip: int
     mem: int
 
     def __post_init__(self) -> None:
-        _str(self.sku, "a sheet's sku")
-        for f in ("tc", "bw", "chip", "mem"):
+        if not isinstance(self.figures, DeviceFigures):
+            raise Malformed(f"a sheet's figures: {self.figures!r} are not DeviceFigures")
+        for f in ("bw", "chip", "mem"):
             _nat(getattr(self, f), f"sheet {self.sku}'s {f}")
+
+    @property
+    def sku(self) -> str:
+        """The sheet's SKU, its figures'."""
+        return self.figures.sku
 
     @classmethod
     def of_file(cls, card: Mapping[str, Any], tick: Fraction = TICK) -> Sheet:
-        """The sheet a card file gives (`verity.hardware.load(sku)`'s table), at ticks of `tick` seconds: as
-        `Accel.Card.toDevice` reads the card, each rate a ceiling rounded up, and the stores' sizes exact."""
+        """The sheet a card file gives (`verity.hardware.load(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
+        and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
+        its SMs at that clock. Its memory figures at ticks of `tick` seconds, as `Accel.Card.toDevice` reads the card:
+        the bandwidth a ceiling rounded up, and the stores' sizes exact."""
         def v(entry: Mapping[str, Any]) -> Fraction:
             return Fraction(str(entry["value"]))
 
@@ -150,17 +255,17 @@ class Sheet:
         mem = v(store["dram"])
         if chip.denominator != 1 or mem.denominator != 1:
             raise Malformed(f"card {card['sku']}: its stores' bits and device memory's bytes are whole")
-        tc = sms * v(card["rate"]["tensor"]) * v(card["clock"]["sm"]) * 10 ** 6 * tick
-        return cls(_str(card["sku"], "sku"), math.ceil(tc), math.ceil(8 * v(card["memory"]["bandwidth"]) * tick),
-                   int(chip), int(mem))
+        clock = v(card["clock"]["sm"]) * 10 ** 6
+        figures = DeviceFigures(_str(card["sku"], "sku"), clock, sms * v(card["rate"]["tensor"]) * clock)
+        return cls(figures, math.ceil(8 * v(card["memory"]["bandwidth"]) * tick), int(chip), int(mem))
 
     def to_json(self) -> dict[str, Any]:
-        return {"bw": self.bw, "chip": self.chip, "mem": self.mem, "sku": self.sku, "tc": self.tc}
+        return {"bw": self.bw, "chip": self.chip, "figures": self.figures.to_json(), "mem": self.mem}
 
     @classmethod
     def of_json(cls, j: Any) -> Sheet:
-        j = _exactly(j, ("bw", "chip", "mem", "sku", "tc"), "a sheet")
-        return cls(_str(j["sku"], "sku"), _nat(j["tc"], "tc"), _nat(j["bw"], "bw"), _nat(j["chip"], "chip"),
+        j = _exactly(j, ("bw", "chip", "figures", "mem"), "a sheet")
+        return cls(DeviceFigures.of_json(j["figures"]), _nat(j["bw"], "bw"), _nat(j["chip"], "chip"),
                    _nat(j["mem"], "mem"))
 
     def digest(self) -> str:
@@ -304,39 +409,47 @@ class Registration:
 
 @dataclass(frozen=True)
 class Auditor:
-    """What the auditor brings to the check: its data sheet for each SKU, and the key of each of its own devices."""
+    """What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
+    SKU's; the relative tolerance registration allows around an estimate; and the key of each of its own devices."""
 
     sheets: tuple[Sheet, ...] = ()
+    tolerance: Fraction = Fraction(0)
     keys: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sheets", tuple(self.sheets))
+        object.__setattr__(self, "tolerance", _rat(self.tolerance, "the auditor's tolerance"))
         object.__setattr__(self, "keys", tuple((_str(d, "a device"), _str(k, "a key")) for d, k in self.keys))
 
     @classmethod
-    def of_files(cls, cards: Iterable[Mapping[str, Any]], keys: Mapping[str, str] | None = None,
-                 tick: Fraction = TICK) -> Auditor:
-        """The auditor whose data sheets come from these card files (`verity.hardware.load(sku)` each), and its devices'
-        keys."""
-        return cls(tuple(Sheet.of_file(c, tick) for c in cards), tuple((keys or {}).items()))
+    def of_files(cls, cards: Iterable[Mapping[str, Any]], tolerance: Fraction = Fraction(0),
+                 keys: Mapping[str, str] | None = None, tick: Fraction = TICK) -> Auditor:
+        """The auditor whose data sheets come from these card files (`verity.hardware.load(sku)` each), at this
+        tolerance, and its devices' keys."""
+        return cls(tuple(Sheet.of_file(c, tick) for c in cards), tolerance, tuple((keys or {}).items()))
 
     def sheet(self, sku: str) -> Sheet | None:
         """The data sheet for `sku`: the first under it."""
         return next((k for k in self.sheets if k.sku == sku), None)
+
+    def estimate(self, a: Sheet) -> DeviceEstimate:
+        """**The auditor's estimate** its sheet `a` states: `a`'s figures, at the auditor's tolerance."""
+        return DeviceEstimate(a.figures, self.tolerance)
 
     def key(self, i: str) -> str | None:
         """The key of the auditor's device `i`: the first under it."""
         return next((k for d, k in self.keys if d == i), None)
 
     def to_json(self) -> dict[str, Any]:
-        return {"keys": [{"id": d, "key": k} for d, k in self.keys], "sheets": [k.to_json() for k in self.sheets]}
+        return {"keys": [{"id": d, "key": k} for d, k in self.keys], "sheets": [k.to_json() for k in self.sheets],
+                "tolerance": str(self.tolerance)}
 
     @classmethod
     def of_json(cls, j: Any) -> Auditor:
-        j = _exactly(j, ("keys", "sheets"), "the auditor")
+        j = _exactly(j, ("keys", "sheets", "tolerance"), "the auditor")
         keys = [_exactly(k, ("id", "key"), "a key") for k in _list(j["keys"], "keys")]
         return cls(tuple(Sheet.of_json(k) for k in _list(j["sheets"], "sheets")),
-                   tuple((k["id"], k["key"]) for k in keys))
+                   _rat_json(j["tolerance"], "the auditor's tolerance"), tuple((k["id"], k["key"]) for k in keys))
 
 
 @dataclass(frozen=True)
@@ -435,11 +548,22 @@ class Site:
         x = self.loc(d)
         return self.sheet_of(x) if x is not None and x.kind == "device" else None
 
-    def device(self, d: str) -> dict[str, int] | None:
-        """The device model's view of device `d` (`Accounting.Device`): its sheet's rate, bandwidth and on-chip state,
-        and as its memory the bytes of the memory leaves under it; None when `d` has no sheet."""
-        c = self.sheet(d)
-        return None if c is None else {"tc": c.tc, "bw": c.bw, "chip": c.chip, "mem": self.held(d)}
+    def device(self, d: str, auditor: Auditor, tick: Fraction = TICK, cuda: int = 0, oracle: int = 0,
+               cap: Mapping[str, int] | None = None) -> dict[str, Any] | None:
+        """**Device `d`'s model** (`Accounting.Device`, `Site.device`), read off its sheet `k` and the auditor's sheet
+        `a` for `k`'s SKU: `k`'s on-chip state (`chip`) and memory bandwidth (`bw`), `k`'s device memory in bits (`mem`),
+        and as its tensor-core MACs a tick (`rate["tc"]`) the highest peak rate of the figures the bound reads
+        (`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s estimate's) over a tick of `tick`
+        seconds, rounded up. No sheet states a device's CUDA-core ops or oracle queries a tick, or its side channels'
+        capacities (`cap`), so they are parameters. None when `d` names no registered sheet or the auditor has none for
+        its SKU."""
+        k = self.sheet(d)
+        a = None if k is None else auditor.sheet(k.sku)
+        if k is None or a is None:
+            return None
+        f = k.figures.bounding(auditor.estimate(a))
+        return {"bw": k.bw, "cap": dict(cap or {}), "chip": k.chip, "mem": 8 * k.mem,
+                "rate": {"cuda": cuda, "oracle": oracle, "tc": math.ceil(tick * max(f.peak_rate))}}
 
     def host(self, i: str) -> str | None:
         """The host a location is in: itself when it is a host."""
@@ -513,11 +637,16 @@ def _first(composite: str, s: Site, head: str, e: Entry, auditor: Auditor) -> tu
                                                                                        ["outside", "host"]):
             return "kind", f"certifier {x.id} doesn't split one uplink: it links to {far}"
     for k in e.sheets:
-        if auditor.sheet(k.sku) != k:
-            return "sheet-digest", f"sheet {k.sku} ({k.digest()[:16]}...) isn't the auditor's data sheet for it"
+        if auditor.sheet(k.sku) is None:
+            return "sheet-digest", f"sheet {k.sku} ({k.digest()[:16]}...) names an SKU the auditor has no data sheet for"
     for x in e.locs:
         if x.kind == "device" and x.sheet not in digests:
             return "sheet-digest", f"{x.id}'s sheet {x.sheet[:16]}... isn't registered"
+    for k in e.sheets:
+        if (a := auditor.sheet(k.sku)) is not None and not (k.figures.accepted(auditor.estimate(a))
+                                                             and (k.bw, k.chip, k.mem) == (a.bw, a.chip, a.mem)):
+            return "figures", (f"sheet {k.sku}'s figures aren't within the auditor's tolerance of its estimate, or its "
+                               "memory figures aren't the auditor's")
     for x in e.locs:
         if x.kind == "memory" and x.bytes == 0:
             return "capacity", f"memory {x.id} holds nothing"

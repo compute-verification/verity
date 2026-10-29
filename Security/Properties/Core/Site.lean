@@ -17,8 +17,11 @@ the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests
   spec's Site of it, and `RefusedAt`: when it refuses, the index it names is the first entry the spec refuses, with that
   refusal.
 
-The code's difftest (`site-difftest`) holds it to `verity.core.site`, so these carry the Python Site to the spec.
+The code's difftest (`site-difftest`) holds it to `verity.core.site`, so these carry the Python Site to the spec. A code
+figure (`Core.Site.Figure`, a nonnegative `Rat`) denotes the same rational in `ℚ≥0` (`figure`).
 -/
+
+open scoped NNRat
 
 namespace Properties.Site
 
@@ -64,11 +67,41 @@ def ofOwner : Verity.Site.Owner → Core.Site.Owner
   | .prover => .prover
   | .auditor => .auditor
 
+/-- The spec's operand class of a code operand class. -/
+def operandClass : Core.Site.OperandClass → Verity.OperandClass
+  | .uniformS8 => .uniformS8
+  | .uniformS2 => .uniformS2
+  | .uniformU2 => .uniformU2
+  | .uniformU4 => .uniformU4
+  | .zero => .zero
+
+/-- The code's operand class of a spec operand class. -/
+def ofOperandClass : Verity.OperandClass → Core.Site.OperandClass
+  | .uniformS8 => .uniformS8
+  | .uniformS2 => .uniformS2
+  | .uniformU2 => .uniformU2
+  | .uniformU4 => .uniformU4
+  | .zero => .zero
+
+/-- The spec's nonnegative rational of a code figure: the same rational. -/
+def figure (q : Core.Site.Figure) : ℚ≥0 := ⟨q.1, q.2⟩
+
+/-- The code's figure of a spec nonnegative rational: the same rational. -/
+def ofFigure (q : ℚ≥0) : Core.Site.Figure := ⟨q.1, q.2⟩
+
+/-- The spec's figures of a code device's figures. -/
+def deviceFigures (d : Core.Site.DeviceFigures) : Verity.DeviceFigures :=
+  ⟨d.sku, figure d.clock, fun c => figure (d.peakRate (ofOperandClass c))⟩
+
+/-- The code's figures of a spec device's figures. -/
+def ofDeviceFigures (d : Verity.DeviceFigures) : Core.Site.DeviceFigures :=
+  ⟨d.sku, ofFigure d.clock, fun c => ofFigure (d.peakRate (operandClass c))⟩
+
 /-- The spec's sheet of a code sheet. -/
-def sheet (k : Core.Site.Sheet) : Verity.Site.Sheet := ⟨k.sku, k.tc, k.bw, k.chip, k.mem⟩
+def sheet (k : Core.Site.Sheet) : Verity.Site.Sheet := ⟨deviceFigures k.figures, k.bw, k.chip, k.mem⟩
 
 /-- The code's sheet of a spec sheet. -/
-def ofSheet (k : Verity.Site.Sheet) : Core.Site.Sheet := ⟨k.sku, k.tc, k.bw, k.chip, k.mem⟩
+def ofSheet (k : Verity.Site.Sheet) : Core.Site.Sheet := ⟨ofDeviceFigures k.figures, k.bw, k.chip, k.mem⟩
 
 /-- The spec's location of a code location. -/
 def loc (x : Core.Site.Loc) : Verity.Site.Loc :=
@@ -122,6 +155,7 @@ def refusal : Core.Site.Registration.Refusal → Verity.Registration.Refusal
   | .unknownRef => .unknownRef
   | .kind => .kind
   | .sheetDigest => .sheetDigest
+  | .figures => .figures
   | .capacity => .capacity
   | .owner => .owner
   | .uncertified => .uncertified
@@ -131,9 +165,9 @@ def refusal : Core.Site.Registration.Refusal → Verity.Registration.Refusal
 def digests (D : Core.Site.Registration.Digests) : Verity.Registration.Digests :=
   ⟨fun k => D.sheet (ofSheet k), fun e => D.entry (ofRegEntry e), fun c => D.genesis (ofComposite c)⟩
 
-/-- **The auditor a code auditor denotes**: the same sheets, as the spec's, and the same keys. -/
+/-- **The auditor a code auditor denotes**: the same sheets, as the spec's, the same tolerance and the same keys. -/
 def auditor (A : Core.Site.Registration.Auditor) : Verity.Registration.Auditor :=
-  ⟨fun sku => (A.sheet sku).map sheet, A.key⟩
+  ⟨fun sku => (A.sheet sku).map sheet, ⟨figure A.tolerance⟩, A.key⟩
 
 /-- **The fold is the spec's**: the code's Site of a log is the spec's Site of the log it denotes. -/
 def Fold : Prop := ∀ l : Core.Site.Registration, site (Core.Site.ofLog l) = Verity.Site.ofLog (log l)
