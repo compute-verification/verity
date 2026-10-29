@@ -1,4 +1,4 @@
-"""N-ADAPT: what a prover that branches on the coins saves on the lead's committed words, built word for word.
+"""What a prover that branches on the coins saves on the lead's committed words, built word for word.
 
 The committed word is word(i, j, t) = −β_j + Σ_{τ ≤ t} (data dot of k32 step τ + coin term of step τ). Designs:
 
@@ -15,6 +15,9 @@ row's A entry is x_t.
   x_t + 1 + b_t, in {0, 1} or {−1, 0}: a lazy walk, so a row holds about √(2S/π) distinct vectors instead of S.
 - `cancel`: p_t = 1 (`tag`, `fix2`) or σ_t (`hw`), x_t = −1. The step's coin term is then b_t·1, 2b_t·σ_t or a word
   (1 + b_t)w_t[j] − 1, which is zero where b_t = 0 (and w_t[j] = +1 for `fix2`).
+- `a2r` (`hw`, an alternating per-column cancel): A = 1 and B_t[j] = −σ_t[j](1 + 2e_t[j]), e_t[j] = ẽ_t where σ_t[j] = +1 and 1 − ẽ_t
+  elsewhere, ẽ_t alternating. Each column walks lazily, on b_t or 1 − b_t as σ_t[j] says, so entries revisit their
+  values but columns don't walk together.
 - `zero`: zero data past step 1 (padding tails); `same`: that, with every row's step-1 data equal (identical rows).
 
 The constructive adversary (`adversary`) keys row i's step t on its coin state (W_t for `tag`, the set of steps with
@@ -22,9 +25,11 @@ b = 1 for `hw`), computes one vector a key from data and coins alone, and copies
 one pointer a row-step. Its words must equal `honest`'s, which multiplies the served lane layout out. `oracle` counts
 distinct row vectors and 4-word tiles: no prover that copies whole row vectors (tiles), at one pointer a copy, writes
 fewer. `patch` is a constructive tile prover (copy the nearest earlier tile at one word, rewrite the rest), whose
-saving is open to a design whose words carry few coin bits each. `ball` is `AdaptiveBallTable`'s lower bound at tile
-grain (free copies, free decisions), which the free-copy patch cost must exceed; `rows_sweep` follows it as rows grow.
-`at_scale` runs the walk at Llama's S.
+saving is open to a design whose words carry few coin bits each. `ball` is `adaptive_ball_table_le`'s lower bound at
+tile grain (free copies, free decisions), which the free-copy patch cost must exceed; `rows_sweep` follows it as rows
+grow. `entry_credit` sets a check that credits each entry's distinct values beside what two write models pay: P (a
+word write costs one, moves free) and W (a whole register of consecutive columns costs its lanes). `at_scale` runs the
+walk at Llama's S.
 """
 
 from __future__ import annotations
@@ -109,6 +114,11 @@ def data(case: str, design: str, m: int, n: int, s: int, pub: dict, rng: np.rand
         return a, b
     for t in range(1, s):
         lane = d1 + 31 * (t - 1)
+        if case == "a2r":
+            sig, e = pub["sigma"][t], t % 2
+            b[lane] = -sig * (1 + 2 * np.where(sig == 1, e, 1 - e))
+            a[:, lane] = 1
+            continue
         b[lane] = pub["sigma"][t] if design == "hw" else 1
         a[:, lane] = -1 if case == "cancel" or t % 2 == 1 else -2
     return a, b
@@ -247,7 +257,7 @@ def forest(words: np.ndarray, copy_price: int = 0) -> dict:
 
 
 def ball(words: np.ndarray) -> dict:
-    """`AdaptiveBallTable`'s count at tile grain, with free copies at any address and free decisions.
+    """`adaptive_ball_table_le`'s count at tile grain, with free copies at any address and free decisions.
 
     Targets are the distinct 4-word tiles, pooled over positions. A tile sharing no 2 of its words with another
     target is at distance ≥ 3 from all of them and gets radius 1, any other radius 0, so a run writes at least
@@ -261,6 +271,24 @@ def ball(words: np.ndarray) -> dict:
     bound = 2 * len(tiles) - int(near.sum())
     return {"distinct_tiles_pooled": len(tiles), "radius_1_tiles": len(tiles) - int(near.sum()),
             "ball_share": bound / words.size}
+
+
+def entry_credit(words: np.ndarray, lanes: int = 32) -> dict:
+    """A per-entry check beside what each model's lower bound pays, with free decisions; shares of the honest words.
+
+    `credit_b` counts each entry's distinct values over the steps. Model P (word copies free, `run_values_le`) pays
+    the distinct word values pooled over the call. Model W (`adaptive_lanes_le`, a register of `lanes` consecutive
+    columns of one row) pays `lanes` times the distinct registers pooled, which is short of `credit_b` by at most
+    `lanes` a register value repeated across groups (`model_w_excess`)."""
+    m, s, n = words.shape
+    srt = np.sort(words, axis=1)
+    credit_b = int((1 + (np.diff(srt, axis=1) != 0).sum(axis=1)).sum())
+    regs = words.reshape(m, s, n // lanes, lanes).transpose(0, 2, 1, 3)
+    per_group = sum(len(np.unique(regs[i, g], axis=0)) for i in range(m) for g in range(n // lanes))
+    pooled_w = len(np.unique(regs.reshape(-1, lanes), axis=0))
+    return {"credit_b": credit_b / words.size, "model_p_pays": len(np.unique(words)) / words.size,
+            "model_w_pays": lanes * pooled_w / words.size,
+            "model_w_excess": lanes * (per_group - pooled_w) / words.size}
 
 
 def rows_sweep(seed: int = 13, ms: tuple[int, ...] = (48, 512, 4096), n: int = 64, s: int = 67) -> list[dict]:
@@ -280,7 +308,7 @@ def rows_sweep(seed: int = 13, ms: tuple[int, ...] = (48, 512, 4096), n: int = 6
 def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[dict], list[dict]]:
     rng = np.random.default_rng(seed)
     rows, checks = [], []
-    for design, cases in (("tag", ("zero", "same", "cancel", "walk")), ("hw", ("zero", "same", "cancel")),
+    for design, cases in (("tag", ("zero", "same", "cancel", "walk")), ("hw", ("zero", "same", "cancel", "a2r")),
                           ("fix2", ("zero", "same", "cancel", "walk"))):
         for case in cases:
             pub = public(design, n, s, rng)
@@ -289,10 +317,12 @@ def small(seed: int = 7, m: int = 48, n: int = 64, s: int = 67) -> tuple[list[di
             words = honest(design, a, b, pub, co, s)
             free = {"patch_saving_free_copy": patch(words, copy_price=0)["patch_saving"]}
             row = {"design": design, "case": case, "m": m, "n": n, "S": s, **oracle(words), **patch(words), **free,
-                   **forest(words, 0), **forest(words, 1), **ball(words)}
+                   **forest(words, 0), **forest(words, 1), **ball(words), **entry_credit(words)}
             checks.append({"name": f"{design}/{case} ball bound ≤ free-copy patch and forest costs",
                            "ok": row["ball_share"] <= 1 - max(row["patch_saving_free_copy"],
                                                               row["forest_saving_copy_0"])})
+            checks.append({"name": f"{design}/{case} check (b) ≤ model W's payment + excess (adaptive_lanes_le)",
+                           "ok": row["credit_b"] <= row["model_w_pays"] + row["model_w_excess"] + 1e-12})
             if design != "fix2" and case in ("cancel", "walk"):
                 adv, writes, pointers = adversary(design, case, a, b, pub, co, s)
                 ok = bool(np.array_equal(adv, words))
