@@ -77,6 +77,7 @@ MASK_REGS = 16 * (12 * (20 + 10 + 3) + 37 + 32)
 # each of 32 lanes, y's fragments (2 registers a k-step in each of eight warps), and two instructions an output bit for parity
 MASK_REGS_B1 = 24 * 4 * 32 + 8 * 6 * 2 * 32 // 8 + 2 * 512
 PRICE_REG = {"floor": 32.0, "alone": S.PRICE["alone"]}
+PAD_XOR_REGS = 16                                   # b = x ⊕ pad over x's 512 bits: one LOP3 a 32-bit word
 # a frame-v3-sha512 leaf's message before its value: the frame string, the tag, the 64-byte domain id, rank and position
 # (3 bytes each), a schema as long as hm96-sha512/row-seg/v1's, and the value's length, each part length-framed. Its first
 # block holds the rank, so no midstate skips it
@@ -146,9 +147,10 @@ def instance_prices(sass: dict, rows: S.Rows, mask_sass: dict | None = None) -> 
         "unforced, b1 mask (estimate)": {p: prf[p] + c[p] + b1[p] for p in w1c},
         "forced (a), b1 mask (estimate)": dict(b1),
         "forced (a), SHA-512 mask (e2)": {"floor": 0.0, "alone": 0.0, "time": 0.0},
-        # b = x ⊕ SHA-512(ks ‖ salt_w ‖ pos) in place of b ‖ c: one compression a public digest past the window's midstate
-        "pad, uncredited": {**w1c, "time": r["c_ns"] * mt},
-        "pad, credited": {"floor": 0.0, "alone": 0.0, "time": 0.0},
+        # b = x ⊕ SHA-512(ks ‖ salt_w ‖ pos) in place of b ‖ c: one compression a public digest past the window's midstate,
+        # and the XOR of x's 16 words, which no hashing premise credits
+        "pad, uncredited": {**{p: w + PAD_XOR_REGS * PRICE_REG[p] for p, w in w1c.items()}, "time": r["c_ns"] * mt},
+        "pad, credited": {**{p: PAD_XOR_REGS * PRICE_REG[p] for p in w1c}, "time": 0.0},
         **by_best,
         "compression": {**w1c, "time": r["c_ns"] * mt},
     }
@@ -449,7 +451,8 @@ def main() -> None:
                 f: {sc: {p: {"share_floor": h[f]["floor"], "ands_floor": mac * S.ANDS_MAC * h[f]["floor"],
                              "ands_alone": mac * S.ANDS_MAC * h[f]["alone"]}
                          for p, mac in ps.items()} for sc, ps in scopes.items()}
-                for f in ("unforced", "forced (a)", "unforced, unrolled mask", "forced (a), unrolled mask", "pad, uncredited")
+                for f in ("unforced", "forced (a)", "unforced, unrolled mask", "forced (a), unrolled mask", "pad, uncredited",
+                          "pad, credited")
                 if f in h}
     pt = out["designs"]["ssn_1l"]["points"]["T 8,192"]
     for name, share in (("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"]),
@@ -467,7 +470,7 @@ def main() -> None:
           f"L1 time a byte {l1_ratio:.4f} of 16 KiB rows'; committer's build over the best {excess['registers']} registers, "
           f"{excess['floor']:,.0f} / {excess['alone']:,.0f} W1 a compression")
     shown = [f for f in ("unforced", "unforced, unrolled mask", "unforced, b1 mask (estimate)", "forced (a)",
-                         "forced (a), unrolled mask", "pad, uncredited") if f in p]
+                         "forced (a), unrolled mask", "pad, uncredited", "pad, credited") if f in p]
     for design, d in out["designs"].items():
         bb = d["bytes"]
         print(f"\n{design}: α {bb['alpha']:.4f}, words {bb['words_bpm']:.5f} + A {bb['a_bpm']:.6f} = {bb['bpm']:.5f} B a useful MAC")
