@@ -24,6 +24,10 @@ Units: W1, 1/32 of a register write; stock is 1 W1 a useful MAC; h is honest has
   m + ceil((m - 1)/2).
 - T. Low-k truncation (trunc-k) at M0 for k <= 4: an exact adversary in four 8-bit lanes a register, bit for bit, with
   its writes against honest's IMMA write and its LEA tree packing 32/k residues into a message register.
+- R. A bit-sliced M0 adversary for xorrot-m and xor-m, bit for bit, its writes counted operation by operation: 32
+  cells a register, so rotation is free; an add over the low bits only; the step's coins uniform across the warp, so
+  each increment bit is a predicated LOP3 case (the warp's uniform writes shared by its 32 threads, as at T 8,192)
+  and the b bits one register a step.
 """
 from __future__ import annotations
 
@@ -286,6 +290,217 @@ def part_x(checks: Checks, rng: np.random.Generator) -> dict:
     return out
 
 
+def rot_amount(t: int) -> int:
+    return (7 * t) & 31
+
+
+def xorrot_honest_per_word(m: int) -> float:
+    return 1 + (m - 1) / m + math.ceil((m - 1) / 2) / m
+
+
+def xor_fold_writes(n: int) -> int:
+    """Writes to fold n registers into one by 3-input LOP3s: the first takes three, each later one two."""
+    return 0 if n == 0 else 1 if n <= 3 else 1 + math.ceil((n - 3) / 2)
+
+
+LO = 21
+
+
+def uniform_per_step(lo_bits: int) -> int:
+    """The warp's uniform writes a step, a column and a parity: both increments, then each low bit's two case
+    predicates."""
+    return 4 + 2 * lo_bits
+
+
+class Regs:
+    """Bit-sliced registers of one thread, 32 cells a register, for every group at once; `w` counts one write."""
+
+    def __init__(self) -> None:
+        self.writes = 0
+
+    def w(self, x: np.ndarray) -> np.ndarray:
+        self.writes += 1
+        return x & np.uint64(M32)
+
+
+def bitslice(v: np.ndarray, bits: range) -> list[np.ndarray]:
+    """v: (32 cells, groups) -> one register a bit, bit c of a register the cell c's."""
+    cells = np.arange(32, dtype=np.uint64)[:, None]
+    return [(((v.astype(np.uint64) >> np.uint64(i)) & np.uint64(1)) << cells).sum(axis=0, dtype=np.uint64)
+            for i in bits]
+
+
+def transpose32(r: Regs, a: list[np.ndarray]) -> list[np.ndarray]:
+    """A 32x32 bit transpose by block swaps (register k's bit c to register c's bit k): at block size j, register k's
+    high-j bits trade places with register k + j's low-j bits. PRMT swaps the 16- and 8-bit blocks (one write a
+    register), a shift and a LOP3 select the smaller ones (two)."""
+    a = list(a)
+    j, msk = 16, 0x0000FFFF
+    while j:
+        mj = np.uint64(msk)
+        nm = ~mj & np.uint64(M32)
+        k = 0
+        while k < 32:
+            x, y = a[k], a[k + j]
+            nx = (x & mj) | ((y << np.uint64(j)) & nm)
+            ny = (y & nm) | ((x >> np.uint64(j)) & mj)
+            if j < 8:
+                r.writes += 2
+            a[k], a[k + j] = r.w(nx), r.w(ny)
+            k = ((k | j) + 1) & ~j
+        j >>= 1
+        msk ^= msk << j
+    return a
+
+
+def block_reach(d: dict, m: int) -> np.ndarray:
+    """The largest |partial sum| of a block's increments, over its cells and blocks, a column."""
+    steps = d["delta"].shape[0]
+    run = np.cumsum(d["delta"].reshape(steps // m, m, *d["delta"].shape[1:]), axis=1)
+    return np.abs(run).max(axis=(0, 1, 2))
+
+
+def lo_bits_for(reach: int) -> int:
+    """The narrowest low part whose middle half holds a block: reach < 2^(L - 2)."""
+    return max(4, int(reach).bit_length() + 2)
+
+
+def bitsliced_adversary(d: dict, m: int, lo_bits: int = LO, rotate: bool = True) -> tuple[np.ndarray, dict]:
+    """The bit-sliced M0 adversary for xorrot-m (rotate) or xor-m. A group is 32 rows of one parity in one column, one cell a bit of a
+    register; rotation is free. With L = lo_bits, a block's state is (H', lo', beta): W = H' 2^L + lo' - beta 2^(L-1),
+    with lo' in the middle half of [0, 2^L) at the block's start, so the block's L-bit adds never wrap while each
+    partial sum of the block's increments stays below 2^(L-2). The low L bits of W_t are lo' with bit L-1 flipped
+    where beta, and its high 32 - L bits are H' - (beta and not lo'_(L-1)), H' xor (not lo'_(L-1) and R), where R is
+    beta and the borrow chain of H'. A step: the b-bit register, the L-bit add (each bit's increment is 0, ~0, B or ~B
+    by the step's coins and code, a predicated LOP3 a case; sum and carry), and the 32 - L high terms. A block: the
+    rebase, the R chain, the fold of the low and constant terms (3-input LOP3s), and the transpose. Unrotated (xor-m),
+    every step's high terms land on the same bits, so a block takes them at once: the XOR P of the block's lo'_(L-1),
+    which the fold of bit L-1 computes anyway, gives each high bit j as (P' and R_j) xor H'_j, one write. Bit 0 of an
+    increment that is odd for both b values adds as ~a with carry a, one write."""
+    rows, cols = d["w0"].shape
+    steps = d["delta"].shape[0]
+    lo_n, hi_n = lo_bits, 32 - lo_bits
+    assert rows == 64 and steps % m == 0 and m <= 32 and block_reach(d, m).max() < 1 << (lo_n - 2)
+    top, sub = lo_n - 1, lo_n - 2
+    cells = lambda x: x.reshape(32, 2 * cols)  # noqa: E731
+    r = Regs()
+    lo = bitslice(cells(d["w0"] & ((1 << lo_n) - 1)), range(lo_n))
+    hi = bitslice(cells(d["w0"] >> lo_n), range(hi_n))
+    beta = np.zeros(2 * cols, dtype=np.uint64)
+    ones = np.uint64(M32)
+    b_cells = d["b"].reshape(steps, 32, 2)
+    out = np.zeros((steps // m, rows, cols), dtype=np.int64)
+    per_step = per_block = 0.0
+    for blk in range(steps // m):
+        start = r.writes
+        wtop = r.w(lo[top] ^ beta)
+        beta_new = r.w(~(lo[top] ^ beta ^ lo[sub]))
+        dn = r.w(beta & ~lo[top])
+        up = r.w(beta_new & wtop)
+        lo[top] = r.w(wtop ^ beta_new)
+        c = r.w(up ^ dn)
+        for j in range(hi_n):
+            hj = hi[j]
+            hi[j] = r.w(hj ^ c)
+            if j < hi_n - 1:
+                c = r.w(c & (hj ^ dn))
+        beta = beta_new
+        rch = [beta]
+        for j in range(hi_n - 1):
+            rch.append(r.w(rch[j] & ~hi[j]))
+        terms: list[list[np.ndarray]] = [[] for _ in range(32)]
+        const: list[dict] = [{} for _ in range(32)]
+        hiterm = [0] * 32
+        x = [np.zeros(2 * cols, dtype=np.uint64) for _ in range(32)]
+        steps_start = r.writes
+        for t in range(m):
+            step = blk * m + t
+            rho = rot_amount(t) if rotate else 0
+            bb = r.w((b_cells[step].astype(np.uint64) << np.arange(32, dtype=np.uint64)[:, None]).sum(
+                axis=0, dtype=np.uint64))
+            bmask = np.concatenate([np.repeat(bb[p], cols) for p in range(2)])
+            dv0 = np.concatenate([d["coin"][step, p, :] + d["g"][step] for p in range(2)])
+            dv1 = np.concatenate([d["coin"][step, p, :] + 2 * d["g"][step] for p in range(2)])
+            bcell = cells(d["b"][step][:, None].repeat(cols, axis=1))
+            assert np.array_equal(cells(d["delta"][step]), np.where(bcell == 1, dv1[None], dv0[None]))
+            carry = None
+            for j in range(lo_n):
+                e0 = ((dv0 >> j) & 1).astype(bool)
+                e1 = ((dv1 >> j) & 1).astype(bool)
+                dj = np.where(e0 & e1, ones, np.where(e1, bmask, np.where(e0, ~bmask & ones, np.uint64(0))))
+                a = lo[j]
+                if carry is None:
+                    lo[j] = r.w(a ^ dj)
+                    carry = a & dj
+                    r.writes += float(np.mean(~(e0 & e1)))
+                elif j < lo_n - 1:
+                    lo[j] = r.w(a ^ dj ^ carry)
+                    carry = r.w((a & dj) | (a & carry) | (dj & carry))
+                else:
+                    lo[j] = r.w(a ^ dj ^ carry)
+            for j in range(lo_n):
+                terms[(j + rho) & 31].append(lo[j])
+            k = (top + rho) & 31
+            const[k]["beta"] = const[k].get("beta", 0) ^ 1
+            for j in range(hi_n):
+                k = (lo_n + j + rho) & 31
+                const[k][j] = const[k].get(j, 0) ^ 1
+                if rotate:
+                    x[k] = r.w(x[k] ^ (~lo[top] & rch[j]))
+                    hiterm[k] += 1
+        per_step = (r.writes - steps_start) / m
+        fold = 0
+        if not rotate:
+            ptop = np.bitwise_xor.reduce(np.stack(terms[top]), axis=0)
+            e = ptop ^ (ones if m & 1 else np.uint64(0))
+            if m & 1:
+                r.writes += xor_fold_writes(m) + 1 - xor_fold_writes(m + 1)
+            for j in range(hi_n):
+                k = lo_n + j
+                x[k] = r.w((e & rch[j]) ^ (hi[j] if const[k].pop(j, 0) else np.uint64(0)))
+                hiterm[k] = -1
+        for k in range(32):
+            cs = [beta if v == "beta" else hi[v] for v, odd in const[k].items() if odd]
+            for reg in terms[k] + cs:
+                x[k] = x[k] ^ reg
+            n = len(terms[k]) + len(cs)
+            fold += 0 if n == 0 else math.ceil(n / 2) if hiterm[k] else xor_fold_writes(n)
+        r.writes += fold
+        y = np.stack(transpose32(r, x))
+        per_block = r.writes - start - per_step * m
+        for c in range(32):
+            for p in range(2):
+                out[blk, 2 * c + p] = y[c, p * cols:(p + 1) * cols].astype(np.int64)
+    per_word = r.writes / (steps // m) / (32 * m)
+    uni = uniform_per_step(lo_n)
+    honest = xorrot_honest_per_word(m) if rotate else xor_honest_writes(m) / m
+    return out, {"lo_bits": lo_n, "per_step": per_step, "per_block": per_block, "per_word": per_word,
+                 "uniform_per_word_t8192": uni / 32 / 32, "uniform_per_word_t512": uni / 8 / 32,
+                 "honest_per_word": honest, "ratio": (per_word + uni / 32 / 32) / honest}
+
+
+def bitsliced_adaptive(d: dict, m: int, rotate: bool = True) -> tuple[np.ndarray, dict]:
+    """bitsliced_adversary with each column's low part as narrow as its blocks allow (the coins are uniform across the
+    warp, so it knows each block's reach before the block): the columns run at their own width and the writes are
+    their mean."""
+    lb = np.array([lo_bits_for(v) for v in block_reach(d, m)])
+    out = np.zeros((d["delta"].shape[0] // m, *d["w0"].shape), dtype=np.int64)
+    per_word = uniform = 0.0
+    widths = {}
+    for width in np.unique(lb):
+        sel = np.flatnonzero(lb == width)
+        sub = {k: (v[..., sel] if k in ("s", "g", "w0", "coin", "delta", "words") else v) for k, v in d.items()}
+        o, info = bitsliced_adversary(sub, m, int(width), rotate)
+        out[..., sel] = o
+        share = len(sel) / len(lb)
+        per_word += info["per_word"] * share
+        uniform += info["uniform_per_word_t8192"] * share
+        widths[int(width)] = len(sel)
+    honest = xorrot_honest_per_word(m) if rotate else xor_honest_writes(m) / m
+    return out, {"widths": widths, "per_word": per_word, "uniform_per_word_t8192": uniform, "honest_per_word": honest,
+                 "ratio": (per_word + uniform) / honest}
+
+
 TRUNC_FORMING = 4 + 4 + 4 * 4 + 16 + 16 + 12
 
 
@@ -312,6 +527,38 @@ def trunc_adversary(d: dict, k: int) -> tuple[np.ndarray, dict]:
     return out, {"per_word": per_word, "honest_per_word": trunc_honest(k), "credit_premise": 1 + k / 32}
 
 
+def part_r(checks: Checks, rng: np.random.Generator, x: dict) -> dict:
+    out: dict = {"xorrot": {}, "xor": {}}
+    for rotate, name in ((True, "xorrot"), (False, "xor")):
+        for m in (8, 11, 16, 24, 31):
+            d = m0_draw(rng, rows=64, cols=16, steps=4 * m)
+            rho = np.array([rot_amount(t) if rotate else 0 for t in range(m)], dtype=np.int64)[None, :, None, None]
+            w = d["words"].reshape(4, m, 64, 16)
+            honest = np.bitwise_xor.reduce(np.where(rho == 0, w, ((w << rho) | (w >> ((32 - rho) & 31))) & M32), axis=1)
+            fixed, fi = bitsliced_adversary(d, m, LO, rotate)
+            adapt, ai = bitsliced_adaptive(d, m, rotate)
+            ok = np.array_equal(fixed, honest) and np.array_equal(adapt, honest)
+            out[name][m] = {"fixed": fi, "adaptive": ai, "exact": bool(ok)}
+            checks.check(f"R: {name}-{m} at M0, the bit-sliced adversary matches honest's XOR bit for bit (4 blocks x "
+                         f"64 rows x 16 columns), with a 21-bit low part and with each column's own", ok,
+                         f"{ai['per_word'] + ai['uniform_per_word_t8192']:.3f} writes a word against honest's "
+                         f"{ai['honest_per_word']:.3f} ({ai['ratio']:.3f}x; widths {ai['widths']}); at 21 bits "
+                         f"{fi['ratio']:.3f}x")
+    rot = {m: v["adaptive"]["ratio"] for m, v in out["xorrot"].items()}
+    xr = {m: v["adaptive"]["ratio"] for m, v in out["xor"].items()}
+    checks.check("R: rotation is free to a bit-sliced program: it comes within 15% of honest's writes on xorrot-m from "
+                 "m = 16 and within 1% at m = 31, below its margin on xor-m at every m, so rotating weakens the premise",
+                 rot[16] < 1.15 and rot[31] < 1.01 and all(rot[m] < xr[m] for m in rot),
+                 ", ".join(f"m {m}: xorrot {rot[m]:.3f}x, xor {xr[m]:.3f}x" for m in rot))
+    best = {m: min(xr[m], x[m]["ratio"]) if m in x else xr[m] for m in xr}
+    checks.check("R: on xor-m it beats the packed adversary at m = 16 and still pays more than honest at every m <= 31, "
+                 "so XorWrites_m stands against both",
+                 xr[16] < x[16]["ratio"] and all(v > 1 for v in best.values()),
+                 ", ".join(f"m {m}: bit-sliced {xr[m]:.3f}x" + (f", packed {x[m]['ratio']:.3f}x" if m in x else "")
+                           for m in xr))
+    return out
+
+
 def part_t(checks: Checks, rng: np.random.Generator) -> dict:
     out = {}
     for k in (1, 2, 4):
@@ -336,10 +583,13 @@ def main() -> int:
     part_l(checks, rng)
     x = part_x(checks, rng)
     t = part_t(checks, rng)
+    r = part_r(checks, rng, x)
     if "--json" in args:
         Path(args[args.index("--json") + 1]).write_text(json.dumps(
             {"floor": f, "candidates": p, "xor": {str(k): v for k, v in x.items()},
-             "trunc": {str(k): v for k, v in t.items()}}, indent=1, sort_keys=True, default=float) + "\n")
+             "trunc": {str(k): v for k, v in t.items()},
+             "bitsliced": {n: {str(k): v for k, v in g.items()} for n, g in r.items()}},
+            indent=1, sort_keys=True, default=float) + "\n")
     print("\ncandidate      bits  h@t8192  cut   T1 DW-only  T1 premise  T2 t512 s/a     T2 r512 s/a     T2 t8192 s/a")
     for n, v in p.items():
         q = v["points"]
