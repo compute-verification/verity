@@ -12,7 +12,7 @@ Default-kind page still Waiting on Daniel past its Deadline.
 - Approve ticked: Status Approved, Decision "Approved by Daniel (Approve ticked, <time PT>)".
 - Choose set to a letter the relay hasn't seen on the page: Status Decided otherwise, Decision "Daniel chose <letter>: <that
   option's heading on the page>". A lane fills Choose on a page it decides itself, and that pick stays the lane's when the page
-  reopens (27 Oct: reopening ASK-173 to Revising made its lane's A read as Daniel's).
+  reopens.
 - Approve ticked on a Decided by lane page: Status Approved, and " Endorsed by Daniel." appended to its Decision.
 - A Default-kind page past its Deadline, still Waiting on Daniel: Status Default applied, Decision "Default applied <time PT>:
   <If no answer>".
