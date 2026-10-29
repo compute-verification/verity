@@ -5,7 +5,7 @@
 # taps under UTIL_ROOT.
 #
 # The mix: N requests of exactly PROMPT_IDS (1,024) prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py
-# --varied N --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with T/PROMPT_IDS requests a step and a window
+# --varied N --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with SLOTS requests a step and a window
 # (--max-num-seqs, --window-requests), --window-steps 1, --admit arrival, no prefix cache. WARM requests are served first,
 # outside the capture. Arms (ARM):
 #   stock   --no-commit, no protocol: the ceiling
@@ -26,8 +26,11 @@
 # Commit on (its `serve_row` module). No bench row's Build declares async scheduling yet, so serve-openai's row check (`serve_row.of`) takes
 # the row whichever scheduler it declares, as `tests/pipeline/serve_async_commit_gpu.py` does: its records attest the row's
 # LAG 0 Programs, so the arm is <arm>-async and not the served stack. SEQS defaults to 2·T/PROMPT_IDS, as for async.
-# Env: ARM, T (8192), N (64), PROMPT_IDS (1024: each request's prompt ids, so T/PROMPT_IDS requests a step; V3's class is
-# T 512 with 4 a window, PROMPT_IDS 128), WARM (2·T/PROMPT_IDS), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
+# Env: ARM, T (8192), N (64), PROMPT_IDS (1024: each request's prompt ids, so T/PROMPT_IDS requests a step), SLOTS (the
+# requests a step and a window, T/PROMPT_IDS; fewer leave the step part empty, and the steady state is then the steps of
+# SLOTS·PROMPT_IDS tokens: V3's own window, the certifier front's group, is SLOTS 4 of PROMPT_IDS 16 at T 512),
+# MAX_MODEL_LEN (1088; V3 serves 64), H1_PROVER=1 (the h1 arm keeps H1's prover state in the scratch, --h1-prover, as
+# V3's runner does, in a tree whose serve-openai takes it), WARM (2·SLOTS), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
@@ -52,7 +55,7 @@ set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
 ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; PROMPT_IDS=${PROMPT_IDS:-1024}
-SLOTS=$(( T / PROMPT_IDS )); WARM=${WARM:-$(( 2 * SLOTS ))}
+SLOTS=${SLOTS:-$(( T / PROMPT_IDS ))}; WARM=${WARM:-$(( 2 * SLOTS ))}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-1088}
 case $ARM:${ASYNC:-0} in graphs:*|async:*|*:1) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
 LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
@@ -64,15 +67,15 @@ NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve
 PORT=${PORT:-18190}
-export TREE ARM LABEL T N PROMPT_IDS SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
+export TREE ARM LABEL T N PROMPT_IDS SLOTS SEQS WARM MAX_MODEL_LEN ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
   case $ARM in stock|noseal|seal|h1|graphs|async) ;; *) say "ARM $ARM: not stock, noseal, seal, h1, graphs or async"; exit 2 ;; esac
   case $ARM:${ASYNC:-0} in *:0|noseal:1|seal:1|h1:1) ;; *) say "ASYNC=1 is for the Commit's arms (noseal, seal, h1): stock's is ARM=async"; exit 2 ;; esac
   { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
-  [ "$PROMPT_IDS" -ge 1 ] && [ "$PROMPT_IDS" -le 1024 ] && [ $(( T % PROMPT_IDS )) = 0 ] \
-    || { say "T $T: not a multiple of PROMPT_IDS $PROMPT_IDS (1 to 1,024)"; exit 2; }
+  [ "$PROMPT_IDS" -ge 1 ] && [ "$PROMPT_IDS" -le 1024 ] && [ "$SLOTS" -ge 1 ] && [ $(( SLOTS * PROMPT_IDS )) -le "$T" ] \
+    || { say "SLOTS $SLOTS of PROMPT_IDS $PROMPT_IDS (1 to 1,024): not one to T $T tokens a step"; exit 2; }
   [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
   if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
@@ -97,7 +100,8 @@ if [ "${1:-}" != leased ]; then
   rc=$?
   say "LEASED PART rc=$rc"
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
-    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
+    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --step-tokens $(( SLOTS * PROMPT_IDS )) \
+    --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
@@ -122,7 +126,7 @@ export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BU
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
       --admit arrival --window-requests "$SEQS" --max-num-seqs "$SEQS"
-      --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
+      --max-num-batched-tokens "$T" --max-model-len "$MAX_MODEL_LEN" --window-steps 1 --no-prefix-caching)
 [ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$ROW/manifest.json")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
@@ -133,7 +137,8 @@ case $ARM in
   stock) args+=(--no-commit) ;;
   noseal) args+=("${commit[@]}" --no-seal) ;;
   seal) args+=("${commit[@]}" --seal) ;;
-  h1) args+=("${commit[@]}" "$([ "${H1_SEAL:-0}" = 1 ] && echo --seal || echo --no-seal)" --protocols pouw:eps1-sm120-h1fx1) ;;
+  h1) args+=("${commit[@]}" "$([ "${H1_SEAL:-0}" = 1 ] && echo --seal || echo --no-seal)" --protocols pouw:eps1-sm120-h1fx1)
+      [ "${H1_PROVER:-0}" = 1 ] && { (umask 077; mkdir -p "$SCR/private"); args+=(--h1-prover "$SCR/private/h1"); } ;;
   graphs|async)
     args+=(--no-commit)
     sizes=1; s=2; while [ "$s" -le "$T" ]; do sizes+=",$s"; s=$(( 2 * s )); done
