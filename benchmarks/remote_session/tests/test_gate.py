@@ -41,11 +41,11 @@ def git(r: Path, *cmd: str) -> str:
 @pytest.fixture
 def repo(tmp_path: Path) -> tuple[Path, str]:
     r, origin = tmp_path / "repo", tmp_path / "origin.git"
-    (r / "verity/core/protocols/remote_bandwidth").mkdir(parents=True)
+    (r / "verity/core/protocols/poub").mkdir(parents=True)
     git(tmp_path, "init", "-q", "--bare", str(origin))
     git(r, "init", "-q", "-b", "main")
     for x in ("0", "1"):
-        (r / "verity/core/protocols/remote_bandwidth/store.py").write_text(f"x = {x}\n")
+        (r / "verity/core/protocols/poub/store.py").write_text(f"x = {x}\n")
         git(r, "add", ".")
         git(r, "commit", "-q", "-m", f"c{x}")
     git(r, "remote", "add", "origin", str(origin))
@@ -57,7 +57,7 @@ def off_main(repo: tuple[Path, str]) -> tuple[Path, str]:
     """The repository checked out at a commit on top of main that origin/main doesn't hold."""
     r, _ = repo
     git(r, "checkout", "-q", "-b", "side")
-    (r / "verity/core/protocols/remote_bandwidth/store.py").write_text("x = 2\n")
+    (r / "verity/core/protocols/poub/store.py").write_text("x = 2\n")
     git(r, "commit", "-q", "-am", "side")
     return r, git(r, "rev-parse", "HEAD")
 
@@ -92,7 +92,7 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
 def test_the_probe_passes_reading_only(tmp_path, repo):
     p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 0, p.stdout + p.stderr
-    tree = subprocess.run(["git", "rev-parse", f"{repo[1]}:verity/core/protocols/remote_bandwidth"], cwd=repo[0],
+    tree = subprocess.run(["git", "rev-parse", f"{repo[1]}:verity/core/protocols/poub"], cwd=repo[0],
                           capture_output=True, text=True, check=True).stdout.strip()
     doc = json.loads((out / "probe.json").read_text())
     assert doc["refused"] == [] and doc["challenger_pinned_at_commit"]

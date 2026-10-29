@@ -1,5 +1,5 @@
 """The remote audit's verifier, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
-verity/core/protocols/remote_bandwidth/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
+verity/core/protocols/poub/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
 on its stdin (an openings frame's bytes right after its line), each answered by one line on its stdout; a window's
 check runs on the process's threads and its verdict comes on a line of its own, handed to `done` as it arrives.
 
@@ -22,10 +22,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
+from verity.core.protocols.poub import audit, codec, coins, receipts
 
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = ROOT / "verity/core/protocols/remote_bandwidth/lean"
+PACKAGE = ROOT / "verity/core/protocols/poub/lean"
 EXE = "remote-audit-verifier"
 REFUSED = {"refused": True}
 BUILD_LOCK = ROOT / "verity/core/difftest/lean/.lake/harness-build.lock"

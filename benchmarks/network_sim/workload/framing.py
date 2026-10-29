@@ -6,7 +6,7 @@ carry. Inside a message, edges are in value order and each value's bits are pack
 first, from bit 0 of byte 0; `positions` gives each value's bit offset, so its bytes are [offset // 8, ⌈(offset + width)
 / 8⌉). The last byte's unused bits are 0.
 
-**Frames.** A message's bytes are `verity.core.protocols.certifier.active.data_frames`', the canonical framing: `DATA`
+**Frames.** A message's bytes are `verity.core.protocols.network_certifier.active.data_frames`', the canonical framing: `DATA`
 frames on `CANONICAL_STREAM` of B − 9 bytes each, the last zero-filled, so every frame's header is one constant and a
 frame says nothing of the message it belongs to. φ, which is public, fixes where each message starts and ends: a
 connection carries its messages in send order, each in `frame_count` frames.
@@ -29,7 +29,7 @@ import struct
 from collections import defaultdict
 from dataclasses import dataclass
 
-from verity.core.protocols.certifier.active import HEADER, data_frames, request_placement
+from verity.core.protocols.network_certifier.active import HEADER, data_frames, request_placement
 
 from .hardware import DeviceGraph
 from .placement import Edge

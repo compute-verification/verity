@@ -1,11 +1,11 @@
-"""Measure the reference circuits' structural properties and set them beside benchmarks/rho's shape-derived ones.
+"""Measure the reference circuits' structural properties and set them beside benchmarks/overhead's shape-derived ones.
 
     uv run --extra torch-cpu benchmarks/circuit_properties/run.py [--models NAME,...] [--T T] [--out DIR]
 
 For each configuration in `references.configs()`, one b1 layer at T positions on bits (`references.layer`) is measured
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
 a_out, a_in and |𝒥| per position: rho's `fanout`, `legs` and active layer products, as recorded for the model in
-benchmarks/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
+benchmarks/overhead/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
 DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
@@ -23,15 +23,15 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "rho"))
+sys.path.insert(0, str(HERE.parent / "overhead"))
 
 from circuit_properties import references as R
 from circuit_properties.measure import Blocks, describe, measure, whole
 
 
 def rho_shapes(name: str, C: dict) -> dict:
-    from rho import instances as I
-    from rho.params import Registry
+    from overhead import instances as I
+    from overhead.params import Registry
     H, NH, KVH, D, IM, NL = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["NL"]
     own = I.Model(name, 0, 0, H, NL, C["V"], 0, 0, matrices={
         "attention": tuple(I.Matrix(n, a, b, NL, NL) for n, a, b in

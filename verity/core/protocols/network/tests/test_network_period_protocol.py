@@ -24,10 +24,10 @@ import period_case as PC
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
                          build, clog2, public, reference, verdict_of)
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.certificate import Certificate
-from verity.core.protocols.certifier.schedule import SyncSet
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier.certificate import Certificate
+from verity.core.protocols.network_certifier.schedule import SyncSet
+from verity.core.protocols.network_certifier.warden import WardenParams
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 

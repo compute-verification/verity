@@ -24,7 +24,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.certifier.certificate import Direction, Issuer
+from verity.core.protocols.network_certifier.certificate import Direction, Issuer
 
 HERE = Path(__file__).resolve().parents[1]
 TOKENS, REQUESTS = 4, 8
@@ -211,8 +211,8 @@ def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_
     """On the certificate's own tree (`certificate.frames_root`, `open_frame`, `verify_frame`): every honest frame opens
     under the root, the changed one doesn't, and no other frame changes. The run keeps no frames, so `make` says what
     the negative waits for."""
-    from verity.core.protocols.certifier.certificate import frames_root, open_frame, verify_frame
-    from verity.core.protocols.certifier.grid import GridParams
+    from verity.core.protocols.network_certifier.certificate import frames_root, open_frame, verify_frame
+    from verity.core.protocols.network_certifier.grid import GridParams
 
     params = GridParams(buckets=4, allocation=2, frame_bytes=64, bucket_ms=100, queue_capacity=8)
     frames = [bytes([k]) * 64 for k in range(5)]
@@ -509,7 +509,7 @@ def test_n2s_advised_counts_refuse_the_advice_negatives_and_accept_the_step_unit
     that isn't the requests' frames, and an extra request whose frames pass the egress allocation R in a bucket, are
     refused by the view."""
     AD = pytest.importorskip(NG.ADVISED_MODULE)
-    from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
+    from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet
 
     T, R, RIN, OWN, syncs, sigma = 8, 8, 8, 0, [ClockSync(1, Fraction(1))], SyncSet((1,), (Fraction(1),))
     a = _advice()
@@ -542,7 +542,7 @@ def test_the_advice_suite_makes_each_advice_negative_and_names_n2s_codes_on_it()
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
-    from verity.core.protocols.certifier.schedule import ClockSync
+    from verity.core.protocols.network_certifier.schedule import ClockSync
 
     rows = NG.advice_suite(_advice(), T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING,
                            received=[3])
@@ -564,7 +564,7 @@ def test_an_advice_that_releases_before_its_declared_sync_runs_no_negative_until
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
-    from verity.core.protocols.certifier.schedule import ClockSync
+    from verity.core.protocols.network_certifier.schedule import ClockSync
 
     early = _advice(release=(0, 0, 0, 0, 5))
     rows = NG.advice_suite(early, T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING, received=[3])
@@ -583,7 +583,7 @@ def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_r
     """serve-openai's rows by user (by http id without one) where they carry the prompt; each advice request's id
     request is its record's (its prompt ids, user and what it brought, seed 0 when it brought none), and one without a
     record a prompt of its length under its own id; a record whose prompt isn't the advice's length can't be tied."""
-    from verity.core.protocols.certifier.active import id_request
+    from verity.core.protocols.network_certifier.active import id_request
 
     brought = {"max_tokens": 3, "temperature": 0.5, "top_p": 0.9}
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
@@ -613,7 +613,7 @@ def test_io_tie_request_refuses_the_prompt_split_that_n2s_counts_accept():
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
-    from verity.core.protocols.certifier.schedule import ClockSync
+    from verity.core.protocols.network_certifier.schedule import ClockSync
 
     rows = NG.advice_suite(_advice(), T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=FRAMING,
                            received=[3], frame_bytes=404)
@@ -636,7 +636,7 @@ def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_ti
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
-    from verity.core.protocols.certifier.schedule import ClockSync
+    from verity.core.protocols.network_certifier.schedule import ClockSync
 
     a = V.Advice((V.RequestAdvice("u0", 339, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
                  (V.StepAdvice((V.Row(0, "prefill", 0, 339),)), V.StepAdvice((V.Row(0, "decode", 339, 1),
@@ -870,9 +870,9 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
-    from verity.core.protocols.certifier.active import DATA, HEADER, PAD
-    from verity.core.protocols.certifier.grid import COMPLETE, Record
-    from verity.core.protocols.certifier.warden import WardenParams, cell
+    from verity.core.protocols.network_certifier.active import DATA, HEADER, PAD
+    from verity.core.protocols.network_certifier.grid import COMPLETE, Record
+    from verity.core.protocols.network_certifier.warden import WardenParams, cell
 
     params = WardenParams(cell_bytes=64, slots=2, lanes=2, window=2)
     B, S = params.cell_bytes, params.grid.allocation

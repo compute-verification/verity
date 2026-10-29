@@ -1,4 +1,4 @@
-"""PoUW's read of the network certifier's per-window salt (`verity/core/protocols/certifier/active.py`, "The salt").
+"""PoUW's read of the network certifier's per-window salt (`verity/core/protocols/network_certifier/active.py`, "The salt").
 
 PoUW window p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier draws p's 512-bit
 salt at p's first ingress tick, releases it into the block only, and gives it to the verifier by `reveal(p,

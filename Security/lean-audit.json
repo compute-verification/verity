@@ -12616,12 +12616,12 @@
    },
    "Accounting.Assumptions.SquaringFloor": {
     "status": "open",
-    "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_squaring_floor_known_constructions",
+    "test": "verity/core/protocols/poub/tests/test_encode_chain.py::test_squaring_floor_known_constructions",
     "why": "In the circuit model's nonlinear units (Definitions/Accounting/Gates: window proven by interval analysis; the only free operations are linear maps with coefficients fixed before the coins, so a cost is the budgeted units and a unit per data product, an s8-family lane whose two multiplicands both depend on run or coin data, whatever their range), one squaring mod p from a word's canonical bytes to n/8 byte-format limbs congruent to its square, right on more than ε of the words, costs at least e nonlinear units, at ε ≥ 2^−64 and p ≥ 2^66; open, priced e = (2L − 1) + (L − d(ε)), d(ε) = 4 + ⌈log₂(1/ε)/8⌉ (374 at p1024 and ε = 2^−40): the 2L − 1 column sums' multiplicative complexity (sketched) plus the red team's Lemma R at c = 0. Every known construction sits above it (ripple carries 16,896, 3-limb look-ahead 16,726). Its test builds them and checks each costs at least e, its column sums L² data products."
    },
    "Accounting.Assumptions.ChainSum": {
     "status": "open",
-    "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_chain_sum_known_chains",
+    "test": "verity/core/protocols/poub/tests/test_encode_chain.py::test_chain_sum_known_chains",
     "why": "In the circuit model's nonlinear units, if one squaring mod p costs e nonlinear units (SquaringFloor), the masked k-round codec's words cost k·S·e nonlinear units each (S = Field.squarings, 1,021 at p1024), less a word per n − 1 run-input bits (Gates.EncodeBound at E = k·S·e), at ε ≥ 2^−64, k ≥ 1, p ≥ 2^66 and p ≡ 3 mod 4: Sloth's sequentiality (Lenstra–Wesolowski) in the model, the roots' squarings in sequence and no work shared across words; open. Its test chains the known squarings at p1024 and checks the chain costs their sum, and the bitwise codec's data products are measured in benchmarks/property_redteam/tests/test_bitwise_codec.py."
    },
    "Pous.P2.Assumptions.P2RingRoundSecureWide": {

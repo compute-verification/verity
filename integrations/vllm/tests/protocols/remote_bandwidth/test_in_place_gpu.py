@@ -23,12 +23,12 @@ PAGED_SO = os.environ.get("VERITY_PAGED_SO")
 pytestmark = pytest.mark.skipif(not (torch.cuda.is_available() and SESSION_SO and KV_SO),
                                 reason="a GPU, VERITY_SESSION_SO (session.cu) and VERITY_KV_SO (kv.cu at p1024, masked)")
 
-from verity.core.protocols.remote_bandwidth import audit, codec as rcodec  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth import int8_kv, memory_map as store_map, remote  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.in_place import InPlaceBackend  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, PageLayout  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import Store  # noqa: E402
+from verity.core.protocols.poub import audit, codec as rcodec  # noqa: E402
+from verity_vllm.protocols.poub import int8_kv, memory_map as store_map, remote  # noqa: E402
+from verity_vllm.protocols.poub.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
+from verity_vllm.protocols.poub.in_place import InPlaceBackend  # noqa: E402
+from verity_vllm.protocols.poub.interface import IDENTITY, Append, PageLayout  # noqa: E402
+from verity_vllm.protocols.poub.registry import Store  # noqa: E402
 
 from .test_memory_map import kv_payload  # noqa: E402
 from .test_registry import RECEIPT  # noqa: E402

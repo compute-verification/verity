@@ -992,7 +992,7 @@ def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
-    names (`verity.core.protocols.certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    names (`verity.core.protocols.network_certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
     place of the digest is the Definition's."""
     from verity.ml.circuits.codec import program_digest
     from verity.ml.circuits.program import Program

@@ -14,7 +14,7 @@ import types
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.certifier import calibration
+from verity.core.protocols.network_certifier import calibration
 
 HERE = Path(__file__).resolve().parents[1]
 

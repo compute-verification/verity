@@ -1,4 +1,4 @@
-"""The verifier's process: the remote bandwidth audit v0's `Session` (verity/core/protocols/remote_bandwidth/audit.py)
+"""The verifier's process: the remote bandwidth audit v0's `Session` (verity/core/protocols/poub/audit.py)
 driven over the wire against a prover on another process or machine, with a secret of its own.
 
 One connection serves one registration and then `--sessions` sessions over it, each of `--windows` windows of
@@ -76,7 +76,7 @@ Lean answers has come and agreed.
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
-was set, which `replay.py transcript` (verity/core/protocols/remote_bandwidth/lean/tests) replays through both
+was set, which `replay.py transcript` (verity/core/protocols/poub/lean/tests) replays through both
 verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
@@ -130,8 +130,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.poub import audit, coins, ledger, line, timing  # noqa: E402
+from verity.core.protocols.poub import store as rstore  # noqa: E402
 
 import challengers  # noqa: E402
 import lean_verifier as lv  # noqa: E402
@@ -184,7 +184,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
 
 def regions_of(layout, blocks: int) -> tuple[tuple[str, str, int, int], ...] | None:
     """The hello's layout of the registered store as regions `(kind, tier, first, blocks)` in index order, covering its
-    `blocks` exactly (`verity_vllm.protocols.remote_bandwidth.registry.Store.layout`'s), or None without one.  The labels are the prover's,
+    `blocks` exactly (`verity_vllm.protocols.poub.registry.Store.layout`'s), or None without one.  The labels are the prover's,
     public as protocol structure: that a plan's weights blocks hold the circuit's weights is the plan unit's to show
     (`audit.RequirementLink`), not this."""
     if layout is None:

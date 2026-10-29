@@ -35,7 +35,7 @@ filesystem under its floor, and ``on_floor`` then hears why (the server stops). 
 into the run's ``$OUT`` after each close and each seal.
 
 With ``served`` (the compile slice's statics, `served_statics`) each close also commits the step rows the window ran
-(`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
+(`verity.core.protocols.network_certifier.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width) goes into the window's ``windows.jsonl`` line, beside its run root, written at the
 close and so before any draw over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
@@ -54,8 +54,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.core.protocols.certifier import compile_slice as CS
-from verity.core.protocols.certifier import served_rows as SRW
+from verity.core.protocols.network_certifier import compile_slice as CS
+from verity.core.protocols.network_certifier import served_rows as SRW
 from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests

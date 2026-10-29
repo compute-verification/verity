@@ -1,4 +1,4 @@
-"""The active certifier on recorded traces, in real time: `verity.core.protocols.certifier.active` serving a replay of honest traces'
+"""The active certifier on recorded traces, in real time: `verity.core.protocols.network_certifier.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
@@ -107,8 +107,8 @@ from pathlib import Path
 
 import covert
 import replay
-from verity.core.protocols.certifier import online
-from verity.core.protocols.certifier.active import (
+from verity.core.protocols.network_certifier import online
+from verity.core.protocols.network_certifier.active import (
     CANONICAL_STREAM,
     DATA,
     HEADER,
@@ -141,11 +141,11 @@ from verity.core.protocols.certifier.active import (
     wait_until,
     worker,
 )
-from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.calibration import choose_syncs
-from verity.core.protocols.certifier.release import release_head, release_of, with_release
-from verity.core.protocols.certifier.commitment import CommittedRecord, commit
-from verity.core.protocols.certifier.grid import (
+from verity.core.protocols.network_certifier.lean_audit import Audit
+from verity.core.protocols.network_certifier.calibration import choose_syncs
+from verity.core.protocols.network_certifier.release import release_head, release_of, with_release
+from verity.core.protocols.network_certifier.commitment import CommittedRecord, commit
+from verity.core.protocols.network_certifier.grid import (
     COMPLETE,
     GridParams,
     Reason,
@@ -154,14 +154,14 @@ from verity.core.protocols.certifier.grid import (
     Certifier,
     row_count,
 )
-from verity.core.protocols.certifier.schedule import (
+from verity.core.protocols.network_certifier.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,
     handing_buckets,
     run_shaper,
 )
-from verity.core.protocols.certifier.served import Admission, ServedProfile, admits
+from verity.core.protocols.network_certifier.served import Admission, ServedProfile, admits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 

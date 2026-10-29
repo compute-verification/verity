@@ -12,7 +12,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
 
 **A run** is a certifier-serve run's directory (`certifier_serve.py rehearse`'s, one per strategy): its `plan.json`,
 `calibration.json`, `deployment.json` and `certified.jsonl`, and, as their interfaces land, the advice (I1:
-`verity.core.protocols.certifier.advice`, its `encode` bytes) and the Commit record (I3, serve-openai's).
+`verity.core.protocols.network_certifier.advice`, its `encode` bytes) and the Commit record (I3, serve-openai's).
 
 **What is tampered, by whom** (`Negative.tampers`):
 - ``plan``: the shim's plan (`active_replay.adversary_plan`), served by `certifier_serve.py serve --tamper NAME`. The
@@ -102,22 +102,22 @@ sys.path.insert(0, str(HERE))
 
 import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
-from verity.core.protocols.certifier import audit as host_audit, head_check as HC  # noqa: E402
-from verity.core.protocols.certifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES,  # noqa: E402
+from verity.core.protocols.network_certifier import audit as host_audit, head_check as HC  # noqa: E402
+from verity.core.protocols.network_certifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES,  # noqa: E402
                                                      compact_finish_violations, compact_record_data, decode_frame,
                                                      encode_frame, id_event_data, id_request)
-from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
-from verity.core.protocols.certifier import tie_service as TS, warden as W  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet  # noqa: E402
-from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
+from verity.core.protocols.network_certifier import tie_service as TS, warden as W  # noqa: E402
+from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet  # noqa: E402
+from verity.core.protocols.network_certifier.service import LinkWindows  # noqa: E402
 
 FORMAT = "verity-network-negatives/v1"
-ADVICE_MODULE = "verity.core.protocols.certifier.advice"
-ADVISED_MODULE = "verity.core.protocols.certifier.advised"
-IO_TIE_MODULE = "verity.core.protocols.certifier.io_tie"
-IO_REQUEST_MODULE = "verity.core.protocols.certifier.io_request"
-WARDEN_ROWS_MODULE = "verity.core.protocols.certifier.warden_rows"
+ADVICE_MODULE = "verity.core.protocols.network_certifier.advice"
+ADVISED_MODULE = "verity.core.protocols.network_certifier.advised"
+IO_TIE_MODULE = "verity.core.protocols.network_certifier.io_tie"
+IO_REQUEST_MODULE = "verity.core.protocols.network_certifier.io_request"
+WARDEN_ROWS_MODULE = "verity.core.protocols.network_certifier.warden_rows"
 SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
@@ -265,7 +265,7 @@ def shim(strategy: str) -> Callable[[Path, Path], Path]:
 
 
 # --- the advice (I1) ---------------------------------------------------------------------------------------------------
-# On I1 v0 (`verity.core.protocols.certifier.advice`): Advice(requests, steps, release),
+# On I1 v0 (`verity.core.protocols.network_certifier.advice`): Advice(requests, steps, release),
 # RequestAdvice(id, prompt_len, output_len, finish), StepAdvice(rows), Row(request, kind, start, n, cache_hit,
 # preempted, sources), Source(request, n), and `release` one egress bucket a kept output. Each tampering returns new advice and
 # leaves its argument, and keeps the advice valid under v0's schedule rules (a row continues at its request's computed

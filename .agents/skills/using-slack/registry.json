@@ -329,7 +329,7 @@
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
-        "verity/core/protocols/remote_bandwidth/",
+        "verity/core/protocols/poub/",
         "verity/core/primitives/requirement/",
         "Security/Definitions/Accounting/Bandwidth.lean",
         "Security/Definitions/Accounting/Bandwidth/",
@@ -409,7 +409,7 @@
     {
       "handle": "network-accounting",
       "holder": "the network-accounting coordinator (bc-5c916421-64a5-5c38-94ba-2e28fe629237)",
-      "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/core/protocols/network_certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
       "retired_usergroups": [
@@ -418,7 +418,7 @@
       "linear": "NET",
       "owns": [
         "verity/core/protocols/network/",
-        "verity/core/protocols/certifier/",
+        "verity/core/protocols/network_certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
@@ -648,7 +648,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "benchmarks/rho/",
+        "benchmarks/overhead/",
         "benchmarks/circuit_properties/"
       ],
       "branch_suffixes": [

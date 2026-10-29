@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, VirtualClock
-from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.certifier.release import with_release
-from verity.core.protocols.certifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
+from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier.active import DATA, VirtualClock
+from verity.core.protocols.network_certifier.grid import Reason
+from verity.core.protocols.network_certifier.release import with_release
+from verity.core.protocols.network_certifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
                                                     reason_frame)
 
 HERE = Path(__file__).resolve().parents[1]
@@ -349,7 +349,7 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     import auditor as A
     import demo_stub as D
     import scan_zk as sz
-    from verity.core.protocols.certifier.release import release_of
+    from verity.core.protocols.network_certifier.release import release_of
     prompts = D.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}

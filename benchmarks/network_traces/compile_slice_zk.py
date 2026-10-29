@@ -8,7 +8,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
-  (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
+  (`verity/core/protocols/network_certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit), which `prove`
   first checks is the corpus's (`replay_vectors.vectors` on corpus-smallkv: the arrivals, the decisions and the replay's
   rows; `cache_vectors`' tokens of each arrival); or ``w212``, window 212 of vLLM's served run (the encodings'
   ``vllm-8eb1`` fixture) padded into the run's public engine class, (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, no
@@ -82,15 +82,15 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import n2_zk as N2  # noqa: E402
-from verity.core.protocols.certifier import arith_encode as AE  # noqa: E402
-from verity.core.protocols.certifier import charge_chain as CC  # noqa: E402
-from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
-from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
+from verity.core.protocols.network_certifier import arith_encode as AE  # noqa: E402
+from verity.core.protocols.network_certifier import charge_chain as CC  # noqa: E402
+from verity.core.protocols.network_certifier import compile_slice as CS  # noqa: E402
+from verity.core.protocols.network_certifier import served_rows as SR  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
 
-FIXTURES = REPO / "verity/core/protocols/certifier/tests/fixtures"
+FIXTURES = REPO / "verity/core/protocols/network_certifier/tests/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
 W212 = FIXTURES / "compile_slice_w212_class_async.json"
 TRACE_8EB1 = REPO / "benchmarks/network_e2e/encodings/tests/fixtures/vllm-8eb1/advice_trace.jsonl.gz"

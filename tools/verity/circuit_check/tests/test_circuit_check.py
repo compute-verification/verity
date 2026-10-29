@@ -962,7 +962,7 @@ def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
     place: its own digest passes, another fails by name, and none warns."""
     from verity.ml.circuits.codec import program_digest
     from verity.ml.circuits.program import Program
-    from verity.core.protocols.certifier import served as SV
+    from verity.core.protocols.network_certifier import served as SV
 
     d = SV.unit(8, 3, 1, 2, 2, 0)
     digest = program_digest(Program(d))

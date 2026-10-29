@@ -27,7 +27,7 @@
    "name": "certifier_program",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../../protocols/certifier/lean",
+   "dir": "../../../protocols/network_certifier/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

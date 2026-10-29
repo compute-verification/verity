@@ -18,7 +18,7 @@ from verity.ml.commitments import hm96
 from verity_vllm.pipeline import registration_log as RL
 
 _spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[4] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
+    "nci_reference", Path(__file__).resolve().parents[4] / "verity/core/protocols/inference_only/lean/scripts/nci_reference.py")
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 

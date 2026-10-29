@@ -1,5 +1,5 @@
 """A served endpoint's Commit windows' advice (`verity_vllm.pipeline.window_advice`) as one I1 v0 advice
-(`verity.core.protocols.certifier.advice`), each request in it once.
+(`verity.core.protocols.network_certifier.advice`), each request in it once.
 
 A Commit window that carries requests in (window advice v1) opens with the state its predecessor's advice closed with
 (`window_advice.follows`): its carried requests' records and their state at the open repeat what the window before it
@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 from verity_vllm.pipeline import window_advice as WA
 
 

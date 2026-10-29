@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import active as A, io_tie as IT
-from verity.core.protocols.certifier.release import with_release
+from verity.core.protocols.network_certifier import active as A, io_tie as IT
+from verity.core.protocols.network_certifier.release import with_release
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))

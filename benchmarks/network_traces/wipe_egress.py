@@ -37,8 +37,8 @@ from fractions import Fraction
 from pathlib import Path
 
 import certifier_serve as cs
-from verity.core.protocols.certifier.certificate import Direction
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.certificate import Direction
+from verity.core.protocols.network_certifier.warden import WardenParams
 from verity.core.protocols.pous import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"

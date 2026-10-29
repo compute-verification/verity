@@ -29,8 +29,8 @@ import pytest
 from test_certifier_serve import VARIED_TOKENS, _no_sleep, _Varied, _varied_runs, ar, cs
 import compact_render as cr  # noqa: E402
 from test_compact_render import FIXTURE, VOCAB  # noqa: E402
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.grid import Reason
+from verity.core.protocols.network_certifier import active
+from verity.core.protocols.network_certifier.grid import Reason
 
 B = 8
 EOS_ID = "an EOS id outside a stop record"

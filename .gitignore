@@ -66,10 +66,10 @@ integrations/vllm/tests/protocols/fixtures/challenger_periods
 benchmarks/network_e2e/encodings/tests/fixtures
 benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl
 benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
-verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json
-verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
-verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json
-verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json
+verity/core/protocols/network_certifier/tests/fixtures/arith_encode_vectors.json
+verity/core/protocols/network_certifier/tests/fixtures/cache_step_vectors.json
+verity/core/protocols/network_certifier/tests/fixtures/cache_step_v2_vectors.json
+verity/core/protocols/network_certifier/tests/fixtures/replay_step_vectors.json
 fixtures/lean-vectors
 verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json
 fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json

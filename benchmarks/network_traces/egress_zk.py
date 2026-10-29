@@ -3,7 +3,7 @@ by its own `EgressBucket_v1` unit, its computed row, output ``o1``, registered a
 (`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
-(`verity.core.protocols.certifier.egress`).
+(`verity.core.protocols.network_certifier.egress`).
 
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
@@ -47,11 +47,11 @@ sys.path.insert(0, str(HERE))
 import warden_zk as WZ  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
-from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.core.protocols.network_certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
+from verity.core.protocols.network_certifier.active import DATA  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 
-_TRAFFIC = HERE.parents[1] / "verity/core/protocols/certifier/tests/egress_traffic.py"
+_TRAFFIC = HERE.parents[1] / "verity/core/protocols/network_certifier/tests/egress_traffic.py"
 _spec = importlib.util.spec_from_file_location("egress_traffic", _TRAFFIC)
 traffic = sys.modules["egress_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(traffic)

@@ -1,6 +1,6 @@
 """The liveness cases of the description-sized inference-only check (`NciCheck.Desc`): the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/desc_liveness_vectors.py` writes 13 Program shapes, each at a small `n`
+`verity/core/protocols/inference_only/lean/scripts/desc_liveness_vectors.py` writes 13 Program shapes, each at a small `n`
 and at one of `2^22` to `2^52 + 1` scan iterations or batch members, past anything `NciCheck.Desc` walks one by one.
 `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/DescLivenessMain.lean`
 fails unless `NciCheck.Desc.check` gives on every small instance what `NciCheck.check` gives on it expanded, and on the
@@ -16,7 +16,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
+LEAN = Path(__file__).resolve().parents[2] / "inference_only" / "lean"
 
 
 def _load(name: str):

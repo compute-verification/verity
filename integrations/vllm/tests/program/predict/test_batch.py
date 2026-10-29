@@ -12,7 +12,7 @@ from itertools import accumulate
 
 import pytest
 
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple, Value
@@ -400,7 +400,7 @@ def test_compile_steps_passes_its_own_rule():
     """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p."""
     from verity.ml.definitions.registry.topp_geometry import registered_splits
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
-    I1 = pytest.importorskip("verity.core.protocols.certifier.advice")
+    I1 = pytest.importorskip("verity.core.protocols.network_certifier.advice")
     cfg = {**TINY, "max_position_embeddings": 64}
     reg = steps.Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTX)), default_seed=7)
     greedy = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3}

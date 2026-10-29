@@ -18,8 +18,8 @@ import torch
 from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
+from verity.core.protocols.poub import codec
+from verity.core.protocols.poub.memory_map import Replay, dumps, parse
 from verity.ml.circuits.census import step_of
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program, is_input

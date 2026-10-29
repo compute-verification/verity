@@ -29,7 +29,7 @@ import json
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
-from verity.core.protocols.certifier.active import compact_record_data
+from verity.core.protocols.network_certifier.active import compact_record_data
 
 REPLACEMENT = "\ufffd"
 DONE = b"data: [DONE]\n\n"

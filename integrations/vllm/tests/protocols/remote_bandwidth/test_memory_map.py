@@ -15,11 +15,11 @@ import struct
 import numpy as np
 import pytest
 
-from verity.core.protocols.remote_bandwidth import audit, codec, memory_map
-from verity.core.protocols.remote_bandwidth.memory_map import MemoryMapError, Replay
-from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
-from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, Store
+from verity.core.protocols.poub import audit, codec, memory_map
+from verity.core.protocols.poub.memory_map import MemoryMapError, Replay
+from verity_vllm.protocols.poub.interface import Append, PageLayout
+from verity_vllm.protocols.poub.memory_map import LIFETIME
+from verity_vllm.protocols.poub.registry import ArrayBacking, Store
 
 from .test_registry import CODEC, RECEIPT
 

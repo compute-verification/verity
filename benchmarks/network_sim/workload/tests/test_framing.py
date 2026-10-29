@@ -1,7 +1,7 @@
 """The hardware's routes, and φ: positions in messages, the canonical cut, HELLOs, and the occupancy profile."""
 import pytest
 
-from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, HEADER, decode_frame
+from verity.core.protocols.network_certifier.active import CANONICAL_STREAM, DATA, HEADER, decode_frame
 from workload import framing as F
 from workload import model as M
 from workload import placement as P

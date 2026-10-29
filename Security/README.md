@@ -84,7 +84,7 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
   `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
 - **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
-  (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
+  (`verity/core/protocols/poub`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a subprotocol of onsite only.
 
 ## Building and checking

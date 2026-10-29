@@ -73,7 +73,7 @@ def test_the_pinned_ids_are_every_pin_held_for_a_definition(monkeypatch):
 def test_the_certifiers_pinned_n14_bindings_are_their_sidecars_targets(sidecar, family):
     """``{N=14}`` of the certifier's charge units is over `MAX_GATES` beside ``{N=2}`` under it; both are pinned, so both are
     their sidecar's targets, which ``--all`` keeps the same way (`select`)."""
-    path = str(REPO / f"verity/core/protocols/certifier/{sidecar}.circuit-check.py")
+    path = str(REPO / f"verity/core/protocols/network_certifier/{sidecar}.circuit-check.py")
     n2, n14 = f"{family}{{N=2}}", f"{family}{{N=14}}"
     assert {n2, n14} <= TG.pinned()
     found, _ = TG.sidecar_targets(path)

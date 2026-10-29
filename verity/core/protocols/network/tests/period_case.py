@@ -46,11 +46,11 @@ from functools import lru_cache
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
+from verity.core.protocols.network_certifier import warden_rows as WR
+from verity.core.protocols.network_certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.certifier.warden import WardenParams
+from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet
+from verity.core.protocols.network_certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import annotations as AN, boolean as BL, codec, population

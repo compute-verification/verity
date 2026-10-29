@@ -88,9 +88,9 @@ sys.path[:0] = [str(HERE), str(ROOT / "benchmarks" / "network_traces")]
 
 import chain  # noqa: E402
 import n2_zk  # noqa: E402
-from verity.core.protocols.certifier import head_check as HC  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
+from verity.core.protocols.network_certifier import head_check as HC  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import Direction  # noqa: E402
+from verity.core.protocols.network_certifier.schedule import ClockSync  # noqa: E402
 
 FORMAT = "verity-network-e2e/report/v3"
 HONEST, TAMPERED = "honest", "tampered"
@@ -104,7 +104,7 @@ TIE_STAGE = "the I/O tie (`io_tie`'s reference in the clear, on stand-ins)"
 #: max_tokens, and drop's cut response stops short of it without EOS (the certified I/O's finish rule)
 OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:longer than max_tokens",
             "drop": "io:short of max_tokens without EOS"}
-README = "verity/core/protocols/certifier/README.md"
+README = "verity/core/protocols/network_certifier/README.md"
 PEERS = Path("/etc/vy/peers")
 ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 #: the auditor's host whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)

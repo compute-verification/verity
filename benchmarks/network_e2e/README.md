@@ -130,7 +130,7 @@ It does not cover:
   prover, the ZK server and the verifier on one node.
 - **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut.
 
-Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Zero knowledge: what N2's verdict reads, and
+Zero-knowledge gaps, from `verity/core/protocols/network_certifier/README.md` ("Zero knowledge: what N2's verdict reads, and
 what's open"):
 
 - N2's verdicts here are decided in the clear (`LinkWindows.unproved_outcome`, as for any run that proves nothing),

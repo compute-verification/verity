@@ -13,6 +13,6 @@ inputs = [
   "Security/Definitions/Core/Accel/Sm120.lean",
   "verity/core/protocols/pouw/circuit/h1device.py",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
-  "benchmarks/rho/rho/__init__.py",
-  "benchmarks/rho/rho/theorem.py",
+  "benchmarks/overhead/overhead/__init__.py",
+  "benchmarks/overhead/overhead/theorem.py",
 ]

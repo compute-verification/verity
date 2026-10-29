@@ -49,8 +49,8 @@ from pathlib import Path
 
 import tiers as T
 
-sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
-from rho.theorem import multiple_bound
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "overhead"))
+from overhead.theorem import multiple_bound
 
 #: loss laws L(N, D) = E + A / N^alpha + B / D^beta in nats per token: Besiroglu et al.'s refit of Chinchilla's Approach 3
 #: (besiroglu-2024-chinchilla-replication/2) and Hoffmann et al.'s original Approach 3 fit, which the refit refutes and

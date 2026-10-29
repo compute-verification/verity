@@ -37,8 +37,8 @@ import random
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 
-from verity.core.protocols.certifier import online
-from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
+from verity.core.protocols.network_certifier import online
+from verity.core.protocols.network_certifier.schedule import ClockSync, LogicalFrame, SyncSet
 
 
 def encode_writes(keys: Sequence[tuple[int, int, int, int]], sessions: Sequence[list], sync_set: SyncSet,

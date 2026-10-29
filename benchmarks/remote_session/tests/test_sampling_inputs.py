@@ -57,7 +57,7 @@ def test_a_region_solution_meets_its_constraints():
 def test_the_code_reads_one_coin_over_g_groups_as_the_merged_window_the_model_drew():
     """`audit.pooled` on each group's receipts and draws naming `groups_per_coin` g is the model's reading of shared
     draws, one window of g groups' receipts and the coin's samples, however the coin's samples fall in its groups."""
-    from verity.core.protocols.remote_bandwidth import audit
+    from verity.core.protocols.poub import audit
     for g, shares in ((2, (0, 3)), (4, (1, 0, 2, 0)), (3, (0, 0, 1))):
         n, u = 5, 7_000
         split = si.record_of([(u, shares[x % g]) for x in range(n * g)], g)

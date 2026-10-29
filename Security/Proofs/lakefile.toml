@@ -23,7 +23,7 @@ path = "../../verity/core/service/flock"
 
 [[require]]
 name = "certifier_program"
-path = "../../verity/core/protocols/certifier/lean"
+path = "../../verity/core/protocols/network_certifier/lean"
 
 [[require]]
 name = "core_randomness"

@@ -1,4 +1,4 @@
-"""The difftest of advice v1's in-circuit encoder (`verity.core.protocols.certifier.arith_encode`) against the advice
+"""The difftest of advice v1's in-circuit encoder (`verity.core.protocols.network_certifier.arith_encode`) against the advice
 code's coders (`code.py`, `code_v1`), over what v1 actually codes.
 
 Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
@@ -26,7 +26,7 @@ charges), on the windows with `SEEDED` hits and order entries added, and on thei
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
 slice's P·A = 14 whatever `--cut` says) and the trace-corpus fixture's
 fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
-(`verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are trace-corpus traces
+(`verity/core/protocols/network_certifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are trace-corpus traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
 arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
 where they deviate and v1 sends order entries. The fixtures' arrivals never deviate. The report has each stream's
@@ -68,18 +68,18 @@ CUT, SLICE_CUT = 64, 14
 #: entries seeded into each decisions stream, since the fixtures' traces send almost none
 WHOLE, SEEDED = (4, 2, 2), (12, 10)
 EOS = 2
-FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
+FIXTURE = HERE.parents[2] / "verity" / "core" / "protocols" / "network_certifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
 
 
 def _ae() -> Any:
     """`arith_encode`, for the checks only: the streams are code.py's and v1's alone."""
-    from verity.core.protocols.certifier import arith_encode as AE
+    from verity.core.protocols.network_certifier import arith_encode as AE
     assert AE.K_MAX == K
     return AE
 
 
 def _wc() -> Any:
-    from verity.core.protocols.certifier import window_charge as WC
+    from verity.core.protocols.network_certifier import window_charge as WC
     return WC
 
 

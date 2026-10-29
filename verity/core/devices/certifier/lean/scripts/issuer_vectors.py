@@ -34,7 +34,7 @@ window past a u64, a link past 65,535 bytes, parameters bytes not 64 long, and l
 certificate's signature (a byte, or its length), link, direction, window or digest, the head's deadline, or the public
 key's identifier or root, or the record's salt, or check the certificate in another session; or they change the certificate's link, direction,
 window or key identifier and sign it again at the same leaf, so that only the checks that it names the head's link-window and the key reject it. The Lean audit runs `CertifierDevice/IssuerDifftestMain.lean` on both files (`runs` in
-`lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
+`lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/network_certifier/tests/
 test_network_certifier_issuer_lean_difftest.py` checks that this script still writes them.
 """
 from __future__ import annotations
@@ -46,11 +46,11 @@ import random
 from fractions import Fraction
 from pathlib import Path
 
-import verity.core.protocols.certifier
-from verity.core.protocols.certifier.certificate import (SALT_BYTES, CertifiedClock, Direction, Issuer, LmsKey,
+import verity.core.protocols.network_certifier
+from verity.core.protocols.network_certifier.certificate import (SALT_BYTES, CertifiedClock, Direction, Issuer, LmsKey,
                                                                  SignerRefused, parameters_digest)
-from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
+from verity.core.protocols.network_certifier.grid import GridParams, Reason, Record, Status
+from verity.core.protocols.network_certifier.schedule import ClockSync, SyncSet
 from verity.ml.crypto import lms
 
 COUNT = 160
@@ -341,13 +341,13 @@ def write(out: Path, count: int = COUNT) -> dict[str, Path]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("verity", type=Path, help="the checkout whose verity.core.protocols.certifier is tested")
+    ap.add_argument("verity", type=Path, help="the checkout whose verity.core.protocols.network_certifier is tested")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--count", type=int, default=COUNT)
     a = ap.parse_args()
-    here = Path(verity.core.protocols.certifier.__file__).resolve()
+    here = Path(verity.core.protocols.network_certifier.__file__).resolve()
     if not here.is_relative_to(a.verity.resolve()):
-        raise SystemExit(f"verity.core.protocols.certifier comes from {here}, not from the checkout {a.verity}")
+        raise SystemExit(f"verity.core.protocols.network_certifier comes from {here}, not from the checkout {a.verity}")
     write(a.out, a.count)
 
 

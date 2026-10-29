@@ -3,7 +3,7 @@
 `compile_steps(registered, advice, ingress)` reads these three and nothing else of the run:
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), the public
   default seed a request without one is sampled under (`engine.served_seed`), and ℓ, the public cap on the advice's length in bits.
-- `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
+- `advice`: I1 v0 (`verity.core.protocols.network_certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
@@ -73,7 +73,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 from verity.ml.circuits.defs import bind
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP

@@ -1,5 +1,5 @@
 """network-e2e's steps after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
-`verity.core.protocols.certifier.advice`), its bits per link-window (v0's `bits_by_window` beside the derived rules'
+`verity.core.protocols.network_certifier.advice`), its bits per link-window (v0's `bits_by_window` beside the derived rules'
 residual, `encodings/derived.py`), the prove path's audit of a committed run's step units compiled from that advice
 (`benchmarks/prove_path`), and the negatives (`benchmarks/network_traces/negatives.py`). Each stage's result says what
 it stood on; `stubs` lists what is still a stand-in.
@@ -66,8 +66,8 @@ sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 import active_replay as ar  # noqa: E402
 import negatives as NG  # noqa: E402
 import window_chain as WC  # noqa: E402
-from verity.core.protocols.certifier import advice as I1  # noqa: E402
-from verity.core.protocols.certifier.active import compact_record_data  # noqa: E402
+from verity.core.protocols.network_certifier import advice as I1  # noqa: E402
+from verity.core.protocols.network_certifier.active import compact_record_data  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402

@@ -1,4 +1,4 @@
-"""`CacheStep_v1` (`verity.core.protocols.certifier.cache_step`) against the derived rules' prefix rules
+"""`CacheStep_v1` (`verity.core.protocols.network_certifier.cache_step`) against the derived rules' prefix rules
 (`derived.Prefixes`) over a trace's rows, and its difftest vectors.
 
 `drive` runs the cache as the replay's composition calls it. It takes the rows in the advice's order, which must be the
@@ -11,7 +11,7 @@ the same rows and holds the two to each other:
 - the lookup and the computed units in one call give the same table as the two calls.
 
     python cache_vectors.py --trace tests/fixtures/corpus-smallkv --trace tests/fixtures/sync-crush.json.gz \\
-        --out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
+        --out ../../../verity/core/protocols/network_certifier/tests/fixtures/cache_step_vectors.json
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Sequence
 
-from verity.core.protocols.certifier import cache_step as CS
+from verity.core.protocols.network_certifier import cache_step as CS
 
 HERE = Path(__file__).parent
 

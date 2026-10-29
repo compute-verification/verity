@@ -13,7 +13,7 @@ from __future__ import annotations
 from test_certifier_serve import cs
 from test_compact_eos_phase12 import _caps, _cells, _cut, _sampled, run  # noqa: F401  (run: the rehearsal fixture)
 from test_compact_phase10 import _as_id_events
-from verity.core.protocols.certifier import active
+from verity.core.protocols.network_certifier import active
 
 
 def _io(run, outs, aborted=(), **plan) -> dict:

@@ -11,7 +11,7 @@ dependencies = ["numpy>=1.26"]
 torch-cpu = ["torch>=2.4"]
 
 [project.scripts]
-network-certifier-calibrate = "verity.core.protocols.certifier.calibration:main"
+network-certifier-calibrate = "verity.core.protocols.network_certifier.calibration:main"
 
 [build-system]
 requires = ["hatchling"]

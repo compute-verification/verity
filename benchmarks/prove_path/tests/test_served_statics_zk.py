@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_statics as SS
+from verity.core.protocols.network_certifier import compile_slice as CS, served_rows as SR, served_statics as SS
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.commitments import advice as ADV
 
@@ -22,7 +22,7 @@ sys.path[:0] = [str(HERE.parent), str(HERE.parents[1] / "one_stage")]
 import a8 as A8  # noqa: E402
 import served_statics_zk as Z  # noqa: E402
 
-FIXTURE = HERE.parents[2] / "verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json"
+FIXTURE = HERE.parents[2] / "verity/core/protocols/network_certifier/tests/fixtures/compile_slice_smallkv.json"
 WINDOW = [((0, 1, 0, 0, 5), (1, 2, 0, 0, 3)), ((0, 1, 1, 5, 1), (1, 2, 1, 3, 1)), ((0, 1, 1, 6, 1), (1, 2, 1, 4, 1))]
 RUN_ROOT = bytes(range(64))
 COUNT, POS = 1 << SS.FLAGS.index("count"), 1 << SS.FLAGS.index("pos")

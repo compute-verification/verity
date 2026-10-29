@@ -31,7 +31,7 @@ from verity_vllm.program.prune import dead_free_versions
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
-from verity.core.protocols.certifier import advice as I1
+from verity.core.protocols.network_certifier import advice as I1
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.partition_object import calls
 

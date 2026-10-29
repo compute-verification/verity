@@ -8,7 +8,7 @@
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
-   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
+   "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/network_certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
    "data": {
     "difftest/instances.jsonl": "4842750ee211fc220e9b96bb8fb664bfdc4edbaa16d55b7da4a9c27d17ab1a34",

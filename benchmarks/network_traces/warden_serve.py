@@ -1,4 +1,4 @@
-"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay that knows bytes
+"""warden-serve: the active warden (`verity.core.protocols.network_certifier.warden`) on one host, a relay that knows bytes
 only, in front of any TCP server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the warden's listener. The warden opens one connection to the server
@@ -126,11 +126,11 @@ import active_replay as ar
 import certifier_serve as cs
 import load_relay as lr
 import stall_probe
-from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, PAD, id_request
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
-from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
+from verity.core.protocols.network_certifier import io_tie as IT, warden_rows as WR
+from verity.core.protocols.network_certifier.active import DATA, PAD, id_request
+from verity.core.protocols.network_certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.core.protocols.network_certifier.grid import GridParams, Record, Status, row_count
+from verity.core.protocols.network_certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
 
 HERE = Path(__file__).resolve().parent
 INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"

@@ -20,7 +20,7 @@ window closes at its deadline.
 **The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
 leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π, every unit's σ and y, and
 the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
-`verity/core/protocols/remote_bandwidth` is the interface). It is regenerated, not tracked: the repository's data
+`verity/core/protocols/poub` is the interface). It is regenerated, not tracked: the repository's data
 budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
 """
 from __future__ import annotations
@@ -43,7 +43,7 @@ else:
 
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import expand_prefix
-from verity.core.protocols.remote_bandwidth import audit, coins, p2, receipts
+from verity.core.protocols.poub import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
 FIXTURE_SHA512 = ("658f6d40a5ecdcb252ca2d4b844f41c6b2af0550f291a4d2e33f975d3158fac2"

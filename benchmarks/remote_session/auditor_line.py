@@ -49,7 +49,7 @@ the auditor's.
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
-  `git rev-parse COMMIT:verity/core/protocols/remote_bandwidth` of the run's recorded commit (`--commit`), so it counts
+  `git rev-parse COMMIT:verity/core/protocols/poub` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
@@ -152,11 +152,11 @@ import challengers as CH  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import verifier as V  # noqa: E402
 import wire  # noqa: E402
-from verity.core.protocols.certifier import audit as caudit  # noqa: E402
-from verity.core.protocols.certifier import certificate as cert  # noqa: E402
-from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.network_certifier import audit as caudit  # noqa: E402
+from verity.core.protocols.network_certifier import certificate as cert  # noqa: E402
+from verity.core.protocols.network_certifier.grid import GridParams, Reason, Status  # noqa: E402
+from verity.core.protocols.poub import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.core.protocols.poub import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
@@ -170,7 +170,7 @@ BURSTS = ("stated", "none")
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
 they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
-VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
+VERIFIER_TREE = "verity/core/protocols/poub"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
 """What a session's credit needs, each reported per session in this order."""

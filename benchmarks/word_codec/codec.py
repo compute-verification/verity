@@ -16,7 +16,7 @@ decode     rounds k − 1 … 0 inverted: x ↦ ρ⁻¹(x) − c_j − t(i); a w
 b is 56 (seven bytes a word, the draft's packing) or 60 (fifteen bytes in two words): a byte stream is the
 little-endian integer S, and word i's payload is bits b·i … b·i + b − 1 of S.
 
-The field, ρ and the rounds are the store codec's (`verity.core.protocols.remote_bandwidth.codec`'s `Field`, `rho` and
+The field, ρ and the rounds are the store codec's (`verity.core.protocols.poub.codec`'s `Field`, `rho` and
 `encode_word` over an unmasked `Sloth`); the keys and the packing are this module's.
 
 The seed is drawn after the weights are registered. Encoding a word costs k roots (59k squarings and a square test
@@ -36,8 +36,8 @@ from __future__ import annotations
 import hashlib
 import struct
 
-from verity.core.protocols.remote_bandwidth import codec as RB
-from verity.core.protocols.remote_bandwidth.codec import Key
+from verity.core.protocols.poub import codec as RB
+from verity.core.protocols.poub.codec import Key
 
 FIELD = RB.Field("m61", 61, 1)
 P = FIELD.p

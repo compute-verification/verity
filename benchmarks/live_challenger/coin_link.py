@@ -1,5 +1,5 @@
 """The network certifier's coin link for one window's session, on the challenger's host
-(`verity.core.protocols.certifier.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
+(`verity.core.protocols.network_certifier.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
 on the link's grids.
 
     python3 -I benchmarks/live_challenger/coin_link.py --out DIR --port PORT [--peer NAME [--peers FILE]] [--minutes M]
@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE))
 
 from serve import peer_ssh  # noqa: E402
-from verity.core.protocols.certifier.coin_link import CoinLink, CoinLinkParams  # noqa: E402
+from verity.core.protocols.network_certifier.coin_link import CoinLink, CoinLinkParams  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import ChallengerRecord, CoinError, LiveCommitment  # noqa: E402
 

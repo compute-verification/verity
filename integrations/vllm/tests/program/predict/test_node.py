@@ -22,7 +22,7 @@ from verity_vllm.program.predict.phi import Phi
 from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 
 _spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
+    "nci_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/inference_only/lean/scripts/nci_reference.py")
 NCI = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(NCI)
 

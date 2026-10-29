@@ -63,7 +63,7 @@ M=benchmarks/network_sim/mockdc.py; python3 -B $M down && python3 -B $M up && py
 
 `run` plays `benchmarks/network_traces/tests/test_active_replay.py`'s synthetic trace, three execution phases of 60
 buckets of 100 ms, on every zone at once. In each zone runs the server (`active_replay.Server`), in its certifier's
-namespace the proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified), and on the outside host the peer,
+namespace the proxy (`verity.core.protocols.network_certifier.active.Proxy`, unmodified), and on the outside host the peer,
 whose connection crosses the fabric. Each zone's server plays one strategy: `honest`; `bits`, whose write times carry a
 random bit per request; `late`, which holds a request in execution phase 0 past every sync; `extra`, which writes one
 event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for execution phase 1
@@ -216,5 +216,5 @@ are read.
 N3, the content check (every frame a certified link carried is a committed crossing), was prototyped here: in the clear
 over the certifiers' records and as Boolean circuits over an execution phase, `N3Window_v3` to `N3Window_v5`, that no Spec
 ran. It is retired, superseded by the network certifier's step-indexed scan
-(`verity/core/protocols/certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
+(`verity/core/protocols/network_certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
 in zero knowledge.

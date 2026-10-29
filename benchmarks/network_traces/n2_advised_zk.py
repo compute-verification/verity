@@ -102,20 +102,20 @@ from pathlib import Path
 from types import SimpleNamespace
 
 HERE = Path(__file__).resolve().parent
-TRAFFIC = HERE.parents[1] / "verity" / "core" / "protocols" / "certifier" / "tests" / "advised_traffic.py"
+TRAFFIC = HERE.parents[1] / "verity" / "core" / "protocols" / "network_certifier" / "tests" / "advised_traffic.py"
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import n2_zk as Z  # noqa: E402
 import window_chain as WC  # noqa: E402
 from n2_zk import ENDS  # noqa: E402
-from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
-from verity.core.protocols.certifier import service as SVC  # noqa: E402
-from verity.core.protocols.certifier.active import id_request_frames  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
-from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
-from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
+from verity.core.protocols.network_certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.network_certifier import service as SVC  # noqa: E402
+from verity.core.protocols.network_certifier.active import id_request_frames  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import Direction, Issuer, parameters_digest  # noqa: E402
+from verity.core.protocols.network_certifier.schedule import ClockSync  # noqa: E402
+from verity.core.protocols.network_certifier.grid import GridParams  # noqa: E402
+from verity.core.protocols.network_certifier.service import LinkWindows  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402

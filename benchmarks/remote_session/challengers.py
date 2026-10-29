@@ -42,7 +42,7 @@ import time
 from pathlib import Path
 from typing import Callable, Sequence
 
-from verity.core.protocols.remote_bandwidth import audit, coins
+from verity.core.protocols.poub import audit, coins
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.ml.crypto import lms

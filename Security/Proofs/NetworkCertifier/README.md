@@ -145,7 +145,7 @@ Accepted.lean   an accepted run of the network certificate check is a run of the
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/verity/lean/check.py .                      # Verity's Lean check
-# the difftest is the certifier program's: see its package, ../../../verity/core/protocols/certifier/lean/
+# the difftest is the certifier program's: see its package, ../../../verity/core/protocols/network_certifier/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Definitions/NetworkCertifier/Assumptions.lean`,
@@ -242,7 +242,7 @@ and an abstract compiler; the
 warden's over the warden's code as `Definitions` states it, which no compiled program implements yet; the sampled charge
 over the sequences the circuit's Program accepts with a possible faulty set, and the period's over both), not over the network check's code, and an
 accepted run reaches the first 25 and advice v1's nine leak bounds through `AcceptedRunsAreProgramRuns`. Four are the
-theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s
+theorems whose bounds the calibration reports (`verity.core.protocols.network_certifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
 
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
@@ -347,7 +347,7 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
-to the certifier program (`verity/core/protocols/certifier/lean/`, Lean core only, `NetworkCertifier`), and
+to the certifier program (`verity/core/protocols/network_certifier/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
@@ -397,7 +397,7 @@ that added them (danielreuter/verity#894), and the review of the content version
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
 their proofs. Their statement review, on danielreuter/verity#949, gave GO with one change: the four counts take
 `n ≤ W·T`. All 38 statements (25 guarantees, 13 lemmas) and 16 witnesses are proved. The reference
-implementation, `verity/core/protocols/certifier` (`verity.core.protocols.certifier`), mirrors 19 of the statements and the three
+implementation, `verity/core/protocols/network_certifier` (`verity.core.protocols.network_certifier`), mirrors 19 of the statements and the three
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks

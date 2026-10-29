@@ -1,5 +1,5 @@
 """Pins and checkpoints for the store binding, whose layout and decision are the remote audit's own
-(`verity/core/protocols/remote_bandwidth/store.py`: the pin's form and checks, the arena, the store, its expected payload
+(`verity/core/protocols/poub/store.py`: the pin's form and checks, the arena, the store, its expected payload
 root and `Binding`): a checkpoint's local pin, a small synthetic BF16 checkpoint for tests, and the plain SHA-256 a GiB
 of an engine's arena holding the checkpoint's weights (`node.py --model-dir`'s check of each engine against the layout).
 
@@ -20,7 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.poub import store as rstore  # noqa: E402
 
 GIB = 1 << 30
 

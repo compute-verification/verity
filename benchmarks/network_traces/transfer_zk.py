@@ -73,8 +73,8 @@ from verity.ml.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.ml.circuits.ops import gemm as GM  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
-from verity.core.protocols.certifier import blocks as BK, transfer_rows as TR, warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, LmsSigner  # noqa: E402
+from verity.core.protocols.network_certifier import blocks as BK, transfer_rows as TR, warden_rows as WR  # noqa: E402
+from verity.core.protocols.network_certifier.certificate import Certificate, Direction, Issuer, LmsSigner  # noqa: E402
 
 UPLINK, WINDOW = "s0/uplink", 1
 #: the deployed scheme (N = 64, W = 1) on a tree of 2^6 leaves

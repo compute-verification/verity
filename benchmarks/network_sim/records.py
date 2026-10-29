@@ -1,6 +1,6 @@
 """The real certifier's published records as the accounting layer's `datacenter.observe.PortRecord`s.
 
-Each certifier record (`verity.core.protocols.certifier.grid.Record`: one link-window's grid and status) becomes a
+Each certifier record (`verity.core.protocols.network_certifier.grid.Record`: one link-window's grid and status) becomes a
 `PortRecord`: the port (the block's certifier, `egress` for what leaves the block and `ingress` for what enters it), the
 window, the real frames in each bucket (the grid's occupancy) and a SHA-512 digest of the status and the real frames in
 order. `published` reads a block's from a lab run's directory. `declared` gives the ones the Program says an honest run
@@ -26,9 +26,9 @@ for _p in (str(HERE), str(HERE.parent / "network_traces")):
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402, F401  (puts `datacenter` on the path)
 from datacenter import Cadence, Datacenter, Interval, Plan, Port, PortRecord  # noqa: E402
-from verity.core.protocols.certifier import active  # noqa: E402
-from verity.core.protocols.certifier import grid as cgrid  # noqa: E402
-from verity.core.protocols.certifier.schedule import ClockSync, run_shaper  # noqa: E402
+from verity.core.protocols.network_certifier import active  # noqa: E402
+from verity.core.protocols.network_certifier import grid as cgrid  # noqa: E402
+from verity.core.protocols.network_certifier.schedule import ClockSync, run_shaper  # noqa: E402
 
 DOMAIN = b"network_sim/certifier-record/v1\0"
 TICK_MS = 1

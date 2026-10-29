@@ -1,6 +1,6 @@
 """The difftest of the inference-only policy's Lean check against its Python reference: the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
+`verity/core/protocols/inference_only/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
 335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed
 neighbours, and two pinned ones (θ with an input bound per run, refused, and θ the registered input, accepted), and
 `scripts/nci_reference.py`'s results on each (per IU its size and novel reads, the verdict and the first failing IU, or
@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 
-LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
+LEAN = Path(__file__).resolve().parents[2] / "inference_only" / "lean"
 
 
 def _load(name: str):

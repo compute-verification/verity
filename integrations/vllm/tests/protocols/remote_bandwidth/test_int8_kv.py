@@ -6,9 +6,9 @@ import pytest
 import torch
 
 from tests.protocols.remote_bandwidth.test_registry import CODEC, RECEIPT
-from verity_vllm.protocols.remote_bandwidth.binder import PagedBacking, storage_bytes
-from verity_vllm.protocols.remote_bandwidth.int8_kv import BLOCK, kv_refusal, layer_keys, store_bases, token_layer_layout
-from verity_vllm.protocols.remote_bandwidth.registry import Store
+from verity_vllm.protocols.poub.binder import PagedBacking, storage_bytes
+from verity_vllm.protocols.poub.int8_kv import BLOCK, kv_refusal, layer_keys, store_bases, token_layer_layout
+from verity_vllm.protocols.poub.registry import Store
 
 PAGES, SLOTS, G, D = 3, 16, 8, 128
 

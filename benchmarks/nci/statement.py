@@ -24,13 +24,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(1, str(HERE.parent / "rho"))
+sys.path.insert(1, str(HERE.parent / "overhead"))
 
 import exposure as X  # noqa: E402
 import fit as F  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
-from rho.theorem import multiple_bound  # noqa: E402
+from overhead.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}

@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import verifier as V
 import wire
 
-from verity.core.protocols.remote_bandwidth import audit
+from verity.core.protocols.poub import audit
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
