@@ -180,7 +180,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 - **Placement is static, B's, and names the layout.** It isn't in the advice: B's plan and store name leaves, and each
   record's placement (units to device leaves, theta to a memory leaf) names the layout's head; a leaf no entry holds yet
   is refused. `Requirement.Placement`'s `ticks` and the onsite `placement-boundary` (the circuit's external I/O on a
-  certified uplink of its unit, `NetTiming.Layout.Fits`) are missing: the certifier's view names its registered link,
+  certified uplink of its unit, `NetTiming.BoundaryGates.Fits`) are missing: the certifier's view names its registered link,
   and nothing maps a unit's I/O gates to one.
 - **Accounting is the layout's projections.** PoUW's compute, PoUS's memory by tier, the bandwidth audit's rates and the
   certifier's boundary are each `Layout.accounting`; the challenger's round reads its link's latency and theta's

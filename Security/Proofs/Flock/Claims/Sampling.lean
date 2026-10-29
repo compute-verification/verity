@@ -41,8 +41,8 @@ KS (`Sampling.Bext`); the waits' truncation and union bound (`Sampling.Wait`); t
 bits from Flock's KS at the checked units' sessions and the deployed sampled verifier's named facts (`Sampling.KS`);
 Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`), and at a raised `N₀` with the weight scaled
 by `k` (`Sampling.Raise`); the deployed draw's miss bound and `DrawLaw` from it (`Sampling.Select`); the universal
-unit's gates computing its netlist (`Sampling.Universal`); the block's claims assembled, with what remains as hypotheses
-(`Sampling.Assembled`, at any Flock record; at SHA-512 at the plain one, `Sampling.AssembledPlain`), and at the
+unit's gates running its private circuit (`Sampling.Universal`); the block's claims assembled, with what remains as
+hypotheses (`Sampling.Assembled`, at any Flock record; at SHA-512 at the plain one, `Sampling.AssembledPlain`), and at the
 deployed record over any Flock record (`Sampling.Deployed`); its zero knowledge by sequential composition of the
 masked sessions' at the masked deployed record, the route of record (`Sampling.Seq`), and, the earlier route,
 from a committed-coin protocol given the leaf layer (`Sampling.ZK`), at the sampled masked protocol with every coin

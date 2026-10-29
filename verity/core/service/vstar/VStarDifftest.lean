@@ -15,6 +15,8 @@ SHA-256, bytes and rows), a unit's lowering text (`rec_open_unit`, `inner_unit`)
 verifier's `rec-residuals/…` nets (`Flock.RecResiduals`) to V*'s units, and `verifier_algebra` the verifier's own algebra
 (`Flock.RecAlgebra`, its parts and their nets, holo shapes included) to `rec_algebra` and `rec_residuals`. `inner_draw`
 holds `rec_live.inner_draw`, the prover's reading of the inner session's draw, to the verifier's (`Flock.RecSetup.innerDrawn`).
+`link_unit` holds V*'s link unit (`VStar.linkUnit`) to `rec_link.lowering`, and `link_tree` the verifier's rows trees
+(`Flock.RecLinkTree`) to `rec_link.Tree`.
 -/
 
 namespace VStar.DT
@@ -317,6 +319,27 @@ def topSizesFn (j : Json) : Except String Json := do
   pure (Json.mkObj [("level0", ((2 ^ (s.levels.getD 0 default).cap : Nat) : Json)),
     ("later", natsJson (Flock.RecVStar.topSizes rs))])
 
+/-- `rec_link.lowering(UB, PB).text`. -/
+def linkLowering (j : Json) : Except String Json := do
+  let o ← input' j ["UB", "PB"]
+  unitJson (← linkUnit (← jNat (o "UB") "UB") (← jNat (o "PB") "PB"))
+
+/-- `rec_link.Tree` at depth `UB + PB` over `rows`, `[unit, row, b ‖ c]` each (`b ‖ c` hex), in increasing order: its root
+and the opening of `pos`, `[unit, row]` (`Flock.RecLinkTree.rowsRoot`, `rowsPath`). -/
+def linkTree (j : Json) : Except String Json := do
+  let o ← input' j ["UB", "PB", "rows", "pos"]
+  let UB ← jNat (o "UB") "UB"
+  let PB ← jNat (o "PB") "PB"
+  let rows ← (← jArr (o "rows") "rows").mapM fun x => do
+    let a ← jArr x "row"
+    unless a.size == 3 do throw "row: [unit, row, bc]"
+    pure ((← jNat a[0]! "unit", ← jNat a[1]! "row"), ← hexB a[2]! "bc")
+  let p ← jArr (o "pos") "pos"
+  unless p.size == 2 do throw "pos: [unit, row]"
+  let root ← Flock.RecLinkTree.rowsRoot UB PB rows.toList
+  let path ← Flock.RecLinkTree.rowsPath UB PB rows.toList (← jNat p[0]! "pos") (← jNat p[1]! "pos")
+  pure (Json.mkObj [("root", (Flock.hexOf root : Json)), ("path", Json.arr (path.toArray.map fun s => (Flock.hexOf s : Json)))])
+
 end VStar.DT
 
 open VStar.DT in
@@ -327,4 +350,4 @@ def main : IO Unit := Difftest.serve (Difftest.table [
   ("verifier_parts", verifierPartsFn false), ("verifier_algebra", verifierAlgebraFn), ("spec_holo", specFn true),
   ("statements_holo", statementsFn true), ("inner_circuit_holo", innerCircuit true),
   ("verifier_parts_holo", verifierPartsFn true), ("inner_draw", innerDraw), ("part_in", partInFn),
-  ("top_sizes", topSizesFn)])
+  ("top_sizes", topSizesFn), ("link_unit", linkLowering), ("link_tree", linkTree)])
