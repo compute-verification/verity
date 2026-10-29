@@ -98,7 +98,7 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
     monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
 
-    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None):
+    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None, live=None):
         got.update(cache=cache, circuit_cache=circuit_cache, packs=packs is not None, reused=reused is not None)
         return True, []
 

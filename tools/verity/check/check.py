@@ -2099,13 +2099,14 @@ def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: l
     what = (f"shard {sharded['k']}/{sharded['n']}" if sharded and "k" in sharded else
             f"deferred {','.join(sharded['deferred'])}" if sharded and sharded.get("deferred") else
             f"parts {','.join(picked)}" if picked else "check")
-    put = None
-    if run_dir is not None and (custody := custody_dir()) is not None:
+    put, custody = None, custody_dir() if run_dir is not None else None
+    if custody is not None:
         try:
             put = LIVE.custody_put(custody)
         except Exception as e:  # noqa: BLE001  (unpublished, the record stays in the run dir)
             print(f"check: live: no publishing ({type(e).__name__}: {e}); {LIVE.LIVE_FILE} stays in the run dir", flush=True)
-    return LIVE.Live(out, put=put, commit=os.environ.get("RESEARCH_SOURCE_SHA") or _rev("HEAD"), what=what)
+    run_id = custody.parent.name if custody is not None else run_dir.name if run_dir is not None else None
+    return LIVE.Live(out, run_id=run_id, put=put, commit=_rev("HEAD"), what=what)
 
 
 def main(argv: list[str]) -> int:

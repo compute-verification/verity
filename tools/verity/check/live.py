@@ -67,10 +67,7 @@ def utc(t: float) -> str:
 
 
 def parse_utc(s: str | None) -> float | None:
-    try:
-        return float(calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ")))
-    except (TypeError, ValueError):
-        return None
+    return float(calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ"))) if s else None
 
 
 #: a line `suites.py` prints as a suite ends (or is reused): its status, padded, then its name
@@ -79,12 +76,10 @@ SUITE_LINE = re.compile(r"^(passed|failed|cached|skipped)\s+(\S+)")
 
 def suites_progress(out: Path, step: str) -> dict | None:
     """Suites passed, failed and reused so far, by the step's log, and the failed suites' names."""
-    try:
-        text = (out / f"{step}.log").read_text(errors="replace")
-    except OSError:
+    if not (log := out / f"{step}.log").is_file():
         return None
     got: dict[str, list[str]] = {}
-    for line in text.splitlines():
+    for line in log.read_text(errors="replace").splitlines():
         if m := SUITE_LINE.match(line):
             got.setdefault(m[1], []).append(m[2])
     return {"suites_passed": len(got.get("passed", [])), "suites_failed": len(got.get("failed", [])),
@@ -93,16 +88,11 @@ def suites_progress(out: Path, step: str) -> dict | None:
 
 def circuit_progress(out: Path, step: str) -> dict | None:
     """Targets checked so far and how many failed, by circuit-check's progress lines, and the first failed targets' names."""
-    try:
-        lines = (out / "circuit-check.json.progress.jsonl").read_text(errors="replace").splitlines()
-    except OSError:
+    if not (log := out / "circuit-check.json.progress.jsonl").is_file():
         return None
     done, failed = 0, []
-    for line in lines:
-        try:
-            r = json.loads(line)
-        except ValueError:
-            continue
+    for line in log.read_text(errors="replace").split("\n")[:-1]:       # the last is the line being written, or empty
+        r = json.loads(line)
         done += 1
         if r.get("failures") or r.get("killed"):
             failed.append(str(r.get("target")))
@@ -111,6 +101,17 @@ def circuit_progress(out: Path, step: str) -> dict | None:
 
 PROGRESS: dict[str, Callable[[Path, str], dict | None]] = {
     "pytest": suites_progress, "lean-suites": suites_progress, "circuit-check": circuit_progress}
+
+
+def progress(out: Path, step: str) -> dict | None:
+    """``step``'s progress (`PROGRESS`), or what reading it raised, which the record carries instead: a step's progress never
+    stops the check."""
+    if step not in PROGRESS:
+        return None
+    try:
+        return PROGRESS[step](out, step)
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"[:200]}
 
 
 def custody_put(custody: Path, timeout: float = 30.0) -> Callable[[str, bytes], None]:
@@ -148,7 +149,7 @@ class Live:
     def __init__(self, out: Path, run_id: str | None = None, put: Callable[[str, bytes], None] | None = None,
                  commit: str | None = None, what: str | None = None, machine: str | None = None):
         self.out, self.put = out, put
-        self.run_id = run_id or os.environ.get("RESEARCH_RUN_ID") or "local"
+        self.run_id = run_id or "local"
         self.head = {"commit": commit, "what": what or "check", "machine": machine or machine_of(out)}
         self.t0 = CLOCK()
         self.steps: dict[str, dict] = {}
@@ -183,7 +184,7 @@ class Live:
             if t is not None:
                 s["started_utc"] = utc(t)
             s |= {k: rec[k] for k in ("cache", "detail") if rec.get(k)}
-            if name in PROGRESS and (p := PROGRESS[name](self.out, name)) is not None:
+            if (p := progress(self.out, name)) is not None:
                 s["progress"] = p
             self.steps[name] = s
         self.request()
@@ -196,15 +197,13 @@ class Live:
             s = dict(s)
             if s["state"] == "running":
                 s["seconds"] = round(now - self.began[name], 1)
-                if name in PROGRESS and (p := PROGRESS[name](self.out, name)) is not None:
+                if (p := progress(self.out, name)) is not None:
                     s["progress"] = p
             steps.append(s)
         slot = {}
-        try:
-            got = json.loads((self.out / "slot.json").read_text())
+        if (f := self.out / "slot.json").is_file():                     # slot.py replaces it whole
+            got = json.loads(f.read_text())
             slot = {k: got[k] for k in ("slot", "since", "took") if got.get(k)}
-        except (OSError, ValueError, AttributeError):
-            pass
         return {"schema": SCHEMA, "run_id": self.run_id, **self.head, **({"slot": slot} if slot else {}), "state": self.state,
                 "started_utc": utc(self.t0), "at_utc": utc(now), "seconds": round(now - self.t0, 1), "seq": self.seq, "steps": steps}
 
@@ -268,13 +267,11 @@ def newest_keys(keys: list[str]) -> dict[str, str]:
     return out
 
 
-def read_json(remote, key: str) -> dict | None:
+def read_json(remote, key: str) -> dict:
+    """A record a listing named: objects under `PREFIX` are written whole, once, and never deleted."""
     with tempfile.TemporaryDirectory(prefix="ci-live-") as d:
-        try:
-            remote.get(key, Path(d) / "doc.json")
-            return json.loads((Path(d) / "doc.json").read_text())
-        except (KeyError, OSError, ValueError):
-            return None
+        remote.get(key, Path(d) / "doc.json")
+        return json.loads((Path(d) / "doc.json").read_text())
 
 
 def live_docs(remote, since: str) -> dict[str, dict]:
@@ -302,11 +299,8 @@ def store_checks(store, since: str, limit: int = 200) -> list[dict]:
                            "AND id > ? ORDER BY id DESC LIMIT ?", (since, limit))
     out = []
     for rid, state, commit, host, start, wall, mj in rows:
-        try:
-            doc = json.loads(mj)
-            result, host = (doc.get("outputs") or {}).get("result"), (doc.get("execution") or {}).get("machine") or host
-        except (TypeError, ValueError, AttributeError):
-            result = None
+        doc = json.loads(mj) if mj else {}
+        result, host = (doc.get("outputs") or {}).get("result"), (doc.get("execution") or {}).get("machine") or host
         out.append({"run_id": rid, "state": state, "commit": commit, "machine": host, "started_utc": start, "seconds": wall,
                     "result": result})
     return out
@@ -314,10 +308,7 @@ def store_checks(store, since: str, limit: int = 200) -> list[dict]:
 
 def store_steps(store, art: str) -> list[dict] | None:
     """A check's step records, from its result manifest's meta, or None when the manifest isn't a check's."""
-    try:
-        m = store.get_manifest(art)
-    except Exception:  # noqa: BLE001  (unreadable: not in the basis)
-        return None
+    m = store.get_manifest(art)
     steps = (m.meta or {}).get("steps") if m.kind in CHECK_KINDS else None
     return steps if isinstance(steps, list) else None
 
@@ -359,6 +350,8 @@ def eta(step: dict, elapsed: float | None, seconds: dict[str, list[float]]) -> s
 def progress_text(p: dict | None) -> str:
     if not p:
         return ""
+    if "error" in p:
+        return f"unknown (reading it raised {p['error']})"
     if "targets_done" in p:
         return f"targets {p['targets_done']} done, {p['targets_failed']} failed"
     return f"suites {p['suites_passed']} passed, {p['suites_failed']} failed, {p['suites_cached']} reused"
@@ -466,10 +459,7 @@ def _store(refresh_since: str | None):
 
 
 def _attempt_state(store, rid: str) -> str | None:
-    try:
-        a = store.get_attempt(rid) or {}
-    except Exception:  # noqa: BLE001
-        return None
+    a = store.get_attempt(rid) or {}
     st = a.get("state") or (a.get("status") or {}).get("state")
     return {"done": "passed"}.get(st, st) if st in ("done", "failed", "cancelled") else None
 
@@ -501,15 +491,23 @@ def main(argv: list[str]) -> int:
     ended = _attempt_state(store, a.run) if doc is None or judged(doc, now) != doc.get("state") else None
     runs = {r: d["steps"] for r, d in live_docs(remote, since).items() if r != a.run and d.get("state") in ENDED and d.get("steps")}
     prior = [c for c in store_checks(store, since, 2000) if c["result"] and c["run_id"] not in runs and c["run_id"] != a.run]
+    unread = []
     for c in prior[:3 * a.basis]:
-        if (steps := store_steps(store, c["result"])) is not None:
+        try:
+            steps = store_steps(store, c["result"])
+        except Exception as e:  # noqa: BLE001  (an unreadable result leaves the basis, and the output says so)
+            unread.append(f"{c['run_id']} ({type(e).__name__})")
+            continue
+        if steps is not None:
             runs[c["run_id"]] = steps
     seconds = basis([runs[r] for r in sorted(runs, reverse=True)], a.basis)
     if a.json:
         print(json.dumps({"run_id": a.run, "state": judged(doc, now, ended) if doc else "unknown", "live": doc,
-                          "basis": seconds, "reds": reds(doc) if doc else []}, indent=1))
+                          "basis": seconds, "basis_unread": unread, "reds": reds(doc) if doc else []}, indent=1))
     else:
         print(render_inspect(a.run, doc, seconds, now, ended))
+        if unread:
+            print(f"the ETA basis leaves out {len(unread)} check(s) whose result it couldn't read: {', '.join(unread[:5])}")
     return 0
 
 

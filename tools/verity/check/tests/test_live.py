@@ -51,7 +51,7 @@ def test_the_record_follows_each_step_and_each_write_is_a_new_key(tmp_path, cloc
     (tmp_path / "pytest.log").write_text("cached  verity                       passed at abc\npassed  research                     3 passed in 9 s\n"
                                          "failed  verity-check                 1 passed, 1 failed in 4 s\nsome other line\n")
     (tmp_path / "circuit-check.json.progress.jsonl").write_text(
-        json.dumps({"target": "a", "failures": 0}) + "\n" + json.dumps({"target": "b", "failures": 2}) + "\n")
+        json.dumps({"target": "a", "failures": 0}) + "\n" + json.dumps({"target": "b", "failures": 2}) + "\n" + '{"target": "c", "fa')
     clock.t += 125
     first = live.write()
     assert first["state"] == "running" and first["seconds"] == 125 and first["at_utc"] == "2026-10-26T07:35:25Z"
@@ -90,6 +90,16 @@ def test_a_publish_that_fails_leaves_the_run_dir_record_and_says_so_once(tmp_pat
     live.write()
     assert json.loads((tmp_path / LIVE.LIVE_FILE).read_text())["seq"] == 1 and live.failures == 2
     assert capsys.readouterr().out.count("publishing check-live.json failed (OSError: denied)") == 1
+
+
+def test_progress_that_cannot_be_read_is_recorded_as_such_and_never_stops_the_check(tmp_path, clock):
+    live = LIVE.Live(tmp_path, run_id="r1")
+    live.started("circuit-check")
+    (tmp_path / "circuit-check.json.progress.jsonl").write_text("not json\n")
+    live.ended({"step": "circuit-check", "status": "passed", "seconds": 3.0})
+    p = live.write()["steps"][0]["progress"]
+    assert p["error"].startswith("JSONDecodeError: ")
+    assert LIVE.progress_text(p).startswith("unknown (reading it raised JSONDecodeError: ")
 
 
 def test_steps_report_their_starts_and_ends_to_the_live_record(tmp_path, monkeypatch):
