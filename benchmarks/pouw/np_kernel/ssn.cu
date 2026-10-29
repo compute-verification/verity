@@ -1,0 +1,622 @@
+// ssn_1l on one H200 (sm_90a): the served sparse-noise GEMM with every k32 accumulator word exported and hm96-hashed.
+//
+// Layout (K data entries, S = 1 + ceil((K - 28) / 31) k32 steps; lanes are a step's 32 K bytes):
+//   A'  step 1: lanes 0-27 A[i, 0..27], lanes 28-31 a1[i, 0..3] in {0,1}; step t >= 2: lanes 0-30 the next 31 entries of A,
+//       lane 31 a_t[i] in {0,1}; data lanes past K are 0. The data lanes are written by A's producer with the noise lanes 0;
+//       the forming pass (form_k) ORs the noise bits into the noise registers (one 32-bit register a row a step).
+//   B'  step 1: lanes 0-27 B[0..27, j], lanes 28-31 the public code C[0..3, j] (base-13 digits of c_j minus 6, c_j = j + 1
+//       below 14,280 and j + 2 from there); step t >= 2: lanes 0-30 the next 31 rows of B, lane 31 = 1. Formed once at load.
+//   The accumulator starts at -beta_j, beta_j = rint((sum_e C[e, j] + S - 1) / 2) (half to even), so word (i, j, t) is
+//   D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i], and the last is ssn-1l-b1-v1's P'.
+// Coins: a row's S + 3 bits are bits 0..S+2 of its H = ceil((S + 3) / 32) coin words (a1[i, e] bit e, a_t[i] bit t + 2);
+// row i's words are coin words i H .. i H + H - 1 of the call's stream, whose 16-word block c is SHA-512(seed || be64 c),
+// seed = SHA-512 of the call's 256-byte seed message (tag, salt, forward, position, root(A_j), root(B_j)).
+// Operands are tiled: A' tile (64-row block, step) and B' tile (BN-column block, step) are contiguous, in dc.cuh's K-major
+// layout, so a step's tiles are one linear copy. Exported words: a block (row tile, column tile, step) of 64 x BN s32 in
+// wgmma's fragment order (uint4 j * 128 + thread holds the thread's d[4 j .. 4 j + 3]); the hash pass hashes each block as
+// one hm96 row (served_zk's sz_segments over 1 KiB segments, then each row's segment digests).
+//
+//   ssn check                 every exported word, the final outputs and the formed registers against the host reference
+//                             on small shapes (random, extreme and zero data; columns past the code's skip; S = 1 and a
+//                             partial last step)
+//   ssn time REPS M [BUDGET_GB]  Llama-3.2-1B's fused linears at M rows: one JSON line a timing (see time_all)
+// Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a ssn.cu -o ssn
+#include <cuda_runtime.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "../dc/dc.cuh"
+#include "../dc/wgmma.cuh"
+#include "../served_zk/hm96_rows.cu"
+
+#define CK(x)                                                                                \
+  do {                                                                                       \
+    cudaError_t e_ = (x);                                                                    \
+    if (e_ != cudaSuccess) {                                                                 \
+      fprintf(stderr, "ERR %s:%d %s: %s\n", __FILE__, __LINE__, #x, cudaGetErrorString(e_)); \
+      exit(2);                                                                               \
+    }                                                                                        \
+  } while (0)
+
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+constexpr int KB = 32, TA = 64 * KB, STAGES = 4;
+
+__host__ __device__ inline int steps_of(int k) { return k <= 28 ? 1 : 1 + (k - 28 + 30) / 31; }
+__host__ __device__ inline int coin_words(int s) { return (s + 3 + 31) / 32; }
+
+struct Clk {
+  long long c0, c1;
+  u64 t0, t1;
+};
+__device__ __forceinline__ u64 gtime() {
+  u64 t;
+  asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t));
+  return t;
+}
+__device__ __forceinline__ void cp16(void* s, const void* g) {
+  asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(smem_u32(s)), "l"(g) : "memory");
+}
+__device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
+template <int N> __device__ __forceinline__ void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
+
+template <int BN> __device__ __forceinline__ void mma(int (&d)[BN / 2], u64 da, u64 db);
+template <> __device__ __forceinline__ void mma<256>(int (&d)[128], u64 da, u64 db) { wgmma_s8_n256(d, da, db, 1); }
+template <> __device__ __forceinline__ void mma<128>(int (&d)[64], u64 da, u64 db) { wgmma_s8_n128(d, da, db, 1); }
+
+// One CTA (a warpgroup) a 64 x BN output tile over S steps, STAGES-deep cp.async ring. EXPORT: wait for each step's wgmma
+// and store its 64 x BN words (block (rt, ct, t) of W); otherwise one wgmma group stays in flight (the plain GEMM).
+template <int BN, bool EXPORT>
+__global__ void __launch_bounds__(128) ssn_k(const uint8_t* __restrict__ A, const uint8_t* __restrict__ B,
+                                             const int* __restrict__ beta, int S, int n, uint4* __restrict__ W,
+                                             int* __restrict__ out, Clk* clk) {
+#if defined(__CUDA_ARCH_FEAT_SM90_ALL)
+  constexpr int TB = BN * KB, ST = TA + TB;
+  extern __shared__ __align__(1024) unsigned char sm[];
+  const int tid = threadIdx.x, ct = blockIdx.x, rt = blockIdx.y, nct = gridDim.x;
+  const uint8_t* a0 = A + (size_t)rt * S * TA;
+  const uint8_t* b0 = B + (size_t)ct * S * TB;
+  auto load = [&](int t) {
+    if (t < S) {
+      unsigned char* st = sm + (t % STAGES) * ST;
+      cp16(st + 16 * tid, a0 + (size_t)t * TA + 16 * tid);
+#pragma unroll
+      for (int j = 0; j < TB / 16 / 128; j++) cp16(st + TA + 16 * (tid + 128 * j), b0 + (size_t)t * TB + 16 * (tid + 128 * j));
+    }
+    cp_commit();
+  };
+#pragma unroll
+  for (int t = 0; t < STAGES - 1; t++) load(t);
+  const int w = tid >> 5, lane = tid & 31, g = lane >> 2, q = lane & 3;
+  int d[BN / 2];
+#pragma unroll
+  for (int ni = 0; ni < BN / 8; ni++)
+#pragma unroll
+    for (int e = 0; e < 4; e++) d[4 * ni + e] = beta ? -beta[ct * BN + 8 * ni + 2 * q + (e & 1)] : 0;
+  wgmma_hold(d);
+  const long long c0 = clock64();
+  const u64 t0 = gtime();
+  uint4* wb = W + (size_t)(rt * nct + ct) * S * (BN * 16);
+#pragma unroll 1
+  for (int t = 0; t < S; t++) {
+    cp_wait<STAGES - 2>();
+    fence_async_smem();
+    __syncthreads();
+    unsigned char* st = sm + (t % STAGES) * ST;
+    const u64 da = wgmma_desc(smem_u32(st), kmaj_lbo(), kmaj_sbo(KB));
+    const u64 db = wgmma_desc(smem_u32(st + TA), kmaj_lbo(), kmaj_sbo(KB));
+    wgmma_fence();
+    mma<BN>(d, da, db);
+    wgmma_commit();
+    if constexpr (EXPORT) {
+      wgmma_wait<0>();
+      wgmma_hold(d);
+      uint4* r = wb + (size_t)t * (BN * 16);
+#pragma unroll
+      for (int j = 0; j < BN / 8; j++) r[j * 128 + tid] = make_uint4(d[4 * j], d[4 * j + 1], d[4 * j + 2], d[4 * j + 3]);
+    } else {
+      wgmma_wait<1>();
+    }
+    load(t + STAGES - 1);
+  }
+  wgmma_wait<0>();
+  wgmma_hold(d);
+  if (clk && rt == 0 && ct == 0 && tid == 0) *clk = Clk{c0, clock64(), t0, gtime()};
+  if (out)
+#pragma unroll
+    for (int ni = 0; ni < BN / 8; ni++)
+#pragma unroll
+      for (int e = 0; e < 4; e++)
+        out[(size_t)(64 * rt + 16 * w + g + 8 * (e >> 1)) * n + ct * BN + 8 * ni + 2 * q + (e & 1)] = d[4 * ni + e];
+#endif
+}
+
+// The call's coin stream: thread b derives the seed from the 256-byte seed message (two blocks; the second carries the
+// padding) and writes block b = SHA-512(seed || be64 b), 16 coin words (word 2 j the high half of state word j).
+__global__ void coins_k(const u64* __restrict__ msg, u32* __restrict__ coins, long long blocks) {
+  const long long b = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  if (b >= blocks) return;
+  u64 st[8], w[16];
+  s512_iv(st);
+  for (int j = 0; j < 16; j++) w[j] = msg[j];
+  s512_compress(st, w);
+  for (int j = 0; j < 16; j++) w[j] = msg[16 + j];
+  s512_compress(st, w);
+  u64 seed[8];
+  for (int j = 0; j < 8; j++) seed[j] = st[j];
+  s512_iv(st);
+  for (int j = 0; j < 8; j++) w[j] = seed[j];
+  w[8] = (u64)b;
+  w[9] = 0x8000000000000000ull;
+  for (int j = 10; j < 15; j++) w[j] = 0;
+  w[15] = 72 * 8;
+  s512_compress(st, w);
+  uint4* o = reinterpret_cast<uint4*>(coins + 16 * b);
+  for (int j = 0; j < 4; j++)
+    o[j] = make_uint4((u32)(st[2 * j] >> 32), (u32)st[2 * j], (u32)(st[2 * j + 1] >> 32), (u32)st[2 * j + 1]);
+}
+
+// The forming pass: one thread a noise register (row i, step t), rows fastest. Step 1's register is a1 spread over its four
+// bytes (one IMAD and one LOP3); step t's ORs bit t + 2 of the row's stream into byte 3 (a funnel shift and one LOP3).
+__global__ void form_k(uint8_t* __restrict__ A, const u32* __restrict__ coins, int m, int S) {
+  const long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+  if (x >= (long long)m * S) return;
+  const int i = (int)(x % m), t = (int)(x / m), H = coin_words(S);
+  u32* reg = reinterpret_cast<u32*>(A + ((size_t)(i >> 6) * S + t) * TA + kmaj_off(i & 63, 28, KB));
+  const u32* h = coins + (size_t)i * H;
+  if (t == 0) {
+    *reg = ((h[0] & 0xFu) * 0x00204081u) & 0x01010101u;
+  } else {
+    const int p = t + 3;
+    *reg |= __funnelshift_r(h[p >> 5], h[p >> 5], (p + 8) & 31) & 0x01000000u;
+  }
+}
+
+__global__ void clock_k(Clk* clk, long long cycles) {
+  const long long c0 = clock64();
+  const u64 t0 = gtime();
+  while (clock64() - c0 < cycles) {
+  }
+  *clk = Clk{c0, clock64(), t0, gtime()};
+}
+
+// ---- host ------------------------------------------------------------------------------------------------------------------
+static u64 mix64(u64 x) {
+  x += 0x9E3779B97F4A7C15ull;
+  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+  return x ^ (x >> 31);
+}
+static int code_of(int j, int e) {
+  long long c = j + 1 < 14280 ? j + 1 : j + 2;
+  for (int r = 0; r < e; r++) c /= 13;
+  return (int)(c % 13) - 6;
+}
+static int beta_of(int j, int S) {
+  int s = S - 1;
+  for (int e = 0; e < 4; e++) s += code_of(j, e);
+  return (int)std::nearbyint(s / 2.0);
+}
+// data entry of step t (0-based), lane l: its K index, or -1 for a noise or padding lane
+static int kidx(int t, int l, int K) {
+  const int k = t == 0 ? (l < 28 ? l : -1) : (l < 31 ? 28 + 31 * (t - 1) + l : -1);
+  return k >= 0 && k < K ? k : -1;
+}
+
+struct Lin {
+  int m, n, K, S, BN;
+  std::vector<int8_t> A, B;  // A[i * K + k], B[j * K + k] (B transposed: a column's K entries contiguous)
+};
+static void fill(Lin& L, int kind, u64 seed) {
+  L.A.resize((size_t)L.m * L.K);
+  L.B.resize((size_t)L.n * L.K);
+  auto v = [&](u64 x) -> int8_t {
+    if (kind == 1) return 127;
+    if (kind == 2) return -127;
+    if (kind == 3) return 0;
+    return (int8_t)((int)(mix64(x) % 255) - 127);
+  };
+  for (size_t i = 0; i < L.A.size(); i++) L.A[i] = kind == 2 ? (int8_t)-127 : v(seed * 1000003 + i);
+  for (size_t i = 0; i < L.B.size(); i++) L.B[i] = kind == 2 ? (int8_t)127 : v(~seed * 7919 + i);
+}
+// A' (data lanes, noise lanes 0) and B' in the tiled layout
+static std::vector<uint8_t> tile_a(const Lin& L) {
+  std::vector<uint8_t> o((size_t)L.m * L.S * KB, 0);
+  for (int i = 0; i < L.m; i++)
+    for (int t = 0; t < L.S; t++)
+      for (int l = 0; l < KB; l++) {
+        const int k = kidx(t, l, L.K);
+        if (k >= 0) o[((size_t)(i >> 6) * L.S + t) * TA + kmaj_off(i & 63, l, KB)] = (uint8_t)L.A[(size_t)i * L.K + k];
+      }
+  return o;
+}
+static std::vector<uint8_t> tile_b(const Lin& L) {
+  std::vector<uint8_t> o((size_t)L.n * L.S * KB, 0);
+  const size_t TB = (size_t)L.BN * KB;
+  for (int j = 0; j < L.n; j++)
+    for (int t = 0; t < L.S; t++)
+      for (int l = 0; l < KB; l++) {
+        const int k = kidx(t, l, L.K);
+        int v = k >= 0 ? L.B[(size_t)j * L.K + k] : 0;
+        if (t == 0 && l >= 28) v = code_of(j, l - 28);
+        if (t > 0 && l == 31) v = 1;
+        o[((size_t)(j / L.BN) * L.S + t) * TB + kmaj_off(j % L.BN, l, KB)] = (uint8_t)(int8_t)v;
+      }
+  return o;
+}
+// the stock-shaped operands: 32 data lanes a step, no noise (the plain GEMM at the linear's own K)
+static std::vector<uint8_t> tile_plain(const std::vector<int8_t>& X, int rows, int K, int R) {
+  const int S0 = K / KB;
+  std::vector<uint8_t> o((size_t)rows * K, 0);
+  for (int i = 0; i < rows; i++)
+    for (int t = 0; t < S0; t++)
+      for (int l = 0; l < KB; l++)
+        o[((size_t)(i / R) * S0 + t) * R * KB + kmaj_off(i % R, l, KB)] = (uint8_t)X[(size_t)i * K + KB * t + l];
+  return o;
+}
+template <class T>
+static T* up(const std::vector<T>& v) {
+  T* p;
+  CK(cudaMalloc(&p, v.size() * sizeof(T)));
+  CK(cudaMemcpy(p, v.data(), v.size() * sizeof(T), cudaMemcpyHostToDevice));
+  return p;
+}
+static std::vector<u64> seed_msg(u64 call) {
+  std::vector<u64> m(32, 0);
+  for (int j = 0; j < 28; j++) m[j] = mix64(call * 64 + j);  // tag, salt, forward, position, root(A_j), root(B_j): 224 bytes
+  m[28] = 0x8000000000000000ull;
+  m[31] = 224 * 8;
+  return m;
+}
+static long long coin_blocks(int m, int S) { return ((long long)m * coin_words(S) + 15) / 16; }
+
+template <int BN, bool EXPORT>
+static void gemm_bn(const uint8_t* A, const uint8_t* B, const int* beta, int m, int n, int S, uint4* W, int* out, Clk* clk,
+                    cudaStream_t st) {
+  constexpr int smem = STAGES * (TA + BN * KB);
+  static bool init = false;
+  if (!init) {
+    CK(cudaFuncSetAttribute(ssn_k<BN, EXPORT>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
+    init = true;
+  }
+  ssn_k<BN, EXPORT><<<dim3(n / BN, m / 64), 128, smem, st>>>(A, B, beta, S, n, W, out, clk);
+  CK(cudaGetLastError());
+}
+static void gemm(int BN, bool ex, const uint8_t* A, const uint8_t* B, const int* beta, int m, int n, int S, uint4* W, int* out,
+                 Clk* clk, cudaStream_t st) {
+  if (BN == 256 && ex) gemm_bn<256, true>(A, B, beta, m, n, S, W, out, clk, st);
+  else if (BN == 256) gemm_bn<256, false>(A, B, beta, m, n, S, W, out, clk, st);
+  else if (ex) gemm_bn<128, true>(A, B, beta, m, n, S, W, out, clk, st);
+  else gemm_bn<128, false>(A, B, beta, m, n, S, W, out, clk, st);
+}
+static void coins_form(const u64* msg, u32* coins, uint8_t* A, int m, int S, cudaStream_t st, bool coins_on = true,
+                       bool form_on = true) {
+  const long long nb = coin_blocks(m, S);
+  if (coins_on) coins_k<<<(unsigned)((nb + 127) / 128), 128, 0, st>>>(msg, coins, nb);
+  const long long r = (long long)m * S;
+  if (form_on) form_k<<<(unsigned)((r + 255) / 256), 256, 0, st>>>(A, coins, m, S);
+  CK(cudaGetLastError());
+}
+
+// the hash pass over a run of exported blocks: each block's 1 KiB segments, then each block's segment digests
+struct Hasher {
+  u64* mids = nullptr;
+  uint8_t *dig = nullptr, *dig2 = nullptr;
+  size_t cap = 0;
+  void init(size_t max_blocks, int seg_per_block) {
+    std::vector<uint32_t> pre(64 * 32);
+    for (size_t i = 0; i < pre.size(); i++) pre[i] = (u32)mix64(i + 77);
+    uint32_t* dpre = up(pre);
+    CK(cudaMalloc(&mids, 64 * 8 * sizeof(u64)));
+    Args a{};
+    a.p[0] = (unsigned long long)dpre;
+    a.p[1] = (unsigned long long)mids;
+    a.i[0] = 64;
+    sz_mid<<<1, 64>>>(a);
+    CK(cudaGetLastError());
+    cap = max_blocks;
+    CK(cudaMalloc(&dig, max_blocks * seg_per_block * 64));
+    CK(cudaMalloc(&dig2, max_blocks * 64 * 4));
+    CK(cudaFuncSetAttribute(sz_segments, cudaFuncAttributeMaxDynamicSharedMemorySize, 8 * 32 * 33 * 4));
+  }
+  void seg(const void* data, long long rows, int stride, int s, uint8_t* o, cudaStream_t st) {
+    Args a{};
+    a.p[0] = (unsigned long long)data;
+    a.p[1] = (unsigned long long)mids;
+    a.p[2] = (unsigned long long)o;
+    a.i[0] = (int)rows;
+    a.i[1] = stride;
+    a.i[2] = s;
+    a.i[3] = 1024;
+    const long long total = rows * s;
+    sz_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
+    CK(cudaGetLastError());
+  }
+  void run(const uint4* W, long long blocks, int block_bytes, cudaStream_t st) {
+    const int s = block_bytes / 1024;
+    seg(W, blocks, block_bytes, s, dig, st);
+    seg(dig, blocks, s * 64, s * 64 / 1024, dig2, st);
+  }
+};
+
+// word (i, j, t) of an exported run: block (i / 64, j / BN, t), thread 32 w + 4 g + q, register 4 ni + e
+static size_t word_at(int i, int j, int t, int S, int n, int BN) {
+  const int r = i & 63, c = j % BN, w = r >> 4, g = r & 7, eh = (r >> 3) & 1, ni = c >> 3, q = (c & 7) >> 1, el = c & 1;
+  const size_t blk = ((size_t)(i >> 6) * (n / BN) + j / BN) * S + t;
+  return blk * (64 * (size_t)BN) + ((size_t)ni * 128 + 32 * w + 4 * g + q) * 4 + 2 * eh + el;
+}
+
+static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
+  Lin L{m, n, K, steps_of(K), BN, {}, {}};
+  fill(L, kind, seed);
+  const int S = L.S, H = coin_words(S);
+  std::vector<int> beta(n);
+  for (int j = 0; j < n; j++) beta[j] = beta_of(j, S);
+  const auto ta = tile_a(L);
+  uint8_t* dA = up(ta);
+  uint8_t* dB = up(tile_b(L));
+  int* dbeta = up(beta);
+  u64* dmsg = up(seed_msg(seed));
+  u32* dcoins;
+  const long long nb = coin_blocks(m, S);
+  CK(cudaMalloc(&dcoins, nb * 64));
+  const size_t words = (size_t)m * n * S;
+  uint4* dW;
+  int* dout;
+  CK(cudaMalloc(&dW, words * 4));
+  CK(cudaMalloc(&dout, (size_t)m * n * 4));
+  CK(cudaMemset(dW, 0xA5, words * 4));
+  CK(cudaMemset(dout, 0xA5, (size_t)m * n * 4));
+  coins_form(dmsg, dcoins, dA, m, S, 0);
+  gemm(BN, true, dA, dB, dbeta, m, n, S, dW, dout, nullptr, 0);
+  CK(cudaDeviceSynchronize());
+  std::vector<u32> coins(nb * 16);
+  std::vector<int> W(words), out((size_t)m * n);
+  std::vector<uint8_t> fa(ta.size());
+  CK(cudaMemcpy(coins.data(), dcoins, nb * 64, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(W.data(), dW, words * 4, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(out.data(), dout, (size_t)m * n * 4, cudaMemcpyDeviceToHost));
+  CK(cudaMemcpy(fa.data(), dA, ta.size(), cudaMemcpyDeviceToHost));
+  auto bit = [&](int i, int p) { return (int)((coins[(size_t)i * H + (p >> 5)] >> (p & 31)) & 1u); };
+  // the formed A' against the spec: data lanes unchanged, noise lanes the row's bits
+  size_t bad_form = 0;
+  for (int i = 0; i < m; i++)
+    for (int t = 0; t < S; t++)
+      for (int l = 0; l < KB; l++) {
+        const int k = kidx(t, l, K);
+        int v = k >= 0 ? L.A[(size_t)i * K + k] : 0;
+        if (t == 0 && l >= 28) v = bit(i, l - 28);
+        if (t > 0 && l == 31) v = bit(i, t + 3);
+        bad_form += (int8_t)fa[((size_t)(i >> 6) * S + t) * TA + kmaj_off(i & 63, l, KB)] != v;
+      }
+  // every word against word (i, j, t) = D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i]
+  size_t bad_w = 0, bad_o = 0, ones = 0;
+  long long maxabs = 0;
+  std::vector<int> code(4 * (size_t)n);
+  for (int j = 0; j < n; j++)
+    for (int e = 0; e < 4; e++) code[4 * j + e] = code_of(j, e);
+  for (int i = 0; i < m; i++) {
+    const int8_t* a = &L.A[(size_t)i * K];
+    for (int j = 0; j < n; j++) {
+      const int8_t* b = &L.B[(size_t)j * K];
+      long long acc = -beta[j];
+      for (int e = 0; e < 4; e++) acc += bit(i, e) * code[4 * j + e];
+      for (int t = 0; t < S; t++) {
+        const int lo = t == 0 ? 0 : 28 + 31 * (t - 1), hi = std::min(K, t == 0 ? 28 : lo + 31);
+        for (int k = lo; k < hi; k++) acc += (int)a[k] * (int)b[k];
+        if (t > 0) acc += bit(i, t + 3);
+        maxabs = std::max(maxabs, acc < 0 ? -acc : acc);
+        bad_w += W[word_at(i, j, t, S, n, BN)] != acc;
+      }
+      bad_o += out[(size_t)i * n + j] != (int)acc;
+    }
+    for (int t = 1; t < S; t++) ones += bit(i, t + 3);
+  }
+  printf("{\"check\": \"ssn_1l\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"data\": \"%s\", \"words\": %zu, "
+         "\"word_mismatches\": %zu, \"final_mismatches\": %zu, \"formed_mismatches\": %zu, \"max_abs_word\": %lld, "
+         "\"step_bits_set\": %zu, \"step_bits\": %zu}\n",
+         m, n, K, S, BN, kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : "zero", words, bad_w, bad_o, bad_form,
+         maxabs, ones, (size_t)m * (S - 1));
+  fflush(stdout);
+  CK(cudaFree(dA)); CK(cudaFree(dB)); CK(cudaFree(dbeta)); CK(cudaFree(dmsg)); CK(cudaFree(dcoins));
+  CK(cudaFree(dW)); CK(cudaFree(dout));
+  return bad_w || bad_o || bad_form;
+}
+
+static int check() {
+  struct C { int m, n, K, BN, kind; };
+  const C cs[] = {{128, 512, 2048, 256, 0}, {128, 512, 2048, 128, 0}, {64, 256, 8192, 256, 0}, {64, 512, 100, 256, 0},
+                  {64, 256, 28, 256, 0},    {64, 256, 59, 128, 0},    {64, 16384, 90, 256, 0}, {64, 256, 8192, 256, 1},
+                  {64, 256, 8192, 256, 2},  {128, 256, 2048, 256, 3}, {192, 768, 2048, 256, 0}};
+  int bad = 0;
+  u64 seed = 1;
+  for (const C& c : cs) bad += check_one(c.m, c.n, c.K, c.BN, c.kind, seed++);
+  return bad ? 1 : 0;
+}
+
+// ---- timing ----------------------------------------------------------------------------------------------------------------
+static int g_sms = 132;
+struct Timer {
+  cudaEvent_t a, b;
+  Timer() { CK(cudaEventCreate(&a)); CK(cudaEventCreate(&b)); }
+  template <class F> double ms(int reps, F f, cudaStream_t st = 0) {
+    f();
+    CK(cudaDeviceSynchronize());
+    std::vector<double> v;
+    for (int r = 0; r < reps; r++) {
+      CK(cudaEventRecord(a, st));
+      f();
+      CK(cudaEventRecord(b, st));
+      CK(cudaEventSynchronize(b));
+      float t = 0;
+      CK(cudaEventElapsedTime(&t, a, b));
+      v.push_back(t);
+    }
+    std::sort(v.begin(), v.end());
+    return v[v.size() / 2];
+  }
+};
+static double sm_mhz(Clk* dclk) {
+  clock_k<<<1, 1>>>(dclk, 20000000);
+  CK(cudaDeviceSynchronize());
+  Clk c;
+  CK(cudaMemcpy(&c, dclk, sizeof c, cudaMemcpyDeviceToHost));
+  return (double)(c.c1 - c.c0) / (double)(c.t1 - c.t0) * 1e3;
+}
+static double units(double ms, double mhz) { return ms * 1e-3 * mhz * 1e6 * g_sms * 4096.0; }
+
+struct LinDev {
+  const char* name;
+  int n, K, S, BN, chunk;  // chunk: rows a hash chunk
+  uint8_t *A, *B, *A0, *B0;
+  int* beta;
+  u64* msg;
+  u32* coins;
+};
+
+// One JSON line a measurement, at M rows: per linear the plain GEMM at its own K, ssn_1l's GEMM without and with export,
+// the hash pass over the exported words, coins, forming and coins + forming as one call's latency; then the forward's
+// 16 layers end to end, serial (each chunk's GEMM with export, then its hash, one stream) and beside (chunk c's hash on a
+// second stream while chunk c + 1's GEMM runs), with coins and forming before each linear's GEMM.
+static int time_all(int reps, int M, double budget_gb) {
+  struct Spec { const char* name; int n, K; };
+  const Spec specs[] = {{"qkv", 3072, 2048}, {"o", 2048, 2048}, {"gate_up", 16384, 2048}, {"down", 2048, 8192}};
+  Clk* dclk;
+  CK(cudaMalloc(&dclk, sizeof(Clk)));
+  std::vector<LinDev> lins;
+  size_t max_chunk_words = 0;
+  const size_t budget = (size_t)(budget_gb * 1e9);
+  for (const Spec& s : specs) {
+    Lin L{M, s.n, s.K, steps_of(s.K), ((M / 64) * (s.n / 256) < g_sms) ? 128 : 256, {}, {}};
+    fill(L, 0, 11 + s.n + s.K);
+    LinDev d{s.name, s.n, s.K, L.S, L.BN, 0};
+    d.A = up(tile_a(L));
+    d.B = up(tile_b(L));
+    d.A0 = up(tile_plain(L.A, M, s.K, 64));
+    d.B0 = up(tile_plain(L.B, s.n, s.K, L.BN));
+    std::vector<int> beta(s.n);
+    for (int j = 0; j < s.n; j++) beta[j] = beta_of(j, L.S);
+    d.beta = up(beta);
+    d.msg = up(seed_msg(s.n));
+    CK(cudaMalloc(&d.coins, coin_blocks(M, L.S) * 64));
+    const size_t row_bytes = (size_t)s.n * L.S * 4;
+    d.chunk = (int)std::min<size_t>(M, std::max<size_t>(64, budget / row_bytes / 64 * 64));
+    max_chunk_words = std::max(max_chunk_words, (size_t)d.chunk * s.n * L.S);
+    lins.push_back(d);
+  }
+  uint4* Wb[2];
+  for (auto& w : Wb) CK(cudaMalloc(&w, max_chunk_words * 4));
+  Hasher hs[2];
+  for (auto& h : hs) h.init(max_chunk_words * 4 / 32768, 32);
+  int* dout;
+  CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
+  Timer T;
+  cudaStream_t s1, s2;
+  CK(cudaStreamCreateWithFlags(&s1, cudaStreamNonBlocking));
+  CK(cudaStreamCreateWithFlags(&s2, cudaStreamNonBlocking));
+  const double f0 = sm_mhz(dclk);
+  auto line = [&](const char* what, const LinDev* d, double ms, double macs, double words, double extra) {
+    const double u = units(ms, f0);
+    printf("{\"what\": \"%s\", \"linear\": \"%s\", \"M\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"ms\": %.6f, "
+           "\"mhz\": %.1f, \"units\": %.6e, \"stock_macs\": %.6e, \"units_per_stock_mac\": %.6f, \"words\": %.6e, "
+           "\"units_per_word\": %.3f, \"units_per_byte\": %.3f, \"extra\": %.6g}\n",
+           what, d ? d->name : "all", M, d ? d->n : 0, d ? d->K : 0, d ? d->S : 0, d ? d->BN : 0, ms, f0, u, macs,
+           macs > 0 ? u / macs : 0, words, words > 0 ? u / words : 0, words > 0 ? u / (4 * words) : 0, extra);
+    fflush(stdout);
+  };
+  double fwd_macs = 0;
+  for (const LinDev& d : lins) fwd_macs += 16.0 * M * d.n * (double)d.K;
+  for (const LinDev& d : lins) {
+    const double macs = (double)M * d.n * d.K, words = (double)M * d.n * d.S;
+    line("plain_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A0, d.B0, nullptr, M, d.n, d.K / KB, nullptr, nullptr, nullptr, 0); }),
+         macs, 0, 0);
+    line("ssn_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A, d.B, d.beta, M, d.n, d.S, nullptr, nullptr, nullptr, 0); }),
+         macs, 0, 0);
+    double ex = 0, hsh = 0;
+    for (int r0 = 0; r0 < M; r0 += d.chunk) {
+      const int mc = std::min(d.chunk, M - r0);
+      const uint8_t* A = d.A + (size_t)(r0 / 64) * d.S * TA;
+      ex += T.ms(reps, [&] { gemm(d.BN, true, A, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, 0); });
+      const long long blocks = (long long)(mc / 64) * (d.n / d.BN) * d.S;
+      hsh += T.ms(reps, [&] { hs[0].run(Wb[0], blocks, 64 * d.BN * 4, 0); });
+    }
+    line("ssn_gemm_export", &d, ex, macs, words, d.chunk);
+    line("hash_pass", &d, hsh, macs, words, d.chunk);
+    line("coins", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0, true, false); }), macs,
+         words, (double)coin_blocks(M, d.S));
+    line("forming", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0, false, true); }), macs,
+         words, (double)M * d.S);
+    line("coins_forming", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0); }), macs, words,
+         (double)M * d.S);
+  }
+  double fwd_words = 0;
+  for (const LinDev& d : lins) fwd_words += 16.0 * M * d.n * d.S;
+  // forward: plain, ssn without export, serial, beside
+  auto fwd_plain = [&] {
+    for (int l = 0; l < 16; l++)
+      for (const LinDev& d : lins) gemm(d.BN, false, d.A0, d.B0, nullptr, M, d.n, d.K / KB, nullptr, nullptr, nullptr, s1);
+  };
+  line("fwd_plain_gemm", nullptr, T.ms(reps, fwd_plain, s1), fwd_macs, 0, 0);
+  auto fwd_serial = [&] {
+    for (int l = 0; l < 16; l++)
+      for (const LinDev& d : lins) {
+        coins_form(d.msg, d.coins, d.A, M, d.S, s1);
+        for (int r0 = 0; r0 < M; r0 += d.chunk) {
+          const int mc = std::min(d.chunk, M - r0);
+          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1);
+          hs[0].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1);
+        }
+      }
+  };
+  line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
+  cudaEvent_t done[2], full[2];
+  for (int b = 0; b < 2; b++) {
+    CK(cudaEventCreateWithFlags(&done[b], cudaEventDisableTiming));
+    CK(cudaEventCreateWithFlags(&full[b], cudaEventDisableTiming));
+  }
+  auto fwd_beside = [&] {
+    int c = 0;
+    for (int b = 0; b < 2; b++) CK(cudaEventRecord(done[b], s2));
+    for (int l = 0; l < 16; l++)
+      for (const LinDev& d : lins) {
+        coins_form(d.msg, d.coins, d.A, M, d.S, s1);
+        for (int r0 = 0; r0 < M; r0 += d.chunk, c++) {
+          const int mc = std::min(d.chunk, M - r0), b = c & 1;
+          CK(cudaStreamWaitEvent(s1, done[b]));
+          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1);
+          CK(cudaEventRecord(full[b], s1));
+          CK(cudaStreamWaitEvent(s2, full[b]));
+          hs[b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2);
+          CK(cudaEventRecord(done[b], s2));
+        }
+      }
+    CK(cudaStreamWaitEvent(s1, done[0]));
+    CK(cudaStreamWaitEvent(s1, done[1]));
+  };
+  line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
+  printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f}\n", f0, sm_mhz(dclk));
+  return 0;
+}
+
+int main(int argc, char** argv) {
+  cudaDeviceProp p;
+  CK(cudaGetDeviceProperties(&p, 0));
+  g_sms = p.multiProcessorCount;
+  if (p.major != 9) {
+    fprintf(stderr, "ERR device sm_%d%d: this binary runs on sm_90a\n", p.major, p.minor);
+    return 2;
+  }
+  if (argc == 2 && !strcmp(argv[1], "check")) return check();
+  if ((argc == 4 || argc == 5) && !strcmp(argv[1], "time"))
+    return time_all(atoi(argv[2]), atoi(argv[3]), argc == 5 ? atof(argv[4]) : 16.0);
+  fprintf(stderr, "usage: ssn check | time REPS M [BUDGET_GB]\n");
+  return 2;
+}
