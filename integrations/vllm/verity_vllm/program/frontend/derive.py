@@ -49,7 +49,7 @@ from verity.ml.circuits.liveness import DeadGateReport, dead_gates as _dead_gate
 from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
-from verity_vllm.program.frontend.registration import Registration, RunInputs
+from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
 from verity_vllm.program.prune import kept_records
 from verity.ml.definitions.replay import replayer
@@ -185,13 +185,13 @@ class Ctx:
 
     def __init__(self, *, mode: str, profile: str | None, config: dict | None, allowed_dims: dict, name: str, ruleset: RuleSet,
                  vocab, module, ep, B: Builder, user_inputs: dict[str, Coll], weights_coll: Coll | None, weights: list[WeightLeaf],
-                 placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], registration: Registration | None = None,
+                 placeholder_to_weight: dict[str, int], lifted_constants: dict[str, str], registered_inputs: RegisteredInputs | None = None,
                  weights_param: int | None = None, run_inputs: RunInputs | None = None) -> None:
         self.mode, self.profile, self.config, self.allowed_dims, self.name = mode, profile, dict(config or {}), dict(allowed_dims or {}), name
         self.ruleset, self.vocab, self.module, self.ep, self.B = ruleset, vocab, module, ep, B
         self.user_inputs, self.weights_coll, self.weights = user_inputs, weights_coll, weights
         self.placeholder_to_weight, self.lifted_constants = placeholder_to_weight, lifted_constants
-        self.registration, self.weights_param = registration, weights_param   # the registered inputs (`registered_values`)
+        self.registered_inputs, self.weights_param = registered_inputs, weights_param   # the registered inputs (`registered_values`)
         self.run_inputs = run_inputs   # the `run` parameter a rule declares (`Rule.run_inputs`)
         self.checks: list[tuple[Coll, str]] = []   # (one bit, what it checks): outputs after the source's, required 1 (`check`)
         self.checks_output: int | None = None
@@ -354,10 +354,10 @@ class Ctx:
 
     @property
     def registered_values(self) -> bool:
-        return self.registration is not None
+        return self.registered_inputs is not None
 
     def supplied(self, name: str, width: int, bits: int, node=None, distinct: bool = False) -> Coll:
-        """The field `name` of the registered `values` parameter (`Registration.value`; `distinct`: one field per distinct value): a
+        """The field `name` of the registered `values` parameter (`RegisteredInputs.value`; `distinct`: one field per distinct value): a
         program value (eps, the attention scale, a scalar) that the Definition reading it takes as an input."""
         return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits), distinct))
 
@@ -368,9 +368,9 @@ class Ctx:
     def _registered(self, node, what: str, read) -> Coll:
         node = node or self.current
         try:
-            if self.registration is None:
+            if self.registered_inputs is None:
                 raise ValueError(f"{what} read as an input outside a registered_values derivation")
-            return read(self.registration)
+            return read(self.registered_inputs)
         except ValueError as e:
             refuse("numerics_unregistered", node, self.module_path(node), str(e))
 
@@ -553,7 +553,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     prov["returned_inputs"] = ctx.returned_inputs
     prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
     if ctx.registered_values:
-        prov["supplied"] = ctx.registration.layout()
+        prov["supplied"] = ctx.registered_inputs.layout()
     if ctx.run_inputs is not None:
         prov["run_inputs"] = ctx.run_inputs.layout()
     if ctx.checks:
@@ -567,7 +567,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     corr_digest = correspondence_digest(corr_doc)
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
-                           registered=ctx.registration.names if ctx.registered_values else (),
+                           registered=ctx.registered_inputs.names if ctx.registered_values else (),
                            theta=() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],))
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
@@ -725,7 +725,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
         params.append((un, type_of_tensor(v)))
     run_inputs = (RunInputs.declare(params) if any(r.run_inputs(ep, mode) for r in ruleset.rules if r.modes is None or mode in r.modes)
                   else None)
-    registration = Registration.declare(params, ruleset, ep, mode) if registered_values else None
+    registered_inputs = RegisteredInputs.declare(params, ruleset, ep, mode) if registered_values else None
     wrec_t = Record(*[(w.name, w.type) for w in leaves]) if leaves else None
     if wrec_t is not None:
         params.append(("weights", wrec_t))
@@ -736,7 +736,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     weights_coll = pcolls[-1] if wrec_t is not None else None
     ctx = Ctx(mode=mode, profile=profile, config=config, allowed_dims=allowed_dims, name=name, ruleset=ruleset, vocab=vocab, module=module,
               ep=ep, B=B, user_inputs=user_inputs, weights_coll=weights_coll, weights=leaves, placeholder_to_weight=placeholder_to_weight,
-              lifted_constants=lifted, registration=registration, weights_param=len(params) - 1 if wrec_t is not None else None,
+              lifted_constants=lifted, registered_inputs=registered_inputs, weights_param=len(params) - 1 if wrec_t is not None else None,
               run_inputs=run_inputs)
     if _ctx_holder is not None:
         _ctx_holder.append(ctx)
@@ -746,12 +746,12 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
             run_inputs.finish(params)
         except ValueError as e:
             refuse("side_input", None, None, str(e))
-    if registration is not None:
+    if registered_inputs is not None:
         try:
-            registration.finish(params)
+            registered_inputs.finish(params)
         except ValueError as e:
             refuse("numerics_unregistered", None, None, str(e))
-    if run_inputs is not None or registration is not None:
+    if run_inputs is not None or registered_inputs is not None:
         B.params = tuple(params)
     B.ret_type = out.type
     body = B.finish(out)
