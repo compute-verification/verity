@@ -168,12 +168,18 @@ def tree_chain(leaves: float) -> int:
 
 
 
+def block_k_log(ands: int, rows: Sequence[int]) -> int:
+    """The ``k_log`` of the C-Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each, the
+    output's row last) before the composer packs it: `proof_block_k_log` unpacked. A row's opening is its hm96 and
+    sha512x3 slots, not ANDs in the unit's slot."""
+    return proof_block_k_log(rows[:-1], rows[-1:], ands, packed=False)
+
+
 def cap(ands: int, rows: Sequence[int]) -> int:
-    """A statement's proof blocks of ``ands`` ANDs opening ``rows`` (bytes each, the output's row last): one a C-Flock block
-    of 2^k_log, `proof_block_k_log` unpacked (a row's opening is its hm96 and sha512x3 slots, not ANDs in the unit's slot),
-    under m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement);
-    0, not a proof block, past C-Flock's 2^`K_MAX`."""
-    k = proof_block_k_log(rows[:-1], rows[-1:], ands, packed=False)
+    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a C-Flock block of 2^`block_k_log` under
+    m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
+    proof block, past C-Flock's 2^`K_MAX`."""
+    k = block_k_log(ands, rows)
     return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
 
 
