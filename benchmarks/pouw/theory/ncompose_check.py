@@ -27,7 +27,8 @@ words, and which of `M_0..M_15` each use of the schedule and the rounds reads.
 runs each distinct one once. For `REPEAT` identical rows of one call (a random row and the zero row), it counts the
 compressions and the distinct compression inputs (chaining value ‖ block) with the row digest bound to (salt, forward,
 position) nowhere (`frame-v3`, which binds them in the tree leaf, outside the digest), in a block after the row
-(`suffix`), or in the prefix block (`prefix`).
+(`suffix`), or in the prefix block (`prefix`); and with a salt-free tag of the row's index in its words, as row tags
+give a committed row, in the row's first block (`tag-first`) or its last (`tag-last`).
 
 *Served layouts.* Over `SERVED_ROWS` random rows, the registers that stay constant, which no count can credit, in the
 row digests the served kernels compute a row: `sha512/row/v2` (`registered_rows.cuh`'s `row_digest`, 16 KiB rows),
@@ -282,13 +283,15 @@ def repeats(rng: random.Random) -> dict:
     forward = rng.getrandbits(64).to_bytes(8, "big")
     out = {}
     for name, row in (("random", rng.randbytes(128 * BLOCKS)), ("zero", bytes(128 * BLOCKS))):
-        for layout in ("frame-v3", "suffix", "prefix"):
+        for layout in ("frame-v3", "suffix", "prefix", "tag-first", "tag-last"):
             seen: set[bytes] = set()
             total, ok = 0, True
             for pos in range(REPEAT):
                 bind = salt + forward + pos.to_bytes(8, "big")
+                tag = (pos + 1).to_bytes(8, "big")
                 msg = {"frame-v3": PREFIX + row, "suffix": PREFIX + row + bind,
-                       "prefix": PREFIX[:128 - len(bind)] + bind + row}[layout]
+                       "prefix": PREFIX[:128 - len(bind)] + bind + row,
+                       "tag-first": PREFIX + tag + row[8:], "tag-last": PREFIX + row[:-8] + tag}[layout]
                 keys, d = chain(msg)
                 ok &= d == hashlib.sha512(msg).digest()
                 total += len(keys)
@@ -412,6 +415,11 @@ def main() -> int:
                    all(rep[f"{n}/suffix"]["distinct"] == per_row - 1 + REPEAT for n in ("random", "zero"))))
     checks.append(("repeats: a prefix binding makes every compression input distinct",
                    all(rep[f"{n}/prefix"]["distinct"] == rep[f"{n}/prefix"]["compressions"] == per_row * REPEAT
+                       for n in ("random", "zero"))))
+    checks.append(("repeats: a row tag in the row's first block leaves only the constant prefix block shared",
+                   all(rep[f"{n}/tag-first"]["distinct"] == per_row * REPEAT - (REPEAT - 1) for n in ("random", "zero"))))
+    checks.append(("repeats: a row tag in the row's last block leaves every block before it shared",
+                   all(rep[f"{n}/tag-last"]["distinct"] == per_row * REPEAT - BLOCKS * (REPEAT - 1)
                        for n in ("random", "zero"))))
     sv = out["served"] = served(rng)
     per_comp, sched, round0 = res["be"]["per_block"]["b0"]["writes"], 64 * 22, 28
