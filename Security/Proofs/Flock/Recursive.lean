@@ -4,7 +4,6 @@ import Proofs.Flock.Recursive.Fork
 import Proofs.Flock.Recursive.Sound
 import Proofs.Flock.Recursive.Multi
 import Proofs.Flock.Recursive.Finds
-import Proofs.Flock.Recursive.PadsAt
 import Proofs.Flock.Recursive.Flock
 import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
@@ -21,7 +20,6 @@ import Proofs.Flock.Recursive.Compile
 import Proofs.Flock.Recursive.Audit
 import Proofs.Flock.Recursive.SoundExec
 import Proofs.Flock.Recursive.Universal
-import Proofs.Flock.Recursive.UniversalClass
 import Proofs.Flock.Recursive.ExecClass
 import Proofs.Flock.Recursive.Written
 import Proofs.Flock.Recursive.Loads
@@ -34,7 +32,6 @@ import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.FirewallRun
-import Proofs.Flock.Recursive.FirewallFollows
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
@@ -62,6 +59,8 @@ import Proofs.Flock.Recursive.LeafFinder
 import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.Recursive.PartTie
+import Proofs.Flock.C3.RegLevels.VRows
+import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.Recursive.HPortTie
 import Proofs.Flock.Recursive.KSStatement
 import Proofs.Flock.Recursive.KSNontrivial

@@ -15,7 +15,6 @@ import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.Composed.RegWords
-import Proofs.Flock.Soundness.Discharge.Composed.Refine
 import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
 import Proofs.Flock.Soundness.Discharge.Composed.Custody
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
