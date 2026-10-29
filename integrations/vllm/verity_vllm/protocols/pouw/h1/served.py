@@ -396,21 +396,23 @@ class Served:
             if into is not None:
                 into["z"] = later.also().hex()
 
-    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
-        """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
-        [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves), written into
-        ``out`` when given."""
-        return chunk_words(codes, scales, Wt.chunks(call.k), self.m, out)
+    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None,
+                slots: int | None = None) -> np.ndarray:
+        """Call ``call``'s A table's words over the Program's M slots (or the first ``slots``): its rows' int8 ``codes``
+        [m, K] and f32 ``scales`` [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`,
+        n·M leaves), written into ``out`` when given."""
+        return chunk_words(codes, scales, Wt.chunks(call.k), self.m if slots is None else slots, out)
 
     def _a_rows(self, call: Any, value: str, mine: Sequence[int], codes: np.ndarray, scales: np.ndarray
                 ) -> np.ndarray | None:
         """Write call ``call``'s `a_words` into its step's A table of K ``value`` at its place among ``mine``, the step's
-        calls of K in call order: the whole table once they are all in, else None."""
+        calls of K in call order: the whole table once they are all in, else None. The table starts zero, which is
+        `chunk_words`' padding, so each call writes only its rows."""
         n = Wt.chunks(call.k)
         block = n * self.m
-        table, done = self._a.setdefault(value, (np.empty((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
+        table, done = self._a.setdefault(value, (np.zeros((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
         j = mine.index(call.index)
-        self.a_words(call, codes, scales, table[j * block:(j + 1) * block])
+        self.a_words(call, codes, scales, table[j * block:j * block + n * len(codes)], len(codes))
         done.add(call.index)
         if len(done) < len(mine):
             return None

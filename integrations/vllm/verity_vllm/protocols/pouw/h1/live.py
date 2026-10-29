@@ -39,7 +39,6 @@ import numpy as np
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw.circuit import live_reads as LR
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
@@ -118,9 +117,8 @@ def table(served: Any, run: Any, name: str, r: int, base: int, session: str) -> 
         words, window, bound = slot_words(run.owners.get(r, []), run.rows), served.root, None
     v = value(served, name, r)
     if name == LR.REQUESTS:
-        ys = NR.salts(run._key, nonce(base, name, r), len(words))
-        reg = G.Registered.commit(served.program_digest, v, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(len(words))],
-                                  G.WORD_BITS, LR.REQUEST_SCHEMA, session=bound)
+        reg = NR.commit(served.program_digest, v, words, run._key, nonce(base, name, r), True, schema=LR.REQUEST_SCHEMA,
+                        session=bound)
     else:
         reg = served._tree(run, v, words, nonce(base, name, r), window, bound)
     served.live[v] = reg
