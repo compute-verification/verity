@@ -405,7 +405,8 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, ward
         salt = tar.extractfile(m).read(32)[16:]
     chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
     (chain / "out" / "job.json").write_text(json.dumps({"x": salt.hex()}))
-    (chain / "out" / "report" / "report.json").write_text(json.dumps({"verdict": "accepted", "stubbed": [salt.hex()]}))
+    report = chain / "out" / "report" / "report.json"
+    report.write_text(json.dumps(dict(json.loads(report.read_text()), stubbed=[salt.hex()])))
     rc, piece, d = _piece(tmp_path, warden, chain)
     assert rc == 1 and (piece / "answer.json").is_file() and (piece / "chain" / "scan" / "answers.json").is_file()
     assert not (piece / "chain" / "report" / "report.json").exists() and not (piece / "chain" / "job.json").exists()
@@ -510,7 +511,9 @@ def _private_chain_out(out: Path) -> Path:
                              "tie": {"honest": [True], "forged": [False]}},
         "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
             "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
-            "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
+            "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}},
+            "coins": {"rounds": {r: {"source": "challenger:local", "session": r, "root": c * 128, "ok": True}
+                                 for r, c in (("honest", "a"), ("chain", "b"))}}},
         "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
                               "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
         "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
@@ -546,7 +549,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     assert {rel: _numbers(p) & PRIVATE for rel, p in published.items()} == dict.fromkeys(published, set())
     report = json.loads(published["chain/report/report.json"].read_text())
     assert report["verdict"] == "accepted" and set(report["steps"]) == {
-        "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
+        "custody", "certificates", "endpoint", "tie", "n2", "scan", "coins", "lean"}
     assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
     assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
