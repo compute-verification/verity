@@ -33,6 +33,10 @@ Every figure is W1 priced work against stock's mnK (CORE.md §2a), at H32's floo
   4 bits (b1) or 16 (b4) a row a step of 28 entries; per GPU at the design's served rate, stock's 8,192 tokens in
   37.77 ms (CORE-NCP) over its T2 (estimates). SSN-A's step-1 column code, base 13 in four lanes less the zero vector,
   holds n ≤ 13⁴ − 2.
+- k32's hashed bytes, α/8 B a useful MAC (H32's floor over α·K tensor work a dot product), and the terms that scale
+  with them: SW-HASH's hiding work (unforced, and with the salt derivation forced; W1 floor / alone) and its T2's
+  bytes part, both stated for NCP (α = 3), scaled to SSN-A's and ssn_1l's α over Llama's fused linears. The non-hash
+  part of SSN's T2 is (α − 1) of stock's GEMM (12.49 ms of 37.77) plus its coins (0.60 ms) and A's root (0.096).
 
   python3 benchmarks/pouw/theory/sw_smell_arith.py [--json OUT]
 """
@@ -98,6 +102,26 @@ def stream_bits_per_token(linears, layers: int) -> dict[str, float]:
     steps = sum(-(-k // 28) for _, _, k in linears)
     return {"ncp_e1": layers * 6 * sum(k for _, _, k in linears), "ssn_a_b1": layers * 4 * steps,
             "ssn_a_b4": layers * 16 * steps}
+
+
+SW_HASH_K32 = {"16k": (157.3, 20.8, 41.6, 13.0, 26.0), "256k": (140.9, 1.46, 2.93, 1.00, 2.01),
+               "1m": (None, 0.42, 0.85, 0.27, 0.54)}
+STOCK_MS, GEMM_MS, NCP_EXTRA_MS, A_ROOT, SSN_COIN_MS = 37.77, 12.49, 56.7, 0.096, 0.60
+
+
+def tensor_width(linears, steps) -> float:
+    macs = sum(n * k for _, n, k in linears)
+    return sum(n * 32 * steps(k) for _, n, k in linears) / macs
+
+
+def by_alpha(alpha: float) -> dict:
+    f, out = alpha / 3, {"alpha": alpha, "bytes_per_mac": alpha / 8}
+    for rows, (t2, hu, hua, hf, hfa) in SW_HASH_K32.items():
+        out[rows] = {"hiding_unforced": [hu * f, hua * f], "hiding_salt_forced": [hf * f, hfa * f]}
+        if t2:
+            bytes_part = t2 - 1 - NCP_EXTRA_MS / STOCK_MS - A_ROOT
+            out[rows]["t2_sync"] = 1 + ((alpha - 1) * GEMM_MS + SSN_COIN_MS) / STOCK_MS + A_ROOT + bytes_part * f
+    return out
 
 
 def delta(bytes_per_mac: float, h: float) -> float:
@@ -188,6 +212,15 @@ def main() -> int:
               f"{v['gbit_s_per_gpu_at_stock_rate']:.1f} at stock's (estimates)")
     out["ssn_a_max_n"] = 13 ** 4 - 2
     print(f"SSN-A's step-1 code holds n ≤ {out['ssn_a_max_n']:,}; Llama's head has n 128,256, DeepSeek-V3's 129,280")
+    widths = {"ssn_a": tensor_width(LLAMA_FUSED, lambda k: -(-k // 28)),
+              "ssn_1l": tensor_width(LLAMA_FUSED, lambda k: 1 + -(-(k - 28) // 31))}
+    out["by_alpha"] = {name: by_alpha(a) for name, a in widths.items()}
+    for name, v in out["by_alpha"].items():
+        print(f"{name}: α {v['alpha']:.4f}, {v['bytes_per_mac']:.4f} B a useful MAC; T2 sync at T 8,192 "
+              f"{v['16k']['t2_sync']:.1f}× (16 KiB) / {v['256k']['t2_sync']:.1f}× (256 KiB); hiding × stock, unforced "
+              + ", ".join(f"{r} {v[r]['hiding_unforced'][0]:.3g}–{v[r]['hiding_unforced'][1]:.3g}" for r in SW_HASH_K32)
+              + "; salt forced " + ", ".join(f"{r} {v[r]['hiding_salt_forced'][0]:.3g}–{v[r]['hiding_salt_forced'][1]:.3g}"
+                                             for r in SW_HASH_K32) + " (estimates)")
     checks = (
         ("final word over the block linears is CORE-TIME's 1.239%", abs(out["llama"]["apart_m8192"]["final_word"] - 0.01239) < 5e-5),
         ("forming apart at T 8,192 is CORE-TIME's 1.10%", abs(out["llama"]["apart_m8192"]["forming"] - 0.01101) < 5e-5),
@@ -205,6 +238,14 @@ def main() -> int:
          and abs(bases["world, census / 1.153 (SSN-A's α)"] / 5.27e30 - 1) < 0.01
          and abs(bases["datacenter, peak / 1.153 (SSN-A's α)"] / 3.52e27 - 1) < 0.01),
         ("SSN-A's code: the zero vector (6,6,6,6) is c = 14,280, skipped", sum(6 * 13 ** e for e in range(4)) == 14280),
+        ("tensor widths are SW-NOISE's α over Llama: SSN-A 1.153, ssn_1l 1.044",
+         abs(widths["ssn_a"] - 1.153) < 5e-4 and abs(widths["ssn_1l"] - 1.044) < 5e-4),
+        ("α/8 B at α = 3 is SW-HASH's 0.375 B and NCP's T2 scaling returns its 157.3× / 140.9×",
+         abs(by_alpha(3)["bytes_per_mac"] - WORD_BYTES) < 1e-12 and abs(by_alpha(3)["16k"]["t2_sync"] - 157.3) < 2.5
+         and abs(by_alpha(3)["256k"]["t2_sync"] - 140.9) < 2.5),
+        ("scaled to SSN-A's α, T2 sync is within 5% of SW-PRICE's ssn-k32-w rows at T 8,192 (62.68× / 55.28×)",
+         abs(out["by_alpha"]["ssn_a"]["16k"]["t2_sync"] / 62.68 - 1) < 0.05
+         and abs(out["by_alpha"]["ssn_a"]["256k"]["t2_sync"] / 55.28 - 1) < 0.05),
     )
     ok = True
     for what, passed in checks:
