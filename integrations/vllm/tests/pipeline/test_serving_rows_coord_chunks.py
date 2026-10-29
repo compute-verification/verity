@@ -1,5 +1,5 @@
 """A window's ``coord`` units in chunks (`pipeline.serving_rows`, ``CHUNKED``): the expert-indexed pair GEMMs' coordinates
-(``COORDS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows C-Flock's `UnitStager`
+(``COORDS``) are consecutive chunks of at most the partition's ``chunk_cap``, each a member on the bit rows Flock's `UnitStager`
 stages (`chunk_rows.unit_rows`: ``in<g>`` per parameter, ``o0``), and the chunks are the template's units read once, so that
 the coordinate on each chunk's rows, parsed as the stager parses them, is the rows' committed words, and a flipped word is not."""
 from __future__ import annotations

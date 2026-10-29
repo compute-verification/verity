@@ -9,7 +9,7 @@ function on bits.
     RoPEHeadGptJ_v3{D}, RoPEGptJ_v3{NHEADS, D}   the same signatures, the interleaved pairing (`is_neox=False`)
                                                        word views, defined here: RoPEHeadGptJ_v2{D}, RoPEGptJ_v2{NHEADS, D}
 
-The rotations are traced from core's f32 builders (`verity.ml.circuits.silicon.fp`, `trace.definition`), the pieces C-Flock's lowering
+The rotations are traced from core's f32 builders (`verity.ml.circuits.silicon.fp`, `trace.definition`), the pieces Flock's lowering
 runs for the word primitives: ``t = RN32(y * s)`` (FMUL, subnormals kept), ``RN32(x * c - t)`` with one FFMA rounding, then
 bf16_rn with aten's NaN 0x7FC0. Every NaN of the f32 steps ends in that cast, so their payloads never reach the output. The
 composites are `b1`'s bodies on bits: `RoPEHead_v2` batches `RopeOut_v2` and `RopeOutAdd_v2` over the D/2 coordinate pairs and

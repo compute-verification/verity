@@ -180,7 +180,7 @@ def test_the_cheating_pool_does_not_grow_with_the_fleet():
 
 
 def test_luck_multiplies_skipped_work_but_not_injected_bits():
-    """A block that injects a chosen output fails whenever it is drawn, so ln(1/delta) (1/q + floor_steps) blocks inject
+    """A block that injects a chosen output fails whenever it is sampled, so ln(1/delta) (1/q + floor_steps) blocks inject
     step_bits each, whatever the luck factor."""
     p = T.DEFAULTS | {"floor_steps": 1e9}
     lucky, unlucky = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"luck": 1.0}, T.TIERS["T5"])
@@ -235,7 +235,7 @@ def test_the_amplifier_multiplies_every_term():
 
 
 def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
-    """Until the halt a developer can skip all declared work, once per identity (1 hour is 1.1e-4)."""
+    """Until the halt a developer can skip all registered work, once per identity (1 hour is 1.1e-4)."""
     p = T.DEFAULTS | {"host_share": 0.0}
     no_lag = T.evaluate(p | {"lag_s": 0.0}, T.TIERS["T1"])
     lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])

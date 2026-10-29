@@ -1,6 +1,6 @@
 """The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: one window of a few steps as one unit,
-proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through N2's audit path
-(`n2_zk.py`: its stager, firewall and received-pieces scan).
+proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through N2's audit path
+(`n2_zk.py`: its stager, ZK server and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--dry]
@@ -39,7 +39,7 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
   ``srv`` (``sixpass``) and with its own (``sixpass-own``). The rest are honest, enough of them that the statement fits
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
-  partition's digest) before the draw, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
+  partition's digest) before the sample, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
   G < P the unit is `compile_slice.CompileSliceBlocks_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
   which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
   Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
@@ -62,7 +62,7 @@ proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify
 * **rescan**: a finished ``prove``'s scan taken again under that rule (`leak_scan.rescan`) from the verifier's files it
   kept, the pieces recomputed from its slice, kinds and partition (a salt the run drew isn't, so a found salt reads
   leaked).
-* **Cost** (``--points``): sessions whose verifier draws the first k units, behind the firewall (`a8.cost`).
+* **Cost** (``--points``): sessions whose verifier samples the first k units, behind the ZK server (`a8.cost`).
 """
 from __future__ import annotations
 
@@ -372,7 +372,7 @@ def stage(M, sg: SimpleNamespace, units: list[SimpleNamespace], salt_key: bytes,
 
 
 def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Path, port: int) -> dict:
-    """The statement registered, every unit drawn by the verifier's Lean, proved --zk behind the firewall and held by
+    """The statement registered, every unit sampled by the verifier's Lean, proved --zk behind the ZK server and held by
     Lean; then the verifier's side per unit: ``pub`` opened to its own copy, the verdict read, the bindings checked on
     b‖c (`advice_leaf_ok`, `served_rows.leaf_ok`, `certified`, `charge_chain.check_chain`). Writes what the verifier
     received under ``out / "verifier"``."""
@@ -677,7 +677,7 @@ def rescan(a) -> int:
     """`prove`'s scan under `--from` taken again (`leak_scan.rescan`) from the verifier's files it kept: its units rebuilt
     from its slice, kinds and partition (held to its staged verdict words), every piece of their rows found again less
     those its circuit holds (its summary's ``public_pieces``; the circuit isn't kept; `scan_pieces`, at the run's G), and
-    each carry row. A salt is drawn by `prove` and not recomputed, so a salt the run found reads leaked."""
+    each carry row. A salt is sampled by `prove` and not recomputed, so a salt the run found reads leaked."""
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
     vdir, M = src / "slice" / "verifier", N2._one_stage()
@@ -719,7 +719,7 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=7781)
     p.add_argument("--delta", type=float, default=2.0 ** -20)
-    p.add_argument("--points", default="", help="cost points: the k drawn units of each session, comma-separated")
+    p.add_argument("--points", default="", help="cost points: the k sampled proof blocks of each session, comma-separated")
     p.add_argument("--slice", choices=tuple(REFUSED), default="demo", help="the window the units are of")
     p.add_argument("--g", type=int, default=None, help="the steps a served row holds, dividing P (P by default: one srv "
                    "row a unit)")

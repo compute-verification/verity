@@ -129,7 +129,7 @@ def test_pfill_gates_fail(tmp_path, kw, gate):
 
 
 def test_proved_fraction_by_fold():
-    # decision 43: duo binds every word (provisional: its binding is proved for runs of one to four words,
+    # duo binds every word (provisional: its binding is proved for runs of one to four words,
     # DuoQuadNoKernel; five or more words and the served receipt's projected form are open), ram binds word pairs only
     # (half); r9's XOR family (LI, XIN13) reads at ram's proved half, provisional, until the select-charging lemma lands
     assert R.proved_fraction(2, False, 64) == pytest.approx(0.9)

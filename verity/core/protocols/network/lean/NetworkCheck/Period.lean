@@ -223,6 +223,11 @@ answer, and each connection's cap against its lane (the parameters' `cells`; the
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
+
+**The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
+syncs the certifier signed for a link through its salted clock certificates' openings, each sync and salt against the
+digest its certificate signs (`certificate.SignedClocks`, `signedSyncs`). The certifier chain's record takes each
+window's sync from it, with `certificate.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
 -/
 
 namespace NetworkCheck.Period
@@ -846,16 +851,6 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-! ## The check -/
 
-/-- `Certificate.verify` under the parameters' key in their session: the certificate is the key's (its I) and its LMS
-signature verifies over `certificate_message` of its fields; a message that can't be formed or a signature that doesn't
-decode is false. -/
-def signs (p : Params) (c : Certificate) : Bool :=
-  c.keyId == p.key.extract 0 16 &&
-    match certificateMessage c.keyId p.session c.link c.direction c.window c.digest,
-        Lms.Signature.decode p.lms c.signature with
-    | .ok m, .ok sig => (Lms.verify p.lms p.key m sig).toOption == some true
-    | _, _ => false
-
 /-- `clock_digest`: `tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)` of the sync, ρ = p/q
 in lowest terms; `none` past a u64. -/
 def clockDigest (s : ClockSync) : Option ByteArray :=
@@ -870,9 +865,10 @@ def clockDigest (s : ClockSync) : Option ByteArray :=
 def clearClocks (ss : NetworkCertifier.SyncSet) : List ByteArray :=
   ss.deltas.flatMap fun d => ss.rhos.attach.filterMap fun ρ => clockDigest ⟨d, ρ.1, ss.rhos_pos ρ.1 ρ.2⟩
 
-/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying. -/
+/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying in the parameters' session
+(`Certificate.signs`). -/
 def certifiesOn (p : Params) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
-  c.direction == d && c.link == link && c.window == w && signs p c
+  c.direction == d && c.link == link && c.window == w && c.signs p.lms p.key p.session
 
 /-- A certificate of the link's end `d` at window `w`, the key's and verifying. -/
 def certifies (p : Params) (d : Direction) (w : Nat) (c : Certificate) : Bool := certifiesOn p p.link d w c
@@ -929,9 +925,7 @@ def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Dire
     ("parameters", .str (Flock.hexOf sd)), ("session", .str (Flock.hexOf session)), ("link", .str link),
     ("direction", .str d.value), ("window", toJson w), ("cell_bytes", toJson s.cellBytes),
     ("slots", toJson s.allocation), ("rows", toJson s.window), ("row_schema", .str rowSchema)])
-  let positions ← Identity.identityDigestSha512 "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", toJson (0 : Nat)), ("step", toJson (1 : Nat)), ("stop", toJson s.window)])
-  pure (Flock.FV3.hash "domain" [binding, Flock.FV3.uint 1, positions, Flock.FV3.uint s.window] Flock.Sha512.hash)
+  pure (Flock.FV3.Sha512.Domain.make binding (-1) 0 s.window).id
 
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
@@ -1382,6 +1376,122 @@ def protocol : Core.Protocol where
   check := check
   publicJson := publicJson
   profileJson := profileJson
+
+/-! ## The clock openings -/
+
+/-- A salted clock certificate's opening (`certificate.CertifiedClock`): the sync the certifier ran the window under and
+its salt `salt_c`, both witness, and the certificate, which signs the sync's clock digest salted by it. -/
+structure ClockOpening where
+  sync : ClockSync
+  salt : ByteArray
+  certificate : Certificate
+
+/-- Two openings are one: the same sync, salt and certificate, field by field. -/
+def ClockOpening.same (a b : ClockOpening) : Bool :=
+  let x := a.certificate
+  let y := b.certificate
+  a.sync.delta == b.sync.delta && a.sync.rho == b.sync.rho && a.salt == b.salt && x.keyId == y.keyId &&
+    x.link == y.link && x.direction == y.direction && x.window == y.window && x.digest == y.digest &&
+    x.signature == y.signature
+
+/-- One certifier session's clock openings (`certificate.SignedClocks`): its LMS key and session, the openings, and the
+link whose syncs are read. -/
+structure Openings where
+  lms : Lms.Params
+  key : ByteArray
+  session : ByteArray
+  link : String
+  openings : Array ClockOpening
+
+/-- `{"key", "link", "lms", "openings", "session"}`, each opening `{"certificate", "salt", "sync"}`, its certificate as
+the evidence's and its sync `[δ, num, den]`. -/
+def openingsOf (j : Json) : V Openings := do
+  exactly j ["key", "link", "lms", "openings", "session"] "the object"
+  let l ← Flock.J.get j "lms" "the object"
+  exactly l ["H", "N", "W", "toy"] "lms"
+  let lms ← Lms.Params.make (← Flock.J.nat l "N" "lms") (← Flock.J.nat l "W" "lms") (← Flock.J.nat l "H" "lms")
+    (← Flock.J.bool l "toy" "lms")
+  let key ← Flock.unhex (← Flock.J.str j "key" "the object")
+  unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
+  let openings ← (← Flock.J.arr j "openings" "the object").mapM fun o => do
+    exactly o ["certificate", "salt", "sync"] "an opening"
+    pure { sync := ← Check.syncOf (← Flock.J.get o "sync" "an opening"), salt := ← hexAt o "salt" "an opening",
+           certificate := ← certificateOf (← Flock.J.get o "certificate" "an opening") "an opening's certificate" }
+  pure { lms, key, session := ← hexAt j "session" "the object", link := ← Flock.J.str j "link" "the object",
+         openings }
+
+/-- Why an opening gives no sync (`CertifiedClock.refusal`), or none when it holds: its certificate isn't an egress one
+(`egress`), isn't the key's (`key`), signs another digest than its sync's clock digest salted by its 64-byte salt
+(`clock_commitment`, `opening`), or its signature doesn't verify in the session (`Certificate.signs`: `signature`). -/
+def openingRefusal (s : Openings) (o : ClockOpening) : Option String :=
+  let c := o.certificate
+  if c.direction != .egress then some "egress"
+  else if c.keyId != s.key.extract 0 16 then some "key"
+  else if !(o.salt.size == saltBytes && (clockDigest o.sync).any (c.digest == certificateDigest o.salt ·)) then
+    some "opening"
+  else if !c.signs s.lms s.key s.session then some "signature"
+  else none
+
+/-- The openings that hold by `first` (none), by salt: the first of each salt, and whether another of that salt isn't
+it. -/
+def bySalt (s : Openings) (first : Array (Option String)) : Std.TreeMap.Raw (Array UInt8) (ClockOpening × Bool) :=
+  (s.openings.zip first).foldl (init := ∅) fun m (o, r) =>
+    if r.isSome then m
+    else m.alter o.salt.data fun
+      | some (x, another) => some (x, another || !x.same o)
+      | none => some (o, false)
+
+/-- Each opening's refusal: `openingRefusal`'s, else `salt` where another opening that holds, not this one, has its
+salt, under which two windows of one sync would sign one digest; none where it holds. The openings are keyed by salt
+once (`bySalt`), so past their signatures this takes n log n steps in the openings. -/
+def openingRefusals (s : Openings) : Array (Option String) :=
+  let first := s.openings.map (openingRefusal s)
+  let salts := bySalt s first
+  (s.openings.zip first).map fun (o, r) =>
+    if r.isSome then r else if (salts.get? o.salt.data).any (·.2) then some "salt" else none
+
+/-- Link-windows in order: by link, then by window. -/
+def linkWindowOrder (a b : String × Nat) : Ordering := (compare a.1 b.1).then (compare a.2 b.2)
+
+/-- What the openings that hold sign, by link-window: the first one's sync, and whether another signs another sync. -/
+abbrev Signed := Std.TreeMap.Raw (String × Nat) (ClockSync × Bool) linkWindowOrder
+
+/-- The openings that hold (`codes` none), keyed by link-window once, so that `signedSyncs` and `split` take n log n
+steps in the openings. -/
+def signedBy (s : Openings) (codes : Array (Option String)) : Signed :=
+  (s.openings.zip codes).foldl (init := ∅) fun m (o, r) =>
+    if r.isSome then m
+    else m.alter (o.certificate.link, o.certificate.window) fun
+      | some (x, two) => some (x, two || !(x.delta == o.sync.delta && x.rho == o.sync.rho))
+      | none => some (o.sync, false)
+
+/-- `SignedClocks.syncs(link)`: window 0's sync on, each the one sync the holding openings sign for the window, up to
+the first window without exactly one. -/
+def signedSyncs (s : Openings) (signed : Signed) : Array ClockSync := Id.run do
+  let mut out := #[]
+  for w in [0:s.openings.size] do
+    match signed.get? (s.link, w) with
+    | some (x, false) => out := out.push x
+    | _ => break
+  return out
+
+/-- The link-windows, of any link, that the holding openings sign two or more syncs for, which have none, in
+`linkWindowOrder`. -/
+def split (signed : Signed) : Array (String × Nat) :=
+  signed.foldl (init := #[]) fun acc k (_, two) => if two then acc.push k else acc
+
+/-- `network-records verdicts`' `clocks`: on `openingsOf`'s object, each opening's refusal (`openingRefusals`, null
+where it holds), the link-windows with two or more signed syncs (`split`, each `[link, window]`), and the link's signed
+syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `certificate.SignedClocks`
+beside it as the reference, each refusal and each such link-window by identity. -/
+def clocksFn (j : Json) : Except String Json := do
+  let s ← openingsOf j
+  let codes := openingRefusals s
+  let signed := signedBy s codes
+  let sync (x : ClockSync) : Json := .arr #[toJson x.delta, toJson x.rho.num, toJson x.rho.den]
+  return Json.mkObj [("refused", .arr (codes.map fun | some r => .str r | none => .null)),
+    ("split", .arr ((split signed).map fun (l, w) => .arr #[.str l, toJson w])),
+    ("syncs", .arr ((signedSyncs s signed).map sync))]
 
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
