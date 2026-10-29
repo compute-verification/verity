@@ -17,21 +17,28 @@ strings (`query_ast.Path`, `NameSel`, `NodeSel`):
 
 * `instances`, `members` (`k` a positive integer), `nodes`, `zip`, `each`, `concat`, `rest`, `default`, `where` and
   `root`, evaluated as `query_ast._Evaluator` evaluates them;
-* `{"op": "table", "path": P, "table": NAME}`: in each body `P` selects (`.` the enclosing one), the table `NAME`'s rows
-  for that body's Definition, one per body node, a label or `null`; set `v` of an activation is every node whose row is
-  `v`, all its members. The labels a body's rows use are `0, …, L - 1`, each at least once;
+* `{"op": "table", "path": P, "table": NAME}` (`"of": "nodes"`, the default, may be written; any other `of` is refused):
+  in each body `P` selects (`.` the enclosing one), the table `NAME`'s rows for that body's Definition, one per body
+  node, a label or `null`; set `v` of an activation is every node whose row is `v`, all its members. The labels a body's
+  rows use are `0, …, L - 1`, each at least once;
 * `{"op": "label", "base": F, "map": {"affine": [a, b, n]}}`: set `i` of `F` gets label `(a·i + b) mod n`, `n > 0`;
-* `{"op": "group", "base": F, "key": "definition" | "name"}`: set `i` of `F` gets the rank, by first appearance in
-  `F`'s order, of the Definition its members call: its specialization, or its `Name` (every specialization of it).
+* `{"op": "label", "base": F, "map": {"table": NAME}}`: a set of `F` gets the label the table `NAME`'s row of the root
+  body gives its node, none for `null`; refused when the set's nodes have different labels;
+* `{"op": "group", "base": F, "key": K}`, `K` a key part or a list of them: set `i` of `F` gets the rank, by first
+  appearance in `F`'s order, of the key of the Definition its node calls, each part one of `definition` (its descriptor
+  key), `name` (its `Name`), `base` (its `Name_vN`) and `static:K` (static `K`'s canonical JSON as the key writes it,
+  `""` without it); the empty key is one label.
 
 `label` and `group` are outermost only. A label holds the union of the sets mapped to it; without one, set `i` is label
 `i`. A name selector's statics (`Name_vN{K=V}`) compare `V` with the binding's canonical JSON, as the descriptor's key
 writes it, and a full specialization id with the descriptor key.
 
 Refused by code (`Annot.Refusal`): `term` (a document the codec doesn't read, or a term this module doesn't evaluate:
-`override`, `frontier`, a two-axis `k`, a set-algebra family, `@name:` selectors, which name metadata outside the
-descriptor), `table` (rows missing, of another length or not dense), `plan` (what `query_ast` refuses at plan time: `zip`
-over unequal member counts, `each` over a set of several nodes, `instances('.')` inside a body) and `fuel`.
+`override`, `frontier`, a two-axis `k`, a set-algebra family, a table of anything but nodes, `@name:` selectors, which
+name metadata outside the descriptor), `table` (rows missing, of another length or not dense), `plan` (what `query_ast`
+refuses at plan time: `zip` over unequal member counts, `each` over a set of several nodes, `instances('.')` inside a
+body, a label map on the root activation, `group` over a set of several nodes, a label table splitting a set, `where`
+over a table) and `fuel`.
 
 ## Meanings
 
@@ -40,8 +47,8 @@ input gate in any; `cover`: every computed gate in at least one), `max_gates` (e
 and `max_count` (at most that many labels). The verdict is `{accept, count}`, with the first failing rule's `code` when
 refused: `input-held`, `gate-in-no-set` or `overlap` (the tiling, body by body in node order, members in order, depth
 first), then `too-many`, then `too-large`. A partition is tested on the unlabelled family's sets, which is stronger than
-the labelled annotation's: a gate in two sets of one label is refused. `max_gates` under `label` is refused as
-`meaning-unsupported`; under `group` it bounds each label by the sum of its sets' sizes.
+the labelled annotation's: a gate in two sets of one label is refused. `max_gates` under an affine `label` is refused as
+`meaning-unsupported`; under `group` and a label table it bounds each label by the sum of its sets' sizes.
 -/
 import Lean.Data.Json
 import Std.Data.HashMap
@@ -237,11 +244,34 @@ structure Pred where
   wMin : Option Nat := none
   deriving BEq, Inhabited
 
+/-- A part of a `group` key, read off the Definition a set's node calls: its descriptor key (`definition`), its `Name`
+(`name`), its `Name_vN` (`base`) or one static's canonical JSON as the key writes it, `""` without it (`static:K`). -/
+inductive KeyPart where
+  | definition
+  | name
+  | base
+  | static (k : String)
+  deriving BEq, Inhabited
+
+def KeyPart.ofString : String → Option KeyPart
+  | "definition" => some .definition
+  | "name" => some .name
+  | "base" => some .base
+  | s => if s.startsWith "static:" && s.length > 7 then some (.static (s.drop 7).toString) else none
+
+def KeyPart.render : KeyPart → String
+  | .definition => "definition"
+  | .name => "name"
+  | .base => "base"
+  | .static k => s!"static:{k}"
+
 /-- A label map, applied to the outermost family. -/
 inductive LabelMap where
   | affine (a b n : Nat)
-  /-- by the Definition its members call: its specialization key (`definition`) or its `Name` (`name`) -/
-  | group (byName : Bool)
+  /-- by a key of the Definition each set's node calls: one label per key, in first appearance -/
+  | group (key : Array KeyPart)
+  /-- by the label the table `name`'s row of the root body gives each set's node -/
+  | table (name : String)
   deriving BEq, Inhabited
 
 inductive Term where
@@ -320,20 +350,36 @@ def Term.ofJson (fuel : Nat) (j : Json) : V Term := do
       | .ok .null | .error _ => pure none
       | _ => refuse "term" "a where form is a string"
     return .where_ (← sub "base") { spec, form, wMax := ← optNat p "w_max", wMin := ← optNat p "w_min" }
-  | "table" => return .table (← Path.parse (← strField j "path")) (← strField j "table")
+  | "table" =>
+    match j.getObjVal? "of" with
+    | .error _ | .ok (.str "nodes") => pure ()
+    | .ok x => refuse "term" s!"a table labels body nodes; of {x.compress} is not a term this check evaluates"
+    return .table (← Path.parse (← strField j "path")) (← strField j "table")
   | "root" => return .root
   | "label" =>
-    match (j.getObjVal? "map").toOption.bind (·.getObjVal? "affine" |>.toOption) with
-    | some (.arr #[a, b, m]) => match natJ? a, natJ? b, natJ? m with
-      | some a, some b, some m =>
-        if m == 0 then refuse "term" "an affine label map needs a positive modulus"
-        return .label (← sub "base") (.affine a b m)
-      | _, _, _ => refuse "term" "an affine label map is [a, b, n] of natural numbers"
-    | _ => refuse "term" "a label map is {\"affine\": [a, b, n]}"
-  | "group" => match (j.getObjVal? "key").toOption with
-    | some (.str "definition") => return .label (← sub "base") (.group false)
-    | some (.str "name") => return .label (← sub "base") (.group true)
-    | _ => refuse "term" "a group key is \"definition\" or \"name\""
+    match (j.getObjVal? "map").toOption with
+    | some (.obj kv) => match kv.toArray with
+      | #[("affine", .arr #[a, b, m])] => match natJ? a, natJ? b, natJ? m with
+        | some a, some b, some m =>
+          if m == 0 then refuse "term" "an affine label map needs a positive modulus"
+          return .label (← sub "base") (.affine a b m)
+        | _, _, _ => refuse "term" "an affine label map is [a, b, n] of natural numbers"
+      | #[("table", .str t)] =>
+        if t.isEmpty then refuse "term" "a label table needs a name"
+        return .label (← sub "base") (.table t)
+      | _ => refuse "term" "a label map is {\"affine\": [a, b, n]} or {\"table\": NAME}"
+    | _ => refuse "term" "a label map is {\"affine\": [a, b, n]} or {\"table\": NAME}"
+  | "group" =>
+    let parts ← match (j.getObjVal? "key").toOption with
+      | some (.str s) => pure #[Json.str s]
+      | some (.arr ps) => pure ps
+      | _ => refuse "term" "a group key is a key part or a list of them"
+    let key ← parts.mapM fun p => match p with
+      | .str s => match KeyPart.ofString s with
+        | some k => pure k
+        | none => refuse "term" s!"a group key part is definition, name, base or static:K, not {repr s}"
+      | x => refuse "term" s!"a group key part is a string, not {x.compress}"
+    return .label (← sub "base") (.group key)
   | "override" | "frontier" | "union" | "minus" | "inter" =>
     refuse "term" s!"{op} is not a term this check evaluates"
   | _ => refuse "term" s!"unknown query op {repr op}"
@@ -357,8 +403,9 @@ def Term.toJson : Term → Json
   | .root => Json.mkObj [("op", "root")]
   | .label b (.affine a c n) => Json.mkObj [("op", "label"), ("base", b.toJson),
       ("map", Json.mkObj [("affine", Lean.toJson #[a, c, n])])]
-  | .label b (.group byName) => Json.mkObj [("op", "group"), ("base", b.toJson),
-      ("key", if byName then "name" else "definition")]
+  | .label b (.table t) => Json.mkObj [("op", "label"), ("base", b.toJson), ("map", Json.mkObj [("table", Json.str t)])]
+  | .label b (.group key) => Json.mkObj [("op", "group"), ("base", b.toJson),
+      ("key", if h : key.size = 1 then Json.str key[0].render else Json.arr (key.map (Json.str ·.render)))]
 
 /-- A term's identity for the plan memo: its document, compact. -/
 def Term.key (t : Term) : String := t.toJson.compress
@@ -558,6 +605,20 @@ def rootMatch (d : Nat) (steps : Path) : Bool :=
 
 def composite (node : Node) : Bool := !(P.defs[node.fn]!).prim
 
+/-- Table `name`'s row for body `d`, one label or none per node, and its label count: the labels it uses are
+`0, …, L - 1`, each at least once. -/
+def tableRow (name : String) (d : Nat) : V (Array (Option Nat) × Nat) := do
+  let body := (P.defs[d]!).body
+  let key := (P.defs[d]!).key
+  let some rows := (D.tables[name]?).bind (·[key]?)
+    | refuse "table" s!"table {repr name} has no rows for {key}"
+  if rows.size != body.nodes.size then
+    refuse "table" s!"table {repr name} has {rows.size} rows for {key}, whose body has {body.nodes.size} nodes"
+  let labels := rows.foldl (fun m r => match r with | some v => max m (v + 1) | none => m) 0
+  if (List.range labels).any fun v => !rows.contains (some v) then
+    refuse "table" s!"table {repr name}'s labels for {key} are not 0..{labels - 1}, each used"
+  return (rows, labels)
+
 /-- `_build_sel`: a leaf applied to the nodes of body `d`. -/
 def selPlan (d : Nat) (leaf : Leaf) : M Nat := memo s!"{d}|sel|{leaf.key}" do
   let body := (P.defs[d]!).body
@@ -579,15 +640,8 @@ def selPlan (d : Nat) (leaf : Leaf) : M Nat := memo s!"{d}|sel|{leaf.key}" do
         liftV (refuse "plan" s!"zip in {(P.defs[d]!).key}: selected nodes {js} have different member counts")
       es := es.push { j := js[0], kind := .zip js, members := full ns[0]! }
   | .table name =>
-    let key := (P.defs[d]!).key
-    let some rows := (D.tables[name]?).bind (·[key]?)
-      | liftV (refuse "table" s!"table {repr name} has no rows for {key}")
-    if rows.size != body.nodes.size then
-      liftV (refuse "table" s!"table {repr name} has {rows.size} rows for {key}, whose body has {body.nodes.size} nodes")
-    let labels := rows.foldl (fun m r => match r with | some v => max m (v + 1) | none => m) 0
-    if (List.range labels).any fun v => !rows.contains (some v) then
-      liftV (refuse "table" s!"table {repr name}'s labels for {key} are not 0..{labels - 1}, each used")
-    es := es.push { j := 0, kind := .table rows labels, members := #[] }
+    let (rows, labels) ← liftV (tableRow P D name d)
+    if labels > 0 then es := es.push { j := 0, kind := .table rows labels, members := #[] }
   | .instances => liftV (refuse "plan" "instances is a path's leaf")
   push d es
 
@@ -753,9 +807,7 @@ def applyWhere : Nat → Nat → Pred → M Nat
         let sub ← applyWhere fuel s pred
         if (← planOf sub).total > 0 then es := es.push { e with kind := .descend sub }
       | .zip ns => if ← ns.allM fun j => predOk P pred body.nodes[j]! 1 then es := es.push e
-      | .table rows _ =>
-        if ← (Array.range rows.size).allM fun j => if rows[j]!.isSome then
-            predOk P pred body.nodes[j]! body.nodes[j]!.members else pure true then es := es.push e
+      | .table _ _ => liftV (refuse "plan" s!"where(...) keeps a set by its node; a table set (in {(P.defs[pl.d]!).key}) spans nodes, so filter its base")
       | .atomic k => if ← predOk P pred body.nodes[e.j]! k then es := es.push e
       | .whole => if ← predOk P pred body.nodes[e.j]! body.nodes[e.j]!.members then es := es.push e
     push pl.d es
@@ -783,6 +835,7 @@ def eval (P : Prog) (D : Desc) : V Family := do
     | .root => true
     | .instances p => p.isSelf || (p.size == 1 && rootMatch P P.root p)
     | _ => false
+  if whole && map.isSome then refuse "plan" "a label map refines the root body's plan; the root activation has none"
   let go : M Nat := if whole then
       push P.root #[{ j := 0, kind := .table (((P.defs[P.root]!).body.nodes.map fun _ => some 0)) 1, members := #[] }]
     else plan P D Steps.FUEL P.root q
@@ -934,11 +987,25 @@ def activations : Array Nat := Id.run do
       if let .descend s := e.kind then a := a.set! s (a[s]! + m * total e.members)
   return a
 
-/-- Per Definition key the group's sets call, the gates they hold together, in first appearance; refused when a set is
-of several nodes. -/
-def groups (byName : Bool) : V (Array (String × Nat)) := do
+/-- Each plan's sets' sizes summed, in gates, per activation, in plan order. -/
+def sumSets : Array Nat := F.plans.foldl (init := #[]) fun acc pl =>
+  let body := (P.defs[pl.d]!).body
+  acc.push (pl.entries.foldl (fun s e => s + match e.kind with
+    | .descend sub => total e.members * acc[sub]!
+    | _ => Entry.allGates P body e) 0)
+
+/-- A `group` key's value on Definition `d`. -/
+def groupKey (key : Array KeyPart) (d : Defn) : Array String := key.map fun
+  | .definition => d.key
+  | .name => baseName d.id
+  | .base => d.id
+  | .static k => (((recordPairs d.key).find? (·.1 == k)).map (·.2)).getD ""
+
+/-- Per key the group's sets' Definitions have, the gates those sets hold together, in first appearance; refused when a
+set is of several nodes. -/
+def groups (key : Array KeyPart) : V (Array (Array String × Nat)) := do
   let act := activations F
-  let mut keys : Array (String × Nat) := #[]
+  let mut keys : Array (Array String × Nat) := #[]
   let mut seen : Std.HashSet Nat := {}
   -- first appearance: plans in family order, each visited once
   let mut order : Array Nat := #[]
@@ -962,11 +1029,10 @@ def groups (byName : Bool) : V (Array (String × Nat)) := do
       let body := (P.defs[pl.d]!).body
       match e.kind with
       | .descend _ => pure ()
-      | .zip _ | .table _ _ => if e.count 0 > 0 then refuse "term" "group over sets of several nodes"
+      | .zip _ | .table _ _ => if e.count 0 > 0 then refuse "plan" "group over sets of several nodes"
       | _ =>
         if e.count 0 == 0 then continue
-        let callee := P.defs[body.nodes[e.j]!.fn]!
-        let k := if byName then baseName callee.id else callee.key
+        let k := groupKey key P.defs[body.nodes[e.j]!.fn]!
         let w := Entry.allGates P body e * act[p]!
         keys := match keys.findIdx? (·.1 == k) with
           | some i => keys.set! i (k, keys[i]!.2 + w)
@@ -976,6 +1042,26 @@ def groups (byName : Bool) : V (Array (String × Nat)) := do
 
 end
 
+/-- The root-body nodes an outermost entry's sets are in. -/
+def Entry.nodes (body : Body) (e : Entry) : Array Nat :=
+  match e.kind with
+  | .zip ns => ns
+  | .table rows _ => (Array.range rows.size).filter fun j => rows[j]!.isSome && body.nodes[j]!.members > 0
+  | _ => #[e.j]
+
+/-- `label(F, table=NAME)`: per entry of the outermost plan, the label table `name`'s row of the root body gives its
+nodes (none for none), and the label count; refused when an entry's nodes have different labels. -/
+def tableLabels (P : Prog) (D : Desc) (F : Family) (name : String) : V (Array (Option Nat) × Nat) := do
+  let top := F.plans[F.top]!
+  let body := (P.defs[top.d]!).body
+  let (row, n) ← tableRow P D name top.d
+  let ls ← top.entries.mapM fun e => do
+    let vs := (e.nodes body).foldl (fun vs j => if vs.contains row[j]! then vs else vs.push row[j]!) #[]
+    if vs.size > 1 then
+      refuse "plan" s!"label(..., table={repr name}) labels a set by its node; an entry spans nodes {e.nodes body} of labels {vs}"
+    return vs[0]?.join
+  return (ls, n)
+
 /-- `Annot.check`: meaning `Φ` decided on the description of annotation `D` of program `P`, at the size of the
 description. -/
 def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
@@ -984,9 +1070,20 @@ def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
   let (count, sizes) ← match F.map with
     | none => pure (top.total, some ((maxSets P F)[F.top]!))
     | some (.affine _ _ n) => pure (n, none)
-    | some (.group byName) => do
-      let gs ← groups P F byName
+    | some (.group key) => do
+      let gs ← groups P F key
       pure (gs.size, some (gs.foldl (fun m (_, w) => max m w) 0))
+    | some (.table name) => do
+      let (ls, n) ← tableLabels P D F name
+      let body := (P.defs[top.d]!).body
+      let sums := sumSets P F
+      let mut w := Array.replicate n 0
+      for (e, l) in top.entries.zip ls do
+        if let some l := l then
+          w := w.modify l (· + match e.kind with
+            | .descend s => total e.members * sums[s]!
+            | _ => Entry.allGates P body e)
+      pure (n, some (w.foldl max 0))
   let refused := fun (code : String) => (pure { accept := false, code, count } : V Verdict)
   if let some t := Φ.tiling then
     match (tiles P F (gateKinds P) (planHolds P F) (t == .partition) Steps.FUEL P.root #[F.top]).run' {} with
