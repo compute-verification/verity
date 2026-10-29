@@ -54,8 +54,6 @@ def parse(argv: list[str]) -> dict:
     ap.add_argument("--expect-uuid", default=None)              # a guard (stops a run on the wrong GPU), not part of the answer
     ap.add_argument("--fake-silicon", default=None)             # dry run; probe.py refuses it with RESEARCH_RUN_ID set
     ap.add_argument("--sass-only", action="store_true")
-    ap.add_argument("--hot-bits", default="14,15,16")            # sp_nvf4_t1: the hot accumulators' h
-    ap.add_argument("--model-sample", type=int, default=4096)   # sp_nvf4_t1: words checked against the pinned models
     ap.add_argument("--prebuilt", default=None)                 # a path to the same source's library (its sha256 is recorded)
     ap.add_argument("--vectors", default=None)                  # nvf4_lean_vectors: the Lean vector file (content-resolved)
     ap.add_argument("--vector-list", default="nvf4P7")
@@ -311,8 +309,8 @@ TC_PROBE_FP4 = Tool(
     command=["python", "benchmarks/tc_probe_fp4/probe.py"],
     closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.ml.circuits", "silicon/**")],
     key_params=["instruction", "arch", "families", "seed", "n", "group", "sweep", "golden_per_family", "replay_autoproof", "sass_check",
-                "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only", "hot_bits",
-                "model_sample", "vectors", "vector_list", "vector_ids", "chain_ids", "special_ids", "collect"],
+                "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only", "vectors",
+                "vector_list", "vector_ids", "chain_ids", "special_ids", "collect"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_autoproof", "vectors"],
     caches=["nvcc"],
