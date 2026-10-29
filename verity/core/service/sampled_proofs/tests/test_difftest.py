@@ -2157,7 +2157,7 @@ CHECK_PROVED = D.Port(PIECES, "check_proved", check_proved, st.one_of(
               st.sampled_from([0, 0, 1, -1])),
     st.builds(lambda d, p, i: {"draw": d, "instances": i, "proved_units": p}, JSON, JSON, JSON)), package=PACKAGE)
 def _sources(least: int, most: int):
-    """Sources of the verifier's own randomness, `least` to `most` bytes after some `ff` bytes or none: a word of them is
+    """Byte sources (a challenger's coins), `least` to `most` bytes after some `ff` bytes or none: a word of them is
     rejected under any `n` but a power of two, so a stream runs out early and is extended and rerun."""
     random = st.builds(lambda seed, n: hashlib.shake_256(seed).hexdigest(n), st.binary(max_size=4), st.integers(least, most))
     return random | st.builds(lambda r, s: "ff" * r + s, st.integers(1, 400), random)

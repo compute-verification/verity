@@ -24,7 +24,7 @@ developer                                          auditor
 serve the workload, committing every value
 that crosses a proof-block boundary
 register the commitment roots   --------------->   check the registration
-                                <---------------   draw proof blocks from its own randomness
+                                <---------------   draw proof blocks on its challenger's coins
 prove the drawn blocks (C-Flock) -------------->   check the proofs (the Lean verifier)
                                                    record the integrity profile
 ~~~

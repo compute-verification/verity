@@ -289,7 +289,7 @@ class Check:
     the auditor reads. `deadline`: a timed session's (PoUS's rounds). `proof_deadline`: seconds on the challenger's clock
     from the draw; a proof delivered later, or none by then, is a reject (`late`), and a `Stream` refuses a check
     without one. `registration_deadline`: seconds on the challenger's clock from
-    the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
+    the salt coin's release (`Stream.salt_released`'s `released_at`); a registration received later,
     or before any salt, is refused (`late-registration`) and ends the epoch."""
 
     program: str | tuple[str, ...]
