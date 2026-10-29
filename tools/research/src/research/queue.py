@@ -2876,7 +2876,8 @@ class RecordsGate:
     `AUDIT: FAIL` still writes a record, which reads as a pass, and a head marked on it fails a train's Lean check, about 50
     minutes later.
 
-    Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that commits exactly the
+    Three heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one whose tree is a parent's
+    byte for byte (a merge that resolved to its own side, the parent vouched); one that commits exactly the
     record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
     changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
     but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
@@ -3151,6 +3152,10 @@ class RecordsGate:
         if depth >= RECORDS_WALK:
             return None
         parents = _out(self.repo, "rev-list", "--parents", "-n", "1", commit).split()[1:]
+        tree = _out(self.repo, "rev-parse", f"{commit}^{{tree}}").strip()
+        for p in parents:
+            if _out(self.repo, "rev-parse", f"{p}^{{tree}}").strip() == tree and (how := self._vouch(p, pkg, depth + 1)):
+                return f"{commit[:12]} has {p[:12]}'s tree byte for byte, where {how}"
         if len(parents) == 2 and self._main_merge(commit, *parents):
             if how := self._vouch(parents[0], pkg, depth + 1):
                 return f"{commit[:12]} only merges `main`'s {parents[1][:12]} into {parents[0][:12]}, where {how}"
