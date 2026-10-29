@@ -75,14 +75,24 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
     ∃ s, String.fromUTF8? b = some s ∧ Flock.canon j = .ok s := by
   unfold Core.canonicalJson at h
   cases hs : String.fromUTF8? b with
-  | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+  | none =>
+    simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · cases h
+    · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
     cases hp : Lean.Json.parse s with
-    | error e => simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    | error e =>
+      simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+      split at h <;> cases h
     | ok j0 =>
       cases hc : Flock.canon j0 with
-      | error e => simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+      | error e =>
+        simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+        split at h
+        · cases h
+        · simp [throw, throwThe, MonadExceptOf.throw] at h
       | ok s' =>
         by_cases hne : s' = s
         · subst hne
