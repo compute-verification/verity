@@ -109,20 +109,6 @@ PORT = D.ProtocolPort(EXE, protocol, st.nothing(), package=M.PACKAGE)
 server = D.server_fixture(PORT)
 
 
-class Clock:
-    """The verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-    def sleep_until(self, clock, t: int) -> None:
-        self.now = max(self.now, t)
-
-
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 
@@ -132,7 +118,7 @@ def periods() -> dict[str, period.Period]:
     to its first window."""
     out = {}
     for name, kw in (("honest", {}), ("dropping", {"cheat": M.dropping(lambda j: j % 2 == 1)}), ("unverified", {"verify": 1})):
-        c = Clock()
+        c = M.Clock(10 ** 9, 1_000)
         out[name] = period.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=M.Entropy(b"salts"), **kw)
     return out
 
