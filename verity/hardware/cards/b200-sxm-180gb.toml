@@ -18,7 +18,6 @@ count = { value = 148, unit = "SM", mark = "ceiling", source = "the SMs the firm
 
 [clock]
 sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }
-tensor = { value = 1965, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, which bounds them; the data sheets' rates imply 1854 MHz (Accounting.TS.Sheets.B200's impliedMHz), which no document states as a clock, and no lower tensor clock is measured on this card" }
 memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes.
@@ -29,7 +28,7 @@ smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "Blackwell Tu
 l2 = { value = 132120576, unit = "B", mark = "placeholder", source = "126 MiB: Blackwell Tuning Guide section 1.4.2.2, 'The NVIDIA GB200 GPU increases the L2 cache capacity to 126 MB', taken as MiB; no document gives the HGX B200's, and the device's L2 size isn't on record" }
 dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (art:a597e0beaf00)" }
 
-# The resources' rates, each a SM-clock (a Lean table's rho would be SMs x this x clock.sm, the tensor's x clock.tensor).
+# The resources' rates, each a SM-clock (a Lean table's rho would be SMs x this x the SM clock).
 [rate]
 tensor = { value = 8192, unit = "s8 MAC/SM-clock", mark = "measurement", source = "tcgen05.mma kind::i8 measured at 8195 MACs a SM-clock (benchmarks/pouw/sass_census/unpriced_fp4.cu) and UTCIMMA M128 N256 at 512 SMSP-cycles (DC-100); the data sheets' 4.5 dense INT8 petaOPS (Lenovo Product Guide Table 2; Technical Brief V2.1 Table 3) over 2 x 148 SMs is 8192 at 1854 MHz, but no document states the clock it is quoted at (Accounting.TS.Sheets.B200's impliedMHz), so the per-clock rate is measured only" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.9.1 (CC 10.x), as section 18.8.1: '4 warp schedulers ... each scheduler issues one instruction for one of its assigned warps'; a uniform instruction takes the slot too (Accounting.TS.Sheets.B200, A2u)" }
