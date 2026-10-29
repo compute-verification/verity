@@ -4,11 +4,13 @@ import Definitions.NetworkCertifier.RecordRows
 # The network certifier's rows read back its lanes
 
 `Definitions.NetworkCertifier.RecordRows`. On a schedule that fits the rows format, the lanes read back from the record
-of the cells the network certifier's code sends are those cells (`RowsFormat.read_record`), so the rows format is a
-`TapRecord` (`RowsFormat.tapRecord`). A lane of `k` cells has cell `j` in bucket `t j` (`wardenLane_fst`); among the
-cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
-bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in turn, so a connection's are its own
-(`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
+of the cells the network certifier's code sends are those cells (`RowsFormat.read_record`), with no schedule given, so
+the rows format is a `TapRecord` (`RowsFormat.tapRecord`). A row's frames are its connections' in turn, so a
+connection's are its own (`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row
+fits (`frames_record`). A connection's frames in a bucket are its padding, in the buckets from its admission to
+`adm c + D`, then its lane's cells in the bucket; a lane of `k` cells has cell `j` in bucket `t j` (`wardenLane_fst`),
+so its cells are in buckets from `adm c + D` on, in order (`wardenCode_sorted`). In bucket order, then, a connection's
+frames are its `r·D` padding frames and then its lane, cell by cell (`drop_flatMap_laneFrames`).
 
 The `#guard`s hold the rows format to the Python network certifier's egress records (the test harness of
 `verity/core/protocols/certifier/tests/test_network_certifier_warden.py`, `params`: B = 64, r = 2, D = 3, two lanes,
@@ -41,31 +43,109 @@ theorem wardenCode_fst (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : �
   rw [List.range_eq_range']
   exact wardenLane_fst _ _ 0 _
 
-/-- An element `j` that `p` keeps is the `n`-th that `p` keeps, `n` the number it keeps before `j`. -/
-theorem getElem?_filter_countP_take {α : Type} (p : α → Bool) :
-    ∀ (L : List α) (j : ℕ) (hj : j < L.length), p L[j] = true → (L.filter p)[(L.take j).countP p]? = some L[j]
-  | x :: xs, 0, _, hp => by simp_all
-  | x :: xs, j + 1, hj, hp => by
-    have ih := getElem?_filter_countP_take p xs j (by simpa using hj) (by simpa using hp)
-    by_cases hx : p x = true
-    · simpa [List.filter_cons, hx, List.countP_cons] using ih
-    · simpa [List.filter_cons, hx, List.countP_cons] using ih
+theorem mem_wardenCode_fst (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : κ) {x : ℕ × CellView Cell}
+    (hx : x ∈ wardenCode s a c) : ∃ j < s.cells c, s.bucket c j = x.1 := by
+  have h := List.mem_map_of_mem (f := Prod.fst) hx
+  rw [wardenCode_fst] at h
+  obtain ⟨j, hj, e⟩ := List.mem_map.1 h
+  exact ⟨j, List.mem_range.1 hj, e⟩
 
-/-- Of the `i < j`, those with `⌊i/r⌋ = ⌊j/r⌋` number `j mod r`. -/
-theorem countP_range_div (r j : ℕ) : (List.range j).countP (fun i => i / r == j / r) = j % r := by
-  rcases Nat.eq_zero_or_pos r with rfl | hr
-  · simp
-  · obtain ⟨q, m, hm, rfl⟩ : ∃ q m, m < r ∧ j = r * q + m := ⟨j / r, j % r, Nat.mod_lt _ hr, (Nat.div_add_mod j r).symm⟩
-    have hq : (r * q + m) / r = q := by rw [Nat.mul_add_div hr, Nat.div_eq_of_lt hm, Nat.add_zero]
-    rw [hq, Nat.mul_add_mod_self_left, Nat.mod_eq_of_lt hm, List.range_add, List.countP_append, List.countP_map]
-    have h1 : (List.range (r * q)).countP (fun i => i / r == q) = 0 := by
-      refine List.countP_eq_zero.2 fun i hi => ?_
-      have : i / r < q := (Nat.div_lt_iff_lt_mul hr).2 (by rw [Nat.mul_comm]; exact List.mem_range.1 hi)
-      simp [Nat.ne_of_lt this]
-    have h2 : (List.range m).countP ((fun i => i / r == q) ∘ (r * q + ·)) = m := by
-      rw [List.countP_eq_length.2 fun i hi => ?_, List.length_range]
-      simp [Nat.mul_add_div hr, Nat.div_eq_of_lt ((List.mem_range.1 hi).trans hm)]
-    rw [h1, h2, Nat.zero_add]
+/-- A lane's cells are in bucket order. -/
+theorem wardenCode_sorted (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : κ) :
+    (wardenCode s a c).Pairwise (fun x y => x.1 ≤ y.1) := by
+  have h : ((List.range (s.cells c)).map (s.bucket c)).Pairwise (· ≤ ·) :=
+    List.pairwise_map.2 (List.pairwise_lt_range.imp fun hij =>
+      Nat.add_le_add_left (Nat.div_le_div_right (Nat.le_of_lt hij)) _)
+  rw [← wardenCode_fst s a c] at h
+  exact List.pairwise_map.1 h
+
+/-- A bucket's cells of a lane, each tagged with the bucket, are those cells. -/
+theorem map_pair_filter_fst {β : Type} (b : ℕ) (l : List (ℕ × β)) :
+    ((l.filter fun x => x.1 == b).map Prod.snd).map (b, ·) = l.filter fun x => x.1 == b := by
+  rw [List.map_map]
+  refine (List.map_congr_left fun x hx => ?_).trans (List.map_id _)
+  have : x.1 = b := by simpa using (List.mem_filter.1 hx).2
+  exact Prod.ext this.symm rfl
+
+/-- Over the buckets, frames that end before bucket `m` and frames that start at it come apart. -/
+theorem flatMap_append_sep {β : Type} (f g : ℕ → List β) (m : ℕ) (hf : ∀ b, m ≤ b → f b = [])
+    (hg : ∀ b, b < m → g b = []) :
+    ∀ N, ((List.range N).flatMap fun b => f b ++ g b) = (List.range N).flatMap f ++ (List.range N).flatMap g
+  | 0 => by simp
+  | N + 1 => by
+    simp only [List.range_succ, List.flatMap_append, List.flatMap_singleton]
+    rw [flatMap_append_sep f g m hf hg N]
+    by_cases h : m ≤ N
+    · rw [hf N h]
+      simp
+    · have hA : (List.range N).flatMap g = [] :=
+        List.flatMap_eq_nil_iff.2 fun b hb => hg b (by have := List.mem_range.1 hb; omega)
+      rw [hg N (by omega), hA]
+      simp
+
+/-- A list in key order with every key at most `N`: those below `N`, then those at `N`. -/
+theorem filter_lt_append_filter_eq {β : Type} (N : ℕ) :
+    ∀ l : List (ℕ × β), l.Pairwise (fun x y => x.1 ≤ y.1) → (∀ x ∈ l, x.1 ≤ N) →
+      l.filter (fun x => decide (x.1 < N)) ++ l.filter (fun x => x.1 == N) = l
+  | [], _, _ => rfl
+  | x :: xs, hp, hN => by
+    obtain ⟨hx, hxs⟩ := List.pairwise_cons.1 hp
+    have hxN := hN x (by simp)
+    rcases Nat.lt_or_eq_of_le hxN with h | h
+    · have ih := filter_lt_append_filter_eq N xs hxs fun y hy => hN y (List.mem_cons_of_mem _ hy)
+      simp [h, Nat.ne_of_lt h, ih]
+    · have h1 : xs.filter (fun x => decide (x.1 < N)) = [] :=
+        List.filter_eq_nil_iff.2 fun y hy => by
+          have := hx y hy
+          simp only [decide_eq_true_eq]
+          omega
+      have h2 : xs.filter (fun x => x.1 == N) = xs :=
+        List.filter_eq_self.2 fun y hy => by
+          have := hx y hy
+          have := hN y (List.mem_cons_of_mem _ hy)
+          exact beq_iff_eq.2 (by omega)
+      simp [h, h1, h2]
+
+/-- **A list in key order, bucket by bucket, is the list**, when every key is a bucket before `N`. -/
+theorem flatMap_filter_fst {β : Type} :
+    ∀ (N : ℕ) (l : List (ℕ × β)), l.Pairwise (fun x y => x.1 ≤ y.1) → (∀ x ∈ l, x.1 < N) →
+      ((List.range N).flatMap fun b => l.filter fun x => x.1 == b) = l
+  | 0, [], _, _ => by simp
+  | 0, x :: _, _, hN => absurd (hN x (by simp)) (Nat.not_lt_zero _)
+  | N + 1, l, hp, hN => by
+    have hsub : ∀ b ∈ List.range N, (l.filter fun x => x.1 == b) =
+        (l.filter fun x => decide (x.1 < N)).filter fun x => x.1 == b := by
+      intro b hb
+      have hbN := List.mem_range.1 hb
+      rw [List.filter_filter]
+      refine List.filter_congr fun x _ => ?_
+      show (x.1 == b) = ((x.1 == b) && decide (x.1 < N))
+      cases hxb : (x.1 == b)
+      · rfl
+      · have hx : x.1 = b := by simpa using hxb
+        exact (decide_eq_true (by omega)).symm
+    simp only [List.range_succ, List.flatMap_append, List.flatMap_singleton]
+    rw [List.flatMap_congr hsub, flatMap_filter_fst N (l.filter fun x => decide (x.1 < N))
+      (hp.sublist List.filter_sublist) fun x hx => by simpa using (List.mem_filter.1 hx).2]
+    exact filter_lt_append_filter_eq N l hp fun x hx => Nat.lt_succ_iff.1 (hN x hx)
+
+/-- The padding frames a connection sends from its admission to `adm + D`, `r` a bucket, number `r` a bucket of
+those before `N`. -/
+theorem length_pre {β : Type} (r D adm : ℕ) (x : β) :
+    ∀ N, ((List.range N).flatMap fun b =>
+      (if adm ≤ b ∧ b < adm + D then List.replicate r x else []).map (b, ·)).length = r * (min N (adm + D) - adm)
+  | 0 => by simp
+  | N + 1 => by
+    simp only [List.range_succ, List.flatMap_append, List.flatMap_singleton, List.length_append,
+      length_pre r D adm x N]
+    split_ifs with h
+    · have : min (N + 1) (adm + D) - adm = min N (adm + D) - adm + 1 := by omega
+      simp only [List.length_map, List.length_replicate]
+      rw [this]
+      exact (Nat.mul_succ r _).symm
+    · have : min (N + 1) (adm + D) - adm = min N (adm + D) - adm := by omega
+      simp only [List.length_map, List.length_nil, Nat.add_zero]
+      rw [this]
 
 theorem filterMap_flatMap_ite [DecidableEq κ] {β : Type} (X : List β) {c : κ} :
     ∀ {conns : List κ}, conns.Nodup → c ∈ conns →
@@ -94,38 +174,48 @@ theorem filterMap_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns.N
   simp only [this]
   exact filterMap_flatMap_ite _ hnd hc
 
-/-- **The lanes read back from the rows of the code's cells are the code's cells.** -/
-theorem lanesOfRows_bucketFrames [DecidableEq κ] {conns : List κ} (hnd : conns.Nodup) (hall : ∀ c, c ∈ conns)
-    (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : κ) :
-    lanesOfRows s (bucketFrames conns s (wardenCode s a)) c = wardenCode s a c := by
-  have hlen : (wardenCode s a c).length = s.cells c := wardenLane_length _ _ _ _
-  have hfst : ∀ j (hj : j < (wardenCode s a c).length), ((wardenCode s a c)[j]).1 = s.bucket c j := by
-    intro j hj
-    have h := congrArg (fun l => l[j]?) (wardenCode_fst s a c)
-    simp only [List.getElem?_map, List.getElem?_eq_getElem hj, List.getElem?_range (hlen ▸ hj),
-      Option.map_some, Option.some.injEq] at h
-    exact h
-  apply List.ext_getElem (by simp [lanesOfRows, hlen])
-  intro j h1 h2
-  have hj : j < s.cells c := by simpa [lanesOfRows] using h1
-  simp only [lanesOfRows, List.getElem_map, List.getElem_range]
-  rw [filterMap_bucketFrames hnd (hall c)]
-  have hpre : ¬(s.adm c ≤ s.bucket c j ∧ s.bucket c j < s.adm c + s.D) := fun h =>
-    absurd h.2 (Nat.not_lt.2 (Nat.le_add_right _ _))
-  simp only [laneFrames, hpre, ite_false, List.nil_append]
-  have key := getElem?_filter_countP_take (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) (wardenCode s a c) j h2
-    (by simp [hfst j h2])
-  have hcount : ((wardenCode s a c).take j).countP (fun x => x.1 == s.bucket c j) = j % s.r := by
-    have := congrArg (fun l => (l.take j).countP (· == s.bucket c j)) (wardenCode_fst s a c)
-    simp only [← List.map_take, List.countP_map, List.take_range, Nat.min_eq_left hj.le] at this
-    rw [show (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) = (· == s.bucket c j) ∘ Prod.fst from rfl, this,
-      ← countP_range_div s.r j]
-    congr 1
-    funext i
-    simp [WardenSchedule.bucket]
-  rw [hcount] at key
-  rw [List.getElem?_map, key]
-  exact Prod.ext (hfst j h2).symm rfl
+/-- **A connection's frames, in bucket order past its padding, are its lane's cells**: over buckets that hold its lane,
+its frames, each with its bucket, are its `r·D` padding frames and then the cells the code sends on its lane. -/
+theorem drop_flatMap_laneFrames (s : WardenSchedule κ) (a : κ → Arrivals Cell) (c : κ) (N : ℕ)
+    (hN : ∀ j, j < s.cells c → s.bucket c j < N) :
+    ((List.range N).flatMap fun b => (laneFrames s (wardenCode s a) c b).map (b, ·)).drop (s.r * s.D) =
+      wardenCode s a c := by
+  have hpad : ∀ b, s.adm c + s.D ≤ b →
+      (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r (CellView.pad : CellView Cell) else []).map
+        (b, ·) = [] := by
+    intro b hb
+    have : ¬(s.adm c ≤ b ∧ b < s.adm c + s.D) := fun h => absurd h.2 (Nat.not_lt.2 hb)
+    rw [ite_eq_right this]
+    rfl
+  have hcel : ∀ b, b < s.adm c + s.D → (wardenCode s a c).filter (fun x => x.1 == b) = [] := by
+    intro b hb
+    refine List.filter_eq_nil_iff.2 fun x hx => ?_
+    obtain ⟨j, -, hj⟩ := mem_wardenCode_fst s a c hx
+    rw [← hj]
+    simp only [beq_iff_eq, WardenSchedule.bucket]
+    have := Nat.le_add_right (s.adm c + s.D) (j / s.r)
+    omega
+  have hkey : ∀ x ∈ wardenCode s a c, x.1 < N := fun x hx => by
+    obtain ⟨j, hj, e⟩ := mem_wardenCode_fst s a c hx
+    rw [← e]
+    exact hN j hj
+  have hsplit : ((List.range N).flatMap fun b => (laneFrames s (wardenCode s a) c b).map (b, ·)) =
+      ((List.range N).flatMap fun b =>
+        (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r (CellView.pad : CellView Cell) else []).map
+          (b, ·)) ++ wardenCode s a c := by
+    simp only [laneFrames, List.map_append, map_pair_filter_fst]
+    rw [flatMap_append_sep _ _ (s.adm c + s.D) hpad hcel N,
+      flatMap_filter_fst N (wardenCode s a c) (wardenCode_sorted s a c) hkey]
+  rw [hsplit]
+  have hlen := length_pre s.r s.D (s.adm c) (CellView.pad : CellView Cell) N
+  rcases Nat.eq_zero_or_pos (s.cells c) with hc0 | hpos
+  · have hnil : wardenCode s a c = [] :=
+      List.eq_nil_of_length_eq_zero ((wardenLane_length (a c) (s.bucket c) 0 (s.cells c)).trans hc0)
+    rw [hnil, List.append_nil]
+    exact List.drop_eq_nil_of_le (by rw [hlen]; exact Nat.mul_le_mul_left _ (by omega))
+  · have h0 := hN 0 hpos
+    simp only [WardenSchedule.bucket, Nat.zero_div, Nat.add_zero] at h0
+    exact List.drop_left' (by rw [hlen, show min N (s.adm c + s.D) - s.adm c = s.D by omega])
 
 /-- A row of the code's cells holds each connection's load in the bucket. -/
 theorem length_bucketFrames (conns : List κ) (s : WardenSchedule κ) (a : κ → Arrivals Cell) (b : ℕ) :
@@ -174,21 +264,28 @@ theorem frames_record (F : RowsFormat κ Cell L K) (hdec : ∀ x, F.dec (F.enc x
     ↓reduceIte, hslot]
   exact filterMap_finRange_getElem? _ hS
 
-/-- **The rows format reads back the code's cells** on every schedule that fits it. -/
+/-- **The rows format reads back the code's cells** on every schedule that fits it, from the record alone. -/
 theorem read_record [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n : ℕ) (s : WardenSchedule κ)
     (hs : F.Fits S n s) (a : κ → Arrivals Cell) :
-    F.read s (F.record S n s a (wardenCode s a)) = wardenCode s a := by
+    F.read (F.record S n s a (wardenCode s a)) = wardenCode s a := by
   obtain ⟨hnd, hall, hdec⟩ := hF
+  obtain ⟨hr, hD, hin, hS⟩ := hs
   funext c
-  have : F.read s (F.record S n s a (wardenCode s a)) c = lanesOfRows s (bucketFrames F.conns s (wardenCode s a)) c := by
-    simp only [read, lanesOfRows]
-    refine List.map_congr_left fun j hj => ?_
-    rw [frames_record F hdec S n s a _ (hs.1 c j (List.mem_range.1 hj))
-      ((length_bucketFrames _ _ _ _).trans_le (hs.2 _))]
-  rw [this, lanesOfRows_bucketFrames hnd hall s a c]
+  have hrow : ∀ b ∈ List.range (n * F.T),
+      ((F.frames (F.record S n s a (wardenCode s a)) b).filterMap fun f => if f.1 = c then some f.2 else none).map
+        (b, ·) = (laneFrames s (wardenCode s a) c b).map (b, ·) := fun b hb => by
+    rw [frames_record F hdec S n s a _ (List.mem_range.1 hb) ((length_bucketFrames _ _ _ _).trans_le (hS _)),
+      filterMap_bucketFrames hnd (hall c)]
+  have : F.read (F.record S n s a (wardenCode s a)) c =
+      ((List.range (n * F.T)).flatMap fun b => (laneFrames s (wardenCode s a) c b).map (b, ·)).drop (s.r * s.D) := by
+    simp only [read, lanesOfRows, hr, hD]
+    congr 1
+    exact List.flatMap_congr hrow
+  rw [this]
+  exact drop_flatMap_laneFrames s a c _ (hin c)
 
 /-- **The rows format is a record format of the network certifier**: on the schedules that fit it, its record of the
-cells the code sends reads back to them. -/
+cells the code sends reads back to them, with no schedule given. -/
 def tapRecord [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n : ℕ) :
     TapRecord κ Cell (Fin n → List (Obs L K S)) where
   record := F.record S n
@@ -228,7 +325,8 @@ def fixtureAgrees {n : ℕ} (s : WardenSchedule (Fin n)) (arr : Fin n → Arriva
     (rows : List (List (ℕ × String × String))) : Bool :=
   (List.range (rows.length + 8)).all (fun b => (bucketFrames (List.finRange n) s (wardenCode s arr) b).map pyFrame ==
       rows.getD b []) &&
-    (List.finRange n).all (fun c => (lanesOfRows s (fun b => (rows.getD b []).filterMap ofPyFrame) c).map pyCell ==
+    (List.finRange n).all (fun c =>
+      (lanesOfRows s.r s.D (rows.length + 8) (fun b => (rows.getD b []).filterMap ofPyFrame) c).map pyCell ==
       (wardenCode s arr c).map pyCell) &&
     (List.range (rows.length + 8)).all fun b => (bucketFrames (List.finRange n) s (wardenCode s arr) b).length ≤ 4
 

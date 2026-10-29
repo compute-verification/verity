@@ -194,8 +194,8 @@ world's. Each comes in two forms, beside its share of one copy of the weights an
 `NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
 `Security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose sampling blocks'
 failures `NetTiming.periodLeak_le_sum` sums by a union bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the
-pooled form is `NetTiming.Guarantees.HorizonLeakAccepted`
-(`Security/Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`). Both are about one device on one uplink. The sum
+pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
+(`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
 datacenter at δ takes each link at δ / links, and each link pays its own faulty proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
@@ -241,11 +241,11 @@ K charges to the sampling block's term (`tiedAudits`). The egress tie moves the 
 tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
 
 The two forms:
-- The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ faulty proof blocks of b = NS + NV bits, and
+- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ faulty proof blocks of b = NS + NV bits, and
   Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block drawn.
-- Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.HorizonLeakAccepted`.
+- Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
 - Beside either, ε = m·δ_scan is the scans' δ summed over the period's m sampling blocks and the links
   (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
 
@@ -277,4 +277,4 @@ K also rests on these conditions:
   audit's (the `SlotEntry_v1` stand-in's) are the sampling block's free inputs above.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
-`HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).
+`POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

@@ -39,9 +39,12 @@
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
+  "Proofs.Properties.Pous.MemoryChallenger.Attest",
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
+  "Proofs.Properties.Pous.Wipe",
+  "Proofs.Properties.Pous.Component",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins",
@@ -61,6 +64,7 @@
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
+  "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Core.Site"
  ],
  "exempt": {

@@ -10,8 +10,7 @@ through the wardens in `w` (`Pr[acc w ∧ b w < moved w] ≤ ε w`). This is the
 error is `δ + ε_ks + ε_bind`, taken here as a hypothesis family, so the sum doesn't depend on the per-window
 statement's form. `periodLeak_le_sum` sums these bounds by a union bound (`Pr_exists_mem_le_sum`): except with
 probability `Σ_w ε w`, when every window's audit is accepted, the period's total is at most `a + Σ_w b w`. The total
-is bounded by the period-level terms `a` (`log2 #Ss + Σ_c log2 (cap_c + 1)` and whatever else the period charges once)
-plus each window's own bits (`htotal`), as `EncardWardenDecodableLe` counts them.
+is bounded by the period-level terms `a` (whatever the period charges once) plus each window's own bits (`htotal`).
 -/
 
 namespace NetTiming
