@@ -1,0 +1,1052 @@
+# The PoUW design space's card (pouw_space.py): every price, shape, point, premise and module it reads, each with its
+# source, and the cards that name designs. `kind` is "measured" (a run id in `source`), "estimate" (its basis in
+# `source`), "checked" (a CPU run) or "arith" (exact from the definitions). The calculator refuses a design whose field
+# is missing or "?", so an unpriced term can't rank.
+
+schema = "np-card/space/v1"
+
+[price.reg]
+value = 32
+unit = "W1 units a 32-bit register written"
+kind = "measured"
+source = "CORE-H32 final: the H200's table is h100Floor (tc, ffma, int32, fp64, other all 32), run r20261029-021534-a5a3, replicate r20261029-014532-a2da; cheapest int32 writer 32.277 (IMAD beside LOP3)"
+
+[price.entries_per_reg]
+value = 4
+unit = "int8 entries a 32-bit register"
+kind = "arith"
+source = "four packed int8 entries a register, so a formed or derived entry costs reg/4 = 8 at the floor"
+
+[price.hash_work]
+value = 1774.85
+unit = "W1 units a hashed byte"
+kind = "estimate"
+source = "HASH-38's bar, the public best SHA-512 on the H200: 0.01803 compressions an SM-clock (r20261027-044217-d499, r20261027-062350-7163), 128 B a compression, priced at its issue time, 4096/(128 x 0.01803) (CORE-SMELL C27: pricing an issue-bound hash at its time; co-issue would raise it)"
+
+[price.hash_work_committer]
+value = 2123.4
+unit = "W1 units a hashed byte"
+kind = "estimate"
+source = "GD-HASH's h_x at 16 KiB hm96 rows, framing and tree included (art:5cf3621a988a946e98dcb8d36eafbecc3496b898df7ae7f481f757f5308ff991); the committer, not the best possible"
+
+[price.hash_work_floor]
+value = 908.0
+unit = "W1 units a hashed byte, at H32's floor"
+kind = "measured"
+source = "SW-HASH final (note compute-research/20261029T0535Z-report-sw-hash, its sources table): SHA-512 a compression in the committer's build on sm_90a writes 3,632 registers, 116,224 W1 units at the floor table (h200Measured = h100Floor), SASS run r20261029-044108-5169; 116,224/128 a byte. Prices honest-only hashing work, the salt side's hiding, which T1 counts at W1's instruction prices (SW-HASH §9's floor column); the credited hashing keeps hash_work, the bar's issue-time price"
+
+[price.hash_rate]
+value = 519.63e9
+unit = "B/s"
+kind = "measured"
+source = "SHA-512 leaves and the level-form tree over 64 GiB of 16 KiB hm96 rows in 132.2461 ms, vy-dc-h200-5, run r20261029-013634-94e5 (CORE-NCP final)"
+
+[price.coin_rate]
+value = 4.449e9
+unit = "SHA-512 compressions/s"
+kind = "measured"
+source = "the committer's leaves, run r20261029-013634-94e5 (CORE-NCP final); a fresh noise matrix's coins are one XOF byte an entry, 64 a compression. Read only by T2's CORE-NCP reading"
+
+[price.hash_rows]
+rows = [16384, 65536, 262144, 1048576]
+time_ratio = [1.0, 0.911, 0.893, 0.899]
+ns_leaf = [31.787, 125.18, 494.424, 1989.076]
+hide_share = [0.0553, 0.0151, 0.004005, 0.0012]
+mask_share = [0.0345, 0.0096, 0.002743, 0.0008]
+comp_ns = 0.2255
+fixed_compressions = 16.5
+kind = "measured"
+source = "SW-HASH interim §1, §5, §7 (art:59be6851ab4ee9a27d8f1d999a2684dd0ed912c7d511877742036eb35d15f1cc, run r20261029-045843-97a0, on runs r20261029-044941-ad5c and r20261029-044436-1926, vy-dc-h200-5): hm96 leaves' kernel time a byte against 16 KiB rows; the salt side's hiding (PRF, M_key·y and c) and M_key·y alone as shares of a leaf's hash time; the data kernel's 0.2255 ns a compression. At 256 KiB, SW-HASH final §9's measured salt kernel, 1.98 ns a leaf of 494.424, with M_key·y 1.00/1.46 of it (its forced-but-M_key·y column). Below 16 KiB a leaf's time is (leaf/128 + fixed_compressions) compressions, fitted to 256 KiB's ratio, and its hiding is 16 KiB's per leaf (estimates)"
+
+[price.coinsncp]
+entries = [131072, 458752, 524288, 1048576, 3670016, 4194304, 6291456, 14680064, 16777216, 29360128, 33554432, 51380224, 58720256, 67108864, 262668288, 1073741824]
+ms = [0.011485, 0.01153, 0.011666, 0.012316, 0.019577, 0.020197, 0.026735, 0.054965, 0.061657, 0.102019, 0.11485, 0.1701, 0.19591, 0.222792, 0.832288, 3.372896]
+kind = "measured"
+source = "SW-GPU interim §1-2: coinsncp, one operand's NCP noise from SHA-512 counter-mode coins and its three formed copies (E2 = E1 shifted 24) written to HBM, a whole call, checked bit-exact, run r20261029-044623-0ed1 (r20261029-045206-f69c within 0.4%), vy-dc-h200-5 (art:0e8dd09b9791fed32c68cea5d1c8514345307fcdb290a00f6a752b265bed180e); log-log between sizes, the smallest call's time below it (one compression's dependency chain), linear above"
+
+[price.coins]
+entries = [131072, 458752, 524288, 1048576, 3670016, 4194304, 6291456, 14680064, 16777216, 29360128, 33554432, 51380224, 58720256, 67108864, 262668288, 1073741824]
+ms = [0.009281, 0.00948, 0.009505, 0.009547, 0.015947, 0.016231, 0.022925, 0.049361, 0.055948, 0.095494, 0.108784, 0.162192, 0.188602, 0.214764, 0.805472, 3.259232]
+kind = "measured"
+source = "SW-GPU final §2: coins alone, SHA-512 counter-mode XOF bytes for a whole call, one byte an entry, checked bit-exact, run r20261029-044623-0ed1 (art:c6d75315170fee55e03eb81f0e1d345024d57a872e39535c599f662c3f215401), vy-dc-h200-5; a 9.3 us floor below 1 M entries"
+
+[price.extract]
+sts_units_per_word = 125.96
+sts_mhz = 1814.2
+stg_units_per_word = 855.98
+stg_mhz = 1807.0
+units_per_clock = 540672
+kind = "measured"
+source = "SW-GPU interim §3: k32's persistent wgmma m64n256k32 s8 on smem-resident tiles; every k32 word exported to shared memory (sts, 2 CTAs an SM: 158.08 units a word over plain's 32.12) or to HBM (stg, 3 CTAs: 888.10), run r20261029-044623-0ed1, at each mode's sampled clock; rates without a served GEMM's operand traffic (SW-GPU's smell)"
+
+[price.latency]
+compression_s = 7.3e-6
+launch_s = 2.7e-6
+kind = "estimate"
+source = "SW-GPU interim §2: one compression's dependency chain floors a coins call at 9.28 us (131,072 entries, compress_from<8>) where a copy of the same size takes 2.70 us (run r20261029-044623-0ed1): 6.6 us for 72 rounds, 7.3 us for 80; a kernel launch 2.7 us. Prices A's root, which the call's noise seed reads, on the step's critical path: its leaf chain, three compressions a tree level, the seed, and a launch a level (no measurement of this chain exists)"
+
+[price.coin_bytes]
+value = 2
+unit = "hashed bytes a derived noise entry"
+kind = "arith"
+source = "one XOF byte a noise entry and 64 XOF bytes a 128-byte compression: each entry's coins cost two hashed bytes of credited work under ShaSpeed (the adversary needs the noise to write noise-dependent words)"
+
+[price.fast_matmul]
+products = [[0, 0], [0, 0], [1, 0], [0, 1], [1, 1], [1, 1], [1, 1]]
+output_adds = 7
+operand_adds = 8
+max_levels = 4
+tensor_max = 127
+kind = "estimate"
+source = "Strassen-Winograd on 2x2 blocks, the best-known bilinear scheme by additions: 7 products ([A summed, B summed] each), 7 output-block and 4 + 4 operand-block additions a level. A summed operand side whose range passes the s8 tensor's 127 is split into two s8 parts, so its product costs two k32 steps a side (P1's floor, scheme_floor; SW-OLD A11); FP16 at k16 costs the same. Charged against the k32 counting whenever it saves (a lower bound on the adversary's saving, not a proof that nothing saves more)"
+
+[price.mac_rate_peak]
+value = 9.89e14
+unit = "int8 MAC/s"
+kind = "measured"
+source = "CORE-TIME final: one H200's tensor peak, 127.99 k32 words/SM-clk x 132 SMs at 1.83 GHz"
+
+[price.and_per_mac]
+value = 129.9375
+unit = "AND gates an int8 MAC"
+kind = "estimate"
+source = "CORE-TIME final's per-period tables: 2,079/16 AND gates an int8 MAC (relayed, not re-derived here)"
+
+# Per monitoring period (AGENTS.md): the datacenter and the world, from the census.
+[scale]
+datacenter_gpus = 100000
+window_s = 600
+datacenter_source = "benchmarks/census/deployments.json dc-12500-machines-600s: 12,500 machines of 8 GPUs, 10-minute windows (its GPUs taken as H200s, an estimate)"
+world_mac_per_year = 4.68e30
+world_source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 FLOP a year, 2 FLOP a MAC"
+mfu_serve = 0.4
+mfu_source = "benchmarks/rho/data/reference.toml fleet.world-h200 mfu_serve (assumed, 0.2-0.6): the served work's share of the int8 tensor peak, the same figure the census's world fleet is sized by"
+basis = "stock work held fixed: one H200 and each of the datacenter's 100,000 GPUs serve stock int8 work at the tensor peak (9.89e14 MAC/s) x mfu_serve 0.4; the world serves the census's 4.68e30 MAC a year (world-inference-2027); every scope's work as"
+
+# The models: each matmul is [name, n out, K in, calls a forward, rows a call as a multiple of the point's tokens, and
+# optionally the serial steps its calls run in (default: one a call; a layer's experts run side by side, batched)].
+[model."llama-3.2-1b"]
+title = "Llama-3.2-1B int8, its 16 layers' linears as vLLM serves them (qkv and gate_up fused; the bf16 head and attention outside)"
+layers = 16
+matmuls = [["qkv", 3072, 2048, 16, 1.0], ["o", 2048, 2048, 16, 1.0], ["gate_up", 16384, 2048, 16, 1.0],
+           ["down", 2048, 8192, 16, 1.0]]
+source = "CORE-NCP final §7 (ncp_k32_price.py LINEARS); unsloth/Llama-3.2-1B config"
+
+[model.v4-like]
+title = "a DeepSeek-V4-like matmul, K = n = 7,168 (CORE.md §7)"
+layers = 1
+matmuls = [["v4-like", 7168, 7168, 1, 1.0]]
+source = "inbox/CORE.md §7: K = n = 7,168, m >= 8,192"
+
+[model.v4-pro]
+title = "DeepSeek-V4-Pro's active matmuls a forward, int8-priced (experts' gate and up fused; head, compressors and mHC outside; routing uniform)"
+layers = 61
+matmuls = [["wq_a", 1536, 7168, 61, 1.0], ["wkv", 512, 7168, 61, 1.0], ["wq_b", 65536, 1536, 61, 1.0],
+           ["wo_a", 1024, 4096, 976, 1.0, 61], ["wo_b", 7168, 16384, 61, 1.0], ["indexer_wq_b", 8192, 1536, 30, 1.0],
+           ["router", 384, 7168, 61, 1.0], ["shared_gate_up", 6144, 7168, 61, 1.0], ["shared_down", 7168, 3072, 61, 1.0],
+           ["expert_gate_up", 6144, 7168, 23424, 0.015625, 61], ["expert_down", 7168, 3072, 23424, 0.015625, 61]]
+source = "benchmarks/rho/data/models.toml model.deepseek-v4-pro.matrices (from integrations/vllm/tests/check/fixtures/deepseek_v4/config.json); an expert's call holds T x 6/384 rows on average (estimate: uniform routing); a layer's 384 experts and wo_a's 16 groups run side by side"
+
+[model.v4-pro-experts]
+title = "DeepSeek-V4-Pro's routed experts alone (gate and up fused), 128 rows a call at 8,192 tokens"
+layers = 61
+matmuls = [["expert_gate_up", 6144, 7168, 23424, 0.015625, 61], ["expert_down", 7168, 3072, 23424, 0.015625, 61]]
+source = "model.v4-pro's expert rows (benchmarks/rho/data/models.toml model.deepseek-v4-pro.matrices); T x 6/384 rows a call on average (estimate: uniform routing), a layer's 384 experts side by side"
+
+# The points: tokens a call, and the T2 inputs that exist for them.
+[point.t512]
+title = "T 512: the demo's step, 64 real tokens a call"
+model = "llama-3.2-1b"
+tokens = 64
+stock_ms = { sync = 3.42, async = 1.67 }
+stock_kind = "estimate"
+stock_source = "CORE-NCP final: p1a-levers' T 8,192 parts scaled (kernels 0.96 ms, gap 2.46 / 0.71 ms), as GD-HASH used them"
+plain_gemm_ms = 0.5708
+gemm_parts = { wide = 0.996, a_side = 1.893, noised = -0.001, w_side = 5.683 }
+gemm_kind = "measured"
+gemm_source = "GD-DENOISE's table, cuBLASLt int8, the 16 layers' linears (art:43138e61baa8fa11988e5ff9873a51133bde30c26784f90a321c67899822be5e, run r20261028-194021-247f); parts over plain: one 3K-wide call less the noised one, fresh A-side noise, the noised GEMM, the weight side formed a call (stand-ins for NCP's forming)"
+hash_rate = 510.48e9
+hash_rate_source = "measured: T 512's 64-token forward of k32 words, 21.75 GiB hashed whole in 45.7495 ms, run r20261029-013634-94e5"
+
+[point.t512r512]
+title = "T 512 with 512 real tokens a call (CORE-SMELL C30: the other reading of T 512)"
+model = "llama-3.2-1b"
+tokens = 512
+stock_ms = { sync = 4.04, async = 2.29 }
+stock_kind = "estimate"
+stock_source = "CORE-NCP final: the 64-token step's kernels with its GEMMs at m 512 (cuBLASLt plain rows); likely low (the served linears measured 1.76 ms, not 1.19)"
+plain_gemm_ms = 1.1943
+gemm_parts = { wide = 1.169, a_side = 2.059, noised = 0.012, w_side = 2.739 }
+gemm_kind = "measured"
+gemm_source = "GD-DENOISE's table (art:43138e61baa8fa11988e5ff9873a51133bde30c26784f90a321c67899822be5e, run r20261028-194021-247f)"
+
+[point.t8192]
+title = "T 8,192: 8,192 tokens a call"
+model = "llama-3.2-1b"
+tokens = 8192
+stock_ms = { sync = 37.77, async = 31.33 }
+stock_kind = "measured (sync); estimate (async)"
+stock_source = "sync: HASH-56's served step, run r20261028-023029-1f82 (host gap 8.73 ms); async: the same with p1a-levers' async gap of 2.29 ms (estimate)"
+plain_gemm_ms = 12.4942
+gemm_parts = { wide = 1.536, a_side = 2.424, noised = 0.043, w_side = 0.265 }
+gemm_kind = "measured"
+gemm_source = "GD-DENOISE's table (art:43138e61baa8fa11988e5ff9873a51133bde30c26784f90a321c67899822be5e, run r20261028-194021-247f)"
+
+[point.v4like]
+title = "V4-like matmul at 8,192 rows"
+model = "v4-like"
+tokens = 8192
+matmul_only = true
+gemm_from = "t8192"
+plain_gemm_ms = 0.598181
+gemm_kind = "measured plain GEMM; estimate for the 3K product's ratio"
+gemm_source = "the plain cuBLASLt int8 GEMM at 8,192 x 7,168 x 7,168 (v4sq), 0.598 ms at 1,755 MHz, SW-GPU run r20261029-042633-0c24 (GD-DENOISE's harness, another H200 instance); the 3K-wide part's ratio is Llama's at m 8,192"
+
+[point.v4pro]
+title = "DeepSeek-V4-Pro's forward at 8,192 tokens (experts at 128 rows a call)"
+model = "v4-pro"
+tokens = 8192
+matmul_only = true
+gemm_from = "t8192"
+gemm_kind = "estimate"
+gemm_source = "the matmuls alone at Llama's measured cuBLASLt rate at m 8,192, with its parts' ratios (no V4 kernel timed on the H200)"
+
+[point.v4experts]
+title = "V4-Pro's routed experts at 8,192 tokens (128 rows a call)"
+model = "v4-pro-experts"
+tokens = 8192
+matmul_only = true
+gemm_from = "t8192"
+gemm_kind = "estimate"
+gemm_source = "the matmuls alone at Llama's measured cuBLASLt rate at m 8,192, with its parts' ratios (no V4 kernel timed on the H200)"
+
+[point.decode]
+title = "decode: Llama-3.2-1B at 16 rows a call (below 64)"
+model = "llama-3.2-1b"
+tokens = 16
+matmul_only = true
+gemm_from = "t512"
+gemm_kind = "estimate"
+gemm_source = "none: every design is outside the bound's domain below 64 rows (CORE-SMELL C15), so no T2 is priced"
+
+# T3: perplexity rise over stock int8 (WikiText-2), by the served operand format.
+[t3.int7-pm63]
+models = ["llama-3.2-1b"]
+ctx2k = 0.0368
+ctx8k = 0.0348
+kind = "measured"
+source = "CORE-NCP final §4: NCP as served (int7 activations and weights on +-63) over stock int8, Llama-3.2-1B (art:0b068bfc0614cbff8c589585b4ec68577d738a9c2aced3f043cdba7685dcd1fb; runs r20261029-005411-f350 and the parts listed there)"
+
+[t3.ssn-a-b1-v1]
+models = ["llama-3.2-1b"]
+ctx2k = -0.0005
+ctx8k = -0.0006
+kind = "measured"
+source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: -0.05% [-0.19, +0.10] at 2K, -0.06% [-0.17, +0.06] at 8K"
+
+[t3.ssn-1l-b1-v1]
+models = ["llama-3.2-1b"]
+ctx2k = -0.0009
+ctx8k = -0.0002
+kind = "measured"
+source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: -0.09% [-0.34, +0.15] at 2K, -0.02% [-0.11, +0.06] at 8K"
+
+[t3.int8-act124-v1]
+models = ["llama-3.2-1b"]
+ctx2k = 0.0004
+ctx8k = 0.0002
+kind = "measured"
+source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: +0.04% [-0.16, +0.23] at 2K, +0.02% [-0.08, +0.13] at 8K"
+
+[t3.int8-stock]
+ctx2k = 0.0
+ctx8k = 0.0
+kind = "arith"
+source = "the served product is stock's own int8 product (the noise cancels exactly and the operands are stock's)"
+
+[t3.int8-fold]
+models = []
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "D.epilogue's served output: stock's int8 product, but the per-row noise term removed in fp32 by the epilogue's FFMA, so within a couple of fp32 ulps of stock's (estimate: T3 about 0); unmeasured"
+
+[t3.ssn2-b1-v1]
+models = ["llama-3.2-1b"]
+ctx2k = -0.0005
+ctx8k = -0.0003
+kind = "measured"
+source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: -0.05% [-0.21, +0.12] at 2K, -0.03% [-0.13, +0.07] at 8K"
+
+[t3.int7-rot]
+models = ["llama-3.2-1b"]
+ctx2k = -0.0096
+ctx8k = -0.0064
+kind = "measured"
+source = "SW-PPL final (note compute-research/20261029T0725Z-report-sw-ppl, art:3448184919db0f476e2bc758698b6533d7603ce0d291745a2db9f56ddf3bf9be; benchmarks/ppl on cursor/compute-research-sw-ppl-dd1e at 136d15b0f8, CPU runs listed there): Llama-3.2-1B on WikiText-2's 16 locked windows, noise seed 0, exp(mean NLL difference) - 1 against stock int8 (int8-channel127-v1) in the same run, 95% paired window bootstrap: ncp-rotate, each linear's input rotated online (x·Q, Q = diag(signs)·H_k/sqrt(k), W·Q offline) then int7 on +-63: -0.96% [-1.20, -0.73] at 2K, -0.64% [-0.74, -0.54] at 8K; against rotated int8 it is +0.22% and +0.29%, so the gain is the rotation's, not int7's"
+
+[t3.ssn-1l5-b1-v1]
+models = []
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "SW-NOISE final §8's ssn-1l5-b1-v1 (the 5-lane balanced code): its served std is below ssn-1l-b1-v1's at every shape (qkv 5.26 against 5.94 units, down 8.72 against 9.22; estimate, ssn_code5.py run r20261029-070428-c03f), and lm_head's noise lands on the logits; SW-PPL to measure"
+
+[t3.nsf-v1]
+models = []
+ctx2k = "?"
+ctx8k = "?"
+kind = "unmeasured"
+source = "SW-NOISE final: nsf served, error at most w units (estimate); unmeasured"
+
+# The premises. rank: NIGHT.md §1's ladder (0 theorem, 1 measured hardware floor, 2 CPU-checkable fact, 3 model
+# faithfulness or protocol premise, 4a algorithmic knowledge about a standardized public primitive (ShaSpeed on SHA-512),
+# 4bU SAK on literally uniform operands, 4b SAK or an algorithmic restriction on our own noised operands, 5 hardness).
+# part: the argument the premise serves, "matmul" (the default) or "hashing" (the credit for hashed bytes); a design's
+# overall rank is the larger of its parts' (NIGHT §1 default 5). status: proved, measured, ruled, assumed, scratch
+# (proved in Lean with clean axioms, in no lock), open (stated, not yet proved or run), refuted. An open premise ranks 5
+# until settled. A premise closes T1 terms (`closes`; hiding_salt credits the salt side's PRF and c as hashing,
+# hiding_mask closes M_key·y, hiding the whole salt side), forces honest's committed registers (`forces_committed`),
+# charges a committed word every L steps `word_units` W1 units (an expression in L and reg; `reg` without one, MH100w's
+# anyFunctionCeiling), with the fast scheme's saving charged against it when `fast_saving`, and may require others.
+[premise.H32]
+rank = 1
+status = "measured"
+owner = "CORE-H32"
+source = "every register written costs >= 32 W1 units on the H200: h200Measured = h100Floor, run r20261029-021534-a5a3 (Lean h32H200Measured, h200MeasuredFloor on cursor/compute-research-core-h32-1e0b)"
+
+[premise.W1]
+rank = 3
+status = "assumed"
+owner = "SW-PREMISES"
+source = "MH100w is faithful to the H200: CardWithinAccel, in the lock (CORE.md §2: model faithfulness, rank 3; SW-PREMISES interim #15)"
+
+[premise.atomic-call]
+rank = 0
+status = "ruled"
+owner = "Daniel"
+requires = ["period-inventory"]
+closes = ["pre_noise_hashing", "final_rows"]
+source = "each A·B call is atomic, with fresh noise every call (Daniel, Wed 28 Oct 4:30 and 4:49 PM PDT; CORE.md §1, §2a). The call's noise seed reads root(A), so A's commitment is hashed by any program that gets the noise: credited hashing under ShaSpeed (SW-SMELL P3; CORE-SMELL C28), as are rows of final words. The closure takes PeriodInventory beside the ruling (SW-PREMISES final: the one route for hashing before the noise, 0.42-0.72x stock)"
+
+[premise.hash-compose]
+rank = "4a"
+part = "hashing"
+status = "open"
+owner = "SW-LEAN"
+source = "SW-SMELL P3: adding ShaSpeed's credit for hashed bytes to DistinctWrites' bound (MH100w) needs a composition of MH100w with ShaSpeed (Accel) that no lemma states; every design that credits hashing takes it, beside ShaSpeed"
+
+[premise.weights-distinct]
+rank = 2
+status = "open"
+owner = "SW-LEAN"
+source = "SW-SMELL S8: the final-word lemma's distinctness fails on a zero or duplicate column of the fixed weights B (a free constant, or one target for two) and on padding rows; a CPU check per checkpoint (and real rows only). Llama-3.2-1B's int8 weights have no zero and no identical rows (SW-NOISE final §6, run r20261029-052919-f1b2, art:4883945f0b33c0cee74f80dd90ee15e64c61d46ae862e328c707492c07c04792); V4's are unchecked, and no lemma states the check's sufficiency, so it stays open"
+
+[premise.per2-distinct]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+requires = ["weights-distinct"]
+source = "SW-NOISE final §2-3: per2's committed words (the data's partial dots plus V·P·B's and the limbs' affine terms in V) are pairwise distinct and non-free but the final word, on distinct weight columns; checked on six degenerate data cases by run r20261029-054725-38d8; like SSN it rests on DistinctOn's set semantics, not a span argument (SW-NOISE's smell). Not stated in Lean"
+
+[premise.salt-forced]
+rank = 0
+part = "hashing"
+status = "open"
+owner = "SW-HASH"
+closes = ["hiding_salt"]
+source = "SW-HASH interim §7 (a): each drawn unit's proof checks y = PRF_ks(pos) against a committed ks, and c = H(salt_prefix ‖ y), so a fixed-salt prover is caught and ShaSpeed credits the PRF and c; M_key·y stays unforced. A protocol change, not built; the drawn unit's added proof work is outside the served step"
+
+[premise.mask-optimal]
+rank = "4a"
+part = "hashing"
+status = "open"
+owner = "SW-HASH"
+requires = ["salt-forced"]
+closes = ["hiding_mask"]
+source = "SW-HASH interim §7: honest's table product M_key·y (960 shared-memory loads and XORs a leaf, a GF(2) product) is the cheapest way to compute it; unstated, rank 4 like SAK for one map. SW-SMELL final §2.4 (d): likely false as worded, since the key is public and fixed, so a table size is a free time-memory choice within device-memory advice (16-bit chunks: 96 lookups a leaf) and Hankel products have sub-quadratic algorithms; it holds only in ShaSpeed's form (no program with the same device memory computes M·y with less work than the best honest one), with honest's T2 priced at that table size (not done)"
+
+[premise.hiding-ruled]
+rank = 0
+part = "hashing"
+status = "refuted"
+owner = "the coordinator (NIGHT.md §1 default 2)"
+closes = ["hiding"]
+source = "ruled out by NIGHT.md §1 default 2 (hiding is required, so honest-only hiding work is a T1 term). Was SW-HASH interim §7 (c): zero knowledge is mandated, so the salt side's hiding work is credited by ruling, not by a premise about the adversary; no ruling yet. SW-SMELL final §2.4: the ruling is a choice of target, cost(H) without the zero-knowledge overhead; what it waives is each row's hiding_closed (ssn_1l at 256 KiB rows: 1.18x stock)"
+
+[premise.route-u2]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+source = "SW-SMELL S9: route U' (X s8, Y + gamma u8, the row init) needs its own Lean definition of the checked values (mmWU is u8 x s8); with it honest takes, per linear, the cheaper of route U's Y lane fix (24/m) and route U''s (32/n)"
+
+[premise.period-inventory]
+rank = 3
+status = "open"
+owner = "SW-PREMISES"
+source = "every device the prover runs in the monitoring period is counted on both sides of T1, the host's SHA-512 and AMX included; stated in DitherInstance.lean, held open, not in the lock (SW-PREMISES interim #18; SW-LEAN interim §2: what the final-word lemma's grid rests on)"
+
+[premise.final-word-lemma]
+rank = 0
+status = "scratch"
+owner = "SW-LEAN"
+requires = ["atomic-call", "period-inventory", "weights-distinct"]
+closes = ["final_word"]
+source = "SW-LEAN interim: finalWordTarget / finalWord_charged, proved in Security/Proofs/Pouw/Dimension/Scratch/SwLean.lean (cursor/compute-research-sw-lean-fa5d at 19904038b9, art:bef3acdfa62b1252ed4478a6915fd140997ab6a9bd2d1f4ee52030717e42ab9c; axioms clean, run r20261029-044839-bed3), in no lock; on the grid uniform in the call's input, so rank 0 given the atomic call and PeriodInventory. Padding rows, repeated rows and replayed requests make A_i·B free, as do zero or equal weight columns (SW-SMELL S8: weights-distinct). SW-LEAN final §2-3 (3726b081f0, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2): for any non-final words independent modulo V0 (NfIndep), NCP's canonical words and route U's (nfIndep_U), and with candidate 1 in one free set (ncp_charged, ncpU_charged); route U''s checked values are not defined (route-u2)"
+
+[premise.commit-forced]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+forces_committed = true
+source = "SWEEP.md candidate 1. SW-LEAN interim: formed_charged (scratch, no atomicity needed) charges each committed register that moves with the salt and equals no coin word, pairwise-different ones once each, and is exact; beside the final-word lemma (allTarget) each operand register needs (a)-(d), proved for no concrete register yet, and two's-complement X fails (a) (the biased packing passes it: route U's u8 x s8 product, whose c0 = -beta·colsum(Y) is fixed per weight, SW-SMELL). NCP's R must have no fixed point with sign -1 (X3 = -A there is free: the shift by 24 avoids it); committed E1/F1 need an 8-bit coin grid. It forces the committed register once, not route U's second write to it (lane_fix). SW-LEAN final §1 (SwLean.lean at 3726b081f0, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2, axioms run r20261029-063252-4ff0; scratch, in no lock): every concrete NCP operand register, X in the biased packing (xAll_props) and Y in two's complement (yAll_props), with R's columns and entries bounded, R without fixed points, and no block-1 Y register of four B bytes all 31 (a coin word, free: a CPU count per checkpoint). Stays open: SSN's formed registers (C1) aren't instantiated, and two's-complement X has no theorem"
+
+[premise.tensor-semantics]
+rank = 3
+status = "open"
+owner = "SW-SEM"
+requires = ["H32"]
+source = "SW-PREMISES final #6 TensorSemantics: a tensor instruction's output register is the captured exact s8 k32 dot of its operand tiles plus its accumulator (P1Int, P2Local, the captured dots), at its measured price; rank 3 (CardWithinAccel's; its content measured, 0 mismatches). The bridge into MH100w (whose wgmma writes any function) isn't stated"
+
+[premise.class-semantics]
+rank = 3
+status = "open"
+owner = "SW-SEM"
+requires = ["H32", "tensor-semantics"]
+source = "SW-SEM final Sm90Sem (H100Sem.lean on cursor/compute-research-sw-sem-0bb6 at 884c37f5af): every instruction class semantic, .int, .other and .fp64 as well as the tensor. Each class's predicate is rank 1 for one instruction, but over whole programs the class list must be complete, so rank 3 (W1; SW-PREMISES final agrees); the list omits IMNMX, SEL, VABSDIFF4, IDP.2A and others (SW-SEM's smell). tcOnlyCeiling (proved): the tensor premise alone buys nothing, since a program with no tensor instruction meets it and writes any word at 32 by .other"
+
+[premise.forming-counting]
+rank = 0
+status = "open"
+owner = "SW-SEM"
+requires = ["tensor-semantics", "class-semantics"]
+closes = ["forming"]
+source = "CORE-TIME final §3; SW-PREMISES #6; SW-OLD final pick 1 (Claim P with Theorem C, paper): with the tensor's semantics a program whose words are NCP's bilinear forms writes (3mK + 3nK)/4 formed registers or pays more tensor words; unproved. It takes every class semantic, not the tensor's alone: by SW-SEM's tcOnlyCeiling a program writing NCP's words by .other at 32 each forms nothing and meets the tensor premise"
+
+[premise.merge-k64]
+rank = 0
+status = "refuted"
+owner = "SW-SEM"
+requires = ["tensor-semantics"]
+word_units = "reg*L/32 if L <= 64 else reg"
+fast_saving = true
+source = "refuted by SW-OLD final (note compute-research/20261029T0450Z-report-sw-old, art:23672edccf40d63a2c04662f14ec099d1473d7ccc155c2c2cba7fffc96cbced7): Theorem B's kappa = 1 is asymptotically tight, about 35 saved a merge at L 64 against 32 a register, so merge counting certifies no more than write counting. Was SW-OLD top 3 #2 (kappa = 1/2 by search)"
+
+[premise.alg-suff-l]
+rank = 3
+status = "open"
+owner = "SW-SEM"
+source = "SW-SEM interim AlgSuffL, A2's analogue for a word every L: nonlinear lanes (bit planes, nibbles, lookups) don't beat bilinear ones; model faithfulness, rank 3"
+
+[premise.bam-floor]
+rank = 2
+status = "open"
+owner = "SW-SEM"
+requires = ["class-semantics", "alg-suff-l"]
+word_units = "64 - 1024/L"
+source = "SW-SEM interim BamFloor, the counting lemma: with every class semantic a committed word every L steps costs at least 64 - 1024/L (48 at L 64, 56 at L 128, 60 at L 256), which is all rank <= 3 premises certify; a floor over every program, so no fast scheme is charged against it. Its arithmetic core lcommitFloorArith and the rank fact innerProductRank are proved; the combinatorial step (a merge-free word's chain has L/32 registers of its own) is a prose sketch, rank 2 once proved"
+
+[premise.pure-lanes]
+rank = "4b"
+status = "open"
+owner = "SW-SEM"
+requires = ["class-semantics", "alg-suff-l"]
+word_units = "reg*L/32 if L <= 128 else 64 - 1024/L"
+fast_saving = true
+source = "SW-SEM final (art:ceb5dee0521b95c8699b4572640f949fc5348c0271e231838e6ebc687471bc7d, run r20261029-052329-aa9b): PureLanes (no tensor lane sums two noise variables; CoverCount) or CellPure (no tensor register shared between two cells' words; PureCount), either rank 4, gives a committed word every L its full L/32 registers. Credited only to L 128: SW-SEM's margins at one merge a word have Strassen-Winograd at +37.5% / +12.5% / 0 and Hopcroft-Kerr at +25% / 0 / -12.5% at L 64 / 128 / 256, so from L 256 the restriction excludes a cheaper program and only BamFloor's 64 - 1024/L is credited. The best-known scheme's saving at the operands' range is charged against it. Replaces NoSharingGain (open at L 64, a tie at 128, likely false from 256)"
+
+[premise.ncp-r-check]
+rank = 2
+status = "open"
+owner = "SW-SEM"
+source = "SW-SEM interim: NCP's noise isn't fresh (blocks 2 and 3 reuse E1 through R), so a bound for a word every L covers NCP only after a rank-modulo-earlier check per R; a CPU check, not yet run"
+
+[premise.ssn-distinct]
+rank = 0
+status = "scratch"
+owner = "SW-LEAN"
+source = "SW-LEAN final §5 (SwLean.lean at 3726b081f0 on cursor/compute-research-sw-lean-fa5d, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2, axioms clean in run r20261029-063252-4ff0; scratch, in no lock): ssnTargetG / ssn_chargedG at every data case with no input premise, for any layout reading each weighed lane from its own bit of the row's coin words (ssn1lBit_charged: S + 3 bits a row; ssnABit_charged: 4S); the cost is at least 32·m·n·S a call for n <= 28,559 (ssnCode_inj, the card's n_max). The served extraction must be stated as an injective (word, bit) map: SW-NOISE's literal masks reach bits {q, q+8, q+16, q+24} and 24..31 only. Not covered: grinding (ssn-success-set) and C1's formed registers. Before it, SW-NOISE final §4 (note compute-research/20261029T0551Z-report-sw-noise): a served sparse noise's words D_t(i,j) - beta_j + (the coin bits' public coefficients) are affine in the coin bits, pairwise distinct and non-free as functions of them whatever A and B (rows: a nonzero code coefficient on the row's own bits; columns: step 1's injective code; steps: each step's own bit), and the formed registers (C1) meet formed_charged's three conditions; the int8 case of DistinctLiveH1T (open, not refuted); checked on six degenerate data cases by run r20261029-054725-38d8, with a mutation. It rests on DistinctOn's set semantics: in Theorem D's span model every affine word after the first is free (SW-NOISE's smell)"
+
+[premise.ssn-success-set]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+source = "SW-NOISE final §4: fixing g noise bits succeeds with probability 2^-g a try and merges at most g·n words (a step's word with the one before, where that step's data dot is 0 or -1), so the loss is at most the share of zero or -1 k32 data dots (0.036-0.149% on WikiText, run r20261029-052919-f1b2) unless the prover chooses its inputs; DistinctWrites charges words distinct on the success set S, which distinctness over every salt doesn't give. Argued, not proved; b4 (4 bits a lane) is the fallback at a T3 risk"
+
+[premise.lane-semantics]
+rank = 3
+status = "open"
+owner = "SW-PREMISES"
+source = "SW-PREMISES interim #16: each lane instruction computes its documented function exactly (Core/Accel Lane), stated for the instance's opcodes with listed gaps (BMSK, MUFU, conversions)"
+
+[premise.one-instruction-minimal]
+rank = 2
+status = "open"
+owner = "SW-PREMISES"
+requires = ["lane-semantics"]
+closes = ["noise_derivation"]
+source = "SW-PREMISES final #13: no single sm_90 lane instruction computes A + ((h & 63) - 31) bytewise from A and the raw XOF word, so the masked noise register is a distinct noise-dependent write; its CPU check passed 55/55 (run r20261029-045843-87a1), and it needs a sharing lemma nobody has proved, so it stays open at rank 2"
+
+[premise.SAK]
+rank = "4b"
+status = "assumed"
+owner = "CORE-RANK"
+source = "symmetric algorithmic knowledge on a distribution (CORE.md §2's rank 4): the Dither and Accel families' SAKMatmul"
+
+[premise.ShaSpeed]
+rank = "4a"
+part = "hashing"
+status = "assumed"
+owner = "SW-HASH"
+source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster than the best implementation; CORE-SMELL C27: SAK for SHA-512, rank 4, needed to delta* = (1% - the other terms) / hashing's work"
+
+[premise.SAK-U]
+rank = "4bU"
+status = "assumed"
+owner = "N-SAKU"
+source = "NIGHT.md §1 default 1: symmetric algorithmic knowledge on literally uniform operands, 4b's mildest form, its own row; no module takes it until N-SAKU's card prices a design on it"
+
+[premise.ssn5-layout]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+source = "SW-NOISE final §4 Domain: SW-LEAN's ssnTargetG needs only that step 1's weights tell the columns apart, and the 5-lane balanced code with lane 27 read from bit 1 of h_{i,0} is an injective code and layout, so it fits ssn1lBit_charged as SW-NOISE reads it; nobody has checked it in Lean"
+
+[premise.ssn-cancel-distinct]
+rank = 0
+status = "open"
+owner = "N-NOISE (composition proposed by N-CARD)"
+source = "D.cancel on a served sparse noise: the noise lanes are repeated negated in ceil((S + 3)/32) more k32 steps against the same public rows, so the final word is A·Bᵀ exactly (free in M0 until the final-word lemma) and every earlier word keeps a fresh bit's nonzero coefficient; that those words stay pairwise distinct and non-free is the open claim (ssn-distinct covers served layouts only)"
+
+[premise.ssn-fold-distinct]
+rank = 0
+status = "open"
+owner = "N-NOISE (composition proposed by N-CARD)"
+requires = ["weights-distinct"]
+source = "D.epilogue on ssn-1l: step 1's 4 code lanes are cancelled in one more k32 step (-a1 against C), and the row term rowsum(a_l) is left in the accumulator and folded into the epilogue's per-row scale; the final word A_i·B_j + rowsum_i(a) is a target, but two columns of one row differ only by A_i·(B_j - B_j'), so distinctness needs distinct weight columns and non-degenerate rows (open)"
+
+[premise.epilogue-fold]
+rank = 2
+status = "open"
+owner = "N-COVER"
+source = "D.epilogue: the served int8 epilogue writes each output through a per-row multiply that an FFMA with a per-row bias replaces at no added instruction, so subtracting a per-row term costs m registers a call, not m·n; a SASS fact about the served epilogue (vLLM's cutlass scaled_mm), unchecked"
+
+[premise.ssn2-distinct]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+source = "SW-NOISE final: ssn2's words (4 bits a row and 4 a column a step) are pairwise distinct and non-free on six degenerate data cases (run r20261029-054725-38d8); no Lean statement"
+
+[premise.os2-distinct]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+requires = ["weights-distinct"]
+source = "SW-NOISE final: os2's words ([A + E | E]·[B; -B]) are distinct and only the final word is free, checked on six data cases (run r20261029-054725-38d8); no Lean statement"
+
+[premise.lowrank-distinct]
+rank = 0
+status = "open"
+owner = "SW-LEAN"
+requires = ["weights-distinct"]
+source = "SW-NOISE final: lowrank1 (X = [A + u·vᵀ | u ⊗ L], v public, u fresh a row) repeats words only on weights-only cases; argued, not checked as a separate case table"
+
+[premise.data-dup]
+rank = 2
+status = "open"
+owner = "SW-NOISE"
+source = "a noise whose words repeat on data (a zero k32 block dot product, identical rows) loses a data-dependent share of its words; SW-NOISE prices it only from noise_data.py's measured shares (--data), so the card leaves `dup` unpriced and refuses it"
+
+# The space (NIGHT.md §2): a design is one module a slot, and the calculator enumerates every compatible composition.
+# Each module contributes `fields`, expressions in m (rows), n (columns), K (depth), reg and epr and in other modules'
+# fields, which the composition merges (a field defined twice is a card error, except that a module overrides
+# [space]'s defaults and a noise's table for one de-noise overrides the noise's own fields); `premises` it takes
+# (`premises_when`: [expression, premises] pairs); `needs`, the fields another module must provide; and `when`, an
+# expression over the composition's fields at a probe shape that must hold. A module with `enumerate = false` is
+# reachable only from a card. `name` is its fragment in the design's name ("" omits it). `like = "<id>"` copies a module
+# of the same slot: its fields and de-noise tables merge under this module's, its premises add, its other keys are
+# replaced. Counts are a call's, in entries unless named in W1 units (format_forming, a format's own work, is W1 units
+# and adds to forming). The calculator refuses a design that leaves a field it reads unpriced, so an unpriced term
+# can't rank.
+[space]
+slots = [["N", "noise"], ["D", "denoise"], ["F", "format"], ["C", "density"], ["C", "operands"], ["H", "rows"],
+         ["H", "hiding"], ["P", "final"], ["P", "forming"], ["P", "derivation"]]
+base = ["H32", "W1", "atomic-call", "period-inventory", "ShaSpeed", "hash-compose"]
+fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0 }
+probe = { m = 64, n = 2048, K = 2048 }
+source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, the atomic call with PeriodInventory for A's commitment hashed before the noise (SW-PREMISES final), and the hashing credit (ShaSpeed with its composition, NIGHT §1 default 1)"
+
+# N, the noise. Fields: noise_x / noise_y the derived noise entries (one LOP3 a packed register from XOF bytes, CORE-SMELL
+# C28), derive_extra the derivation's intermediates no commitment holds, dup the share of words the data repeats, n_max
+# the most columns its distinctness lemma covers; `coins` the XOF bytes a call by the measured table that times them
+# (also the coins' credited hashing, two hashed bytes a byte); `t3` the served format by F when served. [N.<id>.D.<d>]
+# holds what the noise needs under de-noise d: r the stacked width over K, formed_x / formed_y the formed operand
+# entries, denoise in W1 units, operand_max, wide_measured (1: T2 prices the extra width by GD-DENOISE's measured 3K
+# call; 0: at the plain GEMM's time a MAC), fix_U / fix_U2 route U's and U''s second writes (SW-SMELL S9).
+[N.ncp]
+title = "NCP: E1, F1 fresh a call, E2 = E1·R, F2 = -R·F1 word moves, E3, F3 inside IADD3s"
+fields = { noise_x = "m*K", noise_y = "n*K", derive_extra = "0", dup = 0, noise_max = 63 }
+coins = { coinsncp = ["m*K", "n*K"] }
+premises_when = [["L > 32", ["ncp-r-check"]]]
+variant = "ncp-k32-sha512-fresh"
+source = "verity/core/protocols/pouw/schemes/ncp.py's structure; E1's seed reads root(A). The variant priced here is not the tree's ncp-v1 (SW-SMELL P5): k32 words, not every 16-deep step; SHA-512, not SHAKE256; F1 fresh every call, not per (epoch, weight); Y and c0 formed every call, not once per run (circuit/ncp2.py)"
+
+[N.ncp.D.cancel]
+fields = { r = 3, formed_x = "3*m*K", formed_y = "3*n*K", denoise = "0", operand_max = 126, wide_measured = 1, fix_U = "3*n*K", fix_U2 = "4*m*K" }
+source = "X = [A+E1 | A+E2 | -(A+E3)], Y = [B+F1; B+F2; B+F3]: the noise cancels inside the 3K-wide product, no de-noise. Route U makes X + beta u8 and Y s8, and Y's signed bytes cross zero under the noise, so each Y register takes a second write (24/m); route U' makes X s8 and Y + gamma u8, a second write a X register and the row init -gamma·sum_k A_ik (24/n + 8/n). c0 is fixed per weight on route U (SW-SMELL: the F's cancel in Y's column sums)"
+
+[N.ssn-1l]
+title = "ssn-1l, served sparse noise: step 1 holds 28 entries and 4 coin bits against the column's public base-13 code, each later k32 step 31 entries and 1 bit against a weight lane of 1"
+fields = { c = 4, S = "1 + ceil(max(0, K - (32 - c))/31)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S + 4*m*(c - 4)", noise_y = "0", derive_extra = "4*m*rot + 4*m*(c - 4)", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1 }
+coins = { coins = ["4*m*ceil(bits/32)"] }
+premises = ["ssn-distinct", "ssn-success-set"]
+t3 = { s8 = "ssn-1l-b1-v1" }
+variant = "ssn-1l-b1-v1"
+source = "SW-NOISE final §4-5 (note compute-research/20261029T0551Z-report-sw-noise; noise_sweep.py on cursor/compute-research-sw-noise-5e1a at 2ba11b9bfa, art:d90a3d9d0ed503b9190dabc34367dd25ad30f3b247e2cfd0b855122c8a09fafc): c code lanes in step 1, S = 1 + ceil((K - (32 - c))/31) steps, S - 1 + c coin bits a row. A row's step costs a LOP3 (noise_x: candidate 1 forces it when committed) and, after step 1, a funnel-shift rotate except where the lane's bit is already at 24 (derive_extra, ssn_1l_layout: word 0's 32 - c bits, then 32 a word, so one rotate saved a whole coin word past the first); a code lane past 4 costs a rotate and a LOP3 a row (ssn_code5.py). Coins: the row's ceil((S - 1 + c)/32) whole coin words. B' is public apart from B, formed once at load; stock s8 x s8 at +-127, so no int7, sign fix or route"
+
+[N.ssn-1l.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "SW-NOISE final §4: nothing is de-noised; the output is A·Bᵀ plus the served noise, so every word, the final one included, is a target in M0. The extra width is priced at the plain GEMM's time a MAC (estimate: no 31 + 1 kernel exists)"
+
+[N.ssn-1l.D.cancel]
+fields = { r = "32*(S + ceil(bits/32))/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0, derive_extra = "4*m*rot + 4*m*(c - 4) + m*bits" }
+premises = ["ssn-cancel-distinct"]
+t3 = "F"
+source = "N-CARD's composition (estimate): the S - 1 + c noise lanes again, negated, in ceil((S - 1 + c)/32) more k32 steps against the same public rows, so the output is A·Bᵀ exactly (stock's int8 product, T3 0 by arithmetic) and the final word is free until the final-word lemma; the negated lanes are m·(S - 1 + c) more entries a call, packed four a register, which no commitment holds"
+
+[N.ssn-1l.D.epilogue]
+fields = { r = "32*(S + 1)/K", formed_x = "0", formed_y = "0", denoise = "m*reg", operand_max = 127, wide_measured = 0, derive_extra = "4*m*rot + 4*m*(c - 4) + 4*m*ceil(c/4)" }
+premises = ["ssn-fold-distinct", "weights-distinct", "epilogue-fold"]
+t3 = { s8 = "int8-fold" }
+source = "N-CARD's composition (estimate): step 1's c code lanes cancelled in one more k32 step (-a1 against C, a LOP3 a row a register of them), and the row term rowsum(a_l) left in the accumulator, so the final word stays a target, and folded into the epilogue's per-row scale (m per-row biases a call, at reg each)"
+
+[N.ssn-1l.D.posthoc]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "m*n*32*ceil(bits/32) + m*n*reg", operand_max = 127, wide_measured = 0 }
+t3 = { s8 = "int8-stock" }
+source = "the served GEMM's words, then O = O' - a·W0ᵀ: a k32-wide product of the S - 1 + c noise lanes against W0 (32·ceil((S - 1 + c)/32) MACs an output) and one subtraction an output at reg"
+
+[N.ssn-1l5]
+like = "ssn-1l"
+title = "ssn-1l5, ssn-1l with a 5-lane balanced base-13 column code: step 1 holds 27 entries and 5 coin bits, for n <= 371,292"
+fields = { c = 5, n_max = 371292 }
+premises = ["ssn5-layout"]
+t3 = { s8 = "ssn-1l5-b1-v1" }
+variant = "ssn-1l5-b1-v1"
+source = "SW-NOISE final §4 Domain and §10.5 (ssn_code5.py at 7d7de85b2b on cursor/compute-research-sw-noise-5e1a, run r20261029-070428-c03f, art:b26744eced7e1ea737fd280b7b8971137ae47aea8fd20500d965826b4888c8dd): z_j = (floor(j/2) + 1)(-1)^j in five balanced base-13 digits, injective and nonzero for n <= 13^5 - 1; lane 27 holds a1[i, 4] from bit 1 of h_{i,0} (a rotate and a LOP3 a row, C1 forcing the LOP3); the same alpha and coin words as ssn-1l at every K priced. ssn_code5.py counts S - W rotates a row where noise_sweep.py's layout counts S - 1 - floor((S - 22)/32), one more at Llama's K (32/(nK), immaterial); the card prices the layout's"
+
+[N.ssn-a]
+title = "ssn-a, served sparse noise: each k32 step 28 entries and a register a = (h >> q) & 0x01010101 a row against public W0"
+fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*S", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1 }
+coins = { coins = ["m*S/2"] }
+premises = ["ssn-distinct", "ssn-success-set"]
+t3 = { s8 = "ssn-a-b1-v1" }
+variant = "ssn-a-b1-v1"
+source = "SW-NOISE final §2-3 (run r20261029-054725-38d8, art:d90a3d9d0ed503b9190dabc34367dd25ad30f3b247e2cfd0b855122c8a09fafc), the runner-up: a SHF and a LOP3 a row a step; candidate 1 forces the LOP3's output, the SHF stays gap; 4 coin bits a row a step"
+
+[N.ssn-a.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "SW-NOISE final §2: Y's 4 rows a step are the public W0, nothing formed or de-noised; served, so the final word is a target"
+
+[N.ssn-a.D.cancel]
+fields = { r = "32*(S + ceil(4*S/32))/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0, derive_extra = "4*m*S + 4*m*S" }
+premises = ["ssn-cancel-distinct"]
+t3 = "F"
+source = "N-CARD's composition (estimate): ssn-a's 4S lanes again, negated, in ceil(4S/32) more steps; exact output, final word free until the lemma"
+
+[N.ssn2]
+title = "ssn2, served sparse noise on both sides: each k32 step 28 entries, 4 bits a row and 4 bits a column"
+fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "4*n*S", derive_extra = "4*m*S + 4*n*S", dup = 0, noise_max = 1, n_max = 1e30, s8_ok = 1 }
+coins = { coins = ["(m + n)*S/2"] }
+premises = ["ssn2-distinct", "ssn-success-set"]
+t3 = { s8 = "ssn2-b1-v1" }
+source = "SW-NOISE final (noise_sweep.py ssn2): (h >> q) & 0x01010101 on both operands, a SHF and a LOP3 a register a step on each side; served"
+
+[N.ssn2.D.served]
+fields = { r = "32*S/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "SW-NOISE final: served, the final word a target"
+
+[N.per2]
+title = "per2, one-sided periodic noise that cancels: X = [A + V·P | V (x) limbs], Y = [B; -limbs(fold32 B)], V in [-4, 3]^(m x 32)"
+fields = { limbs = "12 if K <= 2048 else 21", noise_x = "32*m", noise_y = "0", derive_extra = "0", dup = 0, noise_max = 3, act124_ok = 1 }
+coins = { coins = ["12*m"] }
+premises = ["per2-distinct", "weights-distinct"]
+variant = "per2"
+source = "SW-NOISE final §2-3 (run r20261029-054725-38d8, art:d90a3d9d0ed503b9190dabc34367dd25ad30f3b247e2cfd0b855122c8a09fafc): V's 32 entries a row from 96 coin bits (12 bytes); the limbs measured on Llama-3.2-1B's weights, 12 at K 2,048 and 21 at K 8,192 (run r20261029-052919-f1b2), other K's by that rule (an estimate, for V4)"
+
+[N.per2.D.cancel]
+fields = { r = "1 + 32*limbs/K", formed_x = "m*(K + 32)", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "SW-NOISE final §2: forming X is A + V·P (K entries a row) and the limb block (32); Y is weights only, formed once at load; the output is exact, so the final word is free until the final-word lemma"
+
+[N.os2]
+title = "os2, one-sided two-block noise: X = [A + E | E], Y = [B; -B], E = (h & 7) - 4"
+fields = { noise_x = "m*K", noise_y = "0", derive_extra = "0", dup = 0, noise_max = 4, act124_ok = 1 }
+coins = { coins = ["3*m*K/8"] }
+premises = ["os2-distinct", "weights-distinct"]
+source = "SW-NOISE final (noise_sweep.py os2): alpha 2, A + E formed (m·K) and E derived (m·K), 3 coin bits an entry; activations clamped to +-124; SW-NOISE: dominated by per2"
+
+[N.os2.D.cancel]
+fields = { r = 2, formed_x = "m*K", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "SW-NOISE final: [A + E | E]·[B; -B] = A·B, exact"
+
+[N.lowrank1]
+title = "lowrank1: X = [A + u·vᵀ | u (x) limbs], v public, u fresh a row"
+fields = { limbs = "12 if K <= 2048 else 21", noise_x = "0", noise_y = "0", derive_extra = "m*K", dup = 0, noise_max = 3, act124_ok = 1 }
+coins = { coins = ["m"] }
+premises = ["lowrank-distinct", "weights-distinct"]
+source = "SW-NOISE final (noise_sweep.py lowrank1): forming A + u·vᵀ (m·K, forced when committed) and the u·vᵀ table select (m·K, not committed), one coin byte a row; SW-NOISE: dominated by per2"
+
+[N.lowrank1.D.cancel]
+fields = { r = "1 + 32*limbs/K", formed_x = "m*K", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "SW-NOISE final: per2's limb correction on a rank-1 noise, exact"
+
+[N.nsf]
+title = "nsf: one k32 step first, 32 coin bits a row against public W0 of distinct weight-w columns, served"
+fields = { noise_x = "4*m", noise_y = "0", derive_extra = "4*m", dup = "?", noise_max = 1, n_max = 1e30, s8_ok = 1 }
+coins = { coins = ["4*m"] }
+premises = ["data-dup"]
+t3 = { s8 = "nsf-v1" }
+source = "SW-NOISE final (noise_sweep.py nsf): a zero data block repeats a word along the chain (data-dependent: dup unpriced without noise_data.py's shares)"
+
+[N.nsf.D.served]
+fields = { r = "1 + 32/K", formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+source = "SW-NOISE final: served"
+
+[N.perm]
+title = "perm: the k32 blocks of K in a fresh order a call (TMA coordinates)"
+fields = { noise_x = "0", noise_y = "0", derive_extra = "0", dup = "?", noise_max = 0, s8_ok = 1 }
+coins = { coins = ["K/32*log2(max(2, K/32))/8"] }
+premises = ["data-dup"]
+source = "SW-NOISE final (noise_sweep.py perm): words equal as functions of the salt on identical rows (data-dependent); a noise-dependent address may price as `other`"
+
+[N.perm.D.cancel]
+fields = { r = 1, formed_x = "0", formed_y = "0", denoise = "0", operand_max = 127, wide_measured = 0 }
+t3 = "F"
+source = "SW-NOISE final: the permuted sum is A·B exactly"
+
+# D, the de-noise. final_target: whether the GEMM's last word carries the noise (a target in M0); `t3`: where the served
+# format's T3 comes from ("N": the noise's served format under this F; "F": the format's own).
+[D.served]
+title = "served: the noise stays in O' = A·Bᵀ + noise"
+fields = { final_target = 1 }
+t3 = "N"
+source = "NIGHT.md §2 D: served"
+
+[D.cancel]
+title = "exact cancellation inside the GEMM (stack width alpha)"
+fields = { final_target = 0 }
+t3 = "F"
+source = "NIGHT.md §2 D: exact cancellation in the GEMM"
+
+[D.posthoc]
+title = "post-hoc correction: the GEMM's noised words, then the noise's contribution subtracted"
+fields = { final_target = 1 }
+t3 = "F"
+source = "NIGHT.md §2 D: post-hoc correction"
+
+[D.epilogue]
+title = "folded into the epilogue: what the GEMM leaves of the noise is removed by the epilogue's own per-row operations"
+fields = { final_target = 1 }
+t3 = "F"
+source = "NIGHT.md §2 D: folded into the epilogue"
+
+# F, the operand format and packing. lane_fix: the route's second writes (entries), from the noise's fix_U / fix_U2.
+[F.s8]
+title = "stock s8 x s8 at +-127, the noise in its own lanes"
+fields = { lane_fix = "0" }
+needs = ["s8_ok"]
+t3 = "int8-stock"
+source = "NIGHT.md §2 F: s8 x s8"
+
+[F.int7-U]
+title = "int7 data on +-63, route U (X + beta u8, Y s8)"
+fields = { lane_fix = "fix_U" }
+needs = ["fix_U"]
+t3 = "int7-pm63"
+source = "CORE-NCP final; SW-SMELL S9"
+
+[F.int7-mix]
+title = "int7 data on +-63, per linear the cheaper of route U and U'"
+name = "int7-mix"
+fields = { lane_fix = "min(fix_U, fix_U2)" }
+needs = ["fix_U", "fix_U2"]
+premises = ["route-u2"]
+t3 = "int7-pm63"
+source = "SW-SMELL S9: honest takes, per linear, the cheaper of route U's Y lane fix (24/m) and route U''s (32/n)"
+
+[F.int7-rot]
+title = "int7 data on +-63 after an online rotation of each linear's input (QuaRot-style; per linear the cheaper route)"
+fields = { lane_fix = "min(fix_U, fix_U2)", format_forming = "reg*m*K*log2(K) if K == 2**floor(log2(K)) else hadamard_order_unpriced" }
+needs = ["fix_U", "fix_U2"]
+premises = ["route-u2"]
+t3 = "int7-rot"
+source = "SW-PPL final's ncp-rotate and its rotation section (estimate): x·Q is a fast Walsh-Hadamard transform, K·log2(K) f32 adds a row, each a register write at reg under H32, honest work no commitment forces (the rotated A is committed, but it isn't noise-dependent); qkv and gate_up are fused, so each call's input is its own transform. Only power-of-two K is priced (V4's 7,168 needs a non-Sylvester order, unpriced). SW-PPL's 0.7-1.8% is in AND gates (812 an f32 add against 132-350 a MAC); in W1 an add costs 32 MACs"
+
+[F.act124]
+title = "int8 activations clamped to +-124, so A + noise stays in s8 (biased u8 packing on X, weights s8)"
+fields = { lane_fix = "0" }
+needs = ["act124_ok"]
+t3 = "int8-act124-v1"
+source = "SW-NOISE final §8: benchmarks/ppl's int8 step with act_top 124"
+
+# C, the commitment: a word every L steps (k32 when L = 32; past it, credited by SW-SEM's BamFloor at rank <= 3 or
+# PureLanes / CellPure at rank 4b), and the operand classes committed (candidate 1, under commit-forced).
+[C.density.k32]
+fields = { L = 32 }
+source = "every k32 accumulator word committed (CORE-TIME)"
+
+[C.density.bam]
+each = [64, 128, 256, 512, 1024, 2048]
+name = "k{L}-bam"
+fields = { L = "{L}" }
+premises = ["tensor-semantics", "class-semantics", "alg-suff-l", "bam-floor"]
+source = "SW-SEM interim BamFloor: a word every L credited 64 - 1024/L at rank <= 3"
+
+[C.density.pl]
+each = [64, 128, 256, 512, 1024, 2048]
+name = "k{L}-pl"
+fields = { L = "{L}" }
+premises = ["tensor-semantics", "class-semantics", "alg-suff-l", "pure-lanes"]
+source = "SW-SEM final: PureLanes or CellPure (rank 4b) credits the full L to L 128"
+
+[C.density.k64-none]
+enumerate = false
+fields = { L = 64 }
+source = "a control: a word every 64 steps with no credit past MH100w's 32 a word"
+
+[C.density.k64-merge]
+enumerate = false
+fields = { L = 64 }
+premises = ["tensor-semantics", "merge-k64", "class-semantics"]
+source = "the k64 merge charge, refuted by SW-OLD final"
+
+[C.operands.w]
+fields = { commit_formed_x = 0, commit_formed_y = 0, commit_noise_x = 0, commit_noise_y = 0 }
+source = "the accumulator words only"
+
+[C.operands.xy]
+name = "xy"
+fields = { commit_formed_x = 1, commit_formed_y = 1, commit_noise_x = 0, commit_noise_y = 0 }
+when = "formed_x + formed_y > 0"
+premises = ["commit-forced"]
+source = "SWEEP.md candidate 1: the formed operands committed"
+
+[C.operands.ef]
+fields = { commit_formed_x = 0, commit_formed_y = 0, commit_noise_x = 1, commit_noise_y = 1 }
+when = "noise_x + noise_y > 0"
+premises = ["commit-forced"]
+source = "SWEEP.md candidate 1: the derived noise registers committed"
+
+[C.operands.xyef]
+fields = { commit_formed_x = 1, commit_formed_y = 1, commit_noise_x = 1, commit_noise_y = 1 }
+when = "formed_x + formed_y > 0 and noise_x + noise_y > 0"
+premises = ["commit-forced"]
+source = "SWEEP.md candidate 1: the formed operands and the noise committed"
+
+# H, the hashing: hm96 rows (a_row A's commitment's leaf, row the leaf of the committed words and operands) and how
+# the salt side's hiding is charged.
+[H.rows.r16k]
+fields = { a_row = 16384, row = 16384 }
+source = "CORE-NCP's measured layout: 16 KiB rows everywhere (r20261029-013634-94e5)"
+
+[H.rows.r256k]
+fields = { a_row = "K", row = 262144 }
+source = "SW-HASH §5: 256 KiB rows save 10.7% of hash time a byte; A per activation row keeps its root's chain short"
+
+[H.rows.r1m]
+fields = { a_row = 262144, row = 1048576 }
+source = "SW-HASH §7 (b): the fewest leaves, so the least hiding; A at 256 KiB rows trades a long chain before the noise for less hiding"
+
+[H.hiding.open]
+source = "the salt side's PRF, M_key·y and c charged as honest-only work (NIGHT.md §1 default 2)"
+
+[H.hiding.salt]
+premises = ["salt-forced"]
+source = "SW-HASH §7 (a): the drawn unit's proof checks y = PRF_ks(pos) and c, so ShaSpeed credits them; M_key·y stays"
+
+[H.hiding.mask]
+premises = ["salt-forced", "mask-optimal"]
+source = "SW-HASH §7 (a) and (b): the PRF and c forced, M_key·y closed by mask-optimal (rank 4a, likely false as worded: SW-SMELL final §2.4)"
+
+[H.hiding.hr]
+premises = ["hiding-ruled"]
+source = "the hiding ruling, ruled out by NIGHT.md §1 default 2"
+
+# P, the premise sets that close a term: the final word (the final-word lemma, when the final word is free), forming
+# (the counting lemma, when the formed operands aren't committed) and the noise's derivation (OneInstructionMinimal).
+[P.final.none]
+name = ""
+source = "the final word free in M0 when the noise cancels"
+
+[P.final.fw]
+when = "final_target == 0"
+premises = ["final-word-lemma", "weights-distinct"]
+source = "SWEEP.md candidate 3, the final-word lemma (SW-LEAN), with distinct weight columns"
+
+[P.forming.none]
+name = ""
+source = "forming charged at reg/4 an entry unless committed"
+
+[P.forming.count]
+when = "formed_x + formed_y > 0 and commit_formed_x + commit_formed_y < 2"
+premises = ["tensor-semantics", "class-semantics", "forming-counting"]
+source = "CORE-TIME final §3: the counting lemma charges forming"
+
+[P.derivation.none]
+name = ""
+source = "the derivation charged at reg/4 an entry unless committed"
+
+[P.derivation.min]
+when = "noise_x + noise_y > 0 and commit_noise_x + commit_noise_y < 2"
+premises = ["lane-semantics", "one-instruction-minimal"]
+source = "SW-PREMISES final #13: OneInstructionMinimal"
+
+# Attacks (NIGHT.md §5): a design taking a premise or module an open attack targets can't rank first.
+[attack]
+
+# Cards (the format in the N-CARD note): a design named by its module on each axis, with the premises it adds, its
+# own claimed numbers (checked against the calculator: `basis` "t1", "gap" or "hiding_words", and the terms it sums).
+# A term no module prices comes as a module or a field, never as a number beside the design. A module a card names
+# that the card doesn't define and the space doesn't hold refuses the card.
+[card.ncp-k32]
+title = "NCP + the rank bound, every k32 word committed (CORE-TIME / CORE-NCP finals)"
+origin = "CORE-TIME"
+modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "CORE-TIME final; CORE-NCP final"
+
+[card.ncp-k64-nosem]
+title = "NCP, a word every 64 steps without the k32 semantics (a control: the uncommitted steps are gap)"
+origin = "SW-PRICE"
+modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k64-none", operands = "xyef", rows = "r16k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
+source = "a control: density without candidate 2"
+
+[card.ncp-k64-merge-0505]
+title = "the 05:05Z interim's best, on the k64 merge charge (refused: merge-k64 is refuted)"
+origin = "SW-PRICE"
+modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k64-merge", operands = "w", rows = "r256k", hiding = "hr", final = "fw", forming = "count", derivation = "min" }
+source = "note compute-research/20261029T0450Z-report-sw-price, 05:05Z revision"
+
+[card.dither-c]
+title = "Dither-C (CORE-RANK #1 by its order rule)"
+origin = "CORE-RANK"
+modules = { N = "dither-c", D = "posthoc", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+premises = ["SAK"]
+source = "CORE-RANK final R09: forming and de-noise unpriced under §2a"
+
+[card.fresh-u]
+title = "Fresh-U (CORE-RANK #2)"
+origin = "CORE-RANK"
+modules = { N = "fresh-u", D = "posthoc", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+premises = ["SAK"]
+source = "CORE-RANK final R11: a′'s forming unpriced under §2a"
+
+[card.accel-d5-d6]
+title = "Accel D5 / D6 (CORE-RANK #3)"
+origin = "CORE-RANK"
+modules = { N = "accel-d5-d6", D = "posthoc", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+premises = ["SAK"]
+source = "CORE-RANK final R33: unpriced under §2a"
+
+# The ingested calculators, reproduced on their own designs (each claim's basis is what that calculator prices).
+[card.sw-noise-ssn-1l]
+title = "SW-NOISE's lead, ssn_1l under M0 without candidate 1"
+origin = "SW-NOISE"
+note = "compute-research/20261029T0551Z-report-sw-noise"
+modules = { N = "ssn-1l", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa: the L columns (T512(64), T512(512), T8192), V4 dense and V4 experts"
+claims.t512 = { gap = 0.000483, tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, ssn_1l M0 n, llama_T512_64tok" }
+claims.t8192 = { gap = 0.000483, tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, ssn_1l M0 n, llama_T8192" }
+claims.v4like = { gap = 0.0002846, tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, ssn_1l M0 n, v4dense_T8192" }
+
+[card.sw-noise-ssn-1l-c1]
+title = "ssn_1l with candidate 1 (its LOP3 outputs committed)"
+origin = "SW-NOISE"
+modules = { N = "ssn-1l", D = "served", F = "s8", density = "k32", operands = "ef", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa"
+claims.t8192 = { gap = 0.0002378, tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, ssn_1l M0 y, llama_T8192" }
+
+[card.sw-noise-ssn-a]
+title = "ssn_a under M0 without candidate 1"
+origin = "SW-NOISE"
+modules = { N = "ssn-a", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa"
+claims.t8192 = { gap = 0.000542, tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, ssn_a M0 n, llama_T8192" }
+claims.v4like = { gap = 0.0003189, tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, ssn_a M0 n, v4dense_T8192" }
+
+[card.sw-noise-ssn2]
+title = "ssn2 under M0 without candidate 1"
+origin = "SW-NOISE"
+modules = { N = "ssn2", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa"
+claims.t512 = { gap = 0.0365737, tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, ssn2 M0 n, L T512(64)" }
+claims.t512r512 = { gap = 0.0050459, tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, ssn2 M0 n, L T512(512)" }
+claims.t8192 = { gap = 0.0008234, tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, ssn2 M0 n, L T8192" }
+
+[card.sw-noise-per2-m1]
+title = "per2 under M1 (the final-word lemma) without candidate 1"
+origin = "SW-NOISE"
+modules = { N = "per2", D = "cancel", F = "act124", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa"
+claims.t8192 = { gap = 0.0019026, terms = ["final_word", "uncommitted_steps", "forming", "lane_fix", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, per2 M1 n, llama_T8192 (it counts V's 32 entries in the limb block, not their derivation from coin bits, which the card prices as noise_derivation: 256/(nK) more)" }
+claims.v4like = { gap = 0.0011211, terms = ["final_word", "uncommitted_steps", "forming", "lane_fix", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --json, per2 M1 n, v4dense_T8192 (forming only, as above)" }
+
+[card.sw-noise-per2-m0]
+title = "per2 under M0 without candidate 1 (the final word free)"
+origin = "SW-NOISE"
+modules = { N = "per2", D = "cancel", F = "act124", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa"
+claims.t8192 = { gap = 0.0142949, terms = ["final_word", "uncommitted_steps", "forming", "lane_fix", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, per2 M0 n, L T8192" }
+
+[card.sw-noise-os2-m1]
+title = "os2 under M1 without candidate 1"
+origin = "SW-NOISE"
+modules = { N = "os2", D = "cancel", F = "act124", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa"
+claims.t8192 = { gap = 0.0037716, tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, os2 M1 n, L T8192" }
+
+[card.sw-noise-ncp3-m1-c1]
+title = "ncp3 under M1 with candidate 1"
+origin = "SW-NOISE"
+modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k32", operands = "xy", rows = "r256k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
+source = "noise_sweep.py at 2ba11b9bfa: candidate 1 forces X and Y, and the gap left is E1's and F1's derivation, 8/n + 8/m; SW-NOISE prices no lane fix (SW-SMELL S9 came after it), which the card adds: route U's 24/m"
+claims.t8192 = { gap = 0.0028623, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "checked", source = "noise_sweep.py --table, ncp3 M1 y, L T8192" }
+
+[card.sw-premises-s1]
+title = "SW-PREMISES' S1 (the atomic call: the final word closed) on Llama fused, NCP"
+origin = "SW-PREMISES"
+note = "compute-research/20261029T0450Z-report-sw-premises"
+modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "none", derivation = "none" }
+source = "premise_buys.py at 468c91f3d0, llama-3.2-1b fused rows"
+claims.t8192 = { gap = 0.0138, tol = 0.0001, kind = "checked", source = "premise_buys.py: S1, llama fused, T 8192" }
+claims.t512r512 = { gap = 0.0776, tol = 0.0001, kind = "checked", source = "premise_buys.py: S1, llama fused, T 512 (512 rows)" }
+
+[card.sw-premises-s2]
+title = "SW-PREMISES' S2 (every class semantic, the counting lemma)"
+origin = "SW-PREMISES"
+modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "count", derivation = "none" }
+source = "premise_buys.py at 468c91f3d0"
+claims.t8192 = { gap = 0.0053, tol = 0.0001, kind = "checked", source = "premise_buys.py: S2, llama fused, T 8192" }
+claims.t512r512 = { gap = 0.0251, tol = 0.0001, kind = "checked", source = "premise_buys.py: S2, llama fused, T 512" }
+
+[card.sw-premises-s3]
+title = "SW-PREMISES' S3 (and OneInstructionMinimal): only the sign fix remains"
+origin = "SW-PREMISES"
+modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "count", derivation = "min" }
+source = "premise_buys.py at 468c91f3d0"
+claims.t8192 = { gap = 0.0024, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, llama fused, T 8192" }
+claims.t512r512 = { gap = 0.0075, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, llama fused, T 512" }
+claims.v4like = { gap = 0.0029, tol = 0.00005, kind = "checked", source = "premise_buys.py: S3, v4-like dense, T 8192" }
+
+[card.sw-hash-k32-r256k]
+title = "SW-HASH's hiding term: NCP's k32 words at 256 KiB rows, unforced, in W1 at the floor"
+origin = "SW-HASH"
+note = "compute-research/20261029T0535Z-report-sw-hash"
+modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "fw", forming = "count", derivation = "min" }
+source = "SW-HASH final §9's table, k32 at 256 KiB, unforced (floor), words only (A's rows apart)"
+claims.t8192 = { hiding_words = 1.46, tol = 0.02, kind = "measured salt kernel, estimate in W1", source = "SW-HASH final §9: 1.46x stock at 256 KiB, 20.8x at 16 KiB" }
+
+[card.sw-hash-k32-r16k]
+title = "SW-HASH's hiding term at 16 KiB rows"
+origin = "SW-HASH"
+modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k32", operands = "w", rows = "r16k", hiding = "open", final = "fw", forming = "count", derivation = "min" }
+source = "SW-HASH final §9"
+claims.t8192 = { hiding_words = 20.8, tol = 0.2, kind = "measured salt kernel, estimate in W1", source = "SW-HASH final §9: 20.8x at 16 KiB" }
