@@ -13,19 +13,21 @@ refuses (`checkInnerRange`), and where it holds the inner statement's files one 
 inner statement set up otherwise than its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`); every V*
 statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no draw (`ProvedScope.drawLaw`) or
 whose draw is not every unit of its population (`RecSetup.fullDraw`), and a session over an inner session whose
-record holds no draw (`RecSetup.innerDrawn`); the compiled statement's reader refuses an inner statement without a draw
-(`RecDeploy.innerOk`). There is no other recursion-level refusal.
+record holds no draw (`RecSetup.innerDrawn`), and a holo or sparse inner shape (`RecSetup.denseOnly`); the compiled
+statement's reader refuses an inner statement without a draw (`RecDeploy.innerOk`). There is no other recursion-level refusal.
 
 * `parseOf`: the deployed parser, what the verifier reads where its setup accepts the inner shape, readable (`toStmt`);
-* `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, and `RecSetup.fullDraw` takes
-  every V* session's draw at the verifier's inner shape (`fullDrawOk`);
-* `inScope_iff`: at a statement the parser accepts, `InScope` holds exactly when every V* session's draw is full, the
-  setup's checks giving every condition on the inner shape (`statements_ok`, `candidate3_ok`, `checkAtC3_ok`,
-  `checkInnerRange_ok`);
+* `scopeCheckOf`: the parser accepts, the inner scope check takes the inner statement, `RecSetup.fullDraw` takes
+  every V* session's draw at the verifier's inner shape (`fullDrawOk`), and `RecSetup.denseOnly` takes the inner shape
+  (`dense`: the verdict's refusal of the holo and sparse forms, which `RecursiveKS` doesn't cover);
+* `inScope_iff`: at a statement the parser accepts, `InScope` holds exactly when every V* session's draw is full and the
+  inner shape is dense, the setup's checks giving every other condition on the inner shape (`statements_ok`,
+  `candidate3_ok`). `checkAtC3_ok` and `checkInnerRange_ok` state what the setup checks of a sparse shape, which the
+  scope doesn't admit;
 * `scopeMatches`: `ScopeMatches` at every inner protocol whose scope its check matches; `scopeMatches_flock` with
   Flock inside, and `scopeMatches_deployed` at the deployed plain Flock inside.
 
-`InScope` states the inner shape's numbers that `statements` and `checkAtC3` check. `statements` also builds V*'s list
+`InScope` states the inner shape's numbers that `statements` checks, and the dense form `denseOnly` takes. `statements` also builds V*'s list
 at the shape (V*'s parts as many as the verifier's groups, a holo shape's `h` round in a group, R's opening's parts),
 and the parser refuses a shape where that fails, as the verifier's setup does.
 -/
@@ -115,11 +117,22 @@ theorem fullDraw_some (i : RecVStar.Inner) (rec rec' : Bool) (draw : Option Lean
     RecSetup.fullDraw (some i) rec draw record = RecSetup.fullDraw (some i) rec' draw record := by
   simp [RecSetup.fullDraw]
 
-/-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, and
-every V* session's draw passes. -/
+/-- **The verifier's inner shape is dense**: the verdict's `RecSetup.denseOnly` takes it, so it is neither holo nor
+sparse. -/
+def dense (i : RecVStar.Inner) : Bool := (RecSetup.denseOnly (some i)).isOk
+
+theorem dense_iff (i : RecVStar.Inner) : dense i = true ↔ i.holo = false ∧ i.sparse = none := by
+  unfold dense
+  cases hh : i.holo <;> cases hs : i.sparse <;>
+    simp [RecSetup.denseOnly, hh, hs, throw, throwThe, MonadExceptOf.throw, pure, Except.pure, Except.isOk,
+      Except.toBool]
+
+/-- **The deployed scope check**: the parser accepts, the inner scope check `ivScope` takes the inner statement, every
+V* session's draw passes, and the verifier's inner shape is dense (`RecSetup.denseOnly`, the verdict's refusal of the
+forms `RecursiveKS` doesn't cover). -/
 def scopeCheckOf (ivScope : Claims.Msg → Bool) (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Bool :=
   match parseBytes decode x with
-  | some r => ivScope r.inner && r.records.all (fullDrawOk r.shape)
+  | some r => ivScope r.inner && r.records.all (fullDrawOk r.shape) && dense r.shape
   | none => false
 
 /-! ## The shape the setup accepts -/
@@ -263,59 +276,46 @@ theorem fullDrawOk_iff (i : RecVStar.Inner) (record : String) :
 
 /-! ## The scope -/
 
-/-- **`InScope` at a statement the setup accepts** holds exactly when every V* session's draw passes: the setup's
-checks give every condition on the inner shape. -/
+/-- **`InScope` at a statement the setup accepts** holds exactly when every V* session's draw passes and the verifier's
+inner shape is dense: the setup's checks give every other condition on the inner shape, and at a dense shape candidate
+3's list has no R (`candidate3_ok`). -/
 theorem inScope_iff {r : Read} (hr : accepts r = true) :
-    Claims.Recursion.InScope (toStmt r) ↔ r.records.all (fullDrawOk r.shape) = true := by
+    Claims.Recursion.InScope (toStmt r) ↔
+      r.records.all (fullDrawOk r.shape) = true ∧ dense r.shape = true := by
   unfold accepts at hr
   simp only [Bool.and_eq_true, isOk_iff] at hr
-  obtain ⟨⟨⟨⟨ss, hs⟩, ⟨u, hc⟩⟩, -⟩, -⟩ := hr
+  obtain ⟨⟨⟨⟨ss, hs⟩, -⟩, -⟩, -⟩ := hr
   obtain ⟨h1, h2, h3, h4, ss', hc3⟩ := statements_ok hs
-  have hshape : (toStmt r).form.sparse = none ∧ (toStmt r).form.stacked = none ∨
-      ∃ nu ell sLog, (toStmt r).form.sparse = some (nu, ell, sLog, 0) ∧ 1 ≤ nu ∧ 6 ≤ ell ∧
-        ell ≤ (toStmt r).form.kLog ∧
-        (toStmt r).innerDims = some ((toStmt r).form.m, (toStmt r).form.kLog, (toStmt r).form.regions) ∧
-        (toStmt r).form.unitRangeInBlock = true ∧
-        (toStmt r).form.stacked = some (max 22 (nu + Claims.Recursion.pLog ell), 2) ∧
-        max 22 (nu + Claims.Recursion.pLog ell) ≤ 35 := by
-    rcases candidate3_ok hc3 with ⟨hsp, hst⟩ | ⟨sp, R, hsp, hv, hst, hcl, hm, hm1, hm2⟩
-    · left
-      simp [toStmt, hsp, hst]
-    · right
-      obtain ⟨st, hst', hcr⟩ := checkAtC3_ok hsp hc
-      obtain ⟨ht, hd1, hd2, hd3, -, hx, hrg⟩ := checkInnerRange_ok hsp hcr
-      have hv' : 1 ≤ sp.nu ∧ 6 ≤ sp.ell ∧ sp.tLog ≤ 16 := by
-        simp only [RecSparse.Shape.valid, RecSparse.PRE_ROUNDS, Bool.and_eq_true, decide_eq_true_eq] at hv
-        exact ⟨hv.1.1, of_decide_eq_true hv.1.2, hv.2⟩
-      have htm : R.m = max 22 (sp.nu + Claims.Recursion.pLog sp.ell) := by
-        rw [hm, RecVStar.tableM, pLog_eq, ht, RecVStar.PAD_TO, Nat.add_zero]
-      refine ⟨sp.nu, sp.ell, sp.sLog, by simp [toStmt, hsp, ht], hv'.1, hv'.2.1, ?_, ?_, ?_, ?_, ?_⟩
-      · simp only [toStmt]
-        simp only [RecSparse.PRE_ROUNDS] at hx
-        omega
-      · simp [toStmt, hst', hd1, hd2, hd3]
-      · simp [toStmt, hsp, hst', hrg]
-      · simp [toStmt, hst, hcl, htm]
-      · omega
+  have hshape : dense r.shape = true →
+      (toStmt r).form.holo = false ∧ (toStmt r).form.sparse = none ∧ (toStmt r).form.stacked = none := by
+    intro hd
+    obtain ⟨hh, hsp⟩ := (dense_iff r.shape).1 hd
+    rcases candidate3_ok hc3 with ⟨-, hst⟩ | ⟨sp, R, hsp', -⟩
+    · exact ⟨by simp [toStmt, hh], by simp [toStmt, hsp], by simp [toStmt, hst]⟩
+    · simp [hsp] at hsp'
   unfold Claims.Recursion.InScope
   constructor
-  · rintro ⟨-, -, -, -, -, -, hd⟩
-    rw [List.all_eq_true]
-    intro rec hrec
-    exact (fullDrawOk_iff r.shape rec).2 (hd _ (List.mem_map_of_mem hrec))
-  · intro hall
-    refine ⟨rfl, h1, h2, h3, h4, hshape, ?_⟩
+  · rintro ⟨-, -, -, -, -, ⟨hh, hsp, -⟩, hd⟩
+    refine ⟨?_, (dense_iff r.shape).2 ⟨?_, ?_⟩⟩
+    · rw [List.all_eq_true]
+      intro rec hrec
+      exact (fullDrawOk_iff r.shape rec).2 (hd _ (List.mem_map_of_mem hrec))
+    · simpa [toStmt] using hh
+    · simpa [toStmt] using hsp
+  · rintro ⟨hall, hdn⟩
+    refine ⟨rfl, h1, h2, h3, h4, hshape hdn, ?_⟩
     intro d hd
     obtain ⟨rec, hrec, rfl⟩ := List.mem_map.1 hd
     exact (fullDrawOk_iff r.shape rec).1 (List.all_eq_true.1 hall rec hrec)
 
 /-- **The readable scope at the verifier's parser**: the setup accepts what the verifier reads, the inner statement is
-in the inner scope, and every V* session's draw passes. -/
+in the inner scope, every V* session's draw passes, and the verifier's inner shape is dense. -/
 theorem scope_iff {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W) (decode : Claims.Msg → Option Read)
     (hparse : D.parse = parseOf decode) (x : Claims.Msg) :
     Claims.Recursion.Scope D I x ↔
-      ∃ r, parseBytes decode x = some r ∧ I.Scope r.inner ∧ r.records.all (fullDrawOk r.shape) = true := by
+      ∃ r, parseBytes decode x = some r ∧ I.Scope r.inner ∧ r.records.all (fullDrawOk r.shape) = true ∧
+        dense r.shape = true := by
   unfold Claims.Recursion.Scope
   rw [hparse]
   constructor
@@ -338,13 +338,14 @@ theorem scopeMatches {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   rw [scope_iff D I decode hparse, hcheck, scopeCheckOf]
   constructor
   · rintro ⟨r, hr, hIr, hd⟩
-    rw [hr, Bool.and_eq_true]
-    exact ⟨(hI r.inner).1 hIr, hd⟩
+    rw [hr]
+    simp only [Bool.and_eq_true]
+    exact ⟨⟨(hI r.inner).1 hIr, hd.1⟩, hd.2⟩
   · intro hx
     split at hx
     · rename_i r hr
-      rw [Bool.and_eq_true] at hx
-      exact ⟨r, hr, (hI r.inner).2 hx.1, hx.2⟩
+      simp only [Bool.and_eq_true] at hx
+      exact ⟨r, hr, (hI r.inner).2 hx.1.1, hx.1.2, hx.2⟩
     · cases hx
 
 /-- **`ScopeMatches` with Flock inside**: at the verifier's parser and scope check over the inner Flock's scope check,
