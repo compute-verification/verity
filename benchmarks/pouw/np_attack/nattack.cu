@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&gbase, N * 4)); CK(cudaMemcpy(gbase, hbase.data(), N * 4, cudaMemcpyHostToDevice));
   CK(cudaMalloc(&gmove, N * 4)); CK(cudaMemcpy(gmove, hbase.data(), N * 4, cudaMemcpyHostToDevice));
   CK(cudaMalloc(&gred, N * 4));
-  CK(cudaMalloc(&gsink, (size_t)S * 3 * TPB * 4));
+  CK(cudaMalloc(&gsink, (size_t)S * 16 * TPB * 4));
   CK(cudaMalloc(&gspan, 8));
 
   if (argc > 1 && std::string(argv[1]) == "check") {
@@ -203,7 +203,7 @@ int main(int argc, char** argv) {
     for (int m = 0; m < N_MODES; m++) {
       if (m == MOVE) continue;  // a load: no committed-word semantics to check
       CK(cudaMemset(gred, 0, N * 4));
-      CK(cudaMemset(gsink, 0, (size_t)S * 3 * TPB * 4));
+      CK(cudaMemset(gsink, 0, (size_t)S * 16 * TPB * 4));
       KERNS[m]<<<1, TPB>>>(iters, gbase, gsink, gred, gmove, gspan);
       CK(cudaDeviceSynchronize());
       bool ok = true;
@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
   const int iters = argc > 3 ? atoi(argv[3]) : 20000;
   CK(cudaMemset(gred, 0, N * 4));
   for (int m = 0; m < N_MODES; m++) {
-    for (int cps = 1; cps <= 3; cps++) {
+    for (int cps : {1, 2, 4, 8}) {  // up to 32 warps an SM, so each route's rate plateaus at its pipe's throughput
       const int blocks = S * cps;
       KERNS[m]<<<blocks, TPB>>>(iters, gbase, gsink, gred, gmove, gspan);  // warm up
       CK(cudaDeviceSynchronize());
