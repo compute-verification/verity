@@ -23,8 +23,9 @@ its rank or sync interval, and a token budget. At each size a configuration take
   is counted as factors or whole, whichever is smaller, with the norms in full. A base registered once, at the start, makes
   the stock what a server block must hold, not one window's delta;
 - kappa at each configuration's own final loss (dense's cost to reach it), the late-training number;
-- where shorter-horizon dense runs exist, dense's envelope (the least cost at which any dense run reaches the target) and kappa
-  against it, since a checkpoint inside a cosine schedule has not annealed.
+- where shorter-horizon runs exist (dense's or a configuration's, at the learning rate its main run took), kappa and alpha
+  between envelopes: each side's least cost to reach the target over its main run and those, since a checkpoint inside a
+  cosine schedule has not annealed. A side with no shorter runs is its main run alone, and the table says which horizon won.
 """
 from __future__ import annotations
 
@@ -184,7 +185,7 @@ def seconds(s: dict, step: float) -> float | None:
 
 
 def compare(fam: dict, dense: dict, fam_fit: dict, dense_fit: dict, target: float, group: str,
-            envelope: list[dict]) -> dict:
+            envelopes: tuple[list[dict], list[dict]]) -> dict:
     sf, sd = step_at(fam, target), step_at(dense, target)
     row = {"target": target, "step": sf, "dense_step": sd}
     if sf is None or sd is None:
@@ -198,21 +199,29 @@ def compare(fam: dict, dense: dict, fam_fit: dict, dense_fit: dict, target: floa
             "omega": omega, "omega_dense": omega_dense, "alpha": omega_dense / omega}
     if group == "lowrank":
         row |= {"stock": stock(fam, sf), "alpha_stock": stock(dense, sd) / stock(fam, sf)}
-    return row | at_envelope(fam, sf, dense, sd, target, group, envelope)
+    return row | at_envelope(fam, sf, dense, sd, target, group, envelopes)
 
 
-def at_envelope(fam: dict, sf: float, dense: dict, sd: float, target: float, group: str, envelope: list[dict]) -> dict:
-    """kappa and alpha against dense's envelope: the dense run (main or shorter-horizon) that reaches `target` at the least FLOPs."""
-    if not envelope:
+def least(s: dict, step: float, shorter: list[dict], target: float) -> tuple[float, dict]:
+    """The run that reaches `target` at the least FLOPs, the main one (`s`, at `step`) or a shorter-horizon one, and its step."""
+    reach = [(step, s), *((st, e) for e in shorter if (st := step_at(e, target)) is not None)]
+    return min(reach, key=lambda p: p[0] * p[1]["flops_per_step"])
+
+
+def at_envelope(fam: dict, sf: float, dense: dict, sd: float, target: float, group: str,
+                envelopes: tuple[list[dict], list[dict]]) -> dict:
+    """kappa and alpha between the family's envelope and dense's (`envelopes`: each one's shorter-horizon runs)."""
+    if not any(envelopes):
         return {}
-    reach = [(st, e) for e in envelope if (st := step_at(e, target)) is not None]
-    best_step, best = min([(sd, dense), *reach], key=lambda p: p[0] * p[1]["flops_per_step"])
-    return {"dense_envelope_flops": best_step * best["flops_per_step"], "dense_envelope_tokens_per_param": best["tpp"],
-            "kappa_flops_envelope": sf * fam["flops_per_step"] / (best_step * best["flops_per_step"]),
-            "alpha_envelope": best_step * per_step(best, group, fam) / (sf * per_step(fam, group, fam))}
+    (fs, f), (ds, d) = least(fam, sf, envelopes[0], target), least(dense, sd, envelopes[1], target)
+    row = {"envelope_tokens_per_param": [f["tpp"], d["tpp"]],
+           "kappa_flops_envelope": fs * f["flops_per_step"] / (ds * d["flops_per_step"]),
+           "kappa_tokens_envelope": fs * f["tokens_per_step"] / (ds * d["tokens_per_step"]),
+           "alpha_envelope": ds * per_step(d, group, fam) / (fs * per_step(f, group, fam))}
+    return row | ({"alpha_stock_envelope": stock(d, ds) / stock(f, fs)} if group == "lowrank" else {})
 
 
-def own_final(fam: dict, dense: dict, group: str, envelope: list[dict]) -> dict:
+def own_final(fam: dict, dense: dict, group: str, envelopes: tuple[list[dict], list[dict]]) -> dict:
     """kappa and alpha at the family's final loss; where dense never gets that low, at dense's final loss instead."""
     target, at = float(fam["loss"].min()), "family's final loss"
     if step_at(dense, target) is None:
@@ -226,7 +235,7 @@ def own_final(fam: dict, dense: dict, group: str, envelope: list[dict]) -> dict:
             "kappa_time": ratio(seconds(fam, sf), seconds(dense, sd)),
             "alpha": sd * per_step(dense, group, fam) / (sf * per_step(fam, group, fam)),
             "alpha_stock": stock(dense, sd) / stock(fam, sf) if group == "lowrank" else None,
-            **at_envelope(fam, sf, dense, sd, target, group, envelope)}
+            **at_envelope(fam, sf, dense, sd, target, group, envelopes)}
 
 
 def plot(out: Path, size: str, group: str, curves: dict[str, dict], tgts: list[float]) -> str:
@@ -264,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
               "skipped": skipped, "gpu": gpu, "gpu_held_hours": sum(g["held_hours"] for g in gpu.values()),
               "non_embedding": {size: next(iter(labels.values()))["config"]["counts"]["non_embedding"]
                                 for size, labels in best.items()},
-              "best": {}, "fits": {}, "comparisons": {}, "throughput": {}, "plots": []}
+              "best": {}, "fits": {}, "envelopes": {}, "comparisons": {}, "throughput": {}, "plots": []}
     for size, labels in sorted(best.items()):
         ser = {lab: series(r) for lab, r in labels.items()}
         fits = {lab: fit(s) for lab, s in ser.items()}
@@ -276,15 +285,19 @@ def main(argv: list[str] | None = None) -> int:
                                       for lab, r in labels.items()}
         if "dense" not in ser:
             continue
-        envelope = [s for lab, s in ser.items() if lab.startswith("dense@")]
+        shorter = {lab: [r for r in runs if r["size"] == size and r["label"].startswith(lab + "@") and r["lr"] == best_r["lr"]
+                         and r["complete"] and not r["diverged"]] for lab, best_r in labels.items() if "@" not in lab}
+        report["envelopes"][size] = {lab: sorted(r["config"]["args"]["tokens_per_param"] for r in rs) for lab, rs in shorter.items()}
+        shorter = {lab: [series(r) for r in rs] for lab, rs in shorter.items()}
         for group, member in GROUPS.items():
             members = {"dense": ser["dense"]} | {lab: ser[lab] for lab, r in labels.items() if "@" not in lab and member(r)}
             if len(members) < 2:
                 continue
             tgts, out_of_targets = targets(ser["dense"], members)
-            rows = {lab: [compare(s, ser["dense"], fits[lab], fits["dense"], t, group, envelope) for t in tgts]
-                    for lab, s in members.items() if lab != "dense"}
-            finals = {lab: own_final(s, ser["dense"], group, envelope) for lab, s in members.items() if lab != "dense"}
+            rows = {lab: [compare(s, ser["dense"], fits[lab], fits["dense"], t, group, (shorter[lab], shorter["dense"]))
+                          for t in tgts] for lab, s in members.items() if lab != "dense"}
+            finals = {lab: own_final(s, ser["dense"], group, (shorter[lab], shorter["dense"]))
+                      for lab, s in members.items() if lab != "dense"}
             report["comparisons"].setdefault(size, {})[group] = {"targets": tgts, "never_below_first_checkpoint": out_of_targets,
                                                                  "rows": rows, "own_final": finals}
             report["plots"].append(plot(a.out, size, group, members, tgts))
@@ -298,6 +311,22 @@ def fmt(x: float | None, spec: str = ".2f") -> str:
     return "-" if x is None else format(x, spec)
 
 
+MAIN = ("kappa_flops", "kappa_tokens", "kappa_time", "alpha", "alpha_stock")
+ENVELOPES = ("kappa_flops_envelope", "kappa_tokens_envelope", "alpha_envelope", "alpha_stock_envelope")
+HEAD = ("kappa FLOPs | kappa tokens | kappa time | alpha | alpha (stock) | kappa FLOPs (envelopes) | kappa tokens (envelopes) |"
+        " alpha (envelopes) | alpha stock (envelopes) | horizons won, tpp (family/dense)")
+
+
+def horizons(r: dict) -> str:
+    h = r.get("envelope_tokens_per_param")
+    return f"{h[0]:g}/{h[1]:g}" if h else "-"
+
+
+def cell(r: dict, keys: tuple[str, str, str], group: str) -> str:
+    c = f"{fmt(r.get(keys[0]))} / {fmt(r.get(keys[1]), '.1f')}"
+    return c + (f" / {fmt(r.get(keys[2]))}" if group == "lowrank" else "")
+
+
 def tables(report: dict) -> str:
     out = ["## Learning rates: final held-out nats per byte at each", "", "| size | config | lr: final loss |", "|---|---|---|"]
     for size, labels in sorted(report["lr_grid"].items()):
@@ -305,41 +334,42 @@ def tables(report: dict) -> str:
             cells = ", ".join(f"{lr}: {v if isinstance(v, str) else format(v, '.4f')}"
                               for lr, v in sorted(by_lr.items(), key=lambda kv: float(kv[0])))
             out.append(f"| {size} | {lab} | {cells} |")
+    out += ["", "## Envelopes: each configuration's shorter-horizon runs at its main run's learning rate (tokens per parameter)", "",
+            "| size | config | horizons |", "|---|---|---|"]
+    for size, labs in sorted(report["envelopes"].items()):
+        out += [f"| {size} | {lab} | {', '.join(f'{t:g}' for t in tpps) or '-'} |" for lab, tpps in sorted(labs.items())]
     for size, groups in sorted(report["comparisons"].items()):
         for group, comp in groups.items():
             never = comp["never_below_first_checkpoint"]
             out += ["", f"## Size {size}, {group}: targets " + ", ".join(f"{t:.4f}" for t in comp["targets"]), "",
                     *([f"Never below the comparison's first checkpoint, so left out of the targets: {', '.join(never)}.", ""]
                       if never else []),
-                    "| config | best lr | target | kappa FLOPs | kappa tokens | kappa time | kappa FLOPs (fit) | kappa FLOPs (envelope) |"
-                    " alpha | alpha (envelope) | alpha (stock) |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+                    f"| config | best lr | target | kappa FLOPs (fit) | {HEAD} |", "|---|---|---|" + "---|" * 11]
             for lab, rows in comp["rows"].items():
                 lr = report["best"][size][lab]["lr"]
                 for r in rows:
-                    out.append(f"| {lab} | {lr:g} | {r['target']:.4f} | " + " | ".join(
-                        fmt(r.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "kappa_flops_fit",
-                                                "kappa_flops_envelope", "alpha", "alpha_envelope", "alpha_stock")) + " |")
-            out += ["", "| config | at | loss | kappa FLOPs | kappa tokens | kappa time | kappa FLOPs (envelope) | alpha |"
-                    " alpha (envelope) | alpha (stock) |", "|---|---|---|---|---|---|---|---|---|---|"]
+                    out.append(f"| {lab} | {lr:g} | {r['target']:.4f} | {fmt(r.get('kappa_flops_fit'))} | "
+                               + " | ".join(fmt(r.get(k)) for k in (*MAIN, *ENVELOPES)) + f" | {horizons(r)} |")
+            out += ["", f"| config | at | loss | {HEAD} |", "|---|---|---|" + "---|" * 10]
             for lab, f in comp["own_final"].items():
-                out.append(f"| {lab} | {f['at']} | {f['target']:.4f} | " + " | ".join(
-                    fmt(f.get(k)) for k in ("kappa_flops", "kappa_tokens", "kappa_time", "kappa_flops_envelope", "alpha",
-                                            "alpha_envelope", "alpha_stock")) + " |")
+                out.append(f"| {lab} | {f['at']} | {f['target']:.4f} | "
+                           + " | ".join(fmt(f.get(k)) for k in (*MAIN, *ENVELOPES)) + f" | {horizons(f)} |")
     sizes = sorted(report["comparisons"], key=lambda s: report["non_embedding"][s])
-    out += ["", "## Across sizes: kappa (FLOPs) / alpha at each target rule (low rank: then alpha on the stock)", "",
-            "| group | config | target | " + " | ".join(sizes) + " |", "|---|---|---|" + "---|" * len(sizes)]
-    for group in GROUPS:
-        labs = sorted({lab for s in sizes for lab in report["comparisons"][s].get(group, {}).get("rows", {})})
-        for lab in labs:
-            for i, rule in enumerate((*RULES, "own final")):
-                cells = []
-                for s in sizes:
-                    comp = report["comparisons"][s].get(group, {})
-                    r = comp.get("own_final", {}).get(lab) if rule == "own final" else (comp.get("rows", {}).get(lab) or [None] * 3)[i]
-                    r = r or {}
-                    cell = f"{fmt(r.get('kappa_flops'))} / {fmt(r.get('alpha'), '.1f')}"
-                    cells.append(cell + (f" / {fmt(r.get('alpha_stock'))}" if group == "lowrank" else ""))
-                out.append(f"| {group} | {lab} | {rule} | " + " | ".join(cells) + " |")
+    for title, keys in (("main runs", ("kappa_flops", "alpha", "alpha_stock")),
+                        ("envelopes", ("kappa_flops_envelope", "alpha_envelope", "alpha_stock_envelope"))):
+        out += ["", f"## Across sizes, {title}: kappa (FLOPs) / alpha at each target rule (low rank: then alpha on the stock)", "",
+                "| group | config | target | " + " | ".join(sizes) + " |", "|---|---|---|" + "---|" * len(sizes)]
+        for group in GROUPS:
+            labs = sorted({lab for s in sizes for lab in report["comparisons"][s].get(group, {}).get("rows", {})})
+            for lab in labs:
+                for i, rule in enumerate((*RULES, "own final")):
+                    cells = []
+                    for s in sizes:
+                        comp = report["comparisons"][s].get(group, {})
+                        r = (comp.get("own_final", {}).get(lab) if rule == "own final"
+                             else (comp.get("rows", {}).get(lab) or [None] * 3)[i]) or {}
+                        cells.append(cell(r, keys, group) + (f" ({horizons(r)})" if title == "envelopes" else ""))
+                    out.append(f"| {group} | {lab} | {rule} | " + " | ".join(cells) + " |")
     out += ["", f"GPU hours held: {report['gpu_held_hours']:.2f}", ""]
     return "\n".join(out)
 
