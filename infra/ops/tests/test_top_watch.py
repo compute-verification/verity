@@ -121,6 +121,16 @@ def test_the_first_pass_records_each_choice_and_still_relays_one_on_an_open_page
     assert state["chosen"] == {"p1": "B", "p2": "A"}
 
 
+def test_a_seed_leaves_a_pending_choice_for_the_next_pass_to_relay():
+    n, ring = Notion(page("p1", Choose="B")), Ring()
+    n.body("p1")
+    state = {}
+    T.asks_pass(state, n, None, "ds", NOW, False)
+    assert n.patches == [] and "p1" not in state["chosen"]
+    T.asks_pass(state, n, ring, "ds", NOW + 900, False)
+    assert n.patches == [("p1", "Decided otherwise", "Daniel chose B: Drop it")]
+
+
 def test_a_default_page_past_its_deadline_gets_its_default_and_one_before_it_waits():
     late = page("p1", Kind="Default", Deadline="2026-10-19T19:00:00.000+00:00", **{"If no answer": "A applies at noon"})
     early = page("p2", Kind="Default", Deadline="2026-10-21T16:00:00.000+00:00")

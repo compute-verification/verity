@@ -235,7 +235,9 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
             if lane != "top":
                 ring("top", f"{lane}'s ask \u201c{ask[:120]}\u201d: {what[:300]} {url}", thread)
 
-        before, chosen[pid] = chosen.get(pid), p.get("Choose") or ""
+        before = chosen.get(pid)
+        if ring is not None or p.get("Status") not in OPEN:
+            chosen[pid] = p.get("Choose") or ""
         if ring is not None and pid not in decided and (d := decide(p, heads, now, before)):   # a seed leaves a pending tick to the next pass
             status, decision, choice = d
             if dry:
