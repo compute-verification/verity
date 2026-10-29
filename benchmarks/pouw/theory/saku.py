@@ -299,7 +299,8 @@ def ncp3_sparse(L, m, shapes, c1):
     return agg
 
 
-H200_MACS = 989.5e12
+H200_MACS = 9.89e14
+MFU_SERVE = 0.4
 DATACENTER_H200 = 100_000
 WINDOW_S = 600
 WORLD_MACS_YEAR = 9.36e30 / 2
@@ -307,13 +308,13 @@ AND_PER_MAC = 2079 / 16
 PERIOD_S = {"window": WINDOW_S, "week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
 
 
-def per_period(share, alpha):
-    """A per-call gap `share` of stock, pooled in AND gates over each period, on SW-PREMISES' basis: one H200 at its int8
-    peak covers H200_MACS / alpha stock MACs a second, a datacenter is DATACENTER_H200 of them, the world is
-    world-inference-2027's FLOP a year as MACs over alpha."""
+def per_period(share):
+    """A per-call gap `share` of stock, pooled in AND gates over each period, on N-CARD's one basis (stock work held
+    fixed): one H200 serves H200_MACS * MFU_SERVE stock int8 MACs a second, a datacenter is DATACENTER_H200 of them, the
+    world is world-inference-2027's FLOP a year as MACs."""
     out = {}
-    for scope, macs_s in (("one H200", H200_MACS / alpha), ("datacenter", DATACENTER_H200 * H200_MACS / alpha),
-                          ("world", WORLD_MACS_YEAR / alpha / PERIOD_S["year"])):
+    for scope, macs_s in (("one H200", H200_MACS * MFU_SERVE), ("datacenter", DATACENTER_H200 * H200_MACS * MFU_SERVE),
+                          ("world", WORLD_MACS_YEAR / PERIOD_S["year"])):
         out[scope] = {p: share * macs_s * s * AND_PER_MAC for p, s in PERIOD_S.items()}
     return out
 
@@ -359,12 +360,13 @@ def main():
     sparse = {f"{wl} m{m} L{L}{' C1' if c1 else ''}": ncp3_sparse(L, m, shapes, c1)
               for wl, shapes in (("llama", LLAMA), ("v4 dense", V4)) for m in (64, 512, 8192)
               for L in (32, 64, 128) for c1 in (False, True)}
-    periods = {"allowance, 1% at alpha 3": per_period(0.01, 3.0),
-               "skip L64, llama": per_period(skip["llama linears L64"], 3.0),
-               "skip L128, llama": per_period(skip["llama linears L128"], 3.0),
-               "skip L64, v4 dense": per_period(skip["v4 dense L64"], 3.0),
-               "ncp3 L64 C1, llama T8192": per_period(sparse["llama m8192 L64 C1"]["T1_credited_coins"], 3.0),
-               "ncp3 L64 C1, v4 dense m8192": per_period(sparse["v4 dense m8192 L64 C1"]["T1_credited_coins"], 3.0)}
+    periods = {"stock work": per_period(1.0),
+               "allowance, 1%": per_period(0.01),
+               "skip L64, llama": per_period(skip["llama linears L64"]),
+               "skip L128, llama": per_period(skip["llama linears L128"]),
+               "skip L64, v4 dense": per_period(skip["v4 dense L64"]),
+               "ncp3 L64 C1, llama T8192": per_period(sparse["llama m8192 L64 C1"]["T1_credited_coins"]),
+               "ncp3 L64 C1, v4 dense m8192": per_period(sparse["v4 dense m8192 L64 C1"]["T1_credited_coins"])}
 
     for name, rs in checks.items():
         print(name, json.dumps(rs))
