@@ -239,7 +239,8 @@ theorem publicDigest_cost (header : Json) (pubs : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem descParse_cost (bytes : ByteArray) : countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h) bytes) 1 := by
+theorem descParse_cost (bytes : ByteArray) :
+    countC.P (TemplateQuery.Desc.parseWith (Hashes.counted h).sha512 bytes) 1 := by
   apply countC.mono
   · unfold TemplateQuery.Desc.parseWith
     repeat (first
@@ -969,8 +970,8 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
   · omega
 
 set_option maxHeartbeats 4000000 in
-theorem linksCheck_cost (c : Circuit) (pop : Public) (program : ByteArray) :
-    countC.P (HmLinks.checkWith (Hashes.counted h) c pop program) 1 := by
+theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
+    countC.P (HmLinks.checkWith (Hashes.counted h) c pop readers program) 1 := by
   apply countC.mono
   · unfold HmLinks.checkWith
     repeat (first
@@ -1411,7 +1412,7 @@ theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
     countC.P (FV3.rootWith (Hashes.counted h) dom leaves)
       ((nextPow2 leaves.size - leaves.size)
         + log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size))) := by
-  unfold FV3.rootWith
+  unfold FV3.rootWith FV3.rootM
   dsimp only
   refine bindQ (mapM_array_cost _ (c := 1) fun _ => hash_cost h _ _) (mapM_array_ok _ _) (fun pads hp => ?_)
     (m := log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size)) + 0) ?_
@@ -1705,11 +1706,12 @@ theorem outParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String �
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
 set_option maxHeartbeats 8000000 in
-/-- **`Stmt.setupHiddenWith`'s calls**, at a drawn statement of an untyped circuit: ten for its parse, partition, load,
-draw, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and draw return. -/
+/-- **`Stmt.setupHiddenWith`'s calls**, at a drawn statement of an untyped flat circuit: ten for its parse, partition,
+load, draw, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and draw
+return. -/
 theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (d : Json) (partition : Option Json) (program publicInputs : Option ByteArray) (PC : Circuit → Prop) (NP K : Nat)
-    (ht : tags.typed = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
+    (ht : tags.typed = false) (hi : tags.isTmpl = false) (hPC : ∀ c, PC c → c.ports.size ≤ NP)
     (H1 : okC (HmOut.parseWith (Hashes.counted h) tags cf tables) PC)
     (H2 : ∀ c pi, PC c → okC (HmIn.loadPublicWith (Hashes.counted h) tags c pi pf) (PT K))
     (H3 : ∀ c pi pop, PT K pop → okC (HmIn.drawnWith (Hashes.counted h) c pi pop d) (fun pub => PT K pub ∧ PN K pub)) :
@@ -1739,7 +1741,11 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
   have hCP : ∀ c pub, PC c → PT K pub ∧ PN K pub →
       countC.P (HmOut.checkPublicWith (Hashes.counted h) c pub) (NP * perRow K) :=
     fun c pub hc hp => countC.mono (checkPublic_cost h c pub K hp.1 hp.2) (Nat.mul_le_mul_right _ (hPC c hc))
+  have hpc : HmOut.parseCommitWith (Hashes.counted h) tags cf tables =
+      HmOut.parseWith (Hashes.counted h) tags cf tables := by
+    rw [HmOut.parseCommitWith, if_neg (by simp [hi])]
   unfold Stmt.setupHiddenWith
+  first | rw [hpc] | simp -zeta only [hpc]
   -- `if let some d := draw` binds its own `d`; only once that match reduces is the law's `Except.map` at the theorem's
   -- `d`, where `generalize` finds it. A `split` the walk leaves unreduced shares one bound between its arms.
   try simp -zeta only
