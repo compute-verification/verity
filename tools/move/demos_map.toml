@@ -1,0 +1,58 @@
+# The examples' rename to demos, part one, the move: `examples/` is `demos/`, with `tests/test_demos.py` and
+# `verity_cli.demos`. At the root of a checkout of any main with this file copied in, untracked (so the move commit holds
+# the move alone, and `--allow-dirty`), one command makes it (each step is idempotent):
+#
+#     python3 tools/move/layout.py --map tools/move/demos_map.toml --no-lock --allow-dirty &&
+#         python3 tools/move/rename.py --map tools/move/demos_map.toml --allow-dirty
+#
+# `layout.py` moves [paths] and rewrites every reference to them, but in code it leaves a lone quoted word, which is a name
+# as often as a path (`"census"` as a key), so `rename.py` then renames the code's lone `"examples"` directory names (the
+# [[words_in]] below) and nothing else (no [words]). `verity check move BASE HEAD` certifies the result. Part two, the words
+# (`verity demo`, `demo.toml`, the prose, and the two files [rewrite] leaves to it), is `demo_words_map.toml`. No workspace
+# member moves, so `uv.lock` doesn't change (`--no-lock`). The format is `layout_map.toml`'s and `rename_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_bench = "benchmarks/harness/verity_bench" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_bench = "benchmarks/harness/verity_bench" }
+
+[paths]
+"examples/" = "demos/"
+"tests/test_examples.py" = "tests/test_demos.py"
+"tools/verity/cli/verity_cli/examples.py" = "tools/verity/cli/verity_cli/demos.py"
+
+[retired]
+paths = ["examples/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and this map, changelogs, research's recorded moves), and files
+# whose bytes a digest pins. Two files go to part two: a path relative to a README's own directory and a shell default
+# (`${REPLAY:-$ROOT/...}`) are forms `verity check move` doesn't read as a moved path.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_suites.py", "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/torch_gpu/commit_slots/README.md", "benchmarks/torch_gpu/units/build.sh"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[rewrite.keep_in]
+# the handle registry's `examples` key is each handle's example posts, not the directory
+".agents/skills/using-slack/registry.json" = ["examples"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"examples" = "demos"
+"tests.test_examples" = "tests.test_demos"
+"verity_cli.examples" = "verity_cli.demos"
+
+[words]
+
+# the code that names the directory by one quoted word: the CLI's runner root and ladder scan, the ladder test's toy tree,
+# and the directories `verity` may never name
+[[words_in]]
+files = ["tools/verity/cli/verity_cli/__init__.py", "tools/verity/cli/verity_cli/demos.py", "tests/test_demos.py",
+         "tests/test_boundaries.py"]
+[words_in.words]
+'"examples"' = '"demos"'
