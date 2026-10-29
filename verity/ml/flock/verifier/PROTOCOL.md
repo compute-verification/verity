@@ -1758,15 +1758,6 @@ shape: `refused: a recursive session (--rec-part, --rec-bindings or --rec-rows) 
 (--rec-inner F): V*'s checks and its full-draw refusal run under that shape, and the recursion's proof covers no session
 without it` (one line).
 
-Under `--rec-inner`, the verifier's own bindings (`--rec-bindings F`, which `verity_flock.rec_bindings` computes from its
-partition object and program, with `--vstar UNIT` from V*'s own Definition of the statement) must be that partition
-object's and program's (`RecVStar.checkOwnBindings`), META must carry them exactly (`checkMeta`), and their
-`program_digests` must name one Definition, V*'s template of the statement (`RecVStar.checkTemplate`): core's codec's
-descriptor id of `RecOpen_v4{LANES=…,H=…}` at a level, `InnerRepCheck_v2{S=…}` at a part's S, `RecSparse_v1{…}` or
-`RecCap_v1` (`RecVStar.templateId`). So a part relabelled under another Definition is refused, however consistently its
-files carry the label: `setup: <unit>: the verifier's bindings' program_digests names <k>, not V*'s template of the
-statement <t>` (an id past 160 characters shown as its first 120 and its length).
-
 Under `--rec-inner`, setup also refuses a session of more than one table, or one whose table holds fewer instances than
 its population (a table drawn short), since V*'s slots are read at the one table's addresses and RecCap reads every
 instance's (`RecSetup.oneFull`): `setup: refused: a V* session of <k> tables: a V* session is one table, the only form
