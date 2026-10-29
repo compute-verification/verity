@@ -14,7 +14,9 @@ volume where it fits on the GPU, else that run's rate), with no gap credit; "wit
 GEMMs alone; "weight noise once" drops forming the weight side every call; "matmuls alone" reads t_S as the plain GEMMs
 only, without the rest of the step. Every input is a
 measurement (its art and run) or an estimate (its source), and the output says which. Coverage: each matmul's final-word
-gap d/(3K), against 1%, and its share of the MACs.
+gap d/(3K), against 1%, and its share of the MACs. T1 in priced work, additive over stock's m·n·K, per linear and over the
+linears: the final word 32/K, forming X f/n and forming Y every call f/m, with hashing and coins credited (gap 0), at f = 24
+(ncp-v1's forming price an operand entry) and at f = 8 (the same price over NCP's 3K-wide product).
 """
 from __future__ import annotations
 
@@ -53,6 +55,9 @@ GEMM = {64: {"plain_us": 570.8, "a_side": 1.893, "noised": -0.001, "wide": 0.996
 # (`ncp.noise_row`), SHA-512 in counter mode at 64 bytes a compression, at the committer's 4.449 G compressions/s
 # (r20261029-013634-94e5; GD-DENOISE's coin kernels ran at 2.8-4.5 G/s)
 COMPRESSIONS_S = 4.449e9
+# ncp-v1's forming price (`verity.core.protocols.pouw.schemes.ncp.FORM_UNITS`): W1 units an operand entry for its three
+# noised copies, so a call forms X in 24·m·K and Y in 24·K·n, against stock's m·n·K (its Ω* = 1 + 8/n is over 3·m·n·K)
+FORM = 24
 
 # the stock steps (GD-HASH, note:compute-research/20261028T2230Z-report-gd-hash-reframe); a T 512 step of 512 real rows
 # is GD-HASH's 64-row step with its GEMMs at m 512 instead of m 64 (GEMM's plain rows) and its other kernels held
@@ -111,6 +116,17 @@ def coverage(ctx: int, decode: bool) -> dict:
             "covered_with_head_long_pv": (lin + head + pv * (1 - short)) / total}
 
 
+def t1(m: int, form: float) -> dict:
+    """The additive gap over stock's m·n·K a call, per linear and over the layers' linears (MAC-weighted): the final word
+    32/K, forming X form/n and forming Y form/m."""
+    per = {name: {"final_word": 32 / k, "form_x": form / n, "form_y": form / m} for name, (n, k) in LINEARS.items()}
+    for v in per.values():
+        v["total"] = v["final_word"] + v["form_x"] + v["form_y"]
+    w = {name: n * k for name, (n, k) in LINEARS.items()}
+    agg = {p: sum(per[x][p] * w[x] for x in per) / sum(w.values()) for p in ("final_word", "form_x", "form_y", "total")}
+    return {"per_linear": per, "linears": agg}
+
+
 def main() -> None:
     out: dict = {"inputs": {"rows": ROWS, "gemm": GEMM, "engines": ENGINES}, "gaps": {}, "points": {}, "coverage": {}}
     for name, (n, k) in {**LINEARS, "head": HEAD, "attention qk": (0, HEAD_DIM)}.items():
@@ -147,6 +163,7 @@ def main() -> None:
                                      {"bytes_mac": t["bytes"] / t["macs"], "J_rule_T8192": rule})[pname] = row
     for ctx, decode in ((144, True), (288, True), (2048, True), (8192, True), (2048, False), (8192, False)):
         out["coverage"][f"{'decode' if decode else 'prefill'} {ctx}"] = coverage(ctx, decode)
+    out["t1"] = {f"f {f}": {pname: t1(m, f) for pname, (_, m) in POINTS.items()} for f in (FORM, FORM // 3)}
     Path(sys.argv[1]).write_text(json.dumps(out, indent=1))
     for d, p in out["points"].items():
         print(f"{d}: {p['bytes_mac']:.3f} B a useful MAC, J by GD-HASH's rule at T 8,192 {p['J_rule_T8192']:.0f}")
@@ -170,6 +187,12 @@ def main() -> None:
         print(f"coverage {c:<20} linears {v['linears']:.1%}  head {v['head']:.1%}  QK {v['qk']:.1%}  PV {v['pv']:.1%} "
               f"(on rows < 1,067 keys {v['pv_macs_short']:.0%})  covered: linears {v['covered_linears']:.1%}, "
               f"+ head {v['covered_with_head']:.1%}, + long P·V {v['covered_with_head_long_pv']:.1%}")
+    for f, pts in out["t1"].items():
+        for pname, r in pts.items():
+            a = r["linears"]
+            print(f"T1 {f:<5} {pname:<20} " + "  ".join(f"{x} {v['total']:.2%}" for x, v in r["per_linear"].items())
+                  + f"  linears {a['total']:.2%} (final word {a['final_word']:.2%}, forming X {a['form_x']:.2%}, "
+                    f"forming Y {a['form_y']:.2%})")
 
 
 if __name__ == "__main__":
