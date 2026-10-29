@@ -268,7 +268,7 @@ def honestShape : Shape := ⟨1, #[1], #[1]⟩
 
 def honestRow (_ _ : Nat) : Array Nat := #[0]
 
-def honestLink : Link := ⟨0, 0, 0, 0⟩
+def honestLink : LinkEntry := ⟨0, 0, 0, 0⟩
 
 /-- **`check_sound`'s honest lemma**: its hypothesis holds at an honest table, the prover's (`table`) of one link that
 holds at the honest instance, which `check` accepts with its one link. -/
@@ -277,7 +277,7 @@ theorem check_sound_honest : check honestShape honestRow honestRow (table [hones
 
 /-- **`check_sound`'s nontrivial lemma**: its conclusion fails at a one-row table whose row is empty, for one link,
 whatever links are named: the row decodes to no link (`row-size`). -/
-theorem check_sound_nontrivial : ∀ ls : List Link,
+theorem check_sound_nontrivial : ∀ ls : List LinkEntry,
     ¬ (decodeAll (#[ByteArray.empty] : Array ByteArray).toList =
           .ok (ls.map some ++ List.replicate ((#[ByteArray.empty] : Array ByteArray).size - 1) none) ∧
         1 = ls.length ∧ 0 < 1 ∧ (#[ByteArray.empty] : Array ByteArray).size = grid 1 ∧
