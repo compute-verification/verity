@@ -4,7 +4,7 @@
 # exactness at depth) under a short lease, checked by mref.py after it; then the interleaved timing at the served shapes
 # under a second lease, whatever the gate said (the table marks an arm whose gate failed). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --env GPU_LEASE_WHO=T1 \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd clone --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/masked_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 # STAGE=build|gate|all (default all); REPS (default 11); SHAPES (name:m:n:k); MG_ARMS.
 set -uo pipefail

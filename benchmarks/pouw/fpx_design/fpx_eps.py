@@ -1,4 +1,4 @@
-"""FPX-DESIGN's candidate FP designs on the machine model: each a device's int8 record with what an FP route adds.
+"""fpx_design's candidate FP designs on the machine model: each a device's int8 record with what an FP route adds.
 
     uv run --project benchmarks/pouw/machine_model python benchmarks/pouw/fpx_design/fpx_eps.py OUT
 
@@ -20,25 +20,24 @@ stated under (the 1.22 reading rests on Theorem C, unproved). An FP route adds:
 
 The extraction is the honest FP route's and no cheater's: a cheater that writes the words on lanes, or on the int8 MMA,
 never extracts, but the model charges a design's fold to every route and to its floor. So V's own ε is over-credited on
-every device, B300 included, where the cheater puts 81-98% of its words on lanes (RT-FP-1, -3, -5, -14,
-note:20261019T0546Z-draft-rt-fp). Each V with an extraction is therefore also written as `V-x0`, the same design with
-`keep` for `fold_add`: V's row is its honest cost (γ), and V-x0's is its credit, the floor the words cost with no
-extraction, and its ε. OUT/credit.md has, per reading, V's γ, V-x0's ε, and V's own ε beside the bound
-1 - T / ♭_V, T the lesser of V-x0's cheater and floor: what crediting V's own floor would give a cheater that doesn't
-extract, at V's L, marked (`CAVEATS`) where that is no witness (operands past s8, or FP4's k64 words). RT-FP's
-overcredit.py prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
+every device, B300 included, where the cheater puts 81-98% of its words on lanes. Each V with an extraction is therefore
+also written as `V-x0`, the same design with `keep` for `fold_add`: V's row is its honest cost (γ), and V-x0's is its
+credit, the floor the words cost with no extraction, and its ε. OUT/credit.md has, per reading, V's γ, V-x0's ε, and V's
+own ε beside the bound 1 - T / ♭_V, T the lesser of V-x0's cheater and floor: what crediting V's own floor would give a
+cheater that doesn't extract, at V's L, marked (`CAVEATS`) where that is no witness (operands past s8, or FP4's k64
+words). `rt_fp/overcredit.py` prices the routes at other L's (FP4's chained int8 pair, e4m3i352's limbs).
 
 g1 (gap-one) serves the FP model's nearest levels R, in row units, moved by a fair live coin b of 1 and centred:
 R + b - 1/2. The one GEMM of the integers R + b is int8 Dither-2S's on fair coins, folded and served (its rank-one
 terms off in the epilogue). E4M3's integers to 120 and E2M1x2 at integer block scales to 10 (10 * 12 + 1) stay in
 int8, so on int8 units g1 is its device's Dither-2S design: on B200 and H200 the record itself, on sm_120 Dither-2S
-with fx1's keyed IMAD a word (`fpx-g1s-fx1`), which is not sm_120's record. That is H1 (co32c-u16, decision 82;
+with fx1's keyed IMAD a word (`fpx-g1s-fx1`), which is not sm_120's record. That is H1 (co32c-u16;
 `dither-c-peel-fx1`): weights to 110 with U on +-16, so g1 runs on it with E4M3 weights to 104 and block scales to 9
 (`g1h_check.py`), at H1's ε only if its centred served word is the committed one; `g1h_eps.py` prices the correction
 as a skip term otherwise.
 
-FP-NATIVE's FP8-A1 (`fpx-a1-*`: weights the level below plus a coin at its gap, activations the nearest level plus
-its gap times b + b' - 1, note:20261019T0525Z-draft-fp-native) is 2SP with its twin and served GEMM one: each k32
+FP8-A1 (`fpx-a1-*`: weights the level below plus a coin at its gap, activations the nearest level plus
+its gap times b + b' - 1) is 2SP with its twin and served GEMM one: each k32
 word restarts from +0 and is exact in FP32 (32 * 448^2 < 2^23), so it pays 2SP's extraction a word and no second GEMM.
 Its operands don't fit s8, its floor reads Lemma R2 (a paper proof), and no red team has looked for a cheaper route to
 its words; like every extraction, its own is credited to no one (`fpx-a1-*-x0`). On B200 it is also priced at
@@ -47,11 +46,11 @@ extraction a MAC. H200 can't run it (the 14-bit window).
 
 An FP4 word at L = 64 (one kind::mxf4nvf4 k64 firing) costs what an FP8 word at L = 32 costs at B200 rates and
 carries twice the MACs, so its ε and its γ against a plain FP4 GEMM are the FP8 row's; on int8 units an FP4 design's
-γ against plain FP4 is twice its row's (int8 runs at half FP4's rate). That price is MM-SHEETS' sm_100 `sheet.toml`
-row `UTCOMMA_MXF4NVF4_M128_N256` (512 SMSP-cycles at K 64, `UTCIMMA_M128_N256`'s at K 32; measured at 2.000x kind::i8,
-r20261019-090041-1ef5). Main's DS-100 has no e2m1 peak and no `UTCOMMA` class, so there a cheater's FP4 words are
-unpriced, and the B200 FP4-unit rows' ε (`fpx-g1s-fp4-fp`) stands only once that row lands (RT-ISA-4,
-note:20261019T0520Z-draft-rt-isa). Int8 words through `UTCOMMA` take 9 E2M1 products (LOWBIT-DC), so at that row they
+γ against plain FP4 is twice its row's (int8 runs at half FP4's rate). That price is the sm_100 `sheet.toml`
+row `UTCOMMA_MXF4NVF4_M128_N256` (512 SMSP-cycles at K 64, `UTCIMMA_M128_N256`'s at K 32; measured at 2.000x kind::i8).
+DS-100 has no e2m1 peak and no `UTCOMMA` class, so there a cheater's FP4 words are
+unpriced, and the B200 FP4-unit rows' ε (`fpx-g1s-fp4-fp`) stands only once that row lands. Int8 words
+through `UTCOMMA` take 9 E2M1 products (`lowbit_dc`), so at that row they
 cost more than the int8 MMA's. The skip term is the base's, at the base's ♭: a larger fold raises ♭, so this
 overstates ε_skip.
 """

@@ -1,5 +1,5 @@
-// RT-FP candidate 8 (note:20261019T0546Z-draft-rt-fp): is B200's kind::mxf4nvf4 exact when a row's four k16 blocks
-// carry different integer UE4M3 scales, from +0 and from the 1.5 2^23 binade? LOWBIT-DC's fpx.cu filled every scale byte
+// Is B200's kind::mxf4nvf4 exact when a row's four k16 blocks
+// carry different integer UE4M3 scales, from +0 and from the 1.5 2^23 binade? lowbit_dc's fpx.cu filled every scale byte
 // alike, so a block's scale factored out of the whole MMA. With mixed scales the four scaled block partials of one MMA
 // differ in magnitude, and a narrow internal adder would drop the small ones; uniform scales can't show that.
 //

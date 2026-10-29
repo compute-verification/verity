@@ -1,6 +1,6 @@
-// M1 of EPS1 TENSOR on sm_80 (A100): every native mma.sync form alone and beside a scalar lane, the scalar pipes' rates
+// On sm_80 (A100): every native mma.sync form alone and beside a scalar lane, the scalar pipes' rates
 // alone, in pairs and beside saturated IMMA, the duo fold beside IMMA, and a layout-free check of which forms leave the
-// exact s32 word (note:20261017T0700Z-draft-eps1-ampere).
+// exact s32 word.
 //
 // The timed kernels are tensor_kinds.cu's (k_alone, k_spec, k_mixu, k_opalone) with sm_80's forms and lanes; k_duo is
 // honest's inner loop (an MMA, then duo on each of its accumulator words). Every case prints one JSON line naming its
@@ -745,8 +745,8 @@ static void exact() {
   if constexpr (F::EX != 0) exact_int<F>();
 }
 
-// The least bound moves with the loop's length (r20261017-073620-0273: IMMA.16832 at 8 warps 5.16 at R = 32, 4.54 at
-// 48, 5.19 at 64), so R and U each vary, every loop under ~200 instructions.
+// The least bound moves with the loop's length (IMMA.16832 at 8 warps: 5.16 at R = 32, 4.54 at 48, 5.19 at 64), so R
+// and U each vary, every loop under ~200 instructions.
 template <class F, int NW>
 static void sweep() {
   mixu<F, 24, LANE_MIX, NW, 2>(); mixu<F, 24, LANE_MIX, NW, 3>(); mixu<F, 24, LANE_MIX, NW, 4>();
@@ -757,7 +757,7 @@ static void sweep() {
   mixu<F, 96, LANE_MIX, NW, 1>();
 }
 
-// The points sweep() and form() leave out (r20261017-081119-98b5 moved IMMA.SP.16864 3.9% at 7 warps a SMSP)
+// The points sweep() and form() leave out (moved IMMA.SP.16864 3.9% at 7 warps a SMSP)
 template <class F, int NW>
 static void sweep2() {
   mixu<F, 16, LANE_MIX, NW, 4>(); mixu<F, 16, LANE_MIX, NW, 6>(); mixu<F, 24, LANE_MIX, NW, 5>();
@@ -793,7 +793,7 @@ static void form() {
   mixu<F, 48, LANE_MIX, 8>(); mixu<F, 16, LANE_MIX, 6>(); mixu<F, 32, LANE_MIX, 6>(); mixu<F, 8, LANE_IADD3, 8>();
   sweep<F, 6>();
   sweep<F, 8>();
-  // the search's extension (decision 76: its margin is the spread once two successive extensions agree within 2%)
+  // the search's extension (its margin is the spread once two successive extensions agree within 2%)
   sweep<F, 5>();
   sweep<F, 7>();
   sweep2<F, 5>();
@@ -811,7 +811,7 @@ static void beside() {
   spec<F, 64, lane2(OP_LOP3I, OP_FFMA)>(); spec<F, 64, lane2(OP_IADD3, OP_IMAD)>();
 }
 
-// M1c on sm_80 (the search's second extension, after FACET-BREAK beat sm_120's joint rows with an f16 MMA, #2244): each
+// M1c on sm_80 (the search's second extension, after facet_break beat sm_120's joint rows with an f16 MMA): each
 // form that sets a joint coefficient, beside the lane mixes M1 left out (other pipes, register reads, the operand loads),
 // interleaved at three densities and 4, 6 and 8 warps a SMSP, and warp-specialized; M1's IADD3+FFMA least as control.
 template <class F, int X>

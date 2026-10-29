@@ -1,4 +1,4 @@
-// LDS.128 beside a bulk unit that reads shared memory (FACET-BREAK, note:20261017T0524Z-draft-eps1-facet-break): R6r
+// LDS.128 beside a bulk unit that reads shared memory: R6r
 // prices LDS.128, the bulk copy out of shared memory (UBLKCP4K) and the bulk reduction (TMAred512) as one read pool.
 // Joint points, rows.jsonl only.
 //   ls_<p><W>         W warps: 16 LDS.128 an iteration, alone
