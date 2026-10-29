@@ -34,8 +34,8 @@ scalar coefficients, and the functional distinctness (pairwise distinct and non-
 every committed word on small instances, degenerate data included.
 
 All prices and shapes are inputs: H32's 32 (measured on the H200), Llama-3.2-1B's linears, an assumed V4-like dense
-and routed-expert shape, CORE-NCP's measured step parts and the coin expansion's measured call times for the T2
-estimate. Output: a JSON report on stdout or `--json PATH`, and a text table with `--table`.
+and routed-expert shape, and for the T2 estimate CORE-NCP's measured step parts, the measured hm96 hashing and word
+export prices, and the coin expansion's measured call times. Output: a JSON report on stdout or `--json PATH`, and a text table with `--table`.
 """
 
 from __future__ import annotations
@@ -60,7 +60,8 @@ V4_EXPERT = {"e_gate_up": (4096, 7168), "e_down": (7168, 2048)}
 V4_EXPERT_SHARE = 8 / 256
 ROWS = {"T512_64tok": 64, "T512_512tok": 512, "T8192": 8192}
 
-HASH_GBPS = 519.6
+HASH_UNITS_BYTE = {"serial": 2010, "overlapped": 981}
+EXPORT_UNITS_WORD = 848
 STEP = {"T8192": {"stock_ms": 37.77, "gemm_ms": 12.49, "tokens": 8192},
         "T512_64tok": {"stock_ms": 3.42, "gemm_ms": 0.571, "tokens": 64}}
 LLAMA_MACS_TOKEN = sum(n * k for n, k in LLAMA.values()) * LLAMA_LAYERS
@@ -278,16 +279,22 @@ def hash_bytes_per_mac(d: Design, m: int, n: int, k: int, c1: bool) -> float:
 
 
 def t2_estimate(d: Design, point: str, c1: bool) -> dict:
-    """Step time over stock: extra tensor width, hashing at HASH_GBPS, and each call's coin expansion run serially
-    (a call's seed reads its operands' roots, so its coins can't be expanded ahead)."""
+    """Step time over stock: extra tensor width, each committed word exported to HBM (EXPORT_UNITS_WORD) and hashed,
+    and each call's coin expansion run serially (a call's seed reads its operands' roots, so its coins can't be
+    expanded ahead). Hashing runs after the GEMM at the hm96 rows' price alone ("serial", a schedule honest serving
+    always has, so an upper estimate) or at the best price read beside the served step's GEMM ("overlapped"). Units
+    are time at H200_MAC_S."""
     p = STEP[point]
     m = p["tokens"]
     macs = sum(m * n * k for n, k in LLAMA.values()) * LLAMA_LAYERS
     byts = sum(m * n * k * hash_bytes_per_mac(d, m, n, k, c1) for n, k in LLAMA.values()) * LLAMA_LAYERS
     alpha = sum(m * n * k * d.alpha(k) for n, k in LLAMA.values()) * LLAMA_LAYERS / macs
     coin_ms = sum(coin_us(d.coin_bits(m, n, k) / 8) for n, k in LLAMA.values()) * LLAMA_LAYERS * 1e-3
-    t_ms = p["stock_ms"] + (alpha - 1) * p["gemm_ms"] + byts / (HASH_GBPS * 1e9) * 1e3
-    return {"t2": (t_ms + coin_ms) / p["stock_ms"], "t2_without_coins": t_ms / p["stock_ms"], "coin_ms": coin_ms}
+    base = p["stock_ms"] + (alpha - 1) * p["gemm_ms"]
+    t_ms = {key: base + byts * (u + EXPORT_UNITS_WORD / 4) / H200_MAC_S * 1e3 for key, u in HASH_UNITS_BYTE.items()}
+    return {"t2": (t_ms["serial"] + coin_ms) / p["stock_ms"],
+            "t2_overlapped": (t_ms["overlapped"] + coin_ms) / p["stock_ms"],
+            "t2_without_coins": t_ms["serial"] / p["stock_ms"], "coin_ms": coin_ms}
 
 
 def ssn_a_w0(n: int, k: int, rng: np.random.Generator | None = None) -> np.ndarray:
@@ -601,6 +608,7 @@ def report(c1_only: bool = False) -> dict:
                 for point in STEP:
                     t2 = t2_estimate(d, point, c1)
                     entry[f"t2_{point}"] = t2["t2"]
+                    entry[f"t2_overlapped_{point}"] = t2["t2_overlapped"]
                     entry[f"t2_without_coins_{point}"] = t2["t2_without_coins"]
                     entry[f"coin_ms_{point}"] = t2["coin_ms"]
                 rows.append(entry)
@@ -618,7 +626,8 @@ def report(c1_only: bool = False) -> dict:
             "rows": rows, "sims": sims, "per_dot_product": per_dot,
             "noise_std": [ssn_noise_std(k) for k in (2048, 8192)], "checks": check(),
             "params": {"H32": H32, "p_entry": P_ENTRY, "data_per_step": DATA_PER_STEP, "llama": LLAMA, "v4_dense": V4_DENSE,
-                       "v4_expert": V4_EXPERT, "v4_expert_share": V4_EXPERT_SHARE, "rows": ROWS, "hash_GBps": HASH_GBPS,
+                       "v4_expert": V4_EXPERT, "v4_expert_share": V4_EXPERT_SHARE, "rows": ROWS,
+                       "hash_units_byte": HASH_UNITS_BYTE, "export_units_word": EXPORT_UNITS_WORD,
                        "step": STEP, "per2_limbs_default": PER2_LIMBS_REAL, "dup": DUP_ESTIMATE,
                        "coin_priced_byte": COIN_PRICED_BYTE, "coin_call_us": COIN_CALL_US}}
 
@@ -634,7 +643,7 @@ def periods(gap_share: float, alpha: float) -> dict:
 def table(rep: dict) -> str:
     lines = []
     hdr = ("design", "model", "C1", "L T512(64)", "L T512(512)", "L T8192", "V4d T512", "V4d T8192", "V4e T8192",
-           "L T512(64) +coins", "L T8192 +coins", "V4d T8192 +coins", "T2 8192", "T2 512(64)", "coin ms 8192/64")
+           "L T512(64) +coins", "L T8192 +coins", "V4d T8192 +coins", "T2 8192 serial/overlapped", "T2 512(64) serial/overlapped", "coin ms 8192/64")
     lines.append(" | ".join(hdr))
     for r in rep["rows"]:
         def f(key, gap="gap"):
@@ -644,7 +653,8 @@ def table(rep: dict) -> str:
                                  f("llama_T512_512tok"), f("llama_T8192"), f("v4dense_T512_64tok"), f("v4dense_T8192"),
                                  f("v4expert_T8192"), f("llama_T512_64tok", "gap_coins_uncredited"),
                                  f("llama_T8192", "gap_coins_uncredited"), f("v4dense_T8192", "gap_coins_uncredited"),
-                                 f"{r['t2_T8192']:.1f}x", f"{r['t2_T512_64tok']:.1f}x",
+                                 f"{r['t2_T8192']:.1f}x/{r['t2_overlapped_T8192']:.1f}x",
+                                 f"{r['t2_T512_64tok']:.1f}x/{r['t2_overlapped_T512_64tok']:.1f}x",
                                  f"{r['coin_ms_T8192']:.2f}/{r['coin_ms_T512_64tok']:.2f}"]))
     lines.append("")
     for c in rep["checks"]:
