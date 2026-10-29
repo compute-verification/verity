@@ -19,7 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # PoUW's words) and the Definitions' integer, gather and cast primitives (`verity.ml.definitions.registry`, which imports
 # their twins in `verity.ml.definitions.numerics`; both read `verity.ml.definitions.evidence` and its `evidence.json`),
 # and the integration's quarantine, difftest and relation modules.
-# The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
+# The key-binding test reads PoUB, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",

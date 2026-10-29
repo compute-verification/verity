@@ -1,6 +1,6 @@
 # PoUB (`verity.core.protocols.poub`)
 
-Proof of useful bandwidth (PoUB) v0: a verifier with no hardware at the site certifies, window by window, how many reads
+PoUB v0: a verifier with no hardware at the site certifies, window by window, how many reads
 of a node's registered store the node made. `PROTOCOL.md` has the semantics, the byte formats and the record.
 
 ## Which side is the definition

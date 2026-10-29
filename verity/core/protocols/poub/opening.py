@@ -1,4 +1,4 @@
-"""Check 3 under zero knowledge: each receipt the remote session draws goes through the remote bandwidth audit's opening
+"""Check 3 under zero knowledge: each receipt the remote session draws goes through PoUB's opening
 unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks 1-3 and 5 as one unit) in place of its opening,
 so the verifier holds the drawn block, its payload, its receipt leaf, the step's plan row and every salt and path only
 inside the unit, and reads the unit's verdict.
