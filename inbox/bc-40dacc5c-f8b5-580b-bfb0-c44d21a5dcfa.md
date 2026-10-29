@@ -23,3 +23,6 @@ If your branch was cut from origin/next, it carries every queued PR on next, inc
 
 ## 20:46Z
 New capacity until Thu 06:00Z: vy-nebius-cpu-11 and -12, each 192 vCPU with 6 warm Lean build slots. Use `--on vy-nebius-cpu-11 --pool research` (r0-r4; there is no soundness pool there). Send NEW runs there first. Don't cancel a run that has already started elsewhere, but a queued, not-started run 8+ deep on cpu-7/8/9 may be cancelled and resent there.
+
+## 04:50Z soundness
+If your branch carries #6241 (directly or through #5658), merge its final head c92bc0a53f (lean holds it steady; mark ~06:00Z). #5658 is now 2a241ec6e7 (REG-ADV); take that if you carry #5658. It changes check.py, so send what main's gate asks at the new head.
