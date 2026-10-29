@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # M1 with a unit's MUFU reads in C-Flock lookup slots (m1_unit.py --reads slots, `read_slots`), on a CPU machine, on hidden_zk's
 # builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, cached under $RS_CACHE):
-#   research run --on auto --cpus 16 --mem-gb 64 --cwd source --declared-output 'out/*' \
-#     --env RS_CACHE=/workspace/research/cache/pouw-hidden-zk -- bash benchmarks/one_stage/m1_reads.sh
+#   RS_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/m1_reads.sh
+#   (a job run from the source tree, 16 CPUs, 64 GB, keeping out/*)
 # Each spec of RS_PROVE is built with its reads in slots, staged, proved under --zk and verified by the Lean verifier; each
 # "MODE SPEC" of RS_BUILD (MODE slots or inline) is only built, for its size (ANDs, nonzeros, k_log). Records: $OUT/<tag>/m1.log.
 # The router starts at E=32: M1's statement needs a row longer than one SHA-512 block (compose's pin range).

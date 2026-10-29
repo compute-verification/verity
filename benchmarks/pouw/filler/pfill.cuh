@@ -1,4 +1,4 @@
-// pfill: a DRAM-free filler in Theorem E's own setting (HC-PROVED, cmp-13). dcap.cu includes this file in place of FILL
+// pfill: a DRAM-free filler in Theorem E's own setting. dcap.cu includes this file in place of FILL
 // v1's chained filler unless DFILL_V1 is defined, under the same ABI (dfill_k<NC>, DFill, dfill_launch, dfill_prep,
 // dfill_make, dfill_check, dfill_ref), so dcap's d* modes and dscore.cu run it unchanged. The scorer's fill-v1 arm (and
 // fused_arm.py's chained arms) pass -DDFILL_V1 through NVCC_APPEND_FLAGS to build v1's chained filler instead.
@@ -25,8 +25,8 @@
 // the same of row 16F+g+8. NC picks the fold:
 //   4  ram  y <- (rotl(y, 7) + d0) a0 + d1;  y <- (rotl(y, 19) + d2) a1 + d3   (two ops a pair). Not a receipt of
 //           both words: a step is rotl(y, 7) a0 + Q, so it reads a pair only through Q = a0 d0 + d1, which one product a
-//           pair computes (note:20261016T0917Z-draft-fullfloor-s-r8 §1.2; pfill_ref.q_receipt). Built with -DPFILL_LI
-//           or -DPFILL_XIN13, NC 4 is one of P2-FF r9's folds instead (note:20261016T1117Z-draft-fullfloor-s-r9), on the
+//           pair computes (pfill_ref.q_receipt). Built with -DPFILL_LI
+//           or -DPFILL_XIN13, NC 4 is one of the r9 folds instead, on the
 //           device and in dfill_ref alike, each committing the whole y:
 //      LI     y <- (y ^ d0 ^ k0) a0 + d1;  y <- (y ^ d2 ^ k1) a1 + d3   (LOP3, IMAD: two ops a pair). Sound only while no
 //             free operand is shared across a hand-off (d1, d2) or (d3, the next d0): the filler's rows are hashed
@@ -55,11 +55,11 @@
 // products / 2). One build holds one kind: with both in dfill_k, the s8 tile kept 0.96 of its alone rate beside decode
 // instead of 0.99.
 //
-// Built with -DPFILL_BITS instead, the tile is Theorem K's (note:20261016T0341Z-draft-fullfloor-s-r5 §3.6): every A and B
+// Built with -DPFILL_BITS instead, the tile is Theorem K's: every A and B
 // entry is its bit itself, the s8 byte 0 or 1, in the domain PF_DOM01, on the same s8 IMMA m16n8k32, so each word is
 // the s32 sum popcount(a & b) in [0, 32], read unscaled into the same receipt.
 //
-// Built with -DPFILL_BU instead, the tile is pfill-bU (note:20261016T0710Z-draft-filler-floor-r2 §5), in Theorem K's
+// Built with -DPFILL_BU instead, the tile is pfill-bU, in Theorem K's
 // setting: the same s8 IMMA m16n8k32 with C = 0 and the same ram receipt, in the domain PF_DOM_BU. A's entries are their
 // bits, the s8 byte 0 or 1; B's are U in {±1, ..., ±64}, one digest byte t an entry, U = (t & 0x7F) - 64 + ((t >> 6) & 1)
 // = -64 + sum_{p<6} 2^p t_p + 65 t_6 (bit 7 unused), so each word is the s32 sum of a U over the row's set bits, in
@@ -120,7 +120,7 @@ constexpr bool PF_R9 = true;
 #else
 constexpr bool PF_R9 = false;
 #endif
-// FOLD's cost dial (note:20261017T0320Z-draft-eps1-fold): PF_ROUNDS is the number of fold rounds a committed word in the
+// The fold's cost dial: PF_ROUNDS is the number of fold rounds a committed word in the
 // NC 4 (XOR-in / LI / ram) absorb. The default 1 is byte-identical to the fold of record; a build passes -DPF_ROUNDS=R
 // through NVCC_APPEND_FLAGS to measure the cost a word a round beside the saturated noise IMMA.
 #ifndef PF_ROUNDS
@@ -206,7 +206,7 @@ __host__ __device__ __forceinline__ void pf_absorb(uint32_t& y, uint32_t& z, uin
                                                    uint32_t d3, const PfKeys& k) {
   if (NC == 4 || NC == 5) {
 #if PF_ROUNDS > 1
-    // FOLD (note:20261017T0320Z-draft-eps1-fold): the R-round weave's cost dial. Each round re-folds the committed words
+    // The R-round weave's cost dial. Each round re-folds the committed words
     // into the running state with the same XOR-in / LI / ram step, a serial u32 chain of depth PF_ROUNDS a word. The host
     // dfill_ref shares this loop, so dgate stays bit-exact; only the throughput and the receipt value change.
 #pragma unroll 1
@@ -496,7 +496,7 @@ __global__ void __launch_bounds__(32 * PF_W, PF_MINB) dfill_k(uint64_t c0, uint6
   pf_tiles<NC, PF_KIND>(Bs, Ab, c0, c1, tile0, tiles, steps, rec);
 }
 
-// The phase filler (dcap.cu's PFill, HC-SCHED's placement): the same tile at PF_PW warps under the phase ids PBIT | (base +
+// The phase filler (dcap.cu's PFill, psched's placement): the same tile at PF_PW warps under the phase ids PBIT | (base +
 // slot), a tile a block at a time, so a slot is a block's tile (slot off + blockIdx.x tiles + i) and `steps` is a warp's
 // fragments (any multiple of 4). The stop flag is read once a tile by thread 0 and taken by the whole block, since a tile
 // syncs it. Each slot keeps (tile id, receipt); st[1] counts the tiles done. A block of PF_PW warps holds PF_PW / 8 of the
@@ -671,7 +671,7 @@ static inline uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc
   return dfill_ref_kind(c0, c1, tile, nc, steps, PF_KIND, (tile >> 62) == 1 ? PF_PW : PF_W);
 }
 
-// pfill-bU's uniformity gate (note:20261016T0710Z-draft-filler-floor-r2 §5.8): the s8 bytes of U over `tiles` tiles' B
+// pfill-bU's uniformity gate: the s8 bytes of U over `tiles` tiles' B
 // blocks and of A over fragments 0 .. frags - 1 of each, from the round's coins, on the host generators dfill_ref reads,
 // so dgate's receipts hold the GPU's operands to them. hu, ha: 256 counts each, by the byte's u8 value.
 static void pf_bu_hist(uint64_t c0, uint64_t c1, int tiles, int frags, uint64_t* hu, uint64_t* ha) {

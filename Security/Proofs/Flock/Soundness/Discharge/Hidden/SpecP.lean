@@ -1,3 +1,4 @@
+import Flock.Desc
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
@@ -26,7 +27,7 @@ structure SpecP (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List
     (draw : Option Lean.Json) (own : Option ByteArray) (pi : HmIn.Ports) (st : Stmt) : Prop where
   tagsEq : st.tags = tags
   leaf : st.leaf = default
-  parse : HmOut.parse tags cf tables = .ok st.c
+  parse : HmOut.parseCommit tags cf tables = .ok st.c
   ports : HmIn.parse st.c = .ok pi
   merkle : MerkleScheme.find? st.c.leafScheme = some st.merkle
   pub : ∃ pop, HmIn.loadPublic tags st.c pi pf = .ok pop ∧ HmIn.checkOwn pi pop own = .ok () ∧
@@ -86,6 +87,12 @@ theorem setupHidden_specP (h : Stmt.setupHidden tags cf pf coins tables draw par
       inRange := by assumption
       sigma := rfl
       hello := by assumption }⟩
+
+/-- At a flat statement's tags (`Tags.isTmpl`), the committed circuit is `HmOut.parse`'s (`Spec.parseF`). -/
+theorem SpecP.parseF {own : Option ByteArray} {pi : HmIn.Ports} (s : SpecP tags cf pf coins tables draw own pi st)
+    (hi : tags.isTmpl = false) : HmOut.parse tags cf tables = .ok st.c := by
+  have h := s.parse
+  rwa [HmOut.parseCommit, if_neg (by simp [hi])] at h
 
 /-- **Without the verifier's public inputs, `SpecP` is `Spec`**: `HmIn.checkOwn` at `none` leaves no public input port,
 and with none `HmIn`'s public file, draw, Δ and regions are `HmOut`'s. -/

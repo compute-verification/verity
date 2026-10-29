@@ -1,13 +1,13 @@
-// EPS1 DC red-team (RT-ISA round 2): the uniform datapath beside a *saturated asynchronous* tcgen05.mma on sm_100a (B200).
-// The committed-word model prices a uniform instruction at an issue slot (decision 73/84; sm_100 census UNI,issue 0.924,
+// Red-team probe: the uniform datapath beside a *saturated asynchronous* tcgen05.mma on sm_100a (B200).
+// The committed-word model prices a uniform instruction at an issue slot (sm_100 census UNI,issue 0.924,
 // UNI,JI100_0 0.906), measured beside the synchronous mma.sync (uniform.cuh's F_M, um_*). It has never been measured
 // beside a saturated async tcgen05.mma, which one thread issues for a whole 128x256 tile, leaving the warp scheduler's
-// issue slots even freer than wgmma does: the WATCH (note:20261017T1834Z-draft-rt-isa) is whether ptxas/hardware
+// issue slots even freer than wgmma does: the question is whether ptxas/hardware
 // dual-issues a uniform instruction into that shadow at less than an issue slot.
 //
 //   utc_<S>_<K>   bare: warp 0 issues 4 tcgen05.mma i8 128x256x32 a commit group (UTCIMMA, saturating the tensor pipe, as
 //                 tc_i8_m128_n256) and carries K warp-uniform chain instructions a iteration (uchain.cuh). Nothing reads
-//                 the TMEM accumulators inside the loop, so -- the FACET-BREAK finding, as on sm_90 -- ptxas 13.0 lowers
+//                 the TMEM accumulators inside the loop, so -- the facet_break finding, as on sm_90 -- ptxas 13.0 lowers
 //                 the chain to the vector lanes (IMAD/LOP3/IADD3), not the uniform datapath. The gate pins the lane
 //                 counts; the K-slope is the lane cost beside a saturated async tcgen05.mma.
 //   utch_<S>_<K>  honest: as utc, plus the honest step (8 mma.sync + its duo fold) in warp 0's loop, the one thing that
