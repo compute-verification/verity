@@ -477,6 +477,50 @@ def row_sharing(rng, tile=64, writes=3):
     return out
 
 
+def start_edge(rng, m=64, n=48, s_steps=8, writes=3):
+    """Zero data, a call's first steps on the lead's layout with the 8-bit row coin, for three starts N_0:
+      zero    N_1 = R_1 k_1 + C_1 k_1: one IADD3 of a row product and a column product, against 3 writes;
+      kappa   a live word a call: N_1 = (kappa ^ x) k_1 reads x = R_1 + C_1 alone, so it is one load from a table over
+              x's range, after one IADD3;
+      rowcol  a_i ^ b_j, live words a row and a column: the honest's LOP3 xors three inputs, so it costs nothing, and
+              rows of a tile column that share a row-coin prefix no longer share a state.
+    Each route bit for bit; the states rows share; the writes each start leaves an adversary a call, at K 2,048 and
+    8,192 (edge plus rows sharing, at the state's cost), its call-average per step, and its T1."""
+    coins = 2 * rng.integers(-64, 64, (s_steps, 3, n)) + 1
+    col = np.cumsum(np.einsum("e,sen->sn", np.array(LANE_W, dtype=np.int64), coins), 0)
+    row = np.cumsum(rng.integers(0, 256, (s_steps, m)), 0)
+    words = (row[:, :, None] + col[:, None, :]) & U32
+    ks = rng.integers(0, 1 << 31, s_steps, dtype=np.int64) * 2 + 1
+    kappa = int(rng.integers(0, 1 << 32))
+    a, b = rng.integers(0, 1 << 32, m, dtype=np.int64), rng.integers(0, 1 << 32, n, dtype=np.int64)
+    lo, hi = -16383, 255 + 16383
+    table = ((kappa ^ (np.arange(lo, hi + 1) & U32)) * int(ks[0])) & U32
+    starts = {"zero": np.zeros((m, n), dtype=np.int64), "kappa": np.full((m, n), kappa, dtype=np.int64),
+              "rowcol": a[:, None] ^ b[None, :]}
+    first = {s: ((n0 ^ words[0]) * int(ks[0])) & U32 for s, n0 in starts.items()}
+    out = {"zero_route_matches": bool((first["zero"] == ((row[0] * int(ks[0]))[:, None] + col[0] * int(ks[0])) & U32).all()),
+           "kappa_table_entries": hi - lo + 1, "kappa_x_in_table": bool(((row[0][:, None] + col[0]) >= lo).all()
+                                                                       and ((row[0][:, None] + col[0]) <= hi).all()),
+           "kappa_route_matches": bool((first["kappa"] == table[row[0][:, None] + col[0][None, :] - lo]).all()),
+           "states_shared": {}}
+    for s, st in starts.items():
+        shared = []
+        for t in range(s_steps):
+            st = ((st ^ words[t]) * int(ks[t])) & U32
+            shared.append(int(sum(m - len(np.unique(st[:, j])) for j in range(n))))
+        out["states_shared"][s] = shared
+    edge, state_cost = {"zero": 2, "kappa": 1, "rowcol": 0}, {"zero": 1, "kappa": 2, "rowcol": 3}
+    share = {t: m + 2.0 ** (8 * t) * math.expm1(m * math.log1p(-2.0 ** (-8 * t))) for t in range(1, 26)}
+    for s in starts:
+        for k in (2048, 8192):
+            steps = lead_steps(k)
+            sharing = 0.0 if s == "rowcol" else (state_cost[s] * share[1] + writes * sum(share[t] for t in range(2, 26))) / m
+            saved = edge[s] + sharing
+            out[f"{s} K{k}"] = {"writes_saved_a_call": saved, "per_step_call_average": (writes * steps - saved) / steps,
+                                "mu_f_floor": saved / (writes * steps), "t1_percent": 100 * saved * H32 / (28 * steps)}
+    return out
+
+
 def lop3_fanin(rng, cases=64):
     """For each input triple from the registers at hand, a LOP3 exists computing `target` iff the target's bit is
     constant on every minterm class of the triple's bits. Registers: N, D1, D2 and the 16 bitwise functions of K1, K2
@@ -640,6 +684,7 @@ def main():
         "row_sharing": row_sharing(rng),
         "lop3_fanin": lop3_fanin(rng),
         "pricing": pricing(),
+        "start_edge": start_edge(rng),
     }
     s = json.dumps(res, indent=1, default=float)
     if len(sys.argv) > 1:
