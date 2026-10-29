@@ -42122,9 +42122,8 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "d40a3edf5c5539f5688ab9c55204628138d3a9b5e24900f0694438841c488d6d",
+   "digest": "7c0ad044fbd6bffaa6da9c9f443476332736f4b91dced9ac46f406967236d239",
    "definitions": {
-    "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
     "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
