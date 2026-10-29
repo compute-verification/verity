@@ -14,16 +14,16 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The faulty units' committed bits**: over the slots `F` of the partition `P`, each replay unit's gates that its
+/-- **The faulty units' committed bits**: over the slots `F` of the partition `P`, each proof unit's gates that its
 boundary commits (`committed`). -/
 def faultyBits (C : Prog) (P : Partition) (F : Finset ℕ) : ℕ :=
-  ∑ v ∈ F, committed C (RU.gates (P.rus.getD v []))
+  ∑ v ∈ F, committed C (P.blocks.getD v [])
 
 open Classical in
 /-- **The possible faulty sets at `δ`**: the sets of `P`'s slots that are in `M_δ` and hold no slot drawn `all`, the
 faulty sets `RAcc δ` allows. At `δ ≥ miss(1)` none is non-empty. -/
 noncomputable def faultySets (d : Design) (P : Partition) (δ : ℝ) : Finset (Finset ℕ) :=
-  (Finset.range P.rus.length).powerset.filter fun F => F ∈ d.M P δ ∧ Disjoint F (allSlots d P)
+  (Finset.range P.blocks.length).powerset.filter fun F => F ∈ d.M P δ ∧ Disjoint F (allSlots d P)
 
 /-- **Accepted with the faulty set `F`**: some declared advice `(a, free)` makes the first `k` steps `Accepted` by the
 circuit's Program, with `a`, the inputs other than the ingress, among `As`, and `free` holding values only at the

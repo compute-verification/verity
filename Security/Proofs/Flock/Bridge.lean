@@ -13,11 +13,11 @@ import Proofs.Flock.Bridge.RowsC
 import Proofs.Flock.Bridge.Rows
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.KSLive
-import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.RowsReg
 import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
+import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.PublicWitnesses
 import Proofs.Flock.Bridge.PublicNontrivial
 import Proofs.Flock.Bridge.RowsRegWitnesses

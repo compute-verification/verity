@@ -18,10 +18,11 @@ wire's position under `Cm` and `roots`. It reads the transport only at the right
   (`boundary_inner` excludes a row's two XORs).
 * `witRows_val`: `witRows` opens a wire's position at its value wherever some datum passes there (`posOf_injective`);
   `witDep_val` is it at an evaluation.
-* `not_faulty_of_val`: a unit whose witness values are the evaluation on its committed wires is not faulty. The
-  interior is the evaluation at `wireAt`, so `lowers` gives the unit's proof unit correct (`ref_slotOf`), and each input
-  the unit owns is one of its committed wires (`mem_io_of_owner`), so its row opens and its one-gate proof unit is
-  correct (`correct_input`).
+* `not_faulty_of_val`: a unit whose witness values are the evaluation on its committed wires is not faulty. Slot `u` is
+  unit `u`'s proof block with the inputs it owns, which leave its values alone (`ref_blockOf`), so it is correct when the
+  unit's gates are and each owned input opens (`correct_blockOf`). The interior is the evaluation at `wireAt`, so
+  `lowers` gives the unit's gates correct, and each input the unit owns is one of its committed wires
+  (`mem_io_of_owner`), so its row opens.
 * `faultyRows`: `faultyRightC` at `witRows v`, for any `v` that is the evaluation on the unit's committed wires the
   constants don't fix.
 -/
@@ -46,19 +47,6 @@ theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : 
   refine mem_io_of_read hh hr ?_
   rw [hh, (P.input_iff a).2 (by simp [hin, Op.isInput])]
   simp
-
-/-- **A one-gate proof unit of an input is correct** wherever its committed value is opened. -/
-theorem correct_input {Cp : Claims.Sampling.Prog} {ref : ℕ → Option Bool} {p : ℕ} (hp : Cp.gates[p]? = some .input)
-    (h : ref p ≠ none) : Cp.Correct ref [p] := by
-  intro g hg
-  obtain rfl : g = p := List.mem_singleton.1 hg
-  refine ⟨fun x hx i hi _ => ?_, fun _ => ?_⟩
-  · rw [hp] at hx
-    obtain rfl := Option.some.inj hx
-    simp [BGate.reads] at hi
-  · cases hv : ref g with
-    | none => exact absurd hv h
-    | some b => exact ⟨b, rfl, by rw [Boundary.runIn_eq, hp]; simpa [BGate.val] using hv⟩
 
 /-- **A position the unit commits is a wire of `P.io u`**: a gate of `unitGates P u` that `Boundary` commits is the
 position of one of `u`'s wires, and that wire is committed. -/
@@ -107,15 +95,14 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
   exact ⟨hcom, Or.inl hu⟩
 
 /-- **What the unit needs, outside its interior, is its committed wires' positions**: a gate of `need` of
-`[unitGates P u]` outside the unit, or one the unit commits, is the position of a wire in `P.io u`. -/
+`unitGates P u` outside the unit, or one the unit commits, is the position of a wire in `P.io u`. -/
 theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
-    (hi : i ∈ FlockSoundness.Discharge.ZkLink.WrongSet.need (progOf C κ) [unitGates P u])
+    (hi : i ∈ FlockSoundness.Discharge.ZkLink.WrongSet.need (progOf C κ) (unitGates P u))
     (hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true) :
     ∃ a ∈ P.io u, i = posOf C a := by
   by_cases hin : i ∈ unitGates P u
   · exact posOf_of_boundary hin (hB.resolve_left (not_not.2 hin))
-  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
-  simp only [FlockSoundness.Discharge.ZkLink.WrongSet.need, hgates, List.mem_append, List.mem_flatMap] at hi
+  simp only [FlockSoundness.Discharge.ZkLink.WrongSet.need, List.mem_append, List.mem_flatMap] at hi
   rcases hi with hi | ⟨p, hp, hrd⟩
   · exact absurd hi hin
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
@@ -190,25 +177,22 @@ theorem not_faulty_of_val {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (H 
   apply hmem.2
   by_cases hN : Nonempty (Fin C.N)
   · obtain ⟨d⟩ := hN
-    refine ⟨slotOf P κ u, rus_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i), ?_⟩
-    change ∀ pu ∈ slotOf P κ u, (progOf C κ).Correct (RU.ref (progOf C κ) (slotOf P κ u)
-      (w.val H Cm (stmtOf P κ kd desc q roots)) (fun i => C.eval Xr (wireAt C d i))) pu
-    rw [ref_slotOf]
-    intro pu hpu
-    rcases List.mem_append.1 (show pu ∈ [unitGates P u] ++ _ from hpu) with hpu | hpu
+    refine ⟨blockOf P κ u, blocks_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i), ?_⟩
+    change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u)
+      (w.val H Cm (stmtOf P κ kd desc q roots)) (fun i => C.eval Xr (wireAt C d i)))
+      (blockOf P κ u)
+    rw [ref_blockOf, correct_blockOf]
+    refine ⟨lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ fun i hi hc => ?_, fun a ha => ?_⟩
     swap
-    · obtain ⟨a, ha, rfl⟩ := List.mem_map.1 hpu
-      obtain ⟨hin, hk, -⟩ := mem_insOf.1 ha
-      refine correct_input (gates_posOf_input hin hk) ?_
+    · obtain ⟨hin, hk, -⟩ := mem_insOf.1 ha
       rw [Boundary.ref_input _ (gates_posOf_input hin hk), hval a (mem_io_of_owner ha) hk]
       simp
-    refine lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ (fun i hi hc => ?_) pu hpu
-    unfold RU.ref
+    change (progOf C κ).refIn (unitGates P u) (w.val H Cm (stmtOf P κ kd desc q roots))
+      (fun i => C.eval Xr (wireAt C d i)) i = some (C.eval Xr (wireAt C d i))
+    unfold Claims.Sampling.Prog.refIn
     split_ifs with hin
     · rfl
-    · have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
-      rw [hgates] at hin
-      have hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true := by
+    · have hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true := by
         by_cases h1 : i ∈ unitGates P u
         · exact Or.inr (by simpa [h1] using hin)
         · exact Or.inl h1
@@ -220,15 +204,12 @@ theorem not_faulty_of_val {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (H 
           exact absurd (gates_posOf_const (input_of_isInput (hκin a b hk)) hk) (hc b)
       rw [wireAt_posOf]
       exact hval a ha hnone
-  · refine ⟨slotOf P κ u, rus_partOf_getElem? P u, fun _ => false, ?_⟩
-    intro pu hpu g hg
-    rcases List.mem_append.1 (show pu ∈ [unitGates P u] ++ _ from hpu) with hpu | hpu
-    · rw [List.mem_singleton] at hpu
-      subst hpu
-      obtain ⟨w, -⟩ := mem_unitGates.1 hg
+  · refine ⟨blockOf P κ u, blocks_partOf_getElem? P u, fun _ => false, ?_⟩
+    intro g hg
+    rcases mem_blockOf.1 hg with hg | ⟨a, -, -⟩
+    · obtain ⟨w, -⟩ := mem_unitGates.1 hg
       exact absurd ⟨w⟩ hN
-    · obtain ⟨a, -, -⟩ := List.mem_map.1 hpu
-      exact absurd ⟨a⟩ hN
+    · exact absurd ⟨a⟩ hN
 
 /-- **A unit right on its canonical openings is not faulty in `witRows v`** when `v` is the evaluation on `Xr`'s inputs
 at each committed wire of the unit that the constants `κ` don't fix (`FaultyRightTarget` at canonical openings, at the

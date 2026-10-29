@@ -16,7 +16,7 @@ event, on an audit whose outcome carries the transcript.
 * `Accepts I t`: flock-verify's verdict on `t` (`Main.verifyCmd`, an `hm96Rows` statement): the session's statement set
   up from the inputs and the record's draw (`Stmt.setupTables`), and `Flock.verify` accepting the record and proofs
   against it. `verifyCmd` refuses more: a keyed coin tree's reused key (`CoinTree.checkFresh`), which only shrinks the
-  event, and a run of several sessions reuses a setup for a draw of the same canonical form.
+  event. A run of several sessions sets each drawn session up at its own draw.
 * `auditLive L Reg live`: the audit as it runs, the registration, then the verifier's draw, then the live session
   `live S R` that ends in the transcript, and its outcome the registration, the draw and the transcript.
 * `ExecRefines`: the open guarantee R11 at one strategy pair, the probability that flock-verify accepts in the live

@@ -1,4 +1,4 @@
-"""C-Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
+"""Flock's generic IR lowering: an IR Definition becomes a Flock binary circuit by composing :mod:`fp` pieces.
 
 :func:`lower` walks the Definition's gates in canonical order, as ``verity.ml.circuits.evaluate`` does, and maps each primitive to
 its piece in :data:`PIECES` (a primitive without one is an error naming it). Constant gates, and gates whose operands are
@@ -172,7 +172,7 @@ PIECES = _Pieces(PIECES)
 
 
 class NoPiece(NotImplementedError):
-    """An IR primitive that C-Flock's lowering has no piece for."""
+    """An IR primitive that Flock's lowering has no piece for."""
 
 
 # --- the walk ----------------------------------------------------------------------------------------------------------
@@ -885,7 +885,7 @@ def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None
     """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
     n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
     (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
-    pins the units' leaf maps (red-team-flock-2 IR6) and the cut structure (IR4)."""
+    pins the units' leaf maps and the cut structure."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -1223,7 +1223,7 @@ def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, pa
 
 def check_staged(low: Lowering, input_set, path) -> list[str]:
     """What differs between the instance file at ``path`` and the verifier's own staging of the same range of ``input_set``
-    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's (red-team-flock-2 IR2)."""
+    (empty: byte-identical). A verifier proves against a file it staged itself, never a producer's."""
     import tempfile
     from pathlib import Path
 

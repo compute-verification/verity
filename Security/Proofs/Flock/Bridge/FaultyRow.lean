@@ -45,27 +45,26 @@ theorem faulty_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ)
     (hvg : ∀ d, Cm.Opens H roots ⟨posOf C g, v g, d⟩ = true → v g = true) :
     u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witRows C Cm H roots v) := by
   classical
-  have hr0 := rus_partOf_getElem? (κ := κ) P u
-  have hlen : u.val < (partOf P κ).rus.length := (List.getElem?_eq_some_iff.1 hr0).1
+  have hr0 := blocks_partOf_getElem? (κ := κ) P u
+  have hlen : u.val < (partOf P κ).blocks.length := (List.getElem?_eq_some_iff.1 hr0).1
   unfold Claims.Sampling.faulty
   refine Finset.mem_filter.2 ⟨Finset.mem_range.2 hlen, ?_⟩
   rintro ⟨r, hr, ι, hc⟩
   rw [hr0] at hr
   cases hr
-  have hc' : (progOf C κ).Correct (RU.ref (progOf C κ) [unitGates P u]
+  have hc' : (progOf C κ).Correct ((progOf C κ).refIn (unitGates P u)
       ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι) (unitGates P u) := by
-    have h := hc (unitGates P u) (List.mem_append_left _ (List.mem_singleton_self _))
-    change (progOf C κ).Correct (RU.ref (progOf C κ) (slotOf P κ u)
-      ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι) (unitGates P u) at h
-    rwa [ref_slotOf] at h
-  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
+    change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u)
+      ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι) (blockOf P κ u) at hc
+    rw [ref_blockOf, correct_blockOf] at hc
+    exact hc.1
   have hs : (stmtOf P κ kd desc q roots).roots = roots := rfl
   have href : ∀ p, ((progOf C κ).Boundary (unitGates P u) p = true ∨ p ∉ unitGates P u) →
-      RU.ref (progOf C κ) [unitGates P u] ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι p =
+      (progOf C κ).refIn (unitGates P u) ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι p =
         (witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots) p := by
     intro p hp
-    unfold RU.ref
-    rw [hgates, if_neg]
+    unfold Claims.Sampling.Prog.refIn
+    rw [if_neg]
     rintro ⟨h1, h2⟩
     rcases hp with hp | hp
     · rw [hp] at h2; cases h2
@@ -82,7 +81,7 @@ theorem faulty_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ)
     exact Or.inl (Or.inl (List.elem_eq_true_of_mem hout))
   have F1 := href _ (Or.inr hiU)
   have F2 := href _ (Or.inl hb)
-  generalize RU.ref (progOf C κ) [unitGates P u]
+  generalize (progOf C κ).refIn (unitGates P u)
     ((witRows C Cm H roots v).val H Cm (stmtOf P κ kd desc q roots)) ι = ref at hc' F1 F2
   have h3 : gateSize (C.op g) = 3 := by simp [hop, gateSize]
   have hp0 : off C g.val + 0 ∈ unitGates P u := mem_unitGates.2 ⟨g, hu, 0, by omega, rfl⟩

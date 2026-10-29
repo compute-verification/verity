@@ -16,9 +16,9 @@ named assumptions are `EndToEndHidden`'s: A3 and `live-verifier`. Its knowledge 
 additive ones, its finders' probabilities of outputting a SHA-512 collision; `cr/sha-512` and `ecr/sha-512` enter
 only outside it, bounding those.
 
-**Input rows.** `Bridge.partOf P κ` puts each input row in the slot of the unit that owns it, its first reader
-(`Bridge.slotOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`) opens
-only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
+**Input rows.** `Bridge.partOf P κ` puts each input row in the proof block of the unit that owns it, its first reader
+(`Bridge.blockOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`)
+opens only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
 faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
 `Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
 partition.

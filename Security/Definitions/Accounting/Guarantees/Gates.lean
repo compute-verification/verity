@@ -82,20 +82,20 @@ open Accounting.Gates Accounting.Assumptions
 /-- **The window, proven, holds.** A circuit whose window is proven (`Proven C`: property/v1's interval analysis) is in
 its window on every input `x` on which its inputs and budgeted gates but gathers hold their declared intervals. -/
 def ProvenWindow : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (x : ι → ℤ), Proven C → DeclaredHold C x → InWindow C x
+  ∀ {ι : Type} (C : IntDag ι) (x : ι → ℤ), Proven C → DeclaredHold C x → InWindow C x
 
 /-- **Clamp or wrap, in the window.** For a circuit `C` whose window is proven, on an input on which its inputs and
 budgeted gates but gathers hold their declared intervals: a circuit `C'` gate for gate like `C` but for its s8-family
-steps' clamp or wrap (`Gate.Reclamped`) has `C`'s values. -/
+steps' clamp or wrap (`IntGate.Reclamped`) has `C`'s values. -/
 def ClampOrWrap : Prop :=
-  ∀ {ι : Type} (C C' : Dag ι) (x : ι → ℤ), Proven C → DeclaredHold C x → C'.length = C.length →
+  ∀ {ι : Type} (C C' : IntDag ι) (x : ι → ℤ), Proven C → DeclaredHold C x → C'.length = C.length →
     (∀ i (h : i < C.length) (h' : i < C'.length), C[i].Reclamped C'[i]) → values C' x = values C x
 
 /-- **The 2-adic fooling bound.** For a circuit `C`, a set `F` of inputs on each of which `C` is in its window, that
 agree pairwise mod `2^j` in every registered and coin input, and that pairwise differ mod `2^j` in some output gate of
 `out`: `|F| ≤ volume C`, the joint values the run inputs' and budgeted gates' declared intervals allow. -/
 def Fooling : Prop :=
-  ∀ {ι κ : Type} (C : Dag ι) (F : Finset κ) (x : κ → ι → ℤ) (j : ℕ) (out : List ℕ),
+  ∀ {ι κ : Type} (C : IntDag ι) (F : Finset κ) (x : κ → ι → ℤ) (j : ℕ) (out : List ℕ),
     (∀ s ∈ F, InWindow C (x s)) →
     (∀ s ∈ F, ∀ s' ∈ F, ∀ i, FreeInput C i → x s i ≡ x s' i [ZMOD 2 ^ j]) →
     (∀ s ∈ F, ∀ s' ∈ F, s ≠ s' → ∃ o ∈ out, ¬ val C (x s) o ≡ val C (x s') o [ZMOD 2 ^ j]) →
@@ -105,7 +105,7 @@ def Fooling : Prop :=
 inputs read the bytes of `a` (`slot i` the byte input `i` reads), and that on every `a = sparse S` with
 `S ∈ G ⊆ 2^{0..s−1}` is in its window and outputs (`out l`, `l < n`) the bytes of `a² mod p`, has `|G| ≤ volume C`. -/
 def SquaringCarry : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (p n s : ℕ) (G : Finset (Finset ℕ)) (x : Finset ℕ → ι → ℤ) (slot : ι → ℕ)
+  ∀ {ι : Type} (C : IntDag ι) (p n s : ℕ) (G : Finset (Finset ℕ)) (x : Finset ℕ → ι → ℤ) (slot : ι → ℕ)
     (out : ℕ → ℕ),
     s ≤ 255 → 256 ^ (2 * s + 1) ≤ p → 2 * s ≤ n → G ⊆ (Finset.range s).powerset →
     (∀ S ∈ G, ∀ i, FreeInput C i → x S i = byte (sparse S) (slot i)) →
@@ -117,7 +117,7 @@ coin inputs read the bytes of `a` (`slot i` the byte input `i` reads), and that 
 `t ∈ G` is in its window and outputs (`out l`, `l < n`) the bytes of `a² mod p`, has `|G| ≤ volume C`. On the whole
 family (`16^s` members) its charged gates have at least `4s` bits: 252 at p1024 (`s = 63`). -/
 def SquaringCarryNibbles : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (p n s : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
+  ∀ {ι : Type} (C : IntDag ι) (p n s : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
     (slot : ι → ℕ) (out : ℕ → ℕ),
     (249 * 256 ^ s) ^ 2 ≤ p → s + 2 ≤ n →
     (∀ t ∈ G, ∀ i, FreeInput C i → x t i = byte (nibbles s t) (slot i)) →
@@ -128,10 +128,10 @@ def SquaringCarryNibbles : Prop :=
 values (`w ≥ 1`), and a set `F` of inputs on each of which `C` is in its window, that agree in every registered input,
 agree pairwise mod `2^j` in every coin input, and pairwise differ mod `2^j` in some output gate of `out`:
 `|F| ≤ 2^(runBits C + w · budgeted C)`. A budgeted gate that reads a run or coin value carries its value's `w` bits
-for its unit; a gather's units carry its index's outcomes, the fresh index bits of `Gate.indexBits`, shared by the
+for its unit; a gather's units carry its index's outcomes, the fresh index bits of `IntGate.indexBits`, shared by the
 gathers of one index and kind; every other gate is free or reads only registered values. -/
 def UnitsFooling : Prop :=
-  ∀ {ι κ : Type} (C : Dag ι) (F : Finset κ) (x : κ → ι → ℤ) (j w : ℕ) (out : List ℕ),
+  ∀ {ι κ : Type} (C : IntDag ι) (F : Finset κ) (x : κ → ι → ℤ) (j w : ℕ) (out : List ℕ),
     1 ≤ w → (∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → g.size ≤ 2 ^ w) →
     (∀ s ∈ F, InWindow C (x s)) →
     (∀ s ∈ F, ∀ s' ∈ F, ∀ i, (∃ g ∈ C, g.op = .input .registered i) → x s i = x s' i) →
@@ -145,7 +145,7 @@ of `a` (`slot i` the byte input `i` reads), and that on every `a = nibbles s t` 
 outputs (`out l`, `l < n`) the bytes of `a² mod p`, has `|G| ≤ 2^(runBits C + w · budgeted C)`. On the whole family,
 `4s ≤ runBits C + w · budgeted C`: at p1024 (`s = 63`), with no run input and `w = 33`, at least 8 units. -/
 def SquaringUnits : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (p n s w : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
+  ∀ {ι : Type} (C : IntDag ι) (p n s w : ℕ) (G : Finset (Fin s → Fin 16)) (x : (Fin s → Fin 16) → ι → ℤ)
     (slot : ι → ℕ) (out : ℕ → ℕ),
     (249 * 256 ^ s) ^ 2 ≤ p → s + 2 ≤ n → 1 ≤ w →
     (∀ g ∈ C, ∀ cls f, g.op = .budgeted cls f → g.size ≤ 2 ^ w) →
@@ -159,7 +159,7 @@ def SquaringUnits : Prop :=
 circuit at most `j · |out|` bits, `j · |out| / w` units, whatever it computes between its inputs and its outputs: a
 squaring's floor and a chain's sum can't come from counting. -/
 def FoolingCap : Prop :=
-  ∀ {ι κ : Type} (C : Dag ι) (F : Finset κ) (x : κ → ι → ℤ) (j : ℕ) (out : List ℕ),
+  ∀ {ι κ : Type} (C : IntDag ι) (F : Finset κ) (x : κ → ι → ℤ) (j : ℕ) (out : List ℕ),
     (∀ s ∈ F, ∀ s' ∈ F, s ≠ s' → ∃ o ∈ out, ¬ val C (x s) o ≡ val C (x s') o [ZMOD 2 ^ j]) →
     F.card ≤ 2 ^ (j * out.length)
 
@@ -185,7 +185,7 @@ carry-guessing frontier (modeled, 10 to 15 bits a dropped carry: `d = 1 … 5` a
 formula's `5.2 … 12.7`). `t = 64` keeps the claim inside the range that frontier reaches; the bound reads `ε = 2^−40`
 (the headline) and `2^−20` (the property's carrier threshold). -/
 def Renormalization (F : Field) (d₀ c t εnum εden : ℕ) : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
+  ∀ {ι : Type} (C : IntDag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
     εden ≤ 2 ^ t * εnum →
     Proven C → runBits C = 0 → good ⊆ Finset.range F.p → MoreThan (Finset.range F.p) good εnum εden →
     (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ a ∈ good, ∀ a' ∈ good, x a i = x a' i) →
@@ -218,7 +218,7 @@ with `c` the caps' nonlinear units per certified byte read, a rational (property
 bits, and a unit for each data product), and `R_in,w` window `w`'s run-input bytes:
 `q ≤ c · reads / E + 8 · Σ_w R_in,w / (n − 1)`. -/
 def EncodeBudget : Prop :=
-  ∀ (F : Field) (k B E e εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
+  ∀ (F : Field) (k B E e εnum εden : ℕ) {ι : Type} (W : IntDag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
     (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     SquaringFloor F e εnum εden → ChainSum F k B e εnum εden → E ≤ k * F.squarings * e →
     εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
@@ -282,7 +282,7 @@ it, and `Proven` proves its window. -/
 def Bf16ToF32Affine : Prop :=
   classOf "Bf16ToF32_v1" = some .affine ∧
     ∀ u : Fin (2 ^ 16),
-      signed 32 (Verity.Prims.bf16ToF32 u.val) = (bf16ToF32Op : Op Unit).raw (fun _ => 0) [signed 16 u.val]
+      signed 32 (Verity.Prims.bf16ToF32 u.val) = (bf16ToF32Op : IntOp Unit).raw (fun _ => 0) [signed 16 u.val]
 
 /-- **`F32ToS8Rzi`'s interval.** Its code, read as s8, lies in `[−128, 127]`: its type, by saturation. -/
 def F32ToS8RziRange : Prop :=
@@ -319,7 +319,7 @@ theorem over its evaluator on its operands' derived intervals (`Definitions/Acco
 derived intervals) holds its declared intervals and is in its window on every input that gives each slot a word of
 its type (`Typed`): no hypothesis that a run input lies within a narrower bound. -/
 def DeclaredWindow : Prop :=
-  ∀ {ι : Type} (C : Dag ι) (x : ι → ℤ), Proven C → Declared C → Typed C x → DeclaredHold C x ∧ InWindow C x
+  ∀ {ι : Type} (C : IntDag ι) (x : ι → ℤ), Proven C → Declared C → Typed C x → DeclaredHold C x ∧ InWindow C x
 
 /-- **The int8 linear's window, by theorem.** For `K = 32·S ≤ 131,040` (`S ≤ 4095`; gemm's `S8_K_LIMIT`, `K < 2^17`),
 the int8 linear's coordinate (`int8Linear`: `Int8RowQuant`'s codes, then `ScaledMmS8_v1`'s s8·s8 dot) is proven and

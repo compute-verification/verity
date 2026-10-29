@@ -31,7 +31,7 @@ targets read them:
   (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query evaluate to a
   population of the game's `n` units in order (`Bridge.PopMatches`), with the claims' values at the extracted
   plurality (`XplurZC`);
-* `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `Bridge.SampledKSLiveXr`.
+* `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `Bridge.SampledKSLiveXr`.
 
 `SampledKSLiveV2Z` (`Rows`) is its setting with the claims' values at the registrant's rows, and `SampledKSLiveV2`
 (`RowsReg`) the same under `verify --zk --registered F`. `SampledKSLiveV3` (`RowsReg`, `Refused`) reads V2's file
@@ -306,7 +306,7 @@ theorem _root_.Flock.Bridge.sampledKSLiveXr_of (h : SampledKSLive) : Bridge.Samp
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
 count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`Bridge.SampledKSLiveXr`). -/
 def _root_.Flock.Bridge.AssemblyTargetC : Prop :=
-  Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartRusTarget → Bridge.CountTarget →
+  Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartBlocksTarget → Bridge.CountTarget →
     Bridge.EndToEndHiddenC → Bridge.SampledKSLiveXr
 
 end Flock.Guarantees

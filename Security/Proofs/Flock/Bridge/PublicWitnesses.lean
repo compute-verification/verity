@@ -62,8 +62,8 @@ theorem faulty_mem {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundn
     (w : Claims.Sampling.Wit) {g : Fin C.N} {u : Fin n} (hg : g ∈ C.outputs) (hu : P.unit g = some u) :
     u.val ∈ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w := by
   classical
-  have hr0 := rus_partOf_getElem? (κ := κ) P u
-  have hlen : u.val < (partOf P κ).rus.length := (List.getElem?_eq_some_iff.1 hr0).1
+  have hr0 := blocks_partOf_getElem? (κ := κ) P u
+  have hlen : u.val < (partOf P κ).blocks.length := (List.getElem?_eq_some_iff.1 hr0).1
   have hpos : 0 < gateSize (C.op g) := by cases C.op g <;> simp [gateSize]
   have hp : posOf C g ∈ unitGates P u := by
     unfold unitGates
@@ -85,17 +85,15 @@ theorem faulty_mem {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundn
   rintro ⟨r, hr, ι, hc⟩
   rw [hr0] at hr
   cases hr
-  have hc' := hc (unitGates P u) (List.mem_append_left _ (List.mem_singleton_self _))
-  change (progOf C κ).Correct (Claims.Sampling.RU.ref (progOf C κ) (slotOf P κ u)
-    (w.val H Cm (stmtOf P κ kd desc q roots)) ι) (unitGates P u) at hc'
-  rw [ref_slotOf] at hc'
-  obtain ⟨b, hb', -⟩ := (hc' (posOf C g) hp).2 (hb _)
-  have hcond : ¬ (posOf C g ∈ Claims.Sampling.RU.gates [unitGates P u] ∧
-      (progOf C κ).Boundary (Claims.Sampling.RU.gates [unitGates P u]) (posOf C g) = false) :=
+  change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u)
+    (w.val H Cm (stmtOf P κ kd desc q roots)) ι) (blockOf P κ u) at hc
+  rw [ref_blockOf, correct_blockOf] at hc
+  obtain ⟨b, hb', -⟩ := (hc.1 (posOf C g) hp).2 (hb _)
+  have hcond : ¬ (posOf C g ∈ unitGates P u ∧ (progOf C κ).Boundary (unitGates P u) (posOf C g) = false) :=
     fun h => by have := (hb _).symm.trans h.2; cases this
-  have hnone : Claims.Sampling.RU.ref (progOf C κ) [unitGates P u]
+  have hnone : (progOf C κ).refIn (unitGates P u)
       (w.val H Cm (stmtOf P κ kd desc q roots)) ι (posOf C g) = none := by
-    unfold Claims.Sampling.RU.ref
+    unfold Claims.Sampling.Prog.refIn
     rw [if_neg hcond, wit_val_none (s := stmtOf P κ kd desc q roots) hCm]
   rw [hnone] at hb'
   cases hb'

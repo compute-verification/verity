@@ -11,7 +11,7 @@ import Proofs.Flock.Bridge.Transports
 # The sampled audit's knowledge soundness at the extracted values and under `verify --zk`, proved
 
 `Flock.Bridge.sampledKSLiveXr : Flock.Bridge.SampledKSLiveXr`: `AssemblyTargetC` (`assemblyTargetC`) with canonical
-transport (`transportsLiveC`), M1's core (`faultyRightTargetC`), the slot count (`partRus`), the count lemma (`count`)
+transport (`transportsLiveC`), M1's core (`faultyRightTargetC`), the slot count (`partBlocks`), the count lemma (`count`)
 and `EndToEndHiddenC` (`endToEndHiddenC_of`, from `openingsCanon`) plugged in.
 `Flock.Bridge.sampledKSLiveV2Z : Flock.Guarantees.SampledKSLiveV2Z`: the claims at the registrant's rows under
 `verify --zk`, from the count curve at the rows link (`sampledKSLiveV2Z_of_count`), canonical transport, the count lemma
@@ -21,7 +21,7 @@ from these two.
 
 /-- **The sampled audit's knowledge soundness, live, at the extracted values** (`Flock.Bridge.SampledKSLiveXr`). -/
 theorem Flock.Bridge.sampledKSLiveXr : Flock.Bridge.SampledKSLiveXr :=
-  Flock.Bridge.assemblyTargetC Flock.Bridge.transportsLiveC Flock.Bridge.faultyRightTargetC Flock.Bridge.partRus
+  Flock.Bridge.assemblyTargetC Flock.Bridge.transportsLiveC Flock.Bridge.faultyRightTargetC Flock.Bridge.partBlocks
     Flock.Bridge.count (Flock.Bridge.endToEndHiddenC_of Flock.Bridge.openingsCanon)
 
 /-- **The sampled audit's knowledge soundness, live, at the registrant's rows, under `verify --zk`**

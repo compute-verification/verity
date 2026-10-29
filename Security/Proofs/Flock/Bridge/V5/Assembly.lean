@@ -6,7 +6,7 @@ import Proofs.Flock.Bridge.Assembly
 
 `Assembly.lean` at the verifier's public inputs: at `kd = 0` the miss term is `1`; otherwise `EndToEndHiddenV5` at
 `K₁ = min K₀ (n − kd + 1)` bounds the event, since outside `RelS` at least `K₁` slots are faulty population slots
-(`CountTarget`), and each is a unit wrong on the registration with canonical openings, as a unit right in that sense is
+(`CountTarget`), and each is a proof block faulty on the registration with canonical openings, as a proof block right in that sense is
 not faulty (`FaultyRightTargetC`, with its transport from `TransportsLiveV5` at the wires `constsOfP` doesn't fix).
 
 `constsOfP_isInput`: `constsOfP` fixes only input gates, the constant, the zero and the public gates, each below
@@ -22,7 +22,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The constants at public inputs are input gates**: `constsOfP` fixes `oneG`, `zeroG` and the public gates, all
-below `2 + n·B`, which are program inputs of `keyProgP` (`Layout.unit_uniform_input`), so no unit's. -/
+below `2 + n·B`, which are program inputs of `keyProgP` (`Layout.unit_uniform_input`), so no proof block's. -/
 theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports}
     {pub : Public} (outs : Finset (Fin (Discharge.Layout.keyN c hU n))) {g : Fin (Discharge.Layout.keyN c hU n)}
     {b : Bool} (h : Bridge.constsOfP c hU n pi pub g = some b) :

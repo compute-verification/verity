@@ -1,4 +1,4 @@
-"""SERVE-REG's gated lane (`h1zy.PouwH1LaneZy_v1`) against option A's partials, byte for byte (`served_h1/lane_refs.py`):
+"""The gated lane (`h1zy.PouwH1LaneZy_v1`) against option A's partials, byte for byte (`served_h1/lane_refs.py`):
 every leaf's `partials.lane_partials` equals `h1tile.lane_partials(..., gated=admit)` and `h1zy.lane_partial` lane by
 lane, over live and dead leaves and leaves whose admitted rows lie outside some lanes' rows (m = 32 r + j, 0 < j < 8:
 lanes g >= j hold no admitted row and are ungated all the same), and the references' XOR is the served receipt.  A
