@@ -922,7 +922,7 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity' / 'core' / 'service' / 'flock'} build\n"
+    assert log.read_text() == f"{root / 'verity/core/service/flock'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
     assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/core/service/flock exited 1" in p.stdout
