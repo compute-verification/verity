@@ -195,7 +195,7 @@ its work. The composite accepts only if every subprotocol accepts and their comm
 - the proof system is sound (`Properties.Pouw.Period.ServiceSound`), a named assumption no theorem discharges yet;
 - the published draw is the coin's (`SampleIsCoin`), and registration precedes the draw (`RegisteredBeforeSample`);
 - the salt is a live coin (`SaltIsLiveCoin`), and the staged statement pins the receipts' tile (`StagedPins`);
-- PoUW's per-step receipts bind (`OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `UnitFixed`).
+- PoUW's per-step receipts bind (`OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`, `BlockFixed`).
 
 The time credit adds the data sheet's rates.
 
@@ -369,7 +369,7 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
   words' values better than μ.
 - `Accounting.Assumptions.TS.ReceiptLuckAt` and `Accounting.Assumptions.Compose.GuessLuckAt`: a skipped round passes
   its receipt, or a guessed fold state passes, only at the stated rate.
-- `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
+- `Accounting.Assumptions.TS.BlockFixed`: the run's fixed and folded words are at least those of the units it didn't
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
   accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.

@@ -103,7 +103,7 @@ theorem stratumLive_all (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (
 /-- **An honest J10-R period meets every per-stratum premise at each stratum `s`**, in the statement's order, at
 `HonestJ10R`'s instance at `N_s = |stratum σ s|` on stratum `s`'s view (`layerAt`, `runAt`, `creditAt`): `Scope` at
 any `δ_s > 0`, the live share at `ρ = 1`, the stage share, H1's lucks, the play's game, `DeadConeDead`, `PrefixOf`,
-binding at `δ_bind = 0`, `TileServiceSound` at `δ_ks = 0`, `SharedNoiseLucks` and `UnitFixed` at `N_s` fixed and folded
+binding at `δ_bind = 0`, `TileServiceSound` at `δ_ks = 0`, `SharedNoiseLucks` and `BlockFixed` at `N_s` fixed and folded
 words a window. -/
 theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     Scope Honest.scheme (HonestJ10R.circuit (tileCount σ s)) δs ∧
@@ -128,7 +128,7 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
     TileServiceSound σ s unitOf (creditAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n)) (pullAt (rounds1 (tileCount σ s)) σ s HonestJ10R.opened)
       (relAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n) HonestJ10R.place HonestJ10R.tile) 0 ∧
     SharedNoiseLucks Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n) ∧
-    UnitFixed (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n)
+    BlockFixed (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n)
       (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
         HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
       (periodMode (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n)

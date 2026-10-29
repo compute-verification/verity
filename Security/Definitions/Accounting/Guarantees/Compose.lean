@@ -27,7 +27,7 @@ The credit splits in two, and `CircuitCredit` is their composition:
 * (L) `CircuitWork`, the logical layer: an accepted window's run has all but a share of its committed words fixed
   right, at costs `a, b` below `Λ·ln(1/δ_s) + min(a, b)·D₀` (`WorkAt`, `rOf`). It rests on four claims: (H-μ)
   (`OperandHMu`) and B′ (`ReceiptLuckAt`) per tile folded, the whole-unit guess bound (`GuessLuckAt`) per tile whole,
-  at B′'s `½` (`2^-64` isn't granted), and the fixed-words claim, `UnitFixed` with
+  at B′'s `½` (`2^-64` isn't granted), and the fixed-words claim, `BlockFixed` with
   its fold clause at the run's modes (`tileMode`), with the templates' proved luck (`Scheme.LuckProved`), the service's commit order (`LayerCommitted`, in `Scope`), the
   service's draw and sampled (I8)'s pieces on the window's proofs (`DrawnLayer.Of`, binding at
   `δ_bind`, joint proof soundness, `Pins`). The proofs' layer is the IR's (`RegisteredCircuit.layer`): its slots, writers, cuts, coins and draw are
@@ -46,7 +46,7 @@ The seeded pair is (L) and its composition with (P) under seeded coins, stated a
 `SeedExtractedAt` (`random-oracle`) is where that model is named, at `ε_id` once a window. Its run is a `JointRun` on
 every round's answers at once, with no stage order. Its binding is checked at the draw (`RegisteredCircuit.atDraw`: `Of`,
 `MovedIn`, `JointSound`), after every seed, since a seeded round's coin is a hash the cheater can evaluate before it
-commits; its cones are counted at the IR's cuts (`RegisteredCircuit.atIR`: `UnitFixed`, `ServiceCovers`), which read no committed
+commits; its cones are counted at the IR's cuts (`RegisteredCircuit.atIR`: `BlockFixed`, `ServiceCovers`), which read no committed
 value, and its scope needs each seeded round's seed to name what the round reads (`SeedNamed`). GRIND's premise
 (`SeedLuckAt`) at the template's `κ = 4` for folded tiles and the guess bound's `κ₀` for whole ones stands in for the
 live luck claims, and the bound is `rOfSeeded`, the live draw's charge on the unlucky share plus each seed group's
@@ -225,7 +225,7 @@ a uniform `K_d`-subset), with the proofs' coins `Ξ`, each drawn tile proved wit
   jointly over the draws at `δ_ks` (`JointSound`; WindowEps: `max_c κ_c + coll`) and `Pins`;
 * the four claims: (H-μ) (`OperandHMu` at its kind's `μ`) and B′ (`ReceiptLuckAt` at its kind's `r_B`) for every
   credited tile folded at its stage, the guess bound (`GuessLuckAt` at its kind's guess) for every one whole, and the
-  fixed-words claim, `UnitFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and
+  fixed-words claim, `BlockFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and
   the tiles' words;
 
 an accepted window's run has all but a share `d_F + d₀` of its committed words fixed right and all but `d₀` folded,
@@ -266,7 +266,7 @@ def CircuitWork : Prop :=
     PerTile Sc Cd W (fun k G _ => OperandHMu (Sc.mu k) G) →
     PerTile Sc Cd W (fun k G _ => ReceiptLuckAt (Sc.rB k) G) →
     PerTile Sc Cd W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0) →
-    UnitFixed Pl (Cd.layer hr hK pr) (tileMode Cd W) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.layer hr hK pr) (tileMode Cd W) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ WorkAt (wordsOf Sc Cd : ℝ) a b (rOf Sc Cd Np a b Λ δs) (Pl.run x).fixed (folded x)) ≤ δs + (δbind + δks)
 
@@ -287,7 +287,7 @@ round `r`'s operands, values and skips after querying the oracle for any round's
   `pr`): `Of`, `MovedIn` at `δ_bind`, `JointSound` at `δ_ks` and `Pins`. A seeded round's coin is a hash the cheater
   can evaluate before it commits, so nothing it writes, operands or a round's receipts, is bound before the live draw,
   and the draw is where the `δ_bind` card holds: Fiat–Shamir has fixed every root the seeds' preimages name;
-* the fixed-words claim, `UnitFixed`, on the proofs' layer cut at the IR (`RegisteredCircuit.atIR`) at `R`'s modes
+* the fixed-words claim, `BlockFixed`, on the proofs' layer cut at the IR (`RegisteredCircuit.atIR`) at `R`'s modes
   (`jointMode`): it reads modes, cuts and writers, never a committed value, so it needs no binding at the IR cut, and
   its late cones are the IR's, as `ServiceCovers` counts them;
 * the random-oracle premise once for the window (`SeedExtractedAt`: each round's proofs' seed is the answer to query
@@ -347,7 +347,7 @@ def CircuitWorkSeeded : Prop :=
     SeedExtractedAt sq εid T J →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) sq δb →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .whole κ0 (wholeTheta Sc Cd) sq δb →
-    UnitFixed Pl (Cd.atIR.layer hr hK pr) (jointMode R) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.atIR.layer hr hK pr) (jointMode R) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ WorkAt (wordsOf Sc Cd : ℝ) a b (rOfSeeded Sc Cd Np Kd Tq a b κ0 ρ δs δg) (Pl.run x).fixed (folded x)) ≤
       δs + (δbind + δks) + εid T J + 2 * (Cd.rounds : ℝ) * (δg + δb)
@@ -410,7 +410,7 @@ def CircuitCredit : Prop :=
     PerTile Sc Cd W (fun k G _ => OperandHMu (Sc.mu k) G) →
     PerTile Sc Cd W (fun k G _ => ReceiptLuckAt (Sc.rB k) G) →
     PerTile Sc Cd W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0) →
-    UnitFixed Pl (Cd.layer hr hK pr) (tileMode Cd W) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.layer hr hK pr) (tileMode Cd W) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     Fits Sc Cd Sh Z → ModelScope Sc Cd Z lam → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →
@@ -460,7 +460,7 @@ def CircuitCreditSeeded : Prop :=
     SeedExtractedAt sq εid T J →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) sq δb →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .whole κ0 (wholeTheta Sc Cd) sq δb →
-    UnitFixed Pl (Cd.atIR.layer hr hK pr) (jointMode R) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.atIR.layer hr hK pr) (jointMode R) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     Fits Sc Cd Sh Z → ModelScope Sc Cd Z lam → (∀ x, (Pl.run x).Split) →
     (∀ x, SheetClock Sh (Pl.run x).run) → (∀ x, SheetDispatch (Pl.run x).run) →
     (∀ x, SheetTensor Sh (Pl.run x).run) → (∀ x, SheetPipe Sh (Pl.run x).run) →

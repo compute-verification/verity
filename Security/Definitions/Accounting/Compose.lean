@@ -75,7 +75,7 @@ The logical layer:
   stages, one a round, with a unit's mode `Accounting.TS.Mode` (paid; folded, its product skipped and its
   committed words folded; or whole, product and fold skipped), each stage's tiles' deficient words right or not
   (`right`) and their checked values honest or not (`same`, which a receipt-lucky skipped tile meets); and the modes as
-  the window's proofs read them, which `DrawnLayer.Good` and `UnitFixed` take.
+  the window's proofs read them, which `DrawnLayer.Good` and `BlockFixed` take.
 * `JointRun`, `JointRun.share`, `SplitStages.joint`, `jointMode`: a window's modes and checked values as functions of
   every round's coin at once, which the seeded statements take (a cheater may choose a round's skips after querying
   the oracle for later rounds' seeds); a split-stage window is one, and the proofs read its modes as `tileMode` does.
@@ -380,7 +380,7 @@ the draw. -/
 def RegisteredCircuit.atDraw {ι : Type} (Cd : RegisteredCircuit ι) : RegisteredCircuit ι := { Cd with commitRound := fun _ => Cd.rounds }
 
 /-- **The circuit cut at the IR**: every value's commit coin `0`, so `RegisteredCircuit.layer` cuts each position at its IR cut
-(`RegisteredCircuit.cutOf`), and `LayerCommitted` holds. The seeded statements count cones on it (`UnitFixed`,
+(`RegisteredCircuit.cutOf`), and `LayerCommitted` holds. The seeded statements count cones on it (`BlockFixed`,
 `ServiceCovers`): its late edges are the IR's, and neither reads a committed value, only cuts, slots, writers and
 the run's modes. Its cuts are the seeded protocol's commitments only where each seeded round's seed names what the
 round reads (`SeedNamed`, in `ScopeSeeded`). -/
@@ -393,11 +393,11 @@ committed before the salt (whose derivation names the weights' root, `PouwCommit
 round's seed preimage names (`RegisteredCircuit.seedNames`). It is every value read, not only a product's operands: run inputs
 (a request's tokens, decode feedback), earlier rounds' outputs and the round's own glue count.
 
-The seeded statements count cones on the IR's cuts (`RegisteredCircuit.atIR`), and `UnitFixed` there is E1(c): a value
+The seeded statements count cones on the IR's cuts (`RegisteredCircuit.atIR`), and `BlockFixed` there is E1(c): a value
 committed before a unit's coin is fixed when its noise is drawn. Under seeded coins a round's coin is the oracle's
 answer at its preimage, so a value is committed before it only when the preimage names it: re-chosen after the seed,
 it changes the query, a new try that `premiumOf` prices, and for each query it is fixed. A value no preimage names can
-be chosen after the seed, to make a paid unit's checked words dead against its noise, and then `UnitFixed` on the
+be chosen after the seed, to make a paid unit's checked words dead against its noise, and then `BlockFixed` on the
 IR's layer is false and the statements credit nothing. This puts that condition in `ScopeSeeded`, where a reader sees
 it, as `Scope` carries `LayerCommitted`.
 
@@ -628,7 +628,7 @@ def SplitStages.joint {C V : Type} {M : ℕ} (stg : V → ℕ) (W : SplitStages 
   ⟨W.modeAt stg, W.sameAt stg⟩
 
 /-- **A joint run's modes as the window's proofs read them**: on a path of the window's one service round, tile `u`'s
-mode at the rounds' coins. `Accounting.TS.DrawnLayer.Good` and `Accounting.Assumptions.TS.UnitFixed` read these. -/
+mode at the rounds' coins. `Accounting.TS.DrawnLayer.Good` and `Accounting.Assumptions.TS.BlockFixed` read these. -/
 def jointMode {A B : Type} {Np : ℕ} (R : JointRun A (Fin Np)) (x : Paths (A × B) 1) (u : Fin 1 × Fin Np) : Mode :=
   R.mode (coinAt x 0).1 u.2
 
@@ -750,7 +750,7 @@ def StageSlots {ι C B V : Type} {s N : ℕ} (Cd : RegisteredCircuit ι) (pf : D
 /-- **Every one of the IR's slots and writers is the layer's** (the completeness half `StageSlots` leaves out): every
 value the prover writes has its unit as its writer, and every gate of tile `t` and every operand of one is one of `t`'s
 slots. Without it the layer could miss a late edge, and `DrawnLayer.Good` would hold for a tile whose words read a late,
-skipped writer, which `UnitFixed` can't meet. `RegisteredCircuit.layer` meets it under `RegisteredCircuit.Wf` and `units ≤ N`. -/
+skipped writer, which `BlockFixed` can't meet. `RegisteredCircuit.layer` meets it under `RegisteredCircuit.Wf` and `units ≤ N`. -/
 def StageComplete {ι C B V : Type} {s N : ℕ} (Cd : RegisteredCircuit ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) ℕ ℕ V) :
     Prop :=
   (∀ ℓ, Cd.Writes ℓ → ∃ u, pf.src ℓ = some u ∧ u.2.val = Cd.unit ℓ) ∧

@@ -10,7 +10,7 @@ its late cone's weight over the mean round weight `N_w`, the unit `DrawnLayer.Co
 don't decide fixedness: a computed unit's work reads its multiplicative operands and its noise only
 (`Accounting.Guarantees.TS.AdditiveFixed`, a lemma, not an assumption).
 Option B (every operand bound before the coin) was refused because it drops K-chunk sums and glue-fed products, and
-option C (`UnitFixed`'s own reading) because it admits a cheater who cancels the noise (`A = −noise`). This file is
+option C (`BlockFixed`'s own reading) because it admits a cheater who cancels the noise (`A = −noise`). This file is
 that scoping with the slot roles the ruling needs and no
 well-founded chain, so late cones may be cyclic.
 
