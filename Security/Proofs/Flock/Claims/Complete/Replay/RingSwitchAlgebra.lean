@@ -421,7 +421,7 @@ theorem claims_switch (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 2
 /-! ## The record's link points -/
 
 /-- The record's link points have `m_pts` coordinates: `Record.decodeWith` checks it (S9). -/
-theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem decodeWith_points (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) : ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
   unfold Record.decodeWith Record.decodeJWith at h
   dsimp only at h
@@ -444,7 +444,7 @@ theorem _root_.FlockComplete.Run.sess_points (o : Run H rel) {st : Stmt} (hspec 
   cases h : Record.decodeWith o.hs o.spec o.record with
   | error e =>
     intro p hp
-    rw [show (val (Except.error e : Except String Session)).points = #[] from rfl] at hp
+    rw [show (val (Except.error e : Except String RunRecord)).points = #[] from rfl] at hp
     simp at hp
   | ok s =>
     have hp := decodeWith_points o.hs h
