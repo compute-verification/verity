@@ -1,4 +1,4 @@
-"""The frozen table of v0's tags before MEM-152's move (`retired`) covers every tag today's PoUB code names, each the
+"""The frozen table of v0's tags before the PoUB move (`retired`) covers every tag today's PoUB code names, each the
 same tag under v0's name then."""
 
 from __future__ import annotations

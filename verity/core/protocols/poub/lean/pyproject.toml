@@ -18,6 +18,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/poub/store.py", "verity/core/protocols/poub/line.py",
           "verity/core/protocols/poub/pooled.py", "verity/core/protocols/poub/schedule.py",
           "verity/core/protocols/poub/period.py", "verity/core/protocols/interface",
+          # v0's tags before the move, under which the replay reads a session recorded then (`tests/replay.py`)
+          "verity/core/protocols/poub/retired.py",
           "verity/core/protocols/pouw/lean/check/models.json",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",

@@ -1,4 +1,4 @@
-"""v0's ids and domain tags as PoUB sessions recorded before MEM-152's move (28 Oct 2026) hold them: each of today's
+"""v0's ids and domain tags as PoUB sessions recorded before the PoUB move hold them: each of today's
 `verity/poub/` tags to the one, of the same version, that such a session's registration digest, receipts, openings,
 coins, registry and record were made under. Frozen: nothing draws, signs or hashes under them. The replay of recorded
 sessions (`lean/tests/replay.py`) is their one reader: it tells such a record by the id it names, and checks what of it

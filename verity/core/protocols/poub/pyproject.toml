@@ -24,4 +24,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # canonical JSON, held to the circuits codec's
           "verity/core/protocols/pouw/lean/check/models.json",
           # the claims registry, which test_ledger.py holds the memory line's named PRF claim to
-          "verity/core/claims/__init__.py"]
+          "verity/core/claims/__init__.py",
+          # the Lean verifier's sources, whose every tag test_retired.py holds to the frozen table of v0's
+          "verity/core/protocols/poub/lean/PoubCheck.lean", "verity/core/protocols/poub/lean/PoubCheck"]

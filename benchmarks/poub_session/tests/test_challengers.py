@@ -649,7 +649,7 @@ def test_a_session_earns_credit_only_under_the_commit_its_verifier_ran_at_on_mai
 
 
 def test_a_commit_before_the_poub_move_names_its_verifier_by_the_tree_and_id_it_had_then(tmp_path):
-    """`verifier_tree` at a commit before MEM-152's move reads `RETIRED_TREE`'s tree and v0's id then, the descriptor a
+    """`verifier_tree` at a commit before the PoUB move reads `RETIRED_TREE`'s tree and v0's id then, the descriptor a
     period opened there committed; after it, `VERIFIER_TREE`'s and today's; at a commit with neither, it refuses."""
     def git(*args: str) -> str:
         return subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", *args],

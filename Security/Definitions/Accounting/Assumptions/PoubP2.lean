@@ -14,7 +14,7 @@ P2's form, each a named `Prop`:
   roots, each priced `c_root`.
 * `SquaringCeilingP2 T s B`: the held line's `SquaringCeiling` at `E = 4 · 32,890` squarings a unit.
 
-**Drafted, not decided**: these claims await a ruling. No guarantee takes either yet, and
+**Drafted, not decided**: these claims are not yet accepted. No guarantee takes either yet, and
 `audit.ledger` refuses a P2 record (`audit.Rebuild` refuses a P2 codec) until one does. The squaring rate `s` is not
 measured: the H200's at 16,448 bits is the measurement the stated instance waits on.
 -/

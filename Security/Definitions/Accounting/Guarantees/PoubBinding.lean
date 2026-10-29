@@ -25,7 +25,7 @@ every window's roots, ranks and verifiers are fixed by its cut, `split_t = 0` an
 charge. The deployed prover holds the challenger's commitment to every coin (`Committed`), and a root it computes from
 that commitment reads window `t`'s coin, so in the deployed play (`Committed.play com`) the roots can split and
 `split_t` is not bounded here: the gap `binding-split`. The design that would close it sends the prover no
-commitment to window `t`'s coin before window `t`'s roots are in (note:20261025T0115Z-report-bind-close).
+commitment to window `t`'s coin before window `t`'s roots are in.
 -/
 
 namespace Accounting.Guarantees.Poub

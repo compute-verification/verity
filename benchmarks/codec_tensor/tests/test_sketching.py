@@ -109,5 +109,5 @@ def test_pass_seed():
 PIN_SIGNS = "b8d365fd851a03a15a362aacdf5279ae"
 PIN_TAG0 = "adeb6d8a23d278c83f228c489fe3cba9c65e1734f16509c3a763fe68417fe773"
 PIN_TAG15 = "cc570da7530a446ef5c196da1da0ea452237cc4ad57921584745487a129a5b42"
-# The first 32 bytes of the remote driver's `receipts.seed(SEED, 3, bytes(range(64)))`.
-PIN_PASS_SEED = "2a07234e952d7eba243f5e881fbbfba3ac2597accaaf9bbffe3e9a2a4978d97f"
+# The first 32 bytes of PoUB's `receipts.seed(SEED, 3, bytes(range(64)))`, under its verity/poub/ tag since the PoUB move.
+PIN_PASS_SEED = "f4fec78ec4cf4cf8909d78c09cf9159da005f0cbde9482570dc7780212a33042"
