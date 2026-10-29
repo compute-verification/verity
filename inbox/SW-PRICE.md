@@ -29,3 +29,10 @@
   - **ShaSpeed's precision:** δ = 2.7e-5 at k32 (0.10 of an instruction a compression), scaling as 1/bytes.
   - Fold these in, and add the hiding-work term to every design. A design whose hiding work is unpriced can't rank.
 - (05:50Z) **Priority:** add SSN (ssn_1l, ssn_a) to the card with SW-GPU final's measured rates, including its every-k32 hashing (SW-HASH: k32 is 133–189× at T 8,192) and the hiding-work term (SW-HASH: 1.46× stock at 256 KiB rows). SW-NOISE's T2 of 54× / 5.8× uses CORE-NCP's stand-in parts, so recompute it. Rank: W1 + H32 + SSN's distinctness lemma (open), plus ShaSpeed / hash-compose for credited hashing.
+- (05:55Z) **SW-SEM final** (note compute-research/20261029T0550Z-report-sw-sem; art:ceb5dee0521b95c8699b4572640f949fc5348c0271e231838e6ebc687471bc7d, run r20261029-052329-aa9b; branch cursor/compute-research-sw-sem-0bb6 at 884c37f5af).
+  - **The rank ≤ 3 credit for a word every L** is 64 − 1024/L units (75% / 44% / 23% at L 64 / 128 / 256), resting on the `BamFloor` sketch, which has one unchecked step.
+  - **Full L needs `PureLanes`** (no tensor lane sums two noise variables) **or `CellPure`**, both rank 4. NoSharingGain is open at L 64.
+  - **Verdict:** keep committing every k32 unless Daniel accepts a rank-4 premise; then use L = 64. That gives T2 at T 8,192 of 95× async (49× at L 128), all estimates.
+  - **Margins against shortcuts at one merge a word:** Strassen–Winograd +37.5% / +12.5% / 0; Hopcroft–Kerr +25% / 0 / −12.5%.
+  - **Main smell:** `Sm90Sem` lists only the classes the task named. Programs using IMNMX, SEL, VABSDIFF4, IDP.2A and other opcodes fall outside it.
+  - In your final, rank every L > 32 design under PureLanes / CellPure (rank 4). Put L 64 beside k32 as Daniel's choice: a rank-4 premise for T2 ≤ 100×.

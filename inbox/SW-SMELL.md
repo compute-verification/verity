@@ -27,3 +27,10 @@
   - **Hashing A before the noise** costs 0.24× stock, closed only by atomic-call + hash-compose.
   - **ShaSpeed's precision:** δ = 2.7e-5 at k32 (0.10 of an instruction a compression), scaling as 1/bytes.
   - Check the hiding-work gap (20.8× / 1.46× stock): is it real, or an artifact of W1 pricing work that can be precomputed?
+- (05:55Z) **SW-SEM final** (note compute-research/20261029T0550Z-report-sw-sem; art:ceb5dee0521b95c8699b4572640f949fc5348c0271e231838e6ebc687471bc7d, run r20261029-052329-aa9b; branch cursor/compute-research-sw-sem-0bb6 at 884c37f5af).
+  - **The rank ≤ 3 credit for a word every L** is 64 − 1024/L units (75% / 44% / 23% at L 64 / 128 / 256), resting on the `BamFloor` sketch, which has one unchecked step.
+  - **Full L needs `PureLanes`** (no tensor lane sums two noise variables) **or `CellPure`**, both rank 4. NoSharingGain is open at L 64.
+  - **Verdict:** keep committing every k32 unless Daniel accepts a rank-4 premise; then use L = 64. That gives T2 at T 8,192 of 95× async (49× at L 128), all estimates.
+  - **Margins against shortcuts at one merge a word:** Strassen–Winograd +37.5% / +12.5% / 0; Hopcroft–Kerr +25% / 0 / −12.5%.
+  - **Main smell:** `Sm90Sem` lists only the classes the task named. Programs using IMNMX, SEL, VABSDIFF4, IDP.2A and other opcodes fall outside it.
+  - Add SW-SEM's main smell (Sm90Sem's incomplete opcode list) to the catalogue, and check whether SW-LEAN's and SW-PREMISES' results inherit it.
