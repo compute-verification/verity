@@ -1,9 +1,9 @@
-import Definitions.NetworkCertifier.Guarantees.Horizon
+import Definitions.NetworkCertifier.Guarantees.Pooled
 import Proofs.NetworkCertifier.PeriodSum
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
-# The wrong units over a horizon: the escapes multiply
+# The wrong units over a monitoring period: the escapes multiply
 
 A uniform `k`-subset of `n` units misses a set of `f` units with probability `C(n - f, k) / C(n, k)`, at most
 `(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its wrong
@@ -217,10 +217,10 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
       _ = r ^ (f 0 ω₀ + (F - f 0 ω₀)) := (pow_add _ _ _).symm
       _ ≤ r ^ F := pow_le_pow_of_le_one hr0 hr1 (by omega)
 
-/-! ### The horizon -/
+/-! ### The monitoring period -/
 
-/-- **The wrong units over a horizon**: `Guarantees.HorizonWrongUnitsLe`. -/
-theorem horizonWrongUnits : Guarantees.HorizonWrongUnitsLe := by
+/-- **The wrong units over a monitoring period**: `Guarantees.PooledWrongUnitsLe`. -/
+theorem horizonWrongUnits : Guarantees.PooledWrongUnitsLe := by
   intro m Ω _ _ n k draw hcard hunif W hW acc ε hsound q hq0 hq1 hq F
   refine ⟨?_, fun δ hδ hlog => ?_⟩
   · classical
