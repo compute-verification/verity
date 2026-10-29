@@ -59,17 +59,11 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
                                     blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
+                                    and a 320-read window at `2^-20` from `2^19` to `2^27` blocks (`ObligationWide320`),
                                     proved in `Proofs/Pous/Obligation.lean`
-Definitions/Pous/Guarantees/SecureErasure.lean
-                                    two frozen statements, which grade.sh grades against: secure erasure on the
-                                    band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
-                                    `SecureErasureMeets96GiB`); no named assumption, no bandwidth-separation premise;
-                                    in the ideal-permutation model only, not a bound on a band-fill wipe at the
-                                    reference `Π₂`
-Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 42 lemmas, the
+Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 40 lemmas, the
                                     completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
-                                    `N10Refuted` negates, among them `DigestAU` and `SecureErasureMeets`; it
-                                    imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
+                                    `N10Refuted` negates; it imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
                                     `A2LemmaAM1`, `A5RabinGcd` and `A7Params` against it
 Proofs/Pous.lean                    proved, the proofs: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
