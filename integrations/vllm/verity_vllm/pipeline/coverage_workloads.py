@@ -103,7 +103,7 @@ def corpus_paragraphs() -> list[dict]:
 
 def build_requests(tok: Tok, draws: list[dict], *, case: str, profile: str, ctx: str, seed: int, prompt_seed: int | None) -> list[dict]:
     """The requests: lengths from `draws` (a function of (profile, ctx, seed) only), text from the corpus chosen by `prompt_seed`
-    (None: the length seed).  A replicate keeps the draws and changes the prompt seed -- same structural configuration, other prompts."""
+    (None: the length seed).  A replicate keeps the samples and changes the prompt seed -- same structural configuration, other prompts."""
     paras = corpus_paragraphs()
     ps = seed if prompt_seed is None else prompt_seed
     rng = CH.generator([ps, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0DE])
@@ -346,7 +346,7 @@ class Options:
     tokenizer_revision: str | None = option("--tokenizer-revision", default=None)
     profiles: str = option("--profiles", default=",".join(PROFILES))
     ctx: str = option("--ctx", default=",".join(sorted(CTX)))
-    seed: int = option("--seed", type=int, default=0, help="length seed (the draws depend on (profile, ctx, seed) only)")
+    seed: int = option("--seed", type=int, default=0, help="length seed (the samples depend on (profile, ctx, seed) only)")
     out_dir: str = option("--out-dir", default=str(WORKLOADS))
     checkpoints: str = option("--checkpoints", default=str(CHECKPOINTS))
     replicate: int = option("--replicate", type=int, default=0,
@@ -357,7 +357,7 @@ class Options:
                                 "engine.args.dtype = float16); comma-separated or repeated; see parse_variant")
     sampling_seed: int = option("--sampling-seed", type=int, default=20260917,
                                 help="per-request sampler seed for a non-greedy variant")
-    dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the draws only")
+    dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the samples only")
 
 
 def checkpoint_repo(path: str | Path, role: str) -> str | None:
