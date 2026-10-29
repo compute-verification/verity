@@ -9,6 +9,8 @@ The committed word is word(i, j, t) = −β_j + Σ_{τ ≤ t} (data dot of k32 s
 - `fix2`: `tag` with each later step's (1 + b_t[i])·w_t[j], w_t ∈ {±1}ⁿ drawn after B.
 - `blc` (`ssn-1l-tag + blc4a-t64-e7`): `tag` with 28 data lanes a later step and three coin lanes, A′ = 1 against
   B′ = s_t[tile, ℓ, j], odd and uniform in ±127 for each tile of 64 rows and column, drawn after A.
+- `rot` (`blc4a-t64-e7-rot`): `blc` with A′ = (127, 1, 1) on even rows and (1, 127, 1) on odd rows. `lane_bounds`
+  gives either design's exact chance of a kept word and tile, and `kept_sweep` counts them.
 
 Chosen data is zero except one lane a later step: B's row there is a pattern p_t fixed before the coins, and every
 row's A entry is x_t.
@@ -48,7 +50,15 @@ import numpy as np
 TILE = 4
 TAG_LANES = 4
 BLC_TILE, BLC_LANES, BLC_E = 64, 3, 7
+#: The coin-lane designs, and `rot`'s row weights A′ on the three lanes, by row parity.
+BLC = ("blc", "rot")
+ROT = np.array([[127, 1, 1], [1, 127, 1]])
 STEPS = {"K 2,048": 67, "K 8,192": 265}
+
+
+def lane_weights(design: str, m: int) -> np.ndarray:
+    """A′, each row's weights on its tile's three coin lanes: 1 for `blc`, `ROT` by row parity for `rot`."""
+    return ROT[np.arange(m) % 2] if design == "rot" else np.ones((m, BLC_LANES), dtype=np.int64)
 
 
 def code(n: int) -> np.ndarray:
@@ -83,11 +93,11 @@ def coins(design: str, m: int, n: int, s: int, rng: np.random.Generator) -> dict
     """The coins, drawn after the data: a₁, the step bits, and G and w for the tagged designs."""
     co = {"b": rng.integers(0, 2, size=(m, s))}
     co["a1"] = rng.integers(0, 16 if design == "hw" else 2, size=(m, 4))
-    if design in ("tag", "fix2", "blc"):
+    if design in ("tag", "fix2", *BLC):
         co["G"] = rng.integers(-3, 4, size=(TAG_LANES, n))
     if design == "fix2":
         co["w"] = rng.choice(np.array([-1, 1]), size=(s, n))
-    if design == "blc":
+    if design in BLC:
         tiles = -(-m // BLC_TILE)
         co["s"] = 2 * rng.integers(0, 2 ** BLC_E, size=(s, tiles, BLC_LANES, n)) - (2 ** BLC_E - 1)
     return co
@@ -98,7 +108,7 @@ def first_data(design: str) -> int:
 
 
 def later_data(design: str) -> int:
-    return 32 - 1 - BLC_LANES if design == "blc" else 31
+    return 32 - 1 - BLC_LANES if design in BLC else 31
 
 
 def step_weights(design: str, pub: dict, co: dict, n: int, s: int) -> np.ndarray:
@@ -145,7 +155,7 @@ def honest(design: str, a, b, pub: dict, co: dict, s: int) -> np.ndarray:
     m, n = a.shape[0], b.shape[1]
     d1, dl = first_data(design), later_data(design)
     xp, yp = [a[:, :d1]], [b[:d1]]
-    if design in ("tag", "fix2", "blc"):
+    if design in ("tag", "fix2", *BLC):
         xp.append(row_tags(m))
         yp.append(co["G"])
     xp.append(co["a1"])
@@ -155,16 +165,16 @@ def honest(design: str, a, b, pub: dict, co: dict, s: int) -> np.ndarray:
         lo = d1 + dl * (t - 1)
         xp.append(a[:, lo:lo + dl])
         yp.append(b[lo:lo + dl])
-        if design == "blc":
-            xp.append(np.ones((m, BLC_LANES), dtype=np.int64))
+        if design in BLC:
+            xp.append(lane_weights(design, m))
             yp.append(np.zeros((BLC_LANES, n), dtype=np.int64))
         xp.append(lanes[:, t:t + 1])
         yp.append(wts[t:t + 1])
     x, y = np.concatenate(xp, axis=1), np.concatenate(yp, axis=0)
     assert x.shape[1] == 32 * s and np.abs(x).max() <= 127 and np.abs(y).max() <= 127
     steps = np.einsum("mtk,tkn->mtn", x.reshape(m, s, 32), y.reshape(s, 32, n))
-    if design == "blc":
-        steps[:, 1:] += co["s"][1:, np.arange(m) // BLC_TILE].sum(axis=2).transpose(1, 0, 2)
+    if design in BLC:
+        steps[:, 1:] += np.einsum("ml,tmln->mtn", lane_weights(design, m), co["s"][1:, np.arange(m) // BLC_TILE])
     return np.cumsum(steps, axis=1) - bias(pub["C"], s)[None, None, :]
 
 
@@ -356,8 +366,11 @@ def row_levels(design: str, a, co: dict, s: int) -> np.ndarray:
     inc = np.zeros((m, s), dtype=np.int64)
     for t in range(1, s):
         inc[:, t] = a[:, d1 + dl * (t - 1)] + lanes[:, t]
-    tiles = -(-m // BLC_TILE) if design == "blc" else 1
-    return np.cumsum(inc, axis=1) * tiles + (np.arange(m) // BLC_TILE % tiles)[:, None]
+    tiles = -(-m // BLC_TILE) if design in BLC else 1
+    group = np.arange(m) // BLC_TILE % tiles
+    if design == "rot":
+        tiles, group = 2 * tiles, 2 * group + np.arange(m) % 2
+    return np.cumsum(inc, axis=1) * tiles + group[:, None]
 
 
 #: MMA output tiles (rows, columns): a warp's 128 words at the finest wgmma, and a warpgroup's m64n8.
@@ -376,6 +389,42 @@ def tile_excess(words: np.ndarray, rows: int, cols: int) -> float:
     per_group = sum(len(np.unique(g, axis=0)) for g in t)
     pooled = len(np.unique(t.reshape(-1, rows * cols), axis=0))
     return rows * cols * (per_group - pooled) / words.size
+
+
+def kept(words: np.ndarray, rows: int = 1, cols: int = 1) -> float:
+    """The share of a tile's step transitions (at 1 × 1, a word's) that leave the whole tile as it was, which a prover
+    need not write."""
+    m, s, n = words.shape
+    t = words.reshape(m // rows, rows, s, n // cols, cols).transpose(0, 3, 2, 1, 4).reshape(-1, s, rows * cols)
+    return float((t[:, 1:] == t[:, :-1]).all(axis=2).mean())
+
+
+def lane_bounds(design: str) -> dict:
+    """Exact bounds from the coin law, for any data fixed before the coins. A word is kept only if its row's weighted
+    lane sum (odd) hits the one target whose parity the row bit picks: at most half the law's largest point mass. A 16 × 8
+    tile is kept only if one column's lanes, which pin all 16 row bits, are joined by 7 more columns' lanes hitting every
+    row class's targets: at most 2⁻¹⁶ times the classes' joint largest point mass to the 7th."""
+    v = 2 * np.arange(2 ** BLC_E) - (2 ** BLC_E - 1)
+    lanes = np.stack(np.meshgrid(v, v, v, indexing="ij"), axis=-1).reshape(-1, BLC_LANES)
+    sums = lanes @ np.unique(lane_weights(design, 2), axis=0).T
+    word = max(np.unique(c, return_counts=True)[1].max() for c in sums.T) / len(lanes)
+    joint = np.unique(sums, axis=0, return_counts=True)[1].max() / len(lanes)
+    return {"design": design, "point_mass": word, "joint_point_mass": joint, "kept_word_bound": word / 2,
+            "kept_word_zero_data": float((sums == -1).mean() / 2), "kept_tile_16x8_bound": 2.0 ** -16 * joint ** 7}
+
+
+def kept_sweep(seed: int = 41, m: int = BLC_TILE, n: int = 2048, s: int = 265) -> list[dict]:
+    """Kept words and tiles on zero data at one coin tile and Llama's width, where `rot`'s rarer lane hits still occur:
+    one seed draws the same coins for `blc` and `rot`."""
+    out = []
+    for design in BLC:
+        rng = np.random.default_rng(seed)
+        pub = public(design, n, s, rng)
+        a, b = data("zero", design, m, n, s, pub, rng)
+        words = honest(design, a, b, pub, coins(design, m, n, s, rng), s)
+        out.append({"design": design, "case": "zero", "m": m, "n": n, "S": s, "kept_word": kept(words),
+                    "kept_tile_16x8": kept(words, 16, 8), "tile_excess_16x8": tile_excess(words, 16, 8)})
+    return out
 
 
 #: Coins a class pins, as a layout's warp-uniform view sees them: a warp over one row's columns sees the row coins, a
@@ -408,6 +457,7 @@ def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: i
     out = {"design": design, "case": case, "m": m, "n": n, "S": s, **entry_credit(words)}
     out |= {f"tile_excess_{r}x{c}": tile_excess(words, r, c) for r, c in TILES if m % r == 0 and n % c == 0}
     out["box_excess"] = tile_excess(words, *BOX)
+    out |= {"kept_word": kept(words), "kept_tile_16x8": kept(words, 16, 8)}
     entry = np.repeat(np.arange(m * n), s)
     first = refine(np.zeros(entry.size, dtype=np.int64), words)
     for name, keep in CLASSES.items():
@@ -421,10 +471,11 @@ def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: i
     return out
 
 
-def class_sweep(seed: int = 31) -> list[dict]:
-    """`blc`'s class residuals: the four cases at the small shape and `same` at a tile and two at both of Llama's S."""
-    shapes = [("blc", case, 48, 64, 67) for case in ("zero", "same", "cancel", "walk")]
-    shapes += [("blc", "same", m, 64, s) for s in STEPS.values() for m in (BLC_TILE, 2 * BLC_TILE)]
+def class_sweep(seed: int = 31, design: str = "blc") -> list[dict]:
+    """A coin-lane design's class residuals: the four cases at the small shape and `same` at a tile and two at both of
+    Llama's S. One seed draws the same data and coins for `blc` and `rot`, which differ only in A′."""
+    shapes = [(design, case, 48, 64, 67) for case in ("zero", "same", "cancel", "walk")]
+    shapes += [(design, "same", m, 64, s) for s in STEPS.values() for m in (BLC_TILE, 2 * BLC_TILE)]
     return [class_shared(*shape, seed=seed + i) for i, shape in enumerate(shapes)]
 
 
@@ -526,20 +577,32 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     rows, checks = small()
     res = {"small": rows, "checks": checks, "at_scale": at_scale(), "rows_sweep": rows_sweep(),
-           "level_sweep": level_sweep(), "class_sweep": class_sweep()}
+           "level_sweep": level_sweep(), "class_sweep": class_sweep(), "class_sweep_rot": class_sweep(design="rot"),
+           "lane_bounds": [lane_bounds(d) for d in BLC], "kept_sweep": kept_sweep()}
     checks += [{"name": f"blc/same m {r['m']} S {r['S']} same-level masks from held step-1 words copy honest words",
                 "ok": r["mask_mismatch"] == 0} for r in res["level_sweep"]]
-    for r in res["class_sweep"]:
-        tag = f"blc/{r['case']} m {r['m']} S {r['S']}"
+    blc = res["lane_bounds"][0]
+    checks.append({"name": "blc's lane law keeps a word with at most 3/1024 and a 16 × 8 tile with 2⁻¹⁶(3/512)⁷",
+                   "ok": blc["kept_word_bound"] == 3 / 1024 and blc["kept_tile_16x8_bound"] == 2.0 ** -16 * (3 / 512) ** 7})
+    checks.append({"name": "blc's kept words at one tile and n 2,048 are within 10% of the law's 3/1024",
+                   "ok": abs(res["kept_sweep"][0]["kept_word"] / blc["kept_word_zero_data"] - 1) < 0.1})
+    for r in res["class_sweep"] + res["class_sweep_rot"] + res["kept_sweep"]:
+        tag = f"{r['design']}/{r['case']} m {r['m']} S {r['S']}"
+        checks.append({"name": f"{tag} no 16 × 8 tile is kept from one step to the next", "ok": r["kept_tile_16x8"] == 0})
+    checks += [{"name": f"{r['design']}/zero m {r['m']} n {r['n']} S {r['S']} no two groups share a 16 × 8 tile",
+                "ok": r["tile_excess_16x8"] == 0} for r in res["kept_sweep"]]
+    for r in res["class_sweep"] + res["class_sweep_rot"]:
+        tag = f"{r['design']}/{r['case']} m {r['m']} S {r['S']}"
         checks += [{"name": f"{tag} a class pinning only {name} coins shares nothing (credit_le_cost_separated)",
                     "ok": r[f"shared_{name}"] == 0} for name in CLASSES if name != "point"]
         checks.append({"name": f"{tag} no two groups share a whole register (lanes_le_cost_separated)",
                        "ok": r["model_w_excess"] == 0})
         checks += [{"name": f"{tag} no two groups share a whole {key[12:]} tile (adaptive_registers_le, tile grain)",
                     "ok": v == 0} for key, v in r.items() if key.startswith("tile_excess_")]
-    for r in rows + res["rows_sweep"] + res["level_sweep"] + res["class_sweep"]:
-        print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()})
+    for r in rows + res["rows_sweep"] + res["level_sweep"] + res["class_sweep"] + res["class_sweep_rot"] + res["kept_sweep"]:
+        print({k: (float(f"{v:.4g}") if isinstance(v, float) else v) for k, v in r.items()})
     print(json.dumps(res["at_scale"], indent=1))
+    print(json.dumps(res["lane_bounds"], indent=1))
     passed = sum(c["ok"] for c in checks)
     print(f"checks: {passed} of {len(checks)} pass")
     if args.json:
