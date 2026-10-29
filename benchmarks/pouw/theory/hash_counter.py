@@ -43,9 +43,9 @@ Strategies:
 `lead:e7`, `lead:e4` and `lead:w127` instances have the lead's zero-data word form, w_t = d0 + rpos_t(i) + cpos_t(j):
 a −1 lane and a 1 + b lane (b ∈ {0, 1}) on the row, and three odd e-bit coin lanes (one at e4; weights 1, 127, 1 at
 w127) on the column, with d0 a per-cell offset of the lead's size. Only `honest`, `pack`, `copy` and `table` run on
-them. `pack` (an `xor` fold over words that split into a row and a column term) puts L = ⌊32/b⌋ cells in b-bit
-lanes of one register, b the narrowest signed width holding every word, so one IADD3 writes L words and one LOP3 folds
-2L; σ's bits above a lane are its sign bit. `gap_claimed` is (honest − cheapest)/stock: the gap against a design that
+them. `pack` (an `xor` fold over words that split into a row and a column term) puts L = ⌊32g/b⌋ cells in b-bit
+lanes of g registers, b the narrowest signed width holding every word, so g IADD3s write L words and g LOP3s fold 2L;
+σ's bits above a lane are its sign bit. `gap_claimed` is (honest − cheapest)/stock: the gap against a design that
 credits everything its honest prover does (C₀ = cost(H)), beside `gap_share` against stock.
 
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B hash_counter.py OUT.json
@@ -442,9 +442,10 @@ def expand(rule, inst, d):
 
 def pack(rule, inst, d):
     """An `xor` fold over words w = d0(i, j) + R_t(i) + C_t(j) (each lane's U constant down the rows or V across the
-    columns; zero data): L cells a register in b-bit lanes, the low lanes biased by 2^(b−1) so no lane borrows, one
-    IADD3 of the packed d0, row and column terms (and 2/BLOCK operand loads) a register a committed step, and one LOP3
-    a pair of registers. Unpacking a lane: undo the bias's parity and sign-extend from bit b − 1."""
+    columns; zero data): L cells in b-bit lanes of a 32·g-bit integer of g registers (g 1 or 2, whichever is cheaper,
+    and only when L > g), the low lanes biased by 2^(b−1) so no lane borrows. A committed step costs g IADD3s (the
+    second with carry) of the packed d0, row and column terms, 2g/BLOCK operand loads and g/2 LOP3s. Unpacking a
+    lane: undo the bias's parity and sign-extend from bit b − 1."""
     if rule.agg != "xor" or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
         return None
     m, n, S = inst.m, inst.n, inst.S
@@ -455,31 +456,42 @@ def pack(rule, inst, d):
     R = np.cumsum(np.einsum("itl,tl->it", d.U[:, :, rowlane], d.V[0][:, rowlane]), axis=1)
     C = np.cumsum(np.einsum("tl,jtl->jt", d.U[0][:, collane], d.V[:, :, collane]), axis=1)
     W = d.w0[:, :, None] + R[:, None, :] + C[None, :, :]
-    b = int(np.abs(W).max()).bit_length() + 1
-    L = 32 // b
-    if L < 2:
-        return None
-    b = 32 // L
-    groups = -(-n // L)
+    need = int(np.abs(W).max()).bit_length() + 1
+    nrow, ncol = int(rowlane.sum()), int(collane.sum())
     P = d.P
+    best = None
+    for g in (1, 2):
+        L = 32 * g // need
+        if L <= g:
+            continue
+        groups = -(-n // L)
+        cost = (len(P) * groups / n * g * (1 + 2 / BLOCK + 0.5) + 6 + (nrow + 1) * S / CALL_N
+                + (ncol + L) * g * S / CALL_M)
+        if best is None or cost < best[0]:
+            best = (cost, g, L)
+    if best is None:
+        return None
+    cost, g, L = best
+    width_all, b = 32 * g, 32 * g // L
+    u = np.uint64
     sigma = np.zeros((m, n), np.int64)
-    for gi in range(groups):
+    for gi in range(-(-n // L)):
         cols = list(range(gi * L, min(n, (gi + 1) * L)))
-        Dp = sum(((d.w0[:, j] + (1 << (b - 1)) * (a < len(cols) - 1)) << (a * b)) for a, j in enumerate(cols))
-        Rp = R[:, P] * sum(1 << (a * b) for a in range(len(cols)))
-        Cp = sum(C[j, P] << (a * b) for a, j in enumerate(cols))
-        Pk = (Dp[:, None] + Rp + Cp[None, :]) & M32
+        Dp = sum((d.w0[:, j] + (1 << (b - 1)) * (a < len(cols) - 1)).astype(u) << u(a * b) for a, j in enumerate(cols))
+        Rp = sum(R[:, P].astype(u) << u(a * b) for a in range(len(cols)))
+        Cp = sum(C[j, P].astype(u) << u(a * b) for a, j in enumerate(cols))
+        Pk = (Dp[:, None] + Rp + Cp[None, :]) & u((1 << width_all) - 1)
         sp = np.bitwise_xor.reduce(Pk, axis=1)
         for a, j in enumerate(cols):
             top = a == len(cols) - 1
-            width = 32 - a * b if top else b
-            x = (sp >> (a * b)) & ((1 << width) - 1)
+            width = width_all - a * b if top else b
+            x = ((sp >> u(a * b)) & u((1 << width) - 1)).astype(object)
             if not top and len(P) % 2:
                 x ^= 1 << (b - 1)
-            sigma[:, j] = np.where((x >> (width - 1)) & 1, x | (M32 ^ ((1 << width) - 1)), x) & M32
-    nrow, ncol = int(rowlane.sum()), int(collane.sum())
-    cost = len(P) * groups / n * (1 + 2 / BLOCK + 0.5) + 6 + (nrow + 1) * S / CALL_N + (ncol + L) * S / CALL_M
-    return cost, sigma, f"{L} cells a register in {b}-bit lanes"
+            if width < 32:
+                x = np.where(x >> (width - 1) & 1, x | (M32 ^ ((1 << width) - 1)), x)
+            sigma[:, j] = (x & M32).astype(np.int64)
+    return cost, sigma, f"{L} cells in {b}-bit lanes of {g} register(s)"
 
 
 def copy(rule, inst, d):
@@ -683,8 +695,9 @@ def main() -> int:
                      [(r["inst"]["coins"], r["inst"]["S"], r["strategies"]["pack"]["how"], r["gap_claimed"])
                       for r in narrow])
         wide = [r for r in xor if r["inst"]["coins"] == "lead:w127"]
-        checks.check("pack doesn't apply at lead:w127 (words past 16 bits)",
-                     bool(wide) and all("pack" not in r["strategies"] for r in wide))
+        checks.check("pack at lead:w127 (words past 16 bits) uses two-register lanes",
+                     bool(wide) and all("2 register" in r["strategies"].get("pack", {}).get("how", "") for r in wide),
+                     [(r["inst"]["S"], r["strategies"].get("pack", {}).get("how"), r["gap_claimed"]) for r in wide])
     if checks.mutations:
         mutations(checks)
     by_rule = {}
