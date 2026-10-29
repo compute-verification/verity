@@ -305,7 +305,7 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
         ex_ops[g], ex_uses[g] = tuple(sorted(vs)), frozenset(uses.get((r, s), set()))
     ex = R.Execution(width, frozenset(), step, ex_ops, ex_uses, value)
     store = R.Store(0, written, freed, payload)
-    instance = encode(ex, R.Store.Placement(block, offset), store, held, codec.BLOCK_BYTES * 8, end)
+    instance = encode(ex, R.Store.Packing(block, offset), store, held, codec.BLOCK_BYTES * 8, end)
     return instance, {"rows": of_value, "page": page_of, "width": width, "block": block, "held": held, "arrive": arrive}
 
 
