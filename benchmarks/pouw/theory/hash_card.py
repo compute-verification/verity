@@ -543,6 +543,7 @@ def run(card: dict, hc: dict, checks: Checks, prefix: str = "") -> dict:
     base = design_entry(card, hc, "lead", {"title": "the lead", "status": "baseline", "compose": hc["basis"]["lead"]},
                         lead, "baseline")
     base["t2"], base["t3"] = (lead["t2_measured"], "measured"), (lead["t3_measured"], "measured")
+    base["lane"], base["done_missing"] = "baseline", done_missing(base)
     entries = [base]
     for k, v in hc.get("known", {}).items():
         entries.append(design_entry(card, hc, k, v, lead, "known"))
