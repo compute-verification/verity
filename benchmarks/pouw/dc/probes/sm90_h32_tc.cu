@@ -9,7 +9,8 @@
 // No probe for two shapes CUDA 13.0 doesn't give the tensor pipe on sm_90a. m8n8k4 with f16 inputs is a CALL into a
 // scalar routine (SHFL.IDX, HADD2.F32, FFMA and integer instructions), each priced in its own class; f64 m8n8k4 is
 // DMMA and has one. m16n8k32 e4m3 is 2 HMMA.16816.F32 on a zero accumulator and 4 FADD, whose HMMAs ptxas hoists out
-// of a loop with fixed operands.
+// of a loop with fixed operands. s4 and u4 mma.sync (every shape) and b1 xor.popc are CALLs too: nibbles unpacked by
+// LOP3, SHF and IMAD.SHL into IMMA.*.S8.S8 (U8 for u4), and xor through BMMA.168256.AND.POPC; ms_ times each whole call.
 #include "../../opcode_probe/probe.cuh"
 #include "../dc.cuh"
 #include "h32_mma.cuh"
@@ -65,6 +66,11 @@ MS(b1_m8k128, 211, "m8n8k128.row.col.s32.b1.b1.s32.and.popc", int, "r", uint32_t
 MS(f64_m8k4, 211, "m8n8k4.row.col.f64.f64.f64.f64", double, "d", double, "d", 2, 1, 1, 0)
 MS(f64_k4, 421, "m16n8k4.row.col.f64.f64.f64.f64", double, "d", double, "d", 4, 2, 1, 0)
 MS(f64_k8, 442, "m16n8k8.row.col.f64.f64.f64.f64", double, "d", double, "d", 4, 4, 2, 0)
+MS(s4_k64, 442, "m16n8k64.row.col.s32.s4.s4.s32", int, "r", uint32_t, "r", 4, 4, 2, 0)
+MS(u4_k64, 442, "m16n8k64.row.col.s32.u4.u4.s32", int, "r", uint32_t, "r", 4, 4, 2, 0)
+MS(s4_k32, 421, "m16n8k32.row.col.s32.s4.s4.s32", int, "r", uint32_t, "r", 4, 2, 1, 0)
+MS(s4_m8k32, 211, "m8n8k32.row.col.s32.s4.s4.s32", int, "r", uint32_t, "r", 2, 1, 1, 0)
+MS(b1x_k256, 442, "m16n8k256.row.col.s32.b1.b1.s32.xor.popc", int, "r", uint32_t, "r", 4, 4, 2, 0)
 #undef MS
 #undef MSP
 
@@ -86,6 +92,11 @@ MSK(b1_m8k128)
 MSK(f64_m8k4)
 MSK(f64_k4)
 MSK(f64_k8)
+MSK(s4_k64)
+MSK(u4_k64)
+MSK(s4_k32)
+MSK(s4_m8k32)
+MSK(b1x_k256)
 #undef MSK
 OP_KERNEL(mm_f16k8_dadd2_fadd, 512) { mm_run<M_f16_k8, 64, O_DADD_I, O_DADD_I, O_FADD_I>(a); }
 OP_KERNEL(mm_f16k8_dadd, 512) { mm_run<M_f16_k8, 64, O_DADD_I>(a); }
@@ -143,6 +154,12 @@ WU(hfma2_lop3, 64, O_HFMA2_RI, O_LOP3_R)
 #define P_WB(NAME, PAT, REGS) P_WA_(NAME, "tc", PAT, REGS)
 #define P_MS(NAME, PAT, N, NOTE) \
   {.name = "ms_" #NAME, .kernel = (const void*)ms_##NAME, .tpb = 512, .expect = PAT "=" #N, .iters = 512, .note = NOTE}
+// an emulated form: the loop holds one CALL a mma.sync and the moves of its operands and D in and out of the routine's
+// registers (the gate's sink trace reaches the timed CALLs through them); priced per register of D, the routine's own
+// writes uncounted
+#define P_MC(NAME, REGS, IMOV, MOV)                                                                                \
+  {.name = "ms_" #NAME, .kernel = (const void*)ms_##NAME, .tpb = 512,                                             \
+   .expect = "CALL.REL.NOINC=128,IMAD.MOV.U32=" #IMOV ",MOV=" #MOV, .iters = 64, .note = "c=mix w=CALL.REL.NOINC:" #REGS}
 #define P_MM(NAME, PAT, NOTE) \
   {.name = #NAME, .kernel = (const void*)NAME, .tpb = 512, .expect = PAT, .iters = 512, .note = NOTE}
 #define WG128 "IGMMA.64x128x32.S8.S8*"
@@ -200,6 +217,11 @@ static const OpProbe PROBES[] = {
     P_MS(f64_m8k4, "DMMA.8x8x4*", 128, "c=tc w=DMMA.8x8x4*:4"),
     P_MS(f64_k4, "DMMA.16x8x4*", 128, "c=tc w=DMMA.16x8x4*:8"),
     P_MS(f64_k8, "DMMA.16x8x8*", 128, "c=tc w=DMMA.16x8x8*:8"),
+    P_MC(s4_k64, 4, 675, 477),
+    P_MC(u4_k64, 4, 615, 537),
+    P_MC(s4_k32, 4, 633, 519),
+    P_MC(s4_m8k32, 2, 352, 288),
+    P_MC(b1x_k256, 4, 864, 800),
     P_MM(mm_f16k8_dadd2_fadd, "HMMA.1688.F32=64,DADD=128,FADD=64", "c=mix w=HMMA.1688.F32:4,DADD:2,FADD:1"),
     P_MM(mm_f16k8_dadd, "HMMA.1688.F32=64,DADD=64", "c=mix w=HMMA.1688.F32:4,DADD:2"),
     P_MM(mm_f16k8_fadd3, "HMMA.1688.F32=64,FADD=192", "c=mix w=HMMA.1688.F32:4,FADD:1"),

@@ -17,6 +17,12 @@
 //                 prices every register the loop writes
 //   m_lds128b_g<G>  CORE-H32's scalar co-issue minimum (DADD, IMAD, DADD, FADD) with a broadcast LDS.128 every G ops,
 //                 its words that round's DADD operands; m_dadd2_imad_fadd, the same mix without loads, in this harness
+//   y_imadp_on/off  IMAD under a predicate the timed pass holds true / false; y_sel, SEL on it
+//   b_ubra, b_dbra  a branch on a coin bit, warp-uniform (the trip's coin word) and lane-divergent (a chain's own bit),
+//                 arms of 4 IMAD or 4 LOP3: ptxas if-converts them, so both arms issue under the bit's predicate
+//   b_ubra16, b_dbra16  the same with 16-op arms, which ptxas keeps as branches (BRA; BSSY/BSYNC when divergent).
+//                 The loop holds both arms and a decision runs one (divergent: both), so h32.py's price is not a
+//                 decision's; a decision's time is the loop's over its 16 (64) decisions
 #include "../../opcode_probe/probe.cuh"
 #include "w1.cuh"
 
@@ -78,6 +84,35 @@ Y(imad_r, W_IMAD)
 Y(imad_lop3, W_IMAD, W_LOP3)
 #undef Y
 #undef Y64
+
+// a predicate the timed pass holds true (ON) or false, which ptxas can't prove
+template <int R, int X, bool ON>
+DC_DEV void p_run(const OpArgs& a) {
+  WLane l(threadIdx.x ^ (uint32_t)a.mode);
+  l.pm = ON ? (a.mode == 0) : (a.mode != 0);
+  OP_BEGIN
+  OP_LOOP(it) { w1_mix<R, X>(l); }
+  OP_END
+  OP_SINK(l.fold() ^ threadIdx.x)
+}
+template <int R, int X>
+DC_DEV void b_run(const OpArgs& a) {
+  WLane l(threadIdx.x ^ (uint32_t)a.mode);
+  OP_BEGIN
+  OP_LOOP(it) {
+    l.cw = (uint32_t)it * 0x9E3779B9u ^ (uint32_t)a.mode;
+    w1_mix<R, X>(l);
+  }
+  OP_END
+  OP_SINK(l.fold() ^ threadIdx.x)
+}
+OP_KERNEL(y_imadp_on, TPB) { p_run<256, W_IMADP, true>(a); }
+OP_KERNEL(y_imadp_off, TPB) { p_run<256, W_IMADP, false>(a); }
+OP_KERNEL(y_sel, TPB) { p_run<256, W_SEL, true>(a); }
+OP_KERNEL(b_ubra, TPB) { b_run<64, W_UBRA>(a); }
+OP_KERNEL(b_dbra, TPB) { b_run<64, W_DBRA>(a); }
+OP_KERNEL(b_ubra16, TPB) { b_run<16, W_UBRA16>(a); }
+OP_KERNEL(b_dbra16, TPB) { b_run<16, W_DBRA16>(a); }
 
 // ---- loads ----------------------------------------------------------------------------------------------------------
 constexpr int ROWS = 64;
@@ -388,6 +423,13 @@ static const OpProbe PROBES[] = {
     P(y_lop3_r, "LOP3.LUT=256", "c=int32 w=LOP3.LUT:1"),
     P(y_imad_r, "IMAD=256", "c=int32 w=IMAD:1"),
     P(y_imad_lop3, "IMAD=128,LOP3.LUT=128", "c=int32 w=IMAD:1,LOP3.LUT:1"),
+    P(y_imadp_on, "IMAD=256", "c=int32 w=IMAD:1"),
+    P(y_imadp_off, "IMAD=256", "c=int32 w=IMAD:1"),
+    P(y_sel, "SEL=256", "c=int32 w=SEL:1"),
+    P(b_ubra, "IMAD=257,LOP3.LUT=314,P2R=2,ISETP.NE.AND=2", "c=mix w=IMAD:1,LOP3.LUT:1"),
+    P(b_dbra, "IMAD=256,LOP3.LUT=320", "c=mix w=IMAD:1,LOP3.LUT:1"),
+    P(b_ubra16, "IMAD=257,LOP3.LUT=273,BRA=33", "c=mix w=IMAD:1,LOP3.LUT:1"),
+    P(b_dbra16, "IMAD=256,LOP3.LUT=272,BSSY=16,BSYNC=16,BRA=33", "c=mix w=IMAD:1,LOP3.LUT:1"),
     PS(l_ldsm1, "LDSM.16.M88=8", "LDSM.16.M88*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88:1"),
     PS(l_ldsm2, "LDSM.16.M88.2=8", "LDSM.16.M88.2*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88.2:2"),
     PS(l_ldsm4, "LDSM.16.M88.4=8", "LDSM.16.M88.4*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88.4:4"),

@@ -19,6 +19,10 @@ enum : int {
   W_HADD2F32, W_F2FP_H, W_MOVM, W_REDUX, W_MATCH,
   // mix partners on the r and d chains (independent of rr, which the IMAD.WIDE forms use)
   W_LOP3, W_IADD3, W_IMAD, W_FADD, W_DADD, W_HADD2,
+  // reading a predicate: IMAD guarded by pm != 0 (loop-invariant), SEL on it; a branch on bit i of the trip's coin
+  // word cw (warp-uniform), and on bit i of a lane's own chain word (divergent), each arm 4 ops on 4 chains (16 ops
+  // for the *16 forms)
+  W_IMADP, W_SEL, W_UBRA, W_DBRA, W_UBRA16, W_DBRA16,
 };
 
 struct WLane {
@@ -27,6 +31,7 @@ struct WLane {
   uint64_t q[8];
   uint32_t rr[16];
   uint32_t pm;  // the predicate chain's carrier: its bits are the predicates a form's next op reads
+  uint32_t cw = 0;  // the trip's coin word (b_run), the same in every lane
   DC_DEV explicit WLane(uint32_t tid) {
 #pragma unroll
     for (int i = 0; i < 8; i++) {
@@ -144,6 +149,34 @@ struct WLane {
       r[s] = c ^ r[t];
     }
     if constexpr (X == W_MATCH) asm volatile("match.any.sync.b32 %0,%0,0xffffffff;" : "+r"(r[s]));
+    if constexpr (X == W_IMADP)
+      asm volatile("{\n.reg .pred p;\nsetp.ne.u32 p,%1,0;\n@p mad.lo.u32 %0,%0,%2,%3;\n}"
+                   : "+r"(r[s])
+                   : "r"(pm), "r"(r[t]), "r"(0x9E3779B9u));
+    if constexpr (X == W_SEL)
+      asm volatile("{\n.reg .pred p;\nsetp.ne.u32 p,%1,0;\nselp.b32 %0,%2,%0,p;\n}" : "+r"(r[s]) : "r"(pm), "r"(r[t]));
+    if constexpr (X == W_UBRA || X == W_DBRA || X == W_UBRA16 || X == W_DBRA16) {
+#define W1_M4 "mad.lo.u32 %0,%0,%6,%7;\nmad.lo.u32 %1,%1,%6,%7;\nmad.lo.u32 %2,%2,%6,%7;\nmad.lo.u32 %3,%3,%6,%7;\n"
+#define W1_L4 \
+  "lop3.b32 %0,%0,%6,%7,0x96;\nlop3.b32 %1,%1,%6,%7,0x96;\nlop3.b32 %2,%2,%6,%7,0x96;\nlop3.b32 %3,%3,%6,%7,0x96;\n"
+#define W1_ARMS(BRA, M, L)                                                                           \
+  "{\n.reg .pred p;\n.reg .b32 b;\nand.b32 b,%4,%5;\nsetp.ne.u32 p,b,0;\n@p " BRA " W1T;\n" M BRA \
+  " W1E;\nW1T:\n" L "W1E:\n}"
+#define W1_OUT : "+r"(r[s]), "+r"(r[(i + 2) & 7]), "+r"(r[(i + 4) & 7]), "+r"(r[(i + 6) & 7])
+      const uint32_t m = 1u << (i & 31);
+      if constexpr (X == W_UBRA) asm volatile(W1_ARMS("bra.uni", W1_M4, W1_L4) W1_OUT : "r"(cw), "r"(m), "r"(r[t]), "r"(0x9E3779B9u));
+      if constexpr (X == W_DBRA) asm volatile(W1_ARMS("bra", W1_M4, W1_L4) W1_OUT : "r"(r[t]), "r"(m), "r"(r[t]), "r"(0x9E3779B9u));
+      if constexpr (X == W_UBRA16)
+        asm volatile(W1_ARMS("bra.uni", W1_M4 W1_M4 W1_M4 W1_M4, W1_L4 W1_L4 W1_L4 W1_L4) W1_OUT
+                     : "r"(cw), "r"(m), "r"(r[t]), "r"(0x9E3779B9u));
+      if constexpr (X == W_DBRA16)
+        asm volatile(W1_ARMS("bra", W1_M4 W1_M4 W1_M4 W1_M4, W1_L4 W1_L4 W1_L4 W1_L4) W1_OUT
+                     : "r"(r[t]), "r"(m), "r"(r[t]), "r"(0x9E3779B9u));
+#undef W1_OUT
+#undef W1_ARMS
+#undef W1_L4
+#undef W1_M4
+    }
   }
   DC_DEV uint32_t fold() const {
     uint32_t x = pm;
