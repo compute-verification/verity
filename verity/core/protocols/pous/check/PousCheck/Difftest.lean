@@ -16,13 +16,14 @@ a test, not a proof.
 * `merkle`: `Merkle.leaf` or `Merkle.packageLeaf` of every block, `Merkle.root`, the SHA-512 of every `Merkle.path`,
   `Merkle.pathLength` of every leaf, `Merkle.verifyPath` on each check the Python ran (`checkInput` rebuilds its input
   from its name and arguments), and the leaf of each sample block.
-* `randomness`: `Randomness.derive` of a random source, domain and context, its streams and uniforms over random indices,
-  and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices (`PousCheck.Challenge`).
+* `randomness`: `FlockSoundness.Randomness.derive` of a random source, domain and context, its streams and exact uniforms
+  (`uniformExact`) over random indices, and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices
+  (`PousCheck.Challenge`).
 * `audit`: `Audit.check` on a session (frames, measured latencies, the verifier's secret, beacons, seen pairs, its own
   root of a private setup and its held `W`): its `FINAL` frame, the fault's code when there is none, or the refusal.
   An accepted `FINAL` also gives the session's `Certificate.assess`: its verdict, coverage and StorageProfile.
 * `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
-* `sha512`: the SHA-512 of labelled bytes, against the pins the spec's §7 states for them.
+* `sha512`: the SHA-512 of labelled bytes, against the pins `reference.py` and `audit-vectors.json` hold for them.
 
 `transcript` is not a kind of the run: `pous-audit-difftest serve` answers it for `interop.py`, which holds it to
 `wire.py` on the spec's transcripts.
@@ -94,14 +95,14 @@ def merkle (inst py : Json) : V Json := do
     ("samples", .arr samples)]
 
 /-- A part as the script writes it: `["b", hex]`, `["s", string]` or `["i", n]`. -/
-def partOf (j : Json) : V Randomness.Part := do
+def partOf (j : Json) : V FlockSoundness.Randomness.Part := do
   match ← J.asArr j "part" with
   | #[.str "b", b] => pure (.bytes (← bytesOf b "part"))
   | #[.str "s", s] => pure (.str (← J.asStr s "part"))
   | #[.str "i", n] => pure (.int (← J.asNat n "part"))
   | _ => throw "randomness: a part is [b|s|i, value]"
 
-def indexOf (j : Json) : V (List Randomness.Part) := do pure (← (← J.asArr j "index").mapM partOf).toList
+def indexOf (j : Json) : V (List FlockSoundness.Randomness.Part) := do pure (← (← J.asArr j "index").mapM partOf).toList
 
 /-- A `randomness` instance's answers: the derived key, its streams and its uniforms, and P2's mode-0 audit id, key,
 indices and nonces and mode-1 round indices (`Challenge.auditId`, `Challenge.auditKey`, `Challenge.roundKey`). -/
@@ -110,13 +111,13 @@ def randomness (inst : Json) : V Json := do
   let context ← (← J.arr inst "context" "randomness").mapM fun kv => do
     let #[k, v] := (← J.asArr kv "context") | throw "randomness: a context pair is [key, part]"
     pure (← J.asStr k "key", ← partOf v)
-  let key := Randomness.derive source (← J.str inst "domain" "randomness") context.toList
+  let key := FlockSoundness.Randomness.derive source (← J.str inst "domain" "randomness") context.toList
   let streams ← (← J.arr inst "streams" "randomness").mapM fun s => do
     let #[i, n] := (← J.asArr s "stream") | throw "randomness: a stream is [index, n]"
-    pure (hex (Randomness.stream key (← indexOf i) (← J.asNat n "n")))
+    pure (hex (FlockSoundness.Randomness.stream key (← indexOf i) (← J.asNat n "n")))
   let uniforms ← (← J.arr inst "uniforms" "randomness").mapM fun u => do
     let #[n, i] := (← J.asArr u "uniform") | throw "randomness: a uniform is [n, index]"
-    match Randomness.uniform key (← J.asNat n "n") (← indexOf i) with
+    match FlockSoundness.Randomness.uniformExact key (← J.asNat n "n") (← indexOf i) with
     | some x => pure (num x)
     | none => throw "randomness: uniform ran out"
   let p2 ← J.get inst "p2" "randomness"
@@ -204,12 +205,12 @@ def storage (inst : Json) : V Json := do
   let n k := J.nat inst k "storage"
   let q : Wire.Params := ⟨← n "w", ← n "c0", ← n "blocks_per_segment", ← n "segments", "", 0⟩
   let (k, delta, rtt) := (← n "k", ← n "delta", ← n "rtt")
-  pure <| match Certificate.Store.ofParams q with
+  pure <| match Certificate.params q with
     | none => .null
     | some s => Json.mkObj [("covered", .bool (Certificate.gate s k delta rtt).2.1.isEmpty),
       ("profile", Certificate.profileJson s k delta rtt)]
 
-/-- A `sha512` instance's answer: the SHA-512 of each item's bytes, by its label (the spec's §7 pins). -/
+/-- A `sha512` instance's answer: the SHA-512 of each item's bytes, by its label (the vectors' pins). -/
 def sha512 (inst : Json) : V Json := do
   let items ← (← J.arr inst "items" "sha512").mapM fun i => do
     let #[label, b] := (← J.asArr i "item") | throw "sha512: an item is [label, bytes]"
