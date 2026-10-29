@@ -17,15 +17,15 @@ rank = 3
 part = "hashing"
 status = "open"
 owner = "the coordinator, for Daniel"
-source = "N-SALT: the pad family's public digest is not an hm96 leaf (AGENTS.md: commitments are hm96 rows), so it needs a ruling. Its hiding is computational at SHA-512's PRF property keyed by a secret 64-byte block, which is hm96 PROTOCOL §3's generator convention, the one (a)'s derived salts and today's served salts already read: Salt.lean's pad_reduction and pad_ideal_hiding (keyed_ideal_hiding) prove the ideal hybrid exact, with every position used once (a repeated position leaks: pad_repeat_leaks, keyed_repeat_leaks). Whoever holds ks reads every x in its scope (pad_key_reveals), so ks is never published"
+source = "N-SALT: the pad family's public digest is not an hm96 leaf (AGENTS.md: commitments are hm96 rows), so it needs a ruling. Its hiding is computational at SHA-512's PRF property keyed by a secret 64-byte block, which is hm96 PROTOCOL §3's generator convention, the one (a)'s derived salts and today's served salts already read, and prefix-keyed SHA-512 as a PRF has precedent (AMAC, Bellare-Bernstein-Tessaro; Ed25519's nonce); every pad input is fixed at 144 bytes, so the whole 512-bit output is released without AMAC's truncation, and multi-user security at about 2^44 keys a year is a non-issue at 512 bits (N-LIT H23); HMAC, if a named standard is wanted, costs 2 compressions a pad (N-LIT H24): Salt.lean's pad_reduction and pad_ideal_hiding (keyed_ideal_hiding) prove the ideal hybrid exact, with every position used once (a repeated position leaks: pad_repeat_leaks, keyed_repeat_leaks). Whoever holds ks reads every x in its scope (pad_key_reveals), so ks is never published"
 
 [premise.fm-distinct]
 rank = 2
 part = "hashing"
 status = "open"
 owner = "N-SALT"
-requires = ["salt-forced"]
-source = "N-SALT: FM's 48 k32 partials an output, P[i][w] = 128 · Σ ±M_key[i][j] · y_j over words <= w, are affine in y with pairwise distinct nonzero coefficient vectors on the pinned key (24,576 of 24,576 prefixes distinct, every 32-bit block at least 9 bits; salt.py check_fm, mutation caught), so under DistinctWrites each committed partial is charged its k32 step's 32 MACs; with one fixed y they are constants, so it requires (a). Its bit 7 is hm96-sha512/v1's mask bit (Salt.lean fm_mask, proved; salt.py, checked on 4 literal and 4,096 closed-form salts). Like per2-distinct it reads DistinctOn's set semantics, not a span argument"
+requires = ["salt-forced", "adaptive-dw"]
+source = "N-SALT: FM's 48 k32 partials an output, P[i][w] = 128 · Σ ±M_key[i][j] · y_j over words <= w, are affine in y with pairwise distinct nonzero coefficient vectors on the pinned key (24,576 of 24,576 prefixes distinct, every 32-bit block at least 9 bits; salt.py check_fm, mutation caught), so they are pairwise distinct, non-constant functions of y (Salt.lean dot_distinct, dot_nonconstant, proved), and under DistinctWrites stated for programs that read the coins (adaptive-dw: y is PRF_ks(salt_w ‖ pos)) each committed partial is charged its k32 step's 32 MACs; with one fixed y they are constants, so it requires (a). Its bit 7 is hm96-sha512/v1's mask bit (Salt.lean fm_mask, proved; salt.py, checked on 4 literal and 4,096 closed-form salts). Like per2-distinct it reads DistinctOn's set semantics, not a span argument"
 
 [H.hiding.pad]
 name = "pad"
