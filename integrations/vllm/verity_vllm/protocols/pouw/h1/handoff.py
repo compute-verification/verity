@@ -104,8 +104,10 @@ def suspend(run: PH.H1Run, directory: str | Path) -> Path:
     """Save `run` (`client_of`'s) to ``directory / FILE`` (mode 0600) for `resume`: everything its close and release read,
     every tensor as its host copy."""
     client = client_of(run)
-    state = {k: v for k, v in run.__dict__.items() if k not in _REBUILT}
     served = run.served
+    if served is not None:
+        served.settle()
+    state = {k: v for k, v in run.__dict__.items() if k not in _REBUILT}
     codes = {} if served is None else {w: c for w, (t, c) in served._weights.items() if run._weights.get(w, (None,))[0] is t}
     state["weights"] = {w: (codes[w] if w in codes else PH.numpy_of(t), PH.numpy_of(s)) for w, (t, s) in run._weights.items()}
     state["rounds"], state["draw"] = _record(run.rounds), _record(run.draw)
