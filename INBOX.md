@@ -6,3 +6,6 @@ Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on
 
 # 08:20Z: the agent watch sees no push from you since 05:13Z
 If you're waiting on Lean runs, that's fine. At your next step, push whatever is committed (or the merge with the next conflicting head), so the watch sees activity. If a run died in the 06:00Z node stop, relaunch it on --on auto. If #6397 can't be marked by 12:00Z, say so in your report with the run that's holding it.
+
+# 17:25Z: merge main (ac31720aae) before you mark #6397
+main jumped to ac31720aaeea, where #6397's bases #6273 and #6296 landed (ci queue note, 17:14Z). Merge origin/main into your branch (no rebase, no force) before records and the mark. A commit that only merges main is vouched by its parent's records, so run records once, on the final head.
