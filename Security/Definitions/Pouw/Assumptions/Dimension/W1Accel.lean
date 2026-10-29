@@ -1,5 +1,6 @@
 import Definitions.Core.Accel.H200
 import Definitions.Core.Assumptions.Accel
+import Definitions.Pouw.Assumptions.Dimension.H200Measured
 
 /-!
 # W1 as a refinement of the accelerator model (trusted statements; draft semantics)
@@ -22,6 +23,9 @@ what the time reading gives instead.
   `w` on each content is a program of the model whose run writes at most `w / cw` words. At `h200Measured` every class
   is at least 32 a 32-bit register, and so is every load, atomic and reduction form measured on the H200 (the
   `sm90_w1.cu` probes), so `cw = 32` is the measured reading.
+* **`W1H200At pr`** (the premise on the H200 at a price table): `CardWithinAccelW1` at every `cw` the table floors.
+  `W1H200Measured32` (proved) reads it at `h200Measured`, `cw = 32`; the instance's `.mma` is the captured dot, so its
+  `wgmma` is `Op100.wgmma` narrowed to it.
 * **`W1FreshWords`** (proved from the premise): a code at W1 work at most `w` a content changes, on average over any
   grid of contents, at most `w / cw` words outside the register file. With every target word changed on at least a
   `1 − ε` share of the grid, that is `cw·(1 − ε)` a word.
@@ -95,6 +99,20 @@ def W1FreshWords : Prop :=
     ∀ f w D, canW f w D → ∀ (G : Type) (S : Finset G) (M : G → c.Mem), (∀ g ∈ S, D (M g)) →
       ∀ Ls : Finset (Σ s : Store, Fin (c.size s)), (∀ l ∈ Ls, l.1 ≠ .reg) →
         cw * ((∑ l ∈ Ls, (S.filter fun g => f (M g) l ≠ M g l).card : ℕ) : ℚ≥0) ≤ S.card * w
+
+/-- **W1 on the H200 at a price table** (draft semantics): `CardWithinAccelW1` on the H200's instance at every `cw` the
+table floors (`H100.Floor cw pr`), `canW` read at the table's prices. The instance's `.mma` already computes the dot
+its capture pins (`Card.dot`), so a `wgmma` here is `MH100`'s `Op100.wgmma` narrowed to that dot. -/
+def W1H200At (pr : H100.Prices100) (cap : ι → ℕ) (oracle : ℕ)
+    (canW : (H200.card.Mem → H200.card.Mem) → ℚ≥0 → (H200.card.Mem → Prop) → Prop) : Prop :=
+  ∀ cw : ℕ, H100.Floor cw pr → CardWithinAccelW1 H200.card cap oracle cw canW
+
+/-- **At `h200Measured`, W1 is 32 a word**: `W1H200At h200Measured` gives `CardWithinAccelW1` on the H200 at `cw = 32`,
+since the measured table floors every class at 32 (`H100.H32`). -/
+def W1H200Measured32 : Prop :=
+  ∀ (ι : Type) (cap : ι → ℕ) (oracle : ℕ)
+    (canW : (H200.card.Mem → H200.card.Mem) → ℚ≥0 → (H200.card.Mem → Prop) → Prop),
+    W1H200At H100.h200Measured cap oracle canW → CardWithinAccelW1 H200.card cap oracle 32 canW
 
 /-! ## The time reading on the H200's instance -/
 

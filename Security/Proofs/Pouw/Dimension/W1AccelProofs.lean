@@ -1,4 +1,5 @@
 import Definitions.Pouw.Assumptions.Dimension.W1Accel
+import Proofs.Pouw.Dimension.H200MeasuredProofs
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
@@ -146,6 +147,10 @@ theorem w1FreshWords : W1FreshWords := by
         rw [Nat.cast_sum, Finset.mul_sum]
     _ ≤ ∑ _g ∈ S, w := Finset.sum_le_sum fun g hg => (hrun g hg).2
     _ = S.card * w := by rw [Finset.sum_const, nsmul_eq_mul]
+
+/-- **At `h200Measured`, W1 is 32 a word**, proved from `H100.h32H200Measured`. -/
+theorem w1H200Measured32 : W1H200Measured32 := fun _ _ _ _ h => by
+  simpa using h 32 H100.h32H200Measured
 
 /-! ## The H200 instance's tick -/
 
