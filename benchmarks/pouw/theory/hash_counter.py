@@ -36,8 +36,11 @@ Strategies:
 - `table`: a field whose inputs span at most 34 bits (2³⁴ entries, `counter_tile`'s MEM) is one indexed load,
   after gathering its index bits.
 
+`agg` may also be `pow:D`, the sketch Σ r_t f_t^D. `expand` takes a power sketch over separable words apart, and
+`--aggs=A,B` and `--bits=A,B` restrict the sweep to those rules.
+
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B hash_counter.py OUT.json
-[--quick] [--mutations]` (from this directory).
+[--quick] [--mutations] [--aggs=...] [--bits=...]` (from this directory).
 """
 from __future__ import annotations
 
@@ -155,11 +158,23 @@ class Draw:
             self.w = w
 
 
+def degree(rule: Rule) -> int | None:
+    """g's degree when g is the power f^d (`sq` is d 2), else None."""
+    if rule.agg == "sq":
+        return 2
+    if rule.agg.startswith("pow:"):
+        return int(rule.agg.split(":")[1])
+    return None
+
+
 def g_of(rule: Rule, d: Draw, f):
     if rule.agg == "lin":
         return f
-    if rule.agg == "sq":
-        return mulmod(f, f)
+    if degree(rule):
+        out = f
+        for _ in range(degree(rule) - 1):
+            out = mulmod(out, f)
+        return out
     nb = max(1, math.ceil(rule.k / 8))
     out = np.zeros_like(f)
     for b in range(nb):
@@ -183,8 +198,9 @@ def commit_ops(rule: Rule, nP: int) -> float:
         return nP * e
     if rule.agg == "lin":
         return nP * (e + 1)
-    if rule.agg == "sq":
-        return nP * (e + 2)
+    if degree(rule):
+        dg = degree(rule)
+        return nP * (e + dg.bit_length() - 1 + bin(dg).count("1") - 1 + 1)
     nb = max(1, math.ceil(rule.k / 8))
     return nP * (e + 2 * nb + (nb - 1) + 1)
 
@@ -355,7 +371,7 @@ def bsketch(rule, inst, d):
         return None
     cost, bits, _ = res
     cost = min(cost, inst.S * four_russians_cost(1, inst.q)[0] + len(d.P) * TRANSPOSE_WB)
-    g0, g1 = (0, 1) if rule.agg in ("lin", "sq") else (int(d.sbox[0]), int(d.sbox[1]))
+    g0, g1 = (0, 1) if rule.agg == "lin" or degree(rule) else (int(d.sbox[0]), int(d.sbox[1]))
     rbits = (d.r[:, None] >> np.arange(32)[None, :]) & 1
     pop = np.einsum("ijt,tb->ijb", bits, rbits)
     dot = (pop << np.arange(32)[None, None, :]).sum(axis=2) & M32
@@ -364,27 +380,37 @@ def bsketch(rule, inst, d):
     return cost, s, "bitslice + b1 IMMA on r's bit planes"
 
 
+def power(x, e):
+    out = np.ones_like(x)
+    for _ in range(e):
+        out = mulmod(out, x)
+    return out
+
+
 def expand(rule, inst, d):
-    """A squared sketch over separable words w_t = R_t(i) + C_t(j): Σ r R² per row, Σ r C² per column, and the cross
-    term 2 Σ_t (r_t R_t)·C_t, one u8 IMMA chain a digit weight (digit pairs a + b ≤ 3) of depth (a + b + 1)·|P|."""
-    if inst.coins != "sep" or inst.data != "zero" or inst.rec != "add" or rule.agg != "sq" or rule.k != 32:
+    """A power sketch Σ r_t w_t^D over separable words w_t = R_t(i) + C_t(j): Σ r R^D per row, Σ r C^D per column, and
+    each cross term binom(D, a)·Σ_t (r_t R_t^a)·C_t^(D−a), 0 < a < D, as u8 IMMA chains, one a digit weight (digit pairs
+    of weight ≤ 3) of depth (weight + 1)·|P|."""
+    D = degree(rule)
+    if inst.coins != "sep" or inst.data != "zero" or inst.rec != "add" or not D or rule.k != 32:
         return None
     h = inst.q // 2
     R = np.cumsum(d.U[:, :, :h].sum(axis=2), axis=1)[:, d.P] & M32
     C = np.cumsum(d.V[:, :, h:].sum(axis=2), axis=1)[:, d.P] & M32
     rr = d.r[None, :]
-    A = mulmod(rr, mulmod(R, R)).sum(axis=1) & M32
-    B = mulmod(rr, mulmod(C, C)).sum(axis=1) & M32
-    rR = mulmod(rr, R)
-    X = np.zeros((inst.m, inst.n), np.int64)
-    for a, b in itertools.product(range(4), range(4)):
-        if a + b <= 3:
-            X += np.einsum("it,jt->ij", (rR >> (8 * a)) & 0xFF, (C >> (8 * b)) & 0xFF) << (8 * (a + b))
-    s = (A[:, None] + B[None, :] + 2 * X) & M32
+    s = (mulmod(rr, power(R, D)).sum(axis=1)[:, None] + mulmod(rr, power(C, D)).sum(axis=1)[None, :]) & M32
+    for a in range(1, D):
+        left = mulmod(mulmod(rr, power(R, a)), math.comb(D, a) & M32)
+        right = power(C, D - a)
+        for x, y in itertools.product(range(4), range(4)):
+            if x + y <= 3:
+                s += np.einsum("it,jt->ij", (left >> (8 * x)) & 0xFF, (right >> (8 * y)) & 0xFF) << (8 * (x + y))
+        s &= M32
     nP = len(d.P)
-    cost = sum(math.ceil((w + 1) * nP / 32) for w in range(4)) + 3 + 2
-    cost += (3 * nP + 4 * nP) / CALL_N + (2 * nP + 4 * nP) / CALL_M
-    return cost, s, "row and column squares + cross-term IMMA"
+    chains = sum(math.ceil((w + 1) * nP / 32) for w in range(4)) + 3
+    cost = (D - 1) * chains + D
+    cost += ((D + 4) * nP * (D - 1) + 2 * nP) / CALL_N + ((D + 3) * nP * (D - 1) + 2 * nP) / CALL_M
+    return cost, s, f"row and column powers + {D - 1} cross-term IMMA chains"
 
 
 def copy(rule, inst, d):
@@ -461,10 +487,16 @@ def per_period(share: float) -> dict:
     return out
 
 
-RULES = [Rule(p, b, a) for p, b, a in itertools.product(
-    ["all", "every:2", "every:4", "every:8", "every:64", "final"],
-    ["32", "low:1", "low:2", "low:3", "low:4", "low:8", "high:8", "high:1"],
-    ["hash", "lin", "sq", "sbox"])]
+POSITIONS = ["all", "every:2", "every:4", "every:8", "every:64", "final"]
+BITS = ["32", "low:1", "low:2", "low:3", "low:4", "low:8", "high:8", "high:1"]
+AGGS = ["hash", "lin", "sq", "sbox"]
+
+
+def make_rules(bits=BITS, aggs=AGGS):
+    return [Rule(p, b, a) for p, b, a in itertools.product(POSITIONS, bits, aggs)]
+
+
+RULES = make_rules()
 
 
 def instances(quick: bool):
@@ -520,11 +552,15 @@ def mutations(checks: Checks):
 def main() -> int:
     checks = Checks()
     args = [a for a in checks.args if not a.startswith("--")]
+    opts = dict(a[2:].split("=", 1) for a in checks.args if a.startswith("--") and "=" in a)
     quick = "--quick" in checks.args
     out_path = args[0] if args else "hash_counter.json"
+    rules = make_rules(opts["bits"].split(",") if "bits" in opts else BITS,
+                       opts["aggs"].split(",") if "aggs" in opts else AGGS)
+    full = rules == RULES
     results = []
     for inst in instances(quick):
-        for rule in RULES:
+        for rule in rules:
             results.append(evaluate(rule, inst))
     for name in STRATEGIES:
         ran = [r for r in results if name in r["strategies"]]
@@ -537,18 +573,19 @@ def main() -> int:
         "fold": [r for r in results if r["rule"] == "all/32/lin" and r["inst"]["data"] == "zero"],
         "random": [r for r in results if r["inst"]["data"] == "random"],
     }
-    checks.check("fold beats stock on every zero-data all/32/lin instance with q ≤ 4",
-                 all(r["cheapest"] == "fold" and r["breaks_T1"] for r in known["fold"] if r["inst"]["q"] <= 4))
     checks.check("no strategy beats honest on random data", all(not r["breaks_T1"] for r in known["random"]))
-    sep_sq = [r for r in results if r["rule"] == "all/32/sq" and r["inst"]["coins"] == "sep"]
-    checks.check("expand is cheapest on every separable all/32/sq instance",
-                 bool(sep_sq) and all(r["cheapest"] == "expand" for r in sep_sq),
-                 [(r["inst"]["S"], r["inst"]["q"], r["gap_share"]) for r in sep_sq])
     checks.check("bitslice op counts", [bitslice_ops(k) for k in (1, 2, 3, 4)] == [1, 5, 12, 22],
                  [bitslice_ops(k) for k in (1, 2, 3, 4)])
-    hash32 = [r for r in results if r["rule"] == "all/32/hash"]
-    checks.check("all/32/hash costs SHA_REGS/32 writes a word (h · stock)",
-                 all(abs(r["common_hash"] - r["inst"]["S"] * 32 * WB) < 1e-6 for r in hash32))
+    if full:
+        checks.check("fold beats stock on every zero-data all/32/lin instance with q ≤ 4",
+                     all(r["cheapest"] == "fold" and r["breaks_T1"] for r in known["fold"] if r["inst"]["q"] <= 4))
+        sep_sq = [r for r in results if r["rule"] == "all/32/sq" and r["inst"]["coins"] == "sep"]
+        checks.check("expand is cheapest on every separable all/32/sq instance",
+                     bool(sep_sq) and all(r["cheapest"] == "expand" for r in sep_sq),
+                     [(r["inst"]["S"], r["inst"]["q"], r["gap_share"]) for r in sep_sq])
+        hash32 = [r for r in results if r["rule"] == "all/32/hash"]
+        checks.check("all/32/hash costs SHA_REGS/32 writes a word (h · stock)",
+                     all(abs(r["common_hash"] - r["inst"]["S"] * 32 * WB) < 1e-6 for r in hash32))
     if checks.mutations:
         mutations(checks)
     by_rule = {}
@@ -562,7 +599,7 @@ def main() -> int:
             b["cheapest"].add(r["cheapest"])
     summary = {k: {"breaks": v["breaks"], "of": v["of"], "max_gap": v["max_gap"], "h_min": min(v["h"]),
                    "h_max": max(v["h"]), "by": sorted(v["cheapest"])} for k, v in by_rule.items()}
-    json.dump({"schema": "hash-counter/v1", "rules": len(RULES), "instances": len(results) // len(RULES),
+    json.dump({"schema": "hash-counter/v1", "rules": len(rules), "instances": len(results) // len(rules),
                "breaks": len(breaks), "survive": len(survive), "summary": summary, "results": results,
                "per_period_at_1pct": per_period(T1)}, open(out_path, "w"), indent=1, default=list)
     for k, v in summary.items():
