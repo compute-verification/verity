@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.ExecSetup
 import Proofs.Flock.Soundness.E2E
+import Properties.Flock.Circuit.Keyed
 
 /-!
 # `ProgPlaces` from `Stmt.setupH`'s accept
@@ -28,10 +29,6 @@ namespace FlockSoundness.Discharge.Placed
 open Model Audit
 
 /-! ## The circuit's template instance rows -/
-
-/-- **A template instance's rows for a circuit**: `units_per_vu` copies of the unit net's rows, one shared constant
-(`Rows.stack`). -/
-noncomputable def circuitRows (c : Flock.Circuit) (hU : Built c.unit) : Rows := (Rows.ofNet hU).stack c.upv
 
 /-- A net's rows depend only on the net. -/
 theorem ofNet_eq {n n' : Flock.Net} (e : n = n') (h : Built n) (h' : Built n') :
@@ -190,23 +187,6 @@ noncomputable def progPlaces_of_layout (outs : Finset (Fin N))
 end Sites
 
 /-! ## The program of a circuit's units -/
-
-/-- The gates of `n` units with rows `R` after `k` input gates. -/
-def gates (k : ℕ) (R : Rows) : ℕ → ℕ
-  | 0 => k
-  | n + 1 => gates k R n + R.nComp
-
-theorem le_gates (k : ℕ) (R : Rows) : ∀ n, k ≤ gates k R n
-  | 0 => le_rfl
-  | n + 1 => (le_gates k R n).trans (Nat.le_add_right _ _)
-
-/-- **`n` units of rows `R` on `k` input gates**: unit `u`'s input columns read the input gates `ins u`, its constant the
-input gate `one`, which none of them reads. No unit reads another's gates. -/
-def uniform (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (hone : ∀ u c, ins u c ≠ one) :
-    (n : ℕ) → Prog (gates k R n) n
-  | 0 => .inputs k
-  | n + 1 => .snoc (uniform k R ins one hone n) R (fun c => Fin.castLE (le_gates k R n) (ins n c))
-      (Fin.castLE (le_gates k R n) one) (fun c h => hone n c (Fin.castLE_injective _ h))
 
 /-- Every unit of `uniform` has rows `R`. -/
 theorem rows_uniform (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (hone : ∀ u c, ins u c ≠ one) :
