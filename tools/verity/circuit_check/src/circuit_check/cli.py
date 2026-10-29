@@ -16,10 +16,12 @@ A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and 
 ``"mode": "by-calls"`` and names the target each callee relies on.
 
 Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
-on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates are
-warnings with counts, printed and in the report (``--fail-on-warnings`` makes them fail too).  A shard fails on its own targets'
-failures alone (whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and
-``--combine`` exits 2 when it refuses the shards it was given (`shard.read`).
+on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates, an
+unpinned or untyped lowering, and a Definition over the partition's budget are warnings, which never fail
+(``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
+under ``unchecked`` by check, with counts, and the last line counts them.  A shard fails on its own targets' failures alone
+(whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and ``--combine``
+exits 2 when it refuses the shards it was given (`shard.read`).
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
@@ -84,6 +86,12 @@ SHOWN_SECONDS = 0.1
 def _where_time_went(r: dict) -> str:
     by = [(k, v) for k, v in (r.get("seconds_by_check") or {}).items() if v >= SHOWN_SECONDS][:SHOWN_CHECKS]
     return f"{r['seconds']:.1f}s" + (": " + ", ".join(f"{k} {v:.1f}" for k, v in by) if by else "")
+
+
+def _status(r: dict) -> str:
+    """A target's word in its log line: ``FAIL`` on a failure, else ``unchecked`` while it has a warning (a property no check
+    held it to), else ``ok``."""
+    return "FAIL     " if r["failures"] else "unchecked" if r["warnings"] else "ok       "
 
 
 def _errored(r: dict) -> bool:
@@ -641,8 +649,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                     f" q_call=refused:{qc['inapplicable'].get('why')}" if "inapplicable" in qc else "")
             if r.get("mode") == BC.CHECK:
                 call += f" by-calls: {len((r.get('by_calls') or {}).get('callees', []))} callees, not lowered whole"
-            log(f"{'FAIL' if r['failures'] else 'ok  '} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
-                f"warnings={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
+            log(f"{_status(r)} {r['kind']:10s} {r['target'][:90]}  failures={len(r['failures'])} "
+                f"unchecked={len(r['warnings'])}" + (f" recomputed_across={across}" if across else "") + call + f" ({_where_time_went(r)})")
 
     todo = list(range(len(tasks))) if only is None else list(only)
     if tracing:
@@ -653,7 +661,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 out[i] = {**hit[0], "cache": {"hit": hit[1]}}
                 stats["hits"] += 1
                 if log and not everything:
-                    log(f"{'FAIL' if hit[0]['failures'] else 'ok  '} {tasks[i][0]:10s} {tasks[i][1][:90]}  reused: every input "
+                    log(f"{_status(hit[0])} {tasks[i][0]:10s} {tasks[i][1][:90]}  reused: every input "
                         f"its check read is unchanged (it took {hit[0].get('seconds', 0):.1f}s)")
             else:
                 todo.append(i)
@@ -866,7 +874,7 @@ def _structural_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     for name in rep["summary"]["failure_names"]:
         print(f"FAIL {name}")
     for w in t["warnings"]:
-        print(f"warn {w['name']}")
+        print(f"unchecked {w['name']}")
     if a.out:
         a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     rec = t.get("structural") or {}
@@ -1100,13 +1108,15 @@ def verdict(rep: dict, *, everything: bool, out: Path | None, strict: bool = Fal
     for k in stale:
         print(f"FAIL circuit_check.known lists {k}, which no longer fails: drop it")
     for k, w in s["warnings"].items():
-        print(f"warn {k}: {w['total']} over {w['definitions']} target(s)")
+        print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     across = s.get("recomputed_across") or {}
     refused = s.get("q_call_refused") or {}
     what = what or f"{len(rep['targets'])} target(s)"
-    print(f"circuit-check: {what}, {len(s['new_failures'])} new failure(s), {len(s['known_failures'])} known"
+    u = s["unchecked"]
+    print(f"circuit-check: {what}, {len(s['new_failures'])} new failure(s), {len(s['known_failures'])} known, "
+          f"{u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
           + (f", {len(across)} Boolean Call(s) recomputing {sum(across.values())} gate(s) across units (Q_word v2)" if across else "")
           + (f", {len(refused)} Definition(s) Q_call v1 refuses" if refused else "")
           + (f", report {out}" if out else ""))
