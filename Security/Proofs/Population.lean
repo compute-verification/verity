@@ -34,9 +34,9 @@ bounded-reach terms, control reach is at most `min(m w, Reach_inf) + log C(|U|, 
 most `Reach_inf + log C(|U|, ≤ m)`, `Reach_inf` the egress slots inside the incorrect units' cone.
 Equivalently, control times amplification: at most `K · α` values, `α = 1` when no secret is upstream of the egress, and
 fixed arithmetic at fixed indices amplifies one incorrect bit into `N` secret bits.
-`Work`: every skipped unit is downstream of a incorrect unit or lucky, so the skipped work is at most `m F` plus the lucky
-work, `F` bounding a unit's downstream cone, or `F · wt(B)` plus the lucky work with each cone at most `F` times its
-root's weight; a copied unit is correct work never done, so luck needs distinct units.
+`Work`: every skipped unit is downstream of an incorrect unit or lucky, so the skipped work is at most `m F` plus the
+lucky work, `F` bounding a unit's downstream cone, or `F · wt(B)` plus the lucky work with each cone at most `F` times
+its root's weight; a copied unit is correct work never done, so luck needs distinct units.
 `Instance`: a circuit's partition is a single-assignment population whose incorrect units are the partition's, and an
 acyclic one when its units are ordered along the wires (intervals in layout order, as `Q_call` v1 cuts); a unit that
 sandwiches another on a path of wires, as `Q_word` v1 can cut, makes a cycle.

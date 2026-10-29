@@ -25,11 +25,12 @@ What a checker can confirm from the dataflow alone (`Checked`):
 
 `Determinate` is the semantic property: for every choice of unit functions, every input has exactly one assignment in
 which every unit is correct. `down B` is the downstream cone of a set of units, `up O` the slots upstream of a set of
-slots, and `coneEgress O B` the egress slots inside `B`'s cone (at `B = {u}`, its size is `E(u)`, the egress a incorrect
-`u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose incorrect
-units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` incorrect units. `amp` is the
-amplification set: the egress values the secrets give once the incorrect units and their writes are fixed. `SkipsLucky` is
-work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by luck.
+slots, and `coneEgress O B` the egress slots inside `B`'s cone (at `B = {u}`, its size is `E(u)`, the egress an
+incorrect `u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`)
+and whose incorrect units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` incorrect
+units. `amp` is the amplification set: the egress values the secrets give once the incorrect units and their writes are
+fixed. `SkipsLucky` is work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by
+luck.
 
 `DynPopulation` is the object a machine trace is: its read sets depend on values, as a VM step reads memory at an
 address it holds. It is here so that the counterexamples can be stated against it.
@@ -105,7 +106,7 @@ noncomputable def writesOf (B : Finset U) : Finset S := B.biUnion P.writes
 
 open Classical in
 /-- **The egress in `B`'s cone**: the egress slots `O` that a unit downstream of `B` writes. At `B = {u}` its size is
-`E(u)`, the egress a incorrect `u` reaches, which the wiring alone determines. -/
+`E(u)`, the egress an incorrect `u` reaches, which the wiring alone determines. -/
 noncomputable def coneEgress [Fintype U] (O : Finset S) (B : Finset U) : Finset S := O ∩ P.writesOf (P.down B)
 
 open Classical in

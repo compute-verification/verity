@@ -22,5 +22,5 @@ what each policy's damage is (integrity's damaged egress, control at the public 
 `Exfiltration`: the windowed audit as a game, an adaptive prover over live-coin windows that halts at the first
 detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent draw, and deviations from
 the honest egress. `DrawPressure`: the deployed draw, `k` of the `n` units uniformly without replacement, and the draws
-that miss a incorrect set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
+that miss an incorrect set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
 through it (`Strategy.cumLag`, `Strategy.cumUpToLag`). -/

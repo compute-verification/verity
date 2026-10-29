@@ -176,7 +176,7 @@ theorem optEgressAt_subset [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P
   obtain ⟨σ, ⟨hσa, hσm⟩, rfl⟩ := he
   exact ⟨σ, ⟨hσa, (card_le_card P.incorrect_lift_subset).trans hσm⟩, rfl⟩
 
-/-- **The capacity at a incorrect set over `Option V`**: at most `(|V| + 1) ^ |writes B|` egress values. -/
+/-- **The capacity at an incorrect set over `Option V`**: at most `(|V| + 1) ^ |writes B|` egress values. -/
 theorem card_optEgress_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) {X O : Finset S} {B : Finset U} (hX : ∀ s ∈ X, s ∉ P.up O) :
     (P.optEgress f a X O B).card ≤ (Fintype.card V + 1) ^ (P.writesOf B).card := by

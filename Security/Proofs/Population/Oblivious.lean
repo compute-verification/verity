@@ -17,7 +17,7 @@ A program's trace is a `DynPopulation`. Three facts decide what the population t
   public inputs it is a circuit indexed by them; with `A = ∅` (`Oblivious`), one circuit.
 * `frozen_circuit` (Theorem O2), **a classically oblivious program compiled to its circuit**: over a set of honest runs
   that read alike, the padding is a checked population with their wiring, none of them incorrect, and no other run without
-  a incorrect unit. It judges a unit by that wiring, not the program's: `vm_frozen_reads` is the pointer machine's.
+  an incorrect unit. It judges a unit by that wiring, not the program's: `vm_frozen_reads` is the pointer machine's.
 * `eq_honest_off_downAt`, **locality needs no obliviousness**: in a time-ordered, address-closed trace, every run
   agrees with the honest one off the incorrect units' cone in the honest run's own dataflow, and `skipped_mem_downAt`
   puts every skipped unit in that cone or among the lucky. What a program lacks is that this cone be public, and
@@ -141,8 +141,8 @@ theorem pad_reads_of_oblivious [Fintype S] (ho : D.Oblivious) (σ : S → V) (u 
 /-- **Theorem O2, a classically oblivious program compiled to its circuit**: for a set `C` of honest runs that all read
 alike (every honest run, for an honestly oblivious program; those holding the public values, relative to them), the
 padding over `C` is a checked population that reads what each of them reads, has none of them incorrect, and has no other
-run without a incorrect unit holding one's inputs. Its incorrect units are its own: a run that moves a read off the honest
-wiring is incorrect in it, where in the program it need not be (`vm_leak`). -/
+run without an incorrect unit holding one's inputs. Its incorrect units are its own: a run that moves a read off the
+honest wiring is incorrect in it, where in the program it need not be (`vm_leak`). -/
 theorem frozen_circuit [Fintype U] [Fintype S] [Inhabited V] (hsa : D.SingleAssignment) {step : U → ℕ}
     (ht : D.TimeOrdered step) {C : Set (S → V)} (hC : ∀ σ ∈ C, ∀ v, D.Correct σ v)
     (hread : ∀ u, ∀ σ ∈ C, ∀ τ ∈ C, D.reads u σ = D.reads u τ) :

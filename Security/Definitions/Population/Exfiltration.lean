@@ -66,7 +66,7 @@ noncomputable def prob [Fintype Ω] (μ : Ω → ℝ) (n : ℕ) (E : (Fin n → 
   ex μ n fun cs => if E cs then 1 else 0
 
 /-- **What leaves up to and including the first detection**, over `n` windows from the history `h`: each window's leak,
-until the first window whose coin catches a incorrect unit. That window's egress left before its verdict. -/
+until the first window whose coin catches an incorrect unit. That window's egress left before its verdict. -/
 noncomputable def Strategy.cum [DecidableEq Ω] (A : Strategy Ω) : (n : ℕ) → List Ω → (Fin n → Ω) → ℝ
   | 0, _, _ => 0
   | n + 1, h, cs => A.leak h + if cs 0 ∈ A.esc h then A.cum n (cs 0 :: h) (Fin.tail cs) else 0
@@ -104,8 +104,8 @@ egress `hon` succeeds with probability above `g`. A trigger that makes the hones
 def TrustedModel {W H T : Type} [Fintype W] (ρ : W → ℝ) (S : W → T) (hon : W → H) (g : ℝ) : Prop :=
   ∀ γ : H → T, ∑ w, ρ w * (if γ (hon w) = S w then 1 else 0) ≤ g
 
-/-- The draw that catches each unit `u` independently with probability `a u`: a coin says, per unit, whether a incorrect
-`u` would be caught (drawn, and not lucky). -/
+/-- The draw that catches each unit `u` independently with probability `a u`: a coin says, per unit, whether an
+incorrect `u` would be caught (drawn, and not lucky). -/
 def indepDraw {U : Type} [Fintype U] (a : U → ℝ) (c : U → Bool) : ℝ := ∏ u, if c u then a u else 1 - a u
 
 /-- The coins of the independent draw on which the incorrect set `B` escapes: none of its units is caught. -/

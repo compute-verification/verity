@@ -12,7 +12,8 @@ public values. This file shows that nothing smaller works.
   wiring that does contains every slot a unit reads in some assignment holding the public values, apart from the
   public slots and the unit's own writes (`closureReads_sub_of_expresses`). The unit function that witnesses it
   compares the slot it may read with its value in one assignment, so a wiring without that slot cannot tell a correct
-  unit from a incorrect one. `DynPopulation.addressMap_closureReads`: for a program, the closure is `padOver`'s read sets.
+  unit from an incorrect one. `DynPopulation.addressMap_closureReads`: for a program, the closure is `padOver`'s read
+  sets.
 * `vm_not_addressedBy_inputs`: the pointer machine's read sets depend on more than all its inputs, since the pointer is
   a unit's write.
 * `vm_pad_pub_secret_up`: in its padding over the assignments holding the public zero region, every secret word is

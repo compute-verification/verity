@@ -272,7 +272,7 @@ theorem card_egress_le_coneEgress [Fintype U] [Fintype S] (hc : P.Covered) (ha :
     _ ≤ Fintype.card (P.coneEgress O B → V) := Fintype.card_le_of_injective g hg
     _ = Fintype.card V ^ (P.coneEgress O B).card := by rw [Fintype.card_fun, Fintype.card_coe]
 
-/-- **Control reach at a incorrect set**: `min(|W(B)|, |O ∩ cone(B)|)` slots' worth of choice. -/
+/-- **Control reach at an incorrect set**: `min(|W(B)|, |O ∩ cone(B)|)` slots' worth of choice. -/
 theorem card_egress_le_reach [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) (O : Finset S) (B : Finset U) :
     (P.egress f a ∅ O B).card ≤ Fintype.card V ^ min (P.writesOf B).card (P.coneEgress O B).card := by

@@ -13,9 +13,9 @@ leaking what its incorrect units' cones carry, and the deployment halting at the
 * `tail_cumPrev`, **when a caught window's egress is withheld**: at most `exp (-κ x)`, and no per-window term.
 * `ex_cumUpTo`, **the rate form**: before the `j`-th detection at most `j (ℓ + 1/κ)` leaves on average, so each failure a
   deployment tolerates costs at most `ℓ + 1/κ`.
-* `acceptProb_le_exp`: a draw that includes the units independently, unit `u` caught with probability `a u`, lets a incorrect
-  set `B` escape with probability at most `exp (-Σ_{u ∈ B} a u)`; with `a u ≥ κ E(u)` that is detection pressure for the
-  leak `Σ_{u ∈ B} E(u)`.
+* `acceptProb_le_exp`: a draw that includes the units independently, unit `u` caught with probability `a u`, lets an
+  incorrect set `B` escape with probability at most `exp (-Σ_{u ∈ B} a u)`; with `a u ≥ κ E(u)` that is detection
+  pressure for the leak `Σ_{u ∈ B} E(u)`.
 -/
 
 namespace Population.Exfil
@@ -265,8 +265,8 @@ theorem acceptProb_le_exp {U : Type} (B : Finset U) (a : U → ℝ) (ha : ∀ u 
   refine prod_le_prod₀ (fun u hu => by linarith [(ha u hu).2]) fun u _ => ?_
   linarith [Real.add_one_le_exp (-a u)]
 
-/-- **`k` independent draws**: a incorrect set each draw catches with probability `d` escapes `k` draws with probability
-`(1 - d) ^ k ≤ exp (-k d)`. -/
+/-- **`k` independent draws**: an incorrect set each draw catches with probability `d` escapes `k` draws with
+probability `(1 - d) ^ k ≤ exp (-k d)`. -/
 theorem pow_acceptProb_le_exp {d : ℝ} (hd1 : d ≤ 1) (k : ℕ) : (1 - d) ^ k ≤ Real.exp (-(k * d)) := by
   rw [show -(k * d) = k * (-d) by ring, Real.exp_nat_mul]
   exact pow_le_pow_left₀ (by linarith) (by linarith [Real.add_one_le_exp (-d)]) k

@@ -11,8 +11,8 @@ whose incorrect set has `K` units escapes with probability `C(n - K, k) / C(n, k
 * `choose_ratio_le_pow`, `choose_ratio_le_exp`: for `K ≤ n` and `k ≤ n`,
   `C(n - K, k) / C(n, k) ≤ (1 - k/n)^K ≤ exp (-k K / n)`. A draw without replacement escapes no more often than `K`
   independent draws at rate `k/n`.
-* `uniformDraw_isDist`, `sum_missing_uniformDraw`: the uniform draw is a distribution, and it misses a incorrect set `B`
-  with probability `C(n - |B|, k) / C(n, k)`.
+* `uniformDraw_isDist`, `sum_missing_uniformDraw`: the uniform draw is a distribution, and it misses an incorrect set
+  `B` with probability `C(n - |B|, k) / C(n, k)`.
 * `drawPressure`: a window that has the incorrect set `B h`, escapes only on the draws that miss it and leaks at most
   `Σ_{u ∈ B h} w u`, each `w u ≤ 1`, is under detection pressure `k/n`.
 * `draw_tail_cum`: so through `tail_cum`, with probability at least `1 - δ` what leaves up to and including the first

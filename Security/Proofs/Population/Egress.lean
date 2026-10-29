@@ -70,8 +70,8 @@ theorem eq_on_up [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P
   · obtain ⟨v, hv⟩ := hc s hsi
     exact key v s hv hs
 
-/-- **The capacity at a incorrect set**: at most `|V| ^ |writes B|` egress values, over all secrets outside the egress's
-upstream cone. -/
+/-- **The capacity at an incorrect set**: at most `|V| ^ |writes B|` egress values, over all secrets outside the
+egress's upstream cone. -/
 theorem card_egress_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) {X O : Finset S} {B : Finset U} (hX : ∀ s ∈ X, s ∉ P.up O) :
     (P.egress f a X O B).card ≤ Fintype.card V ^ (P.writesOf B).card := by
