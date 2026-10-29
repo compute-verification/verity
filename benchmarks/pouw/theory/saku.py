@@ -15,8 +15,9 @@ Checks (exact integer arithmetic, small shapes, seeded):
   dch_linear prover-chosen data (zero, random, rank 1, zero halves, repeated rows, constant, Gram, one side zero) never
              gives ncp3's segment products a linear relation beyond the total.
 Pricing (estimates, W1 units, moves free): the best SAK-U-only design, a uniform side product with final words committed;
-the zero-data gap of NCP, ssn_1l and served designs with q noise lanes a step at commit density L; the skip, L/K; and
-ncp3 at sparse L in M0, for Llama-3.2-1B's block linears and a V4-like dense layer.
+the zero-data gap of NCP, ssn_1l and served designs with q noise lanes a step at commit density L; the skip, L/K;
+what SAK-U composed with a per-word floor leaves uncertified at density L; and ncp3 at sparse L in M0, for
+Llama-3.2-1B's block linears and a V4-like dense layer, with per-period pools on N-CARD's basis.
 
 usage: saku.py [OUT.json]
 """
@@ -333,6 +334,14 @@ def served_zero_gap(L, q, depth=32, alpha=1.0):
     return max(0.0, alpha * (1.0 - H32 * math.ceil(q * L / 32 / depth) / L))
 
 
+def saku_compose(L, u):
+    """The share of stock SAK-U composed with a per-word floor u(L) leaves uncertified at a committed word every L
+    stacked lanes, when each word is charged once: SAK-U certifies the embedded instance, at most w = min(rank Q,
+    rank T) wide, and the floor the (W - w)/L words outside it, so at least (W - w)(1 - u/L) stays. ncp3 (W 3K, w K):
+    2(1 - u/L); any exact design (W - w >= K + max(rank Q, rank T) >= K): at least 1 - u/L."""
+    return {"ncp3": 2 * max(0.0, 1 - u / L), "any exact design": max(0.0, 1 - u / L)}
+
+
 def ncp3_sparse(L, m, shapes, c1):
     """ncp3 at a committed word every L stacked lanes, M0 (prover-chosen data), MAC-weighted over `shapes`: the skip
     L/K (it replaces SW-NOISE's final word, 32/K at L 32), forming 32/n + 32/m (8/n + 8/m left once C1 forces 24),
@@ -417,6 +426,8 @@ def main():
     sparse = {f"{wl} m{m} L{L}{' C1' if c1 else ''}": ncp3_sparse(L, m, shapes, c1)
               for wl, shapes in (("llama", LLAMA), ("v4 dense", V4)) for m in (64, 512, 8192)
               for L in (32, 64, 128) for c1 in (False, True)}
+    compose = {f"{fl} L{L}": saku_compose(L, u(L)) for L in (32, 64, 128, 256)
+               for fl, u in (("W1", lambda L: H32), ("BamFloor", lambda L: 64 - 1024 / L))}
     periods = {"stock work": per_period(1.0),
                "allowance, 1%": per_period(0.01),
                "skip L64, llama": per_period(skip["llama linears L64"]),
@@ -443,6 +454,8 @@ def main():
         print(f"ncp3 M0 {key:24s} T1 {100 * a['T1_credited_coins']:.3f}% (skip {100 * a['skip']:.3f}, forming "
               f"{100 * a['forming']:.3f}, lane fix {100 * a['lane_fix_U']:.3f}; route mix {100 * a['T1_mix']:.3f}%; "
               f"coins uncredited {100 * a['T1_uncredited_coins']:.2f}%)")
+    for key, v in compose.items():
+        print(f"SAK-U with the {key:13s} floor: uncertified " + ", ".join(f"{d} {100 * g:.1f}%" for d, g in v.items()))
     for key, v in periods.items():
         for scope, ps in v.items():
             print(f"per period {key:28s} {scope:10s} " + " ".join(f"{p} {g:.2e}" for p, g in ps.items()))
@@ -450,7 +463,7 @@ def main():
     if len(sys.argv) > 1:
         json.dump({"checks": checks, "pricing": pricing, "zero_data_gap": zero, "served_zero_gap": served,
                    "exact_skip_gap": skip, "exact_skip_max_L": skip_max_L, "ncp3_sparse_m0": sparse,
-                   "per_period_and_gates": periods, "pass": ok}, open(sys.argv[1], "w"), indent=1, default=float)
+                   "saku_compose": compose, "per_period_and_gates": periods, "pass": ok}, open(sys.argv[1], "w"), indent=1, default=float)
     sys.exit(0 if ok else 1)
 
 
