@@ -19,13 +19,13 @@ and the site's `Covered`: every node that can read a private frame of `c` in tra
 channel's life, is its auditor end, one of the prover's own machines, or an auditor party under `Confined p`. The
 certifier on the server's own uplink meets it, and so does the memory challenger reached in-region; a channel across a
 network the prover doesn't own meets it only with keys (`ChannelHides`). -/
-def WitnessPathPrivate {Node : Type} (s : Site Node) (c : Channel Node) : Prop :=
+def WitnessPathPrivate {Node : Type} (s : Roles Node) (c : Channel Node) : Prop :=
   PathPrivate s c.party c.readsPrivate
 
 /-- **`imprint-path-private`**: the same, only for the bytes of `c`'s one imprint exchange, over the cable between an
 onsite auditor device and its server once per device (the imprint key). The premise shrinks from every
 frame of the channel's life to that one exchange. -/
-def ImprintPathPrivate {Node : Type} (s : Site Node) (c : Channel Node) : Prop :=
+def ImprintPathPrivate {Node : Type} (s : Roles Node) (c : Channel Node) : Prop :=
   PathPrivate s c.party c.readsImprint
 
 /-- **`channel-hides`**, for one test `E` on what a reader outside the channel's ends sees: the wire bytes of the private

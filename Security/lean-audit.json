@@ -20260,9 +20260,9 @@
     "Verity.Transport.Channel.readsPrivate": "5313436fd134a1e976df015f19f6dc97afe9c0cc7986b599b066ef507372ffde",
     "Verity.Transport.Close": "d7c93db41330cd42b0ce78786b7fa4c9b469f94a756906465db82594a765e715",
     "Verity.Transport.PathPrivate": "2c3b358630ec7295be20b525d2d3d264ae6510ce304e09b0a234b80774af2d41",
-    "Verity.Transport.Site": "0dff52ce4114e5743e933c909d569df3a91d953b20a9dcf540cbc08305b8eda2",
-    "Verity.Transport.Site.Confined": "706394d4a5733f1982f20bc1dd0fa7dce8d2e1013774c034b3ad2bbb003e030c",
-    "Verity.Transport.Site.developer": "89d21e75a8610a67154581a4397568b9e8d147d9f895d3a438d0045a7d9d989b",
+    "Verity.Transport.Roles": "0dff52ce4114e5743e933c909d569df3a91d953b20a9dcf540cbc08305b8eda2",
+    "Verity.Transport.Roles.Confined": "706394d4a5733f1982f20bc1dd0fa7dce8d2e1013774c034b3ad2bbb003e030c",
+    "Verity.Transport.Roles.developer": "89d21e75a8610a67154581a4397568b9e8d147d9f895d3a438d0045a7d9d989b",
     "Verity.Transport.ViewIsRecord": "906b909f33f42b786b10c5c1b28fd1d0940bf70aea5147e255196c7c1f9befed",
     "Verity.Transport.outside": "d74c8f9eeeea572204a151d6019e69455f7f1046b30586c677b905d7f85a1ca6",
     "Verity.Transport.seen": "6365e76b633ed3a89da61e3befc26c66fd1a26435ed495ec6dc031643c88bda5"

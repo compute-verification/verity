@@ -20,7 +20,7 @@ declared sizes), when no node outside the ends can read the channel's private fr
 channel's keys hide the traffic against every test (`ChannelHides`, with `fill (record m)` the blank traffic of those
 sizes). The simulator runs the channel on that blank traffic under fresh randomness of its own. -/
 def TransportPassiveZk : Prop :=
-  ∀ {Node Ω M W Rec : Type} [Fintype Ω] [Nonempty Ω] (s : Site Node) (c : Channel Node) (C : Node → Prop)
+  ∀ {Node Ω M W Rec : Type} [Fintype Ω] [Nonempty Ω] (s : Roles Node) (c : Channel Node) (C : Node → Prop)
     (wire : M → Ω → W) (record : M → Rec) (fill : Rec → M) (η : ℝ≥0∞) (m : M),
     (WitnessPathPrivate s c ∨ ∀ E, ChannelHides wire (fun m => fill (record m)) E η m) →
     ∀ E : Option W → Prop,
@@ -32,7 +32,7 @@ one of the prover's own machines or a `Confined` party (`ImprintPathPrivate s c`
 ends of the exchange's random bytes `(R_D, R_S)`, jointly with the root `root R_D R_S` the two ends derive, is exactly a
 simulator's from no record: no bytes, beside the root of a fresh exchange. -/
 def ImprintRootHidden : Prop :=
-  ∀ {Node R K : Type} [Fintype R] [Nonempty R] (s : Site Node) (c : Channel Node) (C : Node → Prop)
+  ∀ {Node R K : Type} [Fintype R] [Nonempty R] (s : Roles Node) (c : Channel Node) (C : Node → Prop)
     (root : R → R → K), ImprintPathPrivate s c →
     ∀ E : Option (R × R) × K → Prop,
       ViewIsRecord (Ω' := R × R) (fun x : R × R => (seen (outside s c.party C) c.readsImprint x, root x.1 x.2))

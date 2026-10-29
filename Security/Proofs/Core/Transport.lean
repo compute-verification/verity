@@ -43,7 +43,7 @@ theorem seen_some {Node W : Type} {C reads : Node → Prop} (h : ∃ o, C o ∧ 
     seen C reads w = some w := by
   simp [seen, h]
 
-theorem not_read_of_pathPrivate {Node : Type} {s : Site Node} {party : Node} {reads : Node → Prop} (C : Node → Prop)
+theorem not_read_of_pathPrivate {Node : Type} {s : Roles Node} {party : Node} {reads : Node → Prop} (C : Node → Prop)
     (hp : PathPrivate s party reads) : ¬ ∃ o, outside s party C o ∧ reads o := by
   rintro ⟨o, ⟨_, hne, hd, hconf⟩, hr⟩
   rcases hp o hr with h | h | h
@@ -94,18 +94,18 @@ def cable : Channel Bool where
   readsPrivate := fun o => o = false ∨ o = true
   readsImprint := fun o => o = false ∨ o = true
 
-/-- The cable's site: the server (`true`) is the prover's, and no other party is on it. -/
-def cableSite : Site Bool where
+/-- The cable's roles: the server (`true`) is the prover's, and no other party is on it. -/
+def cableRoles : Roles Bool where
   developer := fun o => o = true
   Confined := fun _ => False
 
-theorem cable_witnessPathPrivate : WitnessPathPrivate cableSite cable := by
+theorem cable_witnessPathPrivate : WitnessPathPrivate cableRoles cable := by
   intro o _
-  cases o <;> simp [cable, cableSite]
+  cases o <;> simp [cable, cableRoles]
 
-theorem cable_imprintPathPrivate : ImprintPathPrivate cableSite cable := by
+theorem cable_imprintPathPrivate : ImprintPathPrivate cableRoles cable := by
   intro o _
-  cases o <;> simp [cable, cableSite]
+  cases o <;> simp [cable, cableRoles]
 
 /-- A one-bit pad hides one bit against every test, at `η = 0`. -/
 theorem pad_hides (E : Bool → Prop) (m : Bool) :
@@ -123,28 +123,28 @@ def tapped : Channel (Fin 3) where
   readsPrivate := fun _ => True
   readsImprint := fun _ => True
 
-/-- The tapped cable's site: the server is the prover's, and no party is `Confined`. -/
-def tappedSite : Site (Fin 3) where
+/-- The tapped cable's roles: the server is the prover's, and no party is `Confined`. -/
+def tappedRoles : Roles (Fin 3) where
   developer := fun o => o = 1
   Confined := fun _ => False
 
-theorem tap_outside : outside tappedSite tapped.party (fun o => o = 2) 2 :=
-  ⟨rfl, by decide, by simp [tappedSite], by simp [tappedSite]⟩
+theorem tap_outside : outside tappedRoles tapped.party (fun o => o = 2) 2 :=
+  ⟨rfl, by decide, by simp [tappedRoles], by simp [tappedRoles]⟩
 
 theorem tap_sees {W : Type} (w : W) :
-    seen (outside tappedSite tapped.party (fun o => o = 2)) tapped.readsPrivate w = some w ∧
-      seen (outside tappedSite tapped.party (fun o => o = 2)) tapped.readsImprint w = some w :=
+    seen (outside tappedRoles tapped.party (fun o => o = 2)) tapped.readsPrivate w = some w ∧
+      seen (outside tappedRoles tapped.party (fun o => o = 2)) tapped.readsImprint w = some w :=
   ⟨seen_some ⟨2, tap_outside, trivial⟩ w, seen_some ⟨2, tap_outside, trivial⟩ w⟩
 
-theorem tapped_not_private : ¬ WitnessPathPrivate tappedSite tapped ∧ ¬ ImprintPathPrivate tappedSite tapped := by
-  constructor <;> intro h <;> rcases h 2 trivial with h | h | h <;> simp_all [tapped, tappedSite]
+theorem tapped_not_private : ¬ WitnessPathPrivate tappedRoles tapped ∧ ¬ ImprintPathPrivate tappedRoles tapped := by
+  constructor <;> intro h <;> rcases h 2 trivial with h | h | h <;> simp_all [tapped, tappedRoles]
 
 /-- `TransportPassiveZk`'s conclusion on the tapped cable carrying its bit in the clear (`wire m ω = m`, an empty
 record, blank traffic `false`), for the bit `true`: the tap sees it, so no simulator matches at any `η < 1`. -/
 theorem clear_fails {η : ℝ≥0∞} (hη : η < 1) :
     ¬ ViewIsRecord (Ω := Unit) (Ω' := Unit)
-      (fun _ => seen (outside tappedSite tapped.party (fun o => o = 2)) tapped.readsPrivate true) (fun _ => ())
-      (fun _ _ => seen (outside tappedSite tapped.party (fun o => o = 2)) tapped.readsPrivate false)
+      (fun _ => seen (outside tappedRoles tapped.party (fun o => o = 2)) tapped.readsPrivate true) (fun _ => ())
+      (fun _ _ => seen (outside tappedRoles tapped.party (fun o => o = 2)) tapped.readsPrivate false)
       (fun v => v = some true) η := by
   rintro ⟨h, -⟩
   rw [value_bind_draw, value_map_draw_true (fun _ => (tap_sees _).1),
@@ -155,7 +155,7 @@ theorem clear_fails {η : ℝ≥0∞} (hη : η < 1) :
 fresh root matches it. -/
 theorem imprint_read_fails :
     ¬ ViewIsRecord (Ω := Bool × Bool) (Ω' := Bool × Bool)
-      (fun x => (seen (outside tappedSite tapped.party (fun o => o = 2)) tapped.readsImprint x, xor x.1 x.2))
+      (fun x => (seen (outside tappedRoles tapped.party (fun o => o = 2)) tapped.readsImprint x, xor x.1 x.2))
       (fun _ => ()) (fun _ x' => ((none : Option (Bool × Bool)), xor x'.1 x'.2))
       (fun v => ∃ x : Bool × Bool, v.1 = some x ∧ v.2 = xor x.1 x.2) 0 := by
   rintro ⟨h, -⟩
