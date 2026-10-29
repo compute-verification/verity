@@ -1,7 +1,7 @@
 # `pouw_window`: PoUW's audit window as executable Lean
 
 The port of `verity/core/protocols/pouw/window.py`, on Lean core and PoUW's commitments (`pouw_commit`: its frame-v3-sha512
-domains, C-Flock's SHA-512 and hm96, core's tagged identity), and the proof system's challenger for a live window's
+domains, Flock's SHA-512 and hm96, core's tagged identity), and the proof system's challenger for a live window's
 coins (`core_sampled_proofs`). Once its properties are proven it moves, as a
 pure move, to the same path under `verity/core/`; the Python keeps running until then.
 
@@ -31,8 +31,8 @@ fixed length, ignore_eos at each slot's public max_tokens, which the window regi
 each function to Python on Hypothesis-drawn inputs, refusals included: `tests/test_difftest.py` to `window.py`, and
 `tests/test_lanes.py` `PouwWindow.Lanes` to `h1zy.statement_ports` and `h1tile.Layout`, also at the served 32 × 32 leaf at
 K = 448, 4096 and 14336 and at the sidecar's 8 × 16 at K = 64, every lane and the combine, and its input wires to the
-circuits C-Flock lowers the statements to (the combine's at the sidecar's leaf, at 8 × 16 and at the served leaf at K = 448,
-with its circuit file's META; the sidecar's lane, which C-Flock refuses; and, with `VERITY_POUW_WINDOW_LOWERED_LANES=1`,
+circuits Flock lowers the statements to (the combine's at the sidecar's leaf, at 8 × 16 and at the served leaf at K = 448,
+with its circuit file's META; the sidecar's lane, which Flock refuses; and, with `VERITY_POUW_WINDOW_LOWERED_LANES=1`,
 two lanes' circuit files), and `tests/test_known_rows.py` `PouwWindow.KnownRows` (of record) to the served path's stand-in
 known rows, `benchmarks/pouw/h1_lanes/run.py`'s `known_rows`.
 
