@@ -318,7 +318,7 @@ at peak, ζ̄ = ζ_ref/MFU₀.
 
 ### Part 4: so reaching the target takes more fleet-time
 
-The **slowdown** ρ(𝒢, η) is T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), T_𝒢(η; ·) the least fleet-time at which some computation in the set
+The **slowdown** slowdown(𝒢, 𝒜, η) is T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), T_𝒢(η; ·) the least fleet-time at which some computation in the set
 reaches the target with probability above η, and **fleet-time** elapsed time times Φ, registered and unregistered.
 
 **Remote.** A covered successful computation carries a weighted count of at least Ω_* (part 1; with every weight 1,
@@ -336,7 +336,7 @@ The denominator is measured: C_ref is the fleet-time at which the reference trai
 probability above η, which takes a seed sweep, not one run. It stands in for T_𝒢(η; 𝓕), which it bounds from above,
 so the bound is relative to that reference. If f is bounded uniformly over 𝒜 (the utilization policy bounds it),
 
-$$ \rho \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
+$$ \mathrm{slowdown}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
 
 and the bound holds except with probability η + δ: an accepted run reaches the target in less fleet-time only if it
 lacks the covered structure, which coverage allows below T_max with probability at most η
@@ -344,7 +344,7 @@ lacks the covered structure, which coverage allows below T_max with probability 
 (part 3). Let Ω_ref be the reference's count in the same convention and ζ_ref = Ω_ref/C_ref. Under the required-count
 floor Ω_* ≥ Ω_ref/α,
 
-$$ \rho \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, \qquad
+$$ \mathrm{slowdown}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, \qquad
    y = \frac{q}{c\,\zeta_{\mathrm{ref}}}\,(1 - f), $$
 
 y the yield of correct credited work, as a share of the reference's rate. The ratio ζ̄/ζ_ref keeps the reference's achieved rate apart from the ceiling on every
