@@ -34,6 +34,9 @@ The forced mask (FM) computes hm96-sha512/v1's mask `M_key · y` over GF(2) as a
 * `fm_mask`: every product is `±128 · m · y`, so the int32 sum, read modulo `2^32` as the accumulator holds it, has
   bits 0..6 zero and bit 7 equal to the XOR of the row's `m && y`. Every k32 partial is a prefix's sum, so `fm_mask`
   holds for each.
+* `dot_distinct`, `dot_nonconstant`: a partial is `dot c y` for its coefficient vector `c`; partials with distinct
+  vectors are distinct functions of `y`, and a partial with a nonzero coefficient is not a constant. That the pinned
+  key's vectors are distinct and nonzero is a finite fact, checked on the CPU (`fm-distinct`).
 
 Probability is the reader's step: an involution is a bijection, so a uniform `F` maps to a uniform `φ F`.
 -/
@@ -254,6 +257,58 @@ theorem fm_mask (l : List (Fin 8 × Bool × Bool)) :
   obtain ⟨t, ht, hp⟩ := fm_acc l
   rw [ht]
   constructor <;> omega
+
+/-- A committed partial's value as a function of the salt bits `y`: its int coefficients `c` against `y`. -/
+def dot : List Int → List Bool → Int
+  | c :: cs, y :: ys => c * bit y + dot cs ys
+  | _, _ => 0
+
+theorem dot_replicate_false : ∀ c : List Int, dot c (List.replicate c.length false) = 0
+  | [] => rfl
+  | _ :: cs => by
+    simp only [List.length_cons, List.replicate_succ, dot, bit, Int.mul_zero, Int.zero_add]
+    exact dot_replicate_false cs
+
+theorem dot_replicate_zero : ∀ (n : Nat) (y : List Bool), dot (List.replicate n 0) y = 0
+  | 0, y => by cases y <;> rfl
+  | n + 1, [] => rfl
+  | n + 1, _ :: ys => by
+    simp only [List.replicate_succ, dot, Int.zero_mul, Int.zero_add]
+    exact dot_replicate_zero n ys
+
+/-- Two partials with distinct coefficient vectors differ at some salt. -/
+theorem dot_distinct : ∀ c c' : List Int, c.length = c'.length → c ≠ c' →
+    ∃ y : List Bool, y.length = c.length ∧ dot c y ≠ dot c' y
+  | [], [], _, h => absurd rfl h
+  | [], _ :: _, hl, _ => by simp at hl
+  | _ :: _, [], hl, _ => by simp at hl
+  | a :: cs, a' :: cs', hl, h => by
+    have hl' : cs.length = cs'.length := by simpa using hl
+    by_cases hc : cs = cs'
+    · subst hc
+      have ha : a ≠ a' := fun e => h (by rw [e])
+      refine ⟨true :: List.replicate cs.length false, by simp, ?_⟩
+      simp only [dot, bit, Int.mul_one]
+      rw [dot_replicate_false]
+      omega
+    · obtain ⟨ys, hy, hd⟩ := dot_distinct cs cs' hl' hc
+      refine ⟨false :: ys, by simp [hy], ?_⟩
+      simp only [dot, bit, Int.mul_zero, Int.zero_add]
+      exact hd
+
+/-- A partial with a nonzero coefficient is not a constant of the salt. -/
+theorem dot_nonconstant (c : List Int) (h : ∃ a, a ∈ c ∧ a ≠ 0) :
+    ∃ y : List Bool, y.length = c.length ∧ dot c y ≠ dot c (List.replicate c.length false) := by
+  have hz : c ≠ List.replicate c.length 0 := by
+    intro e
+    obtain ⟨a, ha, hne⟩ := h
+    rw [e] at ha
+    exact hne (List.eq_of_mem_replicate ha)
+  obtain ⟨y, hy, hd⟩ := dot_distinct c (List.replicate c.length 0) (by simp) hz
+  refine ⟨y, hy, ?_⟩
+  rw [dot_replicate_false]
+  rw [dot_replicate_zero] at hd
+  exact hd
 
 end ForcedMask
 

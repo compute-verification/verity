@@ -9,7 +9,7 @@ cp "$d/ranking.md" "$OUT/" 2>/dev/null
 L=$(command -v lean || echo "$HOME/.elan/bin/lean")
 if [ -x "$L" ]; then
   cp Security/Proofs/Pouw/Salt.lean "$d/SaltAx.lean"
-  for t in pad_binding pad_unchecked_unbound pad_key_reveals pad_reduction pad_repeat_leaks pad_ideal_hiding keyed_binding keyed_ideal_hiding prefix_free_of_head keyed_repeat_leaks lane_int8 weight_int8 mac mac_parity fm_acc fm_mask; do echo "#print axioms Pouw.Salt.$t" >> "$d/SaltAx.lean"; done
+  for t in pad_binding pad_unchecked_unbound pad_key_reveals pad_reduction pad_repeat_leaks pad_ideal_hiding keyed_binding keyed_ideal_hiding prefix_free_of_head keyed_repeat_leaks lane_int8 weight_int8 mac mac_parity fm_acc fm_mask dot_distinct dot_nonconstant; do echo "#print axioms Pouw.Salt.$t" >> "$d/SaltAx.lean"; done
   "$L" --version > "$OUT/lean.log" 2>&1; "$L" "$d/SaltAx.lean" >> "$OUT/lean.log" 2>&1; echo "lean rc=$?" >> "$OUT/rc.txt"
 else echo "lean absent" >> "$OUT/rc.txt"; fi
 cat "$OUT/rc.txt"
