@@ -1423,7 +1423,8 @@
    "digest": "a414edcfc0295b87863d6548e751f60b429bf55d55cdcd9791ef92d93c02ea94"
   },
   "NetTiming.Assumptions.SampledCodeRuns": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "digest": "3a79d026cbf8be0640e5c03dc42e01bfaf030e8925695f94ab3aab28ffbc0d38"
   },
   "NetTiming.BitsCount": {
    "owner": "@network-accounting",
@@ -2781,19 +2782,10 @@
   "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": "20fc39951575ab482c9cae2fd98b1f3227bada256f634044e929818e3bd26afb",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": "cb4edaa614fa554bf28260d3f2be7a97d1fbcc281c4d5289f1ed37f1867bbb6e",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": "0b1f8a5253756424c59436b951f35d3c27d1ad0a2e780734d7ce6d21b6af784a",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeFixedClock": "83702ebbd0d402a2f16e304ab599dcff7ea1f1557615b05a358e2b3caca1257d",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeSync": "1564cbcbef1db36b50e4f1da0cc1c7b6691134430a5d88f497954467812a4ada",
-  "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "43967fd407da24e706715b2b9d480f1e32e3241ad802b706264dbc8fb5365ce0",
   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": "74ecb898b782ea54232a47453d3d84b864debb5e3aab20c6944a0d5b8446106e",
   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1": "9d968ee8cd314d2f358b07d062e218a6b24ef0ed4d1bf6669caaec94c0801c65",
   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": "7d7b2cc9599ec64be69b1be215cfba86f23ad464848daf7aef91be781b9f00ee",
   "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole": "e325afe3f888dd63288e0fe976f8db0cdf14176affccd4cfd774ddd7c84149e8",
-  "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": "39a3ef7e0a076cb6b30cd12c203a8efb190a4e1e7092c69f1647bbc6dbd6289b",
-  "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": "2b88be87e58fe0688ef1e94ad5860bf98c293951ab6fe4bafc6f32b45c155816",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled": "657c317522e5a4e8cb952c9be17bd49ad0133334cd5b944fe4c6809862fe943f",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow": "1f6fae37b38a9fb93b51665c9c08523c8e03a5ec15ac11f07ae0a3d736096581",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "d88f0cba3aa004a8778740fc4e4abff70e425bb894d4c7ce024701cb880b4a50",
@@ -2802,9 +2794,7 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
-  "NetTiming.SecurityProofs.HorizonLeakAccepted": "42d2a4cd8f85bfae4af68ef6494ced78b576913d56207b74ad57533b9beafae2",
   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f",
-  "NetTiming.SecurityProofs.PeriodLeakAccepted": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
   "NetTiming.SecurityProofs.SampledAuditAccepted": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
   "NetTiming.SecurityProofs.SampledLeakAccepted": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
   "NetTiming.SecurityProofs.SampledLeakRegistered": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
@@ -9454,79 +9444,389 @@
    "type_hash": "b6f79294b8555ef604979d0178cb818abc5d0cc785b14c56841ad73ce13321f6"
   },
   "NetTiming.Witness.ConstantRateFixedClock_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.ConstantRateFixedClock_honest :",
+    "  And (Eq NetTiming.Witness.syncOne.size 1)",
+    "    (Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxRate1 NetTiming.Witness.unitOp 4 1)",
+    "      ((NetTiming.Witness.honestI NetTiming.Witness.fxRate1 NetTiming.Witness.fxAdv1).obsRun Unit.unit 4))"
+   ],
+   "assumptions": [],
+   "type_hash": "c65357f31297265f659a1467824a352a0cbd502588a17c818d53fdbcc258119c"
   },
   "NetTiming.Witness.ConstantRate_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.ConstantRate_honest :",
+    "  Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxRate NetTiming.Witness.unitOp 4 1)",
+    "    ((NetTiming.Witness.honestI NetTiming.Witness.fxRate NetTiming.Witness.fxAdv).obsRun Unit.unit 4)"
+   ],
+   "assumptions": [],
+   "type_hash": "5a89034726c20c95dcc16bf64a927276bf0c4a184d84ba44c38c18f5012948ce"
   },
   "NetTiming.Witness.DecodableConstantRate_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.DecodableConstantRate_honest :",
+    "  And",
+    "    (NetTiming.AcceptedUpTo NetTiming.Witness.fxRate NetTiming.Witness.fxHonestI.op 4",
+    "      (NetTiming.Witness.fxHonestI.obsRun Unit.unit 4))",
+    "    (And (NetTiming.Regenerates NetTiming.Witness.fxHonestI.certifier fun x o => o)",
+    "      (NetTiming.JitterBounded NetTiming.Witness.fxHonestI.certifier 1))"
+   ],
+   "assumptions": [],
+   "type_hash": "80712aa6b5c913349c6be2ba002ee5fc0e4afc910f795c840e37fe02ed811f60"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul (Fintype.card Bool) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "314b9bb33008b02d83d63a3f451e3341f7a8657f63a2ffab57cc2bfb61259d3f"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll (instHMul.hMul 2 2) 1).encard",
+    "      (instHMul.hMul (Fintype.card Bool)",
+    "          (instHPow.hPow (instHMul.hMul NetTiming.Witness.syncTwo.size (instHPow.hPow 1 2)) 2)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "d047b18317b0a68c61d103874417fc6943e7de8916040afe3ea88cbb906ed852"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul (Fintype.card Bool) (instHPow.hPow NetTiming.Witness.syncTwo.size (instMinNat.min 2 2)))",
+    "          (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "f0ff631c199ac878340667773bbeb68f120b9c1b9098a2cbf51e0886dab8a07e"
   },
   "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul (instHMul.hMul (Fintype.card Bool) (instHPow.hPow NetTiming.Witness.syncTwo.size 2))",
+    "          (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "f08aceb65083d6d0443f92da22e620ab4a8581f68f4a58579089d8be8a49a394"
   },
   "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul (Fintype.card Bool) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "314b9bb33008b02d83d63a3f451e3341f7a8657f63a2ffab57cc2bfb61259d3f"
   },
   "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 4 1).encard",
+    "      (instHMul.hMul (instHMul.hMul (Fintype.card Bool) (instHPow.hPow (Fintype.card NetTiming.Witness.syncTwo.Elem) 2))",
+    "          (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "0962efdac04fad9e8b35f65a55760bf7bb8095a7b56db72b9eb6fc68a6388b77"
   },
   "NetTiming.Witness.EncardAccSeqsSampledLe_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest :",
+    "  And (NetTiming.Witness.notLay.Fits NetTiming.Witness.sampProg 1)",
+    "    (And",
+    "      (instLEENat.le",
+    "        (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
+    "            Finset.instEmptyCollection.emptyCollection fun x => Bool.false).encard",
+    "        (instHPow.hPow 2 1).cast)",
+    "      (And",
+    "        (∀ (F : Finset Nat),",
+    "          SetLike.instMembership.mem",
+    "              (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)) F →",
+    "            instLENat.le (NetTiming.faultyBits NetTiming.Witness.sampProg NetTiming.Witness.sampPart F) 3)",
+    "        (And",
+    "          (SetLike.instMembership.mem",
+    "            (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4))",
+    "            (Finset.instSingleton.singleton 0))",
+    "          (Set.instMembership.mem",
+    "            (NetTiming.AccSeqsSampled NetTiming.Witness.sampProg NetTiming.Witness.sampPart NetTiming.Witness.sampDesign",
+    "              NetTiming.Witness.notLay 1",
+    "              (NetTiming.AsReg NetTiming.Witness.sampProg NetTiming.Witness.notLay 1",
+    "                Finset.instEmptyCollection.emptyCollection fun x => Bool.false)",
+    "              (1 / 4) (fun x x_1 => List.cons Bool.false List.nil) 1)",
+    "            (List.cons NetTiming.Witness.obs1 List.nil)))))"
+   ],
+   "assumptions": [],
+   "type_hash": "be1c6294334e0ee9ef76a316a5bd397dc428c589fe029c33f16827bc649bb99a"
   },
   "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le (NetTiming.Witness.AccSeqsAt NetTiming.Witness.acceptAll 1 1).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul",
+    "            (instHMul.hMul (instHPow.hPow 2 1)",
+    "              (NetTiming.faultySets NetTiming.Witness.sampDesign NetTiming.Witness.sampPart (1 / 4)).card)",
+    "            (instHPow.hPow 2 3))",
+    "          (instHPow.hPow 1 1)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "d31975fa452b62cb6fa22da1c8e99b234f01907a1eac379e0237c4e33ca4ae5f"
   },
   "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z (instHMul.hMul 2 2))) z)).encard",
+    "      (instHMul.hMul (Fintype.card Bool)",
+    "          (instHPow.hPow (instHMul.hMul NetTiming.Witness.syncTwo.size (instHPow.hPow 1 2)) 2)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "d2217052622a35e44c81cac9df51b7a23688e12e44e5f4a41b5c6545f555ea3e"
   },
   "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul (Fintype.card Bool) (instHPow.hPow NetTiming.Witness.syncTwo.size (instMinNat.min 2 2)))",
+    "          (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "b8e54d4617270036bb7954a0ab3eab316492d350f92e4c1a009ed4b582d3f5dd"
   },
   "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
+    "      (instHMul.hMul",
+    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
+    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
+    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "30e109ae8259ca7d82a73dcd193752728ce1878ae671d355dda7f9589ea5ae14"
   },
   "NetTiming.Witness.EncardIngressDecodableLe_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.wireRun z 4)) z)).encard",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "b95457a291b12d33f669614bccaf6dfe6214db96dd065740ee82410d83871691"
   },
   "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
+    "      (instHMul.hMul",
+    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
+    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
+    "        (instHPow.hPow",
+    "            (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2))",
+    "            2).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "e8473720806791eb3c1b3d6e5b74613ffd871cc6942e9d2f1c7c0350f5852e61"
   },
   "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 4)) z)).encard",
+    "      (instHMul.hMul",
+    "        (Set.instInsert.insert (fun x => List.cons (List.cons Bool.true List.nil) List.nil)",
+    "            (Set.instSingletonSet.singleton fun x => List.cons (List.cons Bool.false List.nil) List.nil)).encard",
+    "        (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast))"
+   ],
+   "assumptions": [],
+   "type_hash": "e9804570257e38245ab7abda1ff623ed8c62dc48cdae3a17112633c3b5b6c2b7"
   },
   "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2)))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z (instHMul.hMul 2 2))) z)).encard",
+    "      (instHPow.hPow",
+    "          (instHMul.hMul (Finset.univ.prod fun _ℓ => instHPow.hPow (instHAdd.hAdd 1 1) 2) (instHPow.hPow 1 2)) 2).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "6d89ee450eb36c97668699bef9f3405a3da163844d9b219f6c372da9b68c56bf"
   },
   "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (Set.ofPred fun z =>",
+    "          And (NetTiming.Witness.acceptAll (NetTiming.Witness.fxLeakI.obsRun z 4))",
+    "            (Eq (NetTiming.Witness.fxLeakDec (NetTiming.Witness.fxLeakI.obsRun z 4)) z)).encard",
+    "      (instHMul.hMul (instHPow.hPow (Finset.univ.prod fun _ℓ => instHAdd.hAdd 1 1) 4) (instHPow.hPow 1 4)).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "3eafe73f21390c2e120cb879038944495ab8c62d872d7928f2404a1207bbf828"
   },
   "NetTiming.Witness.FixedClock_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.FixedClock_honest :",
+    "  Set.instMembership.mem (NetTiming.AccSeqs NetTiming.Witness.fxFixed NetTiming.Witness.unitOp 4 1)",
+    "    ((NetTiming.Witness.honestI NetTiming.Witness.fxFixed NetTiming.Witness.fxAdvU).obsRun Unit.unit 4)"
+   ],
+   "assumptions": [],
+   "type_hash": "52bace21057536585da9c8e52d5d018cc4865228a0d2781e1f61ef75e4d7be09"
   },
   "NetTiming.Witness.HorizonLeakAccepted_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.HorizonLeakAccepted_honest :",
+    "  And",
+    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
+    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
+    "        (NetTiming.Witness.fxRows.tapRecord NetTiming.Witness.fxRows_wf 4 1).fits s)",
+    "    (∀ (s : NetTiming.WardenSchedule (Fin 3)),",
+    "      Set.instMembership.mem (Set.instSingletonSet.singleton NetTiming.fxQueueSched) s →",
+    "        ∀ (c : Fin 3), instLENat.le (s.cells c) 6)"
+   ],
+   "assumptions": [],
+   "type_hash": "aa2705a63c06e827f3d2a4ec5ef63876b0a75393d352cc66b3fc007e665f8a48"
   },
   "NetTiming.Witness.HorizonLeakAccepted_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Pr fun x =>",
+    "        And (∀ (x : Fin 1), True)",
+    "          (Not",
+    "            (NetTiming.HorizonGood (fun x => NetTiming.Witness.notLay) (fun x => 1)",
+    "              (fun x => Finset.instEmptyCollection.emptyCollection) 1 (fun x => NetTiming.Witness.notStmt)",
+    "              (fun x => NetTiming.Witness.notPart) (fun x x_1 => Bool.false) (fun x x_1 x_2 => List.nil) 1",
+    "              (fun x => Finset.instSingleton.singleton 0) fun x => List.cons NetTiming.Witness.obs0 List.nil)))",
+    "      (instHAdd.hAdd (instHAdd.hAdd (1 / 2) (Finset.univ.sum fun x => 0)) (Finset.univ.sum fun x => 0)))"
+   ],
+   "assumptions": [],
+   "type_hash": "4893547305821d9ef8ce311d2407ecdb95975441e14d2d13d549fb971669b5cf"
   },
   "NetTiming.Witness.Ingress_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.Ingress_honest :",
+    "  And (NetTiming.StatusComplete 4 (NetTiming.Witness.inI.obsRun Unit.unit 4))",
+    "    (And (NetTiming.Packed NetTiming.Witness.inI.certifier)",
+    "      (And (NetTiming.Allocated NetTiming.Witness.inI.certifier fun x => 1)",
+    "        (And (NetTiming.JitterBounded NetTiming.Witness.inI.certifier 1)",
+    "          (NetTiming.Regenerates NetTiming.Witness.inI.certifier fun x o => o))))"
+   ],
+   "assumptions": [],
+   "type_hash": "1983554e44d844245a8190d2baffabbee3dac123ce3bb9672a2ba41957a174a2"
   },
   "NetTiming.Witness.PeriodLeakAccepted_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PeriodLeakAccepted_honest (h : NetTiming.Assumptions.SampledCodeRuns) :",
+    "  And",
+    "    (Exists fun c =>",
+    "      And (Exists fun x => Claims.Sampling.Scope (SamplingDeploy.deploy Flock.Readable.relation c) x)",
+    "        (And (Claims.Sampling.KS FlockDeploy.sha512 (SamplingDeploy.deploy Flock.Readable.relation c))",
+    "          (And",
+    "            (Claims.Flock.ListWithin (SamplingDeploy.deploy Flock.Readable.relation c).flock.len",
+    "              (SamplingDeploy.deploy Flock.Readable.relation c).flock.enc",
+    "              (SamplingDeploy.deploy Flock.Readable.relation c).flock.θ",
+    "              (SamplingDeploy.deploy Flock.Readable.relation c).flock.decode)",
+    "            (Claims.Sampling.Commitment.Binds FlockDeploy.sha512",
+    "              (SamplingDeploy.deploy Flock.Readable.relation c).commit))))",
+    "    ((NetTiming.Witness.fxRows.tapRecord NetTiming.Witness.fxRows_wf 4 1).fits NetTiming.fxQueueSched)"
+   ],
+   "assumptions": ["NetTiming.Assumptions.SampledCodeRuns"],
+   "type_hash": "88730b7230944b2cf64f0dfce2cf0b8896b2e6c32139f6cd4f70f461c92bb6b9"
   },
   "NetTiming.Witness.PeriodLeakAccepted_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.PrBad FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "        (NetTiming.RLeakTap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse",
+    "          (NetTiming.Witness.tapD Unit).partition 1 1 1 (fun x => NetTiming.Witness.notLay) (fun x => 1) (1 / 8)",
+    "          (fun s => NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection) 1",
+    "          fun x => NetTiming.Witness.tapOps)",
+    "        (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) List.nil",
+    "        Claims.Witness.silentP)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.tapD Unit) (1 / 8) List.nil)",
+    "            (instHMul.hMul (Claims.Sampling.γ (NetTiming.Witness.tapD Unit) List.nil)",
+    "                (Claims.PrB FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V Claims.Witness.silentP List.nil)).sqrt)",
+    "          (Claims.Finder.Pr FlockDeploy.sha512",
+    "            (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "              (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil) Unit",
+    "              Claims.Witness.silentP List.nil)))",
+    "        (Claims.Finder.Pr FlockDeploy.sha512",
+    "          (NetTiming.Btap FlockDeploy.sha512 (NetTiming.Witness.tapD Unit).V",
+    "            (Claims.Sampling.E (NetTiming.Witness.tapD Unit) fun x => List.cons Unit.unit List.nil)",
+    "            (NetTiming.Witness.tapD Unit).commit (NetTiming.Witness.tapD Unit).parse (fun x => NetTiming.Witness.tapOps)",
+    "            Unit Claims.Witness.silentP List.nil))))"
+   ],
+   "assumptions": [],
+   "type_hash": "6d5989bb9928b43e730b8de9d106321e4bf69b6f3c022bb3cc664608992a6bd5"
   },
   "Pous.Claims.StreamedWipeMeetsDisk_fails": {
    "owner": "@memory-accounting",
@@ -13476,24 +13776,18 @@
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.SquaringUnits": {
-    "instLENat.le (instHAdd.hAdd s 2) n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le (instHPow.hPow (instHMul.hMul 249 (instHPow.hPow 256 s)) 2) p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le (instHAdd.hAdd s 2) n": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.UnitsFooling": {
     "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.HMu.PersistentOneWord": {
     "∀ (n : Nat) (x : W), Function.Injective fun s => step n s x": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -13611,21 +13905,16 @@
    },
    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.PooledDraw": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
     "instLENat.le T.passes P": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14023,6 +14312,13 @@
     "∀ (e : Prod (Bandwidth.Store N b) (Pous.Bits n)) (O O' : Bandwidth.Oracle N b h) (u : Nat), Eq (Accounting.portSignals S link sidePorts { fst := e, snd := O } u) (Accounting.portSignals S link sidePorts { fst := e, snd := O' } u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (E : Bandwidth.Store N b) (z : Pous.Bits n) (O : Bandwidth.Oracle N b h), Eq (ζ ((S { fst := { fst := E, snd := z }, snd := O }).content X t₀) (List.map (fun i => (S { fst := { fst := E, snd := z }, snd := O }).crossing (Set.instCompl.compl (Finset.instSetLike.coe X)) (Finset.instSetLike.coe X) (Set.instSingletonSet.singleton (instHAdd.hAdd t₀ i))) (List.range T))) z": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Flock.SecurityProofs.DeltaPubDeployed": {
+    "instLENat.le n (instHMul.hMul K₀ kd)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le W (instHPow.hPow 2 40)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le p (instHDiv.hDiv 1 (instHPow.hPow 2 200))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le t' (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Flock.SecurityProofs.EndToEnd": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14203,6 +14499,18 @@
     "Eq pub.n n": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.SampledKSLiveV5": {
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmIn.parse D.unroll) (Except.ok pi)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -14987,11 +15295,9 @@
     "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (run tap { fst := schedOf z, snd := srvOf z }).fst) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakRegistered": {
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.SecurityProofs.BackgroundRebuildExcluded": {
@@ -15184,8 +15490,7 @@
     "Finset.instPartialOrder.le U (Finset.range N)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
-    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FreedOfFloor": {
     "∀ (j : Pd.J) (r : G.Res), Real.instLE.le 0 (Pd.needs j r)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15193,16 +15498,21 @@
     "Eq (Finset.univ.sum fun j => instHMul.hMul (Pd.val j) (z' j)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHSub.hSub (Pd.cap r) (instHMul.hMul W (Pd.hon r))))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHMul.hMul (instHSub.hSub 1 ε) (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul W (Pd.hon r)))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (X r))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Pouw.SecurityProofs.Dither.WorkMoment": {
+    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Pouw.SecurityProofs.Dither.WorkSound": {
     "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : P.Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
     "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15211,10 +15521,7 @@
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (o : nf.Orc) (r : nf.Root) (c : Prod (Fin nf.n) (Prod (Fin nf.n') (Fin nf.nb))) (v : Pouw.Dither.Word) (p : nf.Path), nf.opens o r c v p → And (Pouw.MerkleExtract.Opens (EquivLike.toFunLike.coe eo o) E (rD r) (pl p) v) (Eq (List.map Prod.fst (pl p)) (dirs c))": "nf.opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.EndToEnd": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15284,6 +15591,11 @@
     "Eq P.d 16": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nat.instDvd.dvd 16 (U.layout.shape u).k": "Nat.instDvd.dvd taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt t (instHDiv.hDiv (instHMul.hMul 3 (U.layout.shape u).k) 16)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.SecurityProofs.OnsiteFreed": {
+    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": {
     "Eq d.prices (Pouw.PearlC.Fp4Prices.sm120At 8 Pouw.PearlC.Fp4ScalePath.lut256)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -15405,6 +15717,10 @@
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": {
+    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "RecDeploy.lamLin2_deployed_ge": {
     "∀ (j : Nat), instLTNat.lt j (RecDeploy.nS x) → Exists fun i => Exists fun spec' => Exists fun sts' => RecDeploy.PartIn (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j) i spec' sts'": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 16)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15492,42 +15808,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.DeltaPubDeployed": {
-    "instLENat.le n (instHMul.hMul K₀ kd)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le W (instHPow.hPow 2 40)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le p (instHDiv.hDiv 1 (instHPow.hPow 2 200))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le t' (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.SampledKSLiveV5": {
-    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmIn.parse D.unroll) (Except.ok pi)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.Dither.WorkMoment": {
-    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.OnsiteFreed": {
-    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": {
-    "G.P1": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "restated on `next` after the rule was keyed from `main` (#5034, #4992, #5220), inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -20640,6 +20920,9 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -21245,7 +21528,12 @@
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
-    "NetTiming.SecurityProofs.SampledLeakRegistered"
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Definitions.Core.Accel.Card": {
@@ -23212,6 +23500,7 @@
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -23402,6 +23691,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -23530,6 +23820,7 @@
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -23631,6 +23922,7 @@
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -23976,6 +24268,7 @@
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -24712,7 +25005,8 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Definitions.Flock.Piop": {
@@ -25047,6 +25341,7 @@
     "FlockSoundness.table_sound",
     "FlockSoundness.table_sound_fast100",
     "FlockSoundness.table_sound_fast100_34_35",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -25391,6 +25686,9 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -26918,7 +27216,9 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.Ingress_honest"
    ]
   },
   "Definitions.NetworkCertifier.Assumptions.AdviceString": {
@@ -26991,7 +27291,32 @@
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
-    "NetTiming.SecurityProofs.SampledLeakRegistered"
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.ConstantRateFixedClock_honest",
+    "NetTiming.Witness.ConstantRate_honest",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
+    "NetTiming.Witness.FixedClock_honest",
+    "NetTiming.Witness.HorizonLeakAccepted_honest",
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.Ingress_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees": {
@@ -27166,7 +27491,7 @@
     "NetTiming.HorizonGood": "c15b645d28e137f1d8b30fb04afbdf7cefec7e0399a4b5c155d57b6626378c99",
     "NetTiming.LeakAt": "384ba8473c9dfde3a62acf6d4fe887c6b174f2581008ed953e7c49f597d19d55"
    },
-   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
+   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted", "NetTiming.Witness.HorizonLeakAccepted_nontrivial"]
   },
   "Definitions.NetworkCertifier.Ingress": {
    "digest": "3c3f9fa4cf192807b611a03f6164a25f5407f9f252110a4c4f827b0107065ffc",
@@ -27181,7 +27506,8 @@
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow",
-    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow"
+    "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerWindow",
+    "NetTiming.Witness.Ingress_honest"
    ]
   },
   "Definitions.NetworkCertifier.Period": {
@@ -27261,7 +27587,32 @@
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
-    "NetTiming.SecurityProofs.SampledLeakRegistered"
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.ConstantRateFixedClock_honest",
+    "NetTiming.Witness.ConstantRate_honest",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeFixedClock_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLePerWindow_nontrivial",
+    "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
+    "NetTiming.Witness.FixedClock_honest",
+    "NetTiming.Witness.HorizonLeakAccepted_honest",
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.Ingress_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
@@ -27296,7 +27647,11 @@
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
-    "NetTiming.SecurityProofs.SampledLeakRegistered"
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
@@ -27316,7 +27671,11 @@
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
-    "NetTiming.SecurityProofs.SampledLeakRegistered"
+    "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_honest",
+    "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial",
+    "NetTiming.Witness.HorizonLeakAccepted_nontrivial",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.SampledReg": {
@@ -27369,7 +27728,16 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Whole",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
-    "NetTiming.SecurityProofs.ExpectedRowCausal"
+    "NetTiming.SecurityProofs.ExpectedRowCausal",
+    "NetTiming.Witness.ConstantRateFixedClock_honest",
+    "NetTiming.Witness.ConstantRate_honest",
+    "NetTiming.Witness.DecodableConstantRate_honest",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRateWindows_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial",
+    "NetTiming.Witness.EncardAccSeqsLeSync_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRatePerWindow_nontrivial",
+    "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Tap": {
@@ -27383,7 +27751,9 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakAccepted"
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.Witness.HorizonLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Definitions.NetworkCertifier.TapRows": {
@@ -27397,7 +27767,8 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
-    "NetTiming.SecurityProofs.PeriodLeakAccepted"
+    "NetTiming.SecurityProofs.PeriodLeakAccepted",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Warden": {
@@ -27429,7 +27800,9 @@
     "NetTiming.SecurityProofs.EncardWardenViewsLe",
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
-    "NetTiming.SecurityProofs.WardenViewEqClientView"
+    "NetTiming.SecurityProofs.WardenViewEqClientView",
+    "NetTiming.Witness.HorizonLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Definitions.NetworkCertifier.WindowCharge": {
@@ -35043,6 +35416,7 @@
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -35164,6 +35538,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -35368,6 +35743,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -35534,6 +35910,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -35656,6 +36033,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -35795,6 +36173,7 @@
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -35904,6 +36283,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -36088,6 +36468,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -36239,6 +36620,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -36459,6 +36841,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -36588,6 +36971,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -36767,6 +37151,7 @@
     "FlockVBridge.sound_residualForms",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -36898,6 +37283,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -37081,6 +37467,8 @@
     "FlockVBridge.sound_shaFrom",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -37221,6 +37609,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -37444,6 +37833,7 @@
     "FlockVBridge.sound_shaFrom",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -37698,6 +38088,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -37752,6 +38143,7 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -37962,6 +38354,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38079,6 +38472,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38234,6 +38628,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38366,6 +38761,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38501,6 +38897,7 @@
     "FlockVBridge.sound_recOpen",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38663,6 +39060,7 @@
     "FlockVBridge.laid_unit",
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38788,6 +39186,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -38901,6 +39300,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -39017,6 +39417,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -39167,6 +39568,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -39316,6 +39718,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -39625,6 +40028,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -39817,6 +40221,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -39908,6 +40313,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -40036,6 +40442,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -40211,6 +40618,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -40339,6 +40747,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -40688,6 +41097,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -40851,6 +41261,7 @@
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -41033,6 +41444,7 @@
     "FlockVBridge.laid_unit",
     "FlockVBridge.recOpenNet_eq",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -41175,6 +41587,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -41415,6 +41828,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -41484,6 +41898,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -41644,6 +42059,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -41871,6 +42287,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42011,6 +42428,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42066,6 +42484,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42214,6 +42633,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42337,6 +42757,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42465,6 +42886,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42635,6 +43057,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42743,6 +43166,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42933,6 +43357,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43074,6 +43499,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43236,6 +43662,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43349,6 +43776,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43467,6 +43895,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43582,6 +44011,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43728,6 +44158,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43862,6 +44293,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -43995,6 +44427,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44104,6 +44537,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44233,6 +44667,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44386,6 +44821,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.keyProg_parse",
     "FlockVBridge.unit_check",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44503,6 +44939,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44568,6 +45005,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44700,6 +45138,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44760,6 +45199,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44821,6 +45261,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -44875,6 +45316,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -45072,6 +45514,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -45189,6 +45632,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -45320,6 +45764,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -45857,6 +46302,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -45962,6 +46408,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46023,6 +46470,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46076,6 +46524,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46132,6 +46581,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46190,6 +46640,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46255,6 +46706,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46291,6 +46743,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -46395,6 +46848,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46439,6 +46893,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46482,6 +46937,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46521,6 +46977,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46563,6 +47020,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46619,6 +47077,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46660,6 +47119,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -46696,6 +47156,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -46754,6 +47215,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46801,6 +47263,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46922,6 +47385,8 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -46993,6 +47458,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47092,6 +47558,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47144,6 +47611,8 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47203,6 +47672,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47250,6 +47720,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47310,6 +47781,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47359,6 +47831,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47410,6 +47883,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47474,6 +47948,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47534,6 +48009,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47582,6 +48058,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47665,6 +48142,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47711,6 +48189,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -47821,6 +48300,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -47979,6 +48459,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48041,6 +48522,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48088,6 +48570,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -48135,6 +48618,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49248,6 +49732,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49297,6 +49782,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49358,6 +49844,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49403,7 +49890,8 @@
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Proofs.Flock.Claims.Sampling.Leaf": {
@@ -49417,7 +49905,8 @@
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Proofs.Flock.Claims.Sampling.Path": {
@@ -49437,7 +49926,8 @@
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Proofs.Flock.Claims.Sampling.Reference.Prover": {
@@ -49453,7 +49943,11 @@
     "Claims.Sampling.Reference.revealOC": "ea7b0500ec9b8f3a89f5a626048e2b67d71097a8ea1aa69970aac767ab422128",
     "Claims.Sampling.Reference.sessErrAt": "7abee28754838c777cf0b1a926e24cdf2cdfe557d2abec9592081c63ead27b3e"
    },
-   "guarantees": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
+   "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
+   ]
   },
   "Proofs.Flock.Claims.Sampling.Universal": {
    "digest": "42315f512de440a6ae734b33dd20f9580ddeca80d3d2cec74658efc713748533",
@@ -49474,7 +49968,11 @@
     "Claims.Sampling.Univ.xAt": "76fac07e22e9e58fb8bf779ba8a2a7da217cd2ba055cb6f51f3e07c484b61e86",
     "Claims.Sampling.universalProg": "88844f74a6cf3ef2d38df95e91c6f53afbc0c2a8dc3e5e6d6d6d6435af786ee9"
    },
-   "guarantees": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
+   "guarantees": [
+    "Claims.Sampling.Binding_meets",
+    "Claims.Sampling.Binding_meets_one",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
+   ]
   },
   "Proofs.Flock.Claims.Scope.Block": {
    "digest": "1bc4a5fd2bc7fd13def78fe6b0a603e989c427988ae27d0022c2190eb50867e5",
@@ -49486,6 +49984,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -49533,6 +50032,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49605,6 +50105,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -49641,6 +50142,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -49667,6 +50169,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -49702,6 +50205,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -49826,7 +50330,8 @@
     "Claims.Witness.Recursion.ScopeMatches_fails",
     "Claims.Witness.Recursion.ZKPriv_fails",
     "Claims.Witness.Recursion.ZKStop_fails",
-    "Claims.Witness.Recursion.ZK_fails"
+    "Claims.Witness.Recursion.ZK_fails",
+    "NetTiming.Witness.PeriodLeakAccepted_nontrivial"
    ]
   },
   "Proofs.Flock.Claims.ZK.Capacity": {
@@ -50354,6 +50859,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50407,6 +50913,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50468,6 +50975,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50909,6 +51417,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -50995,6 +51504,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51080,6 +51590,7 @@
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51171,6 +51682,7 @@
     "FlockVBridge.colsHold_words",
     "FlockVBridge.sound_mul128",
     "FlockVBridge.sound_residualForms",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51280,6 +51792,7 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51366,6 +51879,7 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.chainAcc_sum",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51456,6 +51970,7 @@
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51541,6 +52056,7 @@
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51626,6 +52142,7 @@
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51717,6 +52234,7 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -51733,7 +52251,8 @@
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Proofs.Flock.Level3.Seam": {
@@ -51838,6 +52357,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -52697,6 +53217,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -53824,6 +54345,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -54639,6 +55161,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -57480,6 +58003,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -59060,6 +59584,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -59554,6 +60079,7 @@
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -59829,6 +60355,7 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -59938,6 +60465,7 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -60346,6 +60874,7 @@
     "FlockSoundness.Discharge.ZkHidden.zk_session_viewHJ_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -60449,7 +60978,8 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
-    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
+    "NetTiming.Witness.PeriodLeakAccepted_honest"
    ]
   },
   "Proofs.Flock.Soundness.Refine.Schedule": {
@@ -61235,6 +61765,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
@@ -61517,6 +62048,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -61577,6 +62109,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -61696,6 +62229,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -61758,6 +62292,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -61872,6 +62407,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -61952,6 +62488,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62004,6 +62541,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62069,6 +62607,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62154,6 +62693,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62213,6 +62753,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62288,6 +62829,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62354,6 +62896,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -62453,6 +62996,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "NetTiming.Witness.PeriodLeakAccepted_honest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
