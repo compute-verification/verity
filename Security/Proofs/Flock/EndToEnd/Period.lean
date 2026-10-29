@@ -51,14 +51,14 @@ open Classical in
 theorem accepted_wrong_le (hA3 : FlockSoundness.Assumptions.UniformRandomBytes w.Lb w.src) (τ : Strategy w.game)
     (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ w.K₀ ≤ (w.wrongSet τ).card) w.game τ ≤ w.miss + w.ks + w.link := by
-  have h := Flock.SecurityProofs.EndToEndHidden w.n w.Reg w.I w.ht w.D w.hD w.hU w.pub w.hpub w.hpt w.hscope w.kd
+  have h := Flock.SecurityProofs.EndToEndHidden w.n w.Reg w.I w.ht w.D w.hU w.pub (Flock.Sha512.hash w.I.circuitFile)
+    (Flock.Sha512.hash w.I.publicFile) (And.intro w.hD (And.intro w.hpub (And.intro rfl rfl))) w.hpt w.hscope w.kd
     w.hkd w.hdiv w.dj w.S₀ w.d₀ w.y₀ w.wr w.dg w.N w.Ω w.Lb w.src hA3 w.hTags w.hCust w.k w.Rw w.M w.hk w.hRw w.hM
-    w.ρ w.hρ w.hr w.t' w.ht' w.K₀ w.hK₀ τ w.qF w.qS hcr.1 hcr.2
-  calc prob (fun o => LiveAcceptsZK w.I o ∧ w.K₀ ≤ (w.wrongSet τ).card) w.game τ
-      ≤ w.miss + ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS (reg (w.sim τ)) + w.link := h
-    _ ≤ w.miss + w.ks + w.link := by
-        gcongr
-        exact le_iSup (fun R => ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R) _
+    w.ρ w.hρ w.hr w.K₀ w.hK₀ τ
+  refine le_trans h (add_le_add (add_le_add le_rfl ?_) ?_)
+  · exact (ksAvgPrZ_le_strict execArith hs512 (planZHJ w.dj w.y₀) w.k _ _ hcr.1).trans
+      (le_iSup (fun R => ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R) _)
+  · exact linkPrZC_le_closed execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.hρ w.ht' _ _ hcr.2
 
 open Classical in
 /-- **One sampling block's `EndToEndHiddenDrawn`**, at the strategy `τ` that plays it: accepted with a drawn unit
@@ -67,12 +67,11 @@ theorem accepted_drawnWrong_le (τ : Strategy w.game) (hcr : w.CR τ) :
     prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ ≤ w.ks + w.link := by
   have h := Flock.SecurityProofs.EndToEndHiddenDrawn w.n w.Reg w.I w.ht w.D w.hD w.hU w.pub w.hpub w.hpt w.hscope
     w.kd w.hdiv w.dj w.S₀ w.d₀ w.y₀ w.wr w.dg w.N w.Ω w.Lb w.src w.hTags w.hCust w.k w.Rw w.M w.hk w.hRw w.hM
-    w.ρ w.hρ w.hr w.t' w.ht' τ w.qF w.qS hcr.1 hcr.2
-  calc prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ
-      ≤ ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS (reg (w.sim τ)) + w.link := h
-    _ ≤ w.ks + w.link := by
-        gcongr
-        exact le_iSup (fun R => ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R) _
+    w.ρ w.hρ w.hr τ
+  refine le_trans h (add_le_add ?_ ?_)
+  · exact (ksAvgPrZ_le_strict execArith hs512 (planZHJ w.dj w.y₀) w.k _ _ hcr.1).trans
+      (le_iSup (fun R => ksAvgStrictZ (planZHJ w.dj w.y₀) w.L w.k w.qF w.qS R) _)
+  · exact linkPrZC_le_closed execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb w.hρ w.ht' _ _ hcr.2
 
 private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s : Strategy g) :
     prob (fun _ => Q) g s = if Q then 1 else 0 := by

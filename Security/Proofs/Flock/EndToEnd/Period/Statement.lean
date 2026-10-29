@@ -127,8 +127,9 @@ noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.n) :=
   wrongRegZ execArith w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ))
     (XplurZC execArith hs512 w.P (planZHJ w.dj w.y₀) (tabZHJ w.dj w.y₀) w.vb (reg (w.sim τ)) (cont (w.sim τ)) w.k w.Rw)
 
-/-- **`cr/sha-512` and `ecr/sha-512` at the strategy `τ`**: `EndToEndHidden`'s hypotheses `TableCRZ`, for the knowledge
-finders of each table the prover's session runs, and `LinkCRZC`, for its link finders. -/
+/-- **`cr/sha-512` and `ecr/sha-512` at the strategy `τ`**: `TableCRZ`, for the knowledge finders of each table the
+prover's session runs, and `LinkCRZC`, for its link finders, under which `EndToEndHidden`'s additive terms are at most
+`ks` and `link` (`ksAvgPrZ_le_strict`, `linkPrZC_le_closed`). -/
 def CR (τ : Strategy w.game) : Prop :=
   (∀ ω j, TableCRZ execArith hs512 (planZHJ w.dj w.y₀ (w.L.draw ω) (reg (w.sim τ))) j
       (zcStrat execArith hs512 (planZHJ w.dj w.y₀) (cont (w.sim τ) ω)) w.qF w.qS) ∧

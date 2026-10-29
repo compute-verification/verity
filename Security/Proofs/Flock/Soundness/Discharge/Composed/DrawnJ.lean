@@ -83,8 +83,26 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Parti
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) {L : Law n}
 
+/-- **The drawn units of the compiled `--zk` audit, against the registration, at the link finders' collision
+probabilities**: it accepts with a drawn unit in `wrongRegZ` with probability at most `ε_ks + linkPrZC`,
+`zk_flock_countPr_reg`'s terms without the miss term. -/
+theorem zk_flock_drawnPr_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
+    (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a)
+    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
+    prob (fun o => o.1 = true ∧
+        ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
+        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
+      ksAvgZC A Hs planZ k a (reg σ) (cont σ) + linkPrZC A Hs P planZ tab vb k Rw M ρ (reg σ) (cont σ) :=
+  extraction_audit_drawn (analysisZCReg A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+      (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
+    (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
+    (zk_linkSoundPr_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj) σ
+
 /-- **The drawn units of the compiled `--zk` audit, against the registration**: it accepts with a drawn unit in
-`wrongRegZ` with probability at most `ε_ks + δ_link`, `zk_flock_countC_reg`'s terms without the miss term. -/
+`wrongRegZ` with probability at most `ε_ks + δ_link`, `zk_flock_countC_reg`'s terms without the miss term
+(`zk_flock_drawnPr_reg` under A2). -/
 theorem zk_flock_drawnC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
@@ -94,10 +112,26 @@ theorem zk_flock_drawnC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown 
         ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgZC A Hs planZ k a (reg σ) (cont σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) :=
-  extraction_audit_drawn (analysisZCReg A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+  (zk_flock_drawnPr_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj σ).trans
+    (add_le_add le_rfl (linkPrZC_le_linkBoundZC A Hs P planZ tab vb hρ ht _ _))
+
+/-- **The drawn units of the compiled `--zk` audit, against the registration, at the value layer of any values `Xv`**:
+it accepts with a drawn unit in `wrongRegZ` at `XlayerZC (Xv R τ)` with probability at most `ε_ks` plus the link bound
+from the binding errors against `Xv` (`errBoundZC`). -/
+theorem zk_flock_drawnC_reg_at (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw : ℕ}
+    (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a)
+    (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val)
+    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
+    prob (fun o => o.1 = true ∧
+        ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XlayerZC A P planZ tab vb (Xv (reg σ) (cont σ)))) o.2)
+        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
+      ksAvgZC A Hs planZ k a (reg σ) (cont σ) + errBoundZC A Hs P planZ tab vb Xv k Rw ρ (reg σ) (cont σ) :=
+  extraction_audit_drawn (analysisZCReg A Hs P planZ tab vb (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
       (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
     (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
-    (zk_linkSoundC_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj ht) σ
+    (zk_linkSoundC_reg_at A Hs P planZ tab vb hlow hown hRw hρ hr hj Xv) σ
 
 end FlockSoundness.Discharge.ZkLink
 

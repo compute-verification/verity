@@ -7,10 +7,12 @@ import Proofs.Flock.EndToEndDrawn
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.EndToEnd.Blocks
+import Proofs.Flock.EndToEnd.Carry
 import Proofs.Flock.EndToEnd.Joint
 import Proofs.Flock.EndToEnd.Joint.MT.Bound
 import Proofs.Flock.EndToEndRegistered
 import Proofs.Flock.EndToEndRegisteredRows
+import Proofs.Flock.Soundness.Discharge.ZkLink.RowsPr
 import Proofs.Flock.SoundAtBridge
 import Proofs.Flock.ZeroKnowledgeHidden
 import Proofs.Flock.Masked

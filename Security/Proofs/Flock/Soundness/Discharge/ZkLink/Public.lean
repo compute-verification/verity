@@ -22,7 +22,8 @@ essentially every value exists, so there it adds nothing to correctness in `X`.
   `analysisZC`'s, and its `cover` is the same argument: a satisfying message near the table's oracle that decodes to `X`
   on the unit's wires makes the unit correct in `X` (the lowering) and gives an opening of each of its commit strings
   (`ValueBindingZ.opening_spec`), so the unit is right;
-* `zk_flock_countC_reg`: the count curve for it, with `zk_flock_countC`'s bound.
+* `zk_flock_countPr_reg`: the count curve for it at the link finders' collision probabilities (`linkPrZC`), and
+  `zk_flock_countC_reg` the same under A2, with `zk_flock_countC`'s bound.
 -/
 
 namespace FlockSoundness.Audit.Partition
@@ -182,8 +183,22 @@ theorem zc_knowledgeSound_reg
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k)))
     (tab (L.draw ω) R u)
 
-/-- `analysisZCReg`'s link term is `analysisZC`'s at the committed registration, so the link theorem
-(`zk_linkSoundC`) bounds it. -/
+/-- `analysisZCReg`'s link term is `analysisZC`'s at the committed registration, so the link theorem at the link
+finders' collision probabilities (`zk_linkSoundPr`) bounds it. -/
+theorem zk_linkSoundPr_reg
+    (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
+    (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a) :
+    (analysisZCReg (L := L) A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
+      (linkPrZC A Hs P planZ tab vb k Rw M ρ) := by
+  intro R τ tgt
+  refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))
+    (zk_linkSoundPr A Hs P planZ tab vb hlow hRw hM hρ hr hj R τ tgt)
+  simp only [analysisZCReg, analysisZC, ↓reduceIte]
+
+/-- `zk_linkSoundPr_reg` under A2 (`linkPrZC_le_linkBoundZC`). -/
 theorem zk_linkSoundC_reg
     (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -191,15 +206,46 @@ theorem zk_linkSoundC_reg
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZCReg (L := L) A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
         (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
-      (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := by
+      (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := fun R τ tgt =>
+  (zk_linkSoundPr_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj R τ tgt).trans
+    (linkPrZC_le_linkBoundZC A Hs P planZ tab vb hρ ht R τ)
+
+/-- **The compiled `--zk` count curve, "wrong" measured against the registration, at the link finders' collision
+probabilities**: `Pr[accept ∧ at least K units in wrongRegZ] ≤ miss(K) + ksAvgZC + linkPrZC`, for a partition whose
+units read only their own gates and input gates. No hash premise. -/
+theorem zk_flock_countPr_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
+    (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a) (K : ℕ)
+    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
+    prob (fun o => o.1 = true ∧
+        K ≤ (wrongRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
+      L.miss K + ksAvgZC A Hs planZ k a (reg σ) (cont σ) + linkPrZC A Hs P planZ tab vb k Rw M ρ (reg σ) (cont σ) :=
+  extraction_audit_count (analysisZCReg A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+      (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
+    (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
+    (zk_linkSoundPr_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj) K σ
+
+/-- `analysisZCReg`'s link term at the value layer of any values `Xv` is `analysisZC`'s at the committed registration,
+so `zk_linkSoundC_at` bounds it. -/
+theorem zk_linkSoundC_reg_at
+    (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ} {Rw : ℕ} (hRw : 1 ≤ Rw)
+    {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a)
+    (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val) :
+    (analysisZCReg (L := L) A Hs P planZ tab vb (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
+      (errBoundZC A Hs P planZ tab vb Xv k Rw ρ) := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))
-    (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht R τ tgt)
+    (zk_linkSoundC_at A Hs P planZ tab vb hlow hRw hρ hr hj Xv R τ tgt)
   simp only [analysisZCReg, analysisZC, ↓reduceIte]
 
 /-- **The compiled `--zk` count curve, "wrong" measured against the registration**: `zk_flock_countC`'s bound, with
 the units wrong on the registration (`wrongRegZ`) at the plurality value layer, for a partition whose units read only
-their own gates and input gates. -/
+their own gates and input gates (`zk_flock_countPr_reg` under A2). -/
 theorem zk_flock_countC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
@@ -210,9 +256,7 @@ theorem zk_flock_countC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown 
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       L.miss K + ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) :=
-  extraction_audit_count (analysisZCReg A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-      (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
-    (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
-    (zk_linkSoundC_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj ht) K σ
+  (zk_flock_countPr_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj K σ).trans
+    (add_le_add le_rfl (linkPrZC_le_linkBoundZC A Hs P planZ tab vb hρ ht _ _))
 
 end FlockSoundness.Discharge.ZkLink

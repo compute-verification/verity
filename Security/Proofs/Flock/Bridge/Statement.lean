@@ -12,11 +12,16 @@ at the circuit's constants `Bridge.constsOf`, `Bridge.partOf`), is outside `RelS
 at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
 file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep`, whose layout is the game's rows read
 off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
-named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
+named assumptions are `EndToEndHidden`'s: A3 and `live-verifier`. Its knowledge and link terms are `EndToEndHidden`'s
+additive ones, its finders' probabilities of outputting a SHA-512 collision; `cr/sha-512` and `ecr/sha-512` enter
+only outside it, bounding those.
 
-**Inputs are outside this bound.** `Bridge.partOf` lays the input class after the population, as the deployed
-verifier does, but `Bridge.designOf` draws it at rate `0`: the deployed verifier checks every input slot on every run,
-and C-Flock's game, whose bound this is, checks no input unit.
+**Input rows.** `Bridge.partOf P κ` puts each input row in the proof block of the unit that owns it, its first reader
+(`Bridge.blockOf`), and has no input class: that is what the deployed verifier checks, whose session (`HmRow.drawn`)
+opens only the rows its drawn units read, while registration opens none. So a unit whose owned input row doesn't open is a
+faulty slot, and `δ` bounds those slots with the rest. An input no unit reads is in no slot. The deployed
+`Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
+partition.
 
 `SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
 `SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
@@ -64,9 +69,8 @@ def SampledKSLive : Prop :=
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
-    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
+    (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
-    (qF qS : ℝ)
     -- what the sampling statement carries and `RelS` doesn't read
     (desc : Claims.Msg) (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
@@ -91,20 +95,16 @@ def SampledKSLive : Prop :=
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
     -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
-    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
-      (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
-    -- ecr/sha-512 for the prover's link finders
-    LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
-        ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
+        ksAvgPrZ execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
-            (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
-          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+            (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω *
+            (linkFinderPrZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) p k Rw M +
+              1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw))) / (1 - ρ))
 
 open Classical in
 /-- **The registered openings open the deployed commitment** (the bridge's `Transports`, at `SampledKSLive`'s

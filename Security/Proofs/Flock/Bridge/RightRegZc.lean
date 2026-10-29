@@ -13,7 +13,7 @@ right and more are wrong:
   openings too;
 * `OpeningsCanon canon`: in every satisfying witness of a drawn unit, the opening of each of its committed wires'
   commit strings (`ValueBindingZ.opening`) is canonical at the wire;
-* `analysisZCRegC`, `zk_flock_countC_regC`: `analysisZCReg` and its count curve with "wrong" `wrongRegZc`, under
+* `analysisZCRegC`, `zk_flock_countPr_regC`: `analysisZCReg` and its count curve with "wrong" `wrongRegZc`, under
   `OpeningsCanon`. Its knowledge and link terms are `analysisZCReg`'s, and its `cover` is the same argument: the
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
 -/
@@ -140,6 +140,39 @@ theorem zc_knowledgeSound_regC
     (tab (L.draw ω) R u)
 
 /-- `analysisZCRegC`'s link term is `analysisZC`'s at the committed registration, so the link theorem
+(`zk_linkSoundPr`) bounds it by the link finders' collision probabilities. -/
+theorem zk_linkSoundPr_regC
+    (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) (hcan : OpeningsCanon A P planZ tab vb canon)
+    {k : ℕ} {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a) :
+    (analysisZCRegC (L := L) A Hs P planZ tab vb canon (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj).LinkSound
+      (linkPrZC A Hs P planZ tab vb k Rw M ρ) := by
+  intro R τ tgt
+  refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))
+    (zk_linkSoundPr A Hs P planZ tab vb hlow hRw hM hρ hr hj R τ tgt)
+  simp only [analysisZCRegC, analysisZC, ↓reduceIte]
+
+/-- **The compiled `--zk` count curve, "wrong" with canonical openings**: `zk_flock_countPr_reg`'s bound, with the
+units wrong on the registration with canonical openings (`wrongRegZc`), when a drawn unit's openings are canonical
+(`OpeningsCanon`). No hash premise. -/
+theorem zk_flock_countPr_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
+    (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
+    (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a) (K : ℕ)
+    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
+    prob (fun o => o.1 = true ∧
+        K ≤ (wrongRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
+      L.miss K + ksAvgZC A Hs planZ k a (reg σ) (cont σ) + linkPrZC A Hs P planZ tab vb k Rw M ρ (reg σ) (cont σ) :=
+  extraction_audit_count (analysisZCRegC A Hs P planZ tab vb canon (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
+      (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj)
+    (zc_knowledgeSound_regC A Hs P planZ tab vb canon _ _ hlow hown hcan hj)
+    (zk_linkSoundPr_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj) K σ
+
+/-- `analysisZCRegC`'s link term is `analysisZC`'s at the committed registration, so the link theorem at `t'`
 (`zk_linkSoundC`) bounds it. -/
 theorem zk_linkSoundC_regC
     (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) (hcan : OpeningsCanon A P planZ tab vb canon)
@@ -154,9 +187,8 @@ theorem zk_linkSoundC_regC
     (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht R τ tgt)
   simp only [analysisZCRegC, analysisZC, ↓reduceIte]
 
-/-- **The compiled `--zk` count curve, "wrong" with canonical openings**: `zk_flock_countC_reg`'s bound, with the units
-wrong on the registration with canonical openings (`wrongRegZc`), when a drawn unit's openings are canonical
-(`OpeningsCanon`). -/
+/-- **The compiled `--zk` count curve at `t'`, "wrong" with canonical openings**: `zk_flock_countPr_regC` with the link
+term `linkBoundZC` at a per-run time `t'`, which is finite under A2 (`zk_linkSoundC`). -/
 theorem zk_flock_countC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
