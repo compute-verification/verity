@@ -168,8 +168,8 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
         assert seconds == 120 * 60
         address = (out / "stdout.log").read_text().split()[1]
         with pytest.raises(C.CoinError, match="the session's secret"):
-            R.RemoteChallenger.connect(address)
-        R.RemoteChallenger.connect(address, SECRET).close()
+            R.ChallengerClient.connect(address)
+        R.ChallengerClient.connect(address, SECRET).close()
         return proc.wait()
 
     end = A.run(host, session, signer=signer, pinned=PIN, now=lambda: T1, argv=argv, wait=client)
@@ -187,7 +187,7 @@ def test_a_session_serves_from_the_pinned_tree_and_its_end_entry_seals_its_out(h
     def client(proc, seconds):
         assert seconds == 120 * 60
         address = (out / "stdout.log").read_text().split()[1]
-        with R.RemoteChallenger.connect(address, SECRET) as c:
+        with R.ChallengerClient.connect(address, SECRET) as c:
             record = C.LiveRecord(c, "positions", itertools.count().__next__)
             record.record(bytes(64))
         return proc.wait()

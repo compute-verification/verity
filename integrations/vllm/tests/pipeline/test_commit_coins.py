@@ -48,7 +48,7 @@ class _Auditor:
         self.gate, self.tmp, self.argv, self._heads = CH.Gate(PRIVATE, KEY), tmp_path, [], 0
         self.sessions: dict[str, dict] = {}
         self.client = None
-        monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))
+        monkeypatch.setattr(R.ChallengerClient, "connect", classmethod(lambda cls, at, secret=None: self.client))
 
     def run(self, argv: list[str]) -> tuple[int, str]:
         self.argv.append(argv)
@@ -92,7 +92,7 @@ class _Auditor:
         s.update(root=root, directory=directory, commitment=challenger.commitment.root.hex(),
                  thread=threading.Thread(target=serve))
         s["thread"].start()
-        self.client = R.RemoteChallenger(theirs)
+        self.client = R.ChallengerClient(theirs)
 
     def end(self, sid: str) -> None:
         s = self.sessions[sid]

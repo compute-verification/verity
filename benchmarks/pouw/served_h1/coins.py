@@ -2,7 +2,7 @@
 
 * **Off the node** (`Session`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
   coin commitment's root the gate's open answered): the proof service's challenger on its auditor host
-  (`sampled_proofs.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
+  (`sampled_proofs.remote.ChallengerClient`), one session a window, from infra's gate in two steps; lanes don't start
   challenger sessions themselves. `reserve` (``ssh GATE reserve`` with the peer node and the window's layout) gives the
   window's session id; the reserve counts toward its lane's open period, and one not opened by its ``expires_utc`` is
   that period's refused window. `open_window` (``ssh GATE open --session S --root R``) opens it on the window's root R,
@@ -16,7 +16,7 @@
   ``--secret-file F`` and ``--commitment HEX`` (``$POUW_CHALLENGER``, ``$POUW_CHALLENGER_SESSION``,
   ``$POUW_CHALLENGER_SECRET_FILE``, ``$POUW_CHALLENGER_COMMITMENT``); an address without its session id, either without
   the other, or a secret or commitment without both, is refused. The hello carries the secret
-  (``RemoteChallenger.connect(address, secret)``, infra's hello secret, RT4-INT-29). The session's layout is the
+  (``ChallengerClient.connect(address, secret)``, infra's hello secret, RT4-INT-29). The session's layout is the
   window's live epoch (`layout`: `window.LIVE_SCHEME`, the window's epoch, `window.live_families(rounds)`), and the
   client refuses a commitment of any other, or of another root than the gate's open answered.
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
@@ -207,7 +207,7 @@ def layout_reason(commitment: Ch.LiveCommitment, epoch: int, rounds: int) -> str
 
 
 class Coins:
-    """A window's live coins from `challenger` (`LiveChallenger`'s commitment and open: a `RemoteChallenger`, or the
+    """A window's live coins from `challenger` (`LiveChallenger`'s commitment and open: a `ChallengerClient`, or the
     in-process `LiveChallenger`), `source` "off-node" or "in-process": its salt and draw coins, and its rounds through
     `LiveRecord` (`rounds`)."""
 

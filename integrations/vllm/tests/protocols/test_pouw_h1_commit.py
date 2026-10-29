@@ -725,7 +725,7 @@ class _Gate:
         self.dir, self.leaves, self.hosts, self.opened = tmp_path / "gate", itertools.count(), {}, None
         self.dir.mkdir()
         self.ledger = CH.Ledger(self.dir / "auditor.jsonl", 1, self.leaves)
-        monkeypatch.setattr(R.RemoteChallenger, "connect",
+        monkeypatch.setattr(R.ChallengerClient, "connect",
                             classmethod(lambda cls, at, secret=None: self.opened.client if at == AUDITOR else None))
 
     def reserve(self, peer, steps):

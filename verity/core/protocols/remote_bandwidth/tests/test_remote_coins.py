@@ -64,7 +64,7 @@ def sign(tmp_path):
 class Service:
     """Challenger session `sid` on its host: epoch `epoch`'s coins over `windows` windows, its record signed and written
     to `directory` before it serves (`remote.open_session`), served on a thread over a socket pair whose other end is
-    `client`, the verifier's `remote.RemoteChallenger`."""
+    `client`, the verifier's `remote.ChallengerClient`."""
 
     def __init__(self, directory, sign, sid: str, epoch: int, windows: int, label: bytes, appends: int = APPENDS,
                  per_coin: int = 1) -> None:
@@ -76,7 +76,7 @@ class Service:
         ours, theirs = socket.socketpair()
         self.thread = threading.Thread(target=self._serve, args=(ours,))
         self.thread.start()
-        self.client = R.RemoteChallenger(theirs)
+        self.client = R.ChallengerClient(theirs)
 
     def _serve(self, sock: socket.socket) -> None:
         with sock:

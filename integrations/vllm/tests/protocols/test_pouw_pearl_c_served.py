@@ -120,7 +120,7 @@ def _host(tmp_path, monkeypatch, seed=1, challenger=None):
     """The auditor host's challenger (by default Pearl-C's, its salt coin alone), its challenge phase `SID` reserved on its
     ledger and reached at `AUDITOR`."""
     host = CH.Host(tmp_path / "auditor", challenger or salt_only(seed), seed, SID, gated=True)
-    monkeypatch.setattr(R.RemoteChallenger, "connect",
+    monkeypatch.setattr(R.ChallengerClient, "connect",
                         classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
     return host
 
@@ -273,7 +273,7 @@ def test_a_gate_answer_not_the_reserved_session_on_the_epoch_root_is_refused_bef
     or no open at all is refused before the challenger is reached."""
     root, model = PS.epoch_open_root(weights_root(ROOTS), 0).hex(), _model()
     given = None if answer is None else {**answer, "root": answer["root"] or root}
-    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda *a, **k: pytest.fail("no challenger reached")))
+    monkeypatch.setattr(R.ChallengerClient, "connect", classmethod(lambda *a, **k: pytest.fail("no challenger reached")))
     with pytest.raises(ValueError, match=f"{ENTRY}: the gate's answer is not session {SID} opened on salt epoch 0's "
                                          f"root {root[:16]}"):
         PO.install(model, _served(lambda sid, r: given))
@@ -374,8 +374,8 @@ class _GateSession:
         ours, theirs = socket.socketpair()
         self._thread = threading.Thread(target=self._serve, args=(ours, session))
         self._thread.start()
-        self.client = R.RemoteChallenger(theirs)
-        self.monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))
+        self.client = R.ChallengerClient(theirs)
+        self.monkeypatch.setattr(R.ChallengerClient, "connect", classmethod(lambda cls, at, secret=None: self.client))
         return {**reply, "commitment": self.challenger.commitment.root.hex()}
 
     def _serve(self, sock, session):

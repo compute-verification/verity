@@ -99,7 +99,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   checks before the draw and planned the coins its draw reads (`a5_coins.need`), and only under a reserve that covers
   them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its law the
   partition file's rule, `stratified:K` among them), on the session's coins (`coins.ChallengerCoins` over
-  `remote.RemoteChallenger`). The stream registers the rank's window at its counts under the TP run root (`register`), the
+  `remote.ChallengerClient`). The stream registers the rank's window at its counts under the TP run root (`register`), the
   coins commit to the registration's digest, and the stream draws once (`select`: Lean's `Select.select` on the bytes it
   read, then `check_draw`). Once the session has ended, the stream takes the proof (`deliver`) and its outcome (`outcome`)
   with the coins' evidence (key, ledger, main, pins, segment, session; ``--main`` the verifier's own first-parent history of

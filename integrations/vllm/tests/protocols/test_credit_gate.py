@@ -190,7 +190,7 @@ def auditor(tmp_path, monkeypatch):
     """The auditor host's challenger, one challenge phase over a one-round live epoch, reached at `AUDITOR`, reserved as
     `RESERVED` and opened by `GATE`'s ``open``."""
     host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, gated=True)
-    monkeypatch.setattr(R.RemoteChallenger, "connect",
+    monkeypatch.setattr(R.ChallengerClient, "connect",
                         classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
     monkeypatch.setitem(GATE, "open", host.open)
     return host
@@ -277,7 +277,7 @@ def periodic(tmp_path, monkeypatch):
                            model=CH.MODEL if model else None, length=LENGTH)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
-        monkeypatch.setattr(R.RemoteChallenger, "connect",
+        monkeypatch.setattr(R.ChallengerClient, "connect",
                             classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
         monkeypatch.setitem(GATE, "open", host.open)
         return host

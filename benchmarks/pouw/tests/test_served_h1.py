@@ -518,7 +518,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
 
 
 def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_and_a_forged_window_is_refused(tmp_path):
-    """A window's coins from the challenger off the node (`coins.open_coins` over `RemoteChallenger`): salt, one round a
+    """A window's coins from the challenger off the node (`coins.open_coins` over `ChallengerClient`): salt, one round a
     step and the draw, each opened there after the root the window sent.  The verifier (`coins.py check`) reads only the
     session as the gate publishes it (out/ beside request.json and open.json), every head of the auditor's ledger and
     the window's manifest, recomputes the round roots, salts and draw root from the manifest's committed roots, and
@@ -732,7 +732,7 @@ def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad
     a, b = socket.socketpair()
     t = threading.Thread(target=_pipe_server, args=(b, ch, ["ok", answer]))
     t.start()
-    cs = CO.Coins(R.RemoteChallenger(a), "off-node", CO.Session("s", "127.0.0.1:1"))
+    cs = CO.Coins(R.ChallengerClient(a), "off-node", CO.Session("s", "127.0.0.1:1"))
     pipe = CO.RoundPipe(cs)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(3)]
     assert [pipe.send(r) for r in roots[:2]] == [0, 1]
@@ -854,7 +854,7 @@ def test_a_sessions_secret_is_its_hello_and_a_hello_without_it_is_refused(tmp_pa
 
     def connect(address, secret=None):
         seen["secret"] = secret
-        return CO.R.RemoteChallenger.connect(address, secret)
+        return CO.R.ChallengerClient.connect(address, secret)
 
     signed = host.challenger.commitment.root.hex()
     at = dataclasses.replace(host.session, commitment=signed)

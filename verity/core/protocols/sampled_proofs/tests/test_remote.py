@@ -1,7 +1,7 @@
 """The challenger as a service on its own host (`remote`), over loopback: it signs and writes its record before its first
 coin opens, answers each root with that family's next coin and logs the release before the coin leaves; it refuses
 every malformed or out-of-order frame and ends the session there, and however the session ends it signs its release log
-(the close record).  The client (`RemoteChallenger`) is `LiveRecord`'s challenger as it is, and refuses a coin that
+(the close record).  The client (`ChallengerClient`) is `LiveRecord`'s challenger as it is, and refuses a coin that
 doesn't open; it asks for several coins in one round trip (`open_many`), the release log the same as one at a time, and
 a batch with any bad answer raises whole.  The verifier, reading the challenger's directory and the auditor's signed
 ledger, trusts only the one session the ledger opens for the window under the pinned key, ended closed, its commitment
@@ -202,7 +202,7 @@ class Host:
 
 def honest(host: Host) -> dict[str, C.LiveRecord]:
     """The honest client's session: a root and its coin per family, twice, a third positions root, then its close."""
-    client = R.RemoteChallenger.connect(host.address)
+    client = R.ChallengerClient.connect(host.address)
     records = {label: C.LiveRecord(client, label, itertools.count().__next__) for label, _ in FAMILIES}
     for i in range(2):
         for record in records.values():
@@ -327,7 +327,7 @@ SECRET = bytes(range(32))
 
 def test_a_session_with_a_secret_serves_only_the_client_whose_hello_carries_it(tmp_path, signer):
     host = Host(tmp_path, signer, secret=SECRET)
-    with R.RemoteChallenger.connect(host.address, SECRET) as client:
+    with R.ChallengerClient.connect(host.address, SECRET) as client:
         C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
     assert host.ended() is None
     assert host.trusted()[1]["positions"] == (root(0),)
@@ -394,7 +394,7 @@ def test_greet_refuses_a_bad_hello_alone_so_the_next_connection_is_served(tmp_pa
         with socket.create_connection(listener.getsockname()) as s:
             s.sendall(frame(hello))
             assert reply(s)["type"] == "refused" and s.recv(1) == b""
-    with R.RemoteChallenger.connect("127.0.0.1:%d" % listener.getsockname()[1], SECRET) as client:
+    with R.ChallengerClient.connect("127.0.0.1:%d" % listener.getsockname()[1], SECRET) as client:
         C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
     t.join()
     listener.close()
@@ -454,7 +454,7 @@ ANSWERS = {
 def test_the_client_refuses_a_bad_answer_and_every_coin_after(case):
     answer, why = ANSWERS[case]
     liar = Liar(answer)
-    client = R.RemoteChallenger.connect(liar.address)
+    client = R.ChallengerClient.connect(liar.address)
     with pytest.raises(C.CoinError, match=why):
         client.open("positions", 0, root(0))
     liar.join()
@@ -475,7 +475,7 @@ def _served(directory, signer, ask) -> tuple[bytes, object, str | None]:
     ended: list[str | None] = []
     t = threading.Thread(target=lambda: ended.append(R.serve(a, session, itertools.count().__next__)))
     t.start()
-    client = R.RemoteChallenger(b)
+    client = R.ChallengerClient(b)
     try:
         got = ask(client)
     finally:
@@ -520,7 +520,7 @@ def _scripted(n: int, answer):
 
     t = threading.Thread(target=run)
     t.start()
-    return R.RemoteChallenger(b), t
+    return R.ChallengerClient(b), t
 
 
 def _opening(o: C.LiveOpening) -> bytes:
@@ -553,7 +553,7 @@ def test_a_batch_the_challenger_refuses_midway_raises_and_releases_only_the_coin
     """`serve` releases the batch's coins before the refused one, logs them and signs the session's close with the
     refusal; the client returns none of them, the one after is never opened, and every later coin is refused."""
     batch = [BATCH[0], ("positions", 5, root(1)), BATCH[1]]
-    held: list[R.RemoteChallenger] = []
+    held: list[R.ChallengerClient] = []
 
     def ask(client):
         held.append(client)
@@ -581,7 +581,7 @@ def test_a_batch_past_its_bound_is_refused_before_a_frame_is_written(tmp_path, s
 
 def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path, signer):
     host = Host(tmp_path, signer)
-    with R.RemoteChallenger.connect(host.address) as client:
+    with R.ChallengerClient.connect(host.address) as client:
         record = C.LiveRecord(client, "positions", itertools.count().__next__)
         record.record(root(0))
     assert host.ended() is None
@@ -606,7 +606,7 @@ def _set(i: int, key: str, value) -> object:
 
 def _one_coin(tmp_path, signer) -> Host:
     host = Host(tmp_path, signer)
-    with R.RemoteChallenger.connect(host.address) as client:
+    with R.ChallengerClient.connect(host.address) as client:
         C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
     assert host.ended() is None
     return host
@@ -703,7 +703,7 @@ def test_a_log_that_is_not_a_release_order_is_refused_even_unsigned(tmp_path, si
 
 def test_the_verifier_refuses_a_session_whose_record_is_missing_or_another_keys(tmp_path, signer):
     host = Host(tmp_path, signer)
-    with R.RemoteChallenger.connect(host.address):
+    with R.ChallengerClient.connect(host.address):
         pass
     assert host.ended() is None
     other = C.ChallengerKey(4, 2, lms.public_key(lms_key(1)))
@@ -1424,7 +1424,7 @@ def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
 @pytest.mark.parametrize("address", ["7791", ":7791", "host:port", "host:"])
 def test_an_address_is_host_and_port(address):
     with pytest.raises(ValueError, match="HOST:PORT"):
-        R.RemoteChallenger.connect(address)
+        R.ChallengerClient.connect(address)
 
 
 def _clock_and_sleep():

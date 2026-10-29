@@ -916,7 +916,7 @@ def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=No
     ledger opening it for the H1 window's open root (unless not `gated`, for `CH.WINDOW` at once)."""
     host = CH.Host(tmp_path / name, challenger or Wd.live_challenger(0, rounds, CH.entropy(seed)), seed, session, leaves,
                    ledger, gated=gated, reserved=reserved)
-    monkeypatch.setattr(R.RemoteChallenger, "connect",
+    monkeypatch.setattr(R.ChallengerClient, "connect",
                         classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
     monkeypatch.setitem(SESSION, "commitment", host.challenger.commitment.root.hex())
     monkeypatch.setitem(RESERVED, "session", session)
@@ -1122,13 +1122,13 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
         if words[0] == "open":
             return {**host.open(words[2], words[4]), "commitment": None, "port": 7811, "secret": "ab" * 32}
         return {"commitment": host.challenger.commitment.root.hex()}
-    reached, refusals = R.RemoteChallenger.connect, iter((True, True))
+    reached, refusals = R.ChallengerClient.connect, iter((True, True))
 
     def connect(cls, at, secret=None):
         if next(refusals, False):
             raise ConnectionRefusedError(at)
         return reached(at, secret)
-    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
+    monkeypatch.setattr(R.ChallengerClient, "connect", classmethod(connect))
     now = [0.0]
 
     def wait(s):
@@ -1175,7 +1175,7 @@ def test_a_session_whose_tunnel_never_listens_is_refused_by_name_once_its_wait_i
     def wait(s):
         waits.append(s)
         now[0] += s
-    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(refused))
+    monkeypatch.setattr(R.ChallengerClient, "connect", classmethod(refused))
     with pytest.raises(CoinError, match=f"pouw:test: nothing listened at vy-challenger-1:7811 within {R.TUNNEL_WAIT_S} s"):
         PHW.opened("pouw:test", "vy-challenger-1:1", 0, gate, sid, root, "salt epoch 0's root", wait,
                    Wd.salt_epoch_reason, lambda: now[0])

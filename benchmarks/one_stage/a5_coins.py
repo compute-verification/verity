@@ -1,6 +1,6 @@
 """A5's draw from the auditor's challenger (`a5.py --challenger`): one challenger session for the TP step, opened on its TP run root
 of record, from whose coins each rank's registration draws once (`sampled_proofs.coins.ChallengerCoins` over a
-`remote.RemoteChallenger`), and the evidence its verifier checks every draw's coins against once the session has ended.
+`remote.ChallengerClient`), and the evidence its verifier checks every draw's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an

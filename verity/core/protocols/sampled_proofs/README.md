@@ -139,7 +139,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
-  A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
+  A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`ChallengerClient`), deployed
   as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`); remote has no coin path of its own yet.
   The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
   name; both are prose only:
@@ -507,7 +507,7 @@ hash, no derivation and no beacon, after the registration it follows. `draw_firs
 `Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
 
-A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes
+A draw from the auditor's challenger (`remote.ChallengerClient`, or `challenger.LiveChallenger` in process) passes
 `coins.ChallengerCoins` as the stream's `coins`. `commit(after)` takes the prover's commitment (the registration's
 digest after its receipt, or the run's root) and fixes the family and its next index. Each read then opens
 ceil(missing / 64) more of the family's coins after it in one round trip, checks each against the challenger's

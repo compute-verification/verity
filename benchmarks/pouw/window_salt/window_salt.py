@@ -76,7 +76,7 @@ def issue(gate: Any, rec: dict[str, Any], k: int, main: list[str], dest: Path, v
         raise Ch.CoinError(f"the window can't be salted yet: {got}")
     r = PS.anchored_epoch_root(*got, k)
     address, secret, commitment = gate.open(r.hex(), [list(f) for f in Wd.SALT_FAMILIES], scheme=Wd.LIVE_SCHEME)
-    with remote.RemoteChallenger.connect(address, bytes.fromhex(secret)) as client:
+    with remote.ChallengerClient.connect(address, bytes.fromhex(secret)) as client:
         c = client.commitment
         if c.root.hex() != commitment:
             raise Ch.CoinError(f"the challenger's hello answered commitment {c.root.hex()[:16]}..., not the gate's open's "
