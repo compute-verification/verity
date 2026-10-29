@@ -276,11 +276,13 @@ theorem target_unbounded (k : Verity.Registration.Composite) (a : Subprotocol) :
 theorem finder_pr (H : Claims.Msg → Claims.Msg) : finder.Pr H = 0 := by
   unfold Claims.Finder.Pr Claims.Pr
   simp [finder]
+  exact Or.inl rfl
 
 /-- The idle forger forges nothing. -/
 theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forger.Pr verify = 0 := by
   unfold Hash.Assumptions.LmsForger.Pr Hash.Assumptions.LmsForger.Forges
   simp [forger]
+  exact Or.inl rfl
 
 /-- At `exact`, every subprotocol's error is `0`: its finder and forger meet their premises, and every term is `0`. -/
 theorem error_exact (a : Subprotocol) (θ F c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
@@ -295,15 +297,16 @@ theorem pouw_fails (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ 
   intro h
   change (1 : ℝ) ≤ ((Finset.card (∅ : Finset (Fin (exact.circuitOf F).N)) : ℕ) : ℝ) at h
   simp at h
+  norm_num at h
 
 /-- At `exact`, the conclusion at composite `k` fails for a verifier that accepts everything, at the files that are the
 parameters (`ByteArray.empty`), for the honest prover. -/
 theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw ∈ subprotocols k) :
     ¬ exact.SoundnessFor k fun _ => True := by
-  refine soundness_nontrivial_of exact k .empty .empty .empty (exact.honest .empty .empty .empty) rfl .pouw hk
-    (pouw_fails k _ _ _ _) ?_
-  simp only [error_exact, Finset.sum_const_zero]
-  exact zero_lt_one
+  have h0 : ∑ a ∈ subprotocols k, exact.error a .empty .empty .empty (exact.honest .empty .empty .empty) = 0 :=
+    Finset.sum_eq_zero fun a _ => error_exact a _ _ _ _
+  exact soundness_nontrivial_of exact k .empty .empty .empty (exact.honest .empty .empty .empty) rfl .pouw hk
+    (pouw_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
 
 end Idle
 
