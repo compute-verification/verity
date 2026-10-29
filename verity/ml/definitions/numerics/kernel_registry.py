@@ -112,7 +112,8 @@ def register(target: Any, fn: Callable[..., Any], *, kernel: str, domain: str = 
     prev = _REGISTERED.get((key_of(target), kernel))
     if prev is not None and prev.fn is fn:
         return prev
-    core = register_kernel(target, _batch(fn, covers, batch), kernel=kernel, domain=domain, version=version, sample=sample)
+    core = register_kernel(target, _batch(fn, covers, batch), kernel=kernel, domain=domain, version=version, sample=sample,
+                           partial=True)
     reg = _REGISTERED[(core.key, kernel)] = Registered(core.key, kernel, fn, check_targets, covers, core)
     return reg
 
@@ -138,7 +139,7 @@ def registered() -> list[Registered]:
 def check(key: str, kernel: str, generator: Callable[[int], np.random.Generator], n: int = 6) -> list[str]:
     """Why kernel `kernel` of `key` is not its Definition, [] when it is: core `self_check` against the reference on `n` seeded
     instances of each of its check specialisations (`check_targets`, drawn by the caller's ``generator`` over a seed of the
-    pair), each of which it must claim, and not decline every instance of."""
+    pair), each of which it must claim and pass (`SelfCheck.ok`: an instance kernel is partial, and compares at least one)."""
     reg = _REGISTERED.get((key, kernel))
     if reg is None:
         return [f"no {kernel} kernel registered for {key}"]
@@ -154,6 +155,4 @@ def check(key: str, kernel: str, generator: Callable[[int], np.random.Generator]
         sc = self_check(t, kernel=kernel, n=n, seed=0)
         if not sc.ok:
             out.append(str(sc))
-        elif sc.declined >= sc.n:
-            out.append(f"{t.id}: {kernel} declined all {sc.n} instances")
     return out
