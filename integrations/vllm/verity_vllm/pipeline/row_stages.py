@@ -534,7 +534,7 @@ class SingleRow(Row):
         """The Commit's command line; `taps`: the workload's taps that apply to it (`row_records.applicable_taps`), whose sources it attaches."""
         ck = self.ck_
         pairs, warmup = ("1", "1") if self.config_run else (str(ck.pairs), "2")
-        cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
+        cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
         if self.config_run:                           # one instrumented run (and its control with a baseline), bounded staging, k units
