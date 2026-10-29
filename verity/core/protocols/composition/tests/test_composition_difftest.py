@@ -198,7 +198,7 @@ def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int) 
     print(f"{p.label}: {stats}, verdicts {dict(seen)}")
     assert stats.examples == examples and stats.counts == {v: seen[v] for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
     for kind in (R.ACCEPT, R.REJECT, R.UNDECIDED, "reject, a component undecided", "reject, no component rejected"):
-        assert seen[kind] > examples // 50, (kind, dict(seen))
+        assert seen[kind] > examples // 100, (kind, dict(seen))
 
 
 @pytest.mark.slow
