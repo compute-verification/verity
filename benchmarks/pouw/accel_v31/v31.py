@@ -957,7 +957,9 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
                    + (" w0" if r.get("wg") and r.get("W") and not r.get("wgw", 1) else "")
                    + (" r5w0" if r.get("rp") == 5 and r.get("W") and r.get("wgw", 1) and not r.get("r5w", 1) else "")
                    + (" tst" if r.get("rp") == 5 and r.get("tst") else "")
-                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else ""))
+                   + (" m4" if r.get("lminb") == 4 else "") + (" sa" if r.get("sahead") else "")
+                   + (f" pm{r['ppm']}" if r.get("ppm") else "") + (" ph0" if r.get("pph") == 0 else "")
+                   + (" lo" if r.get("lord") else ""))
         variant += commit_labels(r)
         named.append((r, variant))
         fused = "-"
