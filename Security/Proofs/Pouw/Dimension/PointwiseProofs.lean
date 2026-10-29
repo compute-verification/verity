@@ -16,6 +16,8 @@ import Definitions.Pouw.Dimension.Pointwise
   it holds every target at some point and writes exactly the path's Hamming length (`pathLen`). So in this model a
   run's writes lie between `Σ_y (r y + 1)` and the shortest such path, and a target that agrees with an earlier one
   on a fraction of its positions saves that fraction.
+* **Branching on the coins** (`adaptive_pairs_le`). Each bound reads only the targets a coin outcome realizes, so it
+  holds outcome by outcome for a program chosen from the coins, and sums over the outcomes.
 -/
 
 namespace Pouw.Dimension.Pointwise
@@ -380,5 +382,17 @@ theorem pathRun_attained [DecidableEq V] (m₀ : A → Fin w → V) (a : A) (ys 
         rw [List.take_length_add_append, run_append]
         exact hi
     · simp only [pathRun, pathLen, writes_append, writes_patch, ih2]
+
+open Classical in
+/-- **A program that branches on the coins** (`adaptive_pairs_le`): at each coin outcome `ω` it is a run `P ω` from the
+memory `m₀ ω` holding the targets `Y ω`, so summed over any outcomes its writes are at least each outcome's new
+(position, value) pairs. The bound reads only the targets each outcome realizes; a design whose targets repeat a
+(position, value) pair at some outcomes loses those pairs there, whatever the program. -/
+theorem adaptive_pairs_le [DecidableEq V] [Inhabited V] {Ω : Type} (O : Finset Ω) (m₀ : Ω → A → Fin w → V)
+    (P : Ω → List (Step A V w)) (Y : Ω → Finset (Fin w → V))
+    (hY : ∀ ω ∈ O, ∀ y ∈ Y ω, ∃ i a, run (m₀ ω) ((P ω).take i) a = y) :
+    ∑ ω ∈ O, (((Y ω).biUnion pairs).filter fun pv : Fin w × V => ∀ a, m₀ ω a pv.1 ≠ pv.2).card ≤
+      ∑ ω ∈ O, writes (P ω) :=
+  sum_le_sum fun ω hω => run_pairs_le (m₀ ω) (P ω) (Y ω) (hY ω hω)
 
 end Pouw.Dimension.Pointwise
