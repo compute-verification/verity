@@ -63,7 +63,7 @@ def test_circuit_check_runs_in_the_after_landing_run_and_the_nightly_cold_check(
     (test_declaration's `test_check_of_parts_runs_only_their_jobs_and_lean_audit_on_every_package`)."""
     every = ",".join(j.name for j in CHECK.JOBS)
     rc, only = _main(monkeypatch, tmp_path, ["--deferred", every, "--keep-going", "--no-cache"])
-    assert rc == 0 and only == CHECK.shard_parts() and {"circuit-check", "ratchet-gate"} <= set(only)
+    assert rc == 0 and only == CHECK.shard_parts() and {"circuit-check", "ratchet-gate"} <= {p.partition(":")[0] for p in only}
     assert json.loads((tmp_path / "result.json").read_text())["kind"] == CHECK.DEFERRED_KIND
     assert _main(monkeypatch, tmp_path, ["--no-cache"]) == (0, None)
 
