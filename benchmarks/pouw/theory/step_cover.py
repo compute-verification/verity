@@ -95,7 +95,10 @@ PREMISES = {
 }
 
 FA3_BLOCK = 128
-I8_BLOCK = 112
+#: keys a PV call under ssn_sh-tag: step 1's 24 beside the row tags and coin bits, then 28, 28 and 24 (four steps),
+#: a multiple of 8 for QKᵀ's wgmma N and inside the magic-number conversion's exact range
+I8_BLOCK = 104
+TAG_LANES = 4
 EPT_STOCK = 8
 EPT_LEAN = 32
 NOISE_RANGE = 24
@@ -130,24 +133,27 @@ def tc_best(m: int, dtype: str, reading: str) -> tuple[float, float, str]:
 
 # ---------------------------------------------------------------- noising designs for one matmul
 
-def ssn1l_terms(m: int, n: int, k: int, code_lanes: int = 4) -> dict:
-    """noise_sweep's ssn_1l at a code of `code_lanes` lanes (5 reach n ≤ 371,291): α, forming and coins a MAC."""
-    s = 1 + math.ceil(max(0, k - (32 - code_lanes)) / 31)
+def ssn1l_terms(m: int, n: int, k: int, code_lanes: int = 4, tag: int = 0) -> dict:
+    """noise_sweep's ssn_1l at a code of `code_lanes` lanes (5 reach n ≤ 371,291): α, forming and coins a MAC. With
+    `tag`, N-RED's ssn_1l-tag: step 1 gives `tag` lanes to the row tags (loaded row constants, against G drawn once a
+    window, so forming and coins are ssn_1l's)."""
+    s = 1 + math.ceil(max(0, k - (32 - code_lanes - tag)) / 31)
     words = nsw.ssn_1l_words(s + code_lanes - 4)
-    return {"design": f"ssn_1l({code_lanes})", "alpha": H32 * s / k,
+    return {"design": f"ssn_1l({code_lanes})" + ("-tag" if tag else ""), "alpha": H32 * s / k,
             "forming": H32 * nsw.ssn_1l_forming_writes(s) / (n * k),
             "coins": 4 * words * nsw.COIN_PRICED_BYTE / (n * k), "coin_bytes_call": 4 * words * m}
 
 
-def steps_sh(k: int) -> int:
-    return 1 + math.ceil(max(0, k - nsw.DATA_PER_STEP) / nsw.DATA_PER_STEP)
+def steps_sh(k: int, tag: int = 0) -> int:
+    return 1 + math.ceil(max(0, k - (nsw.DATA_PER_STEP - tag)) / nsw.DATA_PER_STEP)
 
 
-def ssn_sh_terms(m: int, n: int, k: int) -> dict:
-    """ssn_sh: one LOP3 a row a call (step 1's bits) and S − 1 shared raw coin words a call."""
-    s = steps_sh(k)
+def ssn_sh_terms(m: int, n: int, k: int, tag: int = 0) -> dict:
+    """ssn_sh: one LOP3 a row a call (step 1's bits) and S − 1 shared raw coin words a call; with `tag`, step 1 gives
+    `tag` lanes to the row tags (loaded, against G drawn once a window)."""
+    s = steps_sh(k, tag)
     coin_b = 0.5 * m + 4 * (s - 1)
-    return {"design": "ssn_sh", "alpha": H32 * s / k, "forming": H32 / (n * k),
+    return {"design": "ssn_sh" + ("-tag" if tag else ""), "alpha": H32 * s / k, "forming": H32 / (n * k),
             "coins": coin_b * nsw.COIN_PRICED_BYTE / (m * n * k), "coin_bytes_call": coin_b}
 
 
@@ -274,17 +280,26 @@ def mem_ops(kind: str, variant: str, resident: bool = False) -> list[tuple[str, 
     return [o for o in (("LD", ld, "A"), ("ADDR", addr, "A")) if o[1]]
 
 
-def dithered(ops: list[tuple[str, float, str]]) -> list[tuple[str, float, str]]:
+#: shares of dithered rounds that come out 0 at the drawn coins, a constant a coin-reading prover stores for free:
+#: an activation quantize's values and its 4-byte packs, and softmax P's u8 values (most of a long row's keys sit
+#: far below the row max) with their packs, which are 0 in the same far blocks. Estimates, until measured.
+ZERO_ACT, ZERO_ACT_PACK, ZERO_P = 0.1, 0.1 ** 4, 0.9
+
+
+def dithered(ops: list[tuple[str, float, str]], zero: float = ZERO_ACT,
+             zero_pack: float = ZERO_ACT_PACK) -> list[tuple[str, float, str]]:
     """Dithered rounding: each round to int8 / u8 (`FFMA` magic, class R) becomes FFMA(x, s, u) and a round-down magic
     FADD, with u ∈ [0, 1) from an in-kernel xorshift seeded by a raw coin word (6 ALU ops a 4 bytes) placed in a float's
-    mantissa and offset (PRMT, FADD); the rounded values then vary with u, so they and their pack are targets."""
+    mantissa and offset (PRMT, FADD). x·s + u is a target; u's words are functions of the coins alone (class K), which
+    a prover that reads the coins has for free, like ssn's forming; the rounded values and their packs are targets
+    except the share `zero` (`zero_pack`) that is 0 at the drawn coins."""
     out = []
     for op, cnt, cls in ops:
         if (op, cls) == ("FFMA", "R"):
-            out += [("FFMA", cnt, "T"), ("FADD", cnt, "T"), ("LOP3", 1.5 * cnt, "T"), ("PRMT", cnt, "T"),
-                    ("FADD", cnt, "T")]
+            out += [("FFMA", cnt, "T"), ("FADD", cnt * (1 - zero), "T"), ("FADD", cnt * zero, "R"),
+                    ("LOP3", 1.5 * cnt, "K"), ("PRMT", cnt, "K"), ("FADD", cnt, "K")]
         elif (op, cls) == ("PRMT", "R"):
-            out.append(("PRMT", cnt, "T"))
+            out += [("PRMT", cnt * (1 - zero_pack), "T"), ("PRMT", cnt * zero_pack, "R")]
         else:
             out.append((op, cnt, cls))
     return out
@@ -478,6 +493,7 @@ class Plan:
     resident: bool = False
     two_pass_argmax: bool = False
     max_block: int = I8_BLOCK
+    tag: int = TAG_LANES
     note: str = ""
 
 
@@ -500,23 +516,23 @@ PLANS = [
     Plan("best_p4_dither", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True,
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4 with dithered rounding"),
-    Plan("best_p4_smlite", lm_head="ssn_1l", attention="i8", exp="mufu", lanes="fused", dither=True,
+    Plan("best_p4_smlite", lm_head="ssn_1l", attention="i8", exp="mufu", lanes="fused",
          softmax_targets="M", premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
-         note="best_p4_dither committing only the softmax's MUFU outputs (T2 for uncovered share)"),
-    Plan("best_max", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", small_m="wgmma64", dither=True,
-         static_scales=True, router="i8", note="best_dither with static activation scales and an int8 router gate"),
-    Plan("best_p4_max", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True, static_scales=True,
+         note="best_p4 committing only the softmax's MUFU outputs (T2 for uncovered share)"),
+    Plan("best_max", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", small_m="wgmma64",
+         static_scales=True, router="i8", note="best_pad64 with static activation scales and an int8 router gate"),
+    Plan("best_p4_max", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", static_scales=True,
          router="i8", premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
-         note="best_p4_dither with static activation scales and an int8 router gate"),
-    Plan("best_p4_max_s8", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True,
+         note="best_p4 with static activation scales and an int8 router gate"),
+    Plan("best_p4_max_s8", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
          static_scales=True, router="i8", rowmax_stride=8,
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_max with the softmax row max over every 8th score plus a margin, P saturated"),
-    Plan("best_p4_all", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused", dither=True,
+    Plan("best_p4_all", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
          static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
          premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
          note="best_p4_max_s8 with resident epilogue scales and norm rows (`MEM`), the sampler's two-pass argmax and "
-              "the row max over 224-key blocks (two PV calls)"),
+              f"the row max over {2 * I8_BLOCK}-key blocks (two PV calls)"),
 ]
 PLAN = {p.name: p for p in PLANS}
 
@@ -581,21 +597,22 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
         hp, hpad, hinstr = wgmma_price(256, reading) / TENSOR["s8"]["kreg"], 64 / c.m, "wgmma, rows padded to 64"
     lanes = 4 if c.n <= nsw.SSN_CODE_N_MAX else 5
     if fam == "linear":
-        t = ssn1l_terms(c.m, c.n, c.k, lanes) if plan.linears == "ssn_1l" else ssn_sh_terms(c.m, c.n, c.k)
+        t = (ssn1l_terms(c.m, c.n, c.k, lanes, plan.tag) if plan.linears == "ssn_1l" else
+             ssn_sh_terms(c.m, c.n, c.k, plan.tag))
         forming, coins = t["forming"] * c.count, t["coins"] * c.count
         coin_calls = [(t["coin_bytes_call"], c.calls * (c.count / (c.m * c.n * c.k * c.calls)))]
     elif fam in ("lm_head", "router_gemm"):
-        t = ssn1l_terms(c.m, c.n, c.k, lanes)
+        t = ssn1l_terms(c.m, c.n, c.k, lanes, plan.tag)
         forming, coins = t["forming"] * c.count, t["coins"] * c.count
         coin_calls = [(t["coin_bytes_call"], 1)]
     else:
         scores = c.count / (c.dk if fam == "qk" else c.dv)
         if fam == "qk":
-            t = ssn_sh_terms(1, max(1.0, c.keys), c.dk)
+            t = ssn_sh_terms(1, max(1.0, c.keys), c.dk, plan.tag)
             per_row = 1.0
         else:
-            t = ssn_sh_terms(1, c.dv, I8_BLOCK)
-            t["alpha"] = H32 * math.ceil(c.keys / nsw.DATA_PER_STEP) / c.keys
+            t = ssn_sh_terms(1, c.dv, I8_BLOCK, plan.tag)
+            t["alpha"] = H32 * math.ceil(c.keys / I8_BLOCK) * steps_sh(I8_BLOCK, plan.tag) / c.keys
             per_row = math.ceil(c.keys / I8_BLOCK)
         forming = H32 * per_row * c.rows
         coin_b = 0.5 * per_row * c.rows
@@ -661,7 +678,7 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                 if plan.rowmax_stride > 1:
                     cands = {e: strided_max(o, plan.rowmax_stride) for e, o in cands.items()}
                 if plan.dither:
-                    cands = {e: dithered(o) for e, o in cands.items()}
+                    cands = {e: dithered(o, ZERO_P, ZERO_P) for e, o in cands.items()}
                 if plan.exp == "best":
                     e = min(cands, key=lambda e: (lambda r: (r["honest"] - r["forced"], r["honest"]))(
                         lane_cost(cands[e], reading, plan.premises, True, plan.softmax_targets)))
@@ -870,30 +887,66 @@ def _bytes_s8(w: np.ndarray) -> np.ndarray:
     return np.where(u > 127, u - 256, u)
 
 
+def row_tags(m: int, lanes: int = 4) -> np.ndarray:
+    """N-RED's row tags T(i): the balanced base-13 digits of z_i = (⌊i/2⌋ + 1)·(−1)^i, injective for m ≤ 28,560."""
+    out = np.zeros((m, lanes), dtype=np.int64)
+    for i in range(m if lanes else 0):
+        z = (i // 2 + 1) * (-1) ** i
+        for e in range(lanes):
+            dgt = (z + 6) % 13 - 6
+            out[i, e], z = dgt, (z - dgt) // 13
+        assert z == 0, "m too large for the tag lanes"
+    return out
+
+
+def vec_repeat_share(words: np.ndarray) -> float:
+    """Share of row-step vectors (a row's n words after one k32 step) equal to an earlier row's at the same salt: what a
+    prover that reads the coins copies in bulk (N-RED's A1) instead of writing."""
+    sa, m, _, s = words.shape
+    rep = 0
+    for si in range(sa):
+        for t in range(s):
+            seen = set()
+            for i in range(m):
+                b = words[si, i, :, t].tobytes()
+                rep += b in seen
+                seen.add(b)
+    return rep / (sa * m * s)
+
+
 def sim_ssn_sh(case: str, salts: int = 24, m: int = 4, n: int = 6, k: int = 4 * 28, seed: int = 1,
-               mutate: str | None = None) -> dict:
-    """ssn_sh on S = 1 + ⌈(k − 28)/28⌉ steps: words distinct and non-free (M0: raw coin words free). Mutations:
-    `no_shared` drops W₀'s shared lane in step 3, `code_dup` gives two columns one code."""
+               mutate: str | None = None, tag: int = 0) -> dict:
+    """ssn_sh on S = steps_sh(k, tag) steps: words distinct and non-free (M0: raw coin words free), and the share of
+    row-step vectors a coin-reading prover copies. With `tag`, step 1 holds 28 − tag data lanes beside the row tags
+    T(i), against G drawn from coins after A and B. Cases beyond noise_sweep's: `all_identical` and `all_zero` rows.
+    Mutations: `no_shared` drops W₀'s shared lane in step 3, `code_dup` gives two columns one code."""
     rng = np.random.default_rng(seed)
-    a, b = nsw._data(case, m, n, 128, rng)
+    a, b = nsw._data(case if case in nsw.CASES else "random", m, n, 128, rng)
+    if case == "all_identical":
+        a[:] = a[0]
+    elif case == "all_zero":
+        a[:] = 0
     a, b = a[:, :k], b[:k]
-    s = steps_sh(k)
+    s = steps_sh(k, tag)
     code = nsw.ssn_a_w0(n, nsw.DATA_PER_STEP)[0].copy()
     if mutate == "code_dup":
         code[:, 1] = code[:, 0]
     d = nsw.DATA_PER_STEP
-    apad = np.zeros((m, d * s), dtype=np.int64)
-    bpad = np.zeros((d * s, n), dtype=np.int64)
+    first = d - tag
+    apad = np.zeros((m, first + d * (s - 1)), dtype=np.int64)
+    bpad = np.zeros((first + d * (s - 1), n), dtype=np.int64)
     apad[:, :k], bpad[:k] = a, b
-    ycols = [bpad[:d], code]
+    g = rng.integers(-3, 4, (tag, n))
+    ycols = [bpad[:first], g, code]
     lanes = []
     for t in range(1, s):
         lane = np.zeros((4, n), dtype=np.int64)
         if not (mutate == "no_shared" and t == 2):
             lane[0] = 1
         lanes.append(lane)
-        ycols += [bpad[d * t:d * (t + 1)], lane]
+        ycols += [bpad[first + d * (t - 1):first + d * t], lane]
     y1 = np.concatenate(ycols, axis=0)
+    tags = row_tags(m, tag)
     xs, raw, formed, inits = [], [], [], []
     bias = np.rint(code.sum(axis=0) / 2).astype(np.int64)
     for _ in range(salts):
@@ -901,9 +954,9 @@ def sim_ssn_sh(case: str, salts: int = 24, m: int = 4, n: int = 6, k: int = 4 * 
         r = rng.integers(0, 2 ** 32, (s - 1,), dtype=np.int64)
         bits = np.stack([(h[:, 0] >> (8 * e)) & 1 for e in range(4)], axis=1)
         rb = _bytes_s8(r)
-        parts = [apad[:, :d], bits]
+        parts = [apad[:, :first], tags, bits]
         for t in range(1, s):
-            parts += [apad[:, d * t:d * (t + 1)], np.broadcast_to(rb[t - 1], (m, 4))]
+            parts += [apad[:, first + d * (t - 1):first + d * t], np.broadcast_to(rb[t - 1], (m, 4))]
         xs.append(np.concatenate(parts, axis=1))
         shared = sum(rb[t - 1] @ lanes[t - 1] for t in range(1, s))
         inits.append(np.broadcast_to(-(shared + bias), (m, n)))
@@ -914,24 +967,31 @@ def sim_ssn_sh(case: str, salts: int = 24, m: int = 4, n: int = 6, k: int = 4 * 
     words = nsw._words(x, y, np.stack(inits))
     out = nsw._distinct([words, np.stack(formed)], [np.stack(raw)])
     err = words[:, :, :, -1] - (a @ b)[None]
-    return out | {"served_err_mean": float(err.mean()), "served_err_std": float(err.std()), "steps": s}
+    return out | {"served_err_mean": float(err.mean()), "served_err_std": float(err.std()), "steps": s,
+                  "vec_repeat_share": vec_repeat_share(words)}
 
 
-PV_CASES = ["random", "zero_row", "identical_rows", "uniform_p", "onehot_p", "identical_cols", "zero_vblock"]
+PV_CASES = ["random", "zero_row", "identical_rows", "uniform_p", "onehot_p", "identical_cols", "zero_vblock",
+            "zero_pblock"]
 
 
 def sim_pv_blocks(case: str, salts: int = 24, m: int = 4, dv: int = 6, blocks: int = 3, steps: int = 2,
-                  seed: int = 2, mutate: str | None = None) -> dict:
+                  seed: int = 2, mutate: str | None = None, tag: int = 0) -> dict:
     """Int8 PV under ssn_sh, a fresh step-1 code a key block: u8 P (m × L) · s8 V (L × dv), each block's k32 words
-    committed. Mutation `code_once` codes only block 1, so later blocks' words repeat on degenerate P."""
+    committed, with the share of row-step vectors a coin-reading prover copies. With `tag`, step 1 holds 28 − tag
+    keys beside the row tags. `zero_pblock`: every row's P is 0 on block 2 (keys far from every query). Mutation
+    `code_once` codes only block 1, so later blocks' words repeat on degenerate P."""
     rng = np.random.default_rng(seed)
     d = nsw.DATA_PER_STEP
-    blk = d * steps
+    first = d - tag
+    blk = first + d * (steps - 1)
     L = blk * blocks
     p = rng.integers(0, 256, (m, L))
     v = np.clip(np.rint(rng.normal(0, 25, (L, dv))), -127, 127).astype(np.int64)
     if case == "zero_row":
         p[0] = 0
+    elif case == "zero_pblock":
+        p[:, blk:2 * blk] = 0
     elif case == "identical_rows":
         p[1] = p[0]
     elif case == "uniform_p":
@@ -946,13 +1006,20 @@ def sim_pv_blocks(case: str, salts: int = 24, m: int = 4, dv: int = 6, blocks: i
     code = nsw.ssn_a_w0(dv, d)[0]
     lane = np.zeros((4, dv), dtype=np.int64)
     lane[0] = 1
+    g = rng.integers(-3, 4, (tag, dv))
+    tags = row_tags(m, tag)
+
+    def span(t: int) -> slice:
+        return slice(0, first) if t == 0 else slice(first + d * (t - 1), first + d * t)
+
     all_words, raws, formed = [], [], []
     for bi in range(blocks):
         pb, vb = p[:, bi * blk:(bi + 1) * blk], v[bi * blk:(bi + 1) * blk]
         coded = not (mutate == "code_once" and bi > 0)
         ycols = []
         for t in range(steps):
-            ycols += [vb[d * t:d * (t + 1)], code if (t == 0 and coded) else lane]
+            ycols += [vb[span(t)], *([g, code] if (t == 0 and coded) else
+                                    [np.zeros((tag, dv), dtype=np.int64), lane] if t == 0 else [lane])]
         y1 = np.concatenate(ycols, axis=0)
         xs, rw, fm, inits = [], [], [], []
         bias = np.rint(code.sum(axis=0) / 2).astype(np.int64) if coded else 0
@@ -964,9 +1031,9 @@ def sim_pv_blocks(case: str, salts: int = 24, m: int = 4, dv: int = 6, blocks: i
             parts, shared = [], 0
             for t in range(steps):
                 if t == 0 and coded:
-                    parts += [pb[:, :d], bits]
+                    parts += [pb[:, span(t)], tags, bits]
                 else:
-                    parts += [pb[:, d * t:d * (t + 1)], np.broadcast_to(rb[t], (m, 4))]
+                    parts += [pb[:, span(t)], *([tags] if t == 0 else []), np.broadcast_to(rb[t], (m, 4))]
                     shared = shared + rb[t] @ lane
             xs.append(np.concatenate(parts, axis=1))
             inits.append(np.broadcast_to(-(shared + bias), (m, dv)))
@@ -978,7 +1045,8 @@ def sim_pv_blocks(case: str, salts: int = 24, m: int = 4, dv: int = 6, blocks: i
         raws.append(np.stack(rw))
         if coded:
             formed.append(np.stack(fm))
-    return nsw._distinct(all_words + formed, raws)
+    out = nsw._distinct(all_words + formed, raws)
+    return out | {"vec_repeat_share": float(np.mean([vec_repeat_share(w) for w in all_words]))}
 
 
 def poly_exp2_coeffs(deg: int = 3) -> np.ndarray:
@@ -1103,7 +1171,7 @@ def sim_dither(salts: int = 48, samples: int = 2048, seed: int = 6, dither: bool
     q, pk = np.stack(qs), np.stack(packs)
     vq, vp = ~(q == q[:1]).all(axis=0), ~(pk == pk[:1]).all(axis=0)
     cols = pk[:, vp].T
-    return {"int8_vary_share": float(vq.mean()), "pack_vary_share": float(vp.mean()),
+    return {"int8_vary_share": float(vq.mean()), "pack_vary_share": float(vp.mean()), "zero_share": float((q == 0).mean()),
             "pack_distinct_share": len({c.tobytes() for c in cols}) / max(1, len(cols)),
             "mean_abs_err_vs_rint": float(np.abs(q.astype(np.float64) - np.rint(
                 (acc[None] * s)).clip(-127, 127)).mean())}
@@ -1148,24 +1216,41 @@ def check() -> list[dict]:
     lin_macs = sum(r["count"] for r in lb["components"] if r["family"] == "linear")
     ok("the step's linear term (floor reading) equals noise_sweep's weighted ssn_1l gap at T 8,192",
        abs(lin_gap / lin_macs - nsw.weighted(d, nsw.LLAMA, 8192, "M0", False)["gap"]) < 1e-9, lin_gap / lin_macs)
-    for name in ("ssn_sh",):
-        bad = {c: sim_ssn_sh(c)["bad_share"] for c in nsw.CASES}
-        ok(f"{name} words distinct and non-free on every data case", all(v == 0 for v in bad.values()), bad)
-    bad64 = {c: sim_ssn_sh(c, k=64)["bad_share"] for c in nsw.CASES}
-    ok("ssn_sh at QK's head dim 64 (S = 3, 8 data lanes in step 3) distinct and non-free on every case",
-       all(v == 0 for v in bad64.values()) and sim_ssn_sh("random", k=64)["steps"] == 3, bad64)
+    tg = TAG_LANES
+    bad = {c: sim_ssn_sh(c, tag=tg)["bad_share"] for c in nsw.CASES}
+    ok("ssn_sh-tag words distinct and non-free on every data case", all(v == 0 for v in bad.values()), bad)
+    bad64 = {c: sim_ssn_sh(c, k=64, tag=tg)["bad_share"] for c in nsw.CASES}
+    ok("ssn_sh-tag at QK's head dim 64 (S = 3, as untagged) distinct and non-free on every case",
+       all(v == 0 for v in bad64.values()) and sim_ssn_sh("random", k=64, tag=tg)["steps"] == 3 == steps_sh(64), bad64)
+    rep = {f"{c}_{'tag' if t else 'untagged'}": sim_ssn_sh(c, salts=4, m=48, k=64, tag=t)["vec_repeat_share"]
+           for c in ("all_identical", "all_zero", "random") for t in (0, tg)}
+    ok("a coin-reading prover copies most row vectors of 48 identical or zero rows under untagged ssn_sh (16 classes "
+       "a step, N-RED's A1) and none under ssn_sh-tag", rep["all_identical_untagged"] > 0.5 and
+       rep["all_zero_untagged"] > 0.5 and all(v == 0 for k_, v in rep.items() if k_.endswith("_tag")), rep)
+    pv_rep = {f"zero_pblock_{'tag' if t else 'untagged'}": sim_pv_blocks("zero_pblock", salts=4, m=48, tag=t)[
+        "vec_repeat_share"] for t in (0, tg)}
+    ok("PV's all-zero P blocks (keys far from every query): most row vectors copied untagged, none tagged",
+       pv_rep["zero_pblock_untagged"] > 0.1 and pv_rep["zero_pblock_tag"] == 0, pv_rep)
+    ks = sorted({k_ for _, k_ in nsw.LLAMA.values()} | {k_ for _, k_ in V4["dense"].values()}
+                | {k_ for _, k_ in V4["expert"].values()})
+    same = {k_: (ssn1l_terms(64, 1, k_, cl, tg)["alpha"] == ssn1l_terms(64, 1, k_, cl)["alpha"])
+            for k_ in ks for cl in (4, 5)}
+    sh_same = {dk: steps_sh(dk, tg) == steps_sh(dk) for dk in (LLAMA["dk"], V4["nope"] + V4["rope"])}
+    ok("the row tags leave ssn_1l's steps unchanged at every linear K of both models (4- and 5-lane codes) and "
+       "ssn_sh's at QK's head dims; PV takes I8_BLOCK keys in 4 steps", all(same.values()) and all(sh_same.values())
+       and steps_sh(I8_BLOCK, tg) == 4, {"ssn_1l": same, "qk": sh_same})
     r = sim_ssn_sh("zero_blocks", mutate="no_shared")
     ok("ssn_sh without step 3's shared lane loses words on zero_blocks (mutation)", r["bad_share"] > 0, r["bad_share"])
     r = sim_ssn_sh("identical_cols", mutate="code_dup")
     ok("ssn_sh with a repeated column code loses words on identical_cols (mutation)", r["bad_share"] > 0,
        r["bad_share"])
-    r = sim_ssn_sh("random", salts=400)
-    ok("ssn_sh served error is zero-mean within 0.5 (std ~3.7 units)", abs(r["served_err_mean"]) < 0.5,
-       (r["served_err_mean"], r["served_err_std"]))
-    pv = {c: sim_pv_blocks(c)["bad_share"] for c in PV_CASES}
-    ok("int8 PV blocks (ssn_sh, a code a block) distinct and non-free on every P/V case",
+    r = sim_ssn_sh("random", salts=400, tag=tg)
+    ok("ssn_sh-tag served error (the coin bits' and the tags' noise, kept in the output) is zero-mean within 0.5",
+       abs(r["served_err_mean"]) < 0.5, (r["served_err_mean"], r["served_err_std"]))
+    pv = {c: sim_pv_blocks(c, tag=tg)["bad_share"] for c in PV_CASES}
+    ok("int8 PV blocks (ssn_sh-tag, a code a block) distinct and non-free on every P/V case",
        all(v == 0 for v in pv.values()), pv)
-    pv_m = {c: sim_pv_blocks(c, mutate="code_once")["bad_share"] for c in ("identical_rows", "uniform_p")}
+    pv_m = {c: sim_pv_blocks(c, mutate="code_once", tag=tg)["bad_share"] for c in ("identical_rows", "uniform_p")}
     ok("int8 PV coded only in block 1 loses words on identical or uniform P (mutation)",
        all(v > 0 for v in pv_m.values()), pv_m)
     for e in ("mufu", "poly"):
@@ -1184,7 +1269,7 @@ def check() -> list[dict]:
        sm["poly_exp2_max_rel_err"] < 2e-4, sm["poly_exp2_max_rel_err"])
     xs = np.array([-(2 ** 22), -1, 0, 1, 12345, 2 ** 22 - 1], dtype=np.int64)
     conv = ((xs + 0x4B400000).astype(np.int32).view(np.float32) - np.float32(12582912.0)).astype(np.float64)
-    ok("magic-number conversion exact for |acc| < 2^22, which holds QK (127^2·64) and PV (255·127·112) blocks",
+    ok(f"magic-number conversion exact for |acc| < 2^22, which holds QK (127^2·64) and PV (255·127·{I8_BLOCK}) blocks",
        bool((conv == xs).all()) and 127 ** 2 * 64 < 2 ** 22 and 255 * 127 * I8_BLOCK < 2 ** 22, conv.tolist())
     tc = {m: tc_best(m, "s8", "paired") for m in (64, 8, 4, 2)}
     tb = {m: tc_best(m, "bf16", "paired") for m in (64, 8, 4)}
