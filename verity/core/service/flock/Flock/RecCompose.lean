@@ -341,10 +341,10 @@ def opensOf : List Event → Except String (List Opened)
   | .opened o :: rest => (opensOf rest).map (o :: ·)
 
 /-- The verdict `v` is the session `o`'s: at its part, on its coin key. -/
-def isOf (o : Opened) (v : Verdict) : Bool := v.part == some o.part && v.coinKey == some o.coinKey
+def isOf (o : Opened) (v : PartVerdict) : Bool := v.part == some o.part && v.coinKey == some o.coinKey
 
 /-- Every part read the shared set the record staged. -/
-def checkStaged (sh : Shared) (name : String) (v : Verdict) : Except String Unit :=
+def checkStaged (sh : Shared) (name : String) (v : PartVerdict) : Except String Unit :=
   if v.shared = some sh then .ok ()
   else .error s!"{name}: its rec_shared is not the one the run record staged before the first Hello"
 
@@ -359,12 +359,12 @@ def checkOnce (opens : List Opened) (j : Nat) : Except String Unit :=
   else .error s!"part {j}: {(opens.map (·.part)).count j} sessions opened in the run record, not one: a part is never retried"
 
 /-- **Every opened session is a composed part's.** -/
-def checkOpened (vs : List (String × Verdict)) (o : Opened) : Except String Unit :=
+def checkOpened (vs : List (String × PartVerdict)) (o : Opened) : Except String Unit :=
   if vs.any fun p => isOf o p.2 then .ok ()
   else .error s!"run record: session {o.session} was opened for part {o.part}, and it is not the session composed for that part"
 
 /-- **Every composed part's session was opened** in the run. -/
-def checkRecorded (opens : List Opened) (name : String) (v : Verdict) : Except String Unit :=
+def checkRecorded (opens : List Opened) (name : String) (v : PartVerdict) : Except String Unit :=
   if opens.any fun o => isOf o v then .ok ()
   else .error s!"{name}: its session is not one the run record opened for its part"
 
@@ -372,7 +372,7 @@ def checkRecorded (opens : List Opened) (name : String) (v : Verdict) : Except S
 the shared set every part read; then the sessions opened, each for one of V*'s `n` statements and exactly one for each
 (`checkOnce`), every one a composed part's (`checkOpened`) and every composed part's among them (`checkRecorded`); then
 the close. -/
-def checkRun (n : Nat) (rows : String) (vs : List (String × Verdict)) (evs : List Event) : Except String Unit :=
+def checkRun (n : Nat) (rows : String) (vs : List (String × PartVerdict)) (evs : List Event) : Except String Unit :=
   match evs with
   | .stage r sh :: rest =>
     if r ≠ rows then .error s!"run record: it staged the rows file {r}, not the composition's {rows}" else
@@ -529,7 +529,7 @@ staging is its first event, at the composition's rows `rows` and the one shared 
 sessions it opened, `opens`, and then its close. Every opened session is for one of V*'s `n` statements, each
 statement has exactly one, and the opened sessions are the composed parts' (each at its part on its coin key, both
 ways). -/
-def OneRun (n : Nat) (rows : String) (vs : List Verdict) (evs : List Event) : Prop :=
+def OneRun (n : Nat) (rows : String) (vs : List PartVerdict) (evs : List Event) : Prop :=
   ∃ (sh : Shared) (opens : List Opened), evs = Event.stage rows sh :: (opens.map Event.opened ++ [Event.close]) ∧
     (∀ v ∈ vs, v.shared = some sh) ∧ (∀ o ∈ opens, o.part < n) ∧
     (∀ j, j < n → (opens.map (·.part)).count j = 1) ∧
@@ -555,12 +555,12 @@ theorem opensOf_ok : ∀ {evs : List Event} {opens : List Opened}, opensOf evs =
       rw [opensOf_ok hr]
       rfl
 
-theorem isOf_eq {o : Opened} {v : Verdict} (h : isOf o v = true) :
+theorem isOf_eq {o : Opened} {v : PartVerdict} (h : isOf o v = true) :
     v.part = some o.part ∧ v.coinKey = some o.coinKey := by
   simpa [isOf] using h
 
 /-- **`checkRun` accepts only what `OneRun` states.** -/
-theorem checkRun_oneRun {n : Nat} {rows : String} {vs : List (String × Verdict)} {evs : List Event}
+theorem checkRun_oneRun {n : Nat} {rows : String} {vs : List (String × PartVerdict)} {evs : List Event}
     (h : checkRun n rows vs evs = .ok ()) : OneRun n rows (vs.map (·.2)) evs := by
   unfold checkRun at h
   split at h
