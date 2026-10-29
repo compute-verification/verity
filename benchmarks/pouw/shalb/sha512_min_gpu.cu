@@ -77,9 +77,10 @@ int main() {
   CK(cudaMemcpy(d_in, h_in.data(), words * 8, cudaMemcpyHostToDevice));
   std::vector<uint64_t> got((size_t)nthreads * 16);
   const int grid = (nthreads + threads - 1) / threads;
-  int bad = 0;
+  int bad_all = 0;
   const int checked = std::min(nthreads, 4096);
   for (int kind = 0; kind < 2; ++kind) {
+    int bad = 0;
     if (kind == 0) chain<0><<<grid, threads>>>(d_in, d_out, nthreads);
     else chain<1><<<grid, threads>>>(d_in, d_out, nthreads);
     CK(cudaGetLastError());
@@ -95,6 +96,7 @@ int main() {
     }
     printf("chain %s: %d threads checked against the host, %d words differ\n", kind ? "committer" : "minimal", checked,
            bad);
+    bad_all += bad;
   }
   forms<<<grid, threads>>>(d_in, d_out, nthreads);
   CK(cudaGetLastError());
@@ -129,5 +131,5 @@ int main() {
     printf("time %s: median %.3f ms over %d launches, %.0f compressions, %.4f ns a compression, %d SMs\n",
            kind ? "committer" : "minimal", med, REPS, comp, med * 1e6 / comp, sms);
   }
-  return bad || bad_forms ? 1 : 0;
+  return bad_all || bad_forms ? 1 : 0;
 }
