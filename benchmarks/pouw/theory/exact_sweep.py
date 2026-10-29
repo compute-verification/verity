@@ -24,7 +24,7 @@ write on rows whose Cauchy–Schwarz bound reaches 2²². `rc_ffma` cancels the 
 only the column bit, at any range, and loses a final word wherever two outputs of a column are equal.
 
 Data models: M0 (free set: constants, salt-independent functions, raw coin words), M1u (the call's own words on a grid
-uniform in A: SW-LEAN's final-word lemma, under PeriodInventory and the atomic call) and M1s (M1 on a grid that keeps the
+uniform in A: the final-word lemma, under PeriodInventory and the atomic call) and M1s (M1 on a grid that keeps the
 served data's zero blocks and identical rows, priced on noise_data.py's measurement). `--data` reads exact_data.py's
 output (final-word repeats, the magic range's fallback rows, the scale fold's exactness), `--noise-data` noise_data.py's.
 Output: JSON (`--json`) and a text table (`--table`); exit 0 iff every check passes.
@@ -194,7 +194,7 @@ def designs() -> list[Design]:
                lambda m, n, k: H32 * ns.ssn_1l_forming_writes(s1(k)) / (n * k), _z,
                lambda m, n, k: H32 * s1(k) / (n * k), _z, _z, False,
                lambda m, n, k: 32 * w1(k) * m, lambda m, n, k: 4 * s1(k) / (n * k), _no_dup, False,
-               "~0 (estimate: served std 6.0 / 9.2 units at K 2,048 / 8,192)", f"{premises_m0}; {coins}",
+               "served noise (std ~6 / ~9 units at K 2,048 / 8,192); measured on benchmarks/ppl", f"{premises_m0}; {coins}",
                "reference (served, not exact)", exact=False),
         Design("ssn_1l_mov", "ssn_1l with its −β_j accumulator init priced as a MOV an output (32/K)",
                lambda k: H32 * s1(k) / k, lambda m, n, k: H32 * ns.ssn_1l_forming_writes(s1(k)) / (n * k), _z,
@@ -202,23 +202,30 @@ def designs() -> list[Design]:
                lambda m, n, k: 32 * w1(k) * m, lambda m, n, k: 4 * s1(k) / (n * k), _no_dup, False,
                "~0 (estimate)", f"{premises_m0}; {coins}",
                "smell: the init is a register write; fold β_j into the column FFMA instead (free)", exact=False),
+        Design("ssn_pd", "ssn_1l partly de-noised in the stock epilogue: r_i (the later steps' row bits) at the magic "
+               "IADD3, β_j in the column FFMA's addend; the code a1·C_j stays served", lambda k: H32 * s1(k) / k,
+               lambda m, n, k: H32 * ns.ssn_1l_forming_writes(s1(k)) / (n * k), _z,
+               lambda m, n, k: H32 * s1(k) / (n * k), _z, lambda m, n, k: H32 * popc_writes(s1(k)) / (n * k), False,
+               lambda m, n, k: 32 * w1(k) * m, lambda m, n, k: 4 * s1(k) / (n * k), _no_dup, True,
+               "served code noise only (std ~3.6 units, zero mean)", f"{premises_m0}; {coins}",
+               "the served lead with no init and a third of its noise; committed words unchanged", exact=False),
         Design("ncp3", "noise_sweep's ncp3: three blocks, full-rank noise both sides (tight at 3K)", lambda k: 3.0,
                lambda m, n, k: 32 / n, lambda m, n, k: 32 / m, lambda m, n, k: 24 / n, lambda m, n, k: 24 / m, _z, True,
                lambda m, n, k: 6 * (m + n) * k + k / 4 * math.log2(k / 4), lambda m, n, k: 3 / n + 3 / m,
                lambda model, m, k, lin: _m1_final(model, m, k, lin, 3 * k // 32), False,
-               "+3.68% 2K / +3.48% 8K (measured, CORE-NCP; int7)", f"{premises_m0}; M1 for the final word: PeriodInventory "
+               "int7 activations; measured on benchmarks/ppl", f"{premises_m0}; M1 for the final word: PeriodInventory "
                "+ atomic call (rank 3)", "minimal for two-sided full-rank noise; dominated"),
         Design("os2", "X=[A+E|E], Y=[B;-B] (tight at 2K)", lambda k: 2.0, lambda m, n, k: 2 * p / n, _z,
                lambda m, n, k: 2 * p / n * (1 - (noise_share("zero_reg_share", m) or 0.0)), _z, _z, True,
                lambda m, n, k: 3 * m * k, lambda m, n, k: 2 / n,
                lambda model, m, k, lin: _m1_final(model, m, k, lin, 2 * k // 32), False,
-               "~0 (clamp 124, estimate)", f"{premises_m0}; M1 (rank 3) for the final word", "dominated by per2"),
+               "activations clamped to ±124; measured on benchmarks/ppl", f"{premises_m0}; M1 (rank 3) for the final word", "dominated by per2"),
         Design("per2", "X=[A+V.P | V x L], Y=[B; -limbs(fold32 B)] (K + 32·limbs; the bound is K + 32)",
                lambda k: 1 + H32 * ns.per2_limbs(k) / k, lambda m, n, k: p / n + 256 / (n * k), _z,
                lambda m, n, k: (p / n + 256 / (n * k)) * (1 - (noise_share("zero_reg_share", m) or 0.0)), _z, _z, True,
                lambda m, n, k: 3 * 32 * m, lambda m, n, k: 1 / n,
                lambda model, m, k, lin: _m1_final(model, m, k, lin, k // 32), False,
-               "~0 (clamp 124, estimate)", f"{premises_m0}; M1 (rank 3) for the final word",
+               "activations clamped to ±124; measured on benchmarks/ppl", f"{premises_m0}; M1 (rank 3) for the final word",
                "the best in-GEMM exact design; needs M1 (final word) and C1 at T 512"),
         Design("lowrank1", "X=[A+u vᵀ | u x L], v public, u fresh a row", lambda k: 1 + H32 * ns.per2_limbs(k) / k,
                lambda m, n, k: 2 * p / n, _z, lambda m, n, k: p / n, _z, _z, True, lambda m, n, k: 8 * m,
