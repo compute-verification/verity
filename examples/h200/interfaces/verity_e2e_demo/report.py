@@ -146,7 +146,7 @@ SERVE_NOISE = ("SERVE_NOISE_S", "SERVE_NOISE_BATCH", "SERVE_NOISE_UNITS_S", "SER
                "SERVE_COMMIT_OVERHEAD_S_SMALL", "SERVE_COMMIT_OVERHEAD_RATIO_SMALL", "SERVE_COMMIT_OVERHEAD_S",
                "SERVE_COMMIT_OVERHEAD_RATIO", "SERVE_COMMIT_COMPRESSIONS", "SERVE_COMMIT_COMPRESSIONS_TO",
                "SERVE_COMMIT_AND_SHARE_AS_SERVED", "SERVE_COMMIT_AND_SHARE")
-#: Daniel's band for the commit's own overhead at 1 KiB rows, over the step it adds to
+#: the target band for the commit's own overhead at 1 KiB rows, over the step it adds to
 COMMIT_OVERHEAD_TARGET = (Fraction(1, 5), Fraction(1, 4))
 #: a section row that states per-call noise itself, which `serve_noise_line` states instead
 NOISE_ROW = re.compile(r"per-call noise|γ_step|gamma_step", re.IGNORECASE)
@@ -532,7 +532,8 @@ def serve_noise_line(values: Mapping[str, V], quiet: str | None = None) -> str:
     tenths, thousandths = (lambda x: f"{float(x):.1f}"), (lambda x: f"{float(x):.3f}")
     lo, hi = COMMIT_OVERHEAD_TARGET
     added, step = _num(values.get("SERVE_COMMIT_OVERHEAD_S")), _num(values.get("SERVE_COMMIT_STEP_S"))
-    where = "against" if added is None or not step else "inside" if added / step <= hi else "above"
+    r = None if added is None or not step else added / step
+    where = "against" if r is None else "under" if r < lo else "inside" if r <= hi else "above"
     return (f"Per-call noise adds **+{c('SERVE_NOISE_S')} s a step at batch {c('SERVE_NOISE_BATCH')}** "
             f"({c('SERVE_NOISE_UNITS_S')} s of units plus {c('SERVE_NOISE_COMMIT_S')} s of commit, "
             f"{runs('SERVE_NOISE_S')}): {c('SERVE_NOISE_GAMMA_STEP')}× against that commit-bound "
