@@ -196,7 +196,7 @@ def counter_parts(hc, coins, data, S, m=64, n=32, q=5, seed=0, chosen=0):
     patterns against random column data."""
     inst = hc.Inst(m, n, S, q, data, "add", seed, coins)
     d = hc.Draw(inst, hc.Rule("all", "32", "hash"))
-    U, V, A, B = d.U.copy(), d.V.copy(), d.A, d.B
+    U, V = d.U.copy(), d.V.copy()
     W = d.w.copy()
     if chosen:
         g = np.random.default_rng(seed + 100)

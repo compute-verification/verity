@@ -15,6 +15,7 @@ needs: stdlib.
   S with k multiplications has k >= rank(H)/2, H being S's Hessian in the variables (Strassen: for a quadratic form,
   products of linear forms are as good as any program). The rank is computed over GF(p) for a 61-bit prime (equal to
   the rational rank with high probability) and over GF(2), where the odd lanes' 2y vanishes and only the coin bits stay.
+  It bounds one S alone: a tile's S values share their column terms, and `nh_attack.py` computes them all for less.
 - **The operands.** A program with exactly rank(H)/2 products has operands spanning H's column space; a raw coin word is
   free, so the count of coordinate vectors e_i in that space (`coin_coordinates_in_colspace`; in RREF, e_i is in it iff
   i is a pivot column whose row is e_i) is how many operands could be free. Zero means every operand is a written value.

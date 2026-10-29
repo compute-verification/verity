@@ -14,9 +14,7 @@ T2 and the per-period totals: stdlib.
   commits words (hm96 rows, frame-v3-sha512 trees, the same hiding), so the seal costs the lead's hashing a word divided
   by G.
 - **Opening.** The AND gates a drawn unit's proof spends a committed word beyond recomputing it (130 AND gates a MAC):
-  SHA-512 58,120 a compression of 32 words; a 32-bit add 31 (one AND a full adder, majority = ((a ^ c) & (b ^ c)) ^ c);
-  a 32 x 32 low product with the accumulator folded in about 1,060 (528 partial products, about 530 full adders);
-  XOR none.
+  SHA-512 58,120 a compression of 32 words, and each design's own circuit beside it.
 - **T2** (estimate): 1 plus each word's ALU registers at the lead's marginal, (T2 - 1) over its hashing registers a
   word. A sketch on the tensor pipe instead adds its MMA share of stock's time.
 """
@@ -34,13 +32,21 @@ DESIGNS = {
     "lead: SHA-512 of every word": (0.0, 0.0, None, False, "ShaWrites + CarriedWords", "4a (hashing part)"),
     "linear: R·w, Carter-Wegman, Freivalds, MLE, count-sketch": (None, None, None, True,
                                                                  "none holds (the linear fold)", "-"),
-    "nh2: IMAD of adjacent accumulators, S += w(j)·w(j+1)": (0.5, 0.0, 1_060 / 2, False, "PairWrites", "4 (rank-2 core)"),
-    "nh: IMAD of consecutive steps, S += w_(2k-1)·w_(2k)": (0.5, 0.0, 1_060 / 2, False, "PairWrites", "4 (rank-2 core)"),
-    "xor: LOP3, S ^= w ^ w'": (0.5, 0.0, 0.0, False, "XorWrites", "4"),
+    "nh2: IMAD of adjacent accumulators, S += w(j)·w(j+1)": (None, None, None, True,
+                                                             "none holds: on the lead's separable words each product "
+                                                             "expands into row sums and a GEMM over the shared column "
+                                                             "terms (nh_attack, from G 64)", "-"),
+    "nh: IMAD of consecutive steps, S += w_(2k-1)·w_(2k)": (None, None, None, True,
+                                                            "none holds on the lead's words (nh_attack, from G 32); "
+                                                            "with one S an output on mirror-π noise, NHWrites", "5"),
+    "xor: LOP3, S ^= w ^ w'": (None, None, None, True,
+                               "none holds: the lead's narrow words pack two or three to a register and XOR "
+                               "lane by lane", "-"),
     "chain: LOP3 and IADD3 alternating, S = (S ^ w ^ w') + w'' + w'''": (None, None, None, True,
                                                                           "none holds: the added words enter linearly "
                                                                           "and fold (synth, T 4)", "-"),
-    "sumsq: IMAD, S += w·w": (1.0, 0.0, 600.0, False, "SqWrites (field bound only half)", "4"),
+    "sumsq: IMAD, S += w·w": (None, None, None, True,
+                              "none holds: the square expands on the lead's separable words, as nh2 does", "-"),
     "tc-bytes: int8 MMA on the accumulators' bytes, N = 8": (0.0, 1.0, 32 * AND_PER_MAC, False, "BytesWrites", "4"),
     "lookups: four byte tables a word": (10.0, 0.0, 1_100.0, False, "LookupWrites (histogram fold risk)", "4-5"),
     # GD-SIS's opening is priced by its own method (a multiple of SHA-512's rows); it is not recomputed here
@@ -123,7 +129,7 @@ def main():
     per = periods(B, rows)
     print("## Per period (hashing W1, stock AND gates beside it)")
     for row in per:
-        if row["design"].startswith(("lead", "nh2", "xor")):
+        if row["design"].startswith(("lead", "tc-bytes")):
             opened = row["opening_and_if_all_opened"]
             print(f"- {row['design'].split(':')[0]}, {row['scope']}, {row['period']}: hashing {row['hashing_w1']:.3g} W1,"
                   f" {opened:.3g} AND gates as a circuit; stock {row['stock_and']:.3g} AND gates")
