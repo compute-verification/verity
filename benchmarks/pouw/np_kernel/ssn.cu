@@ -527,8 +527,8 @@ struct LinDev {
 
 // One JSON line a measurement, at M rows: per linear the plain GEMM at its own K, ssn_1l's GEMM without and with export,
 // the hash pass over the exported words, coins, forming and coins + forming as one call's latency; then the forward's
-// 16 layers end to end, serial (each chunk's GEMM with export, then its hash, one stream) and beside (chunk c's hash on a
-// second stream while chunk c + 1's GEMM runs), with coins and forming before each linear's GEMM.
+// 16 layers end to end, serial (each chunk's GEMM with export, then its hash, one stream) and beside (chunk c's hash on
+// buffer c mod B's stream while the GEMM stream runs on), with coins and forming before each linear's GEMM.
 static int time_all(int reps, int M, double budget_gb, const std::vector<int>& rbs) {
   struct Spec { const char* name; int n, K; };
   const Spec specs[] = {{"qkv", 3072, 2048}, {"o", 2048, 2048}, {"gate_up", 16384, 2048}, {"down", 2048, 8192}};
@@ -555,18 +555,21 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     max_chunk_words = std::max(max_chunk_words, (size_t)d.chunk * s.n * L.S);
     lins.push_back(d);
   }
-  uint4* Wb[2];
+  // beside's buffers, each with its own hash stream: as many as fit in 48 GB, 2 to 8
+  const int nbuf = (int)std::max<size_t>(2, std::min<size_t>(8, (size_t)48e9 / (max_chunk_words * 4)));
+  std::vector<uint4*> Wb(nbuf);
   for (auto& w : Wb) CK(cudaMalloc(&w, max_chunk_words * 4 + 2 * 65536));
-  std::vector<Hasher> hsv(2 * rbs.size());
-  for (size_t h = 0; h < hsv.size(); h++) hsv[h].init(max_chunk_words * 4, rbs[h / 2]);
-  int hi = 0;  // the hasher in use: hsv[2 hi], hsv[2 hi + 1]
+  std::vector<Hasher> hsv(nbuf * rbs.size());
+  for (size_t h = 0; h < hsv.size(); h++) hsv[h].init(max_chunk_words * 4, rbs[h / nbuf]);
+  int hi = 0;  // the hasher in use: hsv[nbuf hi + b] for buffer b
   auto hname = [&](int h) { return h < 0 ? std::string("none") : rbs[h] ? "rows" + std::to_string(rbs[h]) : std::string("rowseg"); };
   int* dout;
   CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
   Timer T;
-  cudaStream_t s1, s2;
+  cudaStream_t s1;
+  std::vector<cudaStream_t> s2(nbuf);
   CK(cudaStreamCreateWithFlags(&s1, cudaStreamNonBlocking));
-  CK(cudaStreamCreateWithFlags(&s2, cudaStreamNonBlocking));
+  for (auto& s : s2) CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
   const double f0 = sm_mhz(dclk);
   auto line = [&](const char* what, const LinDev* d, double ms, double macs, double words, double extra) {
     const double u = units(ms, f0);
@@ -593,7 +596,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       const uint8_t* A = d.A + (size_t)(r0 / 64) * d.S * TA;
       ex += T.ms(reps, [&] { gemm(d.BN, true, A, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, 0); });
       const long long blocks = (long long)(mc / 64) * (d.n / d.BN) * d.S;
-      for (size_t h = 0; h < rbs.size(); h++) hsh[h] += T.ms(reps, [&] { hsv[2 * h].run(Wb[0], blocks, 64 * d.BN * 4, 0); });
+      for (size_t h = 0; h < rbs.size(); h++) hsh[h] += T.ms(reps, [&] { hsv[nbuf * h].run(Wb[0], blocks, 64 * d.BN * 4, 0); });
     }
     line("ssn_gemm_export", &d, ex, macs, words, d.chunk);
     for (hi = 0; hi < (int)rbs.size(); hi++) line("hash_pass", &d, hsh[hi], macs, words, d.chunk);
@@ -620,39 +623,38 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
         for (int r0 = 0; r0 < M; r0 += d.chunk) {
           const int mc = std::min(d.chunk, M - r0);
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1);
-          hsv[2 * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1);
+          hsv[nbuf * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1);
         }
       }
   };
-  cudaEvent_t done[2], full[2];
-  for (int b = 0; b < 2; b++) {
+  std::vector<cudaEvent_t> done(nbuf), full(nbuf);
+  for (int b = 0; b < nbuf; b++) {
     CK(cudaEventCreateWithFlags(&done[b], cudaEventDisableTiming));
     CK(cudaEventCreateWithFlags(&full[b], cudaEventDisableTiming));
   }
   auto fwd_beside = [&] {
     int c = 0;
-    for (int b = 0; b < 2; b++) CK(cudaEventRecord(done[b], s2));
+    for (int b = 0; b < nbuf; b++) CK(cudaEventRecord(done[b], s2[b]));
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
         coins_form(d.msg, d.coins, d.A, M, d.S, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk, c++) {
-          const int mc = std::min(d.chunk, M - r0), b = c & 1;
+          const int mc = std::min(d.chunk, M - r0), b = c % nbuf;
           CK(cudaStreamWaitEvent(s1, done[b]));
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1);
           CK(cudaEventRecord(full[b], s1));
-          CK(cudaStreamWaitEvent(s2, full[b]));
-          hsv[2 * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2);
-          CK(cudaEventRecord(done[b], s2));
+          CK(cudaStreamWaitEvent(s2[b], full[b]));
+          hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b]);
+          CK(cudaEventRecord(done[b], s2[b]));
         }
       }
-    CK(cudaStreamWaitEvent(s1, done[0]));
-    CK(cudaStreamWaitEvent(s1, done[1]));
+    for (int b = 0; b < nbuf; b++) CK(cudaStreamWaitEvent(s1, done[b]));
   };
   for (hi = 0; hi < (int)rbs.size(); hi++) {
     line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
     line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
   }
-  printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f}\n", f0, sm_mhz(dclk));
+  printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d}\n", f0, sm_mhz(dclk), nbuf);
   return 0;
 }
 

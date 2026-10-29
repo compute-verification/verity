@@ -7,7 +7,8 @@ if known) and the stock GEMMs' time a forward, all in ms. T2 is the step with ss
   own   (stock + forward - forward's plain GEMM on the same kernel) / stock: ssn_1l's extra over this kernel's own plain GEMM
   swap  (stock - stock GEMM + forward) / stock: this forward in place of the stock GEMMs
 where forward is the 16 layers' four linears with coins, forming, every k32 word exported and hashed, run serially (one
-stream) or beside (each chunk's hash on a second stream while the next chunk's GEMM runs).
+stream) or beside (each chunk's hash on a second stream while the next chunk's GEMM runs), for each hash scheme (hasher:
+rowseg, or rows<B> for the served committer's hm96 leaves of B-byte rows).
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+
+LINEARS = ("qkv", "o", "gate_up", "down")
 
 
 def load(out: Path) -> dict[int, list[dict]]:
@@ -27,39 +30,47 @@ def load(out: Path) -> dict[int, list[dict]]:
 
 
 def summarize(rows: list[dict], stock: dict | None) -> dict:
-    by = {(r["what"], r.get("linear")): r for r in rows if "what" in r}
+    by = {(r["what"], r.get("linear"), r.get("hasher", "rowseg" if "hash" in r["what"] or r["what"][4:] in ("serial", "beside")
+                                                    else "none")): r for r in rows if "linear" in r}
+    hashers = sorted({h for (_, _, h) in by if h != "none"})
     lin = {}
-    for name in ("qkv", "o", "gate_up", "down"):
-        g = lambda w: by.get((w, name))  # noqa: E731
+    for name in LINEARS:
+        g = lambda w, h="none": by.get((w, name, h))  # noqa: E731
         if not g("plain_gemm"):
             continue
-        p, s, e, h = g("plain_gemm"), g("ssn_gemm"), g("ssn_gemm_export"), g("hash_pass")
+        p, s, e = g("plain_gemm"), g("ssn_gemm"), g("ssn_gemm_export")
         words = e["words"]
         lin[name] = {
-            "n": p["n"], "K": p["K"], "S": p["S"], "BN": p["BN"], "words": words,
+            "n": p["n"], "K": p["K"], "S": p["S"], "BN": p["BN"], "words": words, "stock_macs": p["stock_macs"],
             "plain_ms": p["ms"], "ssn_ms": s["ms"], "alpha_time": s["ms"] / p["ms"], "alpha_layout": 32 * p["S"] / p["K"],
             "export_ms": e["ms"], "export_units_per_word_over_ssn": (e["units"] - s["units"]) / words,
-            "export_units_per_stock_mac": e["units_per_stock_mac"],
-            "hash_ms": h["ms"], "hash_units_per_byte": h["units_per_byte"], "hash_gb_per_s": 4 * words / (h["ms"] * 1e6),
             "coins_us": 1e3 * g("coins")["ms"], "forming_us": 1e3 * g("forming")["ms"],
             "coins_forming_us": 1e3 * g("coins_forming")["ms"],
+            "hash": {h: {"ms": r["ms"], "units_per_byte": r["units_per_byte"], "gb_per_s": 4 * words / (r["ms"] * 1e6)}
+                     for h in hashers if (r := g("hash_pass", h))},
         }
-    f = {w: by[(w, "all")] for w in ("fwd_plain_gemm", "fwd_serial", "fwd_beside") if (w, "all") in by}
+    fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
+    for h in hashers:
+        for sched in ("serial", "beside"):
+            if (r := by.get((f"fwd_{sched}", "all", h))):
+                fwd[f"{sched}/{h}"] = r
     out = {"M": rows[0]["M"], "mhz": rows[0]["mhz"], "linears": lin,
-           "forward": {w: {"ms": r["ms"], "units_per_stock_mac": r["units_per_stock_mac"],
-                           "units_per_word": r["units_per_word"], "words": r["words"]} for w, r in f.items()}}
-    if stock and f:
+           "forward": {k: {"ms": r["ms"], "units": r["units"], "units_per_stock_mac": r["units_per_stock_mac"],
+                           "units_per_word": r["units_per_word"], "words": r["words"], "stock_macs": r["stock_macs"]}
+                       for k, r in fwd.items() if r}}
+    if stock and fwd.get("plain_gemm"):
+        plain = fwd["plain_gemm"]["ms"]
         t2 = {}
-        plain = f["fwd_plain_gemm"]["ms"]
-        for sched in ("fwd_serial", "fwd_beside"):
-            fw = f[sched]["ms"]
+        for k, r in fwd.items():
+            if k == "plain_gemm" or not r:
+                continue
             for kind in ("sync", "async"):
                 st = stock.get(kind)
                 if st is None:
                     continue
-                t2[f"{sched[4:]}_{kind}_own"] = (st + fw - plain) / st
+                t2[f"{k} {kind} own"] = (st + r["ms"] - plain) / st
                 if stock.get("gemm") is not None:
-                    t2[f"{sched[4:]}_{kind}_swap"] = (st - stock["gemm"] + fw) / st
+                    t2[f"{k} {kind} swap"] = (st - stock["gemm"] + r["ms"]) / st
         out["stock"] = stock
         out["t2"] = t2
     return out
@@ -78,17 +89,17 @@ def main() -> None:
         stocks[int(parts[0])] = {"sync": v[0], "async": v[1], "gemm": v[2]}
     res = [summarize(rows, stocks.get(m)) for m, rows in sorted(load(a.out).items())]
     for r in res:
-        print(f"## M {r['M']} (SM clock {r['mhz']:.0f} MHz at idle)")
-        print("| linear | S | BN | plain ms | ssn ms | α time / layout | export ms | export units a word | hash ms | hash units a "
-              "byte | hash GB/s | coins µs | forming µs | coins+forming µs |")
-        print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+        print(f"## M {r['M']} (SM clock {r['mhz']:.0f} MHz)")
+        print("| linear | S | BN | plain ms | ssn ms | α time / layout | export ms | export units a word | coins µs | "
+              "forming µs | coins+forming µs | hash ms, units a byte, GB/s by scheme |")
+        print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|")
         for n, x in r["linears"].items():
+            hs = "; ".join(f"{h} {v['ms']:.3f} / {v['units_per_byte']:.0f} / {v['gb_per_s']:.0f}" for h, v in x["hash"].items())
             print(f"| {n} | {x['S']} | {x['BN']} | {x['plain_ms']:.4f} | {x['ssn_ms']:.4f} | {x['alpha_time']:.3f} / "
                   f"{x['alpha_layout']:.3f} | {x['export_ms']:.3f} | {x['export_units_per_word_over_ssn']:.0f} | "
-                  f"{x['hash_ms']:.3f} | {x['hash_units_per_byte']:.0f} | {x['hash_gb_per_s']:.0f} | {x['coins_us']:.1f} | "
-                  f"{x['forming_us']:.1f} | {x['coins_forming_us']:.1f} |")
+                  f"{x['coins_us']:.1f} | {x['forming_us']:.1f} | {x['coins_forming_us']:.1f} | {hs} |")
         for w, x in r["forward"].items():
-            print(f"- {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC, {x['words']:.4g} words")
+            print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
         for k, v in r.get("t2", {}).items():
             print(f"- T2 {k}: {v:.2f}x")
         print()
