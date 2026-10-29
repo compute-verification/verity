@@ -1265,8 +1265,9 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     for (size_t i = 0; i < lins.size(); i++)
       for (int l = 0; l < 16; l++) lins[i].l1.push_back(l1_dev(w, 4 * l + i, (u64)M * lins[i].K));
   }
-  // beside's buffers, each with its own hash stream: as many as fit in 48 GB, 2 to 8
-  const int nbuf = (int)std::max<size_t>(2, std::min<size_t>(8, (size_t)48e9 / (max_chunk_words * 4)));
+  // beside's buffers, each with its own hash stream: as many as fit in 48 GB, 2 to NBUF (default 8)
+  const size_t nbuf_max = getenv("NBUF") ? (size_t)std::max(2, atoi(getenv("NBUF"))) : 8;
+  const int nbuf = (int)std::max<size_t>(2, std::min<size_t>(nbuf_max, (size_t)48e9 / (max_chunk_words * 4)));
   std::vector<uint4*> Wb(nbuf);
   for (auto& w : Wb) CK(cudaMalloc(&w, max_chunk_words * 4 + 2 * 65536));
   std::vector<Hasher> hsv(nbuf * rbs.size());
@@ -1516,9 +1517,10 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     full[b] = event_in(cx_a, CU_EVENT_DISABLE_TIMING);
   }
   // BARE=1 also times beside with nothing ahead of each call's GEMM (no root(A_j), coins, G, forming or BLC's link; the GEMM
-  // still reads lane coins): the schedule's floor
+  // still reads lane coins), the schedule's floor, and beside's GEMM stream alone (the work ahead of each GEMM and the GEMMs,
+  // no hash)
   const bool bare = getenv("BARE") && atoi(getenv("BARE"));
-  auto fwd_beside_of = [&](bool with_pre) {
+  auto fwd_beside_of = [&](bool with_pre, bool with_hash = true) {
     int c = 0, call = 0;
     for (int b = 0; b < nbuf; b++) CK(cudaEventRecord(done[b], s2[b]));
     for (int l = 0; l < 16; l++)
@@ -1532,6 +1534,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
           const u32* cv = link_c(d, call & 1, r0, mc, with_pre, sb);
           CK(cudaStreamWaitEvent(sb, done[b]));
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, sb, cv);
+          if (!with_hash) continue;
           CK(cudaEventRecord(full[b], sb));
           CK(cudaStreamWaitEvent(s2[b], full[b]));
           hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b], hash_cap, words_tree);
@@ -1546,6 +1549,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     if (!split) line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
     line("fwd_beside", nullptr, tb.ms(reps, [&] { fwd_beside_of(true); }, sb), fwd_macs, fwd_words, 0);
     if (bare) line("fwd_beside_bare", nullptr, tb.ms(reps, [&] { fwd_beside_of(false); }, sb), fwd_macs, fwd_words, 0);
+    if (bare && hi == 0)
+      line("fwd_beside_crit", nullptr, tb.ms(reps, [&] { fwd_beside_of(true, false); }, sb), fwd_macs, fwd_words, 0);
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
          "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "

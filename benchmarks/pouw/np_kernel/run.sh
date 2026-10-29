@@ -18,7 +18,8 @@
 #   BLC (0; 1 times blc4a-t64-e7: the tag layout with three lane coins a 64-row tile in each later step, streamed after A_j;
 #   the check runs all three layouts),
 #   SPLIT (0; R runs beside's GEMM stream in a green context of R SMs and its hash streams in one of the rest; no serial),
-#   BARE (0; 1 also times beside with nothing ahead of each call's GEMM, the schedule's floor), VARIANTS (unset; else
+#   BARE (0; 1 also times beside with nothing ahead of each call's GEMM, the schedule's floor, and beside's GEMM stream
+#   alone, no hash), NBUF (8: the most buffers beside's hash streams take, each its own stream), VARIANTS (unset; else
 #   passes of the timings, each a comma-separated NAME=VALUE list over the environment above, e.g. "L1=1 L1=2,PRIO=1":
 #   time_m<M>_<the list with = as - and , as _>.jsonl).
 #   VERITY_ROWS_PHASES and VERITY_ROWS_FORM reach the served committer (native_rows.cu).

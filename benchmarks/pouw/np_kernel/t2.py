@@ -9,7 +9,8 @@ if known) and the stock GEMMs' time a forward, all in ms. T2 is the step with ss
 where forward is the 16 layers' four linears with coins, forming, every k32 word exported and hashed, run serially (one
 stream) or beside (each chunk's hash on a second stream while the next chunk's GEMM runs), for each hash scheme (hasher:
 rowseg, rows<B> for the served committer's hm96 leaves of B-byte rows, or plain<B> for L1's plain frame-v3 leaves of B-byte
-rows). beside_bare (BARE=1) is beside with nothing ahead of each call's GEMM, a control and not a forward of ssn_1l.
+rows). beside_bare (BARE=1) is beside with nothing ahead of each call's GEMM, and beside_crit beside's GEMM stream alone (the
+work ahead of each GEMM and the GEMMs, no hash): controls, not forwards of ssn_1l.
 """
 
 from __future__ import annotations
@@ -63,7 +64,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
         }
     fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
     for h in hashers:
-        for sched in ("serial", "beside", "beside_bare"):
+        for sched in ("serial", "beside", "beside_bare", "beside_crit"):
             if (r := by.get((f"fwd_{sched}", "all", h))):
                 fwd[f"{sched}/{h}"] = r
     clock = next((r for r in rows if r["what"] == "clock"), {})
@@ -74,6 +75,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
            "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"),
            "prio": clock.get("prio", 0), "layout": clock.get("layout", "ssn_1l"), "l1": clock.get("l1", 0),
            "l1_cta": clock.get("l1_cta", 0), "split_sms": clock.get("split_sms", [0, 0]),
+           "beside_buffers": clock.get("beside_buffers", 0),
            "small_threads": clock.get("small_threads", 0),
            "small_rows_max": clock.get("small_rows_max", 0),
            "small_leaves_check": {"cases": len(small), "leaves": sum(r["leaves"] for r in small),
@@ -86,7 +88,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
         plain = fwd["plain_gemm"]["ms"]
         t2 = {}
         for k, r in fwd.items():
-            if k == "plain_gemm" or k.startswith("beside_bare/") or not r:
+            if k == "plain_gemm" or k.startswith(("beside_bare/", "beside_crit/")) or not r:
                 continue
             for kind in ("sync", "async"):
                 st = stock.get(kind)
@@ -166,6 +168,7 @@ def main() -> None:
         if r["split_sms"][0]:
             print(f"- beside's GEMM stream runs in a green context of {r['split_sms'][0]} SMs, its hash streams in one of "
                   f"{r['split_sms'][1]} (no serial forward)")
+        print(f"- beside's buffers, each with its own hash stream: {r['beside_buffers']}")
         for w, x in r["forward"].items():
             print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
         for w, x in r["forward"].items():
