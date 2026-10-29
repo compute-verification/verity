@@ -8493,6 +8493,18 @@
    "assumptions": [],
    "type_hash": "c714b31cf1728e65cfbbe0a9d2beaf55916ed0f231856ba07ec443f505fde314"
   },
+  "Nci.SecurityProofs.DecompositionCount": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.DecompositionCount : Nci.Guarantees.DecompositionCount"]
+  },
+  "Nci.SecurityProofs.DecompositionCountHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.DecompositionCountHonest : Nci.Guarantees.DecompositionCountHonest"]
+  },
+  "Nci.SecurityProofs.DecompositionCountNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.DecompositionCountNontrivial : Nci.Guarantees.DecompositionCountNontrivial"]
+  },
   "Nci.SecurityProofs.ExpandComplies": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ExpandComplies : Nci.Guarantees.ExpandComplies"],
@@ -8522,6 +8534,18 @@
    "signature": ["Nci.SecurityProofs.FullPositions : Nci.Guarantees.FullPositions"],
    "assumptions": [],
    "type_hash": "55856778f974cf265b7c2df6fc78adbf826e9d78ff0e128bc585a20f62d9ff39"
+  },
+  "Nci.SecurityProofs.GammaBelow": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.GammaBelow : Nci.Guarantees.GammaBelow"]
+  },
+  "Nci.SecurityProofs.GammaBelowHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.GammaBelowHonest : Nci.Guarantees.GammaBelowHonest"]
+  },
+  "Nci.SecurityProofs.GammaBelowNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.GammaBelowNontrivial : Nci.Guarantees.GammaBelowNontrivial"]
   },
   "Nci.SecurityProofs.HeldBudget": {
    "owner": "@training",
@@ -8704,6 +8728,42 @@
    "signature": ["Nci.SecurityProofs.PartitionCovers : Nci.Guarantees.PartitionCovers"],
    "assumptions": [],
    "type_hash": "e91ddc3829ebf746b239f410fb6e3c41921ab211b519ba02ac367583900152ed"
+  },
+  "Nci.SecurityProofs.PointwiseCount": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseCount : Nci.Guarantees.PointwiseCount"]
+  },
+  "Nci.SecurityProofs.PointwiseCountHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseCountHonest : Nci.Guarantees.PointwiseCountHonest"]
+  },
+  "Nci.SecurityProofs.PointwiseCountNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseCountNontrivial : Nci.Guarantees.PointwiseCountNontrivial"]
+  },
+  "Nci.SecurityProofs.PointwiseEvent": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseEvent : Nci.Guarantees.PointwiseEvent"]
+  },
+  "Nci.SecurityProofs.PointwiseEventHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseEventHonest : Nci.Guarantees.PointwiseEventHonest"]
+  },
+  "Nci.SecurityProofs.PointwiseEventNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseEventNontrivial : Nci.Guarantees.PointwiseEventNontrivial"]
+  },
+  "Nci.SecurityProofs.PointwiseThreshold": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseThreshold : Nci.Guarantees.PointwiseThreshold"]
+  },
+  "Nci.SecurityProofs.PointwiseThresholdHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseThresholdHonest : Nci.Guarantees.PointwiseThresholdHonest"]
+  },
+  "Nci.SecurityProofs.PointwiseThresholdNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.PointwiseThresholdNontrivial : Nci.Guarantees.PointwiseThresholdNontrivial"]
   },
   "Nci.SecurityProofs.ReadBound": {
    "owner": "@lean",
@@ -8956,6 +9016,18 @@
    "signature": ["Nci.SecurityProofs.WeightedProductCapNontrivial : Nci.Guarantees.WeightedProductCapNontrivial"],
    "assumptions": [],
    "type_hash": "36dc948f6153d855712fd8f2b3751531f71f67fbea4b4d95dbbf343586cbd9d1"
+  },
+  "Nci.SecurityProofs.WholeCapLocal": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.WholeCapLocal : Nci.Guarantees.WholeCapLocal"]
+  },
+  "Nci.SecurityProofs.WholeCapLocalHonest": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.WholeCapLocalHonest : Nci.Guarantees.WholeCapLocalHonest"]
+  },
+  "Nci.SecurityProofs.WholeCapLocalNontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.WholeCapLocalNontrivial : Nci.Guarantees.WholeCapLocalNontrivial"]
   },
   "NetTiming.SecurityProofs.CardCountsEqLe": {
    "owner": "@network-accounting",
@@ -12771,6 +12843,24 @@
    "Nci.SecurityProofs.RecomputeByStateNontrivial": "completeness: RecomputeByState's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), with one proof block holding both gates (R1), priced 2 together so HeldPriceAtMost at h = 1 fails, the block contains the consumer's required gates, so RecomputeByState's conclusion is not a tautology.",
    "Nci.SecurityProofs.WeightedProductCapHonest": "completeness: WeightedProductCap's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), the product reads its slot (SlotsRead, proved), its use has weight 1, and the proof block holds slots priced at most one bit (HeldPriceAtMost, proved), so WeightedProductCap's premises hold together there and WeightedProductCap is not vacuous.",
    "Nci.SecurityProofs.WeightedProductCapNontrivial": "completeness: WeightedProductCap's nontrivial witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), at h = 0, below the slot the block holds so HeldPriceAtMost fails, its weighted products, 1, exceed h times the weight it serves, so WeightedProductCap's conclusion is not a tautology.",
+   "Nci.SecurityProofs.DecompositionCount": "frozen (no-function): It counts the operation gates of an arbitrary counted computation over any decomposition into disjoint regions of c gates and a remainder (Nci.Capability.Counted.Decomposition, Security/Definitions/Nci/Capability/Pointwise.lean), not about a function's code.",
+   "Nci.SecurityProofs.PointwiseCount": "frozen (no-function): It bounds an arbitrary counted computation's weighted total over any decomposition meeting the whole cap, the split cap, the remainder ceiling and utilization (Nci.Capability.Counted.Decomposition.WholeCap, SplitCap, RemainderCeiling, Utilization, Security/Definitions/Nci/Capability/Pointwise.lean), not about a function's code.",
+   "Nci.SecurityProofs.GammaBelow": "frozen (no-function): It is real arithmetic on Theorem A's rate (Nci.Capability.Gamma, Security/Definitions/Nci/Capability/Pointwise.lean), its closed form where the regions' per-gate cap is at most the remainder's, not about a function's code.",
+   "Nci.SecurityProofs.PointwiseThreshold": "frozen (no-function): It bounds below the operation gates of an arbitrary counted computation carrying Omega_* under Theorem A's hypotheses (Nci.Capability.Counted.Decomposition, Security/Definitions/Nci/Capability/Pointwise.lean), not about a function's code.",
+   "Nci.SecurityProofs.PointwiseEvent": "frozen (no-function): It bounds an event of an arbitrary game's probability (Verity.Game.prob), which shape.events does not list, over arbitrary executions' counted computations, acceptance and success, with the decomposition hypotheses' failure and coverage's failure bounded by hypotheses (Nci.Capability.Counted.Decomposes, Security/Definitions/Nci/Capability/Pointwise.lean), not a function's acceptance.",
+   "Nci.SecurityProofs.WholeCapLocal": "frozen (no-function): It is about an arbitrary registration's proof blocks as a decomposition's regions, its counted products as the occurrences, a held slot budget and the uses' upstream certificate and overlap weights (Nci.Capability.Counted.ofProducts, Security/Definitions/Nci/Capability/Pointwise.lean; Nci.Capability.HeldPriceAtMost, Nci.Capability.Consumers.Upstream), not about a function's code.",
+   "Nci.SecurityProofs.DecompositionCountHonest": "completeness: DecompositionCount's honest witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), the counted computation X on the toy circuit's two operation gates has a decomposition at c = 1 (D: the region {2}, the remainder {3}), so DecompositionCount is not vacuous.",
+   "Nci.SecurityProofs.DecompositionCountNontrivial": "completeness: DecompositionCount's nontrivial witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), counting D's one region at c = 2, above its one gate, gives c B + U = 3, more than X's two operation gates, so DecompositionCount's conclusion is not a tautology.",
+   "Nci.SecurityProofs.PointwiseCountHonest": "completeness: PointwiseCount's honest witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), D meets the whole cap, the split cap and the remainder ceiling at 1 and utilization at 1/2, each tight, failing at 0, all proved, so PointwiseCount's premises hold together there, not degenerately, and PointwiseCount is not vacuous.",
+   "Nci.SecurityProofs.PointwiseCountNontrivial": "completeness: PointwiseCount's nontrivial witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), at q_split = 0, below the occurrence D splits so SplitCap fails, Gamma = 1 and X's three occurrences exceed Gamma N = 2, so PointwiseCount's conclusion is not a tautology.",
+   "Nci.SecurityProofs.GammaBelowHonest": "completeness: GammaBelow's honest witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), D's caps give q = 2 at c = 1 and D meets the remainder ceiling nu_out = 2, so q/c <= nu_out holds there, and it fails at D's tight ceiling nu_out = 1, all proved, so GammaBelow is not vacuous.",
+   "Nci.SecurityProofs.GammaBelowNontrivial": "completeness: GammaBelow's nontrivial witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean)'s caps, at nu_out = 1, below q/c = 2, Gamma = 2 is not (q/c)(1 - f) + nu_out f = 3/2, so GammaBelow's conclusion is not a tautology.",
+   "Nci.SecurityProofs.PointwiseThresholdHonest": "completeness: PointwiseThreshold's honest witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), D meets PointwiseCount's premises, Gamma = 2 > 0, and X carries Omega_* = 3 and not 4, all proved, so PointwiseThreshold's premises hold together there, not degenerately, and PointwiseThreshold is not vacuous.",
+   "Nci.SecurityProofs.PointwiseThresholdNontrivial": "completeness: PointwiseThreshold's nontrivial witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), at Omega_* = 5, more than X carries so Omega_* <= Omega fails, L = 5/2 exceeds X's two operation gates, so PointwiseThreshold's conclusion is not a tautology.",
+   "Nci.SecurityProofs.PointwiseEventHonest": "completeness: PointwiseEvent's honest witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), the executions are one fair coin, X or the heavy computation (one occurrence of weight 10 at one gate), each accepted and successful; at c = 1, q_whole = q_split = nu_out = 1, f = 1/2 (Gamma = 2), Omega_* = 6 and N_max = 10, the heavy one has no decomposition meeting the caps (Theorem A would carry 10 on two gates) and X carries 3 < Omega_*, each on half the coins, so both premises hold at delta = eta = 1/2 and fail at 0, all proved, and PointwiseEvent is not vacuous.",
+   "Nci.SecurityProofs.PointwiseEventNontrivial": "completeness: PointwiseEvent's nontrivial witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean), at delta = 0, below the heavy execution's half so the decomposition premise fails, every execution, with its two operation gates below min(L, N_max) = 3, is accepted and succeeds, probability 1, above delta + eta = 1/2, so PointwiseEvent's conclusion is not a tautology.",
+   "Nci.SecurityProofs.WholeCapLocalHonest": "completeness: WholeCapLocal's honest witness (its witnesses entry): at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean) and the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean)'s Xp and Dp, R1 is a (2, 1 + 0)-partition, the product reads its slot, the block holds slots priced at most h = 1, the use's certificate and weight 1 hold, it requires one gate (g = 1), the one occurrence is the product at its gate (r = 1) and Dp's region is R1's proof block, all proved; the budget and the multiplicity fail at 0, so WholeCapLocal's premises hold together there, not degenerately, and WholeCapLocal is not vacuous.",
+   "Nci.SecurityProofs.WholeCapLocalNontrivial": "completeness: WholeCapLocal's nontrivial witness (its witnesses entry): at the pointwise toy Nci.Capability.PointwiseToy (Security/Definitions/Nci/Capability/PointwiseToy.lean)'s Xp and Dp, at r = 0, below the product's one occurrence, Dp's region computes whole weight 1, above r h ((k + k_F) + c/g) = 0, so WholeCapLocal's conclusion is not a tautology.",
    "Nci.SecurityProofs.CapabilityFloorHonest": "completeness: CapabilityFloor's honest witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), a hidden coin ω sets the target, [ω] at one output position, the covered structure is at least two gates and the cost a run's gate count; CoversEfficientMethods holds at Tmax = 10 and η = 1/2, since a position holds one gate so a run reaches at most one of the two targets, and every covered computation costs at least Lc = 2, both proved; coverage is not empty: the one-gate guess lacks the covered structure and reaches the target on half the coins, so CoversEfficientMethods fails at η = 0, also proved, so CapabilityFloor's premises hold together there, not degenerately, and CapabilityFloor is not vacuous.",
    "Nci.SecurityProofs.CapabilityFloorNontrivial": "completeness: CapabilityFloor's nontrivial witness (its witnesses entry): at the toy task Accounting.Slowdown.Toy (Security/Definitions/Accounting/CoverageToy.lean), the one-gate guess, costing 1, below min(Lc, Tmax) = 2, reaches the target on half the coins, a positive probability, above η = 0, where coverage fails, so CapabilityFloor's conclusion is not a tautology.",
    "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet.",
@@ -60832,6 +60922,14 @@
    "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
    "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
   },
+  "Nci.SecurityProofs.DecompositionCount": {
+   "honest": ["Nci.SecurityProofs.DecompositionCountHonest"],
+   "nontrivial": "Nci.SecurityProofs.DecompositionCountNontrivial"
+  },
+  "Nci.SecurityProofs.GammaBelow": {
+   "honest": ["Nci.SecurityProofs.GammaBelowHonest"],
+   "nontrivial": "Nci.SecurityProofs.GammaBelowNontrivial"
+  },
   "Nci.SecurityProofs.HeldBudget": {
    "honest": ["Nci.SecurityProofs.HeldBudgetHonest"],
    "nontrivial": "Nci.SecurityProofs.HeldBudgetNontrivial"
@@ -60852,6 +60950,18 @@
    "honest": ["Nci.SecurityProofs.OperandCapSeparateHonest"],
    "nontrivial": "Nci.SecurityProofs.OperandCapNontrivial"
   },
+  "Nci.SecurityProofs.PointwiseCount": {
+   "honest": ["Nci.SecurityProofs.PointwiseCountHonest"],
+   "nontrivial": "Nci.SecurityProofs.PointwiseCountNontrivial"
+  },
+  "Nci.SecurityProofs.PointwiseEvent": {
+   "honest": ["Nci.SecurityProofs.PointwiseEventHonest"],
+   "nontrivial": "Nci.SecurityProofs.PointwiseEventNontrivial"
+  },
+  "Nci.SecurityProofs.PointwiseThreshold": {
+   "honest": ["Nci.SecurityProofs.PointwiseThresholdHonest"],
+   "nontrivial": "Nci.SecurityProofs.PointwiseThresholdNontrivial"
+  },
   "Nci.SecurityProofs.RecomputeByGates": {
    "honest": ["Nci.SecurityProofs.RecomputeByGatesHonest"],
    "nontrivial": "Nci.SecurityProofs.RecomputeByGatesNontrivial"
@@ -60871,6 +60981,10 @@
   "Nci.SecurityProofs.WeightedProductCap": {
    "honest": ["Nci.SecurityProofs.WeightedProductCapHonest"],
    "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial"
+  },
+  "Nci.SecurityProofs.WholeCapLocal": {
+   "honest": ["Nci.SecurityProofs.WholeCapLocalHonest"],
+   "nontrivial": "Nci.SecurityProofs.WholeCapLocalNontrivial"
   }
  }
 }
