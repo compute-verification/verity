@@ -9,7 +9,8 @@
 // - CVC = 1: the chaining value is the IV, a compile-time constant (any block after a block-aligned constant prefix has
 //   a constant chaining value), so round 0 folds to two adds of W_0 to constants.
 // - PAD_BITS: the block is a block-aligned message's padding block, a constant, so its schedule is K_t + W_t immediates
-//   and a round is 28: 80 × 28 + 14 = 2,254.
+//   and a round is 28: 80 × 28 + 14 = 2,254. nvcc doesn't fold the funnel shifts of a schedule over constant words, so
+//   a constant block is hashed this way, in a chain too.
 // - CHAIN: a chain of compressions two blocks at a time (CHAIN 1, then 2), the chaining value in chain form: cv[7] holds
 //   H7 + K_0, so round 0's first add is h + W_0. The second block reads the first's H3 only in e_1 = d + T1 and its
 //   H7 + K_0 only in that first add, both with a free IADD3 slot, so the first block leaves each as two terms (cv[3] or
@@ -112,7 +113,7 @@ SHAMIN_HD uint64_t maj(uint64_t a, uint64_t b, uint64_t c) { return (a & b) | (c
 // them.
 template <int CVC, uint64_t PAD_BITS = 0, int CHAIN = 0>
 SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
-  static_assert(!CHAIN || (!CVC && !PAD_BITS), "a chain's blocks are variables");
+  static_assert(!CHAIN || !CVC, "a chain's chaining values are variables");
   constexpr PadBlock pad(PAD_BITS);
   uint64_t a, b, c, d, e, f, g, h;
   if constexpr (CVC) {
@@ -134,7 +135,11 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
     }
     uint64_t u;
     if constexpr (PAD_BITS != 0) {
-      u = h + pad.kw[t];
+      if (CHAIN && t == 0) {
+        u = CHAIN == 2 ? h + pend[1] + (pad.kw[0] - Kt(0)) : h + (pad.kw[0] - Kt(0));
+      } else {
+        u = h + pad.kw[t];
+      }
     } else {
       uint64_t wt;
       if (t < 16) {

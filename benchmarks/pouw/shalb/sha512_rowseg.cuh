@@ -124,12 +124,10 @@ SHAMIN_HD void data(const uint64_t* v, uint64_t* st, uint64_t* pend) {
 // The segment's digest into st from the call's PRE words, block 1's words 13 and 14 and the segment's 128 words.
 template <class PreT>
 SHAMIN_HD void segment_from(PreT pre, uint64_t w13, uint64_t w14, const uint64_t* v, uint64_t* st) {
-  uint64_t w[16], pend[2];
+  uint64_t pend[2];
   block1(pre, w13, w14, st, pend);
   data<0>(v, st, pend);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = i == 0 ? 1ull << 63 : i == 15 ? MESSAGE_BITS : 0;
-  shamin::compress<0, 0, 2>(st, w, pend);
+  shamin::compress<0, MESSAGE_BITS, 2>(st, nullptr, pend);
   st[7] -= shamin::Kt(0);
 }
 
