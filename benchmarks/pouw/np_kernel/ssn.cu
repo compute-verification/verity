@@ -19,8 +19,11 @@
 //   ssn check                 every exported word, the final outputs and the formed registers against the host reference
 //                             on small shapes (random, extreme and zero data; columns past the code's skip; S = 1 and a
 //                             partial last step)
-//   ssn time REPS M [BUDGET_GB]  Llama-3.2-1B's fused linears at M rows: one JSON line a timing (see time_all)
-// Build: nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a ssn.cu -o ssn
+//   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
+//                             Llama-3.2-1B's fused linears at M rows, one JSON line a timing (see time_all), the hash pass
+//                             by each ROW_BYTES (0: row-seg; default 0 65536 16384)
+// Build (from the tree's root): nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a benchmarks/pouw/np_kernel/ssn.cu
+//   integrations/vllm/verity_vllm/commit/committer/native_rows.cu -o ssn
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -306,12 +309,43 @@ static void coins_form(const u64* msg, u32* coins, uint8_t* A, int m, int S, cud
   CK(cudaGetLastError());
 }
 
-// the hash pass over a run of exported blocks: each block's 1 KiB segments, then each block's segment digests
+// native_rows.cu (the served committer, linked as its own translation unit): hm96-sha512/row/v2 leaves of fixed-size rows
+extern "C" int verity_rows_params_bytes();
+extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, const uint8_t* row_prefix, const uint8_t* salt_prefix,
+                                 const uint8_t* leaf_prefix, const char* schema, int schema_len, uint32_t lb, void* out);
+extern "C" int verity_rows_leaves_sf_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows,
+                                            const uint8_t* salts, const uint8_t* tn, uint64_t first, uint64_t m, uint64_t n_total,
+                                            uint8_t* out, uint8_t* bc, uint8_t* hs, uint8_t* scratch, uint64_t max_blocks,
+                                            cudaStream_t st);
+
+// The hash pass over a run of exported words. rb 0: served_zk's row-seg rows (sz_segments), one row an exported block: its
+// 1 KiB segments, then its segment digests. rb > 0: the served committer's hm96-sha512/row/v2 leaves of rb-byte rows over
+// the words (salts derived, the split form), one thread a row. The constants (prefixes, key, nibble table) are stand-ins of
+// the scheme's lengths: they set no compression count.
 struct Hasher {
+  int rb = 0;
   u64* mids = nullptr;
-  uint8_t *dig = nullptr, *dig2 = nullptr;
-  size_t cap = 0;
-  void init(size_t max_blocks, int seg_per_block) {
+  uint8_t *dig = nullptr, *dig2 = nullptr, *tn = nullptr, *leaves = nullptr, *scratch = nullptr;
+  std::vector<uint8_t> params;
+  void init(size_t max_bytes, int row_bytes) {
+    rb = row_bytes;
+    if (rb) {
+      std::vector<uint8_t> c(1024);
+      for (size_t i = 0; i < c.size(); i++) c[i] = (uint8_t)mix64(i + 99);
+      params.resize(verity_rows_params_bytes());
+      const char* schema = "hm96-sha512/row/v2";
+      if (verity_rows_build(&c[0], &c[64], &c[128], &c[256], &c[384], schema, (int)strlen(schema), (uint32_t)rb, params.data())) {
+        fprintf(stderr, "ERR verity_rows_build\n");
+        exit(2);
+      }
+      std::vector<uint8_t> t(256 * 17 * 16);
+      for (size_t i = 0; i < t.size(); i++) t[i] = (uint8_t)mix64(i + 5);
+      tn = up(t);
+      const size_t rows = max_bytes / rb + 2;
+      CK(cudaMalloc(&leaves, rows * 64));
+      CK(cudaMalloc(&scratch, rows * 192));
+      return;
+    }
     std::vector<uint32_t> pre(64 * 32);
     for (size_t i = 0; i < pre.size(); i++) pre[i] = (u32)mix64(i + 77);
     uint32_t* dpre = up(pre);
@@ -322,9 +356,8 @@ struct Hasher {
     a.i[0] = 64;
     sz_mid<<<1, 64>>>(a);
     CK(cudaGetLastError());
-    cap = max_blocks;
-    CK(cudaMalloc(&dig, max_blocks * seg_per_block * 64));
-    CK(cudaMalloc(&dig2, max_blocks * 64 * 4));
+    CK(cudaMalloc(&dig, max_bytes / 16 + 64));
+    CK(cudaMalloc(&dig2, max_bytes / 256 + 64));
     CK(cudaFuncSetAttribute(sz_segments, cudaFuncAttributeMaxDynamicSharedMemorySize, 8 * 32 * 33 * 4));
   }
   void seg(const void* data, long long rows, int stride, int s, uint8_t* o, cudaStream_t st) {
@@ -341,6 +374,16 @@ struct Hasher {
     CK(cudaGetLastError());
   }
   void run(const uint4* W, long long blocks, int block_bytes, cudaStream_t st) {
+    if (rb) {
+      const u64 n = ((u64)blocks * block_bytes + rb - 1) / rb;
+      const int rc = verity_rows_leaves_sf_launch(params.data(), (const uint8_t*)W, rb, n, nullptr, tn, 0, n, n, leaves, nullptr,
+                                                  nullptr, scratch, 0, st);
+      if (rc) {
+        fprintf(stderr, "ERR verity_rows_leaves_sf_launch %d\n", rc);
+        exit(2);
+      }
+      return;
+    }
     const int s = block_bytes / 1024;
     seg(W, blocks, block_bytes, s, dig, st);
     seg(dig, blocks, s * 64, s * 64 / 1024, dig2, st);
@@ -486,7 +529,7 @@ struct LinDev {
 // the hash pass over the exported words, coins, forming and coins + forming as one call's latency; then the forward's
 // 16 layers end to end, serial (each chunk's GEMM with export, then its hash, one stream) and beside (chunk c's hash on a
 // second stream while chunk c + 1's GEMM runs), with coins and forming before each linear's GEMM.
-static int time_all(int reps, int M, double budget_gb) {
+static int time_all(int reps, int M, double budget_gb, const std::vector<int>& rbs) {
   struct Spec { const char* name; int n, K; };
   const Spec specs[] = {{"qkv", 3072, 2048}, {"o", 2048, 2048}, {"gate_up", 16384, 2048}, {"down", 2048, 8192}};
   Clk* dclk;
@@ -513,9 +556,11 @@ static int time_all(int reps, int M, double budget_gb) {
     lins.push_back(d);
   }
   uint4* Wb[2];
-  for (auto& w : Wb) CK(cudaMalloc(&w, max_chunk_words * 4));
-  Hasher hs[2];
-  for (auto& h : hs) h.init(max_chunk_words * 4 / 32768, 32);
+  for (auto& w : Wb) CK(cudaMalloc(&w, max_chunk_words * 4 + 2 * 65536));
+  std::vector<Hasher> hsv(2 * rbs.size());
+  for (size_t h = 0; h < hsv.size(); h++) hsv[h].init(max_chunk_words * 4, rbs[h / 2]);
+  int hi = 0;  // the hasher in use: hsv[2 hi], hsv[2 hi + 1]
+  auto hname = [&](int h) { return h < 0 ? std::string("none") : rbs[h] ? "rows" + std::to_string(rbs[h]) : std::string("rowseg"); };
   int* dout;
   CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
   Timer T;
@@ -525,10 +570,11 @@ static int time_all(int reps, int M, double budget_gb) {
   const double f0 = sm_mhz(dclk);
   auto line = [&](const char* what, const LinDev* d, double ms, double macs, double words, double extra) {
     const double u = units(ms, f0);
-    printf("{\"what\": \"%s\", \"linear\": \"%s\", \"M\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"ms\": %.6f, "
+    printf("{\"what\": \"%s\", \"hasher\": \"%s\", \"linear\": \"%s\", \"M\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"ms\": %.6f, "
            "\"mhz\": %.1f, \"units\": %.6e, \"stock_macs\": %.6e, \"units_per_stock_mac\": %.6f, \"words\": %.6e, "
            "\"units_per_word\": %.3f, \"units_per_byte\": %.3f, \"extra\": %.6g}\n",
-           what, d ? d->name : "all", M, d ? d->n : 0, d ? d->K : 0, d ? d->S : 0, d ? d->BN : 0, ms, f0, u, macs,
+           what, std::strstr(what, "hash") || std::strstr(what, "fwd_s") || std::strstr(what, "fwd_b") ? hname(hi).c_str() : "none",
+           d ? d->name : "all", M, d ? d->n : 0, d ? d->K : 0, d ? d->S : 0, d ? d->BN : 0, ms, f0, u, macs,
            macs > 0 ? u / macs : 0, words, words > 0 ? u / words : 0, words > 0 ? u / (4 * words) : 0, extra);
     fflush(stdout);
   };
@@ -540,16 +586,18 @@ static int time_all(int reps, int M, double budget_gb) {
          macs, 0, 0);
     line("ssn_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A, d.B, d.beta, M, d.n, d.S, nullptr, nullptr, nullptr, 0); }),
          macs, 0, 0);
-    double ex = 0, hsh = 0;
+    double ex = 0;
+    std::vector<double> hsh(rbs.size(), 0.0);
     for (int r0 = 0; r0 < M; r0 += d.chunk) {
       const int mc = std::min(d.chunk, M - r0);
       const uint8_t* A = d.A + (size_t)(r0 / 64) * d.S * TA;
       ex += T.ms(reps, [&] { gemm(d.BN, true, A, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, 0); });
       const long long blocks = (long long)(mc / 64) * (d.n / d.BN) * d.S;
-      hsh += T.ms(reps, [&] { hs[0].run(Wb[0], blocks, 64 * d.BN * 4, 0); });
+      for (size_t h = 0; h < rbs.size(); h++) hsh[h] += T.ms(reps, [&] { hsv[2 * h].run(Wb[0], blocks, 64 * d.BN * 4, 0); });
     }
     line("ssn_gemm_export", &d, ex, macs, words, d.chunk);
-    line("hash_pass", &d, hsh, macs, words, d.chunk);
+    for (hi = 0; hi < (int)rbs.size(); hi++) line("hash_pass", &d, hsh[hi], macs, words, d.chunk);
+    hi = -1;
     line("coins", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0, true, false); }), macs,
          words, (double)coin_blocks(M, d.S));
     line("forming", &d, T.ms(std::max(reps, 51), [&] { coins_form(d.msg, d.coins, d.A, M, d.S, 0, false, true); }), macs,
@@ -572,11 +620,10 @@ static int time_all(int reps, int M, double budget_gb) {
         for (int r0 = 0; r0 < M; r0 += d.chunk) {
           const int mc = std::min(d.chunk, M - r0);
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1);
-          hs[0].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1);
+          hsv[2 * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1);
         }
       }
   };
-  line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
   cudaEvent_t done[2], full[2];
   for (int b = 0; b < 2; b++) {
     CK(cudaEventCreateWithFlags(&done[b], cudaEventDisableTiming));
@@ -594,14 +641,17 @@ static int time_all(int reps, int M, double budget_gb) {
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1);
           CK(cudaEventRecord(full[b], s1));
           CK(cudaStreamWaitEvent(s2, full[b]));
-          hs[b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2);
+          hsv[2 * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2);
           CK(cudaEventRecord(done[b], s2));
         }
       }
     CK(cudaStreamWaitEvent(s1, done[0]));
     CK(cudaStreamWaitEvent(s1, done[1]));
   };
-  line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
+  for (hi = 0; hi < (int)rbs.size(); hi++) {
+    line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
+    line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
+  }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f}\n", f0, sm_mhz(dclk));
   return 0;
 }
@@ -615,8 +665,12 @@ int main(int argc, char** argv) {
     return 2;
   }
   if (argc == 2 && !strcmp(argv[1], "check")) return check();
-  if ((argc == 4 || argc == 5) && !strcmp(argv[1], "time"))
-    return time_all(atoi(argv[2]), atoi(argv[3]), argc == 5 ? atof(argv[4]) : 16.0);
-  fprintf(stderr, "usage: ssn check | time REPS M [BUDGET_GB]\n");
+  if (argc >= 4 && !strcmp(argv[1], "time")) {
+    std::vector<int> rbs;
+    for (int a = 5; a < argc; a++) rbs.push_back(atoi(argv[a]));
+    if (rbs.empty()) rbs = {0, 65536, 16384};
+    return time_all(atoi(argv[2]), atoi(argv[3]), argc >= 5 ? atof(argv[4]) : 16.0, rbs);
+  }
+  fprintf(stderr, "usage: ssn check | time REPS M [BUDGET_GB [ROW_BYTES ...]]   (ROW_BYTES 0: row-seg)\n");
   return 2;
 }
