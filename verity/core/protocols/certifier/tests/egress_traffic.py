@@ -21,7 +21,7 @@ IB = (V - 1).bit_length()
 @dataclass(frozen=True)
 class Served:
     """A link served through the warden's own egress (`warden.Warden._egress`): its schedule, the egress records its
-    grid closed (one a link-window), each connection's request (ordinal q = k + 1, its admission bucket, its n
+    grid closed (one an execution phase), each connection's request (ordinal q = k + 1, its admission bucket, its n
     outputs) and response ids, and the warden's `fails` frames."""
 
     params: W.WardenParams
@@ -34,7 +34,7 @@ class Served:
 def serve(params: W.WardenParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids, each one id
     event of P bytes, then `TRAILER`, all there by their deadlines), and the warden serves the link for `windows`
-    link-windows: admitted at the first bucket with a free lane in arrival order."""
+    execution phases: admitted at the first bucket with a free lane in arrival order."""
     P = params.payload
     fails: list[bytes] = []
     warden = SimpleNamespace(params=params, fails=SimpleNamespace(enqueue=fails.append))

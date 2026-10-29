@@ -59,7 +59,7 @@ def period():
 
 @pytest.fixture(scope="module")
 def warden(tmp_path_factory):
-    """The synthetic warden run, its fetch (``late``: the same run, its rehearsal failed late), and the link-window
+    """The synthetic warden run, its fetch (``late``: the same run, its rehearsal failed late), and the execution phase
     holding the most whole certified requests."""
     d = tmp_path_factory.mktemp("warden")
     run = gate_run(d)
@@ -86,7 +86,7 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
                fetch: str = "fetch") -> Path:
-    """A serve dir whose window K served ``records`` (the warden's, by default those of its link-window) and whose
+    """A serve dir whose window K served ``records`` (the warden's, by default those of its execution phase) and whose
     gate fetch (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)

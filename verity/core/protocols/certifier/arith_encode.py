@@ -1,4 +1,4 @@
-"""Advice v1's arithmetic encoder as Boolean Definitions, run forward inside the compile unit alongside the replay scan:
+"""Advice v1's arithmetic encoder as Boolean Definitions, run forward inside the compile slice's proof block alongside the replay scan:
 counting the bits it would write, which is what the composition charges, or checking them against a segment.
 
     ArithCountStep_v1{K, BIN, CW}  (tally, en, symbol) -> tally'
@@ -16,7 +16,7 @@ counting the bits it would write, which is what the composition charges, or chec
 Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of the
 32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
 codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
-for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile unit
+for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile slice's proof block
 runs the encoder forward, since which value is read next, and so its window, is the replay's position.
 
 **The counting variant** is what the PROTOCOL composes. The committed advice is the values themselves, which the
@@ -79,15 +79,15 @@ consumes n = 2 bits, or none when nothing was used. Its window's segment must en
 **The book's model** (`BookKT_v1`) is `code_v1.KT`, the estimate advice v1 codes its bits at. C contexts each count
 their 0s and 1s, in KW = 15 bits, from the registered book's priors (`Book.priors`, public). Context ctx gives
 f = 2n + 1 for each count, and the bit then raises its count; once 2·(n0 + n1) + 2 would pass 2^16, that is once
-n0 + n1 reaches 2^15, both are halved, rounding up. The book keeps n0 + n1 < 2^15, and the unit refuses counts past it
+n0 + n1 reaches 2^15, both are halved, rounding up. The book keeps n0 + n1 < 2^15, and the proof block refuses counts past it
 and a context ≥ C. With `en` = 0 it passes the counts through. v1's decisions take context min(run, 2), with run the
 decisions since the last arrival, carried across windows (`code_v1._State.run`): a function of the bits alone, which the
 composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context (C = 1).
 
-**A window's charge** (`ChargeCount_v1{N}`) is the one call the compile unit makes a window, for a window that sends
+**A window's charge** (`ChargeCount_v1{N}`) is the one call the compile slice's proof block makes a window, for a window that sends
 only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the window's
 decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing. In the
-replay's units they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
+replay's proof blocks they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
 `code_v1._window`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more
@@ -109,7 +109,7 @@ the decisions before it and the build is linear in N.
 variant. C contexts each count their 0s and 1s (`replay._KT`, from the registered priors). Context ctx gives f = 2n + 1
 for each count, halved with rounding up while f0 + f1 > 2^16 (`scaled`), and the decision then adds to its count.
 After h ≥ 1 halvings f is ⌊n / 2^(h−1)⌋ + 1, so the circuit takes the first h whose two candidates fit. With `en` = 0 it
-passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. In the compile unit
+passes the counts through. It refuses a context ≥ C and a count that would overflow NW bits. In the compile slice's proof block
 the counts start public, at the registered priors, and pass from model to model, and the context index is the
 replay's (plain: min(passes, 2), C = 3): neither is witness.
 

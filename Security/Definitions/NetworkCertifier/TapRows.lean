@@ -13,7 +13,7 @@ the values the prover registers at `reg` (`AsReg`).
 An extracted trace that opens a transfer gate to a value other than the network certifier's makes, with the network
 certifier's opening there, two passing openings of one position to different values, so under `Commitment.Binds` the
 calls that check them collide; `Btap` looks for that collision. Every transfer gate outside the faulty units is opened,
-so where the trace agrees with the network certifier it carries the network certifier's records there; a faulty unit's
+so where the trace agrees with the network certifier it carries the network certifier's records there; a faulty proof block's
 committed gates are the advice the count already charges (`2^β` over `faultySets`). The leak relation at the network
 certifier's rows (`RLeakTap`) is `RLeak` with the observations it counts picked out by the network certifier's
 registration rather than by the trace's transfer gates.

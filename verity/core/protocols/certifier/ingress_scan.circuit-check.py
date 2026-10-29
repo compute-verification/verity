@@ -6,8 +6,8 @@ from typing import Any
 
 
 def _network_ingress_scan_roots() -> list[Any]:
-    """The scan's ingress bucket unit and its first bucket's at the slow test's class: two lanes of two 512-byte
-    cells, requests of at most four cells, a timestep of 2 buckets (two Program slots each), a 3-bucket ingress bound,
+    """The scan's ingress bucket proof block and its first bucket's at the slow test's class: two lanes of two 512-byte
+    cells, requests of at most four cells, a slot stride of 2 buckets (two Program slots each), a 3-bucket ingress bound,
     the warden's delay 5, 8 outputs and 100 prompt ids a request, which reaches a first and a continuation frame in one
     block, a new and a continuing block, the anchor's wrap, two requests anchored at one boundary, each slot's
     occupancy word, the outputs written at the anchor and a slot held through its egress. The w63 class (B 512, r 4,
