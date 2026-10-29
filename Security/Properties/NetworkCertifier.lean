@@ -71,10 +71,10 @@ def ParamsDigests (p : Params) (eg ig : ByteArray) : Prop :=
   parametersDigest p.grid (some (manifestSet p.syncSet)) = .ok eg ∧ parametersDigest p.ingressGrid none = .ok ig
 
 /-- `syncs` are the clock syncs `link` declares, one per window. -/
-def Declares {W : Nat} (link : Link) (syncs : Fin W → ClockSync) : Prop := ∀ v : Fin W, link.syncs[v.1]? = some (syncs v)
+def Declares {W : Nat} (link : LinkOpening) (syncs : Fin W → ClockSync) : Prop := ∀ v : Fin W, link.syncs[v.1]? = some (syncs v)
 
 /-- The sync `link` declares for window `w` is in Σ_sync and is the unit's, the one the first egress link declares. -/
-def SyncAdmitted (p : Params) (e : Evidence) (link : Link) (w : Nat) : Prop :=
+def SyncAdmitted (p : Params) (e : Evidence) (link : LinkOpening) (w : Nat) : Prop :=
   ∃ s, link.syncs[w]? = some s ∧ s.delta ∈ p.syncSet.deltas ∧ s.rho ∈ p.syncSet.rhos ∧
     ∃ first s₀, e.links[0]? = some first ∧ first.syncs[w]? = some s₀ ∧ s₀.delta = s.delta ∧ s₀.rho = s.rho
 
@@ -92,7 +92,7 @@ def programGrid (p : Params) (syncs : Fin p.windows → ClockSync) (frames : Lis
 /-- Egress link-window `(l, w)`, opened by `link`, is accepted: it is `Settled` with digest `dg`, its declared sync is
 admitted, and `dg` is the digest of `record_head` of the Program's grid under the declared syncs (complete, settled,
 under `eg`). -/
-def EgressAccepted (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) (l : String) (link : Link)
+def EgressAccepted (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) (l : String) (link : LinkOpening)
     (w : Nat) : Prop :=
   ∃ r dg, Settled p c .egress l w r dg ∧ SyncAdmitted p e link w ∧
     ∀ syncs : Fin p.windows → ClockSync, Declares link syncs →
@@ -224,7 +224,7 @@ def treeStrings (g : Grid) (grid : Array (Array (Option ByteArray))) : List Byte
   | .error _ => []
 
 /-- The syncs `link` declares, one per window, as the check reads them. -/
-def declared (W : Nat) (link : Link) : Fin W → ClockSync := fun v => link.syncs.getD v.1 noSync
+def declared (W : Nat) (link : LinkOpening) : Fin W → ClockSync := fun v => link.syncs.getD v.1 noSync
 
 /-- The strings the check hashes under egress parameters digest `eg`: each record's head, its digest under the record's
 salt and its certificate message, and the frame tree and head it recomputes of each egress link-window. -/

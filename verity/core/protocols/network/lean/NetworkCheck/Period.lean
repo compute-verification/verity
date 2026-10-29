@@ -284,7 +284,7 @@ structure Commitment where
   windows : Array Registration
   bytes : ByteArray
 
-structure Layout where
+structure BucketSchedule where
   buckets : Nat
   slots : Nat
   connectionSlots : Nat
@@ -307,7 +307,7 @@ structure Rows where
   domain : String
   wiring : ByteArray
   root : ByteArray
-  layout : Layout
+  layout : BucketSchedule
   key : ByteArray
   digest : ByteArray
   signature : ByteArray
@@ -735,7 +735,7 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
     refuse s!"{what}: not the link's {d.value} rows at window {w}"
   unless r.parameters == Flock.hexOf sd do refuse s!"{what}: another schedule's digest than the bound one"
   unless r.cellBytes == B && r.rows == T && r.words == S * B / 2 && r.wordBits == outBits && r.rowSchema == rowSchema &&
-      r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := w * T } : Layout) do
+      r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := w * T } : BucketSchedule) do
     refuse s!"{what}: not the schedule's rows"
   let .ok dom := rowsDomain s sd p.session p.link d w | refuse s!"{what}: no domain"
   unless r.domain == Flock.hexOf dom do refuse s!"{what}: not the link-window's domain"
