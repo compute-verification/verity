@@ -131,7 +131,7 @@ theorem sound_hm96Leaf (x y : List Lin) : Sound (VStar.hm96Leaf x y) fun z out =
   rw [← commitString_eq] at hbc
   obtain ⟨hol, hob⟩ := hout Hm96.Default512.leafPrefix.data.toList (Hm96.Default512.commitString Dg Sl).data.toList
     (by rw [Array.length_toList, ByteArray.size_data, size_leafPrefix])
-    (by rw [Array.length_toList, ByteArray.size_data]; exact hbc.1) hbc.2 (midstate_eq size_leafPrefix)
+    (hbc.1.trans (by rw [Array.length_toList, ByteArray.size_data])) hbc.2 (midstate_eq size_leafPrefix)
   rw [catBytes_eq] at hob
   exact ⟨by rw [hol, size_leaf], fun t ht => hob t (by omega)⟩
 
@@ -339,15 +339,6 @@ theorem varSlices_linkPorts (UB PB : ℕ) : OfVStar.varSlices 0 (VStar.linkPorts
       vars (3584 + auxBits UB PB) 1536, vars (5120 + auxBits UB PB) (auxBits UB PB)] :=
   varSlices_link (VStar.auxWords (UB + PB))
 
-/-- Two runs of equal builders from equal states agree in state and outputs; stated whole so that no step compares the
-runs' projections, which would evaluate the builders. -/
-theorem unitRun_congr {X Y : M (List Lin × List Lin)} {s s' : St} (hX : X = Y) (hs : s = s') {P Q : Prop} (hP : P)
-    (hQ : Q) :
-    (X.run s).2 = (Y.run s').2 ∧
-      ((X.run s).1.1 ++ (X.run s).1.2).toArray = ((Y.run s').1.1 ++ (Y.run s').1.2).toArray ∧ P ∧ Q := by
-  subst hX hs
-  exact ⟨rfl, rfl, hP, hQ⟩
-
 /-- **V*'s unit is `linkRun`**: its builder's state and outputs are `linkRun`'s from its input bits, its input ports
 `VStar.linkPorts` and its output ports `rin`, `rout`. -/
 theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) :
@@ -365,7 +356,8 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
       omega
     simp only [OfVStar.run_input_bind]
     rw [hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
-    refine unitRun_congr ?_ ?_ (by trivial) (by trivial) <;> rfl
+    simp only [linkRun, linkIn]
+    refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
 
 theorem checkShape_ok {UB PB : ℕ} {x : Unit} (h : RecLinkTree.checkShape UB PB = .ok x) : UB ≤ 32 ∧ PB ≤ 32 := by
   unfold RecLinkTree.checkShape at h
