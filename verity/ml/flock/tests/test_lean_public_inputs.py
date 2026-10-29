@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: `stage/`: `circuit.stage(IL.lowering(rope_head.definition(sub), rope_head.UNIT + "/x4", group=4), set, 0, 4, out,

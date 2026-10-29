@@ -9,7 +9,7 @@ from verity.ml.circuits import library as L
 from verity_flock import ir_lower as IL
 from verity_flock import tail_pieces as TP
 
-LOOKUP_LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / "Flock" / "Lookup.lean"
+LOOKUP_LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock" / "Flock" / "Lookup.lean"
 
 
 def _lean_tables() -> dict[str, tuple[str, str, int]]:

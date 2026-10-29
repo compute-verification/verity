@@ -7,7 +7,7 @@ relaxedAutoImplicit = false
 
 [[require]]
 name = "flock_verifier"
-path = "../../../service/flock"
+path = "../../../proof_system/flock"
 
 [[lean_lib]]
 name = "Lms"

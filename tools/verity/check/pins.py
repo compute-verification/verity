@@ -122,7 +122,7 @@ PINS = (
     Pin("verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json", "inputs", "",
         "bash verity/core/protocols/sampled_proofs/tests/lean/generate.sh", "Security/Proofs"),
     Pin("verity/ml/flock/tests/fixtures/inner_claims.json", "inputs", "",
-        "bash verity/ml/flock/tests/lean/generate_inner_claims.sh", "verity/core/service/flock"),
+        "bash verity/ml/flock/tests/lean/generate_inner_claims.sh", "verity/core/proof_system/flock"),
     Pin("verity/core/protocols/pouw/tests/vectors/ncp_lean.json", "sources_sha256", "Security",
         f"uv run python {NCP} write Security && (cd Security && lake build Definitions.Pouw.NCP.RouteU && "
         f"lake env lean NcpCheck.lean > ncp_lean.out) && uv run python {NCP} pin Security/ncp_lean.out Security; "

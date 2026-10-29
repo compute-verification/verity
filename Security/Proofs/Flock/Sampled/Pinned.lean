@@ -12,7 +12,7 @@ most claims), and its type bound `VStar.Menu.types`'s. The padded sessions of an
 * `Menu.ofEntries`: the menu of a list of entries, given its padded sessions.
 * `Menu.ofEntries_inRange`: `Menu.InRange` of such a menu from its entries' inner sessions, one by one.
 * `Menu.ofEntries_staged`: `Menu.Staged` of such a menu from V* staging each of its shapes' inner sessions. At the pinned
-  menus that is checked by running V*, compiled (`vstar menu`, in `verity/core/service/vstar/tests/test_vstar_menu.py`),
+  menus that is checked by running V*, compiled (`vstar menu`, in `verity/core/proof_system/vstar/tests/test_vstar_menu.py`),
   not proved: the proof, a bound on `VStar.parts`, is deferred.
 * `pinned_inRange`: every pinned model's menu is in the live verifier's range, whatever its padded sessions.
 -/

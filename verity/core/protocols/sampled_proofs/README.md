@@ -103,20 +103,20 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
   (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The verifier's coins are
   the named assumption `Assumptions.UniformRandomBytes`.
-- **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
+- **The executable draw** is the Lean verifier's `verity/core/proof_system/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
   prove that its draws accept faulty proof blocks no more often than the modelled sampling designs do, and
   `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
-  `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
+  `verity/core/proof_system/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
   (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
   beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
   `benchmarks/one_stage` call it. Python is held to the Lean by
-  `verity/core/service/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
+  `verity/core/proof_system/sampled_proofs/tests/test_difftest.py`. The same package ports the challenger's draw from the
   selection rule on (`SampledProofs/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
   partitions. It is the `Stream`'s draw of record: `Stream.select` hands it the bytes of the challenger's coins the

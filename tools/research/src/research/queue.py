@@ -1817,7 +1817,7 @@ SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("verity/core/service/flock",)
+LEAN_BUILDS = ("verity/core/proof_system/flock",)
 
 
 class QuickTier:

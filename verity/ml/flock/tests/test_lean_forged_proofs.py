@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, partition.json, program.json), per case ``<case>/pub-4.bin`` and ``<case>/session/``, and

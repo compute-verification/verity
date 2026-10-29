@@ -3,7 +3,7 @@ import SampledProofs.OneStage
 /-!
 # Sampled proofs' one-stage audit: what its Lean verdict means (`SampledProofs.OneStage.check`)
 
-The property of the executable audit (`verity/core/service/sampled_proofs/`, the port of `one_stage.audit.audit_record`
+The property of the executable audit (`verity/core/proof_system/sampled_proofs/`, the port of `one_stage.audit.audit_record`
 with `registration.check` before it), stated against `OneStage.check` as it runs, for every input of the types its
 decoders produce. It takes no premise: the check is a function of its three inputs, and `AcceptMeans` says what it accepts.
 

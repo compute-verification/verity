@@ -23,7 +23,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 pytestmark = pytest.mark.slow
 N = 8
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit+plain-leaves"
 

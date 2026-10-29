@@ -22,14 +22,14 @@ uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "
 PY=$REPO/.venv/bin/python
 
 log "zk-cost-cpu: source $(git rev-parse HEAD), builds in $W"
-(cd verity/core/service/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
+(cd verity/core/proof_system/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/core/proof_system/flock/.lake/build/bin/flock-verify
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python

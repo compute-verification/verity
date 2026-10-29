@@ -131,7 +131,7 @@ def init(d: Path, argv: list[str]) -> int:
     cfg = {"tree": str(tree), "commit": a.commit, "params": [int(x) for x in a.params.split(",")], "peer": a.peer,
            "ports": [int(x) for x in a.ports.split("-")], "coins": a.coins, "name": a.name}
     if a.coins == "lean":
-        pkg = tree / "verity" / "core" / "service" / "sampled_proofs"
+        pkg = tree / "verity" / "core" / "proof_system" / "sampled_proofs"
         b = subprocess.run(["lake", "build", "sampled-proofs-verifier"], cwd=pkg, capture_output=True, text=True)
         cfg["lean_build"] = {"rc": b.returncode, "tail": (b.stdout + b.stderr)[-3000:]}
         if b.returncode:

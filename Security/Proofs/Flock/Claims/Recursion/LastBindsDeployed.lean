@@ -25,7 +25,7 @@ plain verifier binding its own last message.
 
 **Where the decoder stands.** The verifier hashes each proof file whole and compares the digest with the record's
 `proof_sha` (S17), and no custody check pins `proof_sha`, so two files with one decoding would give two decisions with
-different calls that need not collide. `decodeProof` (`verity/core/service/flock/Flock/Proof.lean`) accepts a file
+different calls that need not collide. `decodeProof` (`verity/core/proof_system/flock/Flock/Proof.lean`) accepts a file
 only if it is `Flock.Wire.proofFile` of what it decodes to, so there are no such two files
 (`Flock.decodeProof_canonical`): `CanonicalProofFiles` holds (`RecDeploy.canonicalProofFiles`), and (P4) at the
 deployed bound record holds at SHA-512 with no premise (`RecDeploy.lastBindsEC_deployed_sha512_closed`,

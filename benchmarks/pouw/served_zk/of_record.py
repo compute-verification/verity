@@ -36,7 +36,7 @@ from verity.ml.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
 POUW = REPO / "verity/core/protocols/pouw/lean/check"
-PIECES = REPO / "verity/core/service/sampled_proofs"
+PIECES = REPO / "verity/core/proof_system/sampled_proofs"
 DISAGREE = "lean-python-disagree"
 CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "prelude", "answer")
 

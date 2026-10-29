@@ -34,7 +34,7 @@
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy", or all;
 #      each as soon as its session ends)  H1S_KEEP_CIRCUIT (a node directory each lowered circuit is kept in after prepare,
 #      as SHA512.txt, a hard link where it can be: the scratch, the circuit's other name, goes at exit)
-#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the ZK server frame built from REV's
+#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/proof_system/flock`: the ZK server frame built from REV's
 #      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
 #      H1S_FIREWALL_TGZ_DIR (a node directory of such tarballs, read again before each firewalled session: the session runs
 #      the frame of the last *.tgz by name, so a later frame dropped in mid-share serves the lanes after it. Move a tarball

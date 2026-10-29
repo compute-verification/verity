@@ -30,7 +30,7 @@ from verity.core.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.circuit import pc4, pc8
 
 POUW_TESTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "pouw" / "tests"
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 _spec = importlib.util.spec_from_file_location("pouw_rows_vectors", POUW_TESTS / "pouw_rows_vectors.py")
 V = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(V)

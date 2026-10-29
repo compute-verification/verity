@@ -5574,7 +5574,7 @@ fn prove_sessions(st: &Arc<Stmt>, inst: &Arc<Instances>, base: &Plan, seeds: &[P
 
 /// `prove --firewall-state DIR --session ID --part NAME`: the ZK server's release side (PROTOCOL.md §10.5) on the state
 /// directory `verity_flock.firewall` shares, run by the Lean session loop it goes through (`core-firewall session`:
-/// `FC_CORE_FIREWALL`, else the build in this checkout's verity/core/service/firewall). It runs behind the send check
+/// `FC_CORE_FIREWALL`, else the build in this checkout's verity/core/proof_system/firewall). It runs behind the send check
 /// only, through the Lean session loop ([`firewall_on`]), proves one session (the ZK server serves each statement of a
 /// recursive session once), and refuses `FC_VERIFY_AHEAD`: the outer slot is held until each session's verdict.
 struct ReleaseArgs {
@@ -5603,7 +5603,7 @@ fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
         refuse("--firewall-state takes --session ID (the recursive session: rec_live's firewall.json) and --part NAME".into());
     }
     let lean = std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
-        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/firewall/.lake/build/bin/core-firewall"));
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/proof_system/firewall/.lake/build/bin/core-firewall"));
     Some(ReleaseArgs { state: state.into(), session, part, lean })
 }
 

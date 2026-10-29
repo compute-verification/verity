@@ -273,7 +273,7 @@ def _separate(rel: Path) -> bool:
 
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree, and no circuit-check
+    directory (core's Lean builds in ``verity/core/proof_system/flock/.lake``) or a ``SEPARATE`` tree, and no circuit-check
     sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and no module imports)."""
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)

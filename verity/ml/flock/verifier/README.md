@@ -1,7 +1,7 @@
 # Flock verifier of record
 
 `PROTOCOL.md` is the specification. `lean/` is the executable verifier written from it, in Lean 4 (toolchain pinned in
-`../../../core/service/flock/lean-toolchain`, no dependencies). It replays recorded sessions offline: interactive coins only, CPU only. Upstream's
+`../../../core/proof_system/flock/lean-toolchain`, no dependencies). It replays recorded sessions offline: interactive coins only, CPU only. Upstream's
 Rust verifier is the cross-validation oracle (§17.1).
 
 Scope today: the circuit statement in strict mode, including lookup slots (built from the pinned MUFU tables), tail stages
@@ -52,7 +52,7 @@ is one log per V* statement and every part is accepted at the one rows file the 
 ## Build and run
 
 ~~~text
-cd verity/core/service/flock && lake build          # .lake/build/bin/flock-verify
+cd verity/core/proof_system/flock && lake build          # .lake/build/bin/flock-verify
 flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os] [--upstream-plain] --session DIR...
 flock-verify statement [--statement ID] --circuit F [--comp comp.rows] --public pub.bin [--tables DIR] [--coins seed|os]   # digest, Σ, Hello
 ~~~

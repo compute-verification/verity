@@ -162,20 +162,20 @@ def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, m
     plan keys the suite as the check that ran it did, built or not.  A lakefile that requires another package keeps the bytes."""
     import hashlib
 
-    lean = tmp_path / "verity" / "core" / "service" / "flock"
+    lean = tmp_path / "verity" / "core" / "proof_system" / "flock"
     (lean / "Flock").mkdir(parents=True)
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
     (lean / "Flock" / "A.lean").write_text("def a := 1\n")
     (lean / ".gitignore").write_text(".lake\n")
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
-                                                     '[tool.verity.tests]\nartifacts = ["verity/core/service/flock/.lake/build/bin/'
+                                                     '[tool.verity.tests]\nartifacts = ["verity/core/proof_system/flock/.lake/build/bin/'
                                                      'flock-verify", "pkg/.lake/build/bin/tool"]\n')
     _git(tmp_path, "init", "-q")
     S = _suites(monkeypatch, tmp_path)
     [suite] = S.discover()
     absent = S.artifact_ids(suite)
-    assert absent["verity/core/service/flock/.lake/build/bin/flock-verify"].startswith("built from ")
+    assert absent["verity/core/proof_system/flock/.lake/build/bin/flock-verify"].startswith("built from ")
     assert absent["pkg/.lake/build/bin/tool"] == "absent"
     (lean / ".lake" / "build" / "bin").mkdir(parents=True)
     (lean / ".lake" / "build" / "bin" / "flock-verify").write_bytes(b"a build")
@@ -185,7 +185,7 @@ def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, m
     assert S.artifact_ids(suite) != absent, "other sources"
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "mathlib"\n')
     S._SOURCES.clear()
-    assert S.artifact_ids(suite)["verity/core/service/flock/.lake/build/bin/flock-verify"] == hashlib.sha256(b"a build").hexdigest()
+    assert S.artifact_ids(suite)["verity/core/proof_system/flock/.lake/build/bin/flock-verify"] == hashlib.sha256(b"a build").hexdigest()
 
 
 def test_jobs_default_to_the_cpus_this_process_may_use(tmp_path, monkeypatch):
@@ -903,9 +903,9 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     root, log = tmp_path / "tree", tmp_path / "lake.log"
     _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
                           "other": "def test_other():\n    pass\n"})
-    (root / "verity" / "core" / "service" / "flock").mkdir(parents=True)
-    (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
-    (root / "verity" / "core" / "service" / "flock" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
+    (root / "verity" / "core" / "proof_system" / "flock").mkdir(parents=True)
+    (root / "verity" / "core" / "proof_system" / "flock" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "core" / "proof_system" / "flock" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -922,10 +922,10 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity/core/service/flock'} build\n"
+    assert log.read_text() == f"{root / 'verity/core/proof_system/flock'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
-    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/core/service/flock exited 1" in p.stdout
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/core/proof_system/flock exited 1" in p.stdout
     assert "passed  other" in p.stdout, p.stdout
 
 
@@ -1866,7 +1866,7 @@ def test_the_verifiers_lake_build_holds_the_trees_build_lock_so_two_runs_of_one_
     `lake` runs under
     `.lake/verity-build.lock`, so a second build of the tree waits for the first."""
     mod = _suites(monkeypatch, tmp_path)
-    lean = tmp_path / "verity" / "core" / "service" / "flock"
+    lean = tmp_path / "verity" / "core" / "proof_system" / "flock"
     lean.mkdir(parents=True)
     (lean / "lakefile.toml").write_text('name = "f"\n')
     bin_ = tmp_path / "bin"

@@ -19,7 +19,7 @@ IN=${RESEARCH_RUN_DIR:?}/inputs
 command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A11/A9's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/proof_system/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 mkdir -p "$OUT/a9"
 if [ -n "${A9_SAVED:-}" ]; then

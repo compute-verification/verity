@@ -361,7 +361,7 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "proof_system"
     words = {k: v for k, v in FC.LEAF_SCHEME.items() if k in ("id", "inner", "salt_source", "key")}
     lean = r'\("(\w+)", (?:s )?"([^"]*)"\)'
     rust = _body(flock / "live" / "src" / "circuit.rs", "pub fn leaf_scheme()")
@@ -381,7 +381,7 @@ def test_the_zk_hooks_name_the_provers_randomness():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "proof_system"
     lean = _body(service / "flock" / "Flock" / "Zk.lean", "def hooks")
     os_words = dict(re.findall(r'let (\w+) := if os then "([^"]*)" else', lean))
     assert set(os_words) == {"pads", "draws"}, os_words

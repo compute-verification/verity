@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]
 

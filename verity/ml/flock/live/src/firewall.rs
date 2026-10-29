@@ -190,7 +190,7 @@ pub fn level0_session(coins: &[F128]) -> String {
 #[cfg(feature = "sha512")]
 pub fn lean_frame_exe() -> std::path::PathBuf {
     std::env::var_os("FC_FIREWALL_LEAN").map(Into::into)
-        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/flock/.lake/build/bin/flock-firewall"))
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/proof_system/flock/.lake/build/bin/flock-firewall"))
 }
 
 /// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every sample of this process
@@ -203,7 +203,7 @@ pub fn lean_tap(exe: &std::path::Path) -> Result<(), String> {
     use std::process::{Command, Stdio};
     const MAX: usize = 1 << 24;
     let mut child = Command::new(exe).arg("tap").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
-        .map_err(|e| refused(format!("the Lean tap {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN", exe.display())))?;
+        .map_err(|e| refused(format!("the Lean tap {} does not start ({e}): `lake build flock-firewall` in verity/core/proof_system/flock, or FC_FIREWALL_LEAN", exe.display())))?;
     let (mut stdin, mut stdout) = (child.stdin.take().expect("piped stdin"), child.stdout.take().expect("piped stdout"));
     let mut read = move |out: &mut [u8]| -> std::io::Result<()> {
         for p in out.chunks_mut(MAX) {
@@ -604,8 +604,8 @@ impl LeanSession {
         use std::process::{Command, Stdio};
         let mut child = Command::new(exe).arg("session").arg("--verifier").arg(verifier).args(args)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
-            .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/core/service/flock, or FC_FIREWALL_LEAN; \
-                                          with --firewall-state, `lake build core-firewall` in verity/core/service/firewall, or FC_CORE_FIREWALL", exe.display())))?;
+            .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/core/proof_system/flock, or FC_FIREWALL_LEAN; \
+                                          with --firewall-state, `lake build core-firewall` in verity/core/proof_system/firewall, or FC_CORE_FIREWALL", exe.display())))?;
         let stdin = child.stdin.take().expect("piped stdin");
         let mut stdout = std::io::BufReader::new(child.stdout.take().expect("piped stdout"));
         let mut line = String::new();

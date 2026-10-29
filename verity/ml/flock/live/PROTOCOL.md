@@ -750,7 +750,7 @@ builds a registered value from the coin server's `b ‖ c` (one row a node, unde
 `out` reads the row of the node it climbs to. The ZK server pays one SHA-512 a node more than for a bare node (the row
 digest).
 
-The rule is also a Lean program, `Flock.Firewall.run` (`../../core/service/flock/Flock/Firewall.lean`, the executable
+The rule is also a Lean program, `Flock.Firewall.run` (`../../core/proof_system/flock/Flock/Firewall.lean`, the executable
 `flock-firewall`): the pinned schedule, the worker's requests and the ZK server's salts in, the coin server's record out. Its
 message type is the contract: each message is the schedule's own value, a count it fixes, zeros, or commitments under the
 ZK server's salts, so nothing a worker sends reaches the coin server any other way. `tests/test_firewall_agreement.py` holds
@@ -1046,7 +1046,7 @@ verdict the relay cuts the challenger's connection without forwarding `Finish`, 
 A refused or stopped session's worker is answered after the session has left the slot, so a worker that keeps talking
 holds up no other session.
 
-**The release side is Lean's** (`core-firewall session`, `Core.Firewall.Loop` in `verity/core/service/firewall`).
+**The release side is Lean's** (`core-firewall session`, `Core.Firewall.Loop` in `verity/core/proof_system/firewall`).
 `flock-circuit prove --zk --firewall-state DIR --session ID --part NAME`, behind its send check (`FC_FIREWALL=1`, §10.4),
 starts it as its Lean session loop (§10.4's `flock-firewall session` with a hold on each session, `Session.Hold`;
 `FC_CORE_FIREWALL`, else this checkout's build), and the loop keeps `verity_flock.firewall`'s record byte for byte
@@ -1059,7 +1059,7 @@ the session reaches the challenger. It relays the session's rounds as §10.4 say
 proofs, and at `Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a
 stop, as is a `Finish` with fewer than the session's proofs (two a table, the loop's finish's: where a check refused, the
 finish computed none) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
-leave, and serve's verdict is its release or its stop. `verity/core/service/firewall/tests` holds these stages to
+leave, and serve's verdict is its release or its stop. `verity/core/proof_system/firewall/tests` holds these stages to
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
 verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the
@@ -1102,7 +1102,7 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 
 The first row holds wherever the inner phase runs `rec_live --firewall --parts` and the outer phase runs through the
 ZK server (`flock-circuit prove --firewall-state`, or the tests' relay; `tests/test_firewall_release.py` and
-`verity/core/service/firewall/tests`, a rule a test). Ending the recursive session at its first stop isn't enough for
+`verity/core/proof_system/firewall/tests`, a rule a test). Ending the recursive session at its first stop isn't enough for
 it. If the worker chose which V* statements come and in what order, each outer statement would be released or never opened at its choice, with at most one
 stopped, and the order in which the challenger's `serve`s are reached would come on top, if the challenger can see it: the
 second row. So the statements and their order are fixed when the recursive session opens, and `admit` serves only the

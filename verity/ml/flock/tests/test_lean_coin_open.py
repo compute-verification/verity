@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
+LEAN = Path(__file__).resolve().parents[3] / "core" / "proof_system" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "coin_open_vectors.json"
 CASES = {c["case"]: c["steps"] for c in json.loads(VECTORS.read_text())["cases"]}

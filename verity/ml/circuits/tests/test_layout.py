@@ -1,5 +1,5 @@
 """`verity.ml.circuits.layout`'s scope walk (`resolve_gate`) on a scan of no iterations, as Lean's `Flock.Program.resolve`
-walks it (`verity/core/service/flock/Flock/Program.lean`): a gate reading the scan's output is refused by name, and a
+walks it (`verity/core/proof_system/flock/Flock/Program.lean`): a gate reading the scan's output is refused by name, and a
 program that holds such a scan without reading it resolves every gate."""
 from __future__ import annotations
 
