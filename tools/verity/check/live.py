@@ -17,7 +17,8 @@ it checked; cache hits come with the step's end), and pytest's and lean-suites' 
 lines `suites.py` prints into the step's log as each suite ends).  A publish that fails is printed once and never stops the check.
 
 The reader reads only recorded data, from the store's remote (this machine's store config or environment): the newest live
-record of each run under `live/`, and for the ETA's basis the ended runs' records and the result manifests (`check/v1` and its
+record of each run under `live/`, beside the recorded checks with a result this machine's catalog holds, and for the ETA's
+basis the ended runs' records and the result manifests (`check/v1` and its
 shard and deferred kinds: `meta.steps[].seconds`) of the recorded checks this machine's catalog holds (`--refresh` refreshes its
 attempts over the window first: slow on a cold catalog).  A basis takes a step's seconds only where it passed without a cache hit.
 What isn't recorded prints as unknown, never as passed: a run with no live record, a step a record doesn't name, and a running
@@ -132,6 +133,14 @@ def custody_put(custody: Path, timeout: float = 30.0) -> Callable[[str, bytes], 
     return put
 
 
+def machine_of(out: Path) -> str:
+    """The machine `research run` placed the run on (its `job.json`), else this host's name."""
+    try:
+        return json.loads((out / "job.json").read_text())["run"]["remote"]["machine"] or platform.node()
+    except (OSError, ValueError, KeyError, TypeError):
+        return platform.node()
+
+
 class Live:
     """One run's live record (the module docstring): `plan`, `started` and `ended` as its steps go, `write` to put it in the run dir and
     publish it with ``put``, and `start` for a thread that writes it every `EVERY_S` and whenever a step ends (`request`)."""
@@ -140,7 +149,7 @@ class Live:
                  commit: str | None = None, what: str | None = None, machine: str | None = None):
         self.out, self.put = out, put
         self.run_id = run_id or os.environ.get("RESEARCH_RUN_ID") or "local"
-        self.head = {"commit": commit, "what": what or "check", "machine": machine or platform.node()}
+        self.head = {"commit": commit, "what": what or "check", "machine": machine or machine_of(out)}
         self.t0 = CLOCK()
         self.steps: dict[str, dict] = {}
         self.began: dict[str, float] = {}
@@ -294,8 +303,9 @@ def store_checks(store, since: str, limit: int = 200) -> list[dict]:
     out = []
     for rid, state, commit, host, start, wall, mj in rows:
         try:
-            result = (json.loads(mj).get("outputs") or {}).get("result")
-        except (TypeError, ValueError):
+            doc = json.loads(mj)
+            result, host = (doc.get("outputs") or {}).get("result"), (doc.get("execution") or {}).get("machine") or host
+        except (TypeError, ValueError, AttributeError):
             result = None
         out.append({"run_id": rid, "state": state, "commit": commit, "machine": host, "started_utc": start, "seconds": wall,
                     "result": result})
@@ -483,16 +493,17 @@ def main(argv: list[str]) -> int:
     remote = store.remote
     if a.cmd == "ls":
         docs = live_docs(remote, since)
-        rows = ls_rows(docs, store_checks(store, since), now, lambda rid: _attempt_state(store, rid))
+        ran = [c for c in store_checks(store, since, 2000) if c["result"]]      # a twin that never took a slot has none
+        rows = ls_rows(docs, ran, now, lambda rid: _attempt_state(store, rid))
         print(json.dumps(rows, indent=1) if a.json else render_ls(rows, now))
         return 0
     doc = live_doc(remote, a.run)
     ended = _attempt_state(store, a.run) if doc is None or judged(doc, now) != doc.get("state") else None
     runs = {r: d["steps"] for r, d in live_docs(remote, since).items() if r != a.run and d.get("state") in ENDED and d.get("steps")}
-    for c in store_checks(store, since)[:3 * a.basis]:
-        if c["run_id"] not in runs and c["run_id"] != a.run and c["state"] == "done" and c["result"]:
-            if (steps := store_steps(store, c["result"])) is not None:
-                runs[c["run_id"]] = steps
+    prior = [c for c in store_checks(store, since, 2000) if c["result"] and c["run_id"] not in runs and c["run_id"] != a.run]
+    for c in prior[:3 * a.basis]:
+        if (steps := store_steps(store, c["result"])) is not None:
+            runs[c["run_id"]] = steps
     seconds = basis([runs[r] for r in sorted(runs, reverse=True)], a.basis)
     if a.json:
         print(json.dumps({"run_id": a.run, "state": judged(doc, now, ended) if doc else "unknown", "live": doc,
