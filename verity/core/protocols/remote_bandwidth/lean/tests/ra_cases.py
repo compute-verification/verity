@@ -26,6 +26,7 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.core import site as S
 from verity.core.protocols import registration as log
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
@@ -397,9 +398,9 @@ def store_log(node: bytes, blocks: int, payload_root: bytes, store: str = STORE,
     takes them (`{"params", "log"}`): the site, the node as its host, the store as a memory leaf of the node's N blocks
     (or `store_bytes`), and θ's value for its payload (`audit.payload_item`, or `item`)."""
     n = node.decode()
-    site = log.Hardware(locs=(log.Loc("site", "site"), log.Loc(n, "host", "site"),
-                              log.Loc(store, "memory", n, tier="dram",
-                                      bytes=blocks * codec.BLOCK_BYTES if store_bytes is None else store_bytes)))
+    site = log.site(locs=(S.Loc("site", "site"), S.Loc(n, "host", "site"),
+                          S.Loc(store, "memory", n, tier="dram",
+                                bytes=blocks * codec.BLOCK_BYTES if store_bytes is None else store_bytes)))
     theta = log.Information((audit.payload_item(store, node, blocks, payload_root) if item is None else item,))
     return {"params": log.params("remote", log.Auditor()),
             "log": {"composite": "remote", "entries": [e.to_json() for e in log.chain("remote", [site, theta])]}}
