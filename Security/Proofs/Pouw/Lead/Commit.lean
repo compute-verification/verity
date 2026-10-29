@@ -1,4 +1,6 @@
 import Proofs.Pouw.Lead.Commit.Hybrid
+import Proofs.Pouw.Lead.Commit.Rounds
+import Proofs.Pouw.Lead.Commit.RowBound
 
 /-!
 # The lead's commitments
