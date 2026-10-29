@@ -193,12 +193,13 @@ def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict) -> dict
 
 def latency(path: Path) -> dict:
     """sha512_latency.cu's output: a compression's latency on one thread (a row's chain, mode 0; a tree path's, mode 1) from
-    the SM clock's slope between 16 and 256 compressions at CLOCK, and the launch floor (one compression, wall time)."""
+    the SM clock's slope between 16 and 256 compressions at CLOCK, and a launch's floor (one compression's wall time less
+    the compression)."""
     d = json.loads(path.read_text())
     one = {(r["mode"], r["n"]): r for r in d["rows"] if r["grid"] == 1 and r["block"] == 1}
     ns = {m: (one[(m, 256)]["cycles_max"] - one[(m, 16)]["cycles_max"]) / 240 / CLOCK * 1e9 for m in (0, 1)}
-    return {"src": {"sha_roll": d["sha_roll"]}, "row_ns": ns[0], "tree_ns": ns[1], "launch_us": one[(0, 1)]["wall_us_best"],
-            "rows": d["rows"]}
+    return {"src": {"sha_roll": d["sha_roll"]}, "row_ns": ns[0], "tree_ns": ns[1],
+            "launch_us": one[(0, 1)]["wall_us_best"] - ns[0] * 1e-3, "rows": d["rows"]}
 
 
 def main() -> None:
