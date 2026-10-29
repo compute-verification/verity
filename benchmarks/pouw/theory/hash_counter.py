@@ -59,6 +59,12 @@ u8-digit IMMA chains, so its products are batched 32 a write.
 sealed with the final word (64 bits hashed); honest pays its word, a LOP3 and an IMUL a step. `edge` starts it from
 free terms: N_1 = D_1·k_1 is one IADD3 (two instructions with a per-cell offset).
 
+`agg` `thin` is main's thin fold (`Accounting.TS.thinFold`): σ absorbs two words an instruction, XOR3 and IADD3
+alternating, sealed with the final word; honest pays its word and half an instruction. `pack` takes it as it takes the
+XOR fold, with a guard bit a lane: the IADD3 steps' lane carries are a constant while σ stays in its lanes, a group
+whose guards rise is recomputed honestly, and `pack_det` prices the guard test at an instruction a register an IADD3
+step. Packed row and column terms are priced by `lane_terms`, the lead's column coins a 64-row tile.
+
 Run: `uv run --no-project --with numpy --with-editable benchmarks/pouw/exact_kit python -B hash_counter.py OUT.json
 [--quick] [--mutations] [--aggs=...] [--bits=...]` (from this directory).
 """
@@ -229,7 +235,22 @@ def aggregate(rule: Rule, d: Draw, fields):
         for t in range(fields.shape[2]):
             N = mulmod(N ^ fields[:, :, t], d.r[t] | 1)
         return N
+    if rule.agg == "thin":
+        return thin_fold(fields)[0]
     return mulmod(g_of(rule, d, fields), d.r[None, None, :]).sum(axis=2) & M32
+
+
+def thin_fold(fields):
+    """Main's `thinFold` from σ = 0: the committed words two a step, σ ⊕ w ⊕ w′ (LOP3) and σ + w + w′ (IADD3)
+    alternating from XOR, an odd last word paired with 0. Returns σ and each cell's widest σ as a signed width."""
+    s = np.zeros(fields.shape[:2], np.int64)
+    widest = np.zeros(fields.shape[:2], np.int64)
+    for k in range(0, fields.shape[2], 2):
+        b = fields[:, :, k + 1] if k + 1 < fields.shape[2] else 0
+        s = s ^ fields[:, :, k] ^ b if k % 4 == 0 else (s + fields[:, :, k] + b) & M32
+        v = np.where(s >> 31, M32 ^ s, s)
+        widest = np.maximum(widest, v)
+    return s, np.vectorize(lambda v: int(v).bit_length() + 1)(widest)
 
 
 def nh_kind(rule: Rule) -> tuple[str, int] | None:
@@ -279,7 +300,7 @@ def common_hash(rule: Rule, nP: int) -> float:
         return -(-nP // xor_block(rule)) * 32 * WB
     if nh_kind(rule):
         return 32 * WB / entries_a_value(rule)
-    return (64 if rule.agg in ("xor", "mulxor") else 32) * WB
+    return (64 if rule.agg in ("xor", "mulxor", "thin") else 32) * WB
 
 
 def commit_ops(rule: Rule, nP: int) -> float:
@@ -292,6 +313,8 @@ def commit_ops(rule: Rule, nP: int) -> float:
         return nP * e + (nP / 2 if nh_kind(rule)[0] == "nh2" else nP // 2 + nP % 2)
     if rule.agg == "mulxor":
         return nP * (e + 2)
+    if rule.agg == "thin":
+        return nP * e + -(-nP // 2)
     if rule.agg == "lin":
         return nP * (e + 1)
     if degree(rule):
@@ -618,17 +641,29 @@ def edge(rule, inst, d):
     return inst.S + commit_ops(rule, len(d.P)) - 3 + first, N, f"first step {first} write(s) from free terms"
 
 
+def lane_terms(inst, nrow, ncol, npat, L, g):
+    """Per entry, the packed row and column terms: a row's walk (its row lanes and one add a step) and its copy into
+    the lanes, shared by the call's columns; a column group's coins spread into the lanes (one instruction a coin a
+    column lane) and each row class's walk over them (one IMAD a register a column lane), shared by the group's L cells
+    and the rows of a coin tile (`TILE` for the lead's coins, which are drawn a 64-row tile; else the call)."""
+    tile = TILE if inst.coins.startswith("lead:") else CALL_M
+    return (nrow + 1 + g) * inst.S / CALL_N + (ncol * L + npat * ncol * g) * inst.S / (tile * L)
+
+
 def pack(rule, inst, d):
     """An `xor` fold over words w = d0(i, j) + R_t(i) + C_t(j) at zero data: each lane's V is constant across the
     columns (a row term), or its U takes at most four row patterns (a column term a row class, as the lead's
     row-parity weights). L cells go in b-bit lanes of a 32·g-bit integer of g registers (g 1 or 2, whichever is
     cheaper, and only when L > g), the low lanes biased by 2^(b−1) so no lane borrows. A committed step costs g IADD3s
     (the second with carry) of the packed d0, row and column terms and 2g/BLOCK operand loads, and the fold is the
-    honest LOP3 count a packed register. Unpacking (6 writes a cell for `xor` with its final word, 2 a block for
-    `xor:m`) undoes the bias's parity and sign-extends from bit b − 1."""
+    honest LOP3 count a packed register; the terms themselves are `lane_terms`. Unpacking (6 writes a cell for `xor`
+    with its final word, 2 a block for `xor:m`) undoes the bias's parity and sign-extends from bit b − 1. The thin
+    fold goes to `pack_thin`."""
+    if rule.agg == "thin":
+        return pack_thin(rule, inst, d)
     if not rule.agg.startswith("xor") or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
         return None
-    m, n, S = inst.m, inst.n, inst.S
+    m, n = inst.m, inst.n
     parts = separable(inst, d)
     if parts is None:
         return None
@@ -646,7 +681,7 @@ def pack(rule, inst, d):
             continue
         groups = -(-n // L)
         cost = (groups / n * g * (len(P) * (1 + 2 / BLOCK) + xor_lop3s(rule, len(P))) + unpack
-                + (nrow + 1) * S / CALL_N + len(pats) * (ncol + L) * g * S / CALL_M)
+                + lane_terms(inst, nrow, ncol, len(pats), L, g))
         if best is None or cost < best[0]:
             best = (cost, g, L)
     if best is None:
@@ -674,6 +709,82 @@ def pack(rule, inst, d):
                 out[:, j, bi] = (x & M32).astype(np.int64)
     how = f"{L} cells in {b}-bit lanes of {g} register(s)" + (f", {len(pats)} row classes" if len(pats) > 1 else "")
     return cost, (out if xor_block(rule) else out[:, :, 0]), how
+
+
+def pack_thin(rule, inst, d, det=0, carry=2):
+    """The thin fold over separable words at zero data, packed as `pack` packs the XOR fold but with a guard bit a
+    lane: L cells in λ-bit lanes of a 32·g-bit integer (g ≤ 4), each lane an f = λ − 1-bit signed value biased by
+    2^(f−1) under its guard. An XOR3 step is g LOP3s and keeps the bias. An IADD3 step is g IADD3s: three biased lanes
+    carry 2^f a lane more than one, a constant folded into the second word's packed offset, so a lane disturbs its
+    neighbour only when its sum leaves the field, and then its guard rises. A group whose guards rise is recomputed
+    honestly. Testing them is `det` instructions a register an IADD3 step: 0 under W1 as stated, which prices a
+    predicate-only LOP3 at nothing, and 1 under the dataflow reading (`pack_det`). The lanes are chosen from each
+    cell's widest σ, and the price counts the groups whose guards actually rose."""
+    if rule.agg != "thin" or rule.k != 32 or inst.data != "zero" or inst.rec != "add":
+        return None
+    parts = separable(inst, d)
+    if parts is None:
+        return None
+    R, C, cls, pats, rowlane = parts
+    m, n, S, P = inst.m, inst.n, inst.S, d.P
+    nP = len(P)
+    nfold = -(-nP // 2)
+    W = d.w0[:, :, None] + R[:, None, :] + C[cls]
+    need = int(np.abs(W[:, :, P]).max()).bit_length() + 1
+    ref, widest = thin_fold(d.w[:, :, P])
+    nrow, ncol = int(rowlane.sum()), int((~rowlane).sum())
+    honest_cell = S + nfold
+
+    def price(g, L, fell):
+        return (-(-n // L) / n * g * (nP * (1 + 2 / BLOCK) + nfold + det * (nfold // 2)) + 6
+                + lane_terms(inst, nrow, ncol, len(pats), L, g) + fell / (m * n) * honest_cell)
+
+    def groups(L):
+        return [list(range(s, min(n, s + L))) for s in range(0, n, L)]
+
+    best = None
+    for g in (1, 2, 3, 4):
+        for L in range(g + 1, 32 * g):
+            if 32 * g // L - 1 < need:
+                break
+            over = widest > 32 * g // L - 1
+            fell = sum(len(cols) * int(over[:, cols].any(axis=1).sum()) for cols in groups(L))
+            cost = price(g, L, fell)
+            if best is None or cost < best[0]:
+                best = (cost, g, L)
+    if best is None:
+        return None
+    _, g, L = best
+    lam = 32 * g // L
+    f, mod = lam - 1, 1 << (32 * g)
+    beta = 1 << (f - 1)
+    out = np.zeros((m, n), np.int64)
+    rose_cells = predicted = 0
+    for cols in groups(L):
+        sh = [a * lam for a in range(len(cols))]
+        one = sum(1 << s for s in sh)
+        guard = sum(1 << (s + lam - 1) for s in sh)
+        Dp = sum((d.w0[:, j].astype(object) + beta) * (1 << s) for s, j in zip(sh, cols))
+        Pk = (Dp[:, None] + R[:, P].astype(object) * one
+              + sum(C[:, j][:, P].astype(object) * (1 << s) for s, j in zip(sh, cols))[cls]) % mod
+        sp = np.full(m, beta * one, dtype=object)
+        rose = np.zeros(m, bool)
+        for k in range(0, nP, 2):
+            b = Pk[:, k + 1] if k + 1 < nP else np.full(m, beta * one, dtype=object)
+            if k % 4 == 0:
+                sp = sp ^ Pk[:, k] ^ b
+            else:
+                sp = (sp + Pk[:, k] + b - carry * beta * one) % mod
+                rose |= np.array([bool(v & guard) for v in sp])
+        for s, j in zip(sh, cols):
+            v = np.array([((int(x) >> s) & ((1 << f) - 1)) ^ beta for x in sp], dtype=np.int64)
+            v = np.where(v >> (f - 1), v - (1 << f), v) & M32
+            out[:, j] = np.where(rose, ref[:, j], v)
+        rose_cells += len(cols) * int(rose.sum())
+        predicted += len(cols) * int((widest[:, cols] > f).any(axis=1).sum())
+    how = (f"{L} cells in {lam}-bit lanes of {g} register(s), σ in {f} bits; {rose_cells}/{m * n} cells fell back"
+           + (f" ({predicted} predicted)" if predicted != rose_cells else ""))
+    return price(g, L, rose_cells), out, how, {"guards_agree": predicted == rose_cells, "fell_back": rose_cells / (m * n)}
 
 
 def copy(rule, inst, d):
@@ -704,9 +815,9 @@ def table(rule, inst, d):
 
 
 STRATEGIES = {"honest": honest, "skip": skip, "fold": fold, "bitslice": bitslice, "four_russians": four_russians,
-              "bsketch": bsketch, "expand": expand, "pack": pack, "decomp": decomp, "edge": edge, "copy": copy,
-              "table": table}
-LEAD_STRATEGIES = ("honest", "pack", "decomp", "edge", "copy", "table")
+              "bsketch": bsketch, "expand": expand, "pack": pack, "pack_det": lambda r, i, d: pack_thin(r, i, d, det=1),
+              "decomp": decomp, "edge": edge, "copy": copy, "table": table}
+LEAD_STRATEGIES = ("honest", "pack", "pack_det", "decomp", "edge", "copy", "table")
 
 
 def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
@@ -721,8 +832,9 @@ def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
         res = fn(rule, inst, d)
         if res is None:
             continue
-        cost, out, how = res
-        rows[name] = {"writes": round(cost, 4), "exact": bool(np.array_equal(out, ref)), "how": how}
+        cost, out, how, *extra = res
+        rows[name] = {"writes": round(cost, 4), "exact": bool(np.array_equal(out, ref)), "how": how,
+                      **(extra[0] if extra else {})}
     exact_rows = {k: v for k, v in rows.items() if v["exact"]}
     best = min(exact_rows, key=lambda k: exact_rows[k]["writes"])
     cheapest = exact_rows[best]["writes"]
@@ -849,6 +961,16 @@ def mutations(checks: Checks):
     d7.w0 = np.zeros_like(d7.w0)
     _, out7, _ = edge(rule7, inst7, d7)
     checks.mutation("edge dropping the per-cell offset", not np.array_equal(out7, ref7))
+    rule8, inst8 = Rule("all", "32", "thin"), Inst(64, 16, 67, 5, "zero", "add", 7, "lead:e7")
+    d8 = Draw(inst8, rule8)
+    _, ref8, _ = honest(rule8, inst8, d8)
+    _, out8, _, info8 = pack_thin(rule8, inst8, d8, carry=0)
+    checks.mutation("pack on the thin fold without the IADD3 steps' lane carry (its guards rise on every group)",
+                    not np.array_equal(out8, ref8) or info8["fell_back"] == 1.0)
+    d8.w0 = d8.w0.copy()
+    d8.w0[2, 3] += 1
+    checks.mutation("pack on the thin fold with one cell's offset off by one",
+                    not np.array_equal(pack_thin(rule8, inst8, d8)[1], ref8))
 
 
 def main() -> int:
@@ -913,6 +1035,11 @@ def main() -> int:
                      all(r["cheapest"] == "edge" and 1 <= r["strategies"]["honest"]["writes"] - r["cheapest_writes"]
                          <= 2 for r in mx),
                      sorted({(r["inst"]["coins"], r["inst"]["S"], round(r["gap_claimed"], 4)) for r in mx}))
+    thin = [r for r in results if r["rule"] == "all/32/thin" and "pack" in r["strategies"]]
+    if thin:
+        checks.check("pack's guard bits on the thin fold rise exactly on the groups whose σ leaves its lanes",
+                     all(r["strategies"][s]["guards_agree"] for r in thin for s in ("pack", "pack_det")),
+                     sorted({(r["inst"]["coins"], r["inst"]["S"], r["strategies"]["pack"]["how"]) for r in thin}))
     if checks.mutations:
         mutations(checks)
     by_rule = {}
