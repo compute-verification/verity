@@ -1214,6 +1214,8 @@ def _where(fn: Any) -> str | None:
 
 
 _TREES: dict[str, ast.Module | None] = {}
+#: `_defined_at` by the file's content digest and the line
+_DEFINED: dict[tuple[str, int], str] = {}
 
 
 def _defined_at(p: Path, line: int) -> str:
@@ -1221,6 +1223,12 @@ def _defined_at(p: Path, line: int) -> str:
     ``line`` (a decorated one at its first decorator), or the line itself when none does."""
     data = p.read_bytes()
     h = hashlib.sha512(data).hexdigest()
+    if (h, line) not in _DEFINED:
+        _DEFINED[h, line] = _defined_in(h, data, line)
+    return _DEFINED[h, line]
+
+
+def _defined_in(h: str, data: bytes, line: int) -> str:
     if h not in _TREES:
         try:
             _TREES[h] = ast.parse(data)
@@ -1438,16 +1446,22 @@ def _check_outside() -> None:
 
 
 def warm() -> None:
-    """What `attributed` works out alike in every process forked from this one, worked out here once, before the forks: which
-    loaded modules are inside the tree, their paths, the import path's entries in the tree and the installed distributions'
-    packages.  Nothing it does is a read, and a module outside the tree is still found, and its process's results not stored,
-    in each process that looks."""
+    """What `attributed` and `seen` work out alike in every process forked from this one, worked out here once, before the
+    forks: which loaded modules are inside the tree, their paths, each in-tree one's parse and top-level imports (`_parsed`,
+    `_top_imports`), the import path's entries in the tree and the installed distributions' packages.  Nothing it does is a
+    read, and a module outside the tree is still found, and its process's results not stored, in each process that looks."""
     _INTERNAL.append(True)
     try:
         _outside_modules()
-        for m in list(sys.modules.values()):
-            if isinstance(f := getattr(m, "__file__", None), str):
-                _rel(_abspath(f))
+        own = os.path.join(str(_HERE), "")
+        for name, m in list(sys.modules.items()):
+            if isinstance(f := getattr(m, "__file__", None), str) and _rel(a := _abspath(f)) is not None \
+                    and a.endswith(".py") and not a.startswith(own):
+                try:
+                    _parsed(Path(a))
+                except OSError:
+                    pass
+                _top_imports(a, name)
         _outside_tops()
         if _ROOT:
             _roots(_ROOT[0])

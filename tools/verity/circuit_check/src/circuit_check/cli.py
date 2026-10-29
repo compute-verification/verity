@@ -255,6 +255,7 @@ def _prepare(x: int | tuple[int, ...]) -> None:
     they share is built once, as a full build builds it once before any check."""
     import gc
 
+    made = False
     for i in x if isinstance(x, tuple) else (x,):
         info = _info(_TASKS[i])
         if "make" not in info or "made" in info:
@@ -266,7 +267,10 @@ def _prepare(x: int | tuple[int, ...]) -> None:
             except Exception as e:  # noqa: BLE001  (its check's error, raised again where it is checked)
                 err = e
         info["made"] = (fn, err, fr)
-    gc.freeze()                       # what it built stays shared with the processes this zygote forks
+        made = True
+    if made:
+        CC.warm()                     # the modules making it imported
+        gc.freeze()                   # what it built stays shared with the processes this zygote forks
 
 
 def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
@@ -699,6 +703,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             listed = None                                 # its reads are every binding's: a full build stores it
     else:
         tasks, keys, hits = _tasks(specs, opts, everything, as_call), None, None
+    if keys is not None:
+        # before the zygotes fork: its digest parses every module a target's check can read, and theirs reuse that
+        _store_listed(cache, listed, tasks, keys, plan)
     zygote = None
     if isolated and fork:
         _TASKS[:] = tasks
@@ -711,8 +718,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     try:
         if keys is None and tracing:
             keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks]
+            _store_listed(cache, listed, tasks, keys, plan)
         rep = _checked_all(tasks, specs, opts, everything, as_call, log, jobs, cache, mem_gb, progress, isolated, tracing,
-                           listed, zygote, mem_file, keys, hits, plan if planned is not None else None)
+                           zygote, mem_file, keys, hits, plan)
     finally:
         for z in zygote or ():
             z.close()
@@ -737,22 +745,28 @@ def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
     return out
 
 
+def _store_listed(cache: Path | None, listed: dict | None, tasks: list[tuple], keys: list[dict], plan: UN.Plan | None) -> None:
+    """The task list's entry under its key ``listed`` (`run`), unless the tracer missed something: its targets and their keys,
+    held to what any of them could read (`cache.task_list_reads`; with ``plan``, from the bindings' records, each binding built
+    apart: each one's share and this process's), digested now."""
+    if listed is None or CC.untraced():
+        return
+    roots = [*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))]
+    if plan is not None:
+        roots += [*(fn for e in plan.entries for fn in e.roots), *plan.objects.values()]
+    reads = CC.task_list_reads(roots)
+    reads = reads if plan is None else UN.merged([reads, plan.listed])
+    CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
+
+
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
                  cache: Path | None, mem_gb: int | None, progress: Path | None, isolated: bool, tracing: bool,
-                 listed: dict | None, zygote: list[Zygote] | None, mem_file: Path | None = None, keys: list[dict] | None = None,
+                 zygote: list[Zygote] | None, mem_file: Path | None = None, keys: list[dict] | None = None,
                  hits: dict[int, tuple[dict, str]] | None = None, plan: UN.Plan | None = None) -> dict:
     """`run`'s report over the task list it built (with ``keys`` and ``hits``, the keys and the entries reused already; with
-    ``plan``, from the bindings' records, each binding built apart: the task list's reads are each one's share and this
-    process's)."""
+    ``plan``, from the bindings' records)."""
     out: list[dict | None] = [None] * len(tasks)
     keys = keys if keys is not None else []
-    if listed is not None and not CC.untraced():
-        roots = [*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))]
-        if plan is not None:
-            roots += [*(fn for e in plan.entries for fn in e.roots), *plan.objects.values()]
-        reads = CC.task_list_reads(roots)
-        reads = reads if plan is None else UN.merged([reads, plan.listed])
-        CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:

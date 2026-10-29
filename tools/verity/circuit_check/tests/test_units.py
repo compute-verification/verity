@@ -324,9 +324,29 @@ def test_two_definitions_of_one_id_are_the_one_the_catalog_keeps(tmp_path):
 
 #: `HARNESS` as `circuit-check --all --jobs 2` runs it: each target checked in a process of its own forked from this one, and
 #: so each binding built in one; ``here`` lists each `units._reach` and `units._materialize` this process ran (a body built
-#: here), ``keys`` the targets' keys, and ``<root>-made.jsonl`` (beside the tree) the process, target and binding of each
-#: target `units.make` made
-FORKED = (HARNESS.replace("rep = cli.run(", "import os\nfrom circuit_check import units as UN\n"
+#: here), ``keys`` the targets' keys, ``<root>-made.jsonl`` (beside the tree) the process, target and binding of each
+#: target `units.make` made, and ``<root>-parsed.jsonl`` each check's process and the source files it parsed that no
+#: process it was forked from had (`cache._parsed`, `cache._top_imports`)
+FORKED = (HARNESS.replace("rep = cli.run(", "import hashlib, os\nfrom circuit_check import units as UN\n"
+                          "parsed, parse, top, work, checking = root.parent / f'{root.name}-parsed.jsonl', CC._parsed, "
+                          "CC._top_imports, cli._work, []\n"
+                          "def parsing(p):\n"
+                          "    with CC.internal():\n"
+                          "        if checking and hashlib.sha512(p.read_bytes()).hexdigest() not in CC._PARSED:\n"
+                          "            checking[-1].append(str(p))\n"
+                          "    return parse(p)\n"
+                          "def topping(path, name):\n"
+                          "    if checking and path not in CC._IMPORTS:\n"
+                          "        checking[-1].append(path)\n"
+                          "    return top(path, name)\n"
+                          "def working(i):\n"
+                          "    checking.append([])\n"
+                          "    try:\n"
+                          "        return work(i)\n"
+                          "    finally:\n"
+                          "        with CC.internal(), parsed.open('a') as f:\n"
+                          "            f.write(json.dumps([os.getpid(), checking.pop()]) + '\\n')\n"
+                          "CC._parsed, CC._top_imports, cli._work = parsing, topping, working\n"
                           "here, reach, materialize = [], UN._reach, UN._materialize\n"
                           "UN._reach = lambda *a, **k: here.append('reach') or reach(*a, **k)\n"
                           "UN._materialize = lambda *a, **k: here.append('materialize') or materialize(*a, **k)\n"
@@ -345,7 +365,8 @@ FORKED = (HARNESS.replace("rep = cli.run(", "import os\nfrom circuit_check impor
 
 def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_path):
     """With ``--jobs``, each binding is built in a process of its own and each target made by the zygote that forks the checks
-    of its binding's targets, so this process builds no body: the verdicts and keys a full build here gives, every binding's
+    of its binding's targets, so this process builds no body, and no check parses a source file again that the process it
+    was forked from parsed (the task list's digest, `cache.warm`): the verdicts and keys a full build here gives, every binding's
     record stored, and the task list, so the next run builds nothing.  Those records count for a run that builds here, and an
     edit rebuilds exactly the binding that reads it, apart, with the verdicts a full build gives, reusing the targets a run
     that builds here reuses."""
@@ -362,6 +383,8 @@ def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_pa
         by.setdefault(via, set()).add(pid)
     assert len(made) > len(by) and all(len(p) == 1 for p in by.values()), made
     assert len({pid for pid, _, _ in made}) <= 2 and not {pid for pid, _, _ in made} & {os.getpid()}, made
+    parsed = [json.loads(ln) for ln in (tmp_path / "t-parsed.jsonl").read_text().splitlines()]
+    assert len(parsed) == len(first["values"]) and not [p for _, p in parsed if p], json.dumps(parsed)
     assert first["stats"]["units"]["reused"] == 0 and first["stats"]["units"]["stored"] == 5, first["stats"]["units"]
     again = _run(root, FORKED)
     assert again["stats"]["task_list"] and again["hits"] == sorted(again["values"]) and again["here"] == []
