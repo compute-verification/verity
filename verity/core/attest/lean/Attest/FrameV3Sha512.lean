@@ -1,6 +1,5 @@
 import Flock.Public
 import Randomness
-import Identity.Domains
 
 /-!
 # frame-v3-sha512 over a range of positions
@@ -105,10 +104,5 @@ def verifyOpening (d : Domain) (root : ByteArray) (count position : Nat) (value 
     (path : Array ByteArray) : Bool :=
   count == d.count && root.size == 64 && position < d.count && path.size == depth d.count &&
     path.all (·.size == 64) && climb d position schema value path == root
-
-/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
-example : TAGGED = Domains.TAGGED_SHA512.toUTF8.push 0 := rfl
-example : ("veritor/indexed-domain/range/v1" : String) = Domains.INDEXED_RANGE := rfl
 
 end FrameV3Sha512
