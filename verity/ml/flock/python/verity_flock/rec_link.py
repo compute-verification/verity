@@ -22,7 +22,8 @@ with ``D = UB + PB``. Every port is u16 words in byte-string order (bit ``t`` of
 **The trees.** The inner statement publishes each unit's rows' commit strings ``b ‖ c`` (hm96-sha512, fresh salts). The
 verifier builds two trees of depth D from them itself: input row ``p`` of unit ``u`` is leaf ``u · 2^PB + p`` of the input rows'
 tree, output row ``o`` of unit ``u`` leaf ``u · 2^PB + o`` of the output rows' tree; a leaf is the row's hm96 tree leaf
-``SHA-512(leaf_prefix(key) ‖ b ‖ c)``, a leaf with no row 64 zero bytes (whose preimage nobody holds), and a node
+``SHA-512(leaf_prefix(key) ‖ b ‖ c)``, a leaf with no row `EMPTY` = ``SHA-512()`` (of the empty string, which is no row
+leaf's input, so opening it is a SHA-512 collision), and a node
 ``SHA-512(left ‖ right)``. It registers both roots, and the statement reads every instance's ``rin`` and ``rout`` against
 them. A position comes from the table row, so which leaves an instance opens is private, and only the table's padded
 count is public.
@@ -59,12 +60,14 @@ from verity.ml.commitments.gates.hm96 import SALT as HM_SALT
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf, leaf_gadget
 from verity.ml.commitments.gates.sha512 import IV
 
+from . import ir_lower as IL
 from . import rec_links as RL
+from .class_statement import ClassDefinition
 from .rec_open import BLOCK, DIGEST, NODE_WORDS, RecSha512Compress, _sha, bytes_of, words_of
 from .sha512_circuit import word_bit
 
 __all__ = ["OUT_WORDS", "PORTS", "RecLink", "Tree", "aux_words", "definition", "depth", "expected", "index", "link_ref",
-           "port_words", "unit_circuit"]
+           "lowering", "port_words", "unit_circuit", "unit_name"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
@@ -76,7 +79,7 @@ OUT_WORDS = 64
 ROW_BLOCK = 64
 FIELD_BITS = 32
 UB_MAX, PB_MAX, D_MAX = 30, 16, 32
-EMPTY = bytes(64)
+EMPTY = hashlib.sha512(b"").digest()
 PORTS = ("trow", "xr", "yr", "raux", "xw", "yw", "waux")
 
 
@@ -386,3 +389,20 @@ def unit_circuit(UB: int, PB: int):
 
 def definition(UB: int, PB: int):
     return bind(RecLink, UB=UB, PB=PB)
+
+
+def unit_name(UB: int, PB: int) -> str:
+    """The link table's statement's unit: ``rec-link/u<UB>-p<PB>`` (`VStar.linkName`)."""
+    return f"rec-link/u{UB}-p{PB}"
+
+
+def lowering(UB: int, PB: int) -> IL.Lowering:
+    """`unit_circuit` as M0's unit named `unit_name`: the ports `PORTS` (u16 words), ``rin`` and ``rout`` (one row each);
+    `VStar.linkUnit` in Lean."""
+    name = unit_name(UB, PB)
+    C, ins, outs = unit_circuit(UB, PB)
+    units = IL.Units(target=None, in_widths=[16] * len(ins), out_widths=[16] * len(outs),
+                     in_src=[[("leaf", p) for p in range(len(ins))]], out_src=[[("ret", p) for p in range(len(outs))]],
+                     signature=(name,), gates=[], arg_gates=[], ret_gates=[])
+    defn = ClassDefinition(name, port_words(UB, PB), len(outs), (OUT_WORDS, OUT_WORDS))
+    return IL.Lowering(name, defn, units, C, IL.layout(C, ins, outs))
