@@ -28,6 +28,13 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   over the statements is the Lean's (`PouwCheck.Verified.verified`, through `verifier.lean`): it names each statement
   to verify and the inputs (`_asks`: up to the first statement a check before the verifier refuses), this module only
   runs the verifier on them, and the Lean judges the answers (`_lean_verified`).
+* **A leaf past the cap is proved as its lanes** (`leaf_lanes`, the lanes form): at a K the open commits as
+  ``lane<K>`` and ``combine<K>`` with their leaf Programs' digests (`LEAF_PROGRAMS`, `lanes_files`: one form a K), the
+  draw is the same, and each drawn leaf's `leaf_lanes.statements` are verified against their one-call leaf Programs, a
+  population of one (`leaf_partition_of`), with the files credit builds at the leaf's served place
+  (`leaf_registered_file`) and its partials ``<prefix>partials@<u>`` held to one produced record under the draw root
+  (`_leaf_asks`, `_leaf_judged`, `_leaf_outcomes`). A leaf outside what `LeafLanesSound` covers is ``lanes-shape``
+  (`lanes_shape`). The Python reference only: `PouwCheck.Verified` refuses the form until its Lean mirror.
 * **The seed's inputs are the verifier's** (`registered_file`'s ``pub``): each unit's public row, the salt, position
   and roots its seed and its receipt's fold keys are derived from, is a row of its call's public table
   ``<prefix>pub@<c>``, which credit builds itself from the window's Program salt, the unit's position and the call's
@@ -3336,12 +3343,13 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "EARLIER_FORM", "INDEX", "K_FIELD", "LAYOUT_KEYS", "LENGTH_FIELD",
+__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "EARLIER_FORM", "INDEX", "K_FIELD", "LANES_FORM", "LANES_KEYS",
+           "LANES_TILES", "LAYOUT_KEYS", "LEAF_FN", "LEAF_PROGRAMS", "LEAF_STATEMENT_KEYS", "LEAF_UNIT", "LENGTH_FIELD",
            "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
-           "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
+           "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "law", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
            "window"]
