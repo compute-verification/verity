@@ -1,7 +1,7 @@
 // W1's census probes on the H200 (sm_90a): the register writers CORE-H32's run of record left unprobed, priced per 32-bit
 // register written, multi-output forms counted per register. Built, gated and timed as sm90_h32.cu's (emp.sh); notes
-// as h32.cuh's (c=CLASS w=PATTERN:REGS), plus p=PATTERN:PREDS for the predicates a counted pattern writes a lane,
-// which ../w1.py prices at 1/32 of a register each, and u=PATTERN:WORDS for the uniform registers one writes a warp.
+// as h32.cuh's (c=CLASS w=PATTERN:REGS), plus p=PATTERN:PREDS for the predicates a counted pattern writes a lane and
+// u=PATTERN:WORDS for the uniform registers one writes a warp, which ../h32.py counts by their bits.
 //   y_<form>      1024 threads (8 warps a SMSP), 256 of the form an iteration, 8 chains a thread (w1.cuh)
 //   l_ldsm<x>     ldmatrix .x1/.x2/.x4 (and .x4.trans) from shared memory, 8 fixed conflict-free row addresses a
 //                 thread, each lane's rows in their own 16 B of a 128-B row; the loaded words folded by LOP3
@@ -10,7 +10,7 @@
 //   l_ldc_d       ld.const at a lane-divergent index (LDC replays per distinct address)
 //   l_tld, l_tld4 tex1Dfetch<u32>, <uint4> inside a window the texture cache holds (TLD, 1 and 4 words)
 //   l_tex         tex2D<float4> bilinear (TEX, 4 words), inside a 2D window the cache holds
-//   l_atoms64     atom.shared.add.u64 with its return (ATOMS.ADD.64: 2 registers and 2 memory words a lane)
+//   l_atoms64     atom.shared.exch.b64 with its return (ATOMS.EXCH.64: 2 registers and 2 memory words a lane)
 #include "../../opcode_probe/probe.cuh"
 #include "w1.cuh"
 
@@ -299,7 +299,7 @@ static const OpProbe PROBES[] = {
     P(l_tld, "TLD.LZ=8", "c=other w=TLD.LZ:1"),
     P(l_tld4, "TLD.LZ=8", "c=other w=TLD.LZ:4"),
     P(l_tex, "TEX.LL=8", "c=other w=TEX.LL:4"),
-    PS(l_atoms64, "ATOMS.EXCH.64=8", "ATOMS.EXCH.64*8", atoms64_off, U * TPB * 8, "c=other w=ATOMS.EXCH.64:4"),
+    PS(l_atoms64, "ATOMS.EXCH.64=8", "ATOMS.EXCH.64*8", atoms64_off, U * TPB * 8, "c=other w=ATOMS.EXCH.64:2"),
 };
 #undef P
 #undef PS
