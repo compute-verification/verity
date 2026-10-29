@@ -685,6 +685,7 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     (src / "windows.jsonl").write_bytes(b'{"a": 1}\n{"b": ')
     (src / "serve.json").write_text("{}")
     (src / "requests.jsonl").write_text('{"prompt_ids": [1]}\n')
+    (src / "advice_trace.jsonl").write_text('{"kind": "header"}\n')
     m = sc.Mirror(src, dst)
     m()
     assert (dst / "windows.jsonl").read_bytes() == b'{"a": 1}\n' and (dst / "serve.json").read_text() == "{}"
@@ -698,22 +699,7 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
     assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "seals.jsonl").exists()
     assert not (dst / "requests.jsonl").exists(), "the requests' ids stay in the serve dir"
-
-
-def test_the_records_mirror_drains_the_step_traces_writer_before_it_copies(tmp_path):
-    """serve-openai's step trace is written by a thread of its own (`advice_trace`): its lines so far reach the file only at a
-    `drain`, which the mirror calls first."""
-    src, dst = tmp_path / "serve", tmp_path / "OUT"
-    src.mkdir()
-    (src / "advice_trace.jsonl").write_bytes(b'{"kind": "header"}\n{"kind": "st')
-
-    def drain() -> None:
-        with open(src / "advice_trace.jsonl", "ab") as f:
-            f.write(b'ep"}\n')
-
-    m = sc.records_mirror(src, str(dst), before=drain)
-    m()
-    assert (dst / "advice_trace.jsonl").read_bytes() == b'{"kind": "header"}\n{"kind": "step"}\n' and not m.errors
+    assert not (dst / "advice_trace.jsonl").exists(), "the step trace stays in the serve dir"
 
 
 def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dumps_writes(tmp_path, host_blocks, monkeypatch):
