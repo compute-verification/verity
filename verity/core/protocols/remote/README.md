@@ -368,14 +368,21 @@ the local bound (an activation price, a joint price, a recoverable source), each
   `Nci.Assumptions.MinEntropyHard`) and the wiring property `Nci.Capability.Consumers.Upstream`, are named assumptions in
   the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
   certificate is not checked on a named training circuit.
-- `Nci.Guarantees.DampenerRemote`: **proved**, but it is the older threaded slowdown bound, a different bound,
-  ρ = max(1, 1/(s + x/MFU₀)) over the thread structure (`Nci.Dampener.remoteDampener`; MFU₀ divides only x), not
-  the bound displayed above. It is arithmetic over inline
-  hypotheses (`Nci.Assumptions.PouwSound` among them, which no PoUW guarantee discharges), not over the local bounds.
-- Over a monitoring period, `Nci.Guarantees.DampenerRemotePeriod`: **open**. Its lock entry,
-  `DampenerRemotePeriodStated`, is the placeholder `s = s` proved by `rfl`, not the statement; its proof is in review.
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
   (`Verity.Guarantees.Counting`): **proved**.
+
+The Lean overhead bounds, and the composed soundness they would rest on (the last column is the chain's status in
+`benchmarks/prove_path/e2e_chains/README.md`):
+
+| Piece | Lean declaration | Lock | End to end |
+|---|---|---|---|
+| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
+| The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
+
+`DampenerRemote` is the older threaded slowdown bound, ρ = max(1, 1/(s + x/MFU₀)) over the thread structure
+(`Nci.Dampener.remoteDampener`; MFU₀ divides only x), not the bound displayed above: arithmetic over inline hypotheses
+(`Nci.Assumptions.PouwSound` among them), not over the local bounds.
 
 ### 7. What is completeness, not security
 
