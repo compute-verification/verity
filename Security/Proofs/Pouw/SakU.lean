@@ -36,6 +36,10 @@ structure Machine where
   pre : {α α' β : Type} → Prog α β → (α' → α) → Prog α' β
   eval_pre : ∀ {α α' β : Type} (p : Prog α β) (f : α' → α) (x : α'), eval (pre p f) x = eval p (f x)
   cost_pre : ∀ {α α' β : Type} (p : Prog α β) (f : α' → α), cost (pre p f) ≤ cost p + mapCost f
+  postCost : {α β γ : Type} → (α → β → γ) → Nat
+  post : {α β γ : Type} → Prog α β → (α → β → γ) → Prog α γ
+  eval_post : ∀ {α β γ : Type} (p : Prog α β) (g : α → β → γ) (x : α), eval (post p g) x = g x (eval p x)
+  cost_post : ∀ {α β γ : Type} (p : Prog α β) (g : α → β → γ), cost (post p g) ≤ cost p + postCost g
 
 /-- A design whose committed words are `words (pad d c)`: a function of one instance, a bijection of the coins `c` for
 each data `d` (`unpad d` its inverse), and whose served output is the useful `useful d`. -/
@@ -130,5 +134,71 @@ theorem denoise_cost (E : M.Prog (D.Data × D.Coin × D.Words) D.Out)
     pubUseful ≤ M.cost E + M.mapCost (fun d : D.Data => (d, D.unpad d u₀, D.words u₀)) := by
   obtain ⟨h1, h2⟩ := denoise_is_useful E hE u₀
   exact Nat.le_trans (hmin _ h1) h2
+
+/-! ## Any design, and DataCantHelp
+
+`Gen` is any design: words `W d c` on data `d` and coins `c`, and a useful output. DataCantHelp says no data's words
+are cheaper than the base data `d₀`'s (zero data). `ToBase` is a reduction that would prove it: coins `τ d c` and a
+post-map `σ` that turn data `d`'s words into `d₀`'s. `gap_at_base` says such a reduction, run through the honest
+program, leaves a gap of at least `pubO` at `d₀`, less the reduction's cost. So in a useful design DataCantHelp has
+no proof by a reduction much cheaper than the useful product. -/
+
+/-- Any design: words `W d c` and the useful output `useful d`. -/
+structure Gen where
+  Data : Type
+  Coin : Type
+  Words : Type
+  Out : Type
+  W : Data → Coin → Words
+  useful : Data → Out
+
+/-- A reduction of every data's words to the base data `d₀`'s. -/
+structure ToBase (G : Gen) (d₀ : G.Data) where
+  τ : G.Data → G.Coin → G.Coin
+  σ : G.Data → G.Coin → G.Words → G.Words
+  spec : ∀ d c, σ d c (G.W d (τ d c)) = G.W d₀ c
+
+/-- SAK-U's direct-sum form at the base data: every program that outputs, on every coins and data, the base data's
+words at those coins and the useful output of that data, costs at least `pubW + pubO`. -/
+def BaseSum (M : Machine) (G : Gen) (d₀ : G.Data) (pubW pubO : Nat) : Prop :=
+  ∀ Q : M.Prog (G.Coin × G.Data) (G.Words × G.Out),
+    (∀ c d, M.eval Q (c, d) = (G.W d₀ c, G.useful d)) → pubW + pubO ≤ M.cost Q
+
+/-- The honest program, composed with the reduction, is a `BaseSum` solver. -/
+theorem honest_pays_base (G : Gen) (d₀ : G.Data) (ρ : ToBase G d₀) (H : M.Prog (G.Data × G.Coin) (G.Words × G.Out))
+    (hH : ∀ d c, M.eval H (d, c) = (G.W d c, G.useful d)) {pubW pubO : Nat} (hS : BaseSum M G d₀ pubW pubO) :
+    pubW + pubO ≤ M.cost H + M.mapCost (fun x : G.Coin × G.Data => (x.2, ρ.τ x.2 x.1)) +
+      M.postCost (fun (x : G.Coin × G.Data) (y : G.Words × G.Out) => (ρ.σ x.2 x.1 y.1, y.2)) := by
+  have hQ : ∀ c d, M.eval (M.post (M.pre H (fun x : G.Coin × G.Data => (x.2, ρ.τ x.2 x.1)))
+      (fun (x : G.Coin × G.Data) (y : G.Words × G.Out) => (ρ.σ x.2 x.1 y.1, y.2))) (c, d) = (G.W d₀ c, G.useful d) := by
+    intro c d
+    rw [M.eval_post, M.eval_pre, hH, ρ.spec]
+  have h1 := hS _ hQ
+  have h2 := M.cost_post (M.pre H (fun x : G.Coin × G.Data => (x.2, ρ.τ x.2 x.1)))
+    (fun (x : G.Coin × G.Data) (y : G.Words × G.Out) => (ρ.σ x.2 x.1 y.1, y.2))
+  have h3 := M.cost_pre H (fun x : G.Coin × G.Data => (x.2, ρ.τ x.2 x.1))
+  omega
+
+/-- **The gap at the base data.** The public best for the base data's words (`pubProg`, cost `pubW`) undercuts the
+honest program there by at least `pubO`, less the reduction's cost. -/
+theorem gap_at_base (G : Gen) (d₀ : G.Data) (ρ : ToBase G d₀) (H : M.Prog (G.Data × G.Coin) (G.Words × G.Out))
+    (hH : ∀ d c, M.eval H (d, c) = (G.W d c, G.useful d)) {pubW pubO : Nat} (hS : BaseSum M G d₀ pubW pubO)
+    (pubProg : M.Prog G.Coin G.Words) (hpub : ∀ c, M.eval pubProg c = G.W d₀ c) (hcost : M.cost pubProg ≤ pubW) :
+    M.cost pubProg + pubO ≤ M.cost H + M.mapCost (fun x : G.Coin × G.Data => (x.2, ρ.τ x.2 x.1)) +
+      M.postCost (fun (x : G.Coin × G.Data) (y : G.Words × G.Out) => (ρ.σ x.2 x.1 y.1, y.2)) := by
+  have := honest_pays_base G d₀ ρ H hH hS
+  have _ := hpub
+  omega
+
+/-- A pad design as a `Gen`. -/
+@[reducible] def Design.gen (D : Design) : Gen :=
+  ⟨D.Data, D.Coin, D.Words, D.Out, fun d c => D.words (D.pad d c), D.useful⟩
+
+/-- A pad design reduces every data's words to any base data's, with `σ` the identity: its instance doesn't depend on
+the data. -/
+def Design.toBase (D : Design) (d₀ : D.Data) : ToBase D.gen d₀ where
+  τ d c := D.unpad d (D.pad d₀ c)
+  σ _ _ w := w
+  spec d c := congrArg D.words (D.pad_unpad d (D.pad d₀ c))
 
 end Pouw.SakU
