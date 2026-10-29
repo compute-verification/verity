@@ -7,7 +7,7 @@ import Proofs.Accounting.RateAudit.Audit
 
 Each location is a `RelayDevice` of `RateAudit`'s game, whose oracle is the mix at what the location holds:
 
-- the GPU at tile outputs `z` is its device (`Device.toRelay`), over the store, at the mix `atZ G z`;
+- the GPU at tile outputs `z` is its device (`Prover.toRelay`), over the store, at the mix `atZ G z`;
 - the rest at a store `E` is a device over the tile outputs (`Rest.view`), with no on-chip state, its memory inlined
   into its program (`Chip.inline`), so that it has no footprint, its tile work as rebuilds and what the GPU sent as
   side reads, at the mix `atE G E`.

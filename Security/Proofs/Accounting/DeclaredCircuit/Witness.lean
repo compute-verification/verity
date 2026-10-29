@@ -575,7 +575,7 @@ theorem requirement {n P N τ : ℕ} (val : ℕ → ℕ → ℕ) (hval : ∀ r i
 
 /-- The honest pass device (`RateSketch.Completeness.honest`) at the session's on-chip state, link and query caps. -/
 def honestDev (N ρ S Lk q : ℕ) (hL : ρ * 256 ≤ Lk) (hq : N ≤ q) :
-    RateSketch.Device N 128 ρ 512 S Lk q 256 RateSketch.Sector (RateSketch.SketchSigns 16 128)
+    RateSketch.Prover N 128 ρ 512 S Lk q 256 RateSketch.Sector (RateSketch.SketchSigns 16 128)
       (Fin 16 → ZMod (2 ^ 32)) where
   held := ∅
   held_le := by simp

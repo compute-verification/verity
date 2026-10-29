@@ -7,9 +7,9 @@ import Proofs.Accounting.DeclaredCircuit.Tiles
 The pieces of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that price `BadK`. Resampling the `K` unobtained
 positions of a run together leaves its queries and what it obtained unchanged, so each correct digest query pins its
 position to the digest's fiber, at most `fib` values, and a stream position to one value (`card_resample_planes`,
-`Device.card_badK_ground_le`). Summed over the candidates of a pass and their `K`-tuples of query indices, a shared
-budget of `qtot` queries pays `(fib·qtot/|X|)^K` (`Device.card_badK_family_le`), which on the sketch at rank `r` is
-`(qtot/2^(8r))^K` (`Device.pr_badK_family_le`).
+`Prover.card_badK_ground_le`). Summed over the candidates of a pass and their `K`-tuples of query indices, a shared
+budget of `qtot` queries pays `(fib·qtot/|X|)^K` (`Prover.card_badK_family_le`), which on the sketch at rank `r` is
+`(qtot/2^(8r))^K` (`Prover.pr_badK_family_le`).
 -/
 
 namespace Accounting.RateSketch
@@ -153,13 +153,13 @@ theorem sum_pow_succ_le {ι : Type} (s : Finset ι) (f : ι → ℕ) (k : ℕ) :
     _ = (∑ j ∈ s, f j) ^ k * ∑ i ∈ s, f i := by rw [Finset.mul_sum]
     _ = (∑ i ∈ s, f i) ^ (k + 1) := by rw [pow_succ]
 
-namespace Device
+namespace Prover
 
 /-- **One tuple of query indices, counted against the data where they exist.** The data on which a run made correct
 digest queries at the indices `ι` behind `K` unobtained spread positions are at most a `(g/|X|)^K` fraction of the data
 on which all `K` indices exist. -/
 theorem card_badK_ground_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] {K : ℕ}
-    (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
+    (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (ι : Fin K → ℕ) (g : ℕ) (hf : fib dig σ ≤ g)
     [DecidablePred (fun D : Data N m ρ X => BadK A dig σ O D ι)] :
     (Finset.univ.filter fun D : Data N m ρ X => BadK A dig σ O D ι).card * Fintype.card (Fin K → X) ≤
@@ -183,7 +183,7 @@ theorem card_badK_ground_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableE
         A.obtained σ O (Function.extend (dir D) a D) = A.obtained σ O D := by
     intro D hne a
     have hp := hdir D hne
-    refine Device.obtained_congr A σ O D (Function.extend (dir D) a D) (fun p hp' => ?_)
+    refine Prover.obtained_congr A σ O D (Function.extend (dir D) a D) (fun p hp' => ?_)
     refine Function.extend_apply' _ _ _ ?_
     rintro ⟨i, rfl⟩
     exact (hp.2 i).1 hp'
@@ -251,7 +251,7 @@ correct digest queries behind `k + 1` unobtained spread positions are at most a 
 candidate's `(k+1)`-tuples of its queries are at most its query count to the `k + 1`, and those add to at most
 `qtot^(k+1)`. -/
 theorem card_badK_family_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] {C k : ℕ}
-    (A : Fin C → Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+    (A : Fin C → Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Fin C → Oracle N ρ h X Dg) (g qtot : ℕ) (hf : fib dig σ ≤ g)
     (hq : ∀ D : Data N m ρ X, ∑ c, (((A c).prog σ D).queries (O c) D).length ≤ qtot)
     [DecidablePred (fun D : Data N m ρ X =>
@@ -318,7 +318,7 @@ variable {ks : ℕ}
 query at most `qtot` times in all, then on uniform data some candidate made correct digest queries behind `k + 1`
 unobtained spread positions with probability at most `(qtot/2^(8r))^(k+1)`. -/
 theorem pr_badK_family_le {C k : ℕ}
-    (A : Fin C → Device N m ρ h S L q w Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : Fin C → Prover N m ρ h S L q w Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (O : Fin C → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) (r qtot : ℕ)
     (hr32 : r ≤ 32)
     (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
@@ -351,6 +351,6 @@ theorem pr_badK_family_le {C k : ℕ}
     rw [div_eq_mul_inv, mul_pow, ← ENNReal.inv_pow, ← div_eq_mul_inv]
   rw [← hbase, hdivpow, Fintype.card_fun, Fintype.card_fin, Nat.cast_pow, Nat.cast_pow, Nat.cast_mul, hXc]
 
-end Device
+end Prover
 
 end Accounting.RateSketch

@@ -194,7 +194,7 @@ theorem scheduledRequirement : ScheduledRequirement := by
         (hX (SketchPrefix.of x.2 w j) x.1 ((win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
           ((x.2 w).2.1 j).1 (((x.2 w).2.1 j).2 ((win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)))
     have hp := hpass (SketchPrefix.of x.2 w j) x.1 (hacc w j) ((x.2 w).2.1 j)
-    rcases RateSketch.Device.unpaid_tiles_split ((win x w).dev j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
+    rcases RateSketch.Prover.unpaid_tiles_split ((win x w).dev j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
         RateSketch.sketch (x.2 w).1 ((win x w).oracle j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
         (Data.ofParts (store x.1 x.2 w j) ((x.2 w).2.1 j).1) (tiles x w j) (Xr * τ + C) k (by norm_num) hXp hj
       with ⟨t, ht⟩ | ⟨ι, hb⟩
