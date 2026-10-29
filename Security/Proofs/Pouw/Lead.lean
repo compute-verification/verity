@@ -1,3 +1,4 @@
+import Proofs.Pouw.Lead.Bridge
 import Proofs.Pouw.Lead.CoinBranch
 import Proofs.Pouw.Lead.Commit
 import Proofs.Pouw.Lead.Compose
