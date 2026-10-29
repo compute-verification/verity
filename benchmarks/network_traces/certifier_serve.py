@@ -20,7 +20,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
 - the client and the certifier agree on the origin through the wall clock (`origin_unix`), so a client on another
   host needs its clock within a few tens of ms of the certifier host's (requests are sent mid-bucket);
 - the rehearsal (`rehearse`) runs the client on the certifier's host, so its link is loopback, and its check plays the
-  firewall and the challenger in one process, with the network registration of each link-window standing in for
+  ZK server and the challenger in one process, with the network registration of each link-window standing in for
   PoUW's registration of the window, which opens the window's salt;
 - the reveal deadline covers the whole run and a margin (`REVEAL_MARGIN_S`), where a deployment's covers one PoUW
   window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the
@@ -98,8 +98,8 @@ first `--probes` requests are probed straight to the endpoint at their arrival t
 after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
 token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
 request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
-frame is handed before its last window. N2's profile is `advice`: no egress profile, the counts are N2-ADVICE's to
-derive from the ingress head and the advice, and this check gives no N2 verdict.
+frame is handed before its last window. N2's profile is `advice`: no egress profile, N2's advised counts derive the
+counts from the ingress head and the advice, and this check gives no N2 verdict.
 
 **The certified I/O** (`certified_io`, the check on the advice profile), read from the records' frames alone: each
 request's ingress ordinal (its stream on the link), release bucket and id request's fields (`user`, prompt ids,
@@ -107,8 +107,9 @@ request's ingress ordinal (its stream on the link), release bucket and id reques
 that name its ordinal, with each frame's canonical position and egress bucket. Accepted when every request is an id
 request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
 by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
-(the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes the I/O to `io.json` for the tie (IO-TIE) and
-N2's advice counts (N2-ADVICE), and compares it with the ids the shim wrote and the requests the plan sent.
+(the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes
+the I/O to `io.json` for the I/O tie and N2's advised counts, and compares it with the ids the shim wrote and the
+requests the plan sent.
 On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
 held to the certifier's key and session (`_certified`). The verdict is `accepted` when every window's records are
@@ -136,7 +137,7 @@ certified, the I/O, the audit and the salt accept.
   certifies every record and signs every reveal off the proxy's GIL), the proxy, the link's listener and the reveal
   endpoint (`active.serve_reveals`, which also serves each window's certificates' public part once both its records
   are certified: `CertifyingPublisher.public`), and writes `deployment.json`, the auditor's record of the run: the
-  certifier's public key, the proxy's run id, the certifier session (`--session`, which the challenger draws), the
+  certifier's public key, the proxy's run id, the certifier session (`--session`, which the challenger samples), the
   links, the addresses, the origin and the reveal deadline. It takes one link connection, which must come before the
   origin. The proxy writes each egress bucket through its pacer, `--paced-ms` (`PACED_MS`) after the bucket's boundary
   (`active.Proxy(paced=…)`), so that nothing on the proxy's loop moves when a bucket leaves; `--paced-ms 0` writes it
@@ -188,7 +189,7 @@ link's verifier of record reads: `read_clocks`), `proxy.json.gz`, the shim's `se
 client's `peer.json`, `certificates.jsonl` and `clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and
 `check.json`, and with `--out-shape` `out-records.jsonl` (public) and `out-witness.jsonl` (the out value's rows and
 salts, witness). Records, their heads, the syncs the certifier signed, the certifier's salts and the shim's events are
-witness, kept behind the firewall in a deployment; a rehearsal publishes them so that its check can be replayed. A
+witness, kept behind the ZK server in a deployment; a rehearsal publishes them so that its check can be replayed. A
 certificate's public part is public, which the client keeps: its key id, link, direction and window, the digest it
 signs and its LMS signature, in the deployment's session. The digest is the head's, or the sync's clock digest,
 salted by its own `salt_c` (`certificate_digest`, `clock_commitment`), a hiding commitment, so the signature over it
@@ -262,7 +263,7 @@ TAMPERS = ("late", *ar.LIVE_TAMPERS)
 ACCEPTED = ("honest", "token", "byte")
 PROFILES = ("planned", "served")
 TRAFFIC = ("fixed", "varied")
-#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2-ADVICE)
+#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2's advised counts)
 ADVICE = "advice"
 #: a varied plan's first arrival is after this, in window 0's bucket 2 or later
 START_MS = 150.0
@@ -287,7 +288,7 @@ CHALLENGER = "certifier-serve-check"
 #: witness, the rows and their salts (the prover's alone)
 OUT_RECORDS, OUT_WITNESS = "out-records.jsonl", "out-witness.jsonl"
 NO_N2 = ("no verdict on the advice profile: N2 derives the egress counts from the ingress head and the advice "
-         "(N2-ADVICE), which this check doesn't read")
+         "(its advised counts), which this check doesn't read")
 
 
 # Keys.
@@ -631,7 +632,7 @@ def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temp
     """The request every session of a served plan sends: exactly `tokens` tokens (`max_tokens`, never stopped early:
     `ignore_eos`), streamed, at `temperature` and `top_p` (greedy by default). Both are always sent: an endpoint
     applies its own generation config to a request that omits them. No `min_tokens`: it masks the EOS logit, which the
-    served Program's sampling doesn't model, so vllm's advice refuses it."""
+    served Program's sampling doesn't model, so the vLLM integration's advice refuses it."""
     return {"model": model, "prompt": prompt, "max_tokens": tokens, "stream": True,
             "ignore_eos": True, "temperature": temperature, "top_p": top_p}
 
@@ -720,7 +721,7 @@ def served_plan(probed: dict, requests: int = 8, delta_buckets: int | None = Non
     F = frames or tokens
     if body.get("ignore_eos") is not True or not isinstance(tokens, int) or tokens < 1 or "min_tokens" in body:
         raise ValueError("a served plan's body asks for exactly its tokens (max_tokens, ignore_eos) and no min_tokens, "
-                         f"which vllm's advice refuses: not {body}")
+                         f"which the vLLM integration's advice refuses: not {body}")
     if F < tokens:
         raise ValueError(f"F, a response's frames, is at least the body's {tokens} tokens, not {F}")
     lengths = sorted({r["events"] for r in probed["responses"]})
@@ -1684,7 +1685,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--delta-buckets", type=int,
                        help="the latency budget D (default: 4 × the slowest + 0.5 s, or the most that fits down to 2 ×)")
         q.add_argument("--profile", choices=PROFILES, default=PROFILES[0],
-                       help="N2's profile: the planned egress occupancy, or the served profile (NET-54), whose egress "
+                       help="N2's profile: the planned egress occupancy, or the served profile, whose egress "
                             "counts derive from the ingress head's")
         q.add_argument("--traffic", choices=TRAFFIC, default=TRAFFIC[0],
                        help="fixed: one body every session (--tokens, --prompt-tokens, --in-flight, --profile); varied: "
@@ -1716,7 +1717,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--reveal", required=True, type=_address, help="HOST:PORT of the reveal endpoint")
     s.add_argument("--key", required=True, type=Path, help="the certifier's key directory (keys)")
     s.add_argument("--challenger-key", required=True, type=Path, help="the challenger's public.json")
-    s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex, the challenger's draw")
+    s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex, the challenger's coins")
     s.add_argument("--n2-link", default=N2_LINK)
     s.add_argument("--reveal-deadline", type=float, help="seconds past a window's end (default: the run's + 300)")
     for q in (s, r):

@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 
 e2e-exec's acceptance lemmas (`Discharge/Exec`) take `hh : I.tags.hiddenOutputs = false`: they are about `Stmt.setupH`'s
 statements, and under hidden outputs `Stmt.setupTables` calls `Stmt.setupHidden`. Each statement here is one of them
-without `hh`, so it covers the sessions main's prover writes since #757 (`verity/flock-circuit`, the default
+without `hh`, so it covers the sessions main's prover writes (`verity/flock-circuit`, the default
 `--statement`). Where the original names `setupH`, this one names `setupOne`, the setup `setupTables` calls for the
 tag; where it doesn't, the conclusion is the original's.
 

@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
-  coordinator when you can't tell, take only keys, access and claims to Daniel, record a ruling where the next agent reads
+  coordinator when you can't tell, take only claims and his own clicks to Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
   change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
   a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
@@ -91,7 +91,7 @@ note in its report, and its coordinator saves it. The notes are public: nothing 
 
 The admin (`@top`) reads new friction notes daily (`research notes mcp`'s `search_notes`, `kind: friction`, `since`),
 files each repeat or repeated wait as a dated issue in its owner's team, and checks that the fix landed and held; only one
-whose fix needs keys or a claim goes to Daniel.
+whose fix needs a claim or his own accounts goes to Daniel.
 
 ## Standing rulings
 
@@ -123,14 +123,18 @@ What an agent may change:
 
 Keys and access:
 
+- Keys and access between our own machines and accounts are the lanes' call: the lane that needs a key or a grant
+  (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
+  shared nodes, with no ask and no wait. This is a simulation: nothing mimics deployment settings, and it needn't be
+  perfect. Daniel only clicks what needs an account he holds (the GitHub organization's admin, billing, the Nebius and
+  Cloudflare consoles).
 - The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
-  so stopping a machine never waits on an agent VM. A key that could also start, create or delete is a new ask.
+  so stopping a machine never waits on an agent VM.
 - Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
   control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
   branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
-- A lane's development gate key on an auditor's gate (vy-challenger-1, vy-auditor-2) is no ask: the lane
-  makes an ed25519 key, sends infra only the public half, and infra registers it under that lane. Only the per-lane Cursor
-  secret that credit-bearing windows need is Daniel's.
+- A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
+  infra only the public half, and infra registers it under that lane.
 
 Landing:
 
@@ -141,7 +145,7 @@ Landing:
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
 - Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python,
-  as drive lands before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
+  as drive lands on `checked` before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
   list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
   `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
   the PR's base). No new swallowing handler: re-raise, record, or test first.
@@ -179,7 +183,7 @@ Protocols and claims:
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
+  (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
@@ -190,9 +194,9 @@ Protocols and claims:
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
-  checks only padded counts. One key per protecting party, drawn once at setup from the OS before anything else, public
+  checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are drawn from the OS, not expanded by a PRG.
+  are sampled from the OS, not expanded by a PRG.
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
   implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the

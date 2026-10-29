@@ -122,7 +122,7 @@ class Producer:
         return art
 
     def table(self, runs, label: str) -> str:
-        """A table art whose meta names its runs, as the benchmarks lane's table arts do."""
+        """A table art whose meta names its runs, as a record's table arts do."""
 
         path = self.tmp_path / "files" / f"table-{label}.md"
         path.parent.mkdir(parents=True, exist_ok=True)

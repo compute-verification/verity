@@ -2,16 +2,15 @@
 # P2 v1 decode climb on one GPU (cwd = the source tree): builds each variant of libp2v1.so and runs decode_bench.py on all of
 # them, the first as the baseline every other's output must equal.  Results go to $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign pous --declared-output 'out/*' -- \
-#     env MAXMIN=M taskset -c 0-119 bash benchmarks/pous/p2_v1/climb.sh 'base=p2v1.cu:' 'tpb128=p2v1.cu:-DP2_TPB=128' ...
-# On vy-nebius-1, which has no ENV_DIR, through node 1's lease pool (r20261008-152508-ff34):
-#   research run --on vy-nebius-1 --project verity --lane L --source . --cwd source --campaign pous --mem-gb 48 -- bash -c \
+#   RESEARCH_RUN_DIR=DIR MAXMIN=M taskset -c 0-119 bash benchmarks/pous/p2_v1/climb.sh 'base=p2v1.cu:' 'tpb128=p2v1.cu:-DP2_TPB=128' ...
+# On a node with no ENV_DIR, through its lease pool:
+#   RESEARCH_RUN_DIR=DIR bash -c \
 #     'e=$(mktemp -d /workspace/tmp/p2climb.XXXXXX); trap "rm -rf $e" EXIT; env GPU_LEASE_DIR=/run/gpu-lease \
 #      GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus PATH=/workspace/verity-guest/bin:$PATH ENV_DIR=$e WORK=$e \
 #      taskset -c 96-111 bash benchmarks/pous/p2_v1/climb.sh ...'
 #
 # The variants build in parallel before the GPU is leased (gpu-lease 1 --wait --max-min MAXMIN, from GPU's indices when it is
-# set), which only the bench holds; a job that already holds its GPU (`research run --queue --gpus 1`, which sets
+# set), which only the bench holds; a job that already holds its GPU (its queue sets
 # GPU_LEASE_UUID) runs the bench on it.
 # A variant is NAME=SOURCE:FLAGS; FLAGS replace the Makefile's defaults where they name the same macro (later -D wins).
 # BLOCKS (default 8 segments, 524,288 labels), REPS and GATE pass through, and KEYS_ALL=1 checks every label's v4 keys.  ENV_DIR holds the shared torch venv and CGBN

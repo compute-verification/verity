@@ -8,7 +8,7 @@
 # is 6.0% of the GEMM.
 name = "cw-l7qs"
 status = "measured"
-source = "cw_l7qs (benchmarks/pouw/edited_gemm/cwgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3n-16's classes (r20261017-091604-85e1; bit-exact against checked_strip's co32c_words and c_l7qs's receipts, cwgemm_ref.py)"
+source = "cw_l7qs (benchmarks/pouw/edited_gemm/cwgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's co32c_words and c_l7qs's receipts, cwgemm_ref.py)"
 L = 32
 
 [mma]
@@ -34,11 +34,11 @@ UTMA16K = 0.0039
 
 [measured]
 cycles_per_mma = 30.5778        # the hot median at its clock; ncu 30.5743; work bound 22.7896 on JI3n_0 (eps_sched 0.255)
-source = "cw_l7qs at 8192^3 (r20261017-091604-85e1): hot 2.6482 ms against c_l7qs's 2.2656 and plain's 1.5128; r20261017-093140-8f65 reproduces it (30.5261, 17.9030 instructions a MMA)"
+source = "cw_l7qs at 8192^3: hot 2.6482 ms against c_l7qs's 2.2656 and plain's 1.5128; a second run reproduces it (30.5261, 17.9030 instructions a MMA)"
 
 [operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
 floor = { LDSM_X4 = 0.2 }
-source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10)"
 
 [fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a MMA at L = 32)
 name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)

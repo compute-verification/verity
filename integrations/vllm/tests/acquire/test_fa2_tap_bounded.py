@@ -54,10 +54,10 @@ def test_plan_b64_and_b8_under_2gib():
 
 
 def test_small_cap_plans_one_sequence_groups_which_the_wrapper_must_still_compact():
-    """[step-2 21:37Z, cp-r18-h100] cap 512 MiB on the B8 llama geometry (393 MiB per sequence) plans EIGHT one-sequence groups.  The C++
-    Fa2Wrap must treat such a group as a group of a split launch (hold_launch), not as a B=1 launch: the first pod run staged them on the
-    whole-buffer b == 1 branch (27,376 tensors / root ba16ddff.. vs 28,016 / 2891d10b.. at cap 0 and 2048).  The plan is legal and the
-    equality is re-measured on the pod (cap 512 rerun); this pins the plan shape that exercises the branch."""
+    """Cap 512 MiB on the B8 llama geometry (393 MiB per sequence) plans EIGHT one-sequence groups.  The C++ Fa2Wrap must treat
+    such a group as a group of a split launch (hold_launch), not as a B=1 launch: staged on the whole-buffer b == 1 branch they give
+    27,376 tensors / root ba16ddff.. vs 28,016 / 2891d10b.. at cap 0 and 2048.  The plan is legal and the equality is measured on
+    the pod; this pins the plan shape that exercises the branch."""
     per = fa2_tap_words_per_seq(32, 1024, 8, 128, 64)
     g8 = plan_fa2_tap_groups(8, per, (512 << 20) // 4)
     assert g8 == [(i, i + 1) for i in range(8)]
@@ -172,7 +172,7 @@ def unbounded_path(seqlens, h, M, NB, BN, D, layers, buf=None, kv_prior=None):
 
 
 def bounded_path(seqlens, h, M, NB, BN, D, layers, cap_words, boundbuf=None, zero_between_groups=True, kv_prior=None):
-    """The R18 split driver: groups from the plan, each tapped into a PREFIX of one capped buffer, staged with the GLOBAL index, zeroed."""
+    """The split driver: groups from the plan, each tapped into a PREFIX of one capped buffer, staged with the GLOBAL index, zeroed."""
     b = len(seqlens)
     per = fa2_tap_words_per_seq(h, M, NB, BN, D)
     groups = plan_fa2_tap_groups(b, per, cap_words)

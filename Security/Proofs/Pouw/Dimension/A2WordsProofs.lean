@@ -7,7 +7,7 @@ import Proofs.Pouw.Dimension.PipeProofs
 * `a2ExtraOutputs`: an extra output outside the target set is never a target, so the matching program still works.
 * `a2WitnessExtra`: `a2WitnessQuad` with every non-word added; the checked words are finitely many and a program's
   slots are finitely many, while the functions of the noise are infinitely many.
-* `emptyQuadPipe`, `a2Separation`: the red team's `red-team-phase12-separation.lean`. The empty program gives
+* `emptyQuadPipe`, `a2Separation`: the separation example. The empty program gives
   `extraMachine` a program, at which the unrestricted A2 fails by `a2WitnessExtra`.
 -/
 

@@ -28,7 +28,7 @@ MAPS = MANIFESTS / "capture-maps"
 #: a tap's Program today: registered and conformance-tested; being built (on a named branch); a registered family whose kernel
 #: variant is not yet pinned; a value only moved (checked by word equality against the taps it copies); none (bound by the Commit,
 #: reported as an unverified unit)
-STATUSES = ("exists", "tonight", "port", "copy", "committed-only")
+STATUSES = ("exists", "pending", "port", "copy", "committed-only")
 DISPOSITIONS = ("taps", "container", "fused", "weights-only", "inactive")
 TP_KINDS = ("replicated", "column", "partial", "reduced", "gathered", "vocab-shard")
 LAYER_VAR = "i"

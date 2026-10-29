@@ -4,8 +4,7 @@ import Definitions.Flock.Holo
 /-!
 # Recursion: hidden unit circuits' class, registered table and registered schedule
 
-F4 candidate 3's statement objects (note:proofs/20261010T0250Z-draft-f4-bitsumcheck §2.1, row S1 of its §4), beside
-`Target.lean`'s `HClass` and `Hidden`:
+The statement objects of hidden unit circuits, beside `Target.lean`'s `HClass` and `Hidden`:
 
 * `HoloClass`: what the class publishes about a block statement with hidden unit circuits: `HClass`'s fields, with the
   template's `ℓ = slotLog` between 6 and `k_log`, `2^ν` entries a template, `2^sLog` slots, slot `σ` filling the unit
@@ -126,7 +125,7 @@ namespace RegSchedule
 
 variable {cls : HoloClass} (rsch : RegSchedule cls)
 
-/-- Level 0's unique-decoding radius `δ = (1 − ρ)/2 − η` (§1.4). -/
+/-- Level 0's unique-decoding radius `δ = (1 − ρ)/2 − η`. -/
 noncomputable def radius : ℝ := (1 - rsch.sch.level₀.rate) / 2 - eta
 
 /-- The registered word `w` is close to the registered table `R`: some level-0 message whose encoding is within the

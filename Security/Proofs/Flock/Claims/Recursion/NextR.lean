@@ -30,9 +30,8 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   what it reads of the last message changes no absorbed value (`readRep_last`). The nonces are absorbed
   (`.bytes (le64 n)`) but no opened row carries one, so the fit fixes them at `0`, the only nonce a deployed prover
   sends: every grinder ignores its bits (`LiveChallenger`'s `pow_nonce` is `0` outside flock-live's R4 test, and the
-  firewall device's is `0`), and the inner proofs of
-  `art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3` carry only zeros
-  (`art:f8e2b70befdb81f371d17105e824e9ffa68f4f51cded57826217f94d46ae9456`). A proof with another nonce is decided by
+  firewall device's is `0`), and the recorded inner proofs carry only
+  zeros. A proof with another nonce is decided by
   no fit. An honest prover's rounds read back (some fit exists, and it is the prover's proof), which `RecursiveKS` at
   `nextR` needs to be non-vacuous: `NextRHonest.lean` states it (`RepReadsBack`, `ReadsBack`) and `NextRFits.lean`
   proves it (`readsBack`).

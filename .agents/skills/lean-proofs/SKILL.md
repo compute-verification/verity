@@ -1,8 +1,8 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE on a node's
-  warm tree; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
+  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE, lake env lean
+  in the file's package; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
   tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
   lean-audit.json, moving them without a landing DM (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
@@ -36,9 +36,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Build, iterate, check
 
-- **The edit loop is `verity lean try FILE`** (FILE from the root; `--on vy-nebius-cpu-5 --pool proofs` for another
-  node with `build` Lean slots): your checkout, uncommitted edits included, on a warm slot tree (the README). It never
-  writes a record. After editing a file others import, try an importer.
+- **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
+  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
+  never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
+  on a project machine with `--on` (the README).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
   feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
   of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
@@ -78,7 +79,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Assumptions and guarantees
 
-- **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (C-Flock's in
+- **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
   and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee

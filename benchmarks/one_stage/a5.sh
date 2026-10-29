@@ -13,7 +13,8 @@
 # WINDOW=served, A5_WINDOW the window its C2 site committed (`c2_replay.serving_rows`); A5_SUBCIRCUIT is the template's input set
 # for the lowering (default rope-head/d64/neox-bf16, the fixture's RoPEHead_v1{D=64}).
 # Kept in $OUT: a5's records and logs, the public files, the session (its proofs and record), the binaries' sha256 and the
-# circuit's pin; never a prover's file (inst-*, m*-private.bin: the rows and their salts) nor the 56 MB circuit (its pin is).
+# circuit's pin; never a prover's file (inst-*, m*-private.bin, v*-private.bin: the rows and their salts) nor the 56 MB
+# circuit (its pin is).
 set -uxo pipefail
 if [ "${COMMIT_SCHEME:-rows-sha512}" != rows-sha512 ]; then
   echo "a5.sh: COMMIT_SCHEME=$COMMIT_SCHEME: the fixture commits under rows-sha512 only (vllm-v1 is kept to read recorded runs)" >&2; exit 2

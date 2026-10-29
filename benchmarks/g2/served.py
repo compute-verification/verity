@@ -32,8 +32,8 @@ RTX PRO 6000's Builds of record are `integrations/vllm/verity_vllm/pins/served/*
 
     uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--tail RUN=FIXED]... [--runs-dir DIR] [--out DIR]
 
-Reads each run's `out/result.json` and `out/pin_check.txt` from DIR/RUN (`research fetch RUN --all`), else from its record in
-the evidence store.
+Reads each run's `out/result.json` and `out/pin_check.txt` from DIR/RUN (the run's directory, fetched whole), else from its
+record in the evidence store.
 Writes OUT/g2-served.md, OUT/g2-served.json (every measure with its pin and why it isn't counted, and each run's facts: timed
 points, host load, failed gates, pin) and OUT/g2-served.png; OUT defaults to $OUT, else ./out.
 
@@ -356,7 +356,7 @@ def main() -> int:
     ap.add_argument("runs", nargs="+")
     ap.add_argument("--tail", action="append", default=[], metavar="RUN=FIXED",
                     help="RUN's compiled Commit run time with FIXED's tail (retail)")
-    ap.add_argument("--runs-dir", type=Path, help="read DIR/RUN/out/result.json where it exists (research fetch RUN --all)")
+    ap.add_argument("--runs-dir", type=Path, help="read DIR/RUN/out/result.json where it exists (the run's directory, fetched whole)")
     ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT", "out")))
     a = ap.parse_args()
     tails = dict(t.split("=", 1) for t in a.tail)
