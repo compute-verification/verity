@@ -83,11 +83,22 @@ def sig_ref(name: str, x: int) -> int:
     return rotr(x, a) ^ rotr(x, b) ^ (rotr(x, c) if c is not None else x >> s)
 
 
-def round_ref(st: list[int], w: int, k: int, v: int = 0) -> list[int]:
+def round_u(st: list[int], u: int, v: int = 0) -> list[int]:
+    """A round given U = h + W + K."""
     a, b, c, d, e, f, g, h = st
-    t1 = (h + sig_ref("S1", e) + ((e & f) ^ (~e & g)) + k + w) & M64
+    t1 = (u + sig_ref("S1", e) + ((e & f) ^ (~e & g))) & M64
     t2 = (sig_ref("S0", a) + ((a & b) ^ (a & c) ^ (b & c))) & M64
     return [(t1 + t2) & M64, a, b, c, (d + t1 + v) & M64, e, f, g]
+
+
+def round_ref(st: list[int], w: int, k: int, v: int = 0) -> list[int]:
+    return round_u(st, (st[7] + k + w) & M64, v)
+
+
+def xc(t: int) -> int:
+    """The per-position constant XORed into a word before an add-only injection (none of 0, 2^31, ~0 in either half,
+    which would let the XOR pass through an add)."""
+    return K[(t + 40) % 80]
 
 
 def sched_ref(w16: list[int], m: int = 0) -> int:
@@ -189,6 +200,10 @@ def round_w1(r: Regs, st, w, k: int, v=None, ff=None):
             r.add(t1, d, ff[4]), r.add(ff[5], e), r.add(ff[6], f), r.add(ff[7], g)]
 
 
+def xor_w1(r: Regs, w, c: int):
+    return (r.lop3(lambda x: x ^ np.uint32(c & M32), w[0]), r.lop3(lambda x: x ^ np.uint32(c >> 32), w[1]))
+
+
 def sched_w1(r: Regs, w16, m=None):
     x = r.add(sig_w1(r, "s1", w16[-2]), w16[-7], sig_w1(r, "s0", w16[-15]))
     return r.add(x, w16[-16], m) if m is not None else r.add(x, w16[-16])
@@ -266,7 +281,7 @@ def fold_ref(design: dict, st0: list[int], ws: list[int], vs: list[int] | None =
         for b0 in range(0, len(ws), 80):
             cv = list(st)
             for t, w in enumerate(ws[b0:b0 + 80]):
-                st = round_ref(st, w, K[t])
+                st = round_ref(st, w ^ xc(t) if design.get("xor") else w, K[t])
             st = [(x + y) & M64 for x, y in zip(cv, st)]
         return st
     if kind == "R16":
@@ -282,7 +297,7 @@ def fold_ref(design: dict, st0: list[int], ws: list[int], vs: list[int] | None =
         return st
     if kind == "RD":
         for i, (w, v) in enumerate(zip(ws, vs)):
-            st = round_ref(st, w, K[i % 80], v)
+            st = round_ref(st, w ^ xc(i % 80) if design.get("xor") else w, K[i % 80], v)
         return st
     if kind == "SCH":
         win = list(st0) + list(st0)
@@ -311,6 +326,7 @@ def fold_w1(r: Regs, design: dict, st0, ws, vs=None):
             cv = list(st)
             blk = ws[b0:b0 + 80]
             for t, w in enumerate(blk):
+                w = xor_w1(r, w, xc(t)) if design.get("xor") else w
                 st = round_w1(r, st, w, K[t], ff=cv if t == len(blk) - 1 else None)
         return st
     if kind == "R16":
@@ -326,6 +342,7 @@ def fold_w1(r: Regs, design: dict, st0, ws, vs=None):
         return st
     if kind == "RD":
         for i, (w, v) in enumerate(zip(ws, vs)):
+            w = xor_w1(r, w, xc(i % 80)) if design.get("xor") else w
             st = round_w1(r, st, w, K[i % 80], v=v)
         return st
     if kind == "SCH":
@@ -355,6 +372,10 @@ DESIGNS = {
                   "what": f"{r} SHA-512 rounds a 64-bit message word ({r / 2:g} a 32-bit word)"} for r in (2, 3, 4, 5)},
     "RD": {"kind": "RD", "w_per_unit": 80, "state_bits": 512, "two_per_round": True,
            "what": "R80 with a second message word added into e' = d + T1 + V (a modified round)"},
+    "R80X": {"kind": "R80", "xor": True, "w_per_unit": 80, "state_bits": 512,
+             "what": "R80 with each message word XORed with a per-position constant first (one LOP3 a word)"},
+    "RDX": {"kind": "RD", "xor": True, "w_per_unit": 80, "state_bits": 512, "two_per_round": True,
+            "what": "RD with its W words XORed with a per-position constant first, its V words raw"},
     "SCH": {"kind": "SCH", "w_per_unit": 1, "state_bits": 1024,
             "what": "SHA-512's schedule step as the fold, one message word added a step"},
     **{f"TC{rc}": {"kind": "TC", "rc": rc, "w_per_unit": 16, "state_bits": 512,
@@ -679,14 +700,76 @@ def part_a(checks: Checks, rng: np.random.Generator, f: dict) -> dict:
     return out
 
 
+def decomp_r80(rng: np.random.Generator, threads: int, cols: int, steps: int, xor: bool = False,
+               fix_carry: bool = True) -> tuple[bool, set]:
+    """COUNTER's decomp on R80 at zero data. Words are w = R_s(row) + C_s(col) mod 2^32 (x = 0, one row class); thread
+    tau holds rows 2 tau and 2 tau + 1 and every column, and its message word k of step s is (lo, hi) = (w(2 tau, k),
+    w(2 tau + 1, k)) at round position (s cols + k) mod 80, the same in every thread (one SIMT program). The prover
+    never forms a word: U = h + R + CK with CK = C + K_p, one register shared by every thread, and the lo half's
+    carry corrected by predicates (an ISETP against ~C, shared, and predicate logic: free in W1). Returns whether its
+    states equal honest's and the corrected carries it fed IADD3.X (two carry-ins hold 0..2)."""
+    design = DESIGNS["R80X" if xor else "R80"]
+    R = rng.integers(0, 2**32, size=(steps, 2 * threads), dtype=np.uint64)
+    C = rng.integers(0, 2**32, size=(steps, cols), dtype=np.uint64)
+    st0 = rng.integers(0, 2**64, size=(threads, 8), dtype=np.uint64)
+    ok, carries = True, set()
+    for tau in range(threads):
+        ws = [((int(R[s, 2 * tau + 1]) + int(C[s, k])) & M32) << 32 | ((int(R[s, 2 * tau]) + int(C[s, k])) & M32)
+              for s in range(steps) for k in range(cols)]
+        honest = fold_ref(design, [int(x) for x in st0[tau]], ws)
+        st, cv = [int(x) for x in st0[tau]], None
+        for i in range(steps * cols):
+            s, k, p = i // cols, i % cols, i % 80
+            if p == 0:
+                cv = list(st)
+            c_ = int(C[s, k])
+            ck_lo, ck_hi, b2 = (c_ + (K[p] & M32)) & M32, (c_ + (K[p] >> 32)) & M32, (c_ + (K[p] & M32)) >> 32
+            r_lo, r_hi = int(R[s, 2 * tau]), int(R[s, 2 * tau + 1])
+            s_lo = (st[7] & M32) + r_lo + ck_lo
+            b1 = int(r_lo > (~c_ & M32))
+            c = (s_lo >> 32) - b1 + b2 if fix_carry else s_lo >> 32
+            carries.add(c)
+            st = round_u(st, (((st[7] >> 32) + r_hi + ck_hi + c) & M32) << 32 | (s_lo & M32))
+            if p == 79:
+                st = [(x + y) & M64 for x, y in zip(cv, st)]
+        ok &= st == honest
+    return bool(ok), carries
+
+
+def decomp_share(threads: int, cols: int) -> float:
+    """decomp's writes a word on R80: CK_lo, CK_hi and ~C a (step, column) shared by the threads, R a (step, row)."""
+    return 3 / (2 * threads) + 1 / cols
+
+
+def part_d(checks: Checks, rng: np.random.Generator) -> dict:
+    ok, carries = decomp_r80(rng, threads=4, cols=16, steps=10)
+    xok, _ = decomp_r80(rng, threads=2, cols=16, steps=5, xor=True)
+    served = decomp_share(16, 64)
+    out = {"exact": ok, "carries": sorted(carries), "xor_exact": xok, "share_toy": decomp_share(4, 16),
+           "share_served": served, "served_layout": "16 threads a (column, register) in a row class, 64 columns"}
+    checks.check("D: decomp on R80 at zero data is exact without forming a word: each word's add U = h + W + K_t "
+                 "becomes h + R + (C + K_t) with C + K_t shared by the threads that hold the column at that position, "
+                 "and the lo carry, corrected by free predicates, always fits IADD3.X's two carry-ins",
+                 ok and carries <= {0, 1, 2}, f"4 threads x 160 words: exact {ok}, carries {sorted(carries)}")
+    checks.check("D: at the served layout decomp pays 0.11 writes a word against honest's MMA write, so R80, R16 and "
+                 "Rr lose the words' credit (T1 about r (1 - 0.11), past 100% of stock) and RD half of it",
+                 abs(served - (3 / 32 + 1 / 64)) < 1e-12, f"{served:.4f} a word")
+    checks.check("D: XORing each word with a per-position constant first (R80X) leaves decomp's program wrong: the "
+                 "XOR doesn't pass through the add, so the word must be formed", not xok)
+    return out
+
+
 # ---------------------------------------------------------------- prices at the lead's points
 
 def r_row(row: int) -> float:
     return R_CHAIN - CHUNK_K / (row / BLOCK + CHUNK_EXTRA)
 
 
-def part_p(checks: Checks, lead: dict, f: dict, a: dict) -> dict:
+def part_p(checks: Checks, lead: dict, f: dict, a: dict, dd: dict) -> dict:
     out = {"seal": {}, "designs": {}}
+    # the share of a fold's words read only by an add that also takes a round constant: decomp's (part D)
+    exposed = {"R80": 1.0, "R16": 1.0, "TC16": 1.0, "RD": 0.5, "R80X": 0.0, "RDX": 0.0, "SCH": 0.0,
+               **{f"RR{k}": 1.0 for k in (2, 3, 4, 5)}}
     # the seal: each fold state hashed once a call at the lead's per-byte price; states per thread, cells per thread
     seal_cases = {"64 cells a thread, K 2,048": (64, 2048), "128 cells a thread, K 8,192": (128, 8192)}
     for name, fd in f.items():
@@ -716,6 +799,7 @@ def part_p(checks: Checks, lead: dict, f: dict, a: dict) -> dict:
                   for case in seal_cases}
             rows[pt] = {"h": h, "cut": {c: p["h"] / v for c, v in h.items()}, "h_fold": h_fold, "h_rest": h_rest,
                         "seal": seal, "t1_premise_holds": t1, "t1_chain_head": head, "t1_cross_call": base,
+                        "t1_decomp": (r * exposed[name] * (1 - dd["share_served"]) if name in exposed else None),
                         "t2": t2, "words": words, "fold_ms": fold_ms}
         out["designs"][name] = {"what": fd["what"], "writes_per_word": fd["writes_per_word"], "points": rows}
     lead_h = lead["points"]["t8192"]["h"]
@@ -735,9 +819,9 @@ def part_p(checks: Checks, lead: dict, f: dict, a: dict) -> dict:
                      for n in ("R80", "RD")) and heads["SCH"][c64] > T1_BAR > heads["SCH"][c128],
                  ", ".join(f"{n} {v[c64]:.3%} / {v[c128]:.3%}" for n, v in heads.items()))
     rd = out["designs"]["RD"]["points"]["t8192"]
-    checks.check("P: only RD (a modified round) and SCH (the schedule alone) reach 10x among the round folds",
+    checks.check("P: only RD and RDX (a modified round) and SCH (the schedule alone) reach 10x among the round folds",
                  sorted(n for n, d in out["designs"].items()
-                        if all(v >= 10 for v in d["points"]["t8192"]["cut"].values())) == ["RD", "SCH"],
+                        if all(v >= 10 for v in d["points"]["t8192"]["cut"].values())) == ["RD", "RDX", "SCH"],
                  f"RD h {min(rd['h'].values()):.2f}-{max(rd['h'].values()):.2f}; SCH h "
                  f"{min(out['designs']['SCH']['points']['t8192']['h'].values()):.2f}-"
                  f"{max(out['designs']['SCH']['points']['t8192']['h'].values()):.2f}")
@@ -782,7 +866,8 @@ def main() -> int:
     m = part_m(checks, rng)
     f = part_f(checks, rng)
     a = part_a(checks, rng, f)
-    p = part_p(checks, lead, f, a)
+    dd = part_d(checks, rng)
+    p = part_p(checks, lead, f, a, dd)
     if checks.mutations:
         mrng = np.random.default_rng(7)
         global maj_w1
@@ -817,11 +902,12 @@ def main() -> int:
                             head_saving(DESIGNS["R80"], mrng) != 20)
         finally:
             Regs._count = good_count
+        checks.mutation("decomp without its carry correction", not decomp_r80(mrng, 2, 16, 5, fix_carry=False)[0])
         checks.mutation("a skipped round taken for the full state",
                         fold_ref(DESIGNS["R16"], IV, list(range(1, 17)))
                         != fold_ref(DESIGNS["R16"], IV, list(range(1, 16))))
     if out_path:
-        Path(out_path).write_text(json.dumps({"model": m, "folds": f, "attacks": a, "prices": p}, indent=1,
+        Path(out_path).write_text(json.dumps({"model": m, "folds": f, "attacks": a, "decomp": dd, "prices": p}, indent=1,
                                              sort_keys=True, default=float) + "\n")
     print("\ndesign  writes/word  h@t8192 (64 cells K2048 | 128 cells K8192)  cut   T2 t8192 sync/async")
     for name, d in p["designs"].items():
