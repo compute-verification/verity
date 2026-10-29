@@ -774,7 +774,7 @@ class BlockScaledAlignAdd:
 
 
 _AUTOPROOF_PIN = (
-    "autoproof SEMANTICS.lock.v1 (ADOPTED 2026-07-11, oracle-v3): RTX 5090 (sm_120, driver 570.195.03, GPU "
+    "autoproof SEMANTICS.lock.v1 (ADOPTED, oracle-v3): RTX 5090 (sm_120, driver 570.195.03, GPU "
     "`autoproof.device`), kernel SASS 166a24a0..., mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64"
     ".row.col.f32.e2m1.e2m1.f32.ue4m3, ascending-K chain from a zero accumulator: the lockfile records 1,574,998 / "
     "1,574,998 dot statements bit-exact under model5 (K in {64, 128, 256}; random, extreme-scale-span, "

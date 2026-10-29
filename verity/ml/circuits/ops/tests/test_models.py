@@ -216,7 +216,7 @@ def _bsaa(**kw) -> BlockScaledAlignAdd:
 
 
 def test_unscaled_fp4_vectors_replay_under_the_same_transducer(vectors: dict) -> None:
-    # PROBE-2: mma.sync m16n8k32 kind::f8f6f4 e2m1 without scales.  The same five-way align-add (scale None, unit
+    # autoproof's probe 2 (`probe2_*.json`): mma.sync m16n8k32 kind::f8f6f4 e2m1 without scales.  The same five-way align-add (scale None, unit
     # weight 2^-2) with k=32 in two groups of 16 reproduces all 1,400 recorded dots.
     unscaled = _bsaa(name="test_unscaled_fp4_m16n8k32", scale=None, k_per_instruction=32)
     cases = vectors["fp4_unscaled_m16n8k32"]["cases"]
