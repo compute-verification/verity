@@ -5,9 +5,9 @@ import Mathlib.Data.List.Chain
 /-!
 # Stacked depth-robust graphs, pebbles and the white/green game (B2, Fisch Claims 13–14)
 
-The definitions of the B2 draft (`lean/submissions/pebbling/B2StackingDraft.lean`, Fisch 2018/702 §2.4, §2.6 and
-App. B) and the white/green game of the Claims 13–14 draft (`FischClaims1314Draft.lean`), verbatim; the drafts'
-headers list the modelling choices.
+The definitions of B2 (Fisch 2018/702 §2.4, §2.6 and App. B), proved in
+`Security/Proofs/Pous/Pebbling/B2Stacking.lean`, and the white/green game of Claims 13–14, proved in
+`Security/Proofs/Pous/Pebbling/FischClaims1314.lean`.
 -/
 
 namespace Pous.DRG

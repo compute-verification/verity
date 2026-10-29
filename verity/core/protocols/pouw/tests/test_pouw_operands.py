@@ -49,7 +49,7 @@ def test_a_record_states_the_operands_with_their_gaps_or_why_they_are_refused():
     b = block()
     got = OP.stated({"context": CONTEXT, OP.KEY: b})
     assert got == {"held": True, "X": OP.root(b).hex(), "roots": {v: e["root"] for v, e in b["values"].items()},
-                   "gaps": list(OP.GAPS)} and any("CIR-100" in g for g in got["gaps"])
+                   "gaps": list(OP.GAPS)} and any("a gather" in g for g in got["gaps"])
     assert OP.stated({"context": CONTEXT}) is None
     bad = OP.stated({"context": OTHER, OP.KEY: b})
     assert bad["held"] is False and "domain other than" in bad["why"]
@@ -57,7 +57,7 @@ def test_a_record_states_the_operands_with_their_gaps_or_why_they_are_refused():
 
 def test_x_is_the_root_of_the_windows_values_its_salt_epoch_binds():
     """X is SHA-512(tag ‖ u64be(len program) ‖ program ‖ per value in name order: u64be(len name) ‖ name ‖ domain ‖ root),
-    the bytes ALLP-SALT's salt epoch root reads as the window's activations' root (``core_check.values_root``)."""
+    the bytes the salt epoch root reads as the window's activations' root (``core_check.values_root``)."""
     b = block()
     want = b"verity/pouw-window-values/v1" + len(b"p").to_bytes(8, "big") + b"p"
     for v in ("a", "b"):

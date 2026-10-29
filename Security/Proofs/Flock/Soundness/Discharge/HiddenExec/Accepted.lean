@@ -37,7 +37,7 @@ theorem drawSetupH_of_setupHiddenI {st : Flock.Stmt}
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hS : ∀ u ∈ S, u.val ∈ D.proved) (hmPts : st.mPts = mPts) :
     ∃ x : DrawSetupH I mPts S d, x.st = st := by
-  have hcst : st.c = c := Except.ok.inj ((setupHidden_parseC h).symm.trans hc)
+  have hcst : st.c = c := setupHidden_c_of_parse hc h
   have hg : 0 < st.c.g := by
     have P := parse_facts (parse_untyped ht hc).1
     obtain ⟨ls, hls⟩ := P.check

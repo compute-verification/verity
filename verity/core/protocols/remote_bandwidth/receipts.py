@@ -50,8 +50,8 @@ The registration also names its block layout (`LAYOUTS`): how a kernel's sketch 
 each block j the encoded store's bytes 4096·j … 4096·j + 4095, whole codec words.  Under store-order/v0, the only one,
 a vector is one registered block's bytes in store order.  `plan_of` takes a kernel's map from its vectors' bytes to
 the store's and returns the plan its vectors are, refusing padding, a codec word split across vectors and a block
-twice, so that only registered blocks' bytes are credited.  The fused GEMM's fragment cut is refused until the byte
-permutation ra-codec-tensor proposes for it is a layout of its own here.
+twice, so that only registered blocks' bytes are credited.  The fused GEMM's fragment cut is refused until a byte
+permutation for it is a layout of its own here.
 
 A pass's plan is public: the prover sends it with the root, and the root binds its digest.  Its runs are disjoint so
 that one read of a block serves at most one receipt of the pass; a plan that repeats a block is refused.  Its order is
@@ -77,6 +77,7 @@ from collections.abc import Iterator, Sequence
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
 from verity.ml.commitments import hm96, verify_opening
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
@@ -93,7 +94,7 @@ SKETCH_ROWS = 16
 ROWS = (16, 64)
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 CHALLENGE_BYTES = 32
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 PER_LEAF = 16
 OWNER = 0
 HM96 = hm96.SHA512

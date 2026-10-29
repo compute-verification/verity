@@ -1,8 +1,8 @@
-"""A firewalled session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one the firewall's Lean
+"""A firewalled session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one the ZK server's Lean
 session loop sends in the prover's place (`Session.helloOf`): held byte for byte to the `Hello`s Rust's `SessionConfig::hello_with_nonce`
 sent in the recorded `--zk` sessions of `test_lean_zk.py`'s fixture (one table, two tables, m = 26 and a drawn session), at
 each record's nonce and draw; at a nonce of its own, a fresh one each session; and its protocol's refusals. A request is
-`draw LEN [NONCE]` and `LEN` bytes of the verifier's draw; a statement the setup refuses is answered `refused WHY` and the
+`draw LEN [NONCE]` and `LEN` bytes of the verifier's sample; a statement the setup refuses is answered `refused WHY` and the
 session goes on, a malformed request `err WHY`, which ends it with exit 1."""
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def _args(root: Path, public: str, tables: int = 1) -> list[str]:
 
 
 def _record(root: Path, name: str) -> tuple[str, str, str]:
-    """A recorded session's `Hello`, its nonce and its draw's JSON (`null` without one): `selftest/CASE`, or a set's one
+    """A recorded session's `Hello`, its nonce and its sample's JSON (`null` without one): `selftest/CASE`, or a set's one
     session."""
     d = root / "sessions" / name
     if "/" not in name:
@@ -83,7 +83,7 @@ def test_the_recorded_hello_at_its_nonce(zk, name, public, tables):
 
 @pytest.mark.slow
 def test_one_process_serves_every_draw(zk):
-    """One process answers sessions at several draws, each draw's statement set up once: the population's, a draw's, and the
+    """One process answers sessions at several draws, each sample's statement set up once: the population's, a sample's, and the
     population's again at another nonce."""
     m26, n26, null = _record(zk, "m26")
     drawn, nd, draw = _record(zk, "drawn")
@@ -105,7 +105,7 @@ def test_a_nonce_of_its_own(zk):
 
 @pytest.mark.slow
 def test_a_draw_the_setup_refuses_and_the_session_goes_on(zk):
-    """The drawn session's draw over the 16-unit population's public file names another population: refused, and the next
+    """The drawn session's sample over the 16-unit population's public file names another population: refused, and the next
     request is answered."""
     hello, nonce, null = _record(zk, "selftest/honest")
     _, _, draw = _record(zk, "drawn")
@@ -163,7 +163,7 @@ def test_a_statement_the_setup_refuses(junk):
     assert rc == 1 and answers[0].startswith("refused setup: ") and answers[1] == "err a request `draw`", answers
 
 
-#: a stratified draw of one of two units, one template's
+#: a stratified sample of one of two units, one template's
 STRATIFIED = json.dumps({"law": "stratified", "population": 2, "k": 1, "strata": [{"template": "t", "units": [[0, 2]], "k": 1}],
                          "units": [0]})
 
@@ -171,8 +171,8 @@ STRATIFIED = json.dumps({"law": "stratified", "population": 2, "k": 1, "strata":
 @pytest.mark.parametrize("law, why", [([], "U2: a stratified draw needs the verifier's own K, program and partition"),
                                       (["--stratified", "2"], "U2: the draw's K is 1, not the verifier's 2")])
 def test_a_stratified_draw_at_the_verifiers_own_k(junk, tmp_path, law, why):
-    """A stratified draw sets up only at the verifier's own K, program and partition (`Stmt.setupTables`, U2), so
-    `--stratified` reaches the setup: without it the draw is refused for want of it, and at another K for its K."""
+    """A stratified sample sets up only at the verifier's own K, program and partition (`Stmt.setupTables`, U2), so
+    `--stratified` reaches the setup: without it the sample is refused for want of it, and at another K for its K."""
     (tmp_path / "partition.json").write_text("{}")
     (tmp_path / "program").write_bytes(b"x")
     args = [*junk, "--partition", str(tmp_path / "partition.json"), "--program", str(tmp_path / "program"), *law]

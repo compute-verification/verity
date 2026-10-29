@@ -167,7 +167,7 @@ def records_of(tmp_path: Path) -> dict[str, dict]:
 
 # ---- γ at both FP32 prices, from the price twins ---------------------------------------------------------------------------
 
-#: pins as the Lean store and the staged twins print them (price-twins-lean, 30 Sep): v2 at the statement's cast and 8.00
+#: pins as the Lean store and the staged twins print them: v2 at the statement's cast and 8.00
 #: (in the Lean store), v2 on the wide-store cast at the loop price, a rounded twin (the loop price at the record's own cast),
 #: v2-hot's value lemma, and Pearl-C4's chain-only value lemma
 PINS = {
@@ -351,7 +351,7 @@ def test_a_pin_whose_signature_isn_t_its_name_is_an_error():
 
 
 @pytest.mark.parametrize("statement, path, reading, published, at", [
-    # the panel's published figures (30 Sep 16:00Z), each from its pin, the larger of the two prices;
+    # the panel's published figures, each from its pin, the larger of the two prices;
     # v1's at its cap then, 1/400
     ("pearl-c-sm120/v1", "cast-32.06", "forming-credited", "0.77888%", "8"),
     ("pearl-c-sm120/v1", "cast-16", "forming-credited", "0.60019%", "1047/125"),
@@ -378,7 +378,7 @@ def test_the_checked_in_table_gives_the_panel_s_published_gamma(statement, path,
                                              (16384, "5273/1466810", "1058166877/294158650000")])
 def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
     """v1's statement is at 1/1,000 now: its twins at the cast 8.72 are DeviceSm120CapRev1Gamma's at FADD 8.00 (0.36901% at
-    8,192³, 0.35949% at 16,384³) and #838's at the loop price (0.36949%, 0.35973%), the larger published; its 1/400 twins
+    8,192³, 0.35949% at 16,384³) and the loop-price twin's (0.36949%, 0.35973%), the larger published; its 1/400 twins
     are history."""
     t = P.load()
     g = P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", n, n)
@@ -693,7 +693,7 @@ def test_an_arm_that_dumps_its_own_transcripts_has_no_harness_poisoning_to_its_n
 
 
 def test_a_run_time_choice_of_code_is_part_of_the_variant_s_id(tmp_path):
-    """GPU 2's pilot finding (18:00Z): PEARLC_A_FORMS picks kernels from one binary at run time, so the forms shared an id."""
+    """GPU 2's pilot finding: PEARLC_A_FORMS picks kernels from one binary at run time, so the forms shared an id."""
     d = kernel_dir(tmp_path)
     base = dict(family="pearl-c", device="sm120", schemes={"s"}, sources=["run.py", "k.cu"], root=d, binaries=[d / "k.cubin"])
     plain, fold, nodes = (L.variant_record(**base, config=c) for c in (None, {"PEARLC_A_FORMS": "p,fold"},
@@ -710,7 +710,7 @@ def test_a_run_time_choice_of_code_is_part_of_the_variant_s_id(tmp_path):
 
 
 def test_the_runner_publishes_the_records_verify_declares_with_the_same_ids(tmp_path):
-    """The pilot's gap (18:26Z): under `research run --on` the store key is the runner's, not the workload's. verify.py
+    """The pilot's gap: under `research run --on` the store key is the runner's, not the workload's. verify.py
     declares its records in outputs.json, and the runner's typed_outputs puts the same manifests `ledger.publish` would."""
     from research.store.attempt import typed_outputs
 

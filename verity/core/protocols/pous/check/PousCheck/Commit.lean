@@ -3,7 +3,7 @@ import PousCheck.P2
 import Identity.Tagged
 
 /-!
-The commitment to `W` (`setup.commit`, `p2/PROTOCOL.md` §4 "Setup commitment, salt and verification root"):
+The commitment to `W` (`setup.commit`):
 
 ~~~text
 manifest      canonical_json_bytes(params.manifest())

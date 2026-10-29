@@ -56,9 +56,9 @@ def test_the_honest_session_s_plans_are_its_schedule_s_and_the_verdict_carries_t
 
 
 def test_the_cap_committed_before_the_coins_is_credited_and_a_schedule_over_it_is_refused(honest) -> None:
-    """The red team's RD-18: the schedule is published after the coins, so its length can
-    follow them.  `padded` gives every pass the honest plan, as `HONEST_SCHEDULE` does, at 264 bits (registered block
-    7 freed at step 2^40, after every pass), so a prover may publish either on the same plans, as the coins say.
+    """The schedule is published after the coins, so its length can follow them.  `padded` gives every pass the
+    honest plan, as `HONEST_SCHEDULE` does, at 264 bits (registered block 7 freed at step 2^40, after every pass), so a
+    prover may publish either on the same plans, as the coins say.
     Credited at its own schedule's bits, its 200-bit sessions would read a `SteeredLayout` bound that holds only at
     the longest schedule's.  So the ledger credits the cap the session committed before its coins, 256, whatever the
     schedule it published within it, and refuses a schedule over it, as the Lean does; a session that committed 264
@@ -154,7 +154,7 @@ def test_a_layout_the_session_accepts_is_refused_credit_unless_the_schedule_give
 
 def test_the_ledger_refuses_a_verdict_on_another_session_or_not_the_check_s(honest) -> None:
     """A verdict names its session by its registration and its coin commitment: another session's (the steered one's
-    coins are the same draw, so its registration is changed here), or a look-alike not made by the check, credits
+    coins are the same flip, so its registration is changed here), or a look-alike not made by the check, credits
     nothing.  Without a property verdict no schedule is needed."""
     r, _ = honest
     rec = r.s.record()

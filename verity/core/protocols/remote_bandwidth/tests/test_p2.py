@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
+"""PoUB over PoUS's P2 store (`p2.py`): the registration from PoUS's setup of a 9-block C*
 (`fixtures/p2-c-star.bin`, the prover's bytes), the unit sketch and its per-block partials, an honest session
 accepted and recorded, and each way an opening goes wrong rejected."""
 
@@ -81,7 +81,7 @@ def drive(store: p2.Store, p: audit.Params, run=None):
     clock = Clock()
     s = p2.Session(p, store.registration, coins.local(store.registration.digest, 0, p.windows, Entropy(b"coins")),
                    not_before_ns=0, clock=clock)
-    prover = p2.Prover(store, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = p2.Prover(store, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(SCHEDULE.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in SCHEDULE.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
