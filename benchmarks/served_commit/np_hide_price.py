@@ -88,11 +88,13 @@ HM96_LEAF = 2                                       # H(leaf_prefix ‖ b ‖ c)
 # node is binary; a 4-ary node is a frame change
 NODE = {2: 2, 4: 3}
 TREE_LEAF = S.blocks(FRAME_LEAF_PREFIX + 64) + NODE[2]   # a row digest's frame leaf and its share of the binary nodes
-# the seed path's layouts: A's leaves (row-seg rows with the call and row bound in each segment's prefix block, as L1 takes
-# them, or with the shared prefix; flat rows; or segments of so many bytes) and the subtree's arity
-CHAINS = {"row-seg rows, binary (L1)": ("row-seg", 2), "row-seg rows, shared prefix, binary": ("row-seg, shared prefix", 2),
-          "flat rows, binary": ("flat", 2),
-          "1 KiB segments as leaves, binary": (1024, 2), "256 B segments as leaves, binary": (256, 2),
+# the seed path's layouts: A's leaves (segments of so many bytes as frame-v3 leaves of the call's domain, L1's 1 KiB among
+# them; row-seg rows with the call and row bound in each segment's prefix block, or with the shared prefix; flat rows) and
+# the subtree's arity
+L1_CHAIN = "1 KiB segments as leaves, binary (L1)"
+CHAINS = {L1_CHAIN: (1024, 2), "row-seg rows, prefix-bound, binary": ("row-seg", 2),
+          "row-seg rows, shared prefix, binary": ("row-seg, shared prefix", 2), "flat rows, binary": ("flat", 2),
+          "256 B segments as leaves, binary": (256, 2),
           "row-seg rows, 4-ary (a frame change)": ("row-seg", 4), "1 KiB segments as leaves, 4-ary (a frame change)": (1024, 4),
           "256 B segments as leaves, 4-ary (a frame change)": (256, 4)}
 WINDOW_STEP_S = 0.1
@@ -283,8 +285,8 @@ def v4(price: dict, lat: dict | None, sizes: list[int]) -> dict:
                     span = rows_l if "over" in g or case == "V4 dense" else m_e
                     tot = gemm = 0.0
                     for n, k in lins.values():
-                        chain = (seed_path(math.ceil(span), k) * lat["tree_ns"] * 1e-9
-                                 + seed_launches(math.ceil(span), k) * lat["launch_us"] * 1e-6)
+                        chain = (seed_path(math.ceil(span), k, *CHAINS[L1_CHAIN]) * lat["tree_ns"] * 1e-9
+                                 + seed_launches(math.ceil(span), k, *CHAINS[L1_CHAIN]) * lat["launch_us"] * 1e-6)
                         g_s = max(rows_l * n * k / SHEET_MAC_S, n_exp * n * k / HBM_B_S)
                         tot, gemm = tot + g_s + chain, gemm + g_s
                     e["seed_path"][g] = {"us": (tot - gemm) * 1e6, "gemm_us": gemm * 1e6, "t2_floor_over_gemm": tot / gemm}
@@ -303,7 +305,7 @@ def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict, chain_m
     coin_floor = CALLS * COIN_CALL_US * 1e-3
     coins = coin_floor if chain_ms is None else chain_ms
     out = {"GB_forward": B / 1e9, "gemm_extra_ms": gemm_ms, "export_ms": export, "coins_ms": coins,
-           "coins_src": "coin floor a call" if chain_ms is None else "seed path, row-seg rows, binary (L1), measured", "hash_ms": {},
+           "coins_src": "coin floor a call" if chain_ms is None else f"seed path, {L1_CHAIN}, measured", "hash_ms": {},
            "engines": {}}
     for rn, u in rates.items():
         out["hash_ms"][rn] = B * u / UNITS_S * 1e3
@@ -403,7 +405,7 @@ def main() -> None:
                         v["by_latency"][ln] = {"ms": ms, "ms_with_launches": ms + launches, "t2_floor": {
                             eng: (st + ms + launches) / st for eng, (st, _g, _s) in N.ENGINES.get(pname, {}).items()}}
                     pt["seed_path"][lay] = v
-                l1 = pt["seed_path"]["row-seg rows, binary (L1)"]
+                l1 = pt["seed_path"][L1_CHAIN]
                 chain = l1["by_latency"]["measured"]["ms_with_launches"]
             pt["t2"] = t2(design, b, pname, real, m, rates, chain)
             if lat:
