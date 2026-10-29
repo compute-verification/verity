@@ -1,0 +1,122 @@
+# N-SALT's cards for pouw_space.py (`--add benchmarks/pouw/theory/np_salt_cards.toml`): N-LIT's counter-mode pad and its
+# keyed forms, and hm96's mask computed as committed int8 partials (FM), as hiding modules priced by their own `salt`
+# (W1 at the floor a public digest: `unforced` all of it, `forced` what stays charged once its checking premise credits
+# the rest). They enter only through cards (`enumerate = false`). salt.py prices and checks them; Salt.lean proves
+# binding, the ideal-hybrid hiding and FM's bit 7.
+
+[premise.pad-checked]
+rank = 0
+part = "hashing"
+status = "open"
+owner = "N-SALT"
+closes = ["hiding_salt"]
+source = "N-SALT: a window key ks, 64 bytes from the OS generator, is committed under its own hm96 leaf before the window's coins; each drawn unit's proof opens it, computes S = f(IV, ks ‖ salt_w) and checks each opened public digest: b = x ⊕ f(S, pos ‖ padding) (pad) or d = f(S, pos ‖ x ‖ padding) (keyed digest), so the pad's or the key's compression is forced and ShaWrites credits it at its count; the pad's 16 XORs stay. Binding is Salt.lean's pad_binding and keyed_binding (proved, premise-free); a pad the proof doesn't check binds nothing (pad_unchecked_unbound). A protocol change, not built"
+
+[premise.pad-leaf-ruled]
+rank = 3
+part = "hashing"
+status = "open"
+owner = "the coordinator, for Daniel"
+source = "N-SALT: the pad family's public digest is not an hm96 leaf (AGENTS.md: commitments are hm96 rows), so it needs a ruling. Its hiding is computational at SHA-512's PRF property keyed by a secret 64-byte block, which is hm96 PROTOCOL §3's generator convention, the one (a)'s derived salts and today's served salts already read: Salt.lean's pad_reduction and pad_ideal_hiding (keyed_ideal_hiding) prove the ideal hybrid exact, with every position used once (a repeated position leaks: pad_repeat_leaks, keyed_repeat_leaks). Whoever holds ks reads every x in its scope (pad_key_reveals), so ks is never published"
+
+[premise.frame-prefix-free]
+rank = 2
+part = "hashing"
+status = "open"
+owner = "N-SALT"
+source = "N-SALT: the keyed leaf's public digests are SHA-512 cascades from S over frame-v3 messages with the 16-byte pos appended, and Bellare-Canetti-Krawczyk reduce their PRF property to the compression function's only on a prefix-free set; it holds if a message's first block (its frame-v3 prefix tag) fixes its length. A CPU-checkable fact about frame-v3's layouts, not checked"
+
+[premise.fm-distinct]
+rank = 2
+part = "hashing"
+status = "open"
+owner = "N-SALT"
+requires = ["salt-forced"]
+source = "N-SALT: FM's 48 k32 partials an output, P[i][w] = 128 · Σ ±M_key[i][j] · y_j over words <= w, are affine in y with pairwise distinct nonzero coefficient vectors on the pinned key (24,576 of 24,576 prefixes distinct, every 32-bit block at least 9 bits; salt.py check_fm, mutation caught), so under DistinctWrites each committed partial is charged its k32 step's 32 MACs; with one fixed y they are constants, so it requires (a). Its bit 7 is hm96-sha512/v1's mask bit (Salt.lean fm_mask, proved; salt.py, checked on 4 literal and 4,096 closed-form salts). Like per2-distinct it reads DistinctOn's set semantics, not a span argument"
+
+[H.hiding.pad]
+name = "pad"
+enumerate = false
+premises = ["pad-checked", "pad-leaf-ruled"]
+salt = { unforced = 116736, forced = 512 }
+source = "N-LIT H20, N-SALT's construction: b = x ⊕ f(S, pos ‖ padding), one compression (116,224 at the floor, credited by pad-checked) and 16 XORs a public digest (512, charged); hm96's c and M_key·y gone; once a window ks's hm96 leaf and S (about 9.1e5 W1, outside the card)"
+
+[H.hiding.keyed]
+name = "keyed"
+enumerate = false
+premises = ["pad-checked", "pad-leaf-ruled"]
+salt = { unforced = 116224, forced = 0 }
+source = "N-SALT's keyed digest (N-HIDE's e3 shape): d = f(S, pos ‖ x ‖ padding), one compression a public digest (credited by pad-checked), no XOR"
+
+[H.hiding.kleaf]
+name = "kleaf"
+enumerate = false
+premises = ["pad-leaf-ruled", "frame-prefix-free"]
+salt = { unforced = 0, forced = 0 }
+source = "N-SALT's keyed leaf: the public digest is the subtree's or leaf's own last hash with pos appended, its frame-v3 prefix block hashed from S instead of the IV (a per-window midstate, as the IV's is constant), and pos fits the padding block SHA-512 already spends (16 + 17 bytes), so nothing is added a public digest; the drawn unit's proof opens ks and checks the digest"
+
+[H.hiding.fm]
+name = "fm"
+enumerate = false
+premises = ["salt-forced", "fm-distinct"]
+salt = { unforced = 791892, forced = 28672 }
+source = "N-SALT's forced mask: hm96-sha512/v1 kept bit for bit, M_key·y computed as an int8 tensor-core product whose 48 k32 partials an output are committed (786,432 MACs and 98,304 B hashed a salt, credited, outside the card's T2); the PRF and c credited by salt-forced; the interface, 384 formed registers, 496 gathered and 16 XORs (896 at 32, estimate), charged"
+
+[card.np-salt-tag-l1-pad]
+title = "the lead with L1 and N-LIT's pad"
+origin = "N-SALT"
+note = "compute-research/20261029T1100Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "pad", final = "none", forming = "none", derivation = "min" }
+source = "benchmarks/pouw/theory/salt.py on cursor/compute-research-np-salt-fb20: L1's salts at the pad's 16 XORs"
+claims.t512 = { gap = 5.344e-7, terms = ["hiding"], tol = 2e-9, kind = "estimate", source = "salt.py: 65 public digests a forward at 512 W1, 64 rows" }
+claims.t512r512 = { gap = 6.68e-8, terms = ["hiding"], tol = 2e-10, kind = "estimate", source = "salt.py, 512 rows" }
+
+[card.np-salt-tag-r256k-pad]
+title = "the lead with 256 KiB rows (L0) and the pad: every leaf's digest public, its XOR charged"
+origin = "N-SALT"
+note = "compute-research/20261029T1100Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "pad", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the pad's XOR at L0, one public digest a leaf"
+claims.t512 = { gap = 2.885e-4, terms = ["hiding"], tol = 3e-6, kind = "estimate", source = "salt.py: 0.0288% at 256 KiB rows (its count of leaves differs from the card's by under 1%)" }
+
+[card.np-salt-tag-r16k-pad]
+title = "the lead with 16 KiB rows (L0) and the pad: N-LIT's '0 at every layout' fails here, the XOR alone 0.41%"
+origin = "N-SALT"
+note = "compute-research/20261029T1100Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r16k", hiding = "pad", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the pad's XOR at L0 with 16 KiB rows"
+claims.t512 = { gap = 4.084e-3, terms = ["hiding"], tol = 4e-5, kind = "estimate", source = "salt.py: 0.411% at 16 KiB rows" }
+
+[card.np-salt-tag-l1-keyed]
+title = "the lead with L1 and the keyed digest"
+origin = "N-SALT"
+note = "compute-research/20261029T1100Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "keyed", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the keyed digest's compression, credited by pad-checked"
+claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+
+[card.np-salt-tag-r256k-kleaf]
+title = "the lead with 256 KiB rows (L0) and the keyed leaf: no salt work and no subtree layout"
+origin = "N-SALT"
+note = "compute-research/20261029T1100Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "kleaf", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: the keyed leaf adds nothing a public digest at any layout"
+claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+claims.t8192 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+
+[card.np-salt-tag-l1-kleaf]
+title = "the lead with L1 and the keyed leaf"
+origin = "N-SALT"
+note = "compute-research/20261029T1100Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "kleaf", final = "none", forming = "none", derivation = "min" }
+source = "salt.py"
+claims.t512 = { gap = 0.0, terms = ["hiding"], tol = 1e-12, kind = "estimate", source = "salt.py" }
+
+[card.np-salt-tag-l1-fm]
+title = "the lead with L1, (a) and the forced mask: hm96 kept, its mask committed int8 partials"
+origin = "N-SALT"
+note = "compute-research/20261029T1100Z-report-np-salt"
+modules = { N = "ssn-1l-tag", D = "served", F = "s8", density = "k32", operands = "w", rows = "l1", hiding = "fm", final = "none", forming = "none", derivation = "min" }
+source = "salt.py: FM's interface at 896 registers a salt (estimate) on L1's salts"
+claims.t512 = { gap = 2.9926e-5, terms = ["hiding"], tol = 3e-7, kind = "estimate", source = "salt.py: 0.0030% at 64 rows" }
+claims.t512r512 = { gap = 3.741e-6, terms = ["hiding"], tol = 4e-8, kind = "estimate", source = "salt.py: 0.0004% at 512 rows" }

@@ -380,7 +380,8 @@ def compose(card: dict, choice: dict, extra: list[str] | None = None, lenient: b
             "coins": noise.get("coins", {}), "t3": t3, "n_max": exprs.get("n_max"), "sources": sources,
             "layout": rows.get("layout", "l0"), "forward_salts": rows.get("forward_salts", 0),
             "title": title or " · ".join(m.get("title", "") for m in mods.values() if m.get("title")),
-            "source": source or "; ".join(v for v in sources.values() if v), "variant": noise.get("variant", "")}
+            "source": source or "; ".join(v for v in sources.values() if v), "variant": noise.get("variant", ""),
+            "salt": mods.get("hiding", {}).get("salt")}
 
 
 def space(card: dict, lenient: bool = False) -> tuple[dict, int, dict]:
@@ -509,10 +510,13 @@ def leaf_hiding(card: dict, leaf: float) -> tuple[float, float]:
     return (hide - mask) / h["comp_ns"], mask / h["comp_ns"]
 
 
-def salt_units(card: dict, basis: str, leaves: list[float]) -> tuple[list[float], list[float]]:
+def salt_units(card: dict, basis: str, leaves: list[float], own: dict | None = None) -> tuple[list[float], list[float]]:
     """W1 units a salt for each object's leaves: (the PRF and c, M_key·y). "w1" is N-HIDE's register count, one price
     whatever the leaf; "leaf-time" is SW-HASH's, the salt kernel's share of the leaf's hash time at the floor's price a
-    compression, which its claims assumed."""
+    compression, which its claims assumed. A hiding module's own `salt` (`own`; a design that replaces hm96's salt
+    side, such as N-SALT's pad) is its price on either basis, its `forced` the part salt-forced's analogue leaves."""
+    if own is not None:
+        return [own["unforced"] - own["forced"]] * len(leaves), [float(own["forced"])] * len(leaves)
     if basis == "w1":
         s = card["price"]["salt"]
         return [s["unforced"] - s["forced"]] * len(leaves), [float(s["forced"])] * len(leaves)
@@ -595,7 +599,7 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
         salts = [math.ceil(b / leaf) if b else 0 for b, leaf in objects]
     else:
         salts = [0, 1 if layout == "l1" else 0, 0]
-    salt_w, mask_w = salt_units(card, d.get("salt_basis", "w1"), [leaf for _, leaf in objects])
+    salt_w, mask_w = salt_units(card, d.get("salt_basis", "w1"), [leaf for _, leaf in objects], d.get("salt"))
     salt_c = sum(s * w for s, w in zip(salts, salt_w))
     mask_c = sum(s * w for s, w in zip(salts, mask_w))
     hid = [s * (w + k) for s, w, k in zip(salts, salt_w, mask_w)]
@@ -711,7 +715,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
     fs = d.get("forward_salts", 0) if d.get("layout", "l0") != "l0" else 0
     if fs:
         closes = effects(card, d["premises"], 32)[0]
-        (sw,), (mw,) = salt_units(card, d.get("salt_basis", "w1"), [1.0])
+        (sw,), (mw,) = salt_units(card, d.get("salt_basis", "w1"), [1.0], d.get("salt"))
         charged = 0.0 if "hiding" in closes else ((0.0 if "hiding_salt" in closes else sw)
                                                   + (0.0 if "hiding_mask" in closes else mw))
         agg["terms"]["hiding"] += fs * charged
