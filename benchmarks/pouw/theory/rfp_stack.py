@@ -20,6 +20,10 @@
    such instructions, `p` pieces and `m'` words. The instructions supply `n` and a merge at most two, so a dot
    product's repeated pair of blocks costs at least
    `2K − (the piece (J−1, 0)) − (its 2J−1 largest other pieces) − Σ (s − 16)⁺ over the rest`.
+5. **One-bit coins at zero data.** With coins in {±64} and A = B = 0 (data the prover chooses), every RFP-4 word is
+   4096 times a sum of products of signs, so a b1 AND-popcount instruction (256 products at the price of 32 s8 ones)
+   makes each word from the coins' bits and their per-segment popcounts. Checked word for word against the s8 words,
+   with both programs' tensor units a dot product.
 
     python3 benchmarks/pouw/theory/rfp_stack.py [--seeds 16] [--out PATH]
 """
@@ -174,6 +178,40 @@ def projection_bounds(seeds, shapes=((2048, 64), (2048, 128), (2048, 256), (8192
     return out
 
 
+def rfp4_zero_data_one_bit(K, L, seed, m=2, n=2):
+    """RFP-4's words at A = B = 0 with coins in {±64}: the s8 program's against the b1 program's, and their prices.
+
+    A segment's sum is 4096·Σ s·t over its signs, and s·t = 2(u∧v + ū∧v̄) − 1 for the sign bits u, v, so a running word
+    is 8192·popc([u, ū] ∧ [v, v̄]) − 4096·(its position): one b1 instruction a segment (2L bits, 256 to one) and one IMAD
+    a word, against the s8 program's L/32 instructions a segment, in units of 32 a dot product."""
+    rng = random.Random(seed)
+    E = [[rng.choice((-1, 1)) for _ in range(K)] for _ in range(m)]
+    G = [[rng.choice((-1, 1)) for _ in range(K)] for _ in range(m)]
+    F = [[rng.choice((-1, 1)) for _ in range(n)] for _ in range(K)]
+    pi, pi2 = list(range(K)), list(range(K))
+    rng.shuffle(pi)
+    rng.shuffle(pi2)
+    agree = True
+    for r in range(m):
+        x = [64 * v for v in E[r] + [-E[r][k] for k in pi] + G[r] + [-G[r][k] for k in pi2]]
+        for c in range(n):
+            y = [64 * F[k][c] for k in list(range(K)) + pi + list(range(K)) + pi2]
+            s8, acc, run = [], 0, 0
+            for t in range(0, 4 * K, L):
+                run += sum(a * b for a, b in zip(x[t:t + L], y[t:t + L]))
+                s8.append(run)
+                u = sum(1 << i for i, a in enumerate(x[t:t + L]) if a > 0)
+                v = sum(1 << i for i, b in enumerate(y[t:t + L]) if b > 0)
+                full = (1 << L) - 1
+                acc += bin(u & v).count("1") + bin(~u & ~v & full).count("1")
+                if s8[-1] != 8192 * acc - 4096 * (t + L):
+                    agree = False
+    honest = 4 * K
+    b1 = (4 * K // L) * (32 * math.ceil(2 * L / 256) + 32)
+    return {"K": K, "L": L, "words_agree": agree, "honest_units": honest, "b1_units": b1,
+            "uncredited_share_of_stock": max(0, honest - b1) / K}
+
+
 STACKS = {
     # blocks, X adds per entry of A, Y adds per entry of B, coin entries per entry of A and of B
     "RFP-3": {"blocks": 3, "x_adds": 1, "y_adds": 1, "coins_a": 1, "coins_b": 1},
@@ -222,6 +260,8 @@ def main():
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     res = {"purity": purity(), "intersections": intersections(a.seeds), "projection_bounds": projection_bounds(a.seeds),
+           "zero_data_one_bit": [rfp4_zero_data_one_bit(K, L, s) for K in (2048, 8192) for L in (64, 128, 256)
+                                 for s in range(2)],
            "llama_3_2_1b": llama_terms()}
     text = json.dumps(res, indent=1)
     if a.out:
