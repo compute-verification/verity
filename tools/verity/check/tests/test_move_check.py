@@ -616,6 +616,41 @@ def test_pins_sorted_anew_after_their_paths_moved_are_a_move(tmp_path):
     assert not _worded(tmp_path / "dropped", base_pins, **{"p/TRUSTED.sha256": dropped})["certified"]
 
 
+def _json_pin(tmp_path: Path, listed: bool = True, digest=None) -> dict:
+    """`L/a` moved to `L/b`; `S`'s manifest names it, and a JSON pin records the manifest's digest and a moved file's."""
+    def manifest(d: str) -> str:
+        return json.dumps({"packages": [{"type": "path", "name": "a", "dir": f"../L/{d}"}]}, indent=1) + "\n"
+
+    def pin(d: str, m: str) -> str:
+        return json.dumps({"inputs": {f"L/{d}/A.lean": _sha("def a := 1\n"), "S/lake-manifest.json": m}, "out": [1, 2]},
+                          indent=1) + "\n"
+    pins = 'PINS = (\n    Pin("f/pin.json", "inputs", "", "bash f/gen.sh", "S"),\n)\n'
+    repo, base = _repo(tmp_path, {"L/a/A.lean": "def a := 1\n", "L/a/lakefile.toml": 'name = "a"\n',
+                                  "S/lakefile.toml": 'name = "s"\n', "S/lake-manifest.json": manifest("a"),
+                                  "f/pin.json": pin("a", _sha(manifest("a"))),
+                                  MC.PINS_TOOL: pins if listed else pins.replace("f/pin.json", "f/other.json")})
+    _move(repo, "L/a", "L/b")
+    _write(repo, {"S/lake-manifest.json": manifest("b"), "f/pin.json": pin("b", digest or _sha(manifest("b")))})
+    return _check(repo, base)
+
+
+def test_a_json_pin_following_a_moved_package_is_a_move(tmp_path):
+    """A JSON pin `pins.py` lists records its inputs' digests: a Lake manifest that names a moved package changes, and the pin
+    records its new digest, as `pins.py --regen` writes it."""
+    r = _json_pin(tmp_path)
+    assert r["certified"], r["refusals"]
+
+
+def test_a_json_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
+    [f] = _json_pin(tmp_path, digest="0" * 64)["refusals"]
+    assert f["path"] == "f/pin.json"
+
+
+def test_a_digest_in_json_that_is_no_pin_is_refused(tmp_path):
+    [f] = _json_pin(tmp_path, listed=False)["refusals"]
+    assert f["path"] == "f/pin.json"
+
+
 def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
     moves = json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/": "T/"}}]}, indent=2) + "\n"
     [f] = _worded(tmp_path, **{"tools/research/src/research/store/moves.json": moves})["refusals"]

@@ -42,7 +42,9 @@ Every path git sees changed must be one of:
 - in place, a `lakefile.toml` whose library `roots` lose the modules the range moved out of its package and gain those it
   moved in, that adds a `require` of a new Lake package, or adds comment lines (`lakefile_in_place`), and a
   `lake-manifest.json` that adds that package (`manifest_change`);
-- a `TRUSTED.sha256` line rewritten from a file's digest at BASE to its digest at HEAD, under its path moved by the map;
+- a `TRUSTED.sha256` line rewritten from a file's digest at BASE to its digest at HEAD, under its path moved by the map, and
+  likewise an entry `"path": "<sha256>"` of a JSON pin that BASE's `tools/verity/check/pins.py` lists (a Lake manifest
+  that names a moved package records new bytes, while what the pin's command computed from the Lean is unchanged);
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
@@ -66,6 +68,7 @@ leaves it below git's similarity, each pair again judged as above.
 from __future__ import annotations
 
 import argparse
+import ast
 import bisect
 import difflib
 import functools
@@ -94,6 +97,9 @@ MAPS = "tools/move/"
 #: the files that pin other files' digests (`<sha256>  <relative path>` lines)
 PINS = "TRUSTED.sha256"
 PIN_LINE = re.compile(r"^([0-9a-f]{64})  (.+)$")
+#: the pins tool, whose `PINS` names each JSON pin (`json_pins`), and one entry of such a pin's {path: digest}
+PINS_TOOL = "tools/verity/check/pins.py"
+PIN_ENTRY = re.compile(r'^(\s*)"([^"\n]+)": "([0-9a-f]{64})"(,?)\s*$')
 ROOT = Path(__file__).resolve().parents[3]
 IMPORT = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\b.*)$|^(\s*import\s+)([\w.]+)(.*)$")
 LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$")
@@ -201,6 +207,11 @@ class Tree:
             return git("cat-file", "blob", f"{self.rev}:{path}", cwd=self.cwd).decode("utf-8")
         except (subprocess.CalledProcessError, UnicodeDecodeError):
             return None
+
+    @functools.cache
+    def digest(self, path: str) -> str | None:
+        data = self.blob(path)
+        return None if data is None else hashlib.sha256(data).hexdigest()
 
 
 def derive_map(renames: list[tuple[str, str]], base_files: list[str], deleted: set[str], added: set[str]) -> dict[str, str]:
@@ -761,21 +772,13 @@ def pins_change(a: list[str], b: list[str], old: str, new: str, base: Tree, head
     """The first hunk of a `TRUSTED.sha256` edit whose lines are not each a file's digest at BASE rewritten to its digest at
     HEAD, under its path moved by the map, in any order (the command that writes the file sorts the paths, and a moved
     path sorts anew); None when there is none."""
-    digests: dict[tuple[int, str], str | None] = {}
-
-    def digest(tree: Tree, path: str) -> str | None:
-        if (id(tree), path) not in digests:
-            data = tree.blob(path)
-            digests[id(tree), path] = None if data is None else hashlib.sha256(data).hexdigest()
-        return digests[id(tree), path]
-
     def pair(x: str, y: str) -> bool:
         mx, my = PIN_LINE.match(x), PIN_LINE.match(y)
         if not (mx and my):
             return False
         po = posixpath.normpath(posixpath.join(posixpath.dirname(old), mx[2]))
         pn = posixpath.normpath(posixpath.join(posixpath.dirname(new), my[2]))
-        return map_path(po, pmap) == pn and digest(base, po) == mx[1] and digest(head, pn) == my[1]
+        return map_path(po, pmap) == pn and base.digest(po) == mx[1] and head.digest(pn) == my[1]
     hunk = first_unexplained(a, b, a, b, pair=pair)
     if hunk is None or len(a) != len(b):
         return hunk
@@ -785,6 +788,33 @@ def pins_change(a: list[str], b: list[str], old: str, new: str, base: Tree, head
             return hunk
         left.remove(x)
     return None
+
+
+def json_pins(base: Tree) -> dict[str, str]:
+    """{path: the directory its recorded paths are relative to} of each JSON pin (a `Pin` with a key) in BASE's `PINS_TOOL`,
+    read from its text with `ast`; {} when BASE holds none."""
+    out: dict[str, str] = {}
+    for n in ast.parse(base.text(PINS_TOOL) or "").body:
+        if isinstance(n, ast.Assign) and isinstance(n.value, ast.Tuple) and any(isinstance(t, ast.Name) and t.id == "PINS"
+                                                                                for t in n.targets):
+            for c in n.value.elts:
+                args = {**dict(zip(("path", "key", "under"), c.args)), **{k.arg: k.value for k in c.keywords}}
+                path, key, under = (ast.literal_eval(args[a]) for a in ("path", "key", "under"))
+                if key is not None:
+                    out[path] = under
+    return out
+
+
+def json_pin_entry(x: str, y: str, under: str, base: Tree, head: Tree, pmap: dict[str, str]) -> bool:
+    """Whether `y` is a JSON pin's entry `x` (`"path": "<sha256>"`, its path maybe already moved by the map) with its digest
+    rewritten from the file's at BASE to the file's at HEAD, under its path moved by the map."""
+    mx, my = PIN_ENTRY.match(x), PIN_ENTRY.match(y)
+    if not (mx and my) or (mx[1], mx[4]) != (my[1], my[4]):
+        return False
+    px = posixpath.normpath(posixpath.join(under, mx[2]))
+    pn = posixpath.normpath(posixpath.join(map_path(under, pmap), my[2]))
+    olds = {px} | {o + px[len(n):] for o, n in pmap.items() if px == n or px.startswith(n + "/")}
+    return head.digest(pn) == my[3] and any(map_path(po, pmap) == pn and base.digest(po) == mx[3] for po in olds)
 
 
 @functools.cache
@@ -1005,6 +1035,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
     def new_lake(p: str) -> bool:
         return new_dir(p) and H.is_package(p) and posixpath.join(p, "lean-audit.json") in H.set
 
+    jpins = json_pins(B)
     new_projects = set()
     for e in entries:
         if e["status"] == "A" and posixpath.basename(e["new"]) == "pyproject.toml" and new_dir(posixpath.dirname(e["new"])):
@@ -1110,6 +1141,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             def pair(x: str, y: str, at_old=at(B, old, a), at_new=at(H, new, b)) -> bool:
                 return any((py and (import_rewrite(z, y, modules, old, new) or anchor_rewrite(z, y, at_old, at_new, pmap)))
                            or (sh and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap))
+                           or (old in jpins and json_pin_entry(z, y, jpins[old], B, H, pmap))
                            or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)
                            for z in dict.fromkeys((x, substitute(x, short))))
 
