@@ -311,6 +311,17 @@ def words_at(p: dict, kind: str) -> float:
     return w
 
 
+def delivered(p: dict) -> bool:
+    """Whether a measured point issues the LDS.128 its words' honest routes read their operands by."""
+    need = 0.0
+    for ins, v in p["lanes"].items():
+        cls = INSTR[ins][0]
+        if cls in WORD_ROUTE:
+            route = ROUTES[WORD_ROUTE[cls]]["honest"]
+            need += v / sum(c for i, c in route.items() if INSTR[i][0] == cls) * route.get("LDS128", 0.0)
+    return p["lanes"].get("LDS128", 0.0) >= 0.99 * need
+
+
 def bisect(f, lo: float, hi: float) -> float:
     """The crossing of a predicate true below it and false above it."""
     for _ in range(60):
@@ -511,42 +522,55 @@ def main() -> int:
         poly_side = min((1 - a * G_SAT) / coef for cls, a, coef in rows.values() if cls == "ALL")
         best_sat = max(sat, key=lambda p: p["side_issue"])
         best_h = max(pts, key=lambda p: p["words"]["honest"])
+        best_d = max((p for p in pts if delivered(p)), key=lambda p: p["words"]["honest"])
         best_a = max(pts, key=lambda p: p["words"]["floor"])
-        r_hm = best_h["words"]["honest"] / sm
+        r_hm, r_hd, r_am = best_h["words"]["honest"] / sm, best_d["words"]["honest"] / sm, best_a["words"]["floor"] / sm
+
+        def against(r, ra):
+            return {"gap": {k: gap(r, ra, k) for k in KS}, "kmin": kmin(r, ra)}
+
         measured = {
             "points": pts, "polytope_side_issue_at_saturation": sm * poly_side,
             "best_side_issue_saturated": {"probe": best_sat["probe"], "side_issue": best_sat["side_issue"]},
-            "honest": {"probe": best_h["probe"], "words_sm_clk": sm * r_hm},
-            "adversary_measured": {"probe": best_a["probe"], "words_sm_clk": best_a["words"]["floor"],
-                                   "gap": {k: gap(r_hm, best_a["words"]["floor"] / sm, k) for k in KS},
-                                   "kmin": kmin(r_hm, best_a["words"]["floor"] / sm)},
-            "vs_polytope": {kind: {"gap": {k: gap(r_hm, adv[kind]["rate"], k) for k in KS},
-                                   "kmin": kmin(r_hm, adv[kind]["rate"])} for kind in adv},
+            "honest_delivered": {"probe": best_d["probe"], "words_sm_clk": sm * r_hd},
+            "honest_products_only": {"probe": best_h["probe"], "words_sm_clk": sm * r_hm},
+            "adversary_measured": {"probe": best_a["probe"], "words_sm_clk": sm * r_am},
+            "vs_polytope": {kind: against(r_hd, adv[kind]["rate"]) for kind in adv},
+            "vs_polytope_products_only": {kind: against(r_hm, adv[kind]["rate"]) for kind in adv},
+            "vs_measured": against(r_hd, r_am), "vs_measured_products_only": against(r_hm, r_am),
+            "vs_measured_delivered": against(r_hd, r_hd),
         }
-        print(f"  measured honest: {sm * r_hm:.2f} words/SM-clk ({best_h['probe']}); polytope's honest "
-              f"{sm * r_h:.2f}")
+        print(f"  measured honest: {sm * r_hd:.2f} words/SM-clk with its operand reads ({best_d['probe']}), "
+              f"{sm * r_hm:.2f} on products alone ({best_h['probe']}); the polytope's honest {sm * r_h:.2f}")
         for kind, v in measured["vs_polytope"].items():
             print(f"    vs {kind:9s} adversary {adv[kind]['words_sm_clk']:7.2f} (polytope): gap "
                   + "  ".join(f"K{k} {v['gap'][k]:6.2%}" for k in KS) + f"  T1 from K {v['kmin']:,.0f}")
-        am = measured["adversary_measured"]
-        print(f"    vs the floor adversary at the measured points {am['words_sm_clk']:7.2f} ({am['probe']}): gap "
-              + "  ".join(f"K{k} {am['gap'][k]:6.2%}" for k in KS) + f"  T1 from K {am['kmin']:,.0f}")
+        for name, key in (("products alone", "vs_measured_products_only"), ("with operand reads", "vs_measured")):
+            v = measured[key]
+            print(f"    honest {name}, vs the floor adversary at the measured points {sm * r_am:7.2f} "
+                  f"({best_a['probe']}): gap " + "  ".join(f"K{k} {v['gap'][k]:6.2%}" for k in KS)
+                  + f"  T1 from K {v['kmin']:,.0f}")
         checks.check("beside a saturated wgmma no measured mix issues the lane instructions the polytope allows: the "
                      "census's generic rows are loose there", best_sat["side_issue"] < 0.9 * sm * poly_side,
                      f"measured {best_sat['side_issue']:.3f} ({best_sat['probe']}) against the rows' "
                      f"{sm * poly_side:.3f} warp instructions/SM-clk")
-        checks.check("honest's best measured schedule makes fewer words than the polytope's honest, and against the "
-                     "polytope's floor adversary it misses T1 at every K: T1 rests on the rows' slack or on a "
-                     "honest kernel that reaches them", r_hm < r_h and measured["vs_polytope"]["floor"]["kmin"] == math.inf,
-                     f"{sm * r_hm:.2f} ({best_h['probe']}) vs {sm * r_h:.2f}; gap at K 2,048 "
-                     + ", ".join(f"{measured['vs_polytope'][k]['gap'][2048]:.2%} ({k}, T1 from K "
-                                 f"{measured['vs_polytope'][k]['kmin']:,.0f})" for k in ("floor", "products", "ideal",
-                                                                                          "delivered")))
-        checks.check("on the measured points (not a bound) the floor adversary's best is within 0.1% of honest's best, "
-                     "so the gap is about the advice word and T1 holds from K near 1,100",
-                     am["words_sm_clk"] < 1.001 * sm * r_hm and am["kmin"] < 1200,
-                     f"{am['words_sm_clk']:.2f} ({am['probe']}) vs honest {sm * r_hm:.2f} ({best_h['probe']}); T1 from "
-                     f"K {am['kmin']:,.0f}, gap at K 2,048 {am['gap'][2048]:.2%}")
+        vp = measured["vs_polytope"]
+        checks.check("honest's operand reads cost it words: its best delivered point makes fewer than its best on "
+                     "products alone, and both fewer than the polytope's honest", r_hd < r_hm < r_h,
+                     f"{sm * r_hd:.2f} ({best_d['probe']}) < {sm * r_hm:.2f} ({best_h['probe']}) < {sm * r_h:.2f}")
+        checks.check("at its measured rate with its operand reads honest misses T1 at every K against every polytope "
+                     "adversary, the delivered one included: T1 rests on the rows' slack, or on a honest kernel that "
+                     "reaches them", all(vp[k]["kmin"] == math.inf for k in adv),
+                     "gap at K 2,048 " + ", ".join(f"{vp[k]['gap'][2048]:.2%} ({k}, T1 from K {vp[k]['kmin']:,.0f})"
+                                                   for k in ("floor", "products", "ideal", "delivered")))
+        vm = measured["vs_measured_products_only"]
+        checks.check("on the measured points (not a bound) the floor adversary's best is within 0.1% of honest's on "
+                     "products alone, so that gap is about the advice word, T1 from K near 1,100; with honest's "
+                     "operand reads and none for the adversary T1 needs K above 16,384", r_am < 1.001 * r_hm
+                     and vm["kmin"] < 1200 and measured["vs_measured"]["kmin"] > 16384,
+                     f"{sm * r_am:.2f} ({best_a['probe']}) vs {sm * r_hm:.2f}: T1 from K {vm['kmin']:,.0f}, gap at K "
+                     f"2,048 {vm['gap'][2048]:.2%}; with operand reads {measured['vs_measured']['gap'][2048]:.2%}, T1 "
+                     f"from K {measured['vs_measured']['kmin']:,.0f}")
         if checks.mutations:
             up = max(usage(dict(best_h, lanes={k: 1.1 * v for k, v in best_h["lanes"].items()}), rows).items(),
                      key=lambda kv: kv[1])
