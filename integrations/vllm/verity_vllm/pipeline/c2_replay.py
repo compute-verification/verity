@@ -4,8 +4,8 @@ One implementation for both places it runs: the Commit, in process, right after 
 replay of a deferred Commit's bundle (`pipeline.replay_bundle`, `row stage replay`).  What differs between them is passed in on the
 `Site`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
 checkpoint opened against the committed weights root), the weights check and the VU export hook.  In both places it's the prover's
-pre-flight check (VLLM-17): it reads committed values in the clear, so it's no verifier's check.  A verifier gets the drawn units
-proved (`sampled_proofs.one_stage`).
+pre-flight check: it reads committed values in the clear, so it's no verifier's check.  A verifier checks the sampled proof
+blocks' proofs (`sampled_proofs.one_stage`).
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered

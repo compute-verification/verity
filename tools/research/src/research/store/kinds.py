@@ -102,7 +102,7 @@ KINDS: dict[str, str] = {
     "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
                            "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
                            "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}. No stage "
-                           "publishes one since VLLM-148: a keep holds clear values (opened committed values with their salts, the "
+                           "publishes one any more: a keep holds clear values (opened committed values with their salts, the "
                            "requests and served tokens, opened weights) and stays on the node",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
@@ -150,7 +150,7 @@ KINDS: dict[str, str] = {
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",
-    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (demos/h200/m3bundle.py build), what "
+    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (examples/h200/m3bundle.py build), what "
                           "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
                           "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
                           "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "

@@ -161,7 +161,7 @@ def reference(product: R.Product, seen: collections.Counter):
 
 
 def port(name: str, product: R.Product, seen: collections.Counter) -> D.ProtocolPort:
-    """`name serve` of the Lake package `name`, on the product's cases and, one draw in ten, any JSON line."""
+    """`name serve` of the Lake package `name`, on the product's cases and, one sample in ten, any JSON line."""
     return D.ProtocolPort(name, reference(product, seen), st.one_of(*[composite(product)] * 9, JSON),
                           package=PROTOCOLS / name)
 

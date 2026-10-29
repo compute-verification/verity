@@ -9,7 +9,7 @@ from pathlib import Path
 from verity_vllm.pipeline import research_outputs as ro
 
 ROW = "llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager"
-COMMIT_SH = Path(__file__).resolve().parents[4] / "demos" / "vllm" / "commit.sh"
+COMMIT_SH = Path(__file__).resolve().parents[4] / "examples" / "vllm" / "commit.sh"
 WDS = ["d" * 64, "a" * 64, "c" * 64, "b" * 64]
 
 

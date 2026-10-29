@@ -14,7 +14,7 @@ record the tree's data files name. Stdlib only; it reads the tree at one commit 
 - `status`: `assumes` with an assumption, `proved` with none and its premises read, `unknown` with none and its premises
   not read.
 - `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported) and each example's
-  `[evidence]` (`demos/*/example.toml`); run ids are counted, not exported.
+  `[evidence]` (`examples/*/example.toml`); run ids are counted, not exported.
 
 The document is written as `canonical` bytes. Prints one JSON line: the counts, the bytes written and their SHA-256.
 """
@@ -36,7 +36,7 @@ SCHEMA = "verity/status/v0"
 LOCK = "lean-audit.json"
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
-EXAMPLES = "demos/*/example.toml"
+EXAMPLES = "examples/*/example.toml"
 #: a table renderer's path -> {the call naming a row's runs of record: how its `what` reads, from the call's first argument}
 RENDERERS = {"benchmarks/harness/verity_bench/served_table.py": {"Protocol": "{}", "Breakdown": "{}, where its time goes by span"}}
 
