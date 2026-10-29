@@ -36,7 +36,7 @@ A record is one of two kinds:
 
 A record is of the protocol id it names: its sessions' records' `protocol` and its registry's schema, or, where it
 names neither (a rejected session, no registry), the id whose registration tag gives its recorded digest. One of v0
-before MEM-152's move (28 Oct 2026, `poub.retired`, v0's tags then) replays as above, but for what those tags made: its
+before the PoUB move (`poub.retired`, v0's tags then) replays as above, but for what those tags made: its
 registration's digest is held to its fields under v0's registration tag then, by Python's formula (Lean's verifier
 computes only today's), and its registry is read back under today's schema, the one thing in it a tag names. A
 transcript names no id: its `verifier.json`'s is its own. One of v0 before the move doesn't replay: its seeds, receipts
@@ -93,17 +93,17 @@ def digests(reg: dict, s: D.Server) -> tuple[D.Outcome, D.Outcome]:
     return (kind, json.loads(text) if kind == "output" else text), _digest_py(reg)
 
 
-def digest_under(reg: dict, domain: bytes) -> str | None:
-    """`audit.Registration.digest` under registration tag `domain` in place of today's; None for a registration Python
-    refuses."""
+def digest_under(reg: dict, domain: bytes) -> D.Outcome:
+    """`audit.Registration.digest` under registration tag `domain` in place of today's, as `_digest_py` answers: the hex
+    digest, or why Python refuses the registration."""
     try:
         with M.decoding():
             r = M.registration_of(copy.deepcopy(reg))
-    except D.Reject:
-        return None
-    return hashlib.sha512(domain + frame(r.node) + r.blocks.to_bytes(8, "big") + r.payload_root + r.codec_seed
-                          + frame(r.codec.name) + frame(r.receipt) + bytes((r.bind,)) + frame(r.layout)
-                          + r.rows.to_bytes(4, "big")).hexdigest()
+    except D.Reject as e:
+        return "reject", str(e)
+    return "output", hashlib.sha512(domain + frame(r.node) + r.blocks.to_bytes(8, "big") + r.payload_root + r.codec_seed
+                                    + frame(r.codec.name) + frame(r.receipt) + bytes((r.bind,)) + frame(r.layout)
+                                    + r.rows.to_bytes(4, "big")).hexdigest()
 
 
 #: The protocol id a registry's schema names: today's, and v0's before the move.
@@ -123,7 +123,8 @@ def protocol_of(v: dict) -> str:
         return named.pop()
     reg = v.get("registration")
     if reg is not None and (any(k not in reg for k in LATER)
-                            or digest_under(registration_of(reg), retired.REGISTRATION_DOMAIN) == reg.get("digest")):
+                            or digest_under(registration_of(reg), retired.REGISTRATION_DOMAIN)
+                            == ("output", reg.get("digest"))):
         return retired.PROTOCOL_ID
     return audit.PROTOCOL_ID
 
@@ -381,7 +382,7 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
     if earlier:
         digest, note = None, f"recorded before it named {' and '.join(earlier)}, its digest not today's"
     elif protocol == retired.PROTOCOL_ID:
-        digest = digest_under(reg, retired.REGISTRATION_DOMAIN) == recorded_digest
+        digest = digest_under(reg, retired.REGISTRATION_DOMAIN) == ("output", recorded_digest)
         note = f"recorded under {protocol}, its digest under that id's registration tag then, by Python's formula"
     else:
         lean_digest, py_digest = digests(reg, s)

@@ -9,7 +9,7 @@ line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the 
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
-A retired id (``IDS``: PoUB's `verity/remote-bandwidth/` tags, `verity/poub/` since MEM-152's move) is matched as written
+A retired id (``IDS``: PoUB's `verity/remote-bandwidth/` tags, `verity/poub/` since the PoUB move) is matched as written
 in every tracked file, the Lean's too, with the same ``ALLOWED`` spellings.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:

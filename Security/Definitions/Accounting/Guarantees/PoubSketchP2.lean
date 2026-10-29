@@ -32,7 +32,7 @@ device never held, read, took in or rebuilt is uniform to it. A device that rebu
 counts it), and what rebuilding costs, in part or whole, is the codec's, the memory line's debit
 (`Accounting.Assumptions.WorkHardnessP2`, `SquaringCeilingP2`).
 
-**Drafted, not decided**: the claims await a ruling; `audit.ledger` refuses a P2 record
+**Drafted, not decided**: the claims are not yet accepted; `audit.ledger` refuses a P2 record
 until a line takes this.
 -/
 

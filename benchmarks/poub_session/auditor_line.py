@@ -172,7 +172,7 @@ they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate do
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/poub"
 RETIRED_TREE = "verity/core/protocols/remote_bandwidth"
-"""`VERIFIER_TREE` at a commit before MEM-152's move, whose sessions' periods committed it under v0's id then
+"""`VERIFIER_TREE` at a commit before the PoUB move, whose sessions' periods committed it under v0's id then
 (`poub.retired`)."""
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
@@ -230,7 +230,7 @@ def descriptor(tree: str, protocol: str = audit.PROTOCOL_ID) -> bytes:
 
 def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> tuple[str, str, str]:
     """The verifier run's recorded commit `commit` in full, `VERIFIER_TREE`'s git tree there and the verifier's id,
-    read in `repo`'s git; at a commit before MEM-152's move, `RETIRED_TREE`'s tree and v0's id then."""
+    read in `repo`'s git; at a commit before the PoUB move, `RETIRED_TREE`'s tree and v0's id then."""
     def rev_parse(rev: str) -> str | None:
         p = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", rev], capture_output=True,
                            text=True)
