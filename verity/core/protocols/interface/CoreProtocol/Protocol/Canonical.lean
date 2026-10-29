@@ -42,10 +42,24 @@ private def RBRACE : UInt8 := 125
 
 @[inline] private def hexDigit (x : UInt8) : UInt8 := if x < 10 then 48 + x else 87 + x
 
+/-- The four lowercase hex digits from `i`: their value, `none` unless there are four. -/
+@[inline] def hex4At (s : String) (i : Nat) : Option Nat :=
+  let a := nibble (byte s i)
+  let b := nibble (byte s (i + 1))
+  let c := nibble (byte s (i + 2))
+  let d := nibble (byte s (i + 3))
+  if a < 16 && b < 16 && c < 16 && d < 16 then some (((a.toNat * 16 + b.toNat) * 16 + c.toNat) * 16 + d.toNat) else none
+
+/-- Whether `v` is a character `canonStr` writes as one `\u` escape: a control character but the short escapes', DEL, or
+one from `0x80` on that isn't a surrogate. -/
+@[inline] def uEscaped (v : Nat) : Bool :=
+  (v < 0x20 && v != 8 && v != 9 && v != 10 && v != 12 && v != 13) || (0x7f ≤ v && (v < 0xD800 || 0xE000 ≤ v))
+
 /-- The closing quote of a string whose body starts at `i`, and whether the body holds an escape: `none` unless the bytes
-before `stop` are `Flock.canonStr`'s of some string. Those are raw bytes from `0x20` on but `"` and `\`, and `canonStr`'s
-escapes exactly: `\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, and `\u00xx` in lowercase for every other control character.
-`fuel` bounds the steps: `stop - i + 1` is enough. -/
+before `stop` are `Flock.canonStr`'s of some string. Those are the raw bytes from `0x20` to `0x7e` but `"` and `\`, and
+`canonStr`'s escapes exactly: `\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, `\u` and four lowercase hex digits for every
+other control character, DEL and every character from `0x80` on below `0x10000` (`uEscaped`), and a high then a low
+surrogate's two for every one above. `fuel` bounds the steps: `stop - i + 1` is enough. -/
 def strEnd (s : String) (stop : Nat) : (fuel i : Nat) → (esc : Bool) → Option (Nat × Bool)
   | 0, _, _ => none
   | fuel + 1, i, esc =>
@@ -58,15 +72,18 @@ def strEnd (s : String) (stop : Nat) : (fuel i : Nat) → (esc : Bool) → Optio
         if stop ≤ i + 1 then none
         else if e == QUOTE || e == BACKSLASH || e == 110 || e == 114 || e == 116 || e == 98 || e == 102 then
           strEnd s stop fuel (i + 2) true
-        else if e == 117 && i + 5 < stop && byte s (i + 2) == 48 && byte s (i + 3) == 48 then
-          let h := byte s (i + 4)
-          let l := nibble (byte s (i + 5))
-          let v := (if h == 49 then 16 else 0) + l
-          if (h == 48 || h == 49) && l < 16 && v != 8 && v != 9 && v != 10 && v != 12 && v != 13 then
-            strEnd s stop fuel (i + 6) true
-          else none
+        else if e == 117 && i + 5 < stop then
+          match hex4At s (i + 2) with
+          | some v =>
+            if uEscaped v then strEnd s stop fuel (i + 6) true
+            else if 0xD800 ≤ v && v < 0xDC00 && i + 11 < stop && byte s (i + 6) == BACKSLASH && byte s (i + 7) == 117 then
+              match hex4At s (i + 8) with
+              | some w => if 0xDC00 ≤ w && w < 0xE000 then strEnd s stop fuel (i + 12) true else none
+              | none => none
+            else none
+          | none => none
         else none
-      else if b < 0x20 then none
+      else if b < 0x20 || 0x7f ≤ b then none
       else strEnd s stop fuel (i + 1) esc
 
 /-- The string whose canonical form runs from the quote at `a - 1` to the quote at `e`: its bytes as they are when it
@@ -161,25 +178,19 @@ def obj (s : String) (stop : Nat) :
               else none
 end
 
-/-- Whether `s`'s bytes from `k` up to `stop` are all below `0x7f`. Over a whole string it is `Flock.ascii`: a character
-below `0x7f` is its one byte, and every byte of any other character is from `0x7f` on. -/
+/-- Whether `s`'s bytes from `k` up to `stop` are all below `0x7f`, which every canonical text's are. -/
 def asciiFrom (s : String) (stop : Nat) : (fuel k : Nat) → Bool
   | 0, _ => false
   | fuel + 1, k => if stop ≤ k then true else if byte s k < 0x7f then asciiFrom s stop fuel (k + 1) else false
 
-/-- `Flock.ascii t`, read in place. -/
-@[inline] def ascii (t : String) : Bool := asciiFrom t t.utf8ByteSize (t.utf8ByteSize + 1) 0
-
 /-- `canonicalJson`'s refusal of a byte at or above `0x7f`, its first check. -/
 def NOT_ASCII : String := "not ASCII without DEL (a byte at or above 0x7f)"
 
-/-- `Flock.canon j`'s error, `none` when it writes `j`: the first non-integer number or string outside ASCII without DEL
-in the tree's order, an object's key before its value, as `canon` meets them. -/
+/-- `Flock.canon j`'s error, `none` when it writes `j`: a non-integer number, its one refusal. -/
 def canonError : Json → Option String
   | .num n => if n.exponent == 0 then none else some "canonical JSON: a non-integer number"
-  | .str t => if ascii t then none else some Flock.notAscii
   | .arr a => a.attach.findSome? fun x => canonError x.1
-  | .obj kvs => kvs.toArray.attach.findSome? fun p => if ascii p.1.1 then canonError p.1.2 else some Flock.notAscii
+  | .obj kvs => kvs.toArray.attach.findSome? fun p => canonError p.1.2
   | _ => none
 termination_by j => sizeOf j
 decreasing_by
@@ -235,17 +246,23 @@ def unhex (s : String) : V ByteArray :=
     | some b => pure b
     | none => throw "not lowercase hex"
 
+/-- Whether `s` holds `\u` and `v`'s four lowercase hex digits from `i`. -/
+@[inline] def uAt (s : String) (stop i v : Nat) : Bool :=
+  let d (k : Nat) : UInt8 := hexDigit ((v >>> (4 * k)) % 16).toUInt8
+  i + 5 < stop && byte s i == BACKSLASH && byte s (i + 1) == 117 && byte s (i + 2) == d 3 && byte s (i + 3) == d 2 &&
+    byte s (i + 4) == d 1 && byte s (i + 5) == d 0
+
 /-- Where `Flock.canonStr t`'s body from `t`'s byte `k` on, then its closing quote, ends when written in `s` from `i`.
-`canonStr` escapes only ASCII bytes and copies every other character's bytes, which are all from `0x80` on. -/
+A character from `0x80` on starts at a byte from `0xc0` on, and is written as `Flock.escU` writes it. -/
 def strWrites (s t : String) (stop : Nat) : (fuel k i : Nat) → Option Nat
   | 0, _, _ => none
   | fuel + 1, k, i =>
     if t.utf8ByteSize ≤ k then (if i < stop && byte s i == QUOTE then some (i + 1) else none)
     else
       let b := byte t k
-      let two (c : UInt8) : Option Nat :=
-        if i + 1 < stop && byte s i == BACKSLASH && byte s (i + 1) == c then some (i + 2) else none
-      let next : Option Nat :=
+      let two (c : UInt8) : Option (Nat × Nat) :=
+        if i + 1 < stop && byte s i == BACKSLASH && byte s (i + 1) == c then some (k + 1, i + 2) else none
+      let next : Option (Nat × Nat) :=
         if b == QUOTE then two QUOTE
         else if b == BACKSLASH then two BACKSLASH
         else if b == 10 then two 110
@@ -253,15 +270,18 @@ def strWrites (s t : String) (stop : Nat) : (fuel k i : Nat) → Option Nat
         else if b == 9 then two 116
         else if b == 8 then two 98
         else if b == 12 then two 102
-        else if b < 0x20 then
-          if i + 5 < stop && byte s i == BACKSLASH && byte s (i + 1) == 117 && byte s (i + 2) == 48 &&
-              byte s (i + 3) == 48 && byte s (i + 4) == hexDigit (b / 16) && byte s (i + 5) == hexDigit (b % 16) then
-            some (i + 6)
+        else if b < 0x20 || b == 0x7f then if uAt s stop i b.toNat then some (k + 1, i + 6) else none
+        else if b < 0x80 then if i < stop && byte s i == b then some (k + 1, i + 1) else none
+        else
+          let c := String.Pos.Raw.get t ⟨k⟩
+          let n := c.toNat
+          let k' := k + c.utf8Size
+          if n < 0x10000 then if uAt s stop i n then some (k', i + 6) else none
+          else if uAt s stop i (0xD800 + (n - 0x10000) / 0x400) && uAt s stop (i + 6) (0xDC00 + (n - 0x10000) % 0x400) then
+            some (k', i + 12)
           else none
-        else if i < stop && byte s i == b then some (i + 1)
-        else none
       match next with
-      | some i => strWrites s t stop fuel (k + 1) i
+      | some (k, i) => strWrites s t stop fuel k i
       | none => none
 
 /-- Where `Flock.canonStr t` ends when written in `s` from `i`. -/
@@ -332,8 +352,6 @@ private def HEX : List String := ["", "00", "0", "0g", "ab", "AB", "é0", "éé"
   | .error a, .error b => a == b
   | _, _ => false
 
-#guard ["", "a", "~", "\x7f", "é", "aé", "😀", "a\x00b"].all fun t => ascii t == Flock.ascii t
-
 #guard [Json.mkObj [("a", .num ⟨1, 1⟩), ("é", .num 1)], Json.mkObj [("a", .str "é"), ("b", .num ⟨1, 1⟩)],
   Json.mkObj [("é", .num ⟨1, 1⟩)], .arr #[.num ⟨1, 1⟩, .str "é"], .arr #[.str "é", .num ⟨1, 1⟩]].all fun j =>
   match Flock.canon j with
@@ -341,7 +359,8 @@ private def HEX : List String := ["", "00", "0", "0g", "ab", "AB", "é0", "éé"
   | .error e => canonError j == some e
 
 private def JSONS : List Json := [Json.null, .bool true, .bool false, .num 0, .num (-7), .num ⟨15, 1⟩, .str "",
-  .str "a\"b\\c\nd\re\tf\x08g\x0ch\x01i\x1fé😀", .arr #[], .arr #[.num 1, .str "x", .arr #[.null]],
+  .str "a\"b\\c\nd\re\tf\x08g\x0ch\x01i\x1fé😀", .str "\x7f", .str "Δ ≥ 1", .str "\uffff\ue000\ud7ff",
+  .str (String.singleton (Char.ofNat 0x10ffff)), .str "é", .str "e", .arr #[], .arr #[.num 1, .str "x", .arr #[.null]],
   Json.mkObj [], Json.mkObj [("b", .num 1), ("a", .arr #[.bool false]), ("é", .str "\x00")],
   Json.mkObj [("k", .num ⟨1, 2⟩)]]
 

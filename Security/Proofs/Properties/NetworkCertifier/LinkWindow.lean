@@ -13,7 +13,7 @@ Its two lemmas:
 
 * honest: `linkWindowAcceptMeans_honest`, the converse, that a link-window proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
-  verdict's digest computes when the case's strings are ASCII, `AsciiStrings`, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_warden`, that on a warden
+  verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_warden`, that on a warden
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof service's:
@@ -202,16 +202,10 @@ theorem synced_of {c : Case} (h : WindowSynced c) : synced c = true := by
     simp only [synced, hk, hs, Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq]
     exact ⟨hd, r, hr, he⟩
 
-/-! ## The verdict's digest computes on ASCII strings
+/-! ## The verdict's digest always computes
 
-`Flock.canon` refuses a number that isn't an integer and a string or key outside ASCII without DEL, and the verdict's
-digest body holds Booleans, naturals, its own keys and the case's strings. -/
-
-/-- The case's strings the verdict's digest body holds (its registration, its sessions and an advised link's advice)
-are ASCII without DEL. -/
-def AsciiStrings (c : Case) : Prop :=
-  Flock.ascii c.registration = true ∧ (∀ s ∈ c.sessions, Flock.ascii s = true) ∧
-    ∀ v a, c.kind = .advised v (some a) → Flock.ascii a = true
+`Flock.canon` refuses only a number that isn't an integer, and the verdict's digest body holds strings, Booleans and
+naturals. -/
 
 theorem listMapM_ok {α β ε : Type} {f : α → Except ε β} :
     ∀ l : List α, (∀ x ∈ l, ∃ y, f x = .ok y) → ∃ ys, l.mapM f = .ok ys
@@ -228,8 +222,8 @@ theorem arrayMapM_ok {α β ε : Type} {f : α → Except ε β} {a : Array α} 
   obtain ⟨ys, hys⟩ := listMapM_ok a.toList fun x hx => h x (Array.mem_toList_iff.1 hx)
   exact ⟨ys.toArray, by rw [Array.mapM_eq_mapM_toList, hys]; rfl⟩
 
-theorem canon_str {s : String} (h : Flock.ascii s = true) : ∃ t, Flock.canon (.str s) = .ok t := by
-  rw [Flock.canon, if_pos h]
+theorem canon_str (s : String) : ∃ t, Flock.canon (.str s) = .ok t := by
+  simp only [Flock.canon]
   exact ⟨_, rfl⟩
 
 theorem canon_bool (b : Bool) : ∃ t, Flock.canon (.bool b) = .ok t := by
@@ -247,33 +241,32 @@ theorem canon_arr {a : Array Json} (h : ∀ x ∈ a, ∃ t, Flock.canon x = .ok 
   rw [hps]
   exact ⟨_, rfl⟩
 
-/-- Every pair of an object `Json.mkObj` builds is a pair of its list. -/
+/-- Every pair of an object `Json.mkObj` builds holds a value of its list. -/
 theorem mkObj_value {l : List (String × Json)} {k : String} {v : Json}
-    (h : (k, v) ∈ (Std.TreeMap.Raw.ofList l compare).toArray) : (k, v) ∈ l := by
+    (h : (k, v) ∈ (Std.TreeMap.Raw.ofList l compare).toArray) : ∃ k', (k', v) ∈ l := by
   rw [Std.TreeMap.Raw.mem_toArray_iff_getElem?_eq_some Std.TreeMap.Raw.WF.ofList,
     Std.TreeMap.Raw.ofList_eq_insertMany_empty, Std.TreeMap.Raw.getElem?_insertMany_list Std.TreeMap.Raw.WF.emptyc,
     Std.TreeMap.Raw.getElem?_emptyc, Option.or_none, List.findSomeRev?_eq_findSome?_reverse] at h
   obtain ⟨⟨k', v'⟩, hm, he⟩ := List.exists_of_findSome?_eq_some h
   by_cases hc : compare k' k = .eq
   · simp only [hc, ↓reduceIte, Option.some.injEq] at he
-    rw [← Std.LawfulEqCmp.compare_eq_iff_eq.1 hc]
-    exact he ▸ List.mem_reverse.1 hm
+    exact ⟨k', he ▸ List.mem_reverse.1 hm⟩
   · simp [hc] at he
 
-theorem canon_mkObj {l : List (String × Json)}
-    (h : ∀ p ∈ l, Flock.ascii p.1 = true ∧ ∃ t, Flock.canon p.2 = .ok t) : ∃ t, Flock.canon (Json.mkObj l) = .ok t := by
+theorem canon_mkObj {l : List (String × Json)} (h : ∀ p ∈ l, ∃ t, Flock.canon p.2 = .ok t) :
+    ∃ t, Flock.canon (Json.mkObj l) = .ok t := by
   obtain ⟨ps, hps⟩ := arrayMapM_ok
     (f := fun p : {x // x ∈ (Std.TreeMap.Raw.ofList l compare).toArray} =>
-      if Flock.ascii p.1.1 then (do pure (p.1.1, ← Flock.canon p.1.2) : Flock.V (String × String))
-      else throw Flock.notAscii)
+      (do pure (p.1.1, ← Flock.canon p.1.2) : Flock.V (String × String)))
     (a := (Std.TreeMap.Raw.ofList l compare).toArray.attach) fun ⟨⟨k, v⟩, hp⟩ _ => by
-      obtain ⟨hk, t, ht⟩ := h _ (mkObj_value hp)
-      exact ⟨(k, t), by rw [if_pos hk, ht]; rfl⟩
+      obtain ⟨k', hk'⟩ := mkObj_value hp
+      obtain ⟨t, ht⟩ := h _ hk'
+      exact ⟨(k, t), by simp only [ht]; rfl⟩
   simp only [Json.mkObj, Flock.canon]
   rw [hps]
   exact ⟨_, rfl⟩
 
-theorem acceptedOutputs_canon {c : Case} (hA : AsciiStrings c) : ∃ t, Flock.canon (acceptedOutputs c) = .ok t := by
+theorem acceptedOutputs_canon (c : Case) : ∃ t, Flock.canon (acceptedOutputs c) = .ok t := by
   unfold acceptedOutputs
   apply canon_mkObj
   intro p hp
@@ -281,19 +274,18 @@ theorem acceptedOutputs_canon {c : Case} (hA : AsciiStrings c) : ∃ t, Flock.ca
   | advised view advice =>
     simp only [hk, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with (rfl | rfl) | rfl
-    · exact ⟨by decide, canon_nat 1⟩
-    · exact ⟨by decide, canon_nat 1⟩
-    · refine ⟨(by dsimp only; decide), ?_⟩
-      cases advice with
-      | some a => exact canon_str (hA.2.2 view a hk)
+    · exact canon_nat 1
+    · exact canon_nat 1
+    · cases advice with
+      | some a => exact canon_str a
       | none => simp only [Flock.canon]; exact ⟨_, rfl⟩
   | plain | served | warden =>
     simp only [hk, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl
-    · exact ⟨by decide, canon_nat 1⟩
-    · exact ⟨by decide, canon_nat 1⟩
+    · exact canon_nat 1
+    · exact canon_nat 1
 
-theorem verdictDigest_ok {c : Case} (hA : AsciiStrings c) : ∃ d, verdictDigest c true (acceptedOutputs c) = .ok d := by
+theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true (acceptedOutputs c) = .ok d := by
   obtain ⟨t, ht⟩ : ∃ t, Flock.canon (Json.mkObj [("format", .str verdictFormat), ("registration", .str c.registration),
       ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool true), ("public", acceptedOutputs c)]) =
       .ok t := by
@@ -301,26 +293,24 @@ theorem verdictDigest_ok {c : Case} (hA : AsciiStrings c) : ∃ d, verdictDigest
     intro p hp
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl | rfl | rfl | rfl
-    · exact ⟨by decide, canon_str (by decide)⟩
-    · exact ⟨(by dsimp only; decide), canon_str hA.1⟩
-    · refine ⟨(by dsimp only; decide), canon_arr fun x hx => ?_⟩
-      obtain ⟨s, hs, rfl⟩ := Array.mem_map.1 hx
-      exact canon_str (hA.2.1 s hs)
-    · exact ⟨by decide, canon_bool true⟩
-    · exact ⟨(by dsimp only; decide), acceptedOutputs_canon hA⟩
+    · exact canon_str _
+    · exact canon_str _
+    · exact canon_arr fun x hx => by
+        obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
+        exact canon_str s
+    · exact canon_bool true
+    · exact acceptedOutputs_canon c
   unfold verdictDigest
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
 /-- **A link-window proved, opened, certified and synced is accepted** (the honest lemma of `LinkWindowAcceptMeans`,
-its converse), when its strings are ASCII (`AsciiStrings`): the verdict accepts it, with the outputs and digest the
-property states. -/
+its converse): the verdict accepts it, with the outputs and digest the property states. -/
 theorem linkWindowAcceptMeans_honest :
-    ∀ c : Case, AsciiStrings c → WindowAccepted c →
-      (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by
-  intro c hA ⟨hp, ho, hc, hs⟩
+    ∀ c : Case, WindowAccepted c → (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by
+  intro c ⟨hp, ho, hc, hs⟩
   obtain ⟨row, hr, hrow⟩ := opened_of ho
-  obtain ⟨d, hd⟩ := verdictDigest_ok hA
+  obtain ⟨d, hd⟩ := verdictDigest_ok c
   have hout : outputsOf c true 3 = acceptedOutputs c := rfl
   have hv : verdict c = .ok ⟨true, acceptedOutputs c, d, true, some 3, true, true⟩ := by
     unfold verdict
@@ -330,18 +320,18 @@ theorem linkWindowAcceptMeans_honest :
 
 /-- **An honest warden link-window is accepted** (the honest lemma of `LinkWindowAcceptMeans` on a warden link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
-parameters `Lms.Params.make` admits, the link's), with ASCII strings, whatever syncs it declares. -/
+parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
 theorem linkWindowAcceptMeans_honest_warden :
     ∀ (c : Case) (w : ByteArray) (N W H : Nat) (toy : Bool) (I seed : ByteArray) (k : Lms.PrivateKey),
       c.kind = .warden w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
-      AsciiStrings c → CertifierSigned c k → WindowProved c → WindowOpened c →
+      CertifierSigned c k → WindowProved c → WindowOpened c →
       (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by
-  intro c w N W H toy I seed k hk hmake hkey hA ⟨hpub, hsize, hall⟩ hp ho
+  intro c w N W H toy I seed k hk hmake hkey ⟨hpub, hsize, hall⟩ hp ho
   obtain ⟨-, hI, -, hIs, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hkey
   have hid : c.key.extract 0 16 = k.I := by
     rw [hpub, Lms.PrivateKey.publicKey]
     exact ByteArray.extract_append_eq_left (hI ▸ hIs).symm
-  refine linkWindowAcceptMeans_honest c hA ⟨hp, ho, ⟨hsize, fun d hd => ?_⟩, by simp only [WindowSynced, hk]⟩
+  refine linkWindowAcceptMeans_honest c ⟨hp, ho, ⟨hsize, fun d hd => ?_⟩, by simp only [WindowSynced, hk]⟩
   obtain ⟨x, m, q, sig, hx, hl, hdir, hw, hxk, hm, hsig, hsx⟩ := hall d hd
   obtain ⟨hv, hdec⟩ := Properties.CertifierDevice.Proofs.Lms.lmsCorrect N W H toy c.lms I seed k q m sig hmake hkey hsig
   exact ⟨x, hx, hl, hdir, hw, hxk.trans hid.symm, m, sig, hm, hsx ▸ hdec, hpub ▸ hv⟩

@@ -5,9 +5,9 @@ import Std.Data.String.ToNat
 /-!
 # The coins' binding has one canonical form per layout
 
-`liveDomain` hashes `canon` of the binding `{epoch, families, scheme}`. What `canon` prints is what `canonLine` prints
-(`canonLine_of_canon`: `canon` only refuses more), and that is `{"epoch":E,"families":F,"scheme":S}` (`canon_binding`):
-`canonLine` sorts the three keys, and they are already in order (`qsort3`). That string parses back uniquely (`binding_inj`): a decimal numeral ends at the first non-digit
+`liveDomain` hashes the identity bytes (`Flock.canonUtf8`) of the binding `{epoch, families, scheme}`. Its form is
+`{"epoch":E,"families":F,"scheme":S}` (`canon_binding`): `canon` sorts the three keys, and they are already in order
+(`qsort3`). That string parses back uniquely (`binding_inj`): a decimal numeral ends at the first non-digit
 (`digits_split`), an escaped string at its first unescaped quote, each escape decoding to one character (`unesc_esc`,
 `canonStr_split`), and the families' list item by item, each a string and a numeral (`fam_split`).
 -/
@@ -74,114 +74,39 @@ theorem binding_sort {α : Type} (a b c : α) :
     (by exact (by decide : decide ("epoch" < "families") = true))
     (by exact (by decide : decide ("scheme" < "families") = false))
 
-/-! ## What `canon` prints is `canonLine`'s -/
+/-! ## `canon`, unfolded -/
 
-private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x with
-  | error e => cases h
-  | ok a => exact ⟨a, rfl, h⟩
-
-private theorem mapM_ok_of {α β ε : Type} {f g : α → Except ε β} :
-    ∀ {l : List α} {r : List β}, (∀ x ∈ l, ∀ y, f x = .ok y → g x = .ok y) → l.mapM f = .ok r → l.mapM g = .ok r
-  | [], _, _, h => h
-  | a :: as, _, hfg, h => by
-    rw [List.mapM_cons] at h ⊢
-    obtain ⟨b, hb, h⟩ := bind_ok h
-    obtain ⟨bs, hbs, h⟩ := bind_ok h
-    rw [hfg a (List.mem_cons_self ..) b hb, mapM_ok_of (fun x hx => hfg x (List.mem_cons_of_mem _ hx)) hbs]
-    exact h
-
-private theorem array_mapM_ok_of {α β ε : Type} {f g : α → Except ε β} {a : Array α} {r : Array β}
-    (hfg : ∀ x ∈ a, ∀ y, f x = .ok y → g x = .ok y) (h : a.mapM f = .ok r) : a.mapM g = .ok r := by
-  rw [Array.mapM_eq_mapM_toList] at h ⊢
-  cases hl : a.toList.mapM f with
-  | error e => rw [hl] at h; cases h
-  | ok l =>
-    rw [mapM_ok_of (fun x hx => hfg x (Array.mem_toList_iff.1 hx)) hl]
-    rw [hl] at h
-    exact h
-
-private theorem canonLine_of_canon_lt :
-    ∀ (k : Nat) (j : Json) {s : String}, sizeOf j < k → Flock.canon j = .ok s → Flock.canonLine j = .ok s
-  | 0, _, _, h, _ => absurd h (Nat.not_lt_zero _)
-  | k + 1, j, _, hk, h => by
-    cases j with
-    | null => rw [Flock.canon] at h; rw [Flock.canonLine]; exact h
-    | bool b => rw [Flock.canon] at h; rw [Flock.canonLine]; exact h
-    | num n => rw [Flock.canon] at h; rw [Flock.canonLine]; exact h
-    | str t =>
-      rw [Flock.canon] at h
-      rw [Flock.canonLine]
-      by_cases ht : Flock.ascii t = true
-      · rw [if_pos ht] at h; exact h
-      · rw [if_neg ht] at h; cases h
-    | arr a =>
-      rw [Flock.canon] at h
-      rw [Flock.canonLine]
-      obtain ⟨parts, hp, h⟩ := bind_ok h
-      have hp' := array_mapM_ok_of (g := fun x : {x // x ∈ a} => Flock.canonLine x.1) (fun x _ y hy => by
-        have hlt := Array.sizeOf_lt_of_mem x.2
-        simp only [Json.arr.sizeOf_spec] at hk
-        exact canonLine_of_canon_lt k x.1 (by omega) hy) hp
-      rw [hp']
-      exact h
-    | obj m =>
-      rw [Flock.canon] at h
-      rw [Flock.canonLine]
-      obtain ⟨vals, hv, h⟩ := bind_ok h
-      have hv' := array_mapM_ok_of
-        (g := fun p : {p // p ∈ m.toArray} => (do pure (p.1.1, ← Flock.canonLine p.1.2) : Flock.V (String × String)))
-        (fun p _ y hy => by
-          have hlt := Flock.sizeOf_lt_of_mem_toArray p.2
-          try dsimp only at hy
-          by_cases ht : Flock.ascii p.1.1 = true
-          · rw [if_pos ht] at hy
-            obtain ⟨c, hc, hy⟩ := bind_ok hy
-            show (Flock.canonLine p.1.2 >>= fun x => pure (p.1.1, x)) = .ok y
-            rw [canonLine_of_canon_lt k p.1.2 (by omega) hc]
-            exact hy
-          · rw [if_neg ht] at hy; cases hy) hv
-      rw [hv']
-      exact h
-
-/-- **What `canon` prints is `canonLine`'s**: `canon` is `canonLine` with two more refusals. -/
-theorem canonLine_of_canon {j : Json} {s : String} (h : Flock.canon j = .ok s) : Flock.canonLine j = .ok s :=
-  canonLine_of_canon_lt (sizeOf j + 1) j (Nat.lt_succ_self _) h
-
-/-! ## `canonLine`, unfolded -/
-
-theorem canon_arr (a : Array Json) : Flock.canonLine (.arr a) =
-    (do let parts ← a.mapM Flock.canonLine; pure ("[" ++ ",".intercalate parts.toList ++ "]")) := by
-  rw [Flock.canonLine]
+theorem canon_arr (a : Array Json) : Flock.canonUtf8 (.arr a) =
+    (do let parts ← a.mapM Flock.canonUtf8; pure ("[" ++ ",".intercalate parts.toList ++ "]")) := by
+  rw [Flock.canonUtf8]
   simp only [Array.mapM_subtype, Array.unattach_attach]
 
-theorem canon_obj (kvs : Std.TreeMap.Raw String Json) : Flock.canonLine (.obj kvs) =
+theorem canon_obj (kvs : Std.TreeMap.Raw String Json) : Flock.canonUtf8 (.obj kvs) =
     (do
-      let vals ← kvs.toArray.mapM fun p => do pure (p.1, ← Flock.canonLine p.2)
+      let vals ← kvs.toArray.mapM fun p => do pure (p.1, ← Flock.canonUtf8 p.2)
       let items := vals.qsort (fun a b => a.1 < b.1)
-      pure ("{" ++ ",".intercalate (items.toList.map fun kv => Flock.canonStr kv.1 ++ ":" ++ kv.2) ++ "}")) := by
-  rw [Flock.canonLine]
+      pure ("{" ++ ",".intercalate (items.toList.map fun kv => Flock.canonStrUtf8 kv.1 ++ ":" ++ kv.2) ++ "}")) := by
+  rw [Flock.canonUtf8]
   simp only [Array.mapM_subtype, Array.unattach_attach]
 
-theorem canon_str (s : String) : Flock.canonLine (.str s) = pure (Flock.canonStr s) := by
-  rw [Flock.canonLine]
+theorem canon_str (s : String) : Flock.canonUtf8 (.str s) = pure (Flock.canonStrUtf8 s) := by
+  rw [Flock.canonUtf8]
 
-theorem canon_nat (n : Nat) : Flock.canonLine (Lean.toJson n) = pure (toString n) := by
-  show Flock.canonLine (.num ⟨n, 0⟩) = _
-  rw [Flock.canonLine]; rfl
+theorem canon_nat (n : Nat) : Flock.canonUtf8 (Lean.toJson n) = pure (toString n) := by
+  show Flock.canonUtf8 (.num ⟨n, 0⟩) = _
+  rw [Flock.canonUtf8]; rfl
 
 /-- A family's canonical form: `[label,count]`. -/
-def itemStr (p : String × Nat) : String := "[" ++ ",".intercalate [Flock.canonStr p.1, toString p.2] ++ "]"
+def itemStr (p : String × Nat) : String := "[" ++ ",".intercalate [Flock.canonStrUtf8 p.1, toString p.2] ++ "]"
 
 /-- The families' canonical form: their items, comma-separated, in brackets. -/
 def famStr (fs : List (String × Nat)) : String := "[" ++ ",".intercalate (fs.map itemStr) ++ "]"
 
-theorem canon_families (fs : List (String × Nat)) : Flock.canonLine (familiesJson fs) = pure (famStr fs) := by
+theorem canon_families (fs : List (String × Nat)) : Flock.canonUtf8 (familiesJson fs) = pure (famStr fs) := by
   unfold familiesJson
   rw [canon_arr, List.map_toArray, List.mapM_toArray]
   suffices h : ∀ gs : List (String × Nat), (gs.map fun (l, n) => Json.arr #[Json.str l, Lean.toJson n]).mapM
-      Flock.canonLine = pure (gs.map itemStr) by
+      Flock.canonUtf8 = pure (gs.map itemStr) by
     rw [h]; simp [famStr]
   intro gs
   induction gs with
@@ -197,12 +122,12 @@ def binding (e : Nat) (fs : List (String × Nat)) (s : String) : Json :=
 
 /-- The binding's canonical form. -/
 def bindStr (e : Nat) (fs : List (String × Nat)) (s : String) : String :=
-  "{" ++ ",".intercalate [Flock.canonStr "epoch" ++ ":" ++ toString e, Flock.canonStr "families" ++ ":" ++ famStr fs,
-    Flock.canonStr "scheme" ++ ":" ++ Flock.canonStr s] ++ "}"
+  "{" ++ ",".intercalate [Flock.canonStrUtf8 "epoch" ++ ":" ++ toString e, Flock.canonStrUtf8 "families" ++ ":" ++ famStr fs,
+    Flock.canonStrUtf8 "scheme" ++ ":" ++ Flock.canonStrUtf8 s] ++ "}"
 
 theorem canon_binding (e : Nat) (fs : List (String × Nat)) (s : String) :
-    Flock.canonLine (binding e fs s) = .ok (bindStr e fs s) := by
-  show Flock.canonLine (Json.obj _) = _
+    Flock.canonUtf8 (binding e fs s) = .ok (bindStr e fs s) := by
+  show Flock.canonUtf8 (Json.obj _) = _
   rw [canon_obj]
   have ht : (Std.TreeMap.Raw.ofList [("epoch", Lean.toJson e), ("families", familiesJson fs), ("scheme", Json.str s)] :
       Std.TreeMap.Raw String Json).toArray =
@@ -215,7 +140,7 @@ theorem canon_binding (e : Nat) (fs : List (String × Nat)) (s : String) :
 
 /-! ## Escaped strings -/
 
-/-- What `canonStr` writes for one character. -/
+/-- What `canonStrUtf8` writes for one character. -/
 def esc (c : Char) : List Char :=
   match c with
   | '"' => ['\\', '"']
@@ -233,8 +158,8 @@ theorem foldl_esc (f : String → Char → String) (hf : ∀ b a, (f b a).toList
   | nil => intro out; simp
   | cons c cs ih => intro out; rw [List.foldl_cons, ih, hf, List.flatMap_cons, List.append_assoc]
 
-theorem canonStr_toList (s : String) : (Flock.canonStr s).toList = '"' :: s.toList.flatMap esc ++ ['"'] := by
-  unfold Flock.canonStr
+theorem canonStr_toList (s : String) : (Flock.canonStrUtf8 s).toList = '"' :: s.toList.flatMap esc ++ ['"'] := by
+  unfold Flock.canonStrUtf8
   simp only [Id.run, List.forIn_pure_yield_eq_foldl]
   show (List.foldl _ "\"" s.toList ++ "\"").toList = _
   rw [String.toList_append, foldl_esc]
@@ -331,7 +256,7 @@ theorem escs_inj : ∀ (cs cs' r r' : List Char), cs.flatMap esc ++ '"' :: r = c
 
 /-- An escaped string ends where it ends: what follows it doesn't change which string it is. -/
 theorem canonStr_split {s s' : String} {r r' : List Char}
-    (h : (Flock.canonStr s).toList ++ r = (Flock.canonStr s').toList ++ r') : s = s' ∧ r = r' := by
+    (h : (Flock.canonStrUtf8 s).toList ++ r = (Flock.canonStrUtf8 s').toList ++ r') : s = s' ∧ r = r' := by
   simp only [canonStr_toList, List.cons_append, List.append_assoc, List.cons.injEq, true_and] at h
   obtain ⟨h1, h2⟩ := escs_inj _ _ _ _ h
   exact ⟨String.toList_inj.mp h1, h2⟩
@@ -381,7 +306,7 @@ theorem nat_split {n n' : Nat} {c c' : Char} {r r' : List Char} (hc : c.isDigit 
 /-! ## The families -/
 
 theorem item_eq (p : String × Nat) (r : List Char) :
-    (itemStr p).toList ++ r = '[' :: ((Flock.canonStr p.1).toList ++ ',' :: ((toString p.2).toList ++ ']' :: r)) := by
+    (itemStr p).toList ++ r = '[' :: ((Flock.canonStrUtf8 p.1).toList ++ ',' :: ((toString p.2).toList ++ ']' :: r)) := by
   simp [itemStr]
 
 theorem item_split {p p' : String × Nat} {r r' : List Char} (h : (itemStr p).toList ++ r = (itemStr p').toList ++ r') :

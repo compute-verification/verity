@@ -180,7 +180,7 @@ def cesc (c : Char) : String :=
   | '\r' => "\\r"
   | '\t' => "\\t"
   | c => if c.toNat == 8 then "\\b" else if c.toNat == 12 then "\\f"
-         else if c.toNat < 0x20 then "\\u" ++ Flock.hex4 c.toNat else String.singleton c
+         else if c.toNat < 0x20 || 0x7f ≤ c.toNat then Flock.escU c.toNat else String.singleton c
 
 theorem foldl_esc (e : Char → List Char) (f : String → Char → String)
     (hf : ∀ b c, (f b c).toList = b.toList ++ e c) :
@@ -201,7 +201,7 @@ theorem canonStr_toList (s : String) :
     all_goals first
       | (simp_all; done)
       | (by_cases h8 : c.toNat = 8 <;> by_cases h12 : c.toNat = 12 <;> by_cases h32 : c.toNat < 32 <;>
-           simp [h8, h12, h32])
+           by_cases h7f : 127 ≤ c.toNat <;> simp [h8, h12, h32, h7f])
 
 theorem hexChar_canon (x : Nat) (hx : x < 16) (cs : List Char) (o : Nat) :
     hexChar ((if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)) :: cs) o = .ok cs (o + 1) x := by
@@ -209,6 +209,116 @@ theorem hexChar_canon (x : Nat) (hx : x < 16) (cs : List Char) (o : Nat) :
   | 0, _ | 1, _ | 2, _ | 3, _ | 4, _ | 5, _ | 6, _ | 7, _ | 8, _ | 9, _ | 10, _ | 11, _ | 12, _ | 13, _ | 14, _
   | 15, _ => rfl
   | _ + 16, h => exact absurd h (by omega)
+
+theorem hexN_hex4 (n : Nat) (hn : n < 0x10000) (cs : List Char) (o : Nat) :
+    hexN 4 0 ((Flock.hex4 n).toList ++ cs) o = .ok cs (o + 4) n := by
+  unfold Flock.hex4
+  simp only [String.toList_ofList, List.cons_append, List.nil_append]
+  have hx : ∀ x, x < 16 → ∀ cs o, hexChar ((if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)) :: cs) o =
+    .ok cs (o + 1) x := hexChar_canon
+  simp only [hexN, Nat.shiftRight_eq_div_pow,
+    hx _ (Nat.mod_lt _ (by omega) : n / 2 ^ (4 * 3) % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : n / 2 ^ (4 * 2) % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : n / 2 ^ (4 * 1) % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : n / 2 ^ (4 * 0) % 16 < 16)]
+  simp only [Nat.reducePow, Nat.reduceMul]
+  have hv : 16 * (16 * (16 * (16 * 0 + n / 4096 % 16) + n / 256 % 16) + n / 16 % 16) + n / 1 % 16 = n := by omega
+  rw [hv]
+
+theorem hex4_low (n : Nat) (h1 : 0xDC00 ≤ n) (h2 : n < 0xE000) (cs : List Char) (o : Nat) :
+    ∃ t, (Flock.hex4 n).toList = 'd' :: t ∧ hexN 3 0 (t ++ cs) o = .ok cs (o + 3) (n - 0xD000) := by
+  unfold Flock.hex4
+  simp only [String.toList_ofList, Nat.shiftRight_eq_div_pow, Nat.reducePow, Nat.reduceMul]
+  have hd : n / 4096 % 16 = 13 := by omega
+  rw [hd]
+  have hdc : (if 13 < 10 then Char.ofNat (48 + 13) else Char.ofNat (87 + 13)) = 'd' := by decide
+  rw [hdc]
+  refine ⟨_, rfl, ?_⟩
+  have hx : ∀ x, x < 16 → ∀ cs o, hexChar ((if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)) :: cs) o =
+    .ok cs (o + 1) x := hexChar_canon
+  simp only [List.cons_append, List.nil_append, hexN,
+    hx _ (Nat.mod_lt _ (by omega) : n / 256 % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : n / 16 % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : n / 1 % 16 < 16)]
+  have hv : 16 * (16 * (16 * 0 + n / 256 % 16) + n / 16 % 16) + n / 1 % 16 = n - 0xD000 := by omega
+  rw [hv]
+
+theorem str_esc (k : Nat) (acc : String) (cs rest : List Char) (o o' : Nat) (ch : Char)
+    (h : escapedChar cs (o + 1) = .ok rest o' ch) : str (k + 1) acc ('\\' :: cs) o = str k (acc.push ch) rest o' := by
+  rw [str, if_neg (by decide), if_pos rfl, h]
+
+theorem escapedChar_high (cs rest : List Char) (o o' hi : Nat) (h : hexN 4 0 cs (o + 1) = .ok rest o' hi)
+    (h1 : 0xD800 ≤ hi) (h2 : hi < 0xDC00) :
+    escapedChar ('u' :: cs) o = match finishPair hi rest o' with
+      | some (cs', o', c) => .ok cs' o' c
+      | none => .ok rest o' '\ufffd' := by
+  simp only [escapedChar, h, show ¬ hi < 0xD800 by omega, show hi < 0xE000 by omega, h2, ↓reduceIte]
+
+theorem finishPair_low (cs rest : List Char) (o o' hi v : Nat) (h : hexN 3 0 cs (o + 3) = .ok rest o' v)
+    (hv : 0xC00 ≤ v) (hc : (hi % 0x400 * 0x400 + v % 0x400 + 0x10000).isValidChar) :
+    finishPair hi ('\\' :: 'u' :: 'd' :: cs) o =
+      some (rest, o', Char.ofNat (hi % 0x400 * 0x400 + v % 0x400 + 0x10000)) := by
+  simp only [finishPair, true_or, ↓reduceIte, h, show ¬ v < 0xC00 by omega, hc]
+
+theorem escU_pair (c : Char) (hge : 0x10000 ≤ c.toNat) :
+    EscC c ("\\u" ++ Flock.hex4 (0xD800 + (c.toNat - 0x10000) / 0x400) ++ "\\u" ++
+      Flock.hex4 (0xDC00 + (c.toNat - 0x10000) % 0x400)).toList := by
+  have hcv : c.toNat < 0xd800 ∨ (0xdfff < c.toNat ∧ c.toNat < 0x110000) := c.valid
+  have hvalid : (c.toNat).isValidChar := c.valid
+  have hn : c.toNat = 0x10000 + (c.toNat - 0x10000) / 0x400 * 0x400 + (c.toNat - 0x10000) % 0x400 := by omega
+  generalize hq : (c.toNat - 0x10000) / 0x400 = q at hn ⊢
+  generalize hr : (c.toNat - 0x10000) % 0x400 = r at hn ⊢
+  have hq' : q < 0x400 := by omega
+  have hr' : r < 0x400 := by omega
+  obtain ⟨t, ht, -⟩ := hex4_low (0xDC00 + r) (by omega) (by omega) [] 0
+  have e : "\\u".toList = ['\\', 'u'] := rfl
+  rw [String.toList_append, String.toList_append, String.toList_append, e, ht]
+  simp only [List.append_assoc]
+  show EscC c ('\\' :: 'u' :: ((Flock.hex4 (55296 + q)).toList ++ ('\\' :: 'u' :: 'd' :: t)))
+  refine ⟨List.cons_ne_nil _ _, fun k acc tail o => ⟨o + 12, ?_⟩⟩
+  rw [List.cons_append, List.cons_append, List.append_assoc, List.cons_append, List.cons_append, List.cons_append]
+  obtain ⟨t', ht', hlo⟩ := hex4_low (0xDC00 + r) (by omega) (by omega) tail (o + 1 + 1 + 4 + 3)
+  rw [ht] at ht'
+  cases ht'
+  have hcv' : (0xD800 + q) % 0x400 * 0x400 + (0xDC00 + r - 0xD000) % 0x400 + 0x10000 = c.toNat := by omega
+  have hfp := finishPair_low (t ++ tail) tail (o + 1 + 1 + 4) (o + 1 + 1 + 4 + 3 + 3) (0xD800 + q) _ hlo
+    (by omega) (by rw [hcv']; exact hvalid)
+  rw [hcv', Char.ofNat_toNat] at hfp
+  have hhi := hexN_hex4 (0xD800 + q) (by omega) ('\\' :: 'u' :: 'd' :: (t ++ tail)) (o + 1 + 1)
+  rw [str_esc k acc _ tail o (o + 1 + 1 + 4 + 3 + 3) c]
+  rw [escapedChar_high _ _ _ _ _ hhi (by omega) (by omega), hfp]
+
+theorem escU_bmp (c : Char) (hlt : c.toNat < 0x10000) : EscC c ("\\u" ++ Flock.hex4 c.toNat).toList := by
+  have hcv : c.toNat < 0xd800 ∨ (0xdfff < c.toNat ∧ c.toNat < 0x110000) := c.valid
+  have e : "\\u".toList = ['\\', 'u'] := rfl
+  refine ⟨by rw [String.toList_append, e]; exact List.cons_ne_nil _ _, fun k acc tail o => ⟨o + 6, ?_⟩⟩
+  unfold Flock.hex4
+  simp only [String.toList_append, String.toList_ofList]
+  rw [e]
+  simp only [List.cons_append, List.nil_append]
+  have hx : ∀ x, x < 16 → ∀ cs o, hexChar ((if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)) :: cs) o =
+    .ok cs (o + 1) x := hexChar_canon
+  rw [str]
+  simp only [escapedChar, hexN, Nat.shiftRight_eq_div_pow,
+    hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 3) % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 2) % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 1) % 16 < 16),
+    hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 0) % 16 < 16)]
+  simp only [Nat.reducePow, Nat.reduceMul]
+  have hv : 16 * (16 * (16 * (16 * 0 + c.toNat / 4096 % 16) + c.toNat / 256 % 16) + c.toNat / 16 % 16) +
+      c.toNat / 1 % 16 = c.toNat := by omega
+  rw [hv]
+  rcases hcv with hs | hs
+  · simp only [show c.toNat < 55296 by omega, ↓reduceIte, Char.ofNat_toNat]
+    rw [if_neg (by decide)]
+  · simp only [show ¬ c.toNat < 55296 by omega, show ¬ c.toNat < 57344 by omega, ↓reduceIte, Char.ofNat_toNat]
+    rw [if_neg (by decide)]
+
+theorem escU_esc (c : Char) : EscC c (Flock.escU c.toNat).toList := by
+  unfold Flock.escU
+  split
+  · exact escU_bmp c (by assumption)
+  · exact escU_pair c (by omega)
 
 theorem cesc_esc (c : Char) : EscC c (cesc c).toList := by
   unfold cesc
@@ -226,39 +336,28 @@ theorem cesc_esc (c : Char) : EscC c (cesc c).toList := by
   · have : c = '\x0c' := by rw [← Char.ofNat_toNat c, h12]
     subst this
     exact ⟨by simp, fun k acc tail o => ⟨_, rfl⟩⟩
-  by_cases h32 : c.toNat < 32
-  · simp only [h8, h12, h32, beq_iff_eq, ↓reduceIte]
-    refine ⟨by simp, fun k acc tail o => ⟨o + 6, ?_⟩⟩
-    unfold Flock.hex4
-    simp only [String.toList_append, String.toList_ofList]
-    have e : "\\u".toList = ['\\', 'u'] := rfl
-    rw [e]
-    simp only [List.cons_append, List.nil_append]
-    have hx : ∀ x, x < 16 → ∀ cs o, hexChar ((if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)) :: cs) o =
-      .ok cs (o + 1) x := hexChar_canon
-    rw [str]
-    simp only [escapedChar, hexN, Nat.shiftRight_eq_div_pow,
-      hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 3) % 16 < 16),
-      hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 2) % 16 < 16),
-      hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 1) % 16 < 16),
-      hx _ (Nat.mod_lt _ (by omega) : c.toNat / 2 ^ (4 * 0) % 16 < 16)]
-    simp only [Nat.reducePow, Nat.reduceMul]
-    have hv : 16 * (16 * (16 * (16 * 0 + c.toNat / 4096 % 16) + c.toNat / 256 % 16) + c.toNat / 16 % 16) +
-        c.toNat / 1 % 16 = c.toNat := by omega
-    rw [hv]
-    simp only [show c.toNat < 55296 by omega, ↓reduceIte, Char.ofNat_toNat]
-    rw [if_neg (by decide)]
-  · have h1' : c ≠ '"' := h1
+  by_cases hu : c.toNat < 0x20 ∨ 0x7f ≤ c.toNat
+  · have hb : (c.toNat < 0x20 || 0x7f ≤ c.toNat) = true := by
+      simp only [Bool.or_eq_true, decide_eq_true_eq]; exact hu
+    simp only [h8, h12, beq_iff_eq, ↓reduceIte, hb]
+    exact escU_esc c
+  · have hb : (c.toNat < 0x20 || 0x7f ≤ c.toNat) = false := by
+      simp only [Bool.or_eq_false_iff, decide_eq_false_iff_not]
+      exact ⟨fun h => hu (Or.inl h), fun h => hu (Or.inr h)⟩
+    have h1' : c ≠ '"' := h1
     have h2' : c ≠ '\\' := h2
     have hv : 0x0020 ≤ c.val ∧ c.val ≤ 0x10ffff := by
       have e : c.toNat = c.val.toNat := rfl
-      rw [e] at h32 hcv
+      rw [e] at hu hcv
       exact ⟨UInt32.le_iff_toNat_le.2 (by simp; omega), UInt32.le_iff_toNat_le.2 (by simp; omega)⟩
-    simp only [h8, h12, h32, beq_iff_eq, ↓reduceIte]
+    simp only [h8, h12, beq_iff_eq, ↓reduceIte, hb, Bool.false_eq_true]
     refine ⟨by simp, fun k acc tail o => ⟨o + c.utf8Size, ?_⟩⟩
     simp only [String.toList_singleton, List.singleton_append]
     rw [str]
     simp only [h1', h2', hv, ↓reduceIte, and_self]
+
+#print axioms cesc_esc
+#print axioms canonStr_toList
 
 /-- What can follow a value: nothing, or the comma or bracket after it. -/
 def Stop (rest : List Char) : Prop := rest = [] ∨ ∃ c cs, rest = c :: cs ∧ (c = ',' ∨ c = ']' ∨ c = '}')
@@ -932,12 +1031,9 @@ theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j
   | bool b => intro s h; rw [Flock.canon] at h; cases h; cases b <;> first | exact .tru | exact .fls
   | num m => intro s h; rw [Flock.canon] at h; cases h; exact .num m
   | str s =>
-    intro s' h; rw [Flock.canon] at h
-    by_cases ht : Flock.ascii s = true
-    · rw [if_pos ht] at h; cases h
-      rw [canonStr_toList]
-      exact .str s _ (esc_of _ cesc_esc s)
-    · rw [if_neg ht] at h; cases h
+    intro s' h; rw [Flock.canon] at h; cases h
+    rw [canonStr_toList]
+    exact .str s _ (esc_of _ cesc_esc s)
   | arr h ih =>
     rename_i a
     intro s hs
@@ -962,8 +1058,7 @@ theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j
     rename_i m
     intro s hs
     rw [Flock.canon] at hs
-    cases hp : m.toArray.attach.mapM (fun p =>
-        if Flock.ascii p.1.1 then do pure (p.1.1, ← Flock.canon p.1.2) else throw Flock.notAscii) with
+    cases hp : m.toArray.attach.mapM (fun p => do pure (p.1.1, ← Flock.canon p.1.2)) with
     | error e => rw [hp] at hs; cases hs
     | ok vals =>
       rw [hp] at hs
@@ -973,18 +1068,14 @@ theorem canon_pr {j : Json} (h : Good j) : ∀ s, Flock.canon j = .ok s → Pr j
           q.2.1 = q.1.1.1 ∧ Flock.canon q.1.1.2 = .ok q.2.2 := by
         intro q hq
         have := hz q hq
-        try dsimp only at this
-        by_cases ht : Flock.ascii q.1.1.1 = true
-        · rw [if_pos ht] at this
-          cases hc : Flock.canon q.1.1.2 with
-          | error e => rw [hc] at this; cases this
-          | ok sv =>
-            rw [hc] at this
-            have e : Except.ok (q.1.1.1, sv) = (Except.ok q.2 : Except String (String × String)) := this
-            injection e with e
-            rw [← e]
-            exact ⟨rfl, rfl⟩
-        · rw [if_neg ht] at this; cases this
+        cases hc : Flock.canon q.1.1.2 with
+        | error e => rw [hc] at this; cases this
+        | ok sv =>
+          rw [hc] at this
+          have e : Except.ok (q.1.1.1, sv) = (Except.ok q.2 : Except String (String × String)) := this
+          injection e with e
+          rw [← e]
+          exact ⟨rfl, rfl⟩
       have hw : ∀ w ∈ vals.toList, ∃ v, m.get? w.1 = some v ∧ Flock.canon v = .ok w.2 := by
         intro w hw'
         obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hw'
