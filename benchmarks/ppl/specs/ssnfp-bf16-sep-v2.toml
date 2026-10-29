@@ -1,0 +1,8 @@
+description = "served sparse noise on the H200's BF16 MMA, binade-pinned per dot product (ssnfp, bound sep): each accumulator at 1.5 2^(a_i + b_j) from a separable bound (the RMSNorm's sqrt(k) against |gamma w_j|_2 on q, k, v, gate and up; Cauchy-Schwarz |x_i|_2 |w_j|_2 on o and down, one pass over the input), the noise lanes 2^r_i against 2^b_j C; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "ssnfp"
+fmt = "bf16"
+bound = "sep"
+noise = true

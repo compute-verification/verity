@@ -1203,8 +1203,9 @@ def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma:
     sqrt(k) max_j |gamma w_j|_2 (bf16's two roundings), for e4m3 times (1 + 2^-4) / sx_i plus the subnormals'
     2^-10 max_j |w_j|_1; `rms` is `l1` where gamma is None. `sep` is a dot product's own bound, a row factor times a
     column factor (so p_ij = a_i + b_j, the noise lanes 2^r_i against 2^b_j C): `rms`'s with |gamma w_j|_2 per column
-    where gamma is given, else |x_i|_inf |w_j|_1; it is returned as (rows, cols), its product under "sep_ij" beside
-    the oracle's own `partial_ij`. Every one is returned, with the chosen one under "dmax"."""
+    where gamma is given, else |x_i|_2 |w_j|_2 (Cauchy-Schwarz on every prefix); it is returned as (rows, cols), its
+    product under "sep_ij" beside the oracle's own `partial_ij`. Every one is returned, with the chosen one under
+    "dmax"."""
     m, k = xv.shape
     s, _ = ssnfp_layout(fmt, k)
     ax, aw = xv.abs(), wv.abs()
@@ -1212,7 +1213,7 @@ def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma:
            "holder": ax.amax(1) * aw.sum(1).max()}
     if gamma is None:
         out["rms"] = out["l1"]
-        out["sep"] = (ax.amax(1), aw.sum(1))
+        out["sep"] = (xv.norm(dim=1), wv.norm(dim=1))
     else:
         t = (1 + 2.0 ** -8) ** 2 * math.sqrt(k) * (wv * gamma[None, :]).norm(dim=1)
         if fmt == "e4m3":

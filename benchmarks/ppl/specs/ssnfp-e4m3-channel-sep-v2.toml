@@ -1,0 +1,8 @@
+description = "served sparse noise on the H200's FP8 MMA, binade-pinned per dot product (ssnfp, bound sep): fp8-e4m3-channel-v1's operands, each accumulator at 1.5 2^(a_i + b_j) from a separable bound (the RMSNorm's sqrt(k) over the row's E4M3 scale against |gamma w_j|_2 on q, k, v, gate and up, free; Cauchy-Schwarz |x_i|_2 |w_j|_2 on o and down, one pass over the input), the noise lanes 2^r_i against 2^b_j C; lm_head and attention bf16"
+plain = "fp8-e4m3-channel-v1"
+
+[[linear]]
+step = "ssnfp"
+fmt = "e4m3"
+scale = "channel"
+bound = "sep"
