@@ -14,6 +14,9 @@ work − gap" breaks when a strategy's saving exceeds the gap at the same instan
     its step.
   - `block`: the tile equals, as a block, one earlier tile of the same columns (an earlier step, or an earlier
     row block of its step). It is the stricter reading, inside `free`.
+  - `segment`: each of the tile's rows (its 8 words) equals one earlier row segment of the same columns, one source a
+    segment priced at H32 for its address: tm·tn·(H32 − 0.40) − tm·H32 a tile. Between `block` and `free`; `free`
+    with its source priced the same way (H32 a word) never pays.
   - Widths: 16 × 8 is `mma.sync` m16n8k32. 16 × 256 is a warp's share of the lead's `IGMMA.64x256x32` at BN 256, and
     64 × 256 is the warpgroup's (N-FLOOR final 2, note 20261029T1225Z-report-np-floor).
 - Chosen data: A2c (identical zero-data rows) and A2r (the alternating cancel), as N-RED's earlier rounds.
@@ -71,6 +74,19 @@ def _block_repeats(w: np.ndarray, tm: int) -> int:
     return int((first[inv.ravel()] < np.arange(len(tiles))).sum())
 
 
+def _segment_repeats(w: np.ndarray, tm: int) -> int:
+    """Tiles tm × nb whose every row segment (nb words) equals an earlier segment of the same columns: an earlier
+    step, or an earlier tm-row block of its step."""
+    m, s, nb = w.shape
+    _, first, inv = np.unique(w.transpose(1, 0, 2).reshape(s * m, nb), axis=0, return_index=True,
+                              return_inverse=True)
+    p = first[inv.ravel()].reshape(s, m)
+    tp, ip = p // m, p % m
+    now, rows = np.arange(s)[:, None], np.arange(m)[None, :]
+    held = (tp < now) | ((tp == now) & (ip // tm < rows // tm))
+    return int(held.reshape(s, m // tm, tm).all(axis=2).sum())
+
+
 def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", cfg: str = LEAD,
            widths: tuple = WIDTHS, g_zero: tuple[int, ...] = ()) -> dict:
     """The copier's whole-tile repeats on one instance (m rows, n columns, depth k), with G's `g_zero` lanes 0."""
@@ -84,6 +100,7 @@ def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", c
     tms = tuple(sorted({tm for tm, _ in widths}))
     counts = {(tm, tn): np.zeros((m // tm, s, n // tn), dtype=np.int64) for tm, tn in widths}
     block_rep = {tm: 0 for tm in tms}
+    seg_rep = {tm: 0 for tm in tms}
     held_words = {tm: 0 for tm in tms}
     equal = True
     for j0 in range(0, n, COL_BLOCK):
@@ -101,6 +118,7 @@ def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", c
             held_words[tm] += int(held[tm].sum())
             if nb == COL_BLOCK:
                 block_rep[tm] += _block_repeats(w, tm)
+                seg_rep[tm] += _segment_repeats(w, tm)
         for (tm, tn), cnt in counts.items():
             h = held[tm].reshape(m // tm, tm, s, nb).sum(axis=1)
             cnt[:, :, j0 // tn] += h.sum(axis=2) if tn >= nb else 0
@@ -116,6 +134,10 @@ def copier(m: int, n: int, k: int, seed: int, pattern: str, tag: str = "wide", c
         rep = block_rep[tm]
         out["copier"][f"{tm}x{COL_BLOCK}/block"] = {"whole": rep, "tiles": (m // tm) * s * (n // COL_BLOCK),
                                                     "share": rep * tm * COL_BLOCK * (H32 - COPY_WORD) / stock}
+        rep = seg_rep[tm]
+        out["copier"][f"{tm}x{COL_BLOCK}/segment"] = {
+            "whole": rep, "tiles": (m // tm) * s * (n // COL_BLOCK),
+            "share": rep * (tm * COL_BLOCK * (H32 - COPY_WORD) - tm * H32) / stock}
     return out
 
 
