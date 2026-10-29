@@ -41,18 +41,16 @@ where it can, building no body (`make`).
 A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--jobs``) builds its bindings so too: each
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
 (``apart`` in `plan`), which returns what its roots reach with each one's descriptor, what its build read (its record's reads,
-`cache.unit_reads`) and its share of the task list's reads (`cache.task_list_reads` of its roots), each with a digest of how
-that process saw them right after its build (`cache.seen_all`, `_seen`): a record is stored only while this process sees its
-reads so too, and the task list only while it sees every share so.  This process builds no body.  A target that misses through
-such a binding is made in the process that checks it (`cli._made`, `make`), which builds the bodies its check reads under its
-own recording and holds the target to the descriptor its binding's build gave; a primitive its id makes, which has no body, is
-made here (`built_here`).  A binding whose process dies fails the run, as it would kill a build in one process.  When every
-binding was built apart, the task list's entry is stored as a full build stores it, its reads every binding's share and this
-process's own.
+`cache.unit_reads`) and its share of the task list's reads (`cache.task_list_reads` of its roots).  This process builds no
+body.  A target that misses through such a binding is made in the process that checks it (`cli._made`, `make`), which builds
+the bodies its check reads under its own recording and holds the target to the descriptor its binding's build gave; a
+primitive its id makes, which has no body, is made here (`built_here`).  A binding whose process dies fails the run, as it
+would kill a build in one process.  When every binding was built apart, the task list's entry is stored as a full build stores
+it, its reads every binding's share and this process's own; it and each record are digested where this process stores them,
+as a full build's are (a full build digests none of its reads where it builds them either).
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sys
@@ -77,8 +75,8 @@ class Stale(Exception):
 class Entry:
     """One binding as this run has it: its units, kind and label (`targets.catalog_units`), its key, the roots it made now,
     what they reach (its record's, or `_reach` of the bodies built now) and whether its record counted.  Built in a process of
-    its own (``apart``, `built_apart`), with what that process read: its record's reads, its share of the task list's (``listed``)
-    and the digest of each as that process saw them (``seen``)."""
+    its own (``apart``, `built_apart`), with what that process read: its record's reads and its share of the task list's
+    (``listed``)."""
     units: tuple[str, ...]
     kind: str
     label: str
@@ -89,7 +87,6 @@ class Entry:
     apart: bool = False
     reads: dict[str, list[str]] | None = None
     listed: dict[str, list[str]] | None = None
-    seen: list[str] | None = None
 
     @property
     def root_ids(self) -> list[str]:
@@ -360,17 +357,6 @@ def merged(parts: Iterable[dict[str, list[str]]]) -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in sorted(out.items())}
 
 
-def _seen(digests: dict) -> str:
-    """How one process saw a read set (`cache.seen_all`), as one digest another process compares its own with."""
-    return hashlib.sha512(json.dumps(digests, sort_keys=True, default=str).encode()).hexdigest()
-
-
-def seen_alike(repo: Path, entries: list[Entry]) -> bool:
-    """Whether this process sees every apart entry's share of the task list's reads as the process that built it did."""
-    shares = [e for e in entries if e.apart and e.listed is not None]
-    return all(_seen(now) == e.seen[1] for e, now in zip(shares, CC.seen_all(repo, [e.listed for e in shares])))
-
-
 def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = None,
          apart: tuple[int, float, dict[str, float]] | None = None) -> Plan | None:
     """The catalog from the bindings' records (the module's docstring); None when there are none of this checker's version (a
@@ -414,18 +400,17 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         return None
     listed = None
     if apart is not None and (todo := [e for e in entries if not e.reused]):
-        traced = (repo, [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units]) \
-            if CC.tracing() else None
-        if traced is not None:
+        side = [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units] if CC.tracing() else None
+        if side is not None:
             CC.warm()
-        kept, _, grew = built_apart(todo, *apart, described=True, traced=traced, strict=True)
+        kept, _, grew = built_apart(todo, *apart, described=True, side=side, strict=True)
         if log:
             over = sorted(((gb, n) for n, gb in grew.items() if gb > apart[2].get(n, APART_GB)), reverse=True)
             log(f"circuit-check: {len(kept)} of {len(todo)} bindings built apart" + (
                 f"; {len(over)} grew past their heavy.json GiB: " + ", ".join(f"{n} {gb}" for gb, n in over) if over else ""))
         gone = {id(e) for e in todo} - {id(e) for e in kept}
         entries = [e for e in entries if id(e) not in gone]
-        if traced is not None and len(kept) == len(entries):
+        if side is not None and len(kept) == len(entries):
             listed = merged(e.listed for e in kept)
     made: list[dict[str, Any]] = []
     for e in entries:
@@ -450,16 +435,13 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
 
 def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> int:
     """Store each binding's record (each rebuilt one's, with ``only_rebuilt``), its reads digested now, each read once for all
-    of them (`cache.seen_all`); one built apart with the reads its process recorded, and only while this process sees them as
-    that one did; the count stored."""
+    of them (`cache.seen_all`); one built apart with the reads its process recorded; the count stored."""
     side = [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units]
     todo = [e for e in entries if not (only_rebuilt and e.reused)]
     reads = [e.reads if e.reads is not None else CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots)
              for e in todo]
     n = 0
     for e, got, now in zip(todo, reads, CC.seen_all(repo, reads)):
-        if e.reads is not None and _seen(now) != e.seen[0]:
-            continue
         if CC.store(cache, e.key, repo, got, {"roots": e.root_ids, "nodes": e.nodes}, now) is not None:
             n += 1
     return n
@@ -530,12 +512,11 @@ def _reach_one(e: Entry, described: bool = False) -> dict[str, dict]:
     return nodes
 
 
-def _child(e: Entry, out: Path, described: bool = False, traced: tuple[Path, list[str]] | None = None,
-           untraced: int = 0) -> None:
+def _child(e: Entry, out: Path, described: bool = False, side: list[str] | None = None, untraced: int = 0) -> None:
     """In a process forked for ``e``: its nodes or its error to ``out``, and out through `os._exit`, so nothing of the parent's
-    (its atexit, its buffers) runs twice.  With ``traced`` (the tree, and the units of the bindings that make no root): what its
-    build read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots), how this process
-    sees each now (`_seen`), and what it did that the tracer cannot see (`cache.untraced`, past the parent's ``untraced``)."""
+    (its atexit, its buffers) runs twice.  With ``side`` (traced: the units of the bindings that make no root): what its build
+    read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots) and what it did that
+    the tracer cannot see (`cache.untraced`, past the parent's ``untraced``)."""
     from . import cli
 
     CC._INTERNAL.clear()              # forked inside `cache.internal`: what this process reads is its build's
@@ -544,12 +525,9 @@ def _child(e: Entry, out: Path, described: bool = False, traced: tuple[Path, lis
         start = cli._rss_gb()
         try:
             got = {"nodes": _reach_one(e, described), "start": start}
-            if traced is not None:
-                repo, side = traced
-                reads = CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots)
-                listed = CC.task_list_reads(e.roots)
-                got.update(reads=reads, listed=listed, seen=[_seen(s) for s in CC.seen_all(repo, [reads, listed])],
-                           untraced=CC.untraced()[untraced:])
+            if side is not None:
+                got.update(reads=CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots),
+                           listed=CC.task_list_reads(e.roots), untraced=CC.untraced()[untraced:])
         except BaseException as ex:  # noqa: BLE001  (a model's is named, as the catalog names it; any other fails the build)
             got = {"error": f"{type(ex).__name__}: {str(ex)[:200]}", "start": start}
         out.write_text(json.dumps(got))
@@ -565,14 +543,14 @@ APART_GB = 2.0
 
 
 def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), weights: dict[str, float] | None = None, *,
-                described: bool = False, traced: tuple[Path, list[str]] | None = None, strict: bool = False) \
+                described: bool = False, side: list[str] | None = None, strict: bool = False) \
         -> tuple[list[Entry], list[tuple[str, ...]], dict[str, float]]:
     """``entries`` (`made_entries`) with each one's nodes (`_reach_one`, ``described`` or not), each binding built in a process
     forked from this one for it alone: this process builds no body, and each binding's bodies go with its process.  Up to
     ``jobs`` at once, the heaviest first, each started only while the ``weights`` (GiB by binding name, `cli.heavy`; `APART_GB`
     unlisted) of those running and its own fit ``budget``, as `cli.run` schedules its targets (`cli.admit`).  A model whose body
     raises, or whose process dies (but with ``strict``), is dropped (its units returned beside) and named in
-    `targets.ROOT_ERRORS`, as the catalog names it; any other binding's error raises.  With ``traced`` (`_child`), each with what
+    `targets.ROOT_ERRORS`, as the catalog names it; any other binding's error raises.  With ``side`` (`_child`), each with what
     its process read, and what that process did that the tracer cannot see is this one's too.  Returned with how far each
     binding's process grew, in GiB: its peak RSS past the RSS it started with, which it shares with this process."""
     import gc
@@ -603,7 +581,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
                         warnings.simplefilter("ignore", DeprecationWarning)    # an xdist worker's idle threads
                         pid = os.fork()
                     if pid == 0:
-                        _child(entries[i], Path(tmp, f"{i}.json"), described, traced, untraced)
+                        _child(entries[i], Path(tmp, f"{i}.json"), described, side, untraced)
                     running[pid] = i
                 queue = [i for i in queue if i not in running.values()]
                 pid, status, usage = os.wait4(-1, 0)
@@ -624,7 +602,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
                 else:
                     e = entries[i]
                     e.nodes, e.apart = got["nodes"], True
-                    e.reads, e.listed, e.seen = got.get("reads"), got.get("listed"), got.get("seen")
+                    e.reads, e.listed = got.get("reads"), got.get("listed")
                     CC._UNTRACED.extend(got.get("untraced", ()))
     finally:
         gc.unfreeze()
@@ -723,4 +701,4 @@ def built_entries() -> list[Entry] | None:
 
 __all__ = ["APART_GB", "REQUEST", "Derived", "Entry", "Plan", "Stale", "built_apart", "built_entries", "built_here",
            "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest", "merged", "plan", "planned",
-           "seen_alike", "store"]
+           "store"]

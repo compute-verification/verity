@@ -680,7 +680,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                  hits: dict[int, tuple[dict, str]] | None = None, plan: UN.Plan | None = None) -> dict:
     """`run`'s report over the task list it built (with ``keys`` and ``hits``, the keys and the entries reused already; with
     ``plan``, from the bindings' records, each binding built apart: the task list's reads are each one's share and this
-    process's, stored only while it sees every share as the process that read it did, `units.seen_alike`)."""
+    process's)."""
     out: list[dict | None] = [None] * len(tasks)
     keys = keys if keys is not None else []
     if listed is not None and not CC.untraced():
@@ -688,9 +688,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         if plan is not None:
             roots += [*(fn for e in plan.entries for fn in e.roots), *plan.objects.values()]
         reads = CC.task_list_reads(roots)
-        if plan is None or (plan.listed is not None and UN.seen_alike(REPO, plan.entries)):
-            reads = reads if plan is None else UN.merged([reads, plan.listed])
-            CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
+        reads = reads if plan is None else UN.merged([reads, plan.listed])
+        CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
