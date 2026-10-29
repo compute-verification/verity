@@ -548,7 +548,7 @@ theorem check_pts {pts : Array (Array F128)} {n k : ℕ} {why : String} {u : Uni
 
 set_option maxHeartbeats 1000000 in
 /-- The record's link points have the configured shape: `Record.decode` checks it (S9). -/
-theorem decode_points {spec : SessionSpec} {text : String} {sess : Session}
+theorem decode_points {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) :
     sess.points.size = spec.points ∧ ∀ p ∈ sess.points.toList, p.size = spec.mPts := by
   unfold Record.decode at h
@@ -567,7 +567,7 @@ statement whose layout and regions are well formed, the conclusion of `verify_re
 theorem verify_refines_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (hm : 13 ≤ st.m) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (record : String) (proofs : Array ByteArray)
     (h : Flock.verify st.spec #[Setup.ofCircuit st] record proofs = .ok ()) :
-    ∃ (sess : Session) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+    ∃ (sess : RunRecord) (sch : Flock.Schedule) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
       Record.decode st.spec record = .ok sess ∧ Flock.fast100 st.m = some sch ∧
       decodeProof (shapeOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
         (ptsOf st.mPts sess.points)).length) proofs[0]! = .ok p₀ ∧

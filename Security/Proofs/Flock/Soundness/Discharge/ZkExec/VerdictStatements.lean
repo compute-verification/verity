@@ -178,7 +178,7 @@ results they reach the table's verdict `accZ`, at the cap `capOfRoot` reads off 
 def ZkTableVerdict : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (T : Finset (Fin n) → Reg → ZkSession.TabZK 𝔽 mPts) (S : Finset (Fin n)) (R : Reg)
     (pts : Fin 2 → Fin mPts → 𝔽) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
-    (sess : Session) (i : ℕ) (b₀ b₁ c : ByteArray),
+    (sess : RunRecord) (i : ℕ) (b₀ b₁ c : ByteArray),
     Zk.schedule st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam (T S R) st sch tPad →
     ZkTabLay (T S R) st sch → FoldRealizes st.fold (T S R).S →
     ExtraRealizes st (T S R).S sess.points (Model.extraClaims (T S R).S (T S R).ptLocal mPts pts) →
