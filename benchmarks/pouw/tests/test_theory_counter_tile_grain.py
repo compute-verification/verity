@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -111,3 +112,16 @@ def test_letter_warp_branch(monkeypatch):
     assert tg.WHOLE_TILES_PAY_FROM == pytest.approx(3020.8)
     monkeypatch.setattr(tg, "WARP_BRANCH", tg.Reading("warp-branch", 3000.0, 0.0, "a cheaper branch", "test"))
     assert tg.falsified({"letter": tg.letter()}) == ["letter: warp-branch"]
+
+
+def test_main_exits_on_a_falsifying_reading(tmp_path, monkeypatch):
+    """`--letter --readings FILE` passes on the measured readings and exits 1 on a cheaper warp branch."""
+    monkeypatch.setattr(tg, "WARP_BRANCH", tg.WARP_BRANCH)
+    f = tmp_path / "readings.json"
+    f.write_text(json.dumps([asdict(r) for r in (*tg.READINGS, tg.WARP_BRANCH)]))
+    monkeypatch.setattr(sys, "argv", ["counter_tile_grain.py", "--letter", "--readings", str(f)])
+    tg.main()
+    f.write_text(json.dumps([asdict(tg.WARP_BRANCH) | {"p": 3000.0}]))
+    with pytest.raises(SystemExit) as e:
+        tg.main()
+    assert e.value.code == 1

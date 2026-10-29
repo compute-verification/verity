@@ -40,8 +40,8 @@ Beside the lead's `wgmma` a selection costs 0.12 a lane-entry and a copy 0.40 a 
 figure is priced W1 work, so time beside `wgmma` doesn't enter, except the copy, taken at its cheapest.
 
 `python counter_tile_grain.py --json OUT` runs the searched calls (`counter_patch`'s spread columns, in-tile sources);
-`--readings FILE` judges new measurements (a JSON list of `READINGS`' fields) in place of these, and `--letter` judges
-them to the letter alone, with no calls.
+`--readings FILE` judges new measurements (a JSON list of `READINGS`' fields; one named `warp-branch` replaces
+`WARP_BRANCH`) in place of these, and `--letter` judges them to the letter alone, with no calls.
 """
 
 from __future__ import annotations
@@ -299,10 +299,13 @@ def main() -> None:
     ap.add_argument("--letter", action="store_true", help="judge the readings to the letter alone, with no calls")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
+    global WARP_BRANCH
     readings = READINGS
     if args.readings:
         with open(args.readings) as f:
             readings = tuple(Reading(**r) for r in json.load(f))
+        WARP_BRANCH = next((r for r in readings if r.name == WARP_BRANCH.name), WARP_BRANCH)
+        readings = tuple(r for r in readings if r.name != WARP_BRANCH.name)
     rep = {"config": vars(args), "verdict": {"letter": letter(readings)}} if args.letter else search(args, readings)
     print("letter", json.dumps(rep["verdict"]["letter"]), flush=True)
     if args.json:
