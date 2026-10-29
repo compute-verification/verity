@@ -66,7 +66,11 @@ the rest is TensorSemantics' credit lost to chosen data. `t1_tile_copy` is the c
 copy saves only when a whole tile's words repeat: ssn_sh's coin is one word a step for the whole call, so data that is
 constant over a tile revisits the tile together, while the lead's coins differ by column. `t1_tile_mac` is the step
 at tile grain over a stock whose linears cost a unit a real MAC, where stock's cheapest instruction pays for its own
-padding below 64 rows (12.02 units a MAC at one row). Without xu the
+padding below 64 rows (12.02 units a MAC at one row), and `t1_tile` the step at tile grain over stock's own price.
+`lead_blc4a_pad64_ac{4,7}[c]` put blc's three coin lanes on every column of attention's later steps (`attn_col_terms`,
+N-ADAPT's per-column coins), one set a 64-row tile or (`c`) one a call, so a whole tile revisits only if all of an
+MMA tile's 8 columns' coin sums hit their targets at once; their copies cost `coin_copy` and their stream
+`col_coin_bytes`. Without xu the
 lead's coin term, a (tile, column) sum, folds in the epilogue's IADD3 column source, so its served noise is the tag
 lead's;
 `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
@@ -225,21 +229,24 @@ def _sum_pmfs(n: int, width: int) -> tuple[np.ndarray, ...]:
     return tuple(out)
 
 
-def walk_share(steps: int, d: tuple[int, ...] | None = None, width: int = 256) -> float:
+def walk_share(steps: int, d: tuple[int, ...] | None = None, width: int = 256, lanes: int = 1) -> float:
     """The share of an entry's later words that equal an earlier word of the same entry, when step t adds d_t + c_t
-    with c_t uniform on `width` consecutive integers (ssn_sh's shared raw byte against W₀) and d_t the data part a
-    prover chose before the coins. Exact up to 5 steps, by inclusion–exclusion over the earlier words a word equals
-    (those events meet in disjoint blocks of increments); beyond, the union bound, an upper bound. With d None, the
-    best d on a grid near the centre (alternating 0 and 1 beyond 4 steps, which centres every block's sum)."""
+    with c_t the sum of `lanes` coins uniform on `width` consecutive integers (ssn_sh's shared raw byte against W₀ is
+    one lane; per-column attention coins three) and d_t the data part a prover chose before the coins. Exact up to 5
+    steps, by inclusion–exclusion over the earlier words a word equals (those events meet in disjoint blocks of
+    increments); beyond, the union bound, an upper bound. With d None, the best d on a grid near the centre
+    (alternating lanes // 2 and one more beyond 4 steps, which centres every block's sum)."""
     if d is None:
-        grid = (itertools.product(range(-1, 3), repeat=steps - 1) if steps <= 4 else
-                [tuple((u + o) % 2 for u in range(steps - 1)) for o in (0, 1)])
-        return max(walk_share(steps, dd, width) for dd in grid)
-    pmfs, lo = _sum_pmfs(steps - 1, width), -(width // 2)
+        c = lanes // 2
+        grid = (itertools.product(range(c - 1, c + 3), repeat=steps - 1) if steps <= 4 else
+                [tuple(c + (u + o) % 2 for u in range(steps - 1)) for o in (0, 1)])
+        return max(walk_share(steps, dd, width, lanes) for dd in grid)
+    pmfs, lo = _sum_pmfs(lanes * (steps - 1), width), -(width // 2)
 
     def mass0(a: int, b: int) -> float:
-        off = (b - a) * lo + sum(d[a:b])
-        return float(pmfs[b - a][-off]) if 0 <= -off < len(pmfs[b - a]) else 0.0
+        off = lanes * (b - a) * lo + sum(d[a:b])
+        p = pmfs[lanes * (b - a)]
+        return float(p[-off]) if 0 <= -off < len(p) else 0.0
 
     copies = 0.0
     for t in range(1, steps):
@@ -256,6 +263,26 @@ def walk_share(steps: int, d: tuple[int, ...] | None = None, width: int = 256) -
 @functools.lru_cache(maxsize=None)
 def sh_walk(steps: int) -> float:
     return walk_share(steps)
+
+
+#: per-column attention coins (N-ADAPT's §5b): blc's three lanes on every column of QKᵀ's and P·V's later steps,
+#: against A′ = [1, 1, 1, 0] in the query rows' coin slot (written with the row, as W₀ is), and the column's coin sum
+#: cancelled exactly in a step-1 slot of its own (two lanes against [1, 64]), so the served output is today's; the
+#: certifier streams each slot raw, one 4-byte cp.async a (tile, column, step), at a copied word's price beside wgmma.
+#: An MMA tile at the finest has 8 columns.
+ATTN_CANCEL_LANES, COPY_WORD_UNITS, MMA_TILE_COLS = 4, 0.40, 8
+
+
+@functools.lru_cache(maxsize=None)
+def attn_col_terms(steps: int, bits: int) -> dict:
+    """Per-column attention coins of `bits`-bit lanes (7-bit odd coins taken as 128 consecutive values, the same
+    point masses): `p_attack`, an entry's own revisit share a later word (bare P), and `tile_p`, the share of a tile's
+    words in a whole-tile revisit, which needs all 8 columns' coin sums to hit the chosen data's targets at once: at
+    most the largest point mass of one step's three-lane sum, to the 8th, a (tile, step pair)."""
+    w = 2 ** bits
+    pm = float(_sum_pmfs(BLC_LANES, w)[BLC_LANES].max())
+    return {"p_attack": walk_share(steps, None, w, BLC_LANES), "point_mass": pm,
+            "tile_p": min(1.0, math.comb(steps, 2) * pm ** MMA_TILE_COLS / steps), "tile_shared": False}
 
 
 def steps_sh(k: int, tag: int = 0) -> int:
@@ -646,6 +673,8 @@ class Plan:
     pad_fill: str = "zero"
     blc: bool = False
     chosen: bool = False
+    attn_cols: int = 0
+    attn_cols_call: bool = False
     note: str = ""
 
 
@@ -722,6 +751,15 @@ PLANS = [
          note="lead_blc4a_pad64 de-noised by N-EXACT's xu (step S cancels the code and the tag; the stock epilogue "
               "removes the rest at its own instruction count): every linear's, the lm_head's and the router's served "
               "output is exact, so only attention's lanes stay forced"),
+    *[Plan(f"lead_blc4a_pad64_ac{b}" + ("c" if call else ""), lm_head="ssn_1l", attention="i8", exp="best",
+           lanes="fused", static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True,
+           max_block=2 * I8_BLOCK, noise_dither=True, block_max=True, small_m="wgmma64", blc=True, chosen=True,
+           attn_cols=b, attn_cols_call=call,
+           premises=frozenset({"MeasuredFloor", "CvtMinimal", "TensorSemantics", "MufuSpeed"}),
+           note=f"lead_blc4a_pad64 with per-column coins on QKᵀ's and P·V's later steps ({b}-bit lanes, "
+                + ("one set a call, shared by its tiles" if call else "one set a 64-row tile, as blc indexes them")
+                + "), cancelled exactly in a step-1 slot")
+      for b in (4, 7) for call in (False, True)],
     Plan("lead_blc4a_coin", lm_head="ssn_1l", attention="i8", exp="best", lanes="fused",
          static_scales=True, router="i8", rowmax_stride=8, resident=True, two_pass_argmax=True, max_block=2 * I8_BLOCK,
          noise_dither=True, block_max=True, pad_fill="coin", blc=True, chosen=True,
@@ -858,6 +896,7 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
         hp, hpad, hinstr = wgmma_price(256, reading) / TENSOR["s8"]["kreg"], 64 / c.m, "wgmma, rows padded to 64"
     lanes = 4 if c.n <= nsw.SSN_CODE_N_MAX else 5
     tile = 64 if plan.small_m == "wgmma64" and c.m < 64 else c.m
+    coin_copy = col_b = 0.0
 
     def lead(m: int, n: int, k: int) -> dict:
         return blc4a_terms(m, n, k, lanes, plan.tag, tile) if plan.blc else ssn1l_terms(m, n, k, lanes, plan.tag)
@@ -871,21 +910,27 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
         forming, coins = t["forming"] * c.count, t["coins"] * c.count
         coin_calls = [(t["coin_bytes_call"], 1)]
     else:
-        scores = c.count / (c.dk if fam == "qk" else c.dv)
+        tag = plan.tag + (ATTN_CANCEL_LANES if plan.attn_cols else 0)
+        blocks = math.ceil(c.keys / I8_BLOCK)
         if fam == "qk":
-            t = ssn_sh_terms(1, max(1.0, c.keys), c.dk, plan.tag)
-            per_row = 1.0
+            t = ssn_sh_terms(1, max(1.0, c.keys), c.dk, tag)
+            per_row, cols = 1.0, max(1.0, c.keys)
         else:
-            t = ssn_sh_terms(1, c.dv, I8_BLOCK, plan.tag)
-            t["alpha"] = H32 * math.ceil(c.keys / I8_BLOCK) * steps_sh(I8_BLOCK, plan.tag) / c.keys
-            per_row = math.ceil(c.keys / I8_BLOCK)
+            t = ssn_sh_terms(1, c.dv, I8_BLOCK, tag)
+            t["alpha"] = H32 * blocks * steps_sh(I8_BLOCK, tag) / c.keys
+            per_row, cols = blocks, blocks * c.dv
         forming = H32 * per_row * c.rows
         coin_b = 0.5 * per_row * c.rows
+        if plan.attn_cols:
+            t.update(attn_col_terms(t["steps"], plan.attn_cols))
+            tiles = c.rows / min(c.m, BLC_TILE)
+            coin_copy = COPY_WORD_UNITS * t["steps"] * cols * tiles
+            col_b = 4 * t["steps"] * cols * (c.calls if plan.attn_cols_call else tiles)
+            coin_b += col_b
         coins = coin_b * nsw.COIN_PRICED_BYTE
         coin_calls = [(coin_b / c.calls, c.calls)]
-        _ = scores
     a = t["alpha"]
-    honest = c.count * a * hp * hpad
+    honest = c.count * a * hp * hpad + coin_copy
     floor_t = min(hp, H32 / TENSOR["s8"]["kreg"])
     ts = "TensorSemantics" in plan.premises
     tile_forced = hp if ts else floor_t
@@ -893,16 +938,18 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
     pad_c = hpad if plan.commit_pad else 1.0
     forced = c.count * a * ((1 - zc) * tile_forced + zc * floor_t
                             + (pad_c - 1) * (tile_forced if plan.pad_fill == "coin" else floor_t))
-    attack = copy = 0.0
+    attack = copy = tile_copy = 0.0
     if plan.blc:
         resid = t["p_attack"] * (t["steps"] - 1) / t["steps"]
         base = c.count * a * pad_c * floor_t if plan.chosen else forced
         attack, copy, forced = forced - base * (1 - resid), base * resid, base * (1 - resid)
+        tile_copy = copy if t.get("tile_shared") else min(copy, base * t.get("tile_p", 0.0))
     words = c.count * a * pad_c / TENSOR["s8"]["kreg"]
     return {"stock": stock_units, "honest": honest + forming, "forced": forced, "words": words, "forming": forming,
             "coins": coins, "coin_calls": coin_calls, "instr": hinstr, "design": t["design"], "alpha": a,
-            "unforced": forming + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad, "attack": attack,
-            "copy": copy, "tile_copy": copy if t.get("tile_shared") else 0.0,
+            "unforced": forming + coin_copy + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad,
+            "attack": attack, "copy": copy, "tile_copy": tile_copy, "steps": t["steps"],
+            **({"coin_copy": coin_copy, "col_coin_bytes": col_b} if plan.attn_cols and fam in ("qk", "pv") else {}),
             **({"zero_chunk": (zc, zsrc)} if zsrc and not plan.chosen else {})}
 
 
@@ -1120,7 +1167,9 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
             "t1_attack": sum(r.get("attack", 0.0) for r in rows) / st,
             "t1_copy": sum(r.get("copy", 0.0) for r in rows) / st,
             "t1_tile_copy": sum(r.get("tile_copy", 0.0) for r in rows) / st,
-            "t1_tile_mac": tile_gap / lin_mac_st,
+            "t1_tile": tile_gap / st, "t1_tile_mac": tile_gap / lin_mac_st,
+            "col_coin_bytes": sum(r.get("col_coin_bytes", 0.0) for r in rows),
+            "coin_copy": sum(r.get("coin_copy", 0.0) for r in rows) / st,
             "linears_attack": sum(r.get("attack", 0.0) for r in lin) / max(1e-30, sum(r["stock"] for r in lin)),
             "slack_share": (tot["honest"] - tot["forced"] - tot["unforced"]) / st,
             "hash_bytes": 4 * tot["words"], "groups": groups, "t2": t2, "t3_estimate": t3,
@@ -1182,6 +1231,7 @@ def t2_of(model: str, point: str, rows: list[dict], plan: Plan) -> dict:
         p["extra"] += max(0.0, r["honest"] - r["stock"]) / _RATES[fam] * 1e3
         p["bytes"] += 4 * r["words"]
         p["coin_ms"] += sum(nsw.coin_us(b) * n for b, n in r.get("coin_calls", [])) * 1e-3
+        p["coin_ms"] += r.get("col_coin_bytes", 0.0) / HBM_B_S * 1e3
     extra = sum(p["extra"] for p in parts.values())
     byts = sum(p["bytes"] for p in parts.values())
     coin_ms = sum(p["coin_ms"] for p in parts.values())
@@ -1799,6 +1849,28 @@ def check() -> list[dict]:
        abs(um[("llama", "dec64_2k")]["t1_tile_mac"] - tile_t1[("llama", "dec64_2k")]) < 1e-5
        and um[("llama", "dec1_2k")]["t1_tile_mac"] > 1.5 * tile_t1[("llama", "dec1_2k")],
        {f"{m} {p}": (tile_t1[(m, p)], e["t1_tile_mac"]) for (m, p), e in um.items()})
+    pm = {b: attn_col_terms(3, b)["point_mass"] for b in (4, 7)}
+    l3 = np.add.outer(np.add.outer(np.arange(-8, 8), np.arange(-8, 8)), np.arange(-8, 8)).ravel().astype(np.int16)
+    dd = (1, 2)
+    w2, w3 = np.meshgrid(l3 + dd[0], l3 + dd[1], indexing="ij")
+    w3 = w3 + w2
+    brute3 = float(((w2 == 0).mean() + ((w3 == 0) | (w3 == w2)).mean()) / 2)
+    del w2, w3
+    ac = {pl: evaluate("llama", "dec64_2k", PLAN[pl])
+          for pl in ("lead_blc4a_pad64", "lead_blc4a_pad64_ac4", "lead_blc4a_pad64_ac4c")}
+    att = {pl: {r["family"]: r for r in e["components"] if r["family"] in ("qk", "pv")} for pl, e in ac.items()}
+    ok("per-column attention coins: a three-lane sum's largest point mass is 3/64 at 4-bit lanes and 3/512 at 7-bit "
+       "(N-ADAPT's), the three-lane walk equals a brute force over every coin at 3 steps, the cancel slot keeps "
+       "Llama's QKᵀ at 3 steps and P·V at 4, the tile-grain copy goes under 1e-9 of the step, and a call's one set "
+       "streams fewer bytes than a set a tile",
+       abs(pm[4] - 3 / 64) < 1e-15 and abs(pm[7] - 3 / 512) < 1e-15
+       and abs(walk_share(3, dd, 16, 3) - brute3) < 1e-12
+       and all(att[pl]["qk"]["steps"] == 3 and att[pl]["pv"]["steps"] == 4 for pl in att)
+       and ac["lead_blc4a_pad64_ac4"]["t1_tile_copy"] < 1e-9 < ac["lead_blc4a_pad64"]["t1_tile_copy"]
+       and 0 < ac["lead_blc4a_pad64_ac4c"]["col_coin_bytes"] < ac["lead_blc4a_pad64_ac4"]["col_coin_bytes"],
+       {"point_mass": pm, "walk3": (walk_share(3, dd, 16, 3), brute3),
+        "tile_copy": {pl: e["t1_tile_copy"] for pl, e in ac.items()},
+        "col_coin_bytes": {pl: e["col_coin_bytes"] for pl, e in ac.items()}})
     for plan in PLANS:
         for model in ("llama", "v4"):
             for point in POINTS:
@@ -1858,7 +1930,8 @@ def report(lookup: bool = False) -> dict:
 
 PERIOD_PLANS = ("linears", "best", "best_p4", "best_p4_dither", "best_p4_max", "best_p4_max_s8", "best_p4_all",
                 "best_p4_nkd", "best_p4_nkd_bmax", "best_p4_nkd_bmax_pad64", "best_p4_nkd_bmax_coin", "best_p4_exact",
-                "best_p4_exact_sep", "lead_blc4a_pad64", "lead_blc4a_pad64_xu", "lead_blc4a_coin",
+                "best_p4_exact_sep", "lead_blc4a_pad64", "lead_blc4a_pad64_xu", "lead_blc4a_pad64_ac4",
+                "lead_blc4a_pad64_ac4c", "lead_blc4a_pad64_ac7", "lead_blc4a_pad64_ac7c", "lead_blc4a_coin",
                 "lead_blc4a_coin_hd")
 #: pouw_space.py's points (and this file's further ones) to this file's (model, point)
 CARD_POINTS = {"t512": ("llama", "T512_64"), "t512r512": ("llama", "T512_512"), "t8192": ("llama", "T8192_8x1k"),
