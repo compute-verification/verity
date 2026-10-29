@@ -1,12 +1,12 @@
 """The scan (`ingress_scan.IngressScanBucket`, `IngressScanFirst`) and the egress buckets on the views it writes
 (`egress.EgressBucket`), on the network certifier's own records: the network certifier, driven tick by tick
-(`test_network_certifier_warden`'s harness), carries three warden-form id requests on two lanes, the third queued until
-a lane frees, and their responses of id events. The reference's scan of its ingress rows from the empty state, the
-Programs' rows its responses, holds each request's prompt ids at their positions, its head's fields, its admission
-bucket and its anchor until the anchor (two requests anchored at one boundary in their own slots) and its outputs from
-then until its last egress bucket, gives each slot's occupancy word 1 in the state its Program reads and 0 in every
-other (the token-id row, `token_row`: the occupancy word, the prompt's length and its prompt in order, each where
-`slot_row` puts it in the state row), and reuses a slot only past it; egress bucket t computes the
+(`test_network_certifier_warden`'s harness), carries three network-certifier-form id requests on two lanes, the third
+queued until a lane frees, and their responses of id events. The reference's scan of its ingress rows from the empty
+state, the Programs' rows its responses, holds each request's prompt ids at their positions, its head's fields, its
+admission bucket and its anchor until the anchor (two requests anchored at one boundary in their own slots) and its
+outputs from then until its last egress bucket, gives each slot's occupancy word 1 in the state its Program reads and 0
+in every other (the token-id row, `token_row`: the occupancy word, the prompt's length and its prompt in order, each
+where `slot_row` puts it in the state row), and reuses a slot only past it; egress bucket t computes the
 network certifier's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged
 one) from a view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random
 flips (S_t and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an

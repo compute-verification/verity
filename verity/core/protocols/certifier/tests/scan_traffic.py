@@ -1,5 +1,5 @@
-"""Warden-form id requests and their responses served through the network certifier's own ingress and egress, both
-links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s
+"""Network-certifier-form id requests and their responses served through the network certifier's own ingress and egress,
+both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s
 cross-check of the network certifier, and `benchmarks/network_traces/scan_zk.py`'s). It imports no test framework, so a
 node's bare venv runs it."""
 

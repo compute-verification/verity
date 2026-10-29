@@ -409,9 +409,9 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 
 def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
-    """A warden-path step held to the network certifier run the certificates step read (``run_id``): refused by name
-    (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run), and
-    when it is another network certifier run's."""
+    """A network-certifier-path step held to the network certifier run the certificates step read (``run_id``): refused
+    by name (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run),
+    and when it is another network certifier run's."""
     from warden_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):
@@ -769,8 +769,8 @@ def merged_n2(paths: list[str] | None) -> dict | None:
 
 def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[str]:
     """What a certifier-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
-    what served them when their ``request.json`` says (demo_chain.sh's); a warden-path report's, `WARDEN_STUBBED`, or
-    `WARDEN_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
+    what served them when their ``request.json`` says (demo_chain.sh's); a network-certifier-path report's,
+    `WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
     if job.get("path") == WARDEN:
         return list(WARDEN_SERVED_STUBBED if (endpoint or {}).get("at") == SERVED_NODE else WARDEN_STUBBED)
     if job.get("path") != CERTIFIER_ONLY:

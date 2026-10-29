@@ -29,10 +29,10 @@ prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximatel
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
 its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
-at the same sampling when given): warden-form id requests (`active.id_request`, offset 0), each answered by the fake
-endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`, at most
-`egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
-the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
+at the same sampling when given): network-certifier-form id requests (`active.id_request`, offset 0), each answered by
+the fake endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`,
+at most `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends
+it to the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
 `--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`),
 so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
@@ -199,11 +199,11 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
 def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_tokens: tuple[int, int] = (16, 1024),
                max_tokens: tuple[int, int] = (1, 64), start_s: float = 0.0, temperature: float | None = None,
                top_p: float | None = None) -> list[dict]:
-    """n warden-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids": its
-    fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform, and
-    the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when given,
-    every request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
-    exactly these."""
+    """n network-certifier-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids":
+    its fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform,
+    and the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when
+    given, every request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan
+    (`ingress_scan`) reads exactly these."""
     rng = random.Random(seed)
     at, out = start_s, []
     for i in range(n):
@@ -250,10 +250,10 @@ def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
 def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: WardenParams, max_tokens: int,
                    rate: float = 0.5, seed: int = 0, start_s: float = 0.0, temperature: float | None = None,
                    top_p: float | None = None, window_per_group: bool = False) -> list[dict]:
-    """n warden-form id requests (`id_traffic`'s items) of the given prompts, request j's ``prompts[j mod len]`` with
-    exactly `max_tokens`: at `id_traffic`'s Poisson arrivals, or under `window_per_group` in groups of ``len(prompts)``
-    (at most `lanes`), group g's requests together half a bucket into window g·G (G = `group_windows`), so group g's
-    cells are exactly its windows' (``groups``). The seeds are the seed's either way."""
+    """n network-certifier-form id requests (`id_traffic`'s items) of the given prompts, request j's
+    ``prompts[j mod len]`` with exactly `max_tokens`: at `id_traffic`'s Poisson arrivals, or under `window_per_group` in
+    groups of ``len(prompts)`` (at most `lanes`), group g's requests together half a bucket into window g·G (G =
+    `group_windows`), so group g's cells are exactly its windows' (``groups``). The seeds are the seed's either way."""
     if window_per_group and len(prompts) > params.lanes:
         raise SystemExit(f"--window-per-group: a group of {len(prompts)} prompts, past the schedule's "
                          f"{params.lanes} lanes")
@@ -809,8 +809,8 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
 
 async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
-    shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its warden-form id request
-    (`active.id_request`, offset 0) and its response read as id-form."""
+    shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its network-certifier-form id
+    request (`active.id_request`, offset 0) and its response read as id-form."""
     params = WardenParams(**deployment["params"])
     origin, listen = deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])
@@ -1220,8 +1220,8 @@ def parser() -> argparse.ArgumentParser:
     pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0, help="seconds the run lasts past the last request's time")
     r.add_argument("--ids", action="store_true",
-                   help="warden-form id requests (id_traffic), answered id-form (the fake's --id-payload): the scan's "
-                        "traffic (scan_zk.py --warden-run)")
+                   help="network-certifier-form id requests (id_traffic), answered id-form (the fake's --id-payload): "
+                        "the scan's traffic (scan_zk.py --warden-run)")
     r.add_argument("--prompts", type=Path,
                    help="with --ids: the requests' prompts, a JSON array of token-id arrays, request j's the (j mod n)-th "
                         "of the n, each with exactly --max-tokens (at most --egress-cells - 1)")

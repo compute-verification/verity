@@ -17,7 +17,7 @@ certifier path none of its records enters the chain.
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
   `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
-  connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a warden-form id request
+  connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
 """
@@ -143,8 +143,8 @@ def certificates(run: Path, deployed: bool = False) -> dict:
 
 def io(run: Path) -> dict:
     """The certified I/O (the module docstring's `io`): ``records`` in ingress order, `accepted` when every connection's
-    request is a warden-form id request of a user no other names and every egress `DATA` cell an id-form cell of a
-    connection released by its bucket."""
+    request is a network-certifier-form id request of a user no other names and every egress `DATA` cell an id-form cell
+    of a connection released by its bucket."""
     _, params = deployment(run)
     B, T = params.cell_bytes, params.window
     recs = WS.read_records(witness(run), params)

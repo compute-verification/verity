@@ -1,5 +1,5 @@
-"""Regressions on the network certifier's bucket rows (`warden_rows`): replays of real warden-signed roots and
-certificates across windows and directions, and a certificate the network certifier signed over another digest, stay
+"""Regressions on the network certifier's bucket rows (`warden_rows`): replays of real network-certifier-signed roots
+and certificates across windows and directions, and a certificate the network certifier signed over another digest, stay
 refused. Two gaps are closed:
 - the layout is bound: the signed head carries S, T and the wiring's digest, and the domain S and T, so a head of
   another layout is another digest, which the certificate doesn't sign;
@@ -62,9 +62,9 @@ def test_the_honest_registration_reads_back(tmp_path):
 
 
 def test_a_real_cross_window_root_and_certificate_replay_is_refused(tmp_path):
-    """A REAL warden-signed window-0 root and certificate can't be presented for window 1: the window-0 document is
-    refused by the field check, and relabelling it to window 1 with the window-0 root and certificate is refused because
-    the certificate signs the window-0 head."""
+    """A REAL network-certifier-signed window-0 root and certificate can't be presented for window 1: the window-0
+    document is refused by the field check, and relabelling it to window 1 with the window-0 root and certificate is
+    refused because the certificate signs the window-0 head."""
     issuer = _issuer(tmp_path)
     c0, c1 = _commit(0, Direction.EGRESS), _commit(1, Direction.EGRESS)
     cert0 = _attest(issuer, c0)
