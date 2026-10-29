@@ -56,7 +56,7 @@ def oddSum (s : ℤ × ℤ × ℤ) : ℤ := s.1 + 127 * s.2.1 + s.2.2
 /-- A row's coin sum under `-rot`: `(127, 1, 1)` on even rows, `(1, 127, 1)` on odd rows. -/
 def rotSum (i : ℕ) (s : ℤ × ℤ × ℤ) : ℤ := if i % 2 = 0 then evenSum s else oddSum s
 
-private theorem mem_triples {s : ℤ × ℤ × ℤ} :
+theorem mem_triples {s : ℤ × ℤ × ℤ} :
     s ∈ triples ↔ s.1 ∈ coins ∧ s.2.1 ∈ coins ∧ s.2.2 ∈ coins := by
   simp only [triples, mem_product]
 
