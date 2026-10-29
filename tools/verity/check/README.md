@@ -49,6 +49,7 @@ follows.
 | `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
 | `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
 | `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
+| `ops.py` | the one way the check and its tests reach research (see [Running from another repository](#running-from-another-repository)) |
 | `tool.py`, `preflight.py` | the check's store declaration, and whether a machine is prepared for it |
 | `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
