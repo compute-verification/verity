@@ -1,4 +1,4 @@
-"""vLLM serving under the remote audit (`serve.py --local`): the vLLM tests' tiny Llama on a GPU, `Binder` on its engine
+"""vLLM serving under PoUB (`serve.py --local`): the vLLM tests' tiny Llama on a GPU, `Binder` on its engine
 and `verity_vllm.protocols.remote_bandwidth.remote.StoreBackend` proving its store to an in-process verifier while it serves a trace of
 requests, one session a process.  Skipped without vLLM, a GPU, or a `StoreBackend` to import (the vLLM integration's
 remote session)."""
