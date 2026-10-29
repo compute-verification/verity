@@ -31,16 +31,11 @@ Definitions/Pous/Model/Continuous.lean
                                     the continuous audit: an explicit memory challenger (sequential reveal, a hard
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
                                     arrivals the memory challenger draws (queued, never dropped) and the memory at each time
-Definitions/Pous/Model/{Digest,SecureErasure}.lean
-                                    the keyed digest of a region (without a bandwidth
-                                    assumption); the secure-erasure audit: a keyed fill of all volatile memory,
-                                    timed spot reads, and the foreign content the prover keeps
-Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMeets}.lean
+Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
                                     a band segment's re-encode cost `R(d)`, a graded row's round span and
-                                    the memory challenger's cap on an audit's duration; `EraseMeets`,
-                                    the secure-erasure requirement
+                                    the memory challenger's cap on an audit's duration
 Definitions/Pous/P2/Cost.lean       P2's cost model, the generic ring over `Z/p` with random odd labels
                                     and the junk label (`ringRO`), the bound `RingBounded D Q L` beside `Bounded`,
                                     `MeetsOn`, `MeetsWithSlack`, and P2 in it (`p2ring`)
@@ -90,9 +85,6 @@ Proofs/Pous/Graded/                 proved: the tail rule (`Tail.lean`), Theorem
 Proofs/Pous/Rebuild/                proved: under the memory challenger's duration cap, no audit re-encodes a whole band
                                     segment from `W` alone (`Clock.lean`, the cumulative chain clock;
                                     `Window.lean`, the counts; `Exclusion.lean`, `BackgroundRebuildExcluded`)
-Proofs/Pous/SecureErasure/          proved: `DigestAU` (Digest), secure erasure from the audit by counting
-                                    (Reduction), and the band's audit at 2152 reads with `EraseMeets` at
-                                    `f = 1/19`, `ε = 2^-128` (Band)
 lean-audit.json                     the policy and guarantee records for tools/verity/lean/check.py
 ~~~
 
