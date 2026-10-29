@@ -767,7 +767,7 @@ EXACT_REACHED = ("softmax", "attn_out", "quant_o")
 
 
 def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> dict:
-    sv = "stock"
+    sv, pz = "stock", None
     if c.family == "lm_epi":
         s_ops = lane_ops("epi_bf16", "stock")
     elif c.kind == "softmax":
@@ -796,7 +796,8 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
                     mb = plan.max_block
                     cands = {e: o + [("FADD", 1 / mb, "T"), ("MUFU", 1 / mb, "M"), ("FMUL", 1 / mb, "T"),
                                      ("FFMA", 1 / mb, "T")] for e, o in cands.items()}
-                zp, zpack, _ = p_zero(c, plan)
+                pz = p_zero(c, plan)
+                zp, zpack, _ = pz
                 if plan.dither:
                     cands = {e: dithered(o, zp, zpack) for e, o in cands.items()}
                 if plan.noise_dither:
@@ -843,7 +844,7 @@ def lane_comp(c: Comp, plan: Plan, reading: str, stock: bool, lookup: bool) -> d
             "words": h["words"] * c.count, "unforced": h["unforced"] * c.count, "forming": 0.0, "coins": 0.0,
             "coin_calls": [], "design": design, "per_element": {"stock": st["honest"], "honest": h["honest"],
                                                                  "forced": h["forced"], "words": h["words"]},
-            "ops": ops}
+            "ops": ops, **({"p_zero": pz} if pz and (plan.dither or plan.noise_dither) else {})}
 
 
 # ---------------------------------------------------------------- the step
@@ -1500,11 +1501,13 @@ def check() -> list[dict]:
             far = p_zero(Comp("softmax", "softmax", 1.0, kind="softmax", span=(4096, 4097)), PLAN["best_p4_nkd_bmax"])
         except ValueError:
             far = None
+        PZERO = None
+        assumed = p_zero(sm, PLAN["best_p4_nkd"])
     finally:
         PZERO = held
     ok("p_zero weighs the measured bins inside a softmax's rows by keys (values) and packs, at the plan's block and "
-       "max reference; a span with no measured rows is refused",
-       abs(got[0] - 0.5) < 1e-12 and abs(got[1] - 0.2) < 1e-12 and p_zero(sm, PLAN["best_p4_nkd"])[2] == "assumed"
+       "max reference; a span with no measured rows is refused, and with no measurement it is ZERO_P",
+       abs(got[0] - 0.5) < 1e-12 and abs(got[1] - 0.2) < 1e-12 and assumed == (ZERO_P, ZERO_P, "assumed")
        and far is None, got)
     ex = {r["name"]: r for r in evaluate("llama", "T8192_8x1k", PLAN["best_p4_exact"])["components"]}
     nb = {r["name"]: r for r in evaluate("llama", "T8192_8x1k", PLAN["best_p4_nkd_bmax"])["components"]}
