@@ -44,6 +44,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
 
+from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
@@ -140,26 +141,32 @@ def m_of(run: Any, s: int) -> int:
     return run.step_rows()[s]
 
 
-def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-    """Round s's ``live@<s>``: its input rows, each port's u16 words (`live_reads.statement_rows`' ports, one instance), and
-    its ``--registered`` file (`live_reads.reads_file`) under the window Program's digest, the open root and the session, at
-    m_s (or a claimed ``m``)."""
-    served, T = run.served, run.rows
+def _rows(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], int]:
+    """Round s's ``live@<s>`` input rows at m_s (or a claimed ``m``): each port's u16 words (`live_reads.statement_rows`'
+    ports, one instance), and the m they state."""
+    T = run.rows
     if (gap := admission_gap(run)) is not None:
         raise ValueError(gap)
     if s >= len(run.round_log):
         raise ValueError(f"round {s} hasn't closed, so its slot table isn't committed")
-    roots = {v: r.root.hex() for v, r in served.live.items()}
     m = m_of(run, s) if m is None else m
     rows = {f"slot_{i}": w for i, w in enumerate(slot_words(run.owners.get(s, []), T))}
     rows |= {f"req_{i}": w for i, w in enumerate(request_words(run.admitted.get(0, []), T))}
     rows["m"] = np.asarray(LR.slot_words([m])[0], np.uint16)
     rows["s"] = np.asarray(LR.slot_words([s])[0], np.uint16)
-    mt = caps(run.admitted.get(0, []))
-    rows |= {f"cap_{i}": w for i, w in enumerate(LR.slot_words(LR.caps(mt, T)))}
-    doc = LR.reads_file(served.program_digest, T, run.steps, s, roots, served.root, served.live[value(served, LR.REQUESTS)].session,
-                       m, served.program.fn.bindings["PREFIX"], mt)
-    return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, doc
+    rows |= {f"cap_{i}": w for i, w in enumerate(LR.slot_words(LR.caps(caps(run.admitted.get(0, [])), T)))}
+    return {p: np.asarray(w, np.uint16).reshape(1, -1) for p, w in rows.items()}, m
+
+
+def statement(run: Any, s: int, m: int | None = None) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Round s's ``live@<s>``: its input rows (`_rows`) and its ``--registered`` file (`live_reads.reads_file`) under the
+    window Program's digest, the open root and the session, at m_s (or a claimed ``m``)."""
+    served = run.served
+    rows, m = _rows(run, s, m)
+    doc = LR.reads_file(served.program_digest, run.rows, run.steps, s, {v: r.root.hex() for v, r in served.live.items()},
+                        served.root, served.live[value(served, LR.REQUESTS)].session, m,
+                        served.program.fn.bindings["PREFIX"], caps(run.admitted.get(0, [])))
+    return rows, doc
 
 
 def evaluated(run: Any, s: int, m: int | None = None) -> int:
@@ -217,26 +224,39 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
     pub = {"T": T, "S": run.steps, "prefix": prefix, "program": prog, "window": window, "session": req.session,
            "roots": {v: r.root.hex() for v, r in served.live.items()},
            "served": [m_of(run, s) for s in range(len(run.round_log))], "max_tokens": caps(run.admitted.get(0, []))}
-    cap = LR.caps_table(prog, prefix, window, T, pub["max_tokens"])[2]
+    cap, ok = LR.caps_table(prog, prefix, window, T, pub["max_tokens"])[2], LR.ok_table(prog, prefix, window, run.steps)[2]
+    salts = {r.value: _salts(r) for r in (req, cap, ok)}
     out.mkdir(parents=True, exist_ok=True)
     (out / "window.json").write_text(json.dumps(pub, indent=1))
     for s, m in enumerate(pub["served"]):
-        rows, _doc = statement(run, s)
-        reads = {f"slot_{i}": (served.live[value(served, LR.SLOTS, s)], i) for i in range(T)}
+        rows, _m = _rows(run, s, m)
+        slots = served.live[value(served, LR.SLOTS, s)]
+        known = LR.m_table(prog, prefix, window, s, m)[2], LR.round_table(prog, prefix, window, s)[2]
+        reads = {f"slot_{i}": (slots, i) for i in range(T)}
         reads |= {f"req_{i}": (req, i) for i in range(T)}
         reads |= {f"cap_{i}": (cap, i) for i in range(T)}
-        reads |= {"m": (LR.m_table(prog, prefix, window, s, m)[2], 0), "s": (LR.round_table(prog, prefix, window, s)[2], 0), LR.OK_PORT: (LR.ok_table(prog, prefix, window, run.steps)[2], s)}
+        reads |= {"m": (known[0], 0), "s": (known[1], 0), LR.OK_PORT: (ok, s)}
         rows[LR.OK_PORT] = np.asarray([CC.OK_ROW], np.uint16)
+        drawn = salts | {r.value: _salts(r) for r in (slots, *known)}
         z: dict[str, Any] = {"units": np.array([s])}
+        opening = {}
         for p, (reg, i) in reads.items():
-            z |= {f"w_{p}": rows[p], f"s_{p}": np.frombuffer(reg.salts[i], np.uint8).reshape(1, -1),
-                  f"v_{p}": np.array([reg.value]), f"r_{p}": np.array([i], np.int64), f"p_{p}": np.array([reg.path(i).hex()])}
+            path = reg.path(i).hex()
+            z |= {f"w_{p}": rows[p], f"s_{p}": drawn[reg.value][i], f"v_{p}": np.array([reg.value]),
+                  f"r_{p}": np.array([i], np.int64), f"p_{p}": np.array([path])}
+            opening[p] = {"value": reg.value, "index": i, "bc": reg.bcs[i].hex(), "path": path}
         d = out / str(s)
         d.mkdir(exist_ok=True)
-        np.savez(d / "rows.npz", **z)
-        (d / "opening.json").write_text(json.dumps({p: {"value": reg.value, "index": i, "bc": reg.bcs[i].hex(),
-                                                        "path": reg.path(i).hex()} for p, (reg, i) in reads.items()}))
+        PV.savez(d / "rows.npz", z)
+        (d / "opening.json").write_text(json.dumps(opening))
     return {"dir": str(out), "rounds": len(pub["served"])}
+
+
+def _salts(reg: Any) -> np.ndarray:
+    """Every row's salt of a registered value as ``(rows, 1, 192)`` u8, drawn in one pass where its salts are drawn on
+    read (`pouw_h1_registered.Salts.at`)."""
+    got = reg.salts.at(range(reg.leaves)) if hasattr(reg.salts, "at") else b"".join(reg.salts)
+    return np.frombuffer(got, np.uint8).reshape(reg.leaves, 1, -1)
 
 
 __all__ = ["REQUESTS", "SLOTS", "Table", "admission_gap", "caps", "dump", "evaluated", "headers", "m_of", "nonce", "request_words",
