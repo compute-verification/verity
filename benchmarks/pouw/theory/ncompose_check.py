@@ -10,7 +10,9 @@ on every row.
 
 Over `ROWS` random rows (the grid), a register is a *carrier* of word `w` when `reg − w` is constant mod 2³², and an
 *encoder* when it is a function of `w` alone (unchanged when every other word is redrawn) and injective in `w`.
-Registers constant over the grid are free and skipped.
+Registers constant over the grid are free and skipped; the counts give, a variant and a block, the registers written
+and those that move over the grid (*live*), with the live registers distinct on the grid. Only a live register can be
+charged, so a write that isn't live (the prefix block's, the padding block's schedule) is honest's to fold.
 
 * `le`: frame-v3's row order. Each word is written little-endian, so SHA-512 reads `bswap32(w)`.
 * `be`: the same with each word written big-endian, so SHA-512 reads `w` itself.
@@ -226,8 +228,14 @@ def analyse(variant: str, rng: random.Random) -> dict:
         moves = np.all(Vf != Vf0[:, None, :], axis=(0, 1))
         hit = live & same & moves
         encoders[j] = [labels[i] for i in np.nonzero(hit)[0]]
+    blk = [L.split(".", 1)[0] for L in labels]
+    per_block = {}
+    for b in sorted(set(blk), key=lambda s: int(s[1:])):
+        idx = np.array([i for i, x in enumerate(blk) if x == b])
+        per_block[b] = {"writes": len(idx), "live": int(live[idx].sum())}
+    distinct = len({V[:, i].tobytes() for i in np.nonzero(live)[0]})
     return {"variant": variant, "digest_ok": ok, "registers": len(labels), "live": int(live.sum()),
-            "carriers": carriers, "encoders": encoders}
+            "distinct_live": distinct, "per_block": per_block, "carriers": carriers, "encoders": encoders}
 
 
 def uses() -> dict[int, list[str]]:
@@ -297,8 +305,12 @@ def main() -> int:
                    all(not res["be-fold"]["carriers"][j] and not res["be-fold"]["encoders"][j] for j in later)))
     checks.append(("be-fold: every other word keeps its wgmma register",
                    all(any("=wgmma" in L for L in res["be-fold"]["carriers"][j]) for j in range(nw) if j not in m0)))
+    checks.append(("the prefix block's registers are constant on the grid",
+                   all(res[v]["per_block"]["b0"]["live"] == 0 for v in res)))
     out["writes"] = {v: res[v]["registers"] for v in res}
     out["live"] = {v: res[v]["live"] for v in res}
+    out["distinct_live"] = {v: res[v]["distinct_live"] for v in res}
+    out["per_block"] = {v: res[v]["per_block"] for v in res}
     out["carriers"] = {v: {j: res[v]["carriers"][j] for j in sorted(set(m0) | {2, 33})} for v in res}
     out["encoders"] = {v: {j: res[v]["encoders"][j] for j in sorted(set(m0) | {2, 33})} for v in res}
     out["sha_carriers"] = {v: sum(len([L for L in res[v]["carriers"][j] if "=wgmma" not in L]) for j in range(nw))
@@ -308,7 +320,8 @@ def main() -> int:
     out["checks"] = [{"check": n, "ok": bool(ok)} for n, ok in checks]
     for n, ok in checks:
         print(f"{'ok  ' if ok else 'FAIL'} {n}")
-    print(json.dumps({k: out[k] for k in ("writes", "live", "sha_carriers", "sha_encoders")}, indent=1))
+    print(json.dumps({k: out[k] for k in ("writes", "live", "distinct_live", "per_block", "sha_carriers",
+                                          "sha_encoders")}, indent=1))
     for v in res:
         for j in sorted(set(m0) | {2, 33}):
             print(f"{v:8s} word {j:2d}: carriers {res[v]['carriers'][j]}  encoders {res[v]['encoders'][j]}")
