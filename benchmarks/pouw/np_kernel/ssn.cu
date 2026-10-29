@@ -368,6 +368,19 @@ extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, u
                                         uint64_t first_index, uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_frame_launch(const void* params, const uint8_t* hs, uint64_t n_h, uint64_t first, uint64_t m,
                                         uint64_t n_total, uint8_t* out, uint64_t max_blocks, cudaStream_t st);
+// SSN_SMALL_ROWS: run.sh's second build of native_rows.cu (SMALL_THREADS), its blocks SSN_SMALL_ROWS threads and its symbols
+// verity_rows_s_*; a leaves launch of fewer rows than SMALL_ROWS_MAX (default 2 blocks of 256 an SM) uses it, so a small
+// call's rows spread over the SMs instead of sharing a few
+#ifdef SSN_SMALL_ROWS
+extern "C" int verity_rows_s_leaves_sf_launch(const void* params, const uint8_t* rows, uint64_t stride, uint64_t n_rows,
+                                              const uint8_t* salts, const uint8_t* tn, uint64_t first, uint64_t m,
+                                              uint64_t n_total, uint8_t* out, uint8_t* bc, uint8_t* hs, uint8_t* scratch,
+                                              uint64_t max_blocks, cudaStream_t st);
+static u64 small_rows_max() {
+  static const u64 v = getenv("SMALL_ROWS_MAX") ? strtoull(getenv("SMALL_ROWS_MAX"), nullptr, 10) : 2 * 132 * 256;
+  return v;
+}
+#endif
 
 // frame-v3-sha512's message heads (verity.ml.commitments.merkle): a leaf's before its 64-byte value (169 to 173 bytes by the
 // leaf's index) and a node's before its left child; with what follows them, 2 and 3 compressions
@@ -485,8 +498,12 @@ struct Hasher {
   u64 leaves_of(const uint8_t* data, u64 rows, u64 row_bytes, cudaStream_t st, u64 cap = 0) {
     if (rb) {
       const u64 n = (rows * row_bytes + rb - 1) / rb;
-      const int rc = verity_rows_leaves_sf_launch(params.data(), data, rb, n, nullptr, tn, 0, n, n, leaves, nullptr, nullptr,
-                                                  scratch, cap, st);
+#ifdef SSN_SMALL_ROWS
+      const auto launch = n < small_rows_max() ? verity_rows_s_leaves_sf_launch : verity_rows_leaves_sf_launch;
+#else
+      const auto launch = verity_rows_leaves_sf_launch;
+#endif
+      const int rc = launch(params.data(), data, rb, n, nullptr, tn, 0, n, n, leaves, nullptr, nullptr, scratch, cap, st);
       if (rc) {
         fprintf(stderr, "ERR verity_rows_leaves_sf_launch %d\n", rc);
         exit(2);
@@ -788,6 +805,30 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   for (int r : rbs) hra[r];
   if (root_a_rows >= 0) hra[root_a_rows];
   for (auto& [r, h] : hra) h.init((size_t)M * 8192, r, (u64)M);
+#ifdef SSN_SMALL_ROWS
+  // the small-block build's leaves against the served build's, over each linear's A_j by each committer scheme
+  for (auto& [r, h] : hra) {
+    if (!r) continue;
+    for (const LinDev& d : lins) {
+      const u64 n = ((u64)M * d.K + r - 1) / r;
+      std::vector<uint8_t> want(64 * n), got(64 * n);
+      for (int small = 0; small < 2; small++) {
+        const auto launch = small ? verity_rows_s_leaves_sf_launch : verity_rows_leaves_sf_launch;
+        if (launch(h.params.data(), d.A0, r, n, nullptr, h.tn, 0, n, n, h.leaves, nullptr, nullptr, h.scratch, 0, 0)) {
+          fprintf(stderr, "ERR the %s build's leaves\n", small ? "small-block" : "served");
+          return 6;
+        }
+        CK(cudaMemcpy(small ? got.data() : want.data(), h.leaves, 64 * n, cudaMemcpyDeviceToHost));
+      }
+      u64 bad = 0;
+      for (u64 i = 0; i < n; i++) bad += memcmp(&want[64 * i], &got[64 * i], 64) != 0;
+      printf("{\"what\": \"small_leaves_check\", \"hasher\": \"rows%d\", \"linear\": \"%s\", \"M\": %d, \"leaves\": %llu, "
+             "\"small_threads\": %d, \"mismatched_leaves\": %llu}\n",
+             r, d.name, M, (unsigned long long)n, SSN_SMALL_ROWS, (unsigned long long)bad);
+      if (bad) return 6;
+    }
+  }
+#endif
   auto fwd_root_a = [&](const LinDev& d, cudaStream_t st) {
     if (root_a) hra[root_a_rows >= 0 ? root_a_rows : rbs[hi]].root(d.A0, (u64)M, (u64)d.K, st);
   };
@@ -801,8 +842,13 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   Timer T;
   cudaStream_t s1;
   std::vector<cudaStream_t> s2(nbuf);
-  CK(cudaStreamCreateWithFlags(&s1, cudaStreamNonBlocking));
-  for (auto& s : s2) CK(cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking));
+  // PRIO=1: the GEMM stream (root(A_j), coins, forming, the GEMMs) at the device's greatest priority, the hash streams at
+  // its least, so a block of the forward's data path is scheduled ahead of the words' hashing
+  const bool prio = getenv("PRIO") && atoi(getenv("PRIO"));
+  int least = 0, greatest = 0;
+  if (prio) CK(cudaDeviceGetStreamPriorityRange(&least, &greatest));
+  CK(cudaStreamCreateWithPriority(&s1, cudaStreamNonBlocking, greatest));
+  for (auto& s : s2) CK(cudaStreamCreateWithPriority(&s, cudaStreamNonBlocking, least));
   const double f0 = sm_mhz(dclk);
   auto line = [&](const char* what, const LinDev* d, double ms, double macs, double words, double extra, std::string hn = "") {
     const double u = units(ms, f0);
@@ -906,7 +952,14 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   }
   printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu, "
          "\"root_a_in_forward\": %d, \"root_a_rows\": %d, \"root_a_tree\": 1, \"words_tree\": %d, \"rowseg_leaf\": "
-         "\"sz_finish\"}\n", f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree);
+         "\"sz_finish\", \"prio\": %d, \"small_threads\": %d, \"small_rows_max\": %llu}\n",
+         f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree, (int)prio,
+#ifdef SSN_SMALL_ROWS
+         SSN_SMALL_ROWS, (unsigned long long)small_rows_max()
+#else
+         0, 0ull
+#endif
+  );
   return 0;
 }
 

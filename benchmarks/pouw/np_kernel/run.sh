@@ -9,7 +9,10 @@
 #   over MS; time_m<M>_cap<C>.jsonl), ROOT_A (0; 1 puts root(A_j), its leaves and the tree above them, in the forward ahead
 #   of each call's coins, by the words' scheme or by ROOT_A_ROWS's: row bytes, 0 row-seg over A_j's rows), ROOT_A_LIST (the
 #   schemes root(A_j) is timed by a call; default ROWS), WORDS_TREE (0; 1 builds the tree above each chunk's leaves in the
-#   forwards). VERITY_ROWS_PHASES and VERITY_ROWS_FORM reach the served committer (native_rows.cu).
+#   forwards), PRIO (0; 1 runs the forwards' GEMM stream at the greatest stream priority, the hash streams at the least),
+#   SMALL_THREADS (unset; N builds native_rows.cu a second time with blocks of N threads, a build-time edit of a copy, for
+#   the leaves of any launch of fewer than SMALL_ROWS_MAX rows). VERITY_ROWS_PHASES and VERITY_ROWS_FORM reach the served
+#   committer (native_rows.cu).
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
@@ -20,8 +23,22 @@ if [ "${1:-}" != leased ]; then
   trap 'rm -rf "$BUILD_DIR"' EXIT
   CUDA=${CUDA_HOME:-/usr/local/cuda-13.0}
   say "build $(git rev-parse --short=10 HEAD 2>/dev/null) into $BUILD_DIR"
-  "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v "$HERE/ssn.cu" \
-    integrations/vllm/verity_vllm/commit/committer/native_rows.cu -o "$BUILD_DIR/ssn" > "$OUT/build_ssn.log" 2>&1
+  COMMITTER=integrations/vllm/verity_vllm/commit/committer
+  SRCS=("$HERE/ssn.cu" "$COMMITTER/native_rows.cu")
+  if [ -n "${SMALL_THREADS:-}" ]; then
+    # the copy keeps the leaf kernels' register cap (128: threads x min blocks = 512) and renames its symbols and sha512.cuh's
+    sed -e "s/^constexpr int THREADS = 256;/constexpr int THREADS = $SMALL_THREADS;/" \
+      -e 's/^#define VERITY_ROWS_MIN_BLOCKS 2$/#define VERITY_ROWS_MIN_BLOCKS (512 \/ THREADS)/' \
+      -e 's/__launch_bounds__(THREADS, 2)/__launch_bounds__(THREADS, 512 \/ THREADS)/' \
+      -e 's/\bverity_rows_/verity_rows_s_/g' -e 's/^#include "sha512.cuh"/#define sha sha_s\n#include "sha512.cuh"/' \
+      "$COMMITTER/native_rows.cu" > "$BUILD_DIR/native_rows_s.cu"
+    n=$(grep -c -e "THREADS = $SMALL_THREADS;" -e 'MIN_BLOCKS (512 / THREADS)' -e 'THREADS, 512 / THREADS' \
+      -e '^#define sha sha_s' "$BUILD_DIR/native_rows_s.cu")
+    [ "$n" = 4 ] || { say "the small-block copy of native_rows.cu took $n of its 4 edits"; exit 3; }
+    SRCS+=("$BUILD_DIR/native_rows_s.cu" -DSSN_SMALL_ROWS="$SMALL_THREADS" -I "$COMMITTER")
+  fi
+  "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v "${SRCS[@]}" \
+    -o "$BUILD_DIR/ssn" > "$OUT/build_ssn.log" 2>&1
   rc=$?; say "build ssn rc $rc"; [ "$rc" = 0 ] || { tail -40 "$OUT/build_ssn.log"; exit 3; }
   "$CUDA/bin/cuobjdump" -sass "$BUILD_DIR/ssn" > "$OUT/ssn.sass"
   python3 - "$OUT/ssn.sass" > "$OUT/gate_ssn.json" <<'EOF'

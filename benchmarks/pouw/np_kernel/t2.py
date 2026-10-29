@@ -58,9 +58,16 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             if (r := by.get((f"fwd_{sched}", "all", h))):
                 fwd[f"{sched}/{h}"] = r
     clock = next((r for r in rows if r["what"] == "clock"), {})
-    out = {"M": rows[0]["M"], "mhz": rows[0]["mhz"], "root_a_in_forward": clock.get("root_a_in_forward", 0),
+    first = next(r for r in rows if "mhz" in r)
+    small = [r for r in rows if r["what"] == "small_leaves_check"]
+    out = {"M": first["M"], "mhz": first["mhz"], "root_a_in_forward": clock.get("root_a_in_forward", 0),
            "root_a_rows": clock.get("root_a_rows", -1), "root_a_tree": clock.get("root_a_tree", 0),
-           "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"), "linears": lin,
+           "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"),
+           "prio": clock.get("prio", 0), "small_threads": clock.get("small_threads", 0),
+           "small_rows_max": clock.get("small_rows_max", 0),
+           "small_leaves_check": {"cases": len(small), "leaves": sum(r["leaves"] for r in small),
+                                  "mismatched": sum(r["mismatched_leaves"] for r in small)},
+           "linears": lin,
            "forward": {k: {"ms": r["ms"], "units": r["units"], "units_per_stock_mac": r["units_per_stock_mac"],
                            "units_per_word": r["units_per_word"], "words": r["words"], "stock_macs": r["stock_macs"]}
                        for k, r in fwd.items() if r}}
@@ -121,6 +128,12 @@ def main() -> None:
             print(f"- the forwards below compute {what} ahead of each call's coins, by {by_scheme}")
         print(f"- the forwards below hash the words' leaves{' and the tree above each chunk' if r['words_tree'] else ''}; "
               f"rowseg's leaf: {r['rowseg_leaf']}")
+        if r["small_threads"]:
+            c = r["small_leaves_check"]
+            print(f"- leaves launches under {r['small_rows_max']} rows use the committer built with {r['small_threads']}-thread "
+                  f"blocks; its leaves against the served build's: {c['mismatched']} of {c['leaves']} differ ({c['cases']} cases)")
+        if r["prio"]:
+            print("- the GEMM stream runs at the greatest stream priority, the hash streams at the least")
         for w, x in r["forward"].items():
             print(f"- forward {w}: {x['ms']:.3f} ms, {x['units_per_stock_mac']:.3f} units a stock MAC")
         for k, v in r.get("t2", {}).items():
