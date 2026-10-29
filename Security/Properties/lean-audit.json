@@ -18515,6 +18515,26 @@
     "Properties.Remote.SecurityProofs.acceptInferenceOnly"
    ]
   },
+  "VStar.Sha": {
+   "digest": "c1006c5528d1ea084e2fb6333d2f0898b6729ed621180f24a000c3c11f9658fa",
+   "definitions": {
+    "VStar.bitL": "d5858ec44582819b1ecc8565badac84dd243ca9acb80ac03e5b65cdc687bc7c8",
+    "VStar.bitsOf": "e14eb64db069d60c055366fe6e5913de6a15fdeaa3be9e00f54f00784f411d38",
+    "VStar.blockAt": "1717993cbf0a1c7e516789e888c8ef38d614ce08eeb20f2f414afdc937ca9870",
+    "VStar.iv": "02aef37dc4d78f6178b2172e05ff4348185eabad87d3664bbb0bc581567f7e1a",
+    "VStar.lenBytes": "233265c91f4882309ecb750cfba22acde9977514236698c0813585e1bd971826",
+    "VStar.padTail": "d965a36ff558bd34264ca9e6080d0e5c05340ffeafac397533ec4189af6d4f9a",
+    "VStar.shaBlock": "efe491100c17fa84af84b6f01a344f6bd12c82650edf5e19abe823f9f741463a",
+    "VStar.shaBlocks": "15ff5ab97d83a28b5d2128e13cbac483237ed3f79cf2ea962509cd0663e98ee9",
+    "VStar.shaFrom": "20b231e72434bed212db98cfabf34f9155d2521180ac8b1690401eeb2dcd3a33",
+    "VStar.shaMsg": "8280261b7254ee502f0a1c4c366663f5789f0a137135b04c04e0e4730a2db273",
+    "VStar.zeroPad": "69ee6e06904e5a90be7946040157352bf618f6fc8a544951f1573f3a7324d6d0"
+   },
+   "guarantees": [
+    "Properties.Remote.SecurityProofs.acceptComplies",
+    "Properties.Remote.SecurityProofs.acceptInferenceOnly"
+   ]
+  },
   "VStar.Stage": {
    "digest": "7942c51300ab9288fc0384946c95e74da196dc3f6ad1ed137973322a2984e475",
    "definitions": {
