@@ -32,6 +32,9 @@ import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.H1Zy
+import Definitions.Pouw.Lead.Gap
+import Definitions.Pouw.Lead.Layout
+import Definitions.Pouw.Lead.Model
 import Definitions.Pouw.M1
 import Definitions.Pouw.MerkleExtract
 import Definitions.Pouw.NCP.Defs

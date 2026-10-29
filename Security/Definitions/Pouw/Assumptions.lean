@@ -32,6 +32,7 @@ import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TTile
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
 import Definitions.Pouw.Assumptions.Game
+import Definitions.Pouw.Assumptions.Lead
 import Definitions.Pouw.Assumptions.NCP.Assumptions
 import Definitions.Pouw.Assumptions.NCP.Chain
 import Definitions.Pouw.Assumptions.NCP.GamePinned
