@@ -19,6 +19,7 @@ class Sealer:
     pinned host memory the double-buffered windows take), else it waits for room and says how long; `drain` waits for every job
     and its seal. A job's own failure, or its seal's, is its window's: the next one still runs."""
     process: Any = None                                  # the `seal_process.SealProcess` its seals run in (`seal_process.ProcessSealer`)
+    records: Any = None                                  # ... and the `window_records.RecordProcess` its windows' records run in
 
     def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
         self.hold_bytes, self.clock = int(hold_bytes), clock

@@ -309,8 +309,8 @@ class Sealed(Serving):
     its committer over the runner."""
 
     def __init__(self, out: Path, *, sealer: Any, mirror: Any = None, disk: Any = None, window_bytes: int | None = None,
-                 window_steps: int = 64, com: Any = Counted) -> None:
-        super().__init__(out, window_steps=window_steps)
+                 window_steps: int = 64, com: Any = Counted, served: dict | None = None) -> None:
+        super().__init__(out, window_steps=window_steps, served=served)
         w = self.windows
         w.com = com(self.runner)
         w.seal, w.sealer, w.mirror, w.disk, w.window_bytes, w.on_floor = {"label": "t"}, sealer, mirror, disk, window_bytes, self.loop.drain
@@ -377,7 +377,7 @@ def test_while_a_windows_finalize_blocks_the_loop_opens_the_next_window_and_serv
     sealer.close()
     wins = records(tmp_path, "windows.jsonl")
     assert [w["window"] for w in wins] == [0, 1] and all(w["passed"] and w["seal"]["off_loop"] for w in wins)
-    assert all(list(w["close_phases_s"])[:4] == ["on_loop", "finalize_wait", "finalize", "readback"]
+    assert all(list(w["close_phases_s"])[:4] == ["on_loop", "finalize_wait", "finalize", "recorder"]
                and list(w["on_loop_phases_s"]) == ["detach", "ledgers", "seal_wait"]
                and set(w["seconds"]) == {"open", "close", "on_loop", "finalize_wait", "seal_wait", "queued"} for w in wins)
     reqs = records(tmp_path, "requests.jsonl")
@@ -499,7 +499,7 @@ def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes
                 "requests": [q["request_id"] for q in kw["reqs"]], "run_root": rc.run_root.hex()}
 
     monkeypatch.setattr(sc, "seal_window", seal)
-    timing = {"windows.jsonl": ("seconds", "close_phases_s", "on_loop_phases_s"), "seals.jsonl": ("queued_s", "seal_wait_s"),
+    timing = {"windows.jsonl": ("seconds", "close_phases_s", "on_loop_phases_s", "recorder_phases_s"), "seals.jsonl": ("queued_s", "seal_wait_s"),
               "requests.jsonl": ("times",), "step_trace.jsonl": ()}
     got = {}
     for name, com in (("on", Counted), ("off", Detached)):
@@ -517,6 +517,66 @@ def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes
                      for f, drop in timing.items()}
     assert len(got["on"]["windows.jsonl"]) > 3 and len(got["on"]["requests.jsonl"]) == 3
     assert got["off"] == got["on"]
+
+
+def test_a_windows_records_run_in_the_record_process_as_on_the_sealers_thread(tmp_path, monkeypatch):
+    """The same requests served twice, off the loop, each window's records (readback, served rows, step trace, requests'
+    checks) once on the sealer's first thread and once in a spawned `window_records.RecordProcess` from what that thread read
+    of the window's view: windows.jsonl, requests.jsonl, request_users.jsonl, step_trace.jsonl and the served rows hold the
+    same lines, timings and the served rows' fresh salts aside, every request checked and passed, and each window's served
+    rows the record its rows recommitted under its salts make."""
+    from tests.pipeline.test_serve_openai import private, recommit, served_statics
+    from verity_vllm.pipeline import window_records as WR
+
+    monkeypatch.setattr(sc, "seal_window", lambda com, rc, d, **kw: {"row_dir": str(d)})
+    statics = served_statics()
+    files = ("windows.jsonl", "requests.jsonl", sc.REQUEST_USERS, "step_trace.jsonl")
+    got, summaries = {}, {}
+    for name in ("thread", "process"):
+        out = tmp_path / name
+        out.mkdir()
+        ids = iter(range(1 << 20))
+        monkeypatch.setattr(so, "new_http_id", lambda: f"cmpl-{next(ids):04x}")
+        sealer = st.Sealer(1 << 40)
+        if name == "process":
+            sealer.records = WR.RecordProcess()
+        with Sealed(out, sealer=sealer, com=Detached, window_steps=2, served=statics) as s:
+            for i in range(3):
+                assert events(s.post("/v1/completions", _body(i, n=3 + i))[1])[-1] == "[DONE]"
+            assert (s.windows.recorder is sealer.records) == (name == "process")
+        sealer.close()
+        if sealer.records is not None:
+            assert sealer.records.close()["exitcode"] == 0
+        summaries[name] = s.windows.summary()
+        drop = ("seconds", "close_phases_s", "on_loop_phases_s", "recorder_phases_s", "served_rows", "times")
+        got[name] = {f: [json.dumps({k: v for k, v in x.items() if k not in drop}).replace(str(out), "OUT") for x in records(out, f)]
+                     for f in files}
+        trace = records(out, "step_trace.jsonl")
+        for w in (w for w in records(out, "windows.jsonl") if not w.get("empty")):
+            priv = private(out, w["window"])
+            by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
+            served, _ = recommit(statics, by_step, priv["ids"], w["steps"], w["run_root"], priv)
+            assert w["served_rows"] == {**served.record(), "statics": statics}
+            got[name].setdefault("served_rows", []).append({k: v for k, v in priv.items() if k != "salts"})
+    assert summaries["process"]["passed"] and summaries["process"]["requests_checked"] == 3 == summaries["thread"]["requests_checked"]
+    assert len(got["thread"]["windows.jsonl"]) > 3 and len(got["thread"]["requests.jsonl"]) == 3
+    assert got["process"] == got["thread"]
+
+
+def test_a_record_process_that_has_exited_fails_each_window_by_name(tmp_path):
+    """`window_records.RecordProcess`: once its process has exited, a window's records raise by the process's name and exit
+    code, and so do the next window's; nothing waits on a process that is gone."""
+    from verity_vllm.pipeline import window_records as WR
+
+    proc = WR.RecordProcess().start(out=tmp_path, run_id="t")
+    w = {"window": 0, "run_root": None, "steps": 0, "step_roots": [], "step_t": {}, "trace": None, "read": None,
+         "finished": [], "admitted": []}
+    assert proc.window(w)["checked"] == [] and (tmp_path / "step_trace.jsonl").exists()
+    proc.process.kill()
+    proc.process.join()
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match=r"the serve-records process exited \(-9\) before its window"):
+            proc.window(w)
 
 
 def test_off_the_loop_the_committer_is_installed_once_and_stays_on_between_windows(tmp_path, monkeypatch):
@@ -670,7 +730,8 @@ def test_a_close_says_where_its_time_went(tmp_path):
     with s:
         s.post("/v1/completions", _body(0, n=2))
     wins = [w for w in records(tmp_path, "windows.jsonl") if not w.get("empty")]
-    assert wins and all(list(w["close_phases_s"]) == ["finalize", "readback", "record", "step_trace", "requests"]
+    assert wins and all(list(w["close_phases_s"]) == ["finalize", "recorder", "record"]
+                        and list(w["recorder_phases_s"]) == ["readback", "step_trace", "requests"]
                         and min(w["close_phases_s"].values()) >= 1 and sum(w["close_phases_s"].values()) == w["seconds"]["close"]
                         for w in wins), [(w["close_phases_s"], w["seconds"]) for w in wins]
 

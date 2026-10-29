@@ -5,8 +5,9 @@ A window (`CommitWindows`) opens at the first engine step after the engine was i
 again (once it holds ``idle_close_steps`` steps), or after ``window_steps`` steps; each is one Commit, with its own run
 root. The record is the served path's and COMMIT-ARB's one record, `commit.served_record`: the committer carries a
 `served_record.SamplerInputsSource`, which binds each sampled row's seed and position beside the sampled ids and keeps
-the step's rows, and at each close `served_record.Record.absorb` reads the window back from the committed bytes into one
-`RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
+the step's rows, and at each close the window's records (`window_records.Recorder`, `CommitWindows.recorder`) read it back
+from the committed bytes into one `RequestRecord` per engine request (`served_record.Record.absorb_read`). A finished request
+is checked by `Record.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
 ended; one its client aborted ends at the k ids streamed before the abort, its finish ``abort`` with ``k``, and passes when
 those are the committed ids' prefix. The finish says who ended it: ``by`` ``client``, or ``server`` for a request still
@@ -17,12 +18,14 @@ its rows and the committer's trace. ``marks`` hears each window's open and close
 With ``seal`` each closed window is also sealed as a deferred Commit's row dir (`serve_seal.seal_window`); with a ``sealer``
 (`seal_stages.Sealer`) off the engine loop. There the close itself runs off the loop too: the loop ends the window's last
 step, detaches the window into a view of the committer (`NativeHostCommitter.detach`), takes the ledgers as they stand and
-opens the next window, and the window's finalize, its readback, its records and its requests' checks run on the sealer's
-first thread in window order (`CommitWindows._finish`), then its seal on its second, beside the next window's finalize; a
-committer that detaches no window is finalized at the close and frozen for its seal (`serve_seal.freeze`). The window's line
-in ``windows.jsonl``, written once its finalize has run and before its seal, names its row dir (``seal``); what its seal wrote
-is its line in ``seals.jsonl``, once written, in window order; a sealer with a ``process`` (`seal_process.ProcessSealer`)
-writes only each seal's store files on its thread, and the rest of the seal runs in that spawned process. With ``release``
+opens the next window, and the window's finalize, its records and its line run on the sealer's first thread in window order
+(`CommitWindows._finish`), then its seal on its second, beside the next window's finalize; a committer that detaches no
+window is finalized at the close and frozen for its seal (`serve_seal.freeze`). The window's line in ``windows.jsonl``,
+written once its finalize has run and before its seal, names its row dir (``seal``); what its seal wrote is its line in
+``seals.jsonl``, once written, in window order. A sealer with a ``process`` (`seal_process.ProcessSealer`) writes only each
+seal's store files on its thread, and the rest of the seal runs in that spawned process; its ``records``, another, runs each
+window's records from what the first thread read of its view (`CommitWindows._window_in`), so that neither's Python takes
+the engine's GIL. With ``release``
 (`serve_release.Draws`, ``--retain device --release-after``) a window's seal, on either path, first waits for its
 draw-gated release (on the first thread), which keeps only the leaves its
 subprotocols' drawn blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
@@ -57,10 +60,11 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity.core.protocols.certifier import compile_slice as CS
-from verity.core.protocols.certifier import served_rows as SRW
-from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
+from verity_vllm.commit.served_record import base_id, served_rows, stop_string_end, window_commit, window_read
+from verity_vllm.pipeline import window_records as WR
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
+from verity_vllm.pipeline.window_records import REQUEST_USERS
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
@@ -87,11 +91,6 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
     return StepTrace(Path(out) / SERVED, request_id=external_id, clock=time.time, writer=True).install(engine)
 
-
-#: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
-#: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
-#: advice_trace.jsonl, windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
-REQUEST_USERS = "request_users.jsonl"
 
 #: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
 MIRRORED = ("serve.json", "requests.jsonl", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "step_trace.jsonl",
@@ -201,15 +200,6 @@ def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> 
     return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
 
 
-def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,
-                  run_root: bytes, salts: Sequence[bytes] | None = None) -> tuple[SRW.Served, list]:
-    """A window's served rows (`served_record.served_rows`' form, by step) committed under its run root
-    (`served_rows.register`, fresh salts unless ``salts`` gives them), and the slice windows they make."""
-    S = SimpleNamespace(**statics)
-    session = SRW.windows(S, by_step, ids, steps)
-    return SRW.register(S, session, run_root, salts=salts), session
-
-
 @dataclass
 class Ledger:
     """One request as served: its ids, the HTTP id -> engine id map, its ingress record and its stream."""
@@ -243,6 +233,7 @@ class _Closed:
     on_loop: dict[str, float] = field(default_factory=dict)    # off the loop: the close's phases on the loop
     t_close: float = 0.0                                       # ... when its job was queued
     seal_wait: float = 0.0                                     # ... and how long the loop waited for the sealer's room
+    recorded: bool = False                                     # its records ran (`CommitWindows.recorder`): its requests checked
 
 
 def _phases(laps: Sequence[tuple[str, float]]) -> dict[str, float]:
@@ -285,14 +276,15 @@ class CommitWindows:
         self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
         self.served = dict(served) if served is not None else None   # the compile slice's statics: commit every window's rows
-        self.arrivals: dict[str, int] = {}               # every admitted engine id -> its arrival id, in admission order
+        self._admitted: list[tuple[str, str]] = []       # every admission's (engine id, HTTP id), in order, for the recorder
+        self._sent = 0                                   # ... of which the recorder has heard
         self.sealer, self.window_bytes, self.disk, self.on_floor, self.mirror = sealer, window_bytes, disk, on_floor, mirror
         self.floor_hit: dict[str, Any] | None = None     # the first window the disk floor left unsealed
         self.run_id, self.window_steps, self.idle_close_steps = run_id, int(window_steps), int(idle_close_steps)
         self.eos_ids, self.decode = [int(x) for x in eos_ids], decode
         self.known: dict[str, str] = {}                  # every admitted engine id -> its HTTP id; rows past a finish still map
         self.names: dict[str, str] = {}                  # every admitted engine id -> its name in a sealed window (`user`, else HTTP id)
-        self.record = Record(known=self.known)
+        self._recorder: Any = None                       # where the windows' records run (`recorder`), once one has
         self.window, self.open_s, self.is_open = -1, 0.0, False
         self.installed = False                           # the committer's hooks are on the engine (an off-loop close leaves them)
         self.step_t: dict[int, float] = {}               # the open window's committed steps -> when their engine step ended
@@ -311,7 +303,7 @@ class CommitWindows:
     def admitted(self, adm: Any) -> None:
         """``adm`` a `verity_vllm.pipeline.serve_openai.Admission`."""
         self.known[adm.engine_id] = adm.http_id
-        self.arrivals.setdefault(adm.engine_id, len(self.arrivals))
+        self._admitted.append((adm.engine_id, adm.http_id))
         self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
                                              getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1,
                                              times=dict(getattr(adm, "times", None) or {}))
@@ -446,17 +438,11 @@ class CommitWindows:
             return self._close_off_loop(laps, lap)
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
         lap("finalize")
-        readback = self.record.absorb(self.com, self.window) if rc is not None else None
-        lap("readback")
+        c = _Closed(self.window, self.com, self.step_t, dict(self.ledgers), self._pop_finished(), self.open_s)
+        w = self._window_in(c, rc)
         self.com.uninstall()
         self.installed = self.is_open = False
-        c = _Closed(self.window, self.com, self.step_t, self.ledgers, [], self.open_s)
-        rec, job = self._record(c, rc, readback, lap)
-        c.finished = self._pop_finished()
-        self._write_step_trace(rec, rc, c)
-        lap("step_trace")
-        self._check_finished(c.finished)
-        lap("requests")
+        rec, job = self._record(c, rc, w, lap)
         rec["seconds"] = {"open": round(self.open_s, 4), "close": round(laps[-1][1] - t0, 4)}
         rec["close_phases_s"] = _phases(laps)
         self._write_window(rec)
@@ -497,26 +483,19 @@ class CommitWindows:
         laps = [("", t0)]
         lap = functools.partial(_lap, laps, self.clock)
         job: Any = None
-        waited, checking = 0.0, False
+        waited = 0.0
         try:
             waited = c.com.wait_absorbed() if c.com is not None else 0.0
             lap("finalize_wait")
             rc = c.com.finalize() if c.com is not None else None
             lap("finalize")
-            readback = self.record.absorb(c.com, c.window) if rc is not None else None
-            lap("readback")
-            rec, job = self._record(c, rc, readback, lap)
-            self._write_step_trace(rec, rc, c)
-            lap("step_trace")
-            checking = True
-            self._check_finished(c.finished)
-            lap("requests")
+            rec, job = self._record(c, rc, self._window_in(c, rc), lap)
         except Exception as e:  # noqa: BLE001  (a window whose close fails is its own failure; the server goes on)
             rec = {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "steps": 0, "requests": [],
-                   "error": f"{type(e).__name__}: {e}"[:500], "passed": False}
+                   "error": (str(e) if isinstance(e, WR.RecordFailed) else f"{type(e).__name__}: {e}")[:500], "passed": False}
             job = None
-            if not checking:
-                self._check_finished(c.finished)        # against what the record holds of them: none of this window's rows
+            if not c.recorded:                          # against what the record holds of them: none of this window's rows
+                self._recorded(c, self.recorder.window(self._window_in(c, None)))
         finally:
             if c.com is not None and not isinstance(job, tuple):
                 thaw(c.com)
@@ -532,25 +511,67 @@ class CommitWindows:
             self.mirror()
         return self._land(rec, job, here=(c.t_close, c.seal_wait)) if isinstance(job, tuple) else None
 
-    def _record(self, c: _Closed, rc: Any, readback: Any, lap: Callable[[str], None]) -> tuple[dict[str, Any], Any]:
-        """The closed window's line of windows.jsonl as its finalize and readback make it, with its served rows and its seal's
-        arguments (`_seal_job`)."""
+    @property
+    def recorder(self) -> Any:
+        """Where the windows' records run (`window_records`), made at the first close: the sealer's process (``records``,
+        `seal_process.ProcessSealer`) when it has one, else a `window_records.Recorder` on the thread that closes the window."""
+        if self._recorder is None:
+            config = {"out": self.out, "run_id": self.run_id, "served": self.served, "eos_ids": self.eos_ids}
+            proc = getattr(self.sealer, "records", None)
+            self._recorder = proc.start(**config) if proc is not None else WR.Recorder(**config)
+        return self._recorder
+
+    def _window_in(self, c: _Closed, rc: Any) -> dict[str, Any]:
+        """What the recorder reads of ``c``, finalized into ``rc`` (None: no step, or a close that failed before its records), as
+        plain data: its committed ids, samples, seeds and positions and its rows (`served_record.window_read`), its steps' roots,
+        ends and trace, the requests it finished (`_ledger_in`), and the admissions since the window before."""
+        steps = list(getattr(rc, "steps", None) or ())
+        w = {"window": c.window, "run_root": bytes(rc.run_root).hex() if rc is not None else None, "steps": len(steps),
+             "step_roots": [bytes(s.root).hex() for s in steps], "step_t": dict(c.step_t),
+             "trace": None if rc is None else (getattr(rc, "extra", None) or {}).get("step_trace"),
+             "read": None if rc is None else window_read(c.com), "finished": [self._ledger_in(led) for led in c.finished]}
+        n = len(self._admitted)
+        w["admitted"], self._sent = self._admitted[self._sent:n], n
+        return w
+
+    def _ledger_in(self, led: Ledger) -> dict[str, Any]:
+        """``led`` as the recorder checks it (`window_records.LEDGER_KEYS`), with where its stop string ends when it stopped on
+        one (``stop_end``, `served_record.stop_string_end` with the tokenizer's ``decode``)."""
+        got = {k: getattr(led, k) for k in WR.LEDGER_KEYS}
+        f = led.finish or {}
+        if self.decode is not None and f.get("reason") == "stop" and isinstance(f.get("stop_reason"), str):
+            min_tokens = int((led.ingress.get("params") or {}).get("min_tokens") or 0)
+            got["stop_end"] = stop_string_end(led.streamed, f["stop_reason"], min_tokens, self.decode)
+        return got
+
+    def _recorded(self, c: _Closed, got: Mapping[str, Any]) -> None:
+        c.recorded = True
+        with self._lock:
+            self.checked.extend(got["checked"])
+
+    def _record(self, c: _Closed, rc: Any, w: Mapping[str, Any], lap: Callable[[str], None]) -> tuple[dict[str, Any], Any]:
+        """The closed window's line of windows.jsonl as its finalize and its records (`recorder`, over ``w``: its readback, served
+        rows, step trace and its requests' checks) make it, and its seal's arguments (`_seal_job`)."""
         job: Any = None
+        got = self.recorder.window(w)
+        self._recorded(c, got)
+        lap("recorder")
+        if "error" in got:
+            raise WR.RecordFailed(got["error"])
         if rc is None:
             return {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "steps": 0, "empty": True, "requests": [],
                     "passed": True}, None
-        commit = window_commit(rc)
+        commit, readback = window_commit(rc), got["readback"]
         rec = {"window": c.window, "run_id": f"{self.run_id}/w{c.window}", "run_root": commit["run_root"],
-               "steps": commit["steps"], "step_roots": [bytes(s.root).hex() for s in rc.steps],
+               "steps": commit["steps"], "step_roots": w["step_roots"],
                "committed_bytes": sum(int(s.n_bytes) for s in rc.steps), "ids_name": readback["ids_name"],
                "requests": readback["requests"], "commit": commit, "readback_errors": readback["readback_errors"],
                "readback_errors_n": readback["readback_errors_n"], "passed": commit["passed"] and readback["passed"],
-               "gc": gc_of(rc), "commit_s": commit_s_of(rc)}
-        lap("record")
+               "gc": gc_of(rc), "commit_s": commit_s_of(rc), "recorder_phases_s": got["phases"]}
         if self.served is not None:
-            rec["served_rows"] = self._served_rows(rec, c.com)
+            rec["served_rows"] = got["served_rows"]
             rec["passed"] = rec["passed"] and "error" not in rec["served_rows"]
-            lap("served_rows")
+        lap("record")
         if self.seal is not None:
             job = self._seal_job(rec, rc, c)
             rec["seal"] = {"row_dir": str(self.out / "windows" / f"w{c.window}"), "off_loop": self.sealer is not None} \
@@ -570,24 +591,6 @@ class CommitWindows:
             self.records.append(rec)
             with open(self.out / "windows.jsonl", "a") as fh:
                 fh.write(json.dumps(rec) + "\n")
-
-    def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
-        """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
-        statics it was packed under; the rows and salts written to ``served_rows/w<k>.json``. A failure is the window's."""
-        try:
-            by_step = served_rows(com)
-            ids = {rid: self.arrivals[e] for rows in by_step.values() for rid, *_ in rows
-                   if (e := base_id(rid, self.known)) in self.arrivals}
-            served, session = commit_served(self.served, by_step, ids, rec["steps"], bytes.fromhex(rec["run_root"]))
-        except Exception as e:  # noqa: BLE001  (a window whose rows can't be committed fails visibly; the server goes on)
-            return {"error": f"{type(e).__name__}: {e}"[:500]}
-        d = self.out / "served_rows"
-        d.mkdir(parents=True, exist_ok=True)
-        (d / f"w{rec['window']}.json").write_text(json.dumps({
-            "window": rec["window"], "run_root": rec["run_root"], "statics": self.served, "ids": ids,
-            "session": [[None if s is None else [list(r) for r in s] for s in w] for w in session],
-            "salts": [s.hex() for s in served.registration.salts]}))
-        return {**served.record(), "statics": self.served}
 
     def _seal_job(self, rec: dict[str, Any], rc: Any, c: _Closed) -> Any:
         """What the window's seal reads that the next window changes (its requests, rows and tokens from the ledgers at its
@@ -693,50 +696,12 @@ class CommitWindows:
         return None
 
     def check(self, led: Ledger) -> dict[str, Any]:
-        """``led``'s record against what was served: `Record.check` with the seed it carried and its finish."""
-        params = led.ingress.get("params") or {}
-        finish = None if led.finish is None else {**led.finish, "max_tokens": params.get("max_tokens"),
-                                                  "min_tokens": params.get("min_tokens") or 0, "eos_ids": self.eos_ids}
-        got = self.record.check(led.engine_id, led.prompt_ids, led.streamed, seed=led.ingress.get("seed"), finish=finish,
-                                decode=self.decode)
-        if led.ingress.get("seed") is None:
-            got = {**got, "passed": False, "problems": ["no seed carried into the engine", *got.get("problems", [])]}
-        return got
-
-    def _write_step_trace(self, rec: dict[str, Any], rc: Any, c: _Closed) -> None:
-        """One ``step_trace.jsonl`` line a committed step: its window, its root, when its engine step ended (unix seconds),
-        the request rows it ran (`served_record.served_rows`: runner id, lo, hi, start, prefill length), and the
-        committer's own trace of it (tensors, bytes, leaves, layout digest)."""
-        trace = {int(t["step"]): t for t in ((getattr(rc, "extra", None) or {}).get("step_trace") or [])} if rc is not None else {}
-        rows = served_rows(c.com) if c.com is not None else {}
-        with open(self.out / "step_trace.jsonl", "a") as fh:
-            for s, root in enumerate(rec.get("step_roots") or []):
-                own = {k: v for k, v in trace.get(s, {}).items() if k not in ("step", "root")}
-                fh.write(json.dumps({"window": rec["window"], "run_id": rec["run_id"], "run_root": rec.get("run_root"), "step": s,
-                                     "step_root": root, "t_end": c.step_t.get(s), "rows": [list(r) for r in rows.get(s, [])],
-                                     **own}) + "\n")
+        """``led``'s record against what was served (`window_records.Recorder.check`)."""
+        return self.recorder.check(self._ledger_in(led))
 
     def _pop_finished(self) -> list[Ledger]:
         """The loop's: the ledgers finished by the close, out of the open ones (their requests ran no step after it)."""
         return [self.ledgers.pop(e) for e in [e for e, led in self.ledgers.items() if led.finished]]
-
-    def _check_finished(self, finished: Sequence[Ledger]) -> None:
-        """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
-        engine id and ``user`` a line of `REQUEST_USERS`."""
-        with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
-            for led in finished:
-                eid = led.engine_id
-                rr = self.record.requests.get(eid)
-                rec = {"http_id": led.http_id, "engine_id": led.engine_id, "user": led.user, "arrival": self.arrivals.get(eid),
-                       "release": led.release, "admitted": led.admitted, "runner_ids": rr.runner_ids if rr else [],
-                       "prompt_ids": led.prompt_ids, "streamed_ids": led.streamed, "ingress": led.ingress, "finish": led.finish,
-                       "windows": sorted({r[0] for r in rr.rows}) if rr else [], "rows": rr.rows if rr else [],
-                       "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led), "times": led.times}
-                with self._lock:
-                    self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
-                                         "cache_hit": int(rec["check"].get("cache_hit") or 0)})
-                fh.write(json.dumps(rec) + "\n")
-                fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
 
     def summary(self) -> dict[str, Any]:
         """The windows closed so far; ``closing`` those whose finalize, off the loop, has yet to run (their requests unchecked)."""

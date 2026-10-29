@@ -208,8 +208,12 @@ def test_a_stream_cut_short_fails_on_its_finish_not_as_an_overrun():
     ({"reason": "stop", "stop_reason": "bc", "min_tokens": 1}, [1, 2, 3], True),  # matched across the last id's start
 ])
 def test_finish_problems(finish, out, ok):
+    """A stop string's finish reads the same with its end found where the tokenizer is (``stop_end``) and no ``decode``."""
     decode = lambda ids: "".join("abc"[i - 1] for i in ids)  # noqa: E731
     assert (SR.finish_problems(out, finish, decode) == []) is ok
+    if isinstance(finish.get("stop_reason"), str):
+        end = SR.stop_string_end(out, finish["stop_reason"], int(finish.get("min_tokens") or 0), decode)
+        assert (SR.finish_problems(out, {**finish, "stop_end": end}) == []) is ok
 
 
 def test_a_seed_other_than_the_requests_fails():
