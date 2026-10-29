@@ -1,7 +1,7 @@
-"""How `Prog` canonicalises a read of a request's peers Input: the received-collective partials of a TP rank.
+"""How `RootView` canonicalises a read of a request's peers Input: the received-collective partials of a TP rank.
 
 The derived rank Program lowers one Input per `peers_<k>` (one field at offset 0); the fold lowers ONE homogeneous peers Record per
-request, its fields at increasing offsets (`Prog.peer_fields[node]` = sorted [(leaf offset, k)], set by the loaders).  A read
+request, its fields at increasing offsets (`RootView.peer_fields[node]` = sorted [(leaf offset, k)], set by the loaders).  A read
 canonicalises as ("PEER", k, lo, hi), lo/hi relative to its field on both sides; a run over several fields is split at the field
 boundaries first (`_split_peer`), so a WORLD > 2 fold compares with the rank Program.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 
 class PeerReads:
-    """`Prog`'s reads of peers Input nodes (`instance_sequence.Prog`, and through it `batch_decomp.Projection`)."""
+    """`RootView`'s reads of peers Input nodes (`instance_sequence.RootView`, and through it `batch_decomp.Projection`)."""
 
     def _peer_src(self, idx: int, lo: int, hi: int):
         """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""
