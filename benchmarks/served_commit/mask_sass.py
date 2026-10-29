@@ -21,8 +21,7 @@ TRIPS = 16
 def main() -> None:
     out = {}
     for form, path in (("rolled", sys.argv[1]), ("unrolled", sys.argv[2])):
-        (name, ins), = [(k, v) for k, v in S.parse(Path(path)).items() if "probe" in k]
-        r = S.per_compression(ins, TRIPS)
+        r = S.per_compression(S.parse(Path(path))["probe"], TRIPS)
         out[form] = r
         print(f"{form}: {r['registers_written']:.0f} registers written a salt ({r['instructions']:.0f} instructions, inner loops "
               f"{r['inner_loops']}), W1 floor {r['w1_floor']:.0f}, alone {r['w1_alone']:.0f}; top {list(r['by_opcode'].items())[:6]}")
