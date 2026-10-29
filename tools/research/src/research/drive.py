@@ -1,14 +1,16 @@
 """`research queue drive`: one tick of the landing automation (from an owner's ready mark to `main` moving, no agent acts
 unless the automation refuses).  A loop runs it every few minutes.
 
-What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns; what a sync
-leaves out of `next` goes once per root cause, naming every PR it takes out, and again only when that changes (`tell_out`).  `--shadow`
+What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns.  `--shadow`
 drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
 What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
 `stale_days` and `stale_close_days`: `_stale`): a PR unmarked at its head and idle `stale_days` rings its owner once a day, and
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
+
+What a sync leaves out of `next` is told once per root cause instead of once per PR and head: the PR that didn't merge or isn't
+admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).
 
 Review landing, the only landing.  `main` holds only fully checked commits: PRs land on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
@@ -74,7 +76,7 @@ waits on train.sh, which takes minutes to print a Lean check's run ids.  A later
 tick reads the ids from its log (`launched`, `_resolve`); until then the launch counts as running for every rule that counts
 running checks (the hold on `next`, `max_lean_checks`, the waits), and a train.sh that exits without them registered no run.
 
-State (launches, refusals told, the root causes told: `out`) is the queue's `state.json`, under `drive`."""
+State (launches, refusals told) is the queue's `state.json`, under `drive`."""
 from __future__ import annotations
 
 import concurrent.futures

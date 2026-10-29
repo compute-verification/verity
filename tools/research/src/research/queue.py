@@ -163,10 +163,11 @@ reverting on `checked` what that check fails, and fast-forwarding `main` to each
 `checked`.  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
-Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owners' handles: drive tells what
-its sync leaves out once per root cause, the PR that didn't merge or isn't admitted, naming every PR it takes out, and again only
-when its head, those PRs or its reason changes (`Driver.tell_out`), and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
-there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit.
+Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `@ci` and the owner's handle, once per PR head:
+drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
+there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit.  What a sync leaves out
+is told once per root cause instead, the PR that didn't merge or isn't admitted, naming every PR it takes out and tagging each
+owner once, and again only when its head, those PRs or its reason changes (`Driver.tell_out`).
 
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
 with no effect on them; its `sync`, `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
