@@ -8,6 +8,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # the twins evaluate MufuEx2Ftz and the fp32 primitives (verity.ml.circuits, which imports no other unit) and round to bf16
-# through verity.ml.kernels.tc; the modules read their variables through settings.py, on verity_config.settings
+# through verity.ml.kernels.tc; the modules read their variables through settings.py, on verity_config.settings; the build
+# check reads ptxas's report and the SASS through s8_linear's sass_gate.py
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
-          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "tools/config/verity_config"]
+          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "tools/config/verity_config",
+          "benchmarks/torch_gpu/s8_linear/sass_gate.py"]
