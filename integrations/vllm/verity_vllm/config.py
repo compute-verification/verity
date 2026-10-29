@@ -330,7 +330,8 @@ def stored_workloads(d: Path = WORKLOADS) -> dict[str, str]:
 
 def _fetch(paths: list[Path]) -> None:
     """Fetch ``paths`` with ``research data fetch-fixtures`` in the repository holding each (the nearest ancestor with a registry),
-    by that tree's own ``research``."""
+    by that tree's own ``research``, run from that repository's root: the command reads a relative PATH against its cwd, not
+    ``--repo``, and a reader running elsewhere (the regression's pytest, from integrations/vllm) would select nothing."""
     by_repo: dict[Path, list[Path]] = {}
     for p in paths:
         repo = next((d for d in p.resolve().parents if (d / "fixtures" / "artifacts.json").is_file()), REPO)
@@ -340,7 +341,7 @@ def _fetch(paths: list[Path]) -> None:
         env = settings.environ()
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "tools" / "research" / "src"), env.get("PYTHONPATH")]))
         r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json", *rels],
-                           capture_output=True, text=True, env=env)
+                           capture_output=True, text=True, env=env, cwd=repo)
         if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
             raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "
