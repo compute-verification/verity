@@ -1,7 +1,23 @@
-"""The bandwidth audit's answer on one served window (`served_bandwidth.sh`, `served_verdicts.sh`'s BANDWIDTH_CMD):
+"""The bandwidth audit's answer on one served window (`served_verdicts.sh`'s BANDWIDTH_CMD):
 
+    served_bandwidth.py collect --serve-dir SERVE_DIR --window K --out DIR
     served_bandwidth.py answer --session FILE --serve-dir SERVE_DIR --window K --out DIR [--r-bytes-per-s R]
                        [--started UTC --ended UTC] [--gpu FILE]
+
+``collect`` (`collect`), the composed run's piece: PoUB-P2's session runs inside the PoUS piece, over the ``C*`` that piece
+encoded and holds (`benchmarks/pous/served_piece.py`, `held_bandwidth.py`), which writes the bandwidth piece's public
+answer and summary to ``DIR`` (``answer.json``, ``bandwidth.json``) and its case to ``SERVE_DIR/private/bandwidth``; the
+composed run starts PoUS's piece before this one (`served_verdicts.PIECES`), so ``collect`` only reads what it wrote:
+
+    BANDWIDTH_CMD='"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
+
+(`served_verdicts.sh`'s default once POUS_CMD is set).
+
+An answer that isn't window K's is replaced by an undecided one saying whose it is, and where the PoUS piece wrote none
+nothing is written, so the record names the bandwidth audit missing (`served_verdicts.piece_row`). Exit 0 on accept, 1 on
+any other answer, 2 on none.
+
+``answer``: the session of `served_bandwidth.sh`, over a store of the node's own on its disk.
 
 The remote bandwidth session's record (`benchmarks/pous/p2_v1/bandwidth.py session`'s ``session.json``) as a core answer
 in ``DIR/answer.json`` (`answer`): the verifier's answer, held to the verifier's own record of it where the session has
@@ -72,9 +88,33 @@ def answer(session: Mapping[str, Any], scope: str, r_bytes_per_s: int | None) ->
     return out
 
 
+def collect(out: Path, window: int) -> dict[str, Any] | None:
+    """The answer the PoUS piece's bandwidth session wrote to `out` for `window` (module docstring), None when it wrote
+    none; ValueError when what it wrote isn't a core answer of the remote bandwidth audit."""
+    import served_verdicts as S
+
+    files = [out / f for f in ("answer.json", "bandwidth.json")]
+    if not all(f.exists() for f in files):
+        return None
+    a, summary = (json.loads(f.read_text()) for f in files)
+    S.check_answer(a)
+    if a.get("protocol") != p2_party.PROTOCOL:
+        raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not the remote bandwidth audit's")
+    if summary.get("window") != window:
+        a = {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None,
+             "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "
+                       f"PoUS piece ran no bandwidth session for window {window}", "verdict": "undecided"}
+        (out / "answer.json").write_text(json.dumps(a, indent=1, sort_keys=True) + "\n")
+    return a
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    c = sub.add_parser("collect")
+    c.add_argument("--serve-dir", type=Path, required=True)
+    c.add_argument("--window", type=int, required=True)
+    c.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("answer")
     p.add_argument("--session", type=Path, required=True, help="bandwidth.py session's session.json")
     p.add_argument("--serve-dir", type=Path, required=True)
@@ -86,6 +126,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--gpu", type=Path, help="nvidia-smi's line of the card the session ran on")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.cmd == "collect":
+        try:
+            got = collect(a.out, a.window)
+        except ValueError as e:
+            print(f"BANDWIDTH error: {e}", flush=True)
+            return 1
+        if got is None:
+            print(f"MISSING the bandwidth audit: the PoUS piece wrote no bandwidth answer to {a.out} for window "
+                  f"{a.window} (its session runs over the store the PoUS piece holds, POUS_CMD, before this piece)",
+                  flush=True)
+            return 2
+        print(f"BANDWIDTH {json.dumps({k: got[k] for k in ('verdict', 'reason', 'public')}, sort_keys=True)}", flush=True)
+        return 0 if got["verdict"] == "accept" else 1
     try:
         doc = json.loads(a.session.read_text())
     except (OSError, ValueError) as e:
