@@ -159,3 +159,19 @@ about random families or a standard primitive, and it checkpoints at 23:00Z.
 
 **Card basis:** h counts hashing wherever it runs. ALT's card/certifier split moves the hashing to the auditor's
 device and cuts none, so its 98.09 leaves the frontier.
+
+**21:30Z, FOLD-ROUNDS (note 20261029T2120Z-report-hash-fold-rounds), the first cut at rank 4a:**
+- **R80X:** run SHA-512's 80 rounds over the raw words, each XORed first with a per-position constant (one LOP3), and
+  seal each state with one SHA-512. h 17.7–18.1, a 7.0–7.2× cut.
+- **Premises:** ShaWrites-R80, which is ShaWrites carried over to raw round words, and AddXor (no single sm_120
+  instruction computes (a + b) ⊕ c), which isn't enumerated yet.
+- **RDX** adds a second word into e′: h 9.0–9.4, a 14× cut, but at rank 4 as a construction of our own.
+- `decomp` breaks every plain round fold, because at zero data a word enters only h + W + K_t. The XOR is what fixes
+  that.
+- T1 is about 0.0002% with chains carried across calls. T2 is an estimate (9.1/10.7 against the lead's 54.9/66.0),
+  and T3 is the lead's.
+
+Queue:
+- COUNTER attacks R80X and RDX after its `decomp` round.
+- FOLD-ROUNDS enumerates AddXor (making it checked), states ShaWrites-R80 exactly with its falsification test, and
+  searches for a fold past 10× that stays inside SHA-512's round function.
