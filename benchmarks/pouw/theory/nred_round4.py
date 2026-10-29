@@ -74,8 +74,8 @@ import nred_round2 as r2
 
 H32 = ns.H32
 LAYOUTS = {"blc4a-t64-e7": (64, 7, 3), "blc4a-t32-e7": (32, 7, 3), "blc7a-t64-e7": (64, 7, 6),
-           "blc1a-t128-e4": (128, 4, 1), "blc4a-t64-e7-w127": (64, 7, 3)}
-LANE_WEIGHTS = {"blc4a-t64-e7-w127": (1, 127, 1)}
+           "blc1a-t128-e4": (128, 4, 1), "blc4a-t64-e7-w127": (64, 7, 3), "blc4a-t64-e7-rot": (64, 7, 3)}
+LANE_WEIGHTS = {"blc4a-t64-e7-w127": (1, 127, 1), "blc4a-t64-e7-rot": ((127, 1, 1), (1, 127, 1))}
 PRICES = (32.0, 61.8, 71.7, 327.0)
 SELECT_A_WORD, COPY_A_WORD = 71.7, 48.7
 SHAPES = {"llama": ns.LLAMA, "v4_dense": ns.V4_DENSE}
@@ -210,7 +210,8 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
     odd = np.arange(-(2 ** e - 1), 2 ** e, 2)
     coin = rng.choice(odd, (lanes, ntiles, s - 1, n))
     c = np.where((np.arange(s - 1) % 2 == 1) & (pattern == "a2r"), 2, 1)
-    wts = np.array(LANE_WEIGHTS.get(cfg, (1,) * lanes), dtype=np.int64)
+    wsel = np.array(LANE_WEIGHTS.get(cfg, (1,) * lanes), dtype=np.int64).reshape(-1, lanes)
+    par = np.arange(m) % len(wsel)
 
     x1 = np.concatenate([np.zeros((m, STEP1_DATA), dtype=np.int64), tags, a1], axis=1)
     y1 = np.concatenate([np.zeros((STEP1_DATA, n), dtype=np.int64), g, code], axis=0)
@@ -219,7 +220,8 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
     for tau in range(ntiles):
         rows = tile_of == tau
         xa = np.concatenate([np.ones((rows.sum(), s - 1, 1)), (1 + b[rows])[:, :, None],
-                             np.broadcast_to(wts, (rows.sum(), s - 1, lanes))], axis=2).astype(np.int64)
+                             np.broadcast_to(wsel[par[rows]][:, None, :], (rows.sum(), s - 1, lanes))],
+                            axis=2).astype(np.int64)
         yb = np.concatenate([np.broadcast_to(-c[:, None, None], (s - 1, 1, n)), np.ones((s - 1, 1, n)),
                              coin[:, tau].transpose(1, 0, 2)], axis=1).astype(np.int64)
         honest[rows, 1:] = honest[rows, :1] + np.cumsum(np.einsum("itl,tln->itn", xa, yb), axis=1)
@@ -227,9 +229,9 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
 
     d0 = tags @ g + a1 @ code - beta[None]
     rpos = np.concatenate([np.zeros((m, 1), dtype=np.int64), np.cumsum(1 + b - c[None], axis=1)], axis=1)
-    cpos = np.concatenate([np.zeros((ntiles, 1, n), dtype=np.int64),
-                           np.cumsum(np.einsum("l,ltsn->tsn", wts, coin), axis=1)], axis=1)
-    w = d0[:, None, :] + rpos[:, :, None] + cpos[tile_of]
+    cpos = np.stack([np.concatenate([np.zeros((ntiles, 1, n), dtype=np.int64),
+                                     np.cumsum(np.einsum("l,ltsn->tsn", wv, coin), axis=1)], axis=1) for wv in wsel])
+    w = d0[:, None, :] + rpos[:, :, None] + cpos[par, tile_of]
     per = m * n
 
     t4 = w.reshape(ntiles, tile, s, n)
@@ -257,9 +259,11 @@ def lead_instance(cfg: str, k: int, m: int, n: int, rng: np.random.Generator, pa
     assert abs(float(covered.sum()) / per - entry) < 1e-9
 
     span = int(d0.max() - d0.min()) + 1
-    key = (rpos[:, :, None] * span + (d0 - d0.min())[:, None, :]).reshape(ntiles, tile, s, n)
+    classes = len(wsel)
+    key = ((rpos[:, :, None] * span + (d0 - d0.min())[:, None, :]) * classes
+           + par[:, None, None]).reshape(ntiles, tile, s, n)
     masked = float((tile - _distinct(key, 1)).sum()) / per
-    with_source = int(((tile - _distinct(rpos.reshape(ntiles, tile, s), 1))).sum())
+    with_source = int(((tile - _distinct((rpos * classes + par[:, None]).reshape(ntiles, tile, s), 1))).sum())
     assert masked <= xrow + 1e-12
 
     return {"equal_to_honest": bool(np.array_equal(w, honest)), "steps": s, "tile": tile,
@@ -307,9 +311,9 @@ def weighted(insts: dict, shape: dict) -> dict:
 def runs(seed: int = 97, m: int = 256, n: int = 64) -> dict:
     rng = np.random.default_rng(seed)
     out = {}
-    cases = [(cfg, "narrow") for cfg in LAYOUTS] + [(cfg, "wide") for cfg in
-                                                     ("blc4a-t64-e7", "blc7a-t64-e7", "blc4a-t64-e7-w127")]
-    v4_cfgs = {"blc4a-t64-e7", "blc7a-t64-e7", "blc4a-t64-e7-w127"}
+    wide_cfgs = ("blc4a-t64-e7", "blc7a-t64-e7", "blc4a-t64-e7-w127", "blc4a-t64-e7-rot")
+    cases = [(cfg, "narrow") for cfg in LAYOUTS] + [(cfg, "wide") for cfg in wide_cfgs]
+    v4_cfgs = set(wide_cfgs)
     for cfg, tag in cases:
         for pattern in ("a2c", "a2r"):
             for shape_name, shape in SHAPES.items():
@@ -694,6 +698,18 @@ def check(rep: dict) -> list[dict]:
        and max(v["shares"]["W/whole/interior"] for v in mr.values()) == 0
        and max(sal["W/whole/final"], big["W/whole/final"]) < 1e-4,
        [nar["W/whole/final"], wid["W/whole/final"], sal["W/whole/final"]])
+    rot = [r[f"blc4a-t64-e7-rot/{p}/{sh}"]["shares"] for p in ("a2c", "a2r") for sh in SHAPES]
+    w127 = [r[f"blc4a-t64-e7-w127/{p}/{sh}"]["shares"] for p in ("a2c", "a2r") for sh in SHAPES]
+    rotw = [r[f"blc4a-t64-e7-rot+wide/{p}/{sh}"]["shares"] for p in ("a2c", "a2r") for sh in SHAPES]
+    ok("N-EGRESS's rot lane (A′ (127, 1, 1) / (1, 127, 1) by row parity): lag-1 and within-entry close under literal "
+       "P; cross-row still pays > 1% under P′ at the floor (rows of one parity still cancel), below (1, 127, 1)'s",
+       max(v[g] for v in rot for g in ("P/lag1", "P/entry")) < 0
+       and min(v["P'32/xrow"] for v in rot) > 0.01
+       and max(v["P'32/xrow"] for v in rot) < min(v["P'32/xrow"] for v in w127),
+       [[v["P'32/xrow"], v["P/xrow"]] for v in rot])
+    ok("rot + wide tag: P′ at the floor pays at no grain, and whole tiles < 0.01% (256 rows)",
+       max(v[f"P'32/{g}"] for v in rotw for g in ("lag1", "entry", "xrow", "tilecol", "column")) <= 0
+       and max(v["W/whole"] for v in rotw) < 1e-4, [[v["P/column"], v["W/whole"]] for v in rotw])
     tr = rep["tile_rows"]
     ok("tile grain against rows (free search): at 1,024 rows the wide tag alone repeats whole tiles (> 1% on Llama) "
        "and (1, 127, 1) with the narrow tag > 0.1%; wide + (1, 127, 1) stays < 0.01% at 1,024 and 4,096 rows",
