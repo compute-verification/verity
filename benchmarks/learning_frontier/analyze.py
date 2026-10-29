@@ -8,7 +8,8 @@ its rank or sync interval, and a token budget. At each size a configuration take
 (lowest final held-out loss); a size trained at one learning rate per configuration takes that one. The runs at a size share
 one seed (another seed's runs are analyzed on their own). Then, per size:
 
-- the fit L(C) = E + A * C^-b to each configuration's checkpoints from a tenth of its run on, C its analytic training FLOPs;
+- the fit L(C) = E + A * C^-b to each configuration's checkpoints from a tenth of its run on, C its analytic training FLOPs
+  (none where fewer than FIT_POINTS checkpoints are left);
 - per comparison (dense with the per-window low-rank configurations; dense with the local-SGD ones), three loss targets every
   configuration in it reaches: the worst configuration's final loss, dense's loss a quarter of the way through its run (or,
   when that is no higher, halfway from the worst final loss to the highest first-checkpoint loss), and their midpoint;
@@ -41,6 +42,8 @@ from model import SIZES, matrix_shapes
 from train import OUTER_LR, OUTER_MOMENTUM
 
 FIT_FROM = 0.1
+#: E + A * C^-b has three parameters: a fit to fewer checkpoints than this is exact or underdetermined, so none is made
+FIT_POINTS = 4
 QUARTER = 0.25
 #: each comparison with dense: the configurations in it (a local-SGD run with other outer settings than train.py's is an anchor,
 #: compared on its own so it moves no target of the main comparison)
@@ -147,21 +150,27 @@ def step_at(s: dict, target: float) -> float | None:
     return math.exp(lo + f * (hi - lo))
 
 
-def fit(s: dict) -> dict:
+def fit(s: dict) -> dict | None:
+    """None when fewer than FIT_POINTS checkpoints are left from a tenth of the run on (a short local-SGD run evaluates only at
+    its syncs)."""
     keep = s["step"] >= FIT_FROM * s["n_steps"]
     c, y = s["step"][keep] * s["flops_per_step"], s["loss"][keep]
+    if len(y) < FIT_POINTS:
+        return None
     best = None
     for e in np.linspace(0.0, y.min() - 1e-4, 400):
         slope, icept = np.polyfit(np.log(c), np.log(y - e), 1)
-        sse = float(((e + math.exp(icept) * c ** slope - y) ** 2).sum())
+        sse = float(((e + np.exp(icept + slope * np.log(c)) - y) ** 2).sum())
         if best is None or sse < best[0]:
-            best = (sse, e, math.exp(icept), -slope)
-    sse, e, a, b = best
-    return {"E": e, "A": a, "b": b, "rmse": math.sqrt(sse / len(y)), "points": int(len(y))}
+            best = (sse, e, icept, -slope)
+    sse, e, log_a, b = best
+    return {"E": e, "log_A": log_a, "b": b, "rmse": math.sqrt(sse / len(y)), "points": int(len(y))}
 
 
-def flops_from_fit(f: dict, target: float) -> float | None:
-    return (f["A"] / (target - f["E"])) ** (1 / f["b"]) if target > f["E"] and f["b"] > 0 else None
+def flops_from_fit(f: dict | None, target: float) -> float | None:
+    if f is None or target <= f["E"] or f["b"] <= 0:
+        return None
+    return math.exp((f["log_A"] - math.log(target - f["E"])) / f["b"])
 
 
 def targets(dense: dict, configs: dict[str, dict]) -> tuple[list[float], list[str]]:
