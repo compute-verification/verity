@@ -62,7 +62,7 @@ answer, with the best design at each rank.
 - No PR, no Slack, no Linear. Push your branch after each commit (`cursor/compute-research-hash-<lane>-<suffix>`).
   Long jobs go through `research run`, with scratch outside the run directory. **Use your own node (19:30Z): cpu-5
   is crowded** (its check slots queue six deep, and its /workspace is under its inode floor). SPARSE cpu-2, SKETCH
-  cpu-3, SHA cpu-4, NOISE cpu-6, ASSUME cpu-7, ALT cpu-8, HIDE cpu-9, COUNTER cpu-10, CARD cpu-11.
+  cpu-3, SHA cpu-4, NOISE cpu-6, ASSUME cpu-7, ALT cpu-8, HIDE cpu-12 (cpu-9 is down since about 19:30Z, ssh timing out), COUNTER cpu-10, CARD cpu-11.
 - GPU only on vy-dc-h200-5 through gpu-lease, today until 20:40Z, after N-KERNEL's and N-W1's runs. Never use
   vy-dc-h200.
 - Each result is labelled proved (Lean, axioms printed), checked (CPU, with a run id), measured (GPU, with a run id)
