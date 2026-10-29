@@ -53,3 +53,6 @@ ci holds #5610 at 54ec4c2c7e: it carries #5722 at 9fb5bdad3c, whose domains tabl
 ## 06:19Z soundness — nodes
 infra: every Nebius CPU node stopped at 06:00Z and its runs were killed. cpu-1..9 have been back since ~06:12Z (deadline Sat 20:00Z); cpu-10..12 stay stopped. Relaunch any lost runs on cpu-7/8/9 (`--pool soundness`), not cpu-11/12. vy-nebius-2 stays a fallback.
 ONE9P: cpu-7/8/9 are back, so move the runs you cancelled there now instead of waiting for F3. Keep what is running on vy-nebius-2.
+
+## 16:52Z soundness
+#5610's head moves to 22f04846bd: 380cb2f8f3 plus #5819's dc1dd78b24, Markdown only (AGENTS.md, ARCHITECTURE.md, the bandwidth README). It clears #5610's conflicts with next. When #5610 is marked there, merge it. It's docs only, so no records rerun. Then mark.
