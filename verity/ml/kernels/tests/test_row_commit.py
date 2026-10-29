@@ -3,7 +3,8 @@ every length of uint below 2^32, through the compile-time and the run-time forms
 `frame_leaf_nb`, and the node's also through `Compact`), and the forms with no plan (`pad_of`, `node_at`) past it too; its
 leaf at a rank and a position apart, by the builders and from its head (`leaf_head`, `leaf_tail`, at schemas up to 95 bytes
 and ranks below 2^64), is too; its trees give ``frame_v3/vectors_sha512.json``'s leaves, pads and roots; its hm96-sha512
-leaf, through every table and loop of the mask (`mask_lanes` over a strided salt in two column orders too), gives
+leaf, through every table and loop of the mask (`mask_lanes` over a strided salt in two column orders, and
+`mask_positions` over hm96's byte tables as a position table, too), gives
 ``hm96/vectors_sha512.json``'s commit strings and leaves under both keys, the gates' reference on fresh rows and salts and
 the vectors' hiding leaves; and the gates' Definitions compute what it does.
 ``row_commit_cases.cu`` runs the cases, built by the host's C++ compiler and, where nvcc and a GPU are present, on the
@@ -74,6 +75,11 @@ def case(kind: int, form: int = 0, *, did: bytes = b"", schema: str = ROW, pos: 
 Run = Callable[..., list]
 
 
+def _position_table(key: bytes) -> ctypes.Array:
+    """`PosTab`'s table: hm96's byte tables, an entry of 64 little-endian bytes a salt byte position and byte value."""
+    return ctypes.create_string_buffer(b"".join(v.to_bytes(64, "little") for row in INST.byte_tables(key) for v in row))
+
+
 def _load(path: Path) -> ctypes.CDLL:
     lib = ctypes.CDLL(str(path))
     assert lib.rc_case_bytes() == ctypes.sizeof(Case) and lib.rc_out_bytes() == ctypes.sizeof(Out)
@@ -95,7 +101,7 @@ def _runner(lib: ctypes.CDLL, cuda: bool = False) -> Run:
         if key not in tables:
             t = (ctypes.create_string_buffer(8192), ctypes.create_string_buffer(256 * 272), ctypes.create_string_buffer(256 * 256))
             lib.rc_tables(key, *t)
-            tables[key] = t
+            tables[key] = (*t, _position_table(key))
         n = len(cases)
         outs = (Out * n)()
         if cuda:
@@ -252,7 +258,7 @@ def test_the_hm96_plan_is_the_prefixes_midstates(host: ctypes.CDLL) -> None:
 
 
 def test_hm96_leaves_through_every_mask_are_the_vectors_and_the_reference(host: ctypes.CDLL) -> None:
-    assert host.rc_hm96_forms() == 7
+    assert host.rc_hm96_forms() == 8
     _check_hm96(_runner(host), host.rc_hm96_forms())
 
 
