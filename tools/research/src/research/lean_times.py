@@ -6,8 +6,9 @@ A task is one of:
 
   records       a records run (`lean_changed.py --records PKG`, result kind `lean-fast/v1`), under PKG: its attempt's wall. Beside
                 it: its Lean work, the sum of the `lean-records: P: check.py exit N in S s` lines its stdout.log prints, one for each
-                package it audited (PKG, then its requirers), or with none (the `reused` path, a run that ended before check.py) its
-                wall less its check slot's wait; its wait, the wall outside the work: the check slot's (`slot.json`, took less
+                package it audited (PKG, then its requirers), each timed from that package's sync, once the slots and the tree's lock
+                are held, to check.py's exit; or with none (the `reused` path, a run that ended before check.py) its wall less its
+                check slot's wait. Its wait is the wall outside the work: the check slot's (`slot.json`, took less
                 since) and the rest, which is the node's Lean `build` slot (`lean_slot.py` logs that wait without times), the slot
                 tree's lock and the run's start; its `path` (`slot`, `dev-cache` or `reused`); and how cold it ran: the modules Lake
                 compiled, dependencies included (the distinct `M` of its `lean-audit/**/build*.log` lines `Built M (t)`), against
