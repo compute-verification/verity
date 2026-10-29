@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 HOOK = ROOT / "tools/agent-guard/shell_hook.py"
 GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
@@ -299,7 +299,7 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     assert ask("git checkout lane", "bc-coord")["permission"] == "allow"
     out = ask("git push origin coord", "bc-worker")
     assert out["permission"] == "deny" and "belongs to agent bc-coord" in out["agent_message"]
-    assert ask(f"git worktree add ../wt -b wbranch", "bc-worker")["permission"] == "allow"
+    assert ask("git worktree add ../wt -b wbranch", "bc-worker")["permission"] == "allow"
     subprocess.run(["git", "worktree", "add", "-q", str(tmp_path / "wt"), "-b", "wbranch"], cwd=ws, check=True, capture_output=True,
                    env={**os.environ, **GIT_ENV})
     assert ask("git push -u origin wbranch", "bc-worker", cwd=tmp_path / "wt")["permission"] == "allow"
