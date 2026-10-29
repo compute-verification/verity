@@ -63,9 +63,10 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerClose, Ch
                                                              LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
                                                              write_record)
 from verity.ml.commitments.identity import canonical_json_text
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 RECORD, KEY, RELEASES, CLOSE, HELLOS = Ch.RECORD_FILE, "key.json", Ch.LOG_FILE, Ch.CLOSE_FILE, Ch.HELLOS_FILE
-ROOT_BYTES = 64
+ROOT_BYTES = DIGEST_BYTES["sha512"]
 HEADER = struct.Struct(">II")
 MAX_HEAD = 1 << 20
 MAX_BATCH = 64
