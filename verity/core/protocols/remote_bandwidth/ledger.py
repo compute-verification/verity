@@ -20,7 +20,7 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
 pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
-`timing.sketch_failure` over the session, and the draw's rejection (`rejection`): the statements' δc and δs, and
+`timing.sketch_failure` over the session, and the sample's rejection (`rejection`): the statements' δc and δs, and
 `LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
 windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledDraw`'s terms beyond
 δ by name (`draw`), the advantages named with their claim and priced in neither."""
@@ -40,7 +40,7 @@ TIME_HELD, LINK_CHARGED = line.FORMS
 FORMS = (SNAPSHOT, *line.FORMS)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
 REJECTION_LOG2 = 64
-"""The draw's rejection a draw, in bits: a draw below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
+"""The sample's rejection a sample, in bits: a sample below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
 `Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
@@ -152,11 +152,11 @@ row digest."""
 
 
 def rejection(record: audit.Record) -> float:
-    """The draw's rejection, `PooledDraw`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
-    requested, k_t the record's `samples` in every draw (the k at which `DrawsOfRecord` holds), one draw a window, or
-    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a draw
-    that opens all its receipts): the statement's error is a constant, and a draw's U_t is the prover's.  Refused for a
-    record that states no `samples`.  Exact: the draws are an integer."""
+    """The sample's rejection, `PooledDraw`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
+    requested, k_t the record's `samples` in every sample (the k at which `DrawsOfRecord` holds), one sample a window, or
+    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a sample
+    that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
+    record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
         raise ValueError("the record states no samples, the receipts every draw requested, at which the memory line's "
                          "δ charges the draw's rejection (Σ_t k_t/2^64): give the record its session's Params.samples")
@@ -192,8 +192,8 @@ def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max
 
 
 def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float:
-    """`binding` over a session of `draws` draws, at most `receipts` receipts a draw (`window_receipts` times the
-    windows a draw covers) and a draw cap of `samples`, its prover making at most `queries` SHA-512 compressions over
+    """`binding` over a session of `draws` draws, at most `receipts` receipts a sample (`window_receipts` times the
+    windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
     the span."""
     s = min(samples, receipts)
     return draws * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
@@ -207,10 +207,10 @@ def binding(record: audit.Record, node: Node) -> float:
     2·s_t·`OPENING_HASHES` SHA-512 calls, F·C the most compressions the prover makes over the span (`sketch`'s); under
     claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
     `Accounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
-    L_t a set holding every receipt window t opens at every outcome, s_t the session's draw cap and split_t the chance
+    L_t a set holding every receipt window t opens at every outcome, s_t the session's sample cap and split_t the chance
     that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
     prover's play: this charges them at `window_receipts` and the record's `samples`.  At `groups_per_coin` g > 1 the
-    term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
+    term's t is a sample, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
     deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound
@@ -413,7 +413,7 @@ def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
     """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
     windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
     (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
-    draw's rejection (`rejection`)."""
+    sample's rejection (`rejection`)."""
     return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
             "hiding": hiding(record), "binding": binding(record, node), "sketch": sketch(record, node),
             "rejection": rejection(record)}

@@ -9,7 +9,7 @@
 //            block's sums hashed by one keyed BLAKE3 compression and each 32 blocks' leaves into a unit root; a chunk is
 //            whole units, read by a fixed grid (`ctas`, default one CTA an SM) of 4 warps a CTA, a unit a warp at a time,
 //            the chunk's check word the XOR of its units' first root words. Chunks alternate between two streams so that
-//            one chunk's tail overlaps the next one's start. Its signs are drawn once a run from the run's seed
+//            one chunk's tail overlaps the next one's start. Its signs are sampled once a run from the run's seed
 //
 // `depth` chunks are kept in flight. Each chunk's start and end are CUDA events, read back as milliseconds since the
 // start event, so a window's filler bytes come from the GPU's clock, not the host's.  `tu_pause(1)` stops launching new

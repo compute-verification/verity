@@ -2,7 +2,7 @@
 the least whose partial row compresses before its last SHA-512 block, which C-Flock's circuit needs of a combine row)
 proved as its 32 lanes and its combine (PRF-134, option A:
 `h1zy.PouwH1LaneZy_v1` and `PouwH1Combine_v1`, `pouw.leaf_lanes`' statement set), one C-Flock --zk statement each, every
-statement reading the leaf's lane partials, a value committed after the draw (`one_stage.produced`), and the negatives.
+statement reading the leaf's lane partials, a value committed after the sample (`one_stage.produced`), and the negatives.
 
 * **The statements.** All 32 lanes are one circuit (the lane index is a public input) and the combine another. Each
   statement is the one unit of the Program a served window's verifier derives for it from its own copy of the window
@@ -19,7 +19,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   and admission tables, the weights' b/<K> and its receipt tree (`h1window`); here a registration record of the lane's
   Program (`registration.record`) stands for the window's, and its digest D is what the partials' domain binds. The roots
   the lanes' seeds read are (SHA-512 of root(a) under `ROOTS_TAG`, root(b)).
-* **The partials**, committed after the draw (STAND-IN: the draw of every unit, `draw_digest`): ``partials``, 32 rows, row
+* **The partials**, committed after the sample (STAND-IN: the sample of every unit, `draw_digest`): ``partials``, 32 rows, row
   l lane l's (`h1zy.lane_partial`, 2 (KS + m) u32), `produced.commit`'s tree under D, with `produced.record`'s record,
   which `produced.check` holds to the verifier's own entry (``produced_check``). The record keeps every row's opening
   (its ``b || c``): the partials' and the rows of ``a``, ``b``, ``zy`` and ``receipt``.
@@ -33,7 +33,7 @@ statement reading the leaf's lane partials, a value committed after the draw (`o
   Each check is the Lean verifier's verdict and `pouw-leaf-own-window`'s (PoUW's `PouwCheck.LeafOwn.leafOwn?`): from the
   window's descriptor and round log it places unit 0's reads (`placeOf`), and the file, as flock-verify parses it, holds
   the layout's data ports there at the roots of the records the verifier holds (``holds``), and each of the statement's
-  sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the draw policy).
+  sessions draws every unit of its partition (`PouwWindow.Lanes.checkFull`, the sample policy).
 * **The negatives**, each a statement proved and checked like the others:
   ``swap-lane3`` and ``swap-lane4``: a partials tree with rows 3 and 4 swapped (its record well-formed); each lane reads
   its own row, which holds the other lane's partial, so its ok is 0 (REJECT). ``swap-combine``: the combine on that tree,
@@ -161,7 +161,7 @@ def code_words(codes: list, scales: list) -> np.ndarray:
 
 
 def draw_digest(registration: str, population: int) -> str:
-    """STAND-IN for the draw's digest: the live coin draws the leaf."""
+    """STAND-IN for the sample's digest: the live coin selects the leaf."""
     return hashlib.sha512(DRAW_TAG + canonical_json({"registration": registration, "units": list(range(population))})).hexdigest()
 
 
@@ -257,7 +257,7 @@ def leaf_data(seed: int, k: int, salt: bytes, position: int) -> Leaf:
 
 @dataclass(frozen=True)
 class World:
-    """One registration and the partials after its draw: the verifier's view of a leaf, honest or not."""
+    """One registration and the partials after its sample: the verifier's view of a leaf, honest or not."""
 
     name: str
     leaf: Leaf

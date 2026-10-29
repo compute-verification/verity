@@ -380,7 +380,7 @@ def course_lines(course: dict) -> list[str]:
 
 
 def _verdict(line: str | None) -> str:
-    """verify_run.py's line as its verdict and the tiles it drew."""
+    """verify_run.py's line as its verdict and the tiles it sampled."""
     if not line:
         return "–"
     drawn = re.search(r"\((\d+ drawn[^)]*)\) of (\d+)", line)
