@@ -1,6 +1,6 @@
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Fintype.Card
-import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.Abel
 import Mathlib.Tactic.Ring
 
 /-!
@@ -17,14 +17,15 @@ namespace Pouw.SecurityProofs.Lead.PStar
 
 open Finset
 
-variable {Ω D : Type*} [Fintype Ω] [DecidableEq Ω] [Fintype D]
+variable {Ω D G : Type*} [Fintype Ω] [DecidableEq Ω] [Fintype D] [AddCommGroup G] [DecidableEq G]
 
 /-- **A part of the draw caps the whole**: with `set` overwriting the part `get` reads, and `F` moving with the part only
-through `g`, `F` takes any value on at most `P·|Ω|/|D|` draws when `g` takes none on more than `P` parts. -/
+through `g`, `F` takes any value on at most `P·|Ω|/|D|` draws when `g` takes none on more than `P` parts. The values
+are in any additive group, a word's or a whole tile's. -/
 theorem part_fiber_le (get : Ω → D) (set : Ω → D → Ω) (get_set : ∀ ω d, get (set ω d) = d)
-    (set_set : ∀ ω d d', set (set ω d) d' = set ω d') (set_get : ∀ ω, set ω (get ω) = ω) (F : Ω → ℤ) (g : D → ℤ)
+    (set_set : ∀ ω d d', set (set ω d) d' = set ω d') (set_get : ∀ ω, set ω (get ω) = ω) (F : Ω → G) (g : D → G)
     (hF : ∀ ω d, F (set ω d) = F ω - g (get ω) + g d) {P : ℕ}
-    (hP : ∀ v, (univ.filter fun d => g d = v).card ≤ P) (v : ℤ) :
+    (hP : ∀ v, (univ.filter fun d => g d = v).card ≤ P) (v : G) :
     Fintype.card D * (univ.filter fun ω => F ω = v).card ≤ P * Fintype.card Ω := by
   rcases isEmpty_or_nonempty D with hD | ⟨⟨d₀⟩⟩
   · have : IsEmpty Ω := ⟨fun ω => hD.false (get ω)⟩
@@ -58,7 +59,8 @@ theorem part_fiber_le (get : Ω → D) (set : Ω → D → Ω) (get_set : ∀ ω
       refine ⟨mem_univ _, ?_⟩
       have h := hF ω d₀
       rw [hω.2, hω.1.2] at h
-      linarith
+      rw [h]
+      abel
     · rw [mem_coe, mem_filter] at hω hω'
       rw [← set_get ω, ← set_get ω', ← set_set ω d₀, ← set_set ω' d₀, hω.2, hω'.2, he]
   calc Fintype.card D * _ ≤ Fintype.card D * (P * (univ.image fun ω => set ω d₀).card) :=
