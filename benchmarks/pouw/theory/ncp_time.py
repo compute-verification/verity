@@ -125,9 +125,11 @@ def joint_rows(path: Path = ROWS) -> dict[str, tuple[str, float, float]]:
     return out
 
 
-def solve(routes: dict[str, dict], rows: dict, smem: bool = False, tensor: bool = True, scale: dict | None = None):
+def solve(routes: dict[str, dict], rows: dict, smem: bool = False, tensor: bool = True, scale: dict | None = None,
+          free: tuple[str, ...] = ()):
     """Max words a SMSP-cycle. routes: name → {INSTR: lane instructions a word}; scale: name → a factor on the route's
-    instructions and bytes. Returns (words/SMSP-cycle, g, {r: w})."""
+    instructions and bytes; free: classes the generic joint rows (JI90) don't count, though each still takes an issue
+    slot. Returns (words/SMSP-cycle, g, {r: w})."""
     names = list(routes)
     nv = 1 + len(names)
     use = np.zeros((len(CLASSES), nv))
@@ -137,12 +139,13 @@ def solve(routes: dict[str, dict], rows: dict, smem: bool = False, tensor: bool 
             use[CLASSES.index(cls), j] += cnt * w / LANES * (scale or {}).get(r, 1.0)
     A, b = [], []
     allv = use.sum(0)
+    generic = use[[i for i, c in enumerate(CLASSES) if c not in free]].sum(0)
     for name, (cls, a, coef) in rows.items():
         if cls == "SHFL":
             continue
         line = np.zeros(nv)
         line[0] = a
-        line += coef * (allv if cls == "ALL" else use[CLASSES.index(cls)])
+        line += coef * (generic if cls == "ALL" else use[CLASSES.index(cls)])
         A.append(line)
         b.append(1.0)
     for i, cls in enumerate(CLASSES):
@@ -297,6 +300,17 @@ def main() -> int:
               f"instructions (IDP.4A alone: >= {8 * m['idp4a']:.2f} a word)")
     print(f"  honest side at K 2,048: modelled {sm * side_h:.2f} words/SM-clk; T1 needs >= {need['products']:.2f} "
           f"(products) or >= {need['ideal']:.2f} (ideal)")
+    # The placement estimates: were a class's warp instructions free of the generic rows beside wgmma (both parties).
+    placement = {}
+    for cls in ("FP64", "IMAD"):
+        rh_f = solve(reading("honest", ROUTES), rows, smem=smem, free=(cls,))[0]
+        placement[cls] = {"honest": sm * rh_f}
+        for kind in ("products", "ideal"):
+            ra_f = solve(reading(kind, ROUTES), rows, smem=smem, free=(cls,))[0]
+            placement[cls][kind] = {"adversary": sm * ra_f, "gap_k2048": gap(rh_f, ra_f, 2048), "kmin": kmin(rh_f, ra_f)}
+        print(f"  were {cls} free of JI90 beside wgmma: honest {sm * rh_f:.2f}, gap at K 2,048 "
+              + ", ".join(f"{placement[cls][k]['gap_k2048']:.2%} ({k}, T1 from K {placement[cls][k]['kmin']:,.0f})"
+                          for k in ("products", "ideal")))
     m8 = margins["products@8192"]["every_route"]
     checks.check("premise P32's margin at K 8,192: T1 holds while an off-tensor word costs at least that fraction of "
                  "P32's product instructions", m8 < 1.0, f"{m8:.3f}x, i.e. >= {32 * m8:.1f} products a word "
@@ -323,7 +337,7 @@ def main() -> int:
             "honest": {k: {kk: vv for kk, vv in v.items() if kk != "rate"} for k, v in table.items()},
             "adversary": {k: {kk: vv for kk, vv in v.items() if kk != "rate"} for k, v in adv.items()},
             "gap": {kind: {k: gap(r_h, a["rate"], k) for k in KS} for kind, a in adv.items()},
-            "margins": margins, "honest_side_need_k2048": need, "honest_side": sm * side_h,
+            "margins": margins, "honest_side_need_k2048": need, "honest_side": sm * side_h, "placement": placement,
             "estimates": ESTIMATES, "routes": ROUTES}, indent=1, default=str) + "\n")
     return checks.finish()
 
