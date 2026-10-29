@@ -3238,7 +3238,7 @@ def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
 
 
 def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pieces):
-    """PRF-127, Lean and Python agreeing: a verifier naming its window's open root (`WROOT`) and holding W across windows
+    """Lean and Python agreeing: a verifier naming its window's open root (`WROOT`) and holding W across windows
     accepts a record whose D is a fresh commitment under its window's domain after a log that registered D under an
     earlier window's (`EARLIER_WROOT`) at another root, and W under the same root. The earlier window's D, replayed, is
     refused (`R7-domain`), and so is a W under another root (`R7-held`); a verifier that doesn't hold W takes it per

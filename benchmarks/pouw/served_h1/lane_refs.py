@@ -1,7 +1,7 @@
-"""SERVE-REG's gated lane against option A's prover side, byte for byte: the rows `partials.lane_partials` computes (the
+"""The gated lane against option A's prover side, byte for byte: the rows `partials.lane_partials` computes (the
 cpu's chain split by lane, the gpu's `kh_lanes`) are the rows `h1zy.PouwH1LaneZy_v1` checks.
 
-SERVE-REG's lane (`h1zy.PouwH1LaneZy_v1`) checks a leaf's committed partials row lane by lane: the row is the lane's
+The lane (`h1zy.PouwH1LaneZy_v1`) checks a leaf's committed partials row lane by lane: the row is the lane's
 chain words ANDed with the OR of the leaf's R admit bits, so a dead leaf's row is zero.  Its references on words are
 `h1tile.lane_partials(a, b, salt, position, roots, gated=admit)`, the leaf's 32 lanes, and `h1zy.lane_partial(a, b,
 admit, salt, position, roots, lane, tile)`, one lane from its 4 A rows and 8 B rows by slot.  The references take any
@@ -83,7 +83,7 @@ def load(path) -> list[dict]:
 
 
 def check(recs: list[dict], workers: int = 1) -> dict:
-    """SERVE-REG's two references on each record against its cpu and gpu partials, and the `h1zy.lane_partial` rows and
+    """The two references on each record against its cpu and gpu partials, and the `h1zy.lane_partial` rows and
     the receipt against `h1tile.lane_partials`'; by group: leaves, live, dead, partly admitted (live with a lane holding
     no admitted row), those lanes, and the mismatches."""
     args = [((r["a"].astype(np.int64)).tolist(), (r["b"].astype(np.int64)).tolist(), r["admit"], r["salt"],
@@ -142,7 +142,7 @@ def verdict(doc: dict) -> bool:
 
 
 def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, workers: int = 1) -> dict:
-    """On a served step's capture `g` (dither_one's Window `win`, the step's salt; `lib` the served h1u build for the
+    """On a served step's capture `g` (dither_one's DitherState `win`, the step's salt; `lib` the served h1u build for the
     gpu): every call's `per_call` live leaves and one dead leaf (when the step has a dead row block), group "real", with
     their committed receipts; then, on the step's own operands at m = 32 r + j (j in `PARTLY`,
     r = min(m // 32, t / 32 - 1)), one leaf of row block r on calls 0, 2, the first of the widest K and the last, group

@@ -25,16 +25,36 @@ open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Aliased
 
-/-- **What the copy positions read beside the `Layout`**: the circuit's parse and check, Δ pair by pair, a unit that is
-neither of the rows' circuits, and a unit net whose rows past its useful rows are empty. -/
+/-- **What the copy positions read beside the `Layout`**, of a flat or a templated circuit: the circuit's parse (with a
+templated circuit's committed unit net ahead of the file, `unitPre`) and check, nets that fit their slots, Δ pair by
+pair, a unit that is neither of the rows' circuits, and a unit net whose rows past its useful rows, the row after its
+constant, are empty. -/
 structure UnitFacts (tags : Tags) (st : Stmt) : Prop where
-  parse : ParseFacts tags st.c
+  parse : ParseFactsU tags (unitPre st.c) st.c
+  nets : NetsFit st.c
+  nodup : ∀ i < st.c.nets.size, (portBits (st.c.nets.getD i default).2.inGroups).Nodup
   check : CheckFacts st.c
   delta : FlatDelta st.c st.pin st.da
   sha : st.c.unitNet ≠ st.c.shaNet
   hm : st.c.unitNet ≠ st.c.hmNet
   rowsA : st.c.unit.a.rows ≤ st.c.unit.useful
   rowsB : st.c.unit.b.rows ≤ st.c.unit.useful
+  useful : st.c.unit.useful = st.c.unit.constPos + 1
+
+/-- **`UnitFacts` of a flat circuit**, from its `ParseFacts`. -/
+theorem UnitFacts.ofFlat {tags : Tags} {st : Stmt} (P : ParseFacts tags st.c) (C : CheckFacts st.c)
+    (hΔ : FlatDelta st.c st.pin st.da) (hs : st.c.unitNet ≠ st.c.shaNet) (hh : st.c.unitNet ≠ st.c.hmNet)
+    (ha : st.c.unit.a.rows ≤ st.c.unit.useful) (hb : st.c.unit.b.rows ≤ st.c.unit.useful) : UnitFacts tags st :=
+  ⟨P.toU _, nets_ok P, fun i hi => by
+    rcases P.nets _ (getD_mem_toList hi) with hb | ⟨_, _, _, _, _, hb⟩
+    · exact portBits_nodup hb
+    · rw [(build_facts hb).2.1, portBits_eq]
+      simpa using List.nodup_range', C, hΔ, hs, hh, ha, hb, (built_spec (unit_built P C)).2.1⟩
+
+/-- A flat circuit's `UnitFacts` read its `ParseFacts`. -/
+theorem UnitFacts.flat {tags : Tags} {st : Stmt} (F : UnitFacts tags st) (ht : st.c.tmpl = none) :
+    ParseFacts tags st.c :=
+  F.parse.facts (fun x hx => by rw [unitPre_flat ht] at hx; simp at hx) ht
 
 /-- **`UnitFacts` with nets `pre` first, of any kind** (a templated file's unit net, `Tmpl.unitNet`, is not `Built`): its
 parse is `ParseFactsPre`'s. -/
@@ -50,7 +70,35 @@ structure UnitFactsPre (tags : Tags) (pre : Array (String × Net)) (st : Stmt) :
 /-- `UnitFactsPre` with `pre`'s nets `Built` is `UnitFacts`. -/
 theorem UnitFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {st : Stmt} (F : UnitFactsPre tags pre st)
     (hpre : ∀ x ∈ pre.toList, Built x.2) : UnitFacts tags st :=
-  ⟨F.parse.facts hpre, F.check, F.delta, F.sha, F.hm, F.rowsA, F.rowsB⟩
+  .ofFlat (F.parse.facts hpre) F.check F.delta F.sha F.hm F.rowsA F.rowsB
+
+/-- **The committed unit's input port bits are self rows**, `[x]·[x]`, of a flat or a templated unit: its logical net's
+(`port_row`), which `upos` keeps (`UnitAt`). -/
+theorem unit_self {st : Stmt} (L : Layout st) (hlog : st.c.unit.unitLog ≤ 32) {x : ℕ}
+    (hx : x ∈ portBits st.c.unit.inGroups) (j : ℕ) :
+    sparseEntry st.c.unit.a x j = (if j = x then 1 else 0) ∧ sparseEntry st.c.unit.b x j = if j = x then 1 else 0 := by
+  have A := L.unit_at
+  obtain ⟨p, t, hp, ht, hpt⟩ := mem_portBits hx
+  have hin : x < st.c.unit.inWords * WORD := hpt ▸ L.port_lt hp ht
+  have hc : x < (lunit st.c).constPos := by have := A.in_le; rw [A.in_eq] at this; omega
+  have hpos := A.inputs x hin
+  have hx' : x ∈ portBits (lunit st.c).inGroups := by rw [A.groups]; exact hx
+  obtain ⟨ra, rb⟩ := port_row L.unit_built (le_trans A.log_le hlog) hx'
+  have hself : (((((#[x] : Array ℕ)).toList.map (upos st.c)).count j : ℕ) : ZMod 2) = if j = x then 1 else 0 := by
+    by_cases hj : j = x
+    · subst hj; simp [hpos]
+    · simp [hpos, hj, Ne.symm hj]
+  constructor
+  · have e := A.row_a x hc hlog j
+    rw [hpos, ra] at e
+    exact e.trans hself
+  · have e := A.row_b x hc hlog j
+    rw [hpos, rb] at e
+    exact e.trans hself
+
+/-- A unit's input port bits are distinct: its logical net's (`UnitAt.groups`). -/
+theorem unit_nodup {st : Stmt} (L : Layout st) : (portBits st.c.unit.inGroups).Nodup := by
+  rw [← L.unit_at.groups]; exact portBits_nodup L.unit_built
 
 section copies
 
@@ -65,7 +113,7 @@ def zeroPos {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) : Fin (2 ^ (L.mod
 theorem zeroPos_block_ex {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {D : ℕ → Prop} {z : Model.Witness (L.model regs).m}
     (hz : SatEx (L.model regs) D z) (hD : ¬ D (zeroPos L regs F hs₀).val) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (zeroPos L regs F hs₀) = 0 := by
-  have huse := (built_spec (L.built_flat F.parse.tmpl)).2.1
+  have huse := F.useful
   have hA : ∀ j', sparseEntry st.c.unit.a st.c.unit.useful j' = 0 := fun j' => by
     unfold sparseEntry
     rw [ite_eq_right (by have := F.rowsA; omega)]
@@ -101,16 +149,16 @@ theorem copyAt_block {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hof
   unfold copyAt
   by_cases hm : off ∈ portBits st.c.unit.inGroups
   · rw [ite_eq_left hm]
-    have hnd := portBits_nodup (L.built_flat F.parse.tmpl)
+    have hnd := unit_nodup L
     obtain ⟨p, t, hp, ht, hpt⟩ := mem_portBits hm
     have hsrc : flatSrcAt st.c s₀ off = Flat.flatSrc st.c s₀ p t := by
       unfold flatSrcAt
       rw [hpt, portOf_eq hnd hp ht]
       congr 1
       omega
-    have hself := port_self (L.built_flat F.parse.tmpl) (L.unitLog_le hs₀) hm
+    have hself := unit_self L (L.unitLog_le hs₀) hm
     rw [hpt] at hself
-    have hrow := fun j => L.placed_port F.parse F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
+    have hrow := fun j => L.placed_portT F.parse (fun n => (F.nets n).1) F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
       (fun j' => by rw [L.unit_lookup]; exact (add_zero _).trans (hself j').2) r j (by rw [hr, hpt])
     rw [hsrc]
     split
@@ -216,8 +264,8 @@ theorem setupH_unitFacts (ht : tags.typed = false)
       have h2 : (st.c.nets.getD st.c.unitNet default).2.lookup.isSome = false := C.unit_lookup
       rw [h1] at h2
       cases h2
-  refine ⟨P, C, by rw [hda]; exact delta_flat st.c st.pin P.typed, fun he => ?_, fun he => ?_,
-    hrows.1.le, hrows.2.le⟩
+  refine .ofFlat P C (by rw [hda]; exact delta_flat st.c st.pin P.typed) (fun he => ?_) (fun he => ?_)
+    hrows.1.le hrows.2.le
   · rw [← he, hname] at hsn
     exact absurd hsn (by unfold HmRow.SHA_NET; decide)
   · rw [← he, hname] at hhn

@@ -1,4 +1,4 @@
-import Definitions.Accounting.Overhead
+import Definitions.Accounting.Slowdown
 import Mathlib.Basic.ENNReal.Real
 
 /-!
@@ -7,7 +7,7 @@ import Mathlib.Basic.ENNReal.Real
 Why the local bounds on inference blocks (`Definitions.Nci.Assumptions.Capability`) constrain learning at all: every
 sufficiently cheap way to reach the target contains enough computation that some local bound covers. It is the
 task-level hypothesis, separate from every local premise, and stated over the tasks and runs of
-`Definitions.Accounting.Overhead`.
+`Definitions.Accounting.Slowdown`.
 -/
 
 namespace Nci.Assumptions
@@ -28,10 +28,10 @@ matter do. A method that reduces the restricted state or dependence and reaches 
 at that target and operating point. Full-parameter training being the unrestricted optimum is not enough: a
 compact-state method at twice the cost bounds the slowdown by two. It is the largest scientific conjecture here; a first
 result states it for an explicit implementation family. -/
-def CoversEfficientMethods {In L : Type} {m : ℕ} (G : Accounting.Overhead.Task In (Fin m → List Bool))
-    (𝒜 : Accounting.Overhead.Class In L) (Core : (In → Accounting.Actual.Run L) → In → Prop)
+def CoversEfficientMethods {In L : Type} {m : ℕ} (G : Accounting.Slowdown.Task In (Fin m → List Bool))
+    (𝒜 : Accounting.Slowdown.Class In L) (Core : (In → Accounting.Actual.Run L) → In → Prop)
     (cost : Accounting.Actual.Run L → ℕ) (Tmax : ℕ) (η : ℝ≥0∞) : Prop :=
   ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
-    G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Overhead.Succeeds (C x) pos 𝒴 ∧ cost (C x) < Tmax ∧ ¬ Core C x) ≤ η
+    G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Slowdown.Succeeds (C x) pos 𝒴 ∧ cost (C x) < Tmax ∧ ¬ Core C x) ≤ η
 
 end Nci.Assumptions

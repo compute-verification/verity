@@ -8,7 +8,7 @@ probability δ, at most so many proof blocks are faulty, a proof block being fau
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs is a subprotocol of both composite protocols. Remote Verity (`verity/remote/v0`,
+Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
 `verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
 (`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
 composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
@@ -21,7 +21,9 @@ accepts, at most the profile's count of proof blocks are faulty. Its top stateme
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
-rests on these named assumptions:
+and the V5 guarantees cover sessions of non-templated statements only: knowledge soundness for a templated statement
+(`Flock.Tags.templated`), whose acceptance `flock_verify_sound` covers, is open until the V5 guarantees are restated
+over the statement circuit. It rests on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
   idealized; its docstring says what that leaves out).
@@ -29,6 +31,10 @@ rests on these named assumptions:
   draw file is the one `flock-verify draw` printed for the verifier's own draw.
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
+
+On `main`, both composites' sampled-proofs component is one-stage v1 (`verity/sampled-proofs/one-stage/v1`), which
+takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --zk` produces them, and the link from a
+composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger (or the verifier's own draw),
@@ -148,7 +154,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     which the gate refuses to open without (`auditor.coin_ports`). It is not in Lean: no `.lean` file defines it.
     ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` builds a form of it into its statement instead (each
     unit's prover is a function of the other units' coins).
-  - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
+  - `OneClock`, a named premise under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
