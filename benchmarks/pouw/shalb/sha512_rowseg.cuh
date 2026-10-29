@@ -22,10 +22,16 @@ constexpr uint64_t MESSAGE_BITS = 9216;
 // Words 0–12 and 15 are the call's (15 is zero), and so are 17 and 19.
 SHAMIN_HD constexpr bool per_item(int i) { return i == 13 || i == 14 || i == 16 || (i >= 18 && i != 19); }
 
+// Whether W_t (t ≥ 16) has a per-call part that can be nonzero: a source word that is the call's other than word 15.
+SHAMIN_HD constexpr bool call_part(int t) {
+  return (!per_item(t - 2) && t - 2 != 15) || (!per_item(t - 7) && t - 7 != 15) ||
+         (!per_item(t - 15) && t - 15 != 15) || (!per_item(t - 16) && t - 16 != 15);
+}
+
 // The PRE words a call computes once. Entering block 1's round 13 the state is the call's (a..h); E13 = d + U and
 // A13 = U + S0(a) + Maj(a, b, c) with U = h + K_13 + S1(e) + Ch(e, f, g), so round 13 is e = E13 + W_13,
 // a = A13 + W_13; rounds 14–16 read a, b, c, e, f and the sums H14 = g + K_14, H15 = f + K_15 (W_15 is zero) and
-// H16 = e + K_16; P + t − 16 is W_t's per-call part for t = 16..35 (all of it for 17 and 19).
+// H16 = e + K_16; P + t − 16 is W_t's per-call part for t = 16..35 (all of it for 17 and 19, and zero for 29–31).
 enum : int { E13, A13, RA, RB, RC, RE, RF, H14, H15, H16, P, PRE = P + 20 };
 
 // Block 1's 16 words from its 128 bytes.
@@ -92,7 +98,7 @@ SHAMIN_HD void block1(PreT p, uint64_t w13, uint64_t w14, uint64_t* st, uint64_t
     if (t > 17) {
       h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
     }
-    uint64_t wt = t <= 35 ? (uint64_t)p[P + t - 16] : 0;
+    uint64_t wt = t <= 35 && call_part(t) ? (uint64_t)p[P + t - 16] : 0;
     if (per_item(t)) {
       if (per_item(t - 2)) wt += s1(w[(t - 2) & 15]);
       if (per_item(t - 7)) wt += w[(t - 7) & 15];
