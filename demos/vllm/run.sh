@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `verity demo vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
+# `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
 # demo's workload names (placement.toml's `row`, the integration's file integrations/vllm/workloads/<row>.json, fetched by
 # its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):

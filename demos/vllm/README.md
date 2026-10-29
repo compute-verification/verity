@@ -16,7 +16,7 @@ PoUW's verdict on the served run credits nothing. The challenger's gate holds a 
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
 remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
-`demo.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
+`example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
@@ -80,15 +80,15 @@ doesn't control.
 
 ## Commands
 
-`run.sh` is the one command (`verity demo vllm [window|commit|serve] [--dry-run] [FLAG...]`). It starts the run with
+`run.sh` is the one command (`verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`). It starts the run with
 the run recorder from the tree root, on the node `placement.toml` names, and returns once the run starts. FLAGs go to the
 recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints the command.
 
-1. `verity demo vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
+1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
    that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
    the Commit the endpoint commits under.
-2. `verity demo vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
-3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
+2. `verity example vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
+3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 

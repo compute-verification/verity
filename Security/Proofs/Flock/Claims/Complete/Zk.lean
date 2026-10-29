@@ -32,7 +32,6 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.Zk.Extras
 import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
 import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
-import Proofs.Flock.Claims.Complete.Zk.LaneAgree
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.Complete.Zk.InnerGo
@@ -93,9 +92,8 @@ masked replay that returns stops and the coins its claims read (`replayWith_ret`
 passing on the replay's claims, given the extra claims' algebra `RsExtrasZk` (`ringSwitchZk_goal`); `Extras` that
 algebra at the deployed relation, from `RelS` (`CaseZk.model`, `rsExtrasZk`); `LigeritoPos` what a masked Ligerito
 that returns gives, by coin position: its record and where it stops (`zkLigeritoWith_pos`, `RunZk.lg_pos`), and
-`LigeritoProverPos` what the masked prover records, by send position (`ligeritoPZk_pos`); `LaneAgree` the two records
-giving the same lane constraints where the rounds' coins are the sends' replies and the two Ligeritos start together
-(`lanes_agree`); `PadAlgebra` the honest pads' algebra: at a rep's pads the triple's constraints vanish at every
+`LigeritoProverPos` what the masked prover records, by send position (`ligeritoPZk_pos`); `PadAlgebra` the honest pads'
+algebra: at a rep's pads the triple's constraints vanish at every
 sacrifice coin, so the batched constraint `innerP` checks holds at every coin once the rep's own constraints vanish
 (`triple_holds`, `innerP_batched`), and the verifier's batched and column checks hold on the honest `Y`
 (`innerY_batched`, `innerY_column`); `InnerMerkle` the pads' commitment opening at every column, each column's siblings

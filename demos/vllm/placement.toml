@@ -1,5 +1,5 @@
 # The vLLM demo's placement: the workload it serves, the node each of its runs goes to, how `research run` starts it there,
-# and what that node holds. `run.sh` (`verity demo vllm`) reads it and hands the run's script its node's paths as its environment, so
+# and what that node holds. `run.sh` (`verity example vllm`) reads it and hands the run's script its node's paths as its environment, so
 # no script names a node or a path on one. A node's paths are the [node.NAME] table; a run's own variables are its env table.
 
 # the workload the demo serves, one of the integration's (integrations/vllm/workloads/<row>.json, fetched by its art id and

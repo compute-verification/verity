@@ -1,4 +1,4 @@
-"""The lifecycle demo's two composites over one monitoring period: honest, each accepts; each way the developer deviates
+"""The lifecycle example's two composites over one monitoring period: honest, each accepts; each way the developer deviates
 (`lifecycle.CHEATS` and `ONSITE_CHEATS`, at least one a phase) is refused by name or rejected by the component whose check it breaks, except
 what the remote composite can't see, which goes uncredited."""
 
@@ -99,7 +99,7 @@ ENTRIES = {
                                                                     L.Loc("dram1", "memory", "node1", tier="dram", bytes=1)),
                                                           links=(L.Link("n01", ("node0", "node1"), 1, 1),))),
 }
-"""A later entry for each check `check_registration` makes, with the refusal it draws."""
+"""A later entry for each check `check_registration` makes, with the refusal it samples."""
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
 """The entries a remote site accepts: it has no certifier and no memory challenger to hold its links to."""
 

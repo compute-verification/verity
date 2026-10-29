@@ -4,7 +4,7 @@ Proof of useful work: certifies that a served model's declared matrix products w
 committed, noised checked values. An accepted run establishes a credited size S of noised matrix products, at least
 (1 − ε)·S of their AND gates computed right, except with probability δ. One protocol carries several named schemes
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof service registers each commit period, draws its
-proof blocks with live coins, proves them in zero knowledge (C-Flock `--zk`) and verifies them; PoUW states what each
+proof blocks with live coins, proves them in zero knowledge (Flock `--zk`) and verifies them; PoUW states what each
 commit period commits, the Program each drawn proof block must pass, and what the outcome credits. It carries no policy
 parameter: it surfaces the ε at δ its draw established.
 
@@ -15,7 +15,7 @@ one-stage audit and PoUW's commit-period check (`Core.Remote.components` in
 `verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when both components accept
 their own cases and its commitment binds both components' commitments; either one's rejection rejects it
 (`Core.Composition.product`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
-(`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+(`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a component of the onsite protocol (`verity/core/protocols/onsite`).

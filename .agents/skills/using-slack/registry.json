@@ -229,6 +229,7 @@
         "benchmarks/ppl/",
         "benchmarks/nci/",
         "benchmarks/int8_class_rate/",
+        "benchmarks/unit_lowering/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",

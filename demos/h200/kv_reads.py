@@ -10,7 +10,7 @@ Every opening is then checked (`replay_bundle.check_reads`) against a registrati
         [--registered ROOTS.json] [--slots K] [--blocks N] [--workers W] [run flags as m3draw.py's]
 
 ``--phase replay`` (the GPU's part: the run, keeping the drawn slots' committed rows as each group closes, the root check
-and the drawn blocks' replay from those rows) writes the rows, the salt keys and the blocks' port rows to ``--private
+and the sampled proof blocks' replay from those rows) writes the rows, the salt keys and the blocks' port rows to ``--private
 DIR/state.pkl`` (0600, the prover's: never under ``$OUT``); ``--phase open`` (CPU only, so the card's lease is released)
 opens and checks them from there. ``all`` does both.
 ``--secret``: m3draw's salt secret (``SHA-512(tag || secret || step)[:32]`` a step), else the run id's fixture salt keys.
@@ -195,7 +195,7 @@ def tamper_path(reads: list[dict]) -> list[dict]:
 
 def replay(a: argparse.Namespace) -> dict[str, Any] | int:
     """The GPU's part: the run (keeping the drawn slots' committed rows), its roots held to the registered ones, and the
-    drawn blocks replayed from those rows: the state `open_state` opens (the rows and the salt keys are the prover's), or an
+    sampled proof blocks replayed from those rows: the state `open_state` opens (the rows and the salt keys are the prover's), or an
     exit code."""
     shape = SHAPES[a.shape]
     seed = {"test": SW.TEST_SEED, "demo": SW.DEMO_SEED}.get(a.seed, a.seed.encode())

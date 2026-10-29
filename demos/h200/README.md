@@ -1,14 +1,14 @@
-# The H200 demo
+# The H200 example
 
 It shows the remote protocol's sampled-proofs half (`demos/README.md`) at a frozen shape on one H200: a step's every
-value committed, proof blocks drawn by one live coin, each proved by C-Flock `--zk` and checked by the Lean verifier
+value committed, proof blocks drawn by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
 (`phases.sh`, the run of record). It claims nothing else.
 
 The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape.FROZEN`, `served_weights`'s `H200`) on the
 plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from the
 store into staging instead), every op's output committed through the per-step commit call, drawn slots
 opened by replaying their requests and drawn proof blocks replayed bit for bit against the Definitions, each subprotocol run against the
-step or named, and a replay bundle and block record written. `verity demo h200 --out OUT [...]` runs it
+step or named, and a replay bundle and block record written. `verity example h200 --out OUT [...]` runs it
 (`run.py --help`): on the CPU at the small shapes, or on an H200 at the frozen one (`--shape h200 --device cuda`).
 
 Around sampled proofs, `e2e_h200/legs.py` runs the other subprotocols as a skeleton on fixture coins, not as runs, and
@@ -16,17 +16,17 @@ nothing claims them: PoUW is per-call noise's tiles as a `--subcircuit`, PoUS is
 on the staged path's store, network certification's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
 interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
 
-It is a demo, not an integration: it composes pieces from several parts of the tree (the weights' store and decode
+It is an example, not an integration: it composes pieces from several parts of the tree (the weights' store and decode
 call, the GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run. When the real pieces land
 they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
 
 ## Workload and placement
 
 The workload is the frozen MQA shape on seeded INT8 weights (`e2e_h200/served_weights.py`), with `--shape
-tiny|small|slice` for CPU runs; it isn't an integration yet (`demo.toml`: `workload = "none"`). Every party runs in the
+tiny|small|slice` for CPU runs; it isn't an integration yet (`example.toml`: `workload = "none"`). Every party runs in the
 one run on one GPU node (an H200 node for `percall_job.sh`): the driver and its commit call on the prover's side, and the
-replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, how far the demo runs and
-the runs behind it are `demo.toml`'s (`demos/README.md`).
+replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, how far the example runs and
+the runs behind it are `example.toml`'s (`demos/README.md`).
 
 ## What runs, and what stands in
 
@@ -61,7 +61,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (`demos/h200/interfaces`) |
-| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | PoUS's and the memory wipe's runs, the bandwidth audit, network certification's signed records, C-Flock `--zk` and the Lean verifier |
+| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | PoUS's and the memory wipe's runs, the bandwidth audit, network certification's signed records, Flock `--zk` and the Lean verifier |
 
 `e2e_h200/served_weights.py` is the demo's seeded weights and their registration root, for any decoder
 shape (`H200`, Phase 1's CPU model, `TINY`): a SHA-512 counter generator from (seed, tensor, row) to every tensor, the weights
