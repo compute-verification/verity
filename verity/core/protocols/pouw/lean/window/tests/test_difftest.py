@@ -2,7 +2,7 @@
 shared harness (`verity_difftest`, `of_record="lean"`): one `Port` per function of `window.py` the Lean states, served by
 `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
-The inputs are drawn by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
+The inputs are sampled by the generators below from a Hypothesis-controlled `random.Random` (`st.randoms`), so a run is
 deterministic and shrinks. The grid's numbers run over bits 0 … 6, n up to 2^60 and the integers at or below 0; K′'s
 parameters over realistic ε and δ (down to 2^-40), grid-derived and random work up to n = 2^60, cases where (1 − p)^K = δ
 exactly, and every way out of its domain.
@@ -85,7 +85,7 @@ def levels_in(rng: random.Random) -> dict:
     return {"bits": bits, "lo": lo, "hi": hi}
 
 
-# ---- the draw -----------------------------------------------------------------------------------------------------------
+# ---- the sample -----------------------------------------------------------------------------------------------------------
 
 def _eps(rng: random.Random) -> Fraction:
     return rng.choice((Fraction(1, 2), Fraction(1, 2), Fraction(1, 1000), Fraction(1), Fraction(1, 3), Fraction(9, 10),

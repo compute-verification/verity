@@ -85,7 +85,7 @@ def _record(ch: Ch.LiveChallenger, roots: list[bytes]) -> list[dict]:
 
 class Session:
     """A challenger's session over `ch`'s coins as its host leaves it, its record and close signed under key `seed`: its
-    salt coin opened after root `salt` (none when None), then round coins after `roots`, then its draw coin after the
+    salt coin opened after root `salt` (none when None), then round coins after `roots`, then its sampling coin after the
     root `draw` makes of the round coins' record (none when None); its record signed at leaf `leaf` and its close at the
     next."""
 

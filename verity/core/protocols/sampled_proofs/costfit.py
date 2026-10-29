@@ -1,4 +1,4 @@
-"""C-Flock's cost model, fitted from measurements, for the sampling planner (`optimize.CostModel`).
+"""Flock's cost model, fitted from measurements, for the sampling planner (`optimize.CostModel`).
 
 Three regressions on a template's features (`FEATURES`: one, ands, ands staged, ands drawn), each a least squares in
 relative error with non-negative coefficients over the observations that measure it:
@@ -31,7 +31,7 @@ TARGETS = ("prove", "verify", "stage")
 
 @dataclass(frozen=True)
 class Observation:
-    """One measurement from `source` (a run or `art:` id): a session drawing `drawn` proof blocks from a statement of `staged`
+    """One measurement from `source` (a run or `art:` id): a session sampling `drawn` proof blocks from a statement of `staged`
     proof blocks of `template`, `ands` ANDs a proof block, with what it measured: `prove` (GPU-s, the session), `verify` and `stage`
     (CPU-s, the statement)."""
 
