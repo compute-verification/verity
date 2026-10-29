@@ -35,7 +35,8 @@ reduction's target (`AlgSuffL`, rank 3, the analogue of `A2_algebraicSufficiency
 (`BamFloor`) gives `N·(64 − 1024/L)` for `N` running words, at most two registers a word whatever `L`; its arithmetic
 core is `lcommitFloorArith`, and the rank fact it rests on is `innerProductRank`. The full `L` a word, `L/32` registers
 of 32, is `NoSharingGain`: a lower bound on matrix multiplication's cost with merges and operand ranges, open (rank 4
-to 5). Without operand ranges it is false: one level of Strassen–Winograd costs `7L/8` plus a merge a word.
+to 5). Without operand ranges it is false: one level of Strassen–Winograd costs `7L/8` of the tensor work plus at
+most one merge a word.
 -/
 
 namespace Pouw.Dimension.H100
@@ -86,14 +87,15 @@ inductive TcKind where
   deriving DecidableEq
 
 /-- The instruction `k`s `sm_90` documents for each type, over `wgmma` and `mma.sync` (PTX ISA): FP8 k32; int8 k16
-(`m8n8k16`, `m16n8k16`) and k32; int4 k32 and k64 (`mma.sync` only); `b1` k128 and k256; `f16` k4 (`m8n8k4`), k8 and
-k16; `bf16` k8 and k16; `tf32` k4 and k8; `f64` k4, k8 and k16 (`mma.sync` only). -/
+(`m8n8k16`, `m16n8k16`) and k32; int4 k32 and k64 (`mma.sync` only); `b1` k128 and k256; `f16` and `bf16` k8 and k16;
+`tf32` k4 and k8; `f64` k4, k8 and k16 (`mma.sync` only). `f16` `m8n8k4` is not a tensor-core instruction on `sm_90a`:
+ptxas lowers it to scalar code, whose instructions are priced and semantic in their own classes. -/
 def TcKind.ks : TcKind → List ℕ
   | .e4m3 | .e5m2 => [32]
   | .s8 => [16, 32]
   | .s4 => [32, 64]
   | .b1 => [128, 256]
-  | .f16 => [4, 8, 16]
+  | .f16 => [8, 16]
   | .bf16 => [8, 16]
   | .tf32 => [4, 8]
   | .f64 => [4, 8, 16]
@@ -104,7 +106,7 @@ def TcKind.minK : TcKind → ℕ
   | .s8 => 16
   | .s4 => 32
   | .b1 => 128
-  | .f16 => 4
+  | .f16 => 8
   | .bf16 => 8
   | .tf32 => 4
   | .f64 => 4
@@ -417,8 +419,8 @@ def BamFloor (L : ℕ) : Prop :=
 
 /-- **`NoSharingGain L`** (open; rank 4 to 5): the same programs cost at least `N·L`, the honest `L/32` registers of 32
 a word. It is a lower bound on matrix multiplication's cost with merges priced and operand ranges enforced.
-Without the ranges it is false: one Strassen–Winograd level costs `7L/8` plus a merge a word, below `L` from
-`L = 512`, and two levels from `L = 256`. With them, D4's proved `NaiveBeatsStrassen` is the evidence for Strassen's
+Without the ranges it is false: one Strassen–Winograd level costs `7L/8` of the tensor work plus `m` merges a word
+(`m` from 1/2 to 1 by schedule), below `L` once `L > 256·m`. With them, D4's proved `NaiveBeatsStrassen` is the evidence for Strassen's
 and Winograd's schemes at full int8 range, and its range argument extends to NCP's operands (190 values a block-1
 entry). -/
 def NoSharingGain (L : ℕ) : Prop :=
