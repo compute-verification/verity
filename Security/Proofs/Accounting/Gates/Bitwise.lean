@@ -43,62 +43,62 @@ lemma foldl_snoc_length {α β : Type} (f : List α → β → α) :
     simp only [List.length_append, List.length_cons, List.length_nil]
     omega
 
-lemma values_length (C : Dag ι) (x : ι → ℤ) : (values C x).length = C.length :=
-  (foldl_snoc_length (fun vs (g : Gate ι) => g.value x vs) C []).trans (by simp)
+lemma values_length (C : IntDag ι) (x : ι → ℤ) : (values C x).length = C.length :=
+  (foldl_snoc_length (fun vs (g : IntGate ι) => g.value x vs) C []).trans (by simp)
 
-lemma intervals_length (C : Dag ι) : (intervals C).length = C.length :=
-  (foldl_snoc_length (fun ivs (g : Gate ι) => g.derive ivs) C []).trans (by simp)
+lemma intervals_length (C : IntDag ι) : (intervals C).length = C.length :=
+  (foldl_snoc_length (fun ivs (g : IntGate ι) => g.derive ivs) C []).trans (by simp)
 
 /-- Gate `j`'s derived interval. -/
-def ivOf (C : Dag ι) (j : ℕ) : Iv := (intervals C).getD j (0, 0)
+def ivOf (C : IntDag ι) (j : ℕ) : Iv := (intervals C).getD j (0, 0)
 
-lemma val_append (C E : Dag ι) (x : ι → ℤ) (j : ℕ) (h : j < C.length) : val (C ++ E) x j = val C x j := by
+lemma val_append (C E : IntDag ι) (x : ι → ℤ) (j : ℕ) (h : j < C.length) : val (C ++ E) x j = val C x j := by
   obtain ⟨t, ht⟩ : ∃ t, values (C ++ E) x = values C x ++ t := by
     unfold values; rw [List.foldl_append]; exact foldl_snoc _ _ _
   unfold val; rw [ht, List.getD_append _ _ _ _ (by rw [values_length]; exact h)]
 
-lemma ivOf_append (C E : Dag ι) (j : ℕ) (h : j < C.length) : ivOf (C ++ E) j = ivOf C j := by
+lemma ivOf_append (C E : IntDag ι) (j : ℕ) (h : j < C.length) : ivOf (C ++ E) j = ivOf C j := by
   obtain ⟨t, ht⟩ : ∃ t, intervals (C ++ E) = intervals C ++ t := by
     unfold intervals; rw [List.foldl_append]; exact foldl_snoc _ _ _
   unfold ivOf; rw [ht, List.getD_append _ _ _ _ (by rw [intervals_length]; exact h)]
 
-lemma values_snoc (C : Dag ι) (g : Gate ι) (x : ι → ℤ) :
+lemma values_snoc (C : IntDag ι) (g : IntGate ι) (x : ι → ℤ) :
     values (C ++ [g]) x = values C x ++ [g.value x (values C x)] := by
   simp only [values, List.foldl_append, List.foldl_cons, List.foldl_nil]
 
-lemma intervals_snoc (C : Dag ι) (g : Gate ι) : intervals (C ++ [g]) = intervals C ++ [g.derive (intervals C)] := by
+lemma intervals_snoc (C : IntDag ι) (g : IntGate ι) : intervals (C ++ [g]) = intervals C ++ [g.derive (intervals C)] := by
   simp only [intervals, List.foldl_append, List.foldl_cons, List.foldl_nil]
 
-lemma val_snoc (C : Dag ι) (g : Gate ι) (x : ι → ℤ) : val (C ++ [g]) x C.length = g.value x (values C x) := by
+lemma val_snoc (C : IntDag ι) (g : IntGate ι) (x : ι → ℤ) : val (C ++ [g]) x C.length = g.value x (values C x) := by
   unfold val
   rw [values_snoc, List.getD_append_right _ _ _ _ (by rw [values_length]), values_length, Nat.sub_self]
   simp
 
-lemma ivOf_snoc (C : Dag ι) (g : Gate ι) : ivOf (C ++ [g]) C.length = g.derive (intervals C) := by
+lemma ivOf_snoc (C : IntDag ι) (g : IntGate ι) : ivOf (C ++ [g]) C.length = g.derive (intervals C) := by
   unfold ivOf
   rw [intervals_snoc, List.getD_append_right _ _ _ _ (by rw [intervals_length]), intervals_length, Nat.sub_self]
   simp
 
-lemma val_take (C : Dag ι) (x : ι → ℤ) (n j : ℕ) (hj : j < n) (hn : n ≤ C.length) :
+lemma val_take (C : IntDag ι) (x : ι → ℤ) (n j : ℕ) (hj : j < n) (hn : n ≤ C.length) :
     (values (C.take n) x).getD j 0 = val C x j := by
   have h := val_append (C.take n) (C.drop n) x j (by rw [List.length_take]; omega)
   rw [List.take_append_drop] at h
   exact h.symm
 
-lemma iv_take (C : Dag ι) (n j : ℕ) (hj : j < n) (hn : n ≤ C.length) :
+lemma iv_take (C : IntDag ι) (n j : ℕ) (hj : j < n) (hn : n ≤ C.length) :
     (intervals (C.take n)).getD j (0, 0) = ivOf C j := by
   have h := ivOf_append (C.take n) (C.drop n) j (by rw [List.length_take]; omega)
   rw [List.take_append_drop] at h
   exact h.symm
 
-lemma val_gate (C : Dag ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
+lemma val_gate (C : IntDag ι) (x : ι → ℤ) (i : ℕ) (h : i < C.length) :
     val C x i = C[i].value x (values (C.take i) x) := by
   rw [← val_take C x (i + 1) i (by omega) h, List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some]
   have := val_snoc (C.take i) C[i] x
   rw [List.length_take, min_eq_left h.le] at this
   exact this
 
-lemma iv_gate (C : Dag ι) (i : ℕ) (h : i < C.length) : ivOf C i = C[i].derive (intervals (C.take i)) := by
+lemma iv_gate (C : IntDag ι) (i : ℕ) (h : i < C.length) : ivOf C i = C[i].derive (intervals (C.take i)) := by
   rw [← iv_take C (i + 1) i (by omega) h, List.take_add_one, List.getElem?_eq_getElem h, Option.toList_some]
   have := ivOf_snoc (C.take i) C[i]
   rw [List.length_take, min_eq_left h.le] at this
@@ -107,7 +107,7 @@ lemma iv_gate (C : Dag ι) (i : ℕ) (h : i < C.length) : ivOf C i = C[i].derive
 /-! ## The proven window, gate by gate -/
 
 /-- What `Proven` asks of one gate, from the derived intervals `ivs` of the gates before it. -/
-def GateOk (ivs : List Iv) (g : Gate ι) : Prop :=
+def GateOk (ivs : List Iv) (g : IntGate ι) : Prop :=
   (g.op.IsDerived → (g.derive ivs).Within g.lo g.hi) ∧
     (∀ c₀ cs, g.op = .affine c₀ cs → s32Min ≤ g.lo ∧ g.hi ≤ s32Max) ∧
     ∀ fa fb k sat, g.op = .mma fa fb k sat →
@@ -115,9 +115,9 @@ def GateOk (ivs : List Iv) (g : Gate ι) : Prop :=
         (∀ j ∈ g.args.tail.take k, (ivs.getD j (0, 0)).Within fa.lo fa.hi) ∧
         ∀ j ∈ g.args.tail.drop k, (ivs.getD j (0, 0)).Within fb.lo fb.hi
 
-lemma proven_iff (C : Dag ι) : Proven C ↔ ∀ i (h : i < C.length), GateOk (intervals (C.take i)) C[i] := Iff.rfl
+lemma proven_iff (C : IntDag ι) : Proven C ↔ ∀ i (h : i < C.length), GateOk (intervals (C.take i)) C[i] := Iff.rfl
 
-lemma proven_snoc (D : Dag ι) (g : Gate ι) (hD : Proven D) (hg : GateOk (intervals D) g) : Proven (D ++ [g]) := by
+lemma proven_snoc (D : IntDag ι) (g : IntGate ι) (hD : Proven D) (hg : GateOk (intervals D) g) : Proven (D ++ [g]) := by
   rw [proven_iff] at hD ⊢
   intro i hi
   rw [List.length_append, List.length_singleton] at hi
@@ -131,31 +131,31 @@ lemma proven_snoc (D : Dag ι) (g : Gate ι) (hD : Proven D) (hg : GateOk (inter
 /-! ## Free gates, and extending a circuit by them -/
 
 /-- A free operation: a constant, an affine map or an s8-family step. -/
-def FreeOp : Op ι → Prop
+def FreeOp : IntOp ι → Prop
   | .const _ | .affine .. | .mma .. => True
   | _ => False
 
 /-- `D` is `C` followed by free gates. -/
-def Ext (C D : Dag ι) : Prop := ∃ E, D = C ++ E ∧ ∀ g ∈ E, FreeOp g.op
+def Ext (C D : IntDag ι) : Prop := ∃ E, D = C ++ E ∧ ∀ g ∈ E, FreeOp g.op
 
-lemma Ext.refl (C : Dag ι) : Ext C C := ⟨[], by simp, by simp⟩
+lemma Ext.refl (C : IntDag ι) : Ext C C := ⟨[], by simp, by simp⟩
 
-lemma Ext.trans {C D D' : Dag ι} (h1 : Ext C D) (h2 : Ext D D') : Ext C D' := by
+lemma Ext.trans {C D D' : IntDag ι} (h1 : Ext C D) (h2 : Ext D D') : Ext C D' := by
   obtain ⟨E1, rfl, h1⟩ := h1
   obtain ⟨E2, rfl, h2⟩ := h2
   exact ⟨E1 ++ E2, by simp, fun g hg => (List.mem_append.1 hg).elim (h1 g) (h2 g)⟩
 
-lemma Ext.snoc (D : Dag ι) (g : Gate ι) (hg : FreeOp g.op) : Ext D (D ++ [g]) := ⟨[g], rfl, by simpa using hg⟩
+lemma Ext.snoc (D : IntDag ι) (g : IntGate ι) (hg : FreeOp g.op) : Ext D (D ++ [g]) := ⟨[g], rfl, by simpa using hg⟩
 
-lemma Ext.len {C D : Dag ι} (h : Ext C D) : C.length ≤ D.length := by
+lemma Ext.len {C D : IntDag ι} (h : Ext C D) : C.length ≤ D.length := by
   obtain ⟨E, rfl, -⟩ := h
   simp
 
-lemma Ext.val {C D : Dag ι} (h : Ext C D) (x : ι → ℤ) (j : ℕ) (hj : j < C.length) : val D x j = val C x j := by
+lemma Ext.val {C D : IntDag ι} (h : Ext C D) (x : ι → ℤ) (j : ℕ) (hj : j < C.length) : val D x j = val C x j := by
   obtain ⟨E, rfl, -⟩ := h
   exact val_append C E x j hj
 
-lemma Ext.iv {C D : Dag ι} (h : Ext C D) (j : ℕ) (hj : j < C.length) : ivOf D j = ivOf C j := by
+lemma Ext.iv {C D : IntDag ι} (h : Ext C D) (j : ℕ) (hj : j < C.length) : ivOf D j = ivOf C j := by
   obtain ⟨E, rfl, -⟩ := h
   exact ivOf_append C E j hj
 
@@ -211,29 +211,29 @@ lemma accStep {t : ℕ} {ia ir : Iv} (ha : AccIv t ia) (hr : BitIv ir) :
 
 /-! ## The gates -/
 
-/-- A gate of no step, primitive or site. -/
-def mk (op : Op ι) (args : List ℕ) (lo hi : ℤ) : Gate ι := ⟨op, args, lo, hi, 0, "", .other, false⟩
+/-- A gate of no step, primitive or place. -/
+def mk (op : IntOp ι) (args : List ℕ) (lo hi : ℤ) : IntGate ι := ⟨op, args, lo, hi, 0, "", .other, false⟩
 
 /-- The constant `c`. -/
-def cG (c : ℤ) : Gate ι := mk (.const c) [] c c
+def cG (c : ℤ) : IntGate ι := mk (.const c) [] c c
 
 /-- A coin byte. -/
-def inG (s : ι) : Gate ι := mk (.input .coin s) [] 0 255
+def inG (s : ι) : IntGate ι := mk (.input .coin s) [] 0 255
 
 /-- Bit `t`'s column over the gates `0` and `1` (the constants `0` and `1`): entry `u` is `u`'s bit `t`. -/
 def col (t : ℕ) : List ℕ := (List.range 256).map fun u => if u / 2 ^ t % 2 = 1 then 1 else 0
 
 /-- Bit `t` of gate `j`'s value: a table read of its low 8 bits over `col t`. -/
-def bitG (j t : ℕ) : Gate ι := mk (.gather (some 8) 0) (j :: col t) 0 1
+def bitG (j t : ℕ) : IntGate ι := mk (.gather (some 8) 0) (j :: col t) 0 1
 
 /-- NOT: `1 − u`. -/
-def notG (a : ℕ) : Gate ι := mk (.affine 1 [-1]) [a] 0 1
+def notG (a : ℕ) : IntGate ι := mk (.affine 1 [-1]) [a] 0 1
 
 /-- AND: the u8 step `0 + u·v`, its accumulator gate `0`. -/
-def andG (a b : ℕ) : Gate ι := mk (.mma .u8 .u8 1 true) [0, a, b] 0 1
+def andG (a b : ℕ) : IntGate ι := mk (.mma .u8 .u8 1 true) [0, a, b] 0 1
 
 /-- A partial sum's next bit: `a + 2^t · r`. -/
-def accG (t a r : ℕ) : Gate ι := mk (.affine 0 [1, 2 ^ t]) [a, r] 0 255
+def accG (t a r : ℕ) : IntGate ι := mk (.affine 0 [1, 2 ^ t]) [a, r] 0 255
 
 lemma notG_derive (ivs : List Iv) (a : ℕ) :
     (notG (ι := ι) a).derive ivs = Iv.add (1, 1) (Iv.scale (-1) (ivs.getD a (0, 0))) := rfl
@@ -293,7 +293,7 @@ lemma andG_ok (ivs : List Iv) (a b : ℕ) (h0 : ivs.getD 0 (0, 0) = (0, 0)) (ha 
   refine ⟨fun _ => ?_, fun _ _ h => (by cases h), fun fa fb k sat h => ?_⟩
   · rw [andG_derive, h0]
     exact (andG_bit ha hb).within
-  · simp only [andG, mk, Op.mma.injEq] at h
+  · simp only [andG, mk, IntOp.mma.injEq] at h
     obtain ⟨rfl, rfl, rfl, rfl⟩ := h
     refine ⟨rfl, by norm_num [andG, mk, s32Min], by norm_num [andG, mk, s32Max], ?_, ?_⟩
     · intro j hj
@@ -318,18 +318,18 @@ lemma clampS32_of {z : ℤ} (h1 : s32Min ≤ z) (h2 : z ≤ s32Max) : clampS32 z
   unfold clampS32; rw [min_eq_right h2, max_eq_right h1]
 
 lemma notG_value (a : ℕ) (x : ι → ℤ) (vs : List ℤ) : (notG a).value x vs = 1 - vs.getD a 0 := by
-  simp [Gate.value, Gate.raw, Gate.operands, Op.raw, Op.out, notG, mk]
+  simp [IntGate.value, IntGate.raw, IntGate.operands, IntOp.raw, IntOp.out, notG, mk]
   ring
 
 lemma accG_value (t a r : ℕ) (x : ι → ℤ) (vs : List ℤ) :
     (accG t a r).value x vs = vs.getD a 0 + 2 ^ t * vs.getD r 0 := by
-  simp [Gate.value, Gate.raw, Gate.operands, Op.raw, Op.out, accG, mk]
+  simp [IntGate.value, IntGate.raw, IntGate.operands, IntOp.raw, IntOp.out, accG, mk]
 
 lemma andG_value (a b : ℕ) (x : ι → ℤ) (vs : List ℤ) (h0 : vs.getD 0 0 = 0)
     (ha : vs.getD a 0 = 0 ∨ vs.getD a 0 = 1) (hb : vs.getD b 0 = 0 ∨ vs.getD b 0 = 1) :
     (andG a b).value x vs = vs.getD a 0 * vs.getD b 0 := by
   have : (andG (ι := ι) a b).value x vs = clampS32 (vs.getD 0 0 + vs.getD a 0 * vs.getD b 0) := by
-    simp [Gate.value, Gate.raw, Gate.operands, Op.raw, Op.out, andG, mk, dot]
+    simp [IntGate.value, IntGate.raw, IntGate.operands, IntOp.raw, IntOp.out, andG, mk, dot]
   rw [this, h0, zero_add]
   apply clampS32_of
   · rcases ha with ha | ha <;> rcases hb with hb | hb <;> rw [ha, hb] <;> norm_num [s32Min]
@@ -361,7 +361,7 @@ lemma bitv01 (b : Bool) : bitv b = 0 ∨ bitv b = 1 := by cases b <;> simp [bitv
 lemma bitv_eq (b : Bool) : bitv b = (b.toNat : ℤ) := by cases b <;> rfl
 
 /-- `f` compiled onto `C` over variable wires `w`: the extended circuit and the gate holding `f`'s value. -/
-def compile (w : ℕ → ℕ) : BF → Dag ι → Dag ι × ℕ
+def compile (w : ℕ → ℕ) : BF → IntDag ι → IntDag ι × ℕ
   | .var v, C => (C, w v)
   | .tt, C => (C, 1)
   | .ff, C => (C, 0)
@@ -374,10 +374,10 @@ def compile (w : ℕ → ℕ) : BF → Dag ι → Dag ι × ℕ
     (q.1 ++ [andG p.2 q.2], q.1.length)
 
 /-- The assignment the base circuit's wires hold on input `x`. -/
-def asg (C0 : Dag ι) (w : ℕ → ℕ) (x : ι → ℤ) (v : ℕ) : Bool := decide (val C0 x (w v) = 1)
+def asg (C0 : IntDag ι) (w : ℕ → ℕ) (x : ι → ℤ) (v : ℕ) : Bool := decide (val C0 x (w v) = 1)
 
 /-- What compiling asks of the base circuit: gates `0` and `1` the constants `0` and `1`, and every wire a bit. -/
-structure BaseOk (C0 : Dag ι) (w : ℕ → ℕ) : Prop where
+structure BaseOk (C0 : IntDag ι) (w : ℕ → ℕ) : Prop where
   len : 2 ≤ C0.length
   iv0 : ivOf C0 0 = (0, 0)
   iv1 : ivOf C0 1 = (1, 1)
@@ -388,11 +388,11 @@ structure BaseOk (C0 : Dag ι) (w : ℕ → ℕ) : Prop where
   wval : ∀ x v, val C0 x (w v) = 0 ∨ val C0 x (w v) = 1
 
 /-- `D` extends `C` by free gates, is proven, and its gate `r` holds `f`'s value, a bit. -/
-def Spec (C0 : Dag ι) (w : ℕ → ℕ) (C : Dag ι) (f : BF) (D : Dag ι) (r : ℕ) : Prop :=
+def Spec (C0 : IntDag ι) (w : ℕ → ℕ) (C : IntDag ι) (f : BF) (D : IntDag ι) (r : ℕ) : Prop :=
   Ext C D ∧ Proven D ∧ r < D.length ∧ BitIv (ivOf D r) ∧ ∀ x, val D x r = bitv (f.eval (asg C0 w x))
 
-lemma compile_spec (C0 : Dag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
-    ∀ (f : BF) (C : Dag ι), Ext C0 C → Proven C → Spec C0 w C f (compile w f C).1 (compile w f C).2
+lemma compile_spec (C0 : IntDag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
+    ∀ (f : BF) (C : IntDag ι), Ext C0 C → Proven C → Spec C0 w C f (compile w f C).1 (compile w f C).2
   | .var v, C, hC, hP => by
     refine ⟨Ext.refl C, hP, lt_of_lt_of_le (hB.wlt v) hC.len, ?_, fun x => ?_⟩
     · show BitIv (ivOf C (w v))
@@ -483,18 +483,18 @@ def bitsVal : List Bool → ℕ → ℕ
   | b :: bs, t => b.toNat * 2 ^ t + bitsVal bs (t + 1)
 
 /-- Formulas `fs` compiled onto `C` and summed, bit `j` weighted `2^(t + j)`, onto the partial sum at gate `a`. -/
-def buildSum (w : ℕ → ℕ) : List BF → ℕ → ℕ → Dag ι → Dag ι × ℕ
+def buildSum (w : ℕ → ℕ) : List BF → ℕ → ℕ → IntDag ι → IntDag ι × ℕ
   | [], _, a, C => (C, a)
   | f :: fs, t, a, C =>
     let p := compile w f C
     buildSum w fs (t + 1) p.1.length (p.1 ++ [accG t a p.2])
 
-lemma buildSum_cons (w : ℕ → ℕ) (f : BF) (fs : List BF) (t a : ℕ) (C : Dag ι) :
+lemma buildSum_cons (w : ℕ → ℕ) (f : BF) (fs : List BF) (t a : ℕ) (C : IntDag ι) :
     buildSum w (f :: fs) t a C =
       buildSum w fs (t + 1) (compile w f C).1.length ((compile w f C).1 ++ [accG t a (compile w f C).2]) := rfl
 
-lemma buildSum_spec (C0 : Dag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
-    ∀ (fs : List BF) (t a : ℕ) (C : Dag ι) (A : (ι → ℤ) → ℕ), t + fs.length ≤ 8 → Ext C0 C → Proven C →
+lemma buildSum_spec (C0 : IntDag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
+    ∀ (fs : List BF) (t a : ℕ) (C : IntDag ι) (A : (ι → ℤ) → ℕ), t + fs.length ≤ 8 → Ext C0 C → Proven C →
       a < C.length → AccIv t (ivOf C a) → (∀ x, val C x a = (A x : ℤ)) →
       Ext C (buildSum w fs t a C).1 ∧ Proven (buildSum w fs t a C).1 ∧
         (buildSum w fs t a C).2 < (buildSum w fs t a C).1.length ∧
@@ -530,20 +530,20 @@ lemma buildSum_spec (C0 : Dag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
     ring
 
 /-- Each list of formulas summed into one gate, on circuits extending one another. -/
-def buildAll (w : ℕ → ℕ) : List (List BF) → Dag ι → Dag ι × List ℕ
+def buildAll (w : ℕ → ℕ) : List (List BF) → IntDag ι → IntDag ι × List ℕ
   | [], C => (C, [])
   | fs :: Φ, C =>
     let p := buildSum w fs 0 0 C
     let q := buildAll w Φ p.1
     (q.1, p.2 :: q.2)
 
-lemma buildAll_cons (w : ℕ → ℕ) (fs : List BF) (Φ : List (List BF)) (C : Dag ι) :
+lemma buildAll_cons (w : ℕ → ℕ) (fs : List BF) (Φ : List (List BF)) (C : IntDag ι) :
     buildAll w (fs :: Φ) C =
       ((buildAll w Φ (buildSum w fs 0 0 C).1).1, (buildSum w fs 0 0 C).2 :: (buildAll w Φ (buildSum w fs 0 0 C).1).2) :=
   rfl
 
-lemma buildAll_spec (C0 : Dag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
-    ∀ (Φ : List (List BF)) (C : Dag ι), (∀ fs ∈ Φ, fs.length ≤ 8) → Ext C0 C → Proven C →
+lemma buildAll_spec (C0 : IntDag ι) (w : ℕ → ℕ) (hB : BaseOk C0 w) :
+    ∀ (Φ : List (List BF)) (C : IntDag ι), (∀ fs ∈ Φ, fs.length ≤ 8) → Ext C0 C → Proven C →
       Ext C (buildAll w Φ C).1 ∧ Proven (buildAll w Φ C).1 ∧
         ∀ o < Φ.length, ∀ x, val (buildAll w Φ C).1 x ((buildAll w Φ C).2.getD o 0) =
           (bitsVal ((Φ.getD o []).map fun f => f.eval (asg C0 w x)) 0 : ℤ)
@@ -606,12 +606,12 @@ theorem shannon : ∀ (M : ℕ) (ψ : (ℕ → Bool) → Bool), ∃ f : BF, ∀ 
 /-! ## The base circuit: the constants, the coin bytes and their bits -/
 
 /-- Gate `i` of the base circuit over `N` coin bytes in slots `sl`: `0` and `1`, the bytes, then their bits. -/
-def baseGate (N : ℕ) (sl : ℕ → ι) (i : ℕ) : Gate ι :=
+def baseGate (N : ℕ) (sl : ℕ → ι) (i : ℕ) : IntGate ι :=
   if i = 0 then cG 0 else if i = 1 then cG 1 else if i < 2 + N then inG (sl (i - 2))
   else bitG (2 + (i - 2 - N) / 8) ((i - 2 - N) % 8)
 
 /-- The base circuit. -/
-def C0 (N : ℕ) (sl : ℕ → ι) : Dag ι := (List.range (2 + N + 8 * N)).map (baseGate N sl)
+def C0 (N : ℕ) (sl : ℕ → ι) : IntDag ι := (List.range (2 + N + 8 * N)).map (baseGate N sl)
 
 /-- Variable `v`'s wire: bit `v % 8` of byte `v / 8`, and the constant `0` past the bytes. -/
 def wire (N v : ℕ) : ℕ := if v < 8 * N then 2 + N + v else 0
@@ -679,7 +679,7 @@ lemma C0_val_bit (x : ι → ℤ) (v : ℕ) (hv : v < 8 * N) :
     rw [val_take _ x _ _ (by omega) hl.le, C0_val_in N sl x (v / 8) (by omega)]
   generalize values ((C0 N sl).take (2 + N + v)) x = vs at hvs0 hvs1 hvsj
   show ((col (v % 8)).map fun j => vs.getD j 0).getD
-    (Op.gatherAt (some 8) ((col (v % 8)).map fun j => vs.getD j 0).length (vs.getD (2 + v / 8) 0)) 0 = _
+    (IntOp.gatherAt (some 8) ((col (v % 8)).map fun j => vs.getD j 0).length (vs.getD (2 + v / 8) 0)) 0 = _
   rw [col_getD _ _ _ hvs0 hvs1, hvsj]
   rfl
 
@@ -734,13 +734,13 @@ end Base
 /-! ## Units -/
 
 /-- A gate's most units: one a budgeted gate, its index bits and one a gather, none any other. -/
-def ubG (g : Gate ι) : ℕ :=
+def ubG (g : IntGate ι) : ℕ :=
   match g.op with
   | .budgeted _ _ => 1
   | .gather _ _ => g.indexBits + 1
   | _ => 0
 
-lemma units_le (C : Dag ι) (i : ℕ) (h : i < C.length) : units C i ≤ ubG C[i] := by
+lemma units_le (C : IntDag ι) (i : ℕ) (h : i < C.length) : units C i ≤ ubG C[i] := by
   unfold units ubG
   rw [List.getElem?_eq_getElem h]
   dsimp only
@@ -752,15 +752,15 @@ lemma units_le (C : Dag ι) (i : ℕ) (h : i < C.length) : units C i ≤ ubG C[i
     | cons j col => dsimp only; split_ifs <;> omega
   | _ => exact Nat.zero_le _
 
-lemma sum_getD_map (f : Gate ι → ℕ) :
-    ∀ C : Dag ι, ∑ i ∈ Finset.range C.length, ((C[i]?).map f).getD 0 = (C.map f).sum
+lemma sum_getD_map (f : IntGate ι → ℕ) :
+    ∀ C : IntDag ι, ∑ i ∈ Finset.range C.length, ((C[i]?).map f).getD 0 = (C.map f).sum
   | [] => by simp
   | g :: C => by
     rw [List.length_cons, Finset.sum_range_succ', List.map_cons, List.sum_cons, ← sum_getD_map f C]
     simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.map_some, Option.getD_some]
     ring
 
-lemma budgeted_le (C : Dag ι) : budgeted C ≤ (C.map ubG).sum := by
+lemma budgeted_le (C : IntDag ι) : budgeted C ≤ (C.map ubG).sum := by
   unfold budgeted
   rw [← sum_getD_map ubG C]
   refine Finset.sum_le_sum fun i hi => ?_
@@ -768,7 +768,7 @@ lemma budgeted_le (C : Dag ι) : budgeted C ≤ (C.map ubG).sum := by
   rw [List.getElem?_eq_getElem hi]
   exact units_le C i hi
 
-lemma sum_ubG_free (E : Dag ι) (hE : ∀ g ∈ E, FreeOp g.op) : (E.map ubG).sum = 0 := by
+lemma sum_ubG_free (E : IntDag ι) (hE : ∀ g ∈ E, FreeOp g.op) : (E.map ubG).sum = 0 := by
   refine List.sum_eq_zero fun y hy => ?_
   obtain ⟨g, hg, rfl⟩ := List.mem_map.1 hy
   have := hE g hg
@@ -793,31 +793,31 @@ lemma C0_ub (N : ℕ) (sl : ℕ → ι) : ((C0 N sl).map ubG).sum ≤ 72 * N := 
         obtain ⟨v, -, rfl⟩ := List.mem_map.1 hy
         simp only [Function.comp]
         unfold baseGate
-        split_ifs <;> simp [ubG, cG, inG, bitG, mk, Gate.indexBits])
+        split_ifs <;> simp [ubG, cG, inG, bitG, mk, IntGate.indexBits])
     simpa using this
   omega
 
 /-! ## Which gates the circuit has -/
 
 /-- A gate of the construction: a coin byte declared `[0, 255]`, or no input and no budgeted gate. -/
-def GoodG (g : Gate ι) : Prop :=
+def GoodG (g : IntGate ι) : Prop :=
   match g.op with
   | .input b _ => b = .coin ∧ g.lo = 0 ∧ g.hi = 255
   | .budgeted _ _ => False
   | _ => True
 
-lemma good_of_free (g : Gate ι) (h : FreeOp g.op) : GoodG g := by
+lemma good_of_free (g : IntGate ι) (h : FreeOp g.op) : GoodG g := by
   unfold GoodG
   unfold FreeOp at h
   split <;> simp_all
 
-lemma C0_good (N : ℕ) (sl : ℕ → ι) (g : Gate ι) (hg : g ∈ C0 N sl) : GoodG g := by
+lemma C0_good (N : ℕ) (sl : ℕ → ι) (g : IntGate ι) (hg : g ∈ C0 N sl) : GoodG g := by
   unfold C0 at hg
   obtain ⟨i, -, rfl⟩ := List.mem_map.1 hg
   unfold baseGate
   split_ifs <;> simp [GoodG, cG, inG, bitG, mk]
 
-lemma declared_of_good (C : Dag ι) (x : ι → ℤ) (hC : ∀ g ∈ C, GoodG g) (hx : ∀ s, 0 ≤ x s ∧ x s ≤ 255) :
+lemma declared_of_good (C : IntDag ι) (x : ι → ℤ) (hC : ∀ g ∈ C, GoodG g) (hx : ∀ s, 0 ≤ x s ∧ x s ≤ 255) :
     DeclaredHold C x := by
   intro i hi hnd
   have hg := hC C[i] (List.getElem_mem hi)
@@ -827,7 +827,7 @@ lemma declared_of_good (C : Dag ι) (x : ι → ℤ) (hC : ∀ g ∈ C, GoodG g)
   | input b s =>
     rw [hop] at hg
     obtain ⟨-, hlo, hhi⟩ := hg
-    simp only [Gate.raw, hop, Op.raw]
+    simp only [IntGate.raw, hop, IntOp.raw]
     rw [hlo, hhi]
     exact hx s
   | budgeted cls f => rw [hop] at hg; exact hg.elim
@@ -1098,7 +1098,7 @@ theorem EncodeChainRefuted : Accounting.Guarantees.Gates.EncodeChainRefuted := b
     obtain ⟨g, hg, rfl⟩ := List.mem_map.1 hy
     have := hgood g hg
     unfold GoodG at this
-    unfold Gate.inputBits
+    unfold IntGate.inputBits
     split
     · rename_i b' s heq
       rw [heq] at this
