@@ -1,5 +1,5 @@
 """A served audit window's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, drawn and
-judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
