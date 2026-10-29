@@ -8,7 +8,8 @@
    Each commits running words of each block every `L` steps. With block 2 in a uniformly random order `π`, its `L`-chunks meet block 1's consecutive
    chunks in small pieces. Prices, per dot product in registers of 32, the honest program, the aligned-order shortcut
    (valid only for `π` the identity) and the intersection attack (atoms on every piece, merges of at most three
-   registers). An attack family's price, not a lower bound.
+   registers). An attack family's price, not a lower bound. Once the pieces average 32 (`L² ≈ 32K`) the atoms fill
+   their registers and the attack nears honest; from about twice that `L` it is cheaper.
 3. **The stacks' terms on Llama-3.2-1B's linears.** Forming, coin entries and committed bytes a useful MAC, at T 512
    and T 8,192, from one 32-unit instruction per four s8 lanes formed (a permuted block reads its buffer in `π`'s
    order, and a block of coins as drawn is not formed) and SHA-512 at the floor's 908 units a byte.
@@ -105,8 +106,9 @@ def stack_costs(K, L, perm):
     }
 
 
-def intersections(seeds, shapes=((2048, 64), (2048, 128), (8192, 64), (8192, 128), (7168, 64), (7168, 128),
-                                 (2048, 256), (8192, 256))):
+def intersections(seeds, shapes=((2048, 64), (2048, 128), (2048, 256), (2048, 512), (2048, 1024), (8192, 64),
+                                 (8192, 128), (8192, 256), (8192, 512), (8192, 1024), (7168, 64), (7168, 128),
+                                 (7168, 512), (7168, 1024))):
     out = []
     for K, L in shapes:
         runs = []
