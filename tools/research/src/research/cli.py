@@ -114,8 +114,9 @@ import math
 import os
 import subprocess
 import sys
+import tarfile
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 from . import checkview, clone
@@ -1616,10 +1617,13 @@ def _check_view(root: Path, run_dir: Path, basis_ref: str | None) -> list[str]:
                 basis, why = None, why or f"--basis {basis_ref} is no finished check"
     elif not checkview.finished(run_dir) and (rec := remote._read_json(run_dir / "remote.json") or {}).get("remote_run_dir"):
         ssh = remote.ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
-        basis = checkview.remote_basis(rec, ssh, root / ".check-basis", remote.ssh_read)
+        try:
+            basis = checkview.remote_basis(rec, ssh, root / ".check-basis", remote.ssh_read)
+        except (tarfile.TarError, OSError) as e:
+            why = f"the machine's newest finished check couldn't be read: {type(e).__name__}: {e}"
     head = [] if checkview.finished(run_dir) and not basis_ref else [
         f"basis   {basis.name}" if basis else f"basis   none{f' ({why})' if why else ''}"]
-    return head + checkview.view(run_dir, datetime.now(timezone.utc), basis)
+    return head + checkview.view(run_dir, datetime.now(UTC), basis)
 
 
 def _slot_text(sl: dict) -> str:

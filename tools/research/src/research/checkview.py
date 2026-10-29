@@ -15,9 +15,10 @@ otherwise it says why it is unknown, never a guess.
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import tarfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 SPANS = "spans.jsonl"
@@ -31,19 +32,12 @@ BASIS_SCAN = 200
 
 
 def _jsonl(path: Path) -> list[dict]:
-    try:
-        text = path.read_text(errors="replace")
-    except OSError:
+    """The file's JSON objects, one a line, but a last line a writer hasn't finished yet."""
+    if not path.is_file():
         return []
-    out = []
-    for line in text.splitlines():
-        try:
-            doc = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(doc, dict):
-            out.append(doc)
-    return out
+    text = path.read_text(errors="replace")
+    lines = text.splitlines() if text.endswith("\n") else text.splitlines()[:-1]
+    return [doc for line in lines if line.strip() and isinstance(doc := json.loads(line), dict)]
 
 
 def spans(run_dir: Path) -> list[dict]:
@@ -64,11 +58,10 @@ def finished(run_dir: Path) -> bool:
     return any(s.get("parent_span_id") is None and s.get("end_utc") for s in spans(run_dir))
 
 
-def _t(utc: str) -> datetime | None:
-    try:
-        return datetime.strptime(utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-    except (TypeError, ValueError):
+def _t(utc: object) -> datetime | None:
+    if not (isinstance(utc, str) and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", utc)):
         return None
+    return datetime.strptime(utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
 
 def _took(s: dict) -> float | None:
@@ -151,7 +144,8 @@ def _circuit_check(run_dir: Path, basis: Path | None, so_far: float) -> tuple[st
 
 def remote_basis(rec: dict, ssh: list[str], dest_root: Path, read) -> Path | None:
     """The newest other finished check on the machine of a remote run (``rec``, its remote.json): its CHECK_FILES copied into
-    ``dest_root``/<run id>, or None. ``read`` is `remote.ssh_read`."""
+    ``dest_root``/<run id>, or None when the machine has none. ``read`` is `remote.ssh_read`; a stream that isn't a tar raises
+    tarfile.TarError."""
     rd = rec.get("remote_run_dir")
     if not rd:
         return None
@@ -160,7 +154,8 @@ def remote_basis(rec: dict, ssh: list[str], dest_root: Path, read) -> Path | Non
     script = (f"cd {shlex.quote(parent)} || exit 0; for d in $(ls -td r*/ 2>/dev/null | head -n {BASIS_SCAN}); do d=${{d%/}}; "
               f"[ \"$d\" = {shlex.quote(me)} ] && continue; [ -s \"$d/{PROGRESS}\" ] || continue; "
               f"grep -q '\"parent_span_id\": null.*\"end_utc\": \"' \"$d/{SPANS}\" 2>/dev/null || continue; "
-              f"cd \"$d\" && ls {files} 2>/dev/null | sed \"s|^|$d/|\" | (cd .. && tar -cf - -T -); exit 0; done")
+              f"cd \"$d\" && ls {files} 2>/dev/null | sed \"s|^|$d/|\" | (cd .. && tar -cf - -T -); exit 0; done; "
+              f"tar -cf - -T /dev/null")
     got: list[str] = []
 
     def extract(stream) -> None:
@@ -172,8 +167,5 @@ def remote_basis(rec: dict, ssh: list[str], dest_root: Path, read) -> Path | Non
                 tf.extract(m, dest_root, **({"filter": "data"} if hasattr(tarfile, "data_filter") else {}))
                 got.append(parts[0])
 
-    try:
-        r = read(ssh, ["sh", "-c", script], extract, timeout=120)
-    except (tarfile.TarError, OSError):
-        return None
+    r = read(ssh, ["sh", "-c", script], extract, timeout=120)
     return dest_root / got[0] if r.returncode == 0 and got else None

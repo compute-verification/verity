@@ -6,12 +6,12 @@ import io
 import json
 import subprocess
 import tarfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from research import checkview as CV
 
-T0 = datetime(2026, 10, 28, 21, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 28, 21, 0, tzinfo=UTC)
 
 
 def at(minutes: float) -> str:
@@ -95,9 +95,15 @@ def test_the_machines_newest_finished_check_is_copied_as_the_basis_and_none_foun
     assert not (got / "secret.json").exists()
     assert "cd /workspace/research/runs" in calls[0][-1] and "r20261028-173829-d101" in calls[0][-1]
 
+    nothing = io.BytesIO()
+    tarfile.open(fileobj=nothing, mode="w").close()
+
     def empty(ssh, argv, consume, timeout):
-        consume(io.BytesIO(b""))
+        consume(io.BytesIO(nothing.getvalue()))
         return subprocess.CompletedProcess(argv, 0, b"", b"")
 
     assert CV.remote_basis(rec, ["ssh"], tmp_path / "cache2", empty) is None
     assert CV.remote_basis({}, ["ssh"], tmp_path / "cache3", read) is None
+    (tmp_path / "half").mkdir()
+    (tmp_path / "half" / CV.SPANS).write_text(json.dumps(span("root", "check", 0)) + '\n{"trace_id": "r", "span')
+    assert CV.is_check(tmp_path / "half") and not CV.finished(tmp_path / "half")   # a line still being written is left out
