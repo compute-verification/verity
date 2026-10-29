@@ -25,9 +25,11 @@ largest share of the digit pairs that `op` sends to one value.
 * **The coin lane, `1 + b + s`** (`lane_fiber_le`, `lane_sum_hits_le`): with a row bit `b ∈ {0, 1}` and an odd column
   coin `s`, parity fixes `b` and then `s`, so each value has at most one preimage and `p* = 1/(2|B|)`: `2^−(e+1)` for
   coins odd in `±(2^e − 1)`.
-* **A lane in a sum** (`fiber_add_card_le`, `lane_add_card_le`, `hwLane_add_card_le`): a lane on its own row and
-  column digits caps the `p*` of any sum it enters at its own, whatever the other lanes, on other digits, add. hw's row
-  lane `(1 + 2b)·σ` has at most two preimages a value (`hwLane_fiber_le`), so `p* ≤ 1/|B|`.
+* **A lane in a sum** (`fiber_add_card_le`; `lane_add_card_le` and `hwLane_add_card_le` per entry,
+  `lane_add_sum_hits_le` and `hwLane_add_sum_hits_le` over the matrix): a lane on its own row and column digits caps the
+  `p*` of any sum it enters at its own, whatever the other lanes, on other digits, add. hw's row lane `(1 + 2b)·σ` has
+  at most two preimages a value (`hwLane_fiber_le`), so `p* ≤ 1/|B|`. Digits may be of any type, so a lane's digits
+  and the rest's are a product.
 
 The targets are fixed before the draw. A target chosen after it is a branch on the coins, which the adaptive bounds
 treat (`AdaptiveProofs`).
@@ -41,7 +43,8 @@ open Finset
 def signed (b : ℕ) : Finset ℤ := (Icc (-(b : ℤ)) b).erase 0
 
 /-- The pairs of `A × B` that `op` sends to `v`. -/
-def fiber (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (v : ℤ) : Finset (ℤ × ℤ) := (A ×ˢ B).filter fun p => op p.1 p.2 = v
+def fiber {α β : Type*} (op : α → β → ℤ) (A : Finset α) (B : Finset β) (v : ℤ) : Finset (α × β) :=
+  (A ×ˢ B).filter fun p => op p.1 p.2 = v
 
 /-- The magnitudes `a ∈ [1, b]` that divide `n` with a cofactor in `[1, b]`. -/
 def divs (b n : ℕ) : Finset ℕ := (range (b + 1)).filter fun a => 0 < a ∧ a ∣ n ∧ 0 < n / a ∧ n / a ≤ b
@@ -116,19 +119,21 @@ theorem uw6_fiber_120 : 20 ≤ (fiber (· * ·) (signed 32) (signed 32) 120).car
   rcases hp with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
     rfl | rfl | rfl <;> decide
 
-variable {r s : ℕ}
+variable {r s : ℕ} {α β : Type*} [DecidableEq α] [DecidableEq β]
 
+omit [DecidableEq α] [DecidableEq β] in
 /-- Row digits `X : Fin r → A` and column digits `W : Fin s → B`, drawn independently and uniformly. -/
-abbrev draws (A B : Finset ℤ) (r s : ℕ) : Finset ((Fin r → ℤ) × (Fin s → ℤ)) :=
+abbrev draws (A : Finset α) (B : Finset β) (r s : ℕ) : Finset ((Fin r → α) × (Fin s → β)) :=
   Fintype.piFinset (fun _ => A) ×ˢ Fintype.piFinset (fun _ => B)
 
+omit [DecidableEq α] [DecidableEq β] in
 /-- The entries whose `op (X i) (W j)` equals their target. -/
-def hits (op : ℤ → ℤ → ℤ) (v : Fin r → Fin s → ℤ) (D : (Fin r → ℤ) × (Fin s → ℤ)) : ℕ :=
+def hits (op : α → β → ℤ) (v : Fin r → Fin s → ℤ) (D : (Fin r → α) × (Fin s → β)) : ℕ :=
   (univ.filter fun e : Fin r × Fin s => op (D.1 e.1) (D.2 e.2) = v e.1 e.2).card
 
 /-- **One entry**: the draws on which `op (X i) (W j) = v` number `|fiber v|·|A|^(r−1)·|B|^(s−1)`, so the entry hits `v`
 with probability `|fiber v|/(|A||B|)` whatever the other rows and columns draw. -/
-theorem entry_card (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (i : Fin r) (j : Fin s) (v : ℤ) :
+theorem entry_card (op : α → β → ℤ) (A : Finset α) (B : Finset β) (i : Fin r) (j : Fin s) (v : ℤ) :
     ((draws A B r s).filter fun D => op (D.1 i) (D.2 j) = v).card =
       (fiber op A B v).card * (A.card ^ (r - 1) * B.card ^ (s - 1)) := by
   have hmaps : ∀ D ∈ (draws A B r s).filter (fun D => op (D.1 i) (D.2 j) = v), (D.1 i, D.2 j) ∈ fiber op A B v := by
@@ -140,8 +145,8 @@ theorem entry_card (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (i : Fin r) (j 
   refine sum_congr rfl fun p hp => ?_
   simp only [fiber, mem_filter, mem_product] at hp
   have : ((draws A B r s).filter fun D => op (D.1 i) (D.2 j) = v).filter (fun D => (D.1 i, D.2 j) = p) =
-      ((Fintype.piFinset fun _ => A).filter fun X : Fin r → ℤ => X i = p.1) ×ˢ
-        ((Fintype.piFinset fun _ => B).filter fun W : Fin s → ℤ => W j = p.2) := by
+      ((Fintype.piFinset fun _ => A).filter fun X : Fin r → α => X i = p.1) ×ˢ
+        ((Fintype.piFinset fun _ => B).filter fun W : Fin s → β => W j = p.2) := by
     ext ⟨X, W⟩
     simp only [draws, mem_filter, mem_product, Prod.ext_iff]
     constructor
@@ -155,7 +160,7 @@ theorem entry_card (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (i : Fin r) (j 
 /-- **Entries left unchanged, in expectation.** If no value is the product of more than `P` pairs of `A × B`, then for
 targets `v` fixed before the draw the hits summed over the draws are at most `P·r·s·|A|^(r−1)·|B|^(s−1)`: on average a
 `p* = P/(|A||B|)` share of the `r·s` entries, however the rows and columns share their digits. -/
-theorem sum_hits_le (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (P : ℕ) (hP : ∀ v, (fiber op A B v).card ≤ P)
+theorem sum_hits_le (op : α → β → ℤ) (A : Finset α) (B : Finset β) (P : ℕ) (hP : ∀ v, (fiber op A B v).card ≤ P)
     (v : Fin r → Fin s → ℤ) :
     ∑ D ∈ draws A B r s, hits op v D ≤ P * (r * s) * (A.card ^ (r - 1) * B.card ^ (s - 1)) := by
   simp only [hits, card_filter]
@@ -170,10 +175,11 @@ theorem sum_hits_le (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (P : ℕ) (hP 
         rw [sum_const, card_univ, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin, nsmul_eq_mul, Nat.cast_id]
         ring
 
+omit [DecidableEq α] [DecidableEq β] in
 /-- Summed over the draws, a cost that pays `c` for each entry it doesn't leave unchanged plus `c` per hit covers
 `c·r·s` a draw. -/
-theorem sum_cost_hits (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (v : Fin r → Fin s → ℤ) (c : ℕ)
-    (cost : (Fin r → ℤ) × (Fin s → ℤ) → ℕ) (hcost : ∀ D ∈ draws A B r s, c * (r * s) ≤ cost D + c * hits op v D) :
+theorem sum_cost_hits (op : α → β → ℤ) (A : Finset α) (B : Finset β) (v : Fin r → Fin s → ℤ) (c : ℕ)
+    (cost : (Fin r → α) × (Fin s → β) → ℕ) (hcost : ∀ D ∈ draws A B r s, c * (r * s) ≤ cost D + c * hits op v D) :
     c * (r * s) * (draws A B r s).card ≤ ∑ D ∈ draws A B r s, cost D + c * ∑ D ∈ draws A B r s, hits op v D := by
   calc c * (r * s) * (draws A B r s).card = ∑ _D ∈ draws A B r s, c * (r * s) := by
         rw [sum_const, nsmul_eq_mul, Nat.cast_id, mul_comm]
@@ -183,15 +189,16 @@ theorem sum_cost_hits (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (v : Fin r �
 /-- **`p*` in the bound.** If every draw's cost pays `c` for each of the `r·s` entries it doesn't leave unchanged, the
 cost summed over the draws is at least `c·r·s·|draws|` less `c·P·r·s·|A|^(r−1)·|B|^(s−1)`: in expectation `(1 − p*)`
 of the full `c·r·s`. -/
-theorem sum_cost_ge (op : ℤ → ℤ → ℤ) (A B : Finset ℤ) (P : ℕ) (hP : ∀ v, (fiber op A B v).card ≤ P)
-    (v : Fin r → Fin s → ℤ) (c : ℕ) (cost : (Fin r → ℤ) × (Fin s → ℤ) → ℕ)
+theorem sum_cost_ge (op : α → β → ℤ) (A : Finset α) (B : Finset β) (P : ℕ) (hP : ∀ v, (fiber op A B v).card ≤ P)
+    (v : Fin r → Fin s → ℤ) (c : ℕ) (cost : (Fin r → α) × (Fin s → β) → ℕ)
     (hcost : ∀ D ∈ draws A B r s, c * (r * s) ≤ cost D + c * hits op v D) :
     c * (r * s) * (draws A B r s).card ≤
       ∑ D ∈ draws A B r s, cost D + c * (P * (r * s) * (A.card ^ (r - 1) * B.card ^ (s - 1))) :=
   (sum_cost_hits op A B v c cost hcost).trans
     (Nat.add_le_add_left (Nat.mul_le_mul_left _ (sum_hits_le op A B P hP v)) _)
 
-theorem card_draws (A B : Finset ℤ) : (draws A B r s).card = A.card ^ r * B.card ^ s := by
+omit [DecidableEq α] [DecidableEq β] in
+theorem card_draws (A : Finset α) (B : Finset β) : (draws A B r s).card = A.card ^ r * B.card ^ s := by
   rw [card_product, Fintype.card_piFinset, Fintype.card_piFinset, prod_const, prod_const, card_univ, card_univ,
     Fintype.card_fin, Fintype.card_fin]
 
@@ -254,8 +261,8 @@ theorem lane_fiber_le (B : Finset ℤ) (hB : ∀ x ∈ B, Odd x) (v : ℤ) : (fi
 /-- **The coin lane**: with row bits from `{0, 1}`, column coins odd in `±(2^(e+1) − 1)` and targets fixed before the
 draw, at most a `2^−(e+2)` share of the entries hit their target on average (`p* = 1/32` at 4-bit coins). -/
 theorem lane_sum_hits_le (e : ℕ) (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin s → ℤ) :
-    2 ^ (e + 2) * ∑ D ∈ draws {0, 1} (oddLane (e + 1)) r s, hits lane v D ≤
-      r * s * (draws {0, 1} (oddLane (e + 1)) r s).card := by
+    2 ^ (e + 2) * ∑ D ∈ draws ({0, 1} : Finset ℤ) (oddLane (e + 1)) r s, hits lane v D ≤
+      r * s * (draws ({0, 1} : Finset ℤ) (oddLane (e + 1)) r s).card := by
   have h := sum_hits_le (r := r) (s := s) lane {0, 1} (oddLane (e + 1)) 1
     (lane_fiber_le _ fun _ hx => odd_of_mem_oddLane hx) v
   have h2 : ({0, 1} : Finset ℤ).card = 2 := by decide
@@ -271,7 +278,7 @@ theorem lane_sum_hits_le (e : ℕ) (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin 
 /-- **A lane on its own coins caps any sum it enters**: with row digits `A₁ × A'` and column digits `B₁ × B'`, the
 entry `op a₁ b₁ + rest a' b'` hits `v` on at most `P·|A'|·|B'|` digit pairs when no value of `op` has more than `P`
 preimages in `A₁ × B₁`. So its `p*` is at most `op`'s, `P/(|A₁||B₁|)`, whatever the other lanes add. -/
-theorem fiber_add_card_le {α β : Type*} [DecidableEq α] [DecidableEq β] (op : ℤ → ℤ → ℤ) (rest : α → β → ℤ)
+theorem fiber_add_card_le (op : ℤ → ℤ → ℤ) (rest : α → β → ℤ)
     (A₁ B₁ : Finset ℤ) (A' : Finset α) (B' : Finset β) {P : ℕ} (hP : ∀ v, (fiber op A₁ B₁ v).card ≤ P) (v : ℤ) :
     (((A₁ ×ˢ A') ×ˢ (B₁ ×ˢ B')).filter fun p => op p.1.1 p.2.1 + rest p.1.2 p.2.2 = v).card
       ≤ P * (A'.card * B'.card) := by
@@ -305,7 +312,7 @@ theorem fiber_add_card_le {α β : Type*} [DecidableEq α] [DecidableEq β] (op 
 
 /-- **The coin lane in any sum**: a lane `1 + b + s` on its own row bit and odd column coin keeps `p* ≤ 1/(2|B₁|)` per
 entry whatever other lanes, on other digits, add to it. -/
-theorem lane_add_card_le {α β : Type*} [DecidableEq α] [DecidableEq β] (rest : α → β → ℤ) (B₁ : Finset ℤ)
+theorem lane_add_card_le (rest : α → β → ℤ) (B₁ : Finset ℤ)
     (hB : ∀ x ∈ B₁, Odd x) (A' : Finset α) (B' : Finset β) (v : ℤ) :
     2 * B₁.card * ((((({0, 1} : Finset ℤ) ×ˢ A') ×ˢ (B₁ ×ˢ B')).filter fun p =>
         lane p.1.1 p.2.1 + rest p.1.2 p.2.2 = v).card)
@@ -333,7 +340,7 @@ theorem hwLane_fiber_le (B : Finset ℤ) (v : ℤ) : (fiber hwLane {0, 1} B v).c
 
 /-- **hw's row lane in any sum**: `(1 + 2b)·σ` on its own row bit and column coin keeps `p* ≤ 1/|B₁|` per entry whatever
 other lanes, on other digits, add to it. -/
-theorem hwLane_add_card_le {α β : Type*} [DecidableEq α] [DecidableEq β] (rest : α → β → ℤ) (B₁ : Finset ℤ)
+theorem hwLane_add_card_le (rest : α → β → ℤ) (B₁ : Finset ℤ)
     (A' : Finset α) (B' : Finset β) (v : ℤ) :
     B₁.card * ((((({0, 1} : Finset ℤ) ×ˢ A') ×ˢ (B₁ ×ˢ B')).filter fun p =>
         hwLane p.1.1 p.2.1 + rest p.1.2 p.2.2 = v).card)
@@ -343,5 +350,55 @@ theorem hwLane_add_card_le {α β : Type*} [DecidableEq α] [DecidableEq β] (re
   rw [card_product, card_product, card_product, h2]
   calc B₁.card * _ ≤ B₁.card * (2 * (A'.card * B'.card)) := Nat.mul_le_mul_left _ h
     _ = 2 * A'.card * (B₁.card * B'.card) := by ring
+
+/-- **The coin lane in any sum, over the matrix**: with row digits `{0, 1} × A'`, column digits `oddLane (e + 1) × B'`
+and targets fixed before the draw, entries `1 + b + s + rest a' b'` hit their target on at most a `2^−(e+2)` share of
+the entries on average, whatever `rest` adds. -/
+theorem lane_add_sum_hits_le (rest : α → β → ℤ) (A' : Finset α) (B' : Finset β) (e : ℕ) (hr : 0 < r) (hs : 0 < s)
+    (v : Fin r → Fin s → ℤ) :
+    2 ^ (e + 2) * ∑ D ∈ draws (({0, 1} : Finset ℤ) ×ˢ A') (oddLane (e + 1) ×ˢ B') r s,
+        hits (fun a b => lane a.1 b.1 + rest a.2 b.2) v D ≤
+      r * s * (draws (({0, 1} : Finset ℤ) ×ˢ A') (oddLane (e + 1) ×ˢ B') r s).card := by
+  have hP : ∀ w, (fiber (fun a b => lane a.1 b.1 + rest a.2 b.2) (({0, 1} : Finset ℤ) ×ˢ A')
+      (oddLane (e + 1) ×ˢ B') w).card ≤ A'.card * B'.card := fun w => by
+    have := fiber_add_card_le lane rest {0, 1} (oddLane (e + 1)) A' B' (P := 1)
+      (lane_fiber_le _ fun _ hx => odd_of_mem_oddLane hx) w
+    rw [one_mul] at this
+    exact this
+  have h := sum_hits_le (r := r) (s := s) _ _ _ _ hP v
+  have h2 : ({0, 1} : Finset ℤ).card = 2 := by decide
+  rw [card_product, card_product, card_oddLane, h2] at h
+  rw [card_draws, card_product, card_product, card_oddLane, h2]
+  obtain ⟨r', rfl⟩ : ∃ r', r = r' + 1 := ⟨r - 1, by omega⟩
+  obtain ⟨s', rfl⟩ : ∃ s', s = s' + 1 := ⟨s - 1, by omega⟩
+  simp only [Nat.add_sub_cancel] at h
+  calc 2 ^ (e + 2) * ∑ D ∈ draws (({0, 1} : Finset ℤ) ×ˢ A') (oddLane (e + 1) ×ˢ B') (r' + 1) (s' + 1),
+        hits (fun a b => lane a.1 b.1 + rest a.2 b.2) v D
+      ≤ 2 ^ (e + 2) * (A'.card * B'.card * ((r' + 1) * (s' + 1)) *
+          ((2 * A'.card) ^ r' * (2 ^ (e + 1) * B'.card) ^ s')) := Nat.mul_le_mul_left _ h
+    _ = (r' + 1) * (s' + 1) * ((2 * A'.card) ^ (r' + 1) * (2 ^ (e + 1) * B'.card) ^ (s' + 1)) := by ring
+
+/-- **hw's row lane in any sum, over the matrix**: with row digits `{0, 1} × A'` and column digits `B₁ × B'`, entries
+`(1 + 2b)·σ + rest a' b'` hit targets fixed before the draw on at most a `1/|B₁|` share of the entries on average. -/
+theorem hwLane_add_sum_hits_le (rest : α → β → ℤ) (B₁ : Finset ℤ) (A' : Finset α) (B' : Finset β) (hr : 0 < r)
+    (hs : 0 < s) (v : Fin r → Fin s → ℤ) :
+    B₁.card * ∑ D ∈ draws (({0, 1} : Finset ℤ) ×ˢ A') (B₁ ×ˢ B') r s,
+        hits (fun a b => hwLane a.1 b.1 + rest a.2 b.2) v D ≤
+      r * s * (draws (({0, 1} : Finset ℤ) ×ˢ A') (B₁ ×ˢ B') r s).card := by
+  have hP : ∀ w, (fiber (fun a b => hwLane a.1 b.1 + rest a.2 b.2) (({0, 1} : Finset ℤ) ×ˢ A') (B₁ ×ˢ B') w).card
+      ≤ 2 * (A'.card * B'.card) := fun w =>
+    fiber_add_card_le hwLane rest {0, 1} B₁ A' B' (P := 2) (hwLane_fiber_le B₁) w
+  have h := sum_hits_le (r := r) (s := s) _ _ _ _ hP v
+  have h2 : ({0, 1} : Finset ℤ).card = 2 := by decide
+  rw [card_product, card_product, h2] at h
+  rw [card_draws, card_product, card_product, h2]
+  obtain ⟨r', rfl⟩ : ∃ r', r = r' + 1 := ⟨r - 1, by omega⟩
+  obtain ⟨s', rfl⟩ : ∃ s', s = s' + 1 := ⟨s - 1, by omega⟩
+  simp only [Nat.add_sub_cancel] at h
+  calc B₁.card * ∑ D ∈ draws (({0, 1} : Finset ℤ) ×ˢ A') (B₁ ×ˢ B') (r' + 1) (s' + 1),
+        hits (fun a b => hwLane a.1 b.1 + rest a.2 b.2) v D
+      ≤ B₁.card * (2 * (A'.card * B'.card) * ((r' + 1) * (s' + 1)) *
+          ((2 * A'.card) ^ r' * (B₁.card * B'.card) ^ s')) := Nat.mul_le_mul_left _ h
+    _ = (r' + 1) * (s' + 1) * ((2 * A'.card) ^ (r' + 1) * (B₁.card * B'.card) ^ (s' + 1)) := by ring
 
 end Pouw.Dimension.Alphabet
