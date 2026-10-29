@@ -42,9 +42,9 @@ def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
 
 def test_the_later_research_pools_take_a_job_while_the_ones_before_them_are_full():
     """A job goes to the first pool in SPILL's order with a slot free beyond its waiters: cpu-3's and cpu-2's after cpu-1's and
-    cpu-5's, then cpu-6's to cpu-8's. Their slots declare no mem=, which slot.py raises to the run's --mem-gb."""
-    cpu3, cpu2, later = "vy-nebius-cpu-3", "vy-nebius-cpu-2", [f"vy-nebius-cpu-{k}" for k in (6, 7, 8)]
-    assert auto.SPILL == tuple((m, "research") for m in (CPU1, CPU5, cpu3, cpu2, *later))
+    cpu-5's, then cpu-6's, cpu-4's and cpu-7's. Their slots declare no mem=, which slot.py raises to the run's --mem-gb."""
+    cpu3, cpu2, later = "vy-nebius-cpu-3", "vy-nebius-cpu-2", [f"vy-nebius-cpu-{k}" for k in (6, 4, 7)]
+    assert auto.SPILL[:7] == tuple((m, "research") for m in (CPU1, CPU5, cpu3, cpu2, *later))
     full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
     idle = pool(*(slot(f"r{i}", cpus=f"{12 + 22 * i}-{33 + 22 * i}", mem=None) for i in range(8)))
     docs = {N2: share(waiters=5), CPU1: full, CPU5: full}
@@ -116,30 +116,31 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
+    monkeypatch.setattr(auto, "LEAN_SLOTS", str(tmp_path / "no-lean-slots"))  # a node without Lean build slots
     src = tmp_path / "src"
     (src / auto.DESCRIPTION).parent.mkdir(parents=True)
     (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
     (src / auto.SLOT_PY).parent.mkdir(parents=True)
     (src / auto.SLOT_PY).write_text("import os\ndef status_doc(now):\n    return {'file': os.environ['CHECK_SLOTS'], 'slots': [], 'waiters': []}\n")
     try:
-        docs = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])
+        docs = auto.read(src, 4, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)
     finally:
         for fd in held:
             os.close(fd)
     assert docs[N2] == {"share": {"share": 48, "claims": 1, "waiters": 1, "free": 4, "fits": True}}
-    assert docs[CPU1] == {"research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}}
+    assert docs[CPU1] == {"lean": None, "research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}}
     assert (claims / "gone.cpus").exists(), "the probe only reads: a leftover is the next taker's to remove"
-    assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"])[N2]["share"]["fits"] is True, "nothing holds them now"
+    assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)[N2]["share"]["fits"] is True, "nothing holds them now"
     (marker := tmp_path / "runs-via-slot").write_text("")
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
-    assert auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[N2]["slot_only"] == str(marker)
+    assert auto.read(src, 4, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)[N2]["slot_only"] == str(marker)
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
     monkeypatch.setattr(auto, "MIN_FREE_INODES", 2**62)
-    short = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+    short = auto.read(src, 4, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)[CPU1]["research"]
     assert short["error"].startswith(f"disk: {tmp_path} has ") and "inodes free" in short["error"], "27 Oct: cpu-5 out of inodes"
     target, why = auto.choose({N2: share(free=8), CPU1: {"research": short}}, 4, 16)
     assert target is None and "disk:" in why, "a pool on a full disk is skipped like one that can't be read"
-    failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"])
+    failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"], alive=lambda m: True)
     assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
 
 
@@ -228,3 +229,65 @@ def test_the_share_comes_from_the_trees_description(tmp_path):
     (tmp_path / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "pous"\nnode = "{N2}"\ncpus = "0-7"\n'
                                              f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
     assert auto.share_cpus(tmp_path) == "48-95"
+
+
+def lean(n: int, free: int, waiters: int = 0) -> dict:
+    return {"lean": {"n": n, "free": free, "waiters": waiters}}
+
+
+def test_every_cpu_node_is_a_spill_target_and_one_past_its_registry_deadline_is_not_asked(tmp_path):
+    """28 Oct: 89% of the day's 122,705 waiting run-minutes passed while a slot of the same pool was free on a node outside SPILL
+    (cpu-4, cpu-7..12); cpu-1 then held 100 waiters while cpu-10's pools sat idle."""
+    assert {m for m, _ in auto.SPILL} == {f"vy-nebius-cpu-{i}" for i in range(1, 13)}
+    src = tmp_path / "src"
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {}\n")
+    asked = []
+
+    def run(argv, data):
+        asked.append(argv[0])
+        raise RuntimeError("not asked here")
+    docs = auto.read(src, 4, reach=lambda name: [name], run=run, alive=lambda m: m != "vy-nebius-cpu-11")
+    assert docs["vy-nebius-cpu-11"] == "past its registry deadline" and "vy-nebius-cpu-11" not in asked
+    assert "vy-nebius-cpu-10" in asked
+
+    def bad(m):
+        if m == "vy-nebius-cpu-12":
+            raise ValueError("Invalid isoformat string: 'soon'")
+        return True
+    docs = auto.read(src, 4, reach=lambda name: [name], run=run, alive=bad)
+    assert docs["vy-nebius-cpu-12"] == "Invalid isoformat string: 'soon'", "an unreadable deadline is recorded, not taken as up"
+
+
+def test_a_records_run_goes_where_a_lean_build_slot_is_free_not_just_a_pool_slot():
+    """29 Oct 08:14Z: records runs waited hours in cpu-1..9's Lean build lines while their pool slots were taken at once."""
+    no_build = {**pool(slot("r0")), **lean(3, 0, waiters=5)}
+    with_build = {**pool(slot("r0", held=True), slot("r1")), **lean(2, 1)}
+    target, why = auto.choose({N2: share(), CPU1: no_build, CPU5: with_build}, 4, 16, lean=True)
+    assert target == (CPU5, "research") and why.endswith("a slot is free there now")
+    assert auto.choose({N2: share(), CPU1: no_build, CPU5: with_build}, 4, 16)[0] == (CPU1, "research"), "any other job: cpu-1"
+    unread = {**pool(slot("r0"))}
+    target, why = auto.choose({N2: share(), CPU1: unread, CPU5: no_build}, 4, 16, lean=True)
+    assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: no Lean build slots read there" in why
+
+
+def test_the_probe_counts_lean_build_slots_free_held_and_waited_for(tmp_path, monkeypatch):
+    import fcntl
+
+    locks = tmp_path / "locks"
+    (locks / "lean-line-build").mkdir(parents=True)
+    (locks / "lean-slots").write_text("# caps\ncheck 2\nbuild 3   # trees\n")
+    (locks / "lean-line-build" / "ticket.1").write_text("")
+    held = os.open(locks / "lean-build-0.lock", os.O_CREAT | os.O_RDWR)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    (locks / "lean-build-1.lock").write_text("")
+    monkeypatch.setattr(auto, "LEAN_SLOTS", str(locks / "lean-slots"))
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    src = tmp_path / "src"
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'slots': [], 'waiters': []}\n")
+    try:
+        docs = auto.read(src, 4, reach=lambda name: [sys.executable, "-"], alive=lambda m: True)
+    finally:
+        os.close(held)
+    assert docs[CPU1]["lean"] == {"n": 3, "free": 2, "waiters": 1}

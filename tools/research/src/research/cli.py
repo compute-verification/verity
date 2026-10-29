@@ -314,7 +314,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
-        if (harness_opts := _auto_spill(ns, harness_opts)) is None:
+        if (harness_opts := _auto_spill(ns, harness_opts, command)) is None:
             return 2
     if ns.claimed:
         _survive_stray_signals()
@@ -1018,7 +1018,7 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     return None
 
 
-def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | None:
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[str] | None = None) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
     kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`)."""
@@ -1030,7 +1030,9 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | 
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if why is None:
         try:
-            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+            said = " ".join(command or [])
+            records = "lean_changed.py" in said and "--records" in said
+            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem, lean=records)
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
             return None
