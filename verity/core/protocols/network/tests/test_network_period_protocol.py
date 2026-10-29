@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import shutil
 import types
 from collections import Counter
@@ -323,10 +324,10 @@ def test_only_a_tied_audit_must_draw_its_entries_whole(server, monkeypatch):
 def test_a_tied_audit_drawn_in_part_is_charged_its_link_windows_entries(server):
     """A tied audit whose slot entries' and scan slots' templates are strata drawn whole may draw the rest in part at
     its δ (`rows-tied-partial`): Lean accepts the period with the mirror's public, in which that audit's link-window's
-    term charges every entry its at most `b` incorrect proof blocks can set, `faulty_entries` = E_w = lanes · T /
-    every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other link-window's none, and `eps` holds that
-    audit's δ beside the scans'; the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`) or don't
-    (`SlotEntry_v1`)."""
+    `faulty_entries` is every entry its at most `b` incorrect proof blocks can set, E_w = lanes · T / every · the entry's
+    bits, when `b ≥ 1` and none when `b = 0`, every other link-window's none, `capacity` charges their sum, or the
+    tied audits' pool's count when that is smaller, and `eps` holds that audit's δ beside the scans' (and the pool's);
+    the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`) or don't (`SlotEntry_v1`)."""
     seen = Counter()
     for n in range(8):
         case = build("rows-tied-partial", n, small=n % 2 == 0)
@@ -343,7 +344,11 @@ def test_a_tied_audit_drawn_in_part_is_charged_its_link_windows_entries(server):
         assert [t["faulty_entries"] for t in pub["scans"]] == [
             p.scan.entries if b and i in PC._tied_audits(audits, reg) else 0
             for reg in c["windows"]], (n, pub)
-        assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), Fraction(pub["audits"][i]["delta"])))
+        span, pool = sum(t["faulty_entries"] for t in pub["scans"]), pub["pool"]
+        assert pub["capacity"] == (span if pool is None else pool["f"] * (pool["reach"] + PC.clog2(pool["blocks"] + 1)))
+        assert pool is None or (pub["capacity"] < span and pool["reach"] == p.scan.entries), (n, pub)
+        assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), Fraction(pub["audits"][i]["delta"]))
+                                 + (Fraction(pool["delta"]) if pool else 0))
         seen["charged" if b else "uncharged"] += 1
         seen["select" if p.audits[i].scan_slots else "slot"] += 1
     assert all(seen[k] for k in ("charged", "uncharged", "select", "slot")), seen
@@ -546,7 +551,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     accepted = [a["public"] for (k, _), a in answers.items() if k == ACCEPT]
     assert all(isinstance(x["K"], int) and x["eps"] == str(sum(
         (Fraction(t["delta"]) for t in x.get("scans", x["audits"])), Fraction(0)) + sum(
-        (Fraction(x["audits"][i]["delta"]) for i in (charged(drawn[ks], x) if "scans" in x else ())), Fraction(0)))
+        (Fraction(x["audits"][i]["delta"]) for i in (charged(drawn[ks], x) if "scans" in x else ())), Fraction(0)) + (
+        Fraction(x["pool"]["delta"]) if x.get("pool") else 0))
         for ks, a in answers.items() if ks[0] == ACCEPT for x in [a["public"]])
     assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
     shown = [w for (k, _), c in drawn.items() if k == ACCEPT
@@ -591,8 +597,10 @@ def test_the_rows_forms_bound_counts_what_it_says():
     committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no term for incorrect
     proof blocks; at w63's class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs,
     8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit drawn in part with at most 2
-    incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
-    them."""
+    incorrect, K those and its E_w = 896 bits as `capacity`; with a pool of F_t = 14 incorrect proof blocks of 16 at
+    δ_t = 10^-6, each reaching 896 entry bits (12,614 bits), capacity 896 over 1 link-window and 12,614 over 20, with
+    δ_t in eps there; F_t at δ = 10^-6 and q = 1 and 1/10, and at least ln(1/δ)/q; a sample's least detection
+    probability; and eps over the scans' δ alone, or with a charged audit's beside them."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
@@ -609,7 +617,30 @@ def test_the_rows_forms_bound_counts_what_it_says():
     assert (tied["scans"][0]["free"], tied["K"]) == (9088, 9088)
     k4 = dataclasses.replace(w63, scan=PC.Scan(32, 0, 300, 512, 8 * 112))
     part = public(k4, [Facts(16, 9, Fraction(1, 100), 2)], [(Facts(64, 64, Fraction(1, 100), 0), 9088, 8 * 112)])
-    assert (part["scans"][0]["faulty_entries"], part["K"]) == (896, 9088 + 896)
+    assert (part["scans"][0]["faulty_entries"], part["capacity"], part["pool"], part["K"]) == (896, 896, None, 9088 + 896)
+    pool = {"f": 14, "reach": 896, "blocks": 16, "delta": Fraction(1, 10 ** 6), "q": Fraction(1)}
+
+    def over(m: int) -> dict:
+        return public(dataclasses.replace(k4, audits=(), windows=m), [],
+                      [(Facts(64, 64, Fraction(1, 100), 0), 9088, 896)] * m, [], pool)
+    assert (over(1)["capacity"], over(1)["K"], over(1)["pool"], over(1)["eps"]) == (896, 9088 + 896, None, "1/100")
+    assert (over(20)["capacity"], over(20)["K"], over(20)["eps"]) == (12614, 20 * 9088 + 12614, "200001/1000000")
+    assert over(20)["pool"] == {"blocks": 16, "delta": "1/1000000", "f": 14, "q": "1", "reach": 896}
+    assert (PC.tied_f(Fraction(1, 10 ** 6), 1, 1), PC.tied_f(Fraction(1, 10 ** 6), 1, 10)) == (14, 139)
+    assert [PC.tied_f(Fraction(0), 1, 1), PC.tied_f(Fraction(1, 10), 0, 5), PC.tied_f(Fraction(1, 10), 1, 0)] == [None] * 3
+    for d in (Fraction(1, 7), Fraction(1, 100), Fraction(1, 10 ** 6), Fraction(3, 10 ** 9)):
+        for k, n in ((1, 1), (1, 10), (169, 7_000_000)):
+            assert k / n * PC.tied_f(d, k, n) >= math.log(1 / d), (d, k, n)
+    assert PC.tied_f(Fraction(1, 10 ** 6), 169, 7_000_000) == 574205
+
+    def level(size: int, draw: dict) -> dict:
+        return {"name": "unit", "query": None, "size": size, "draw": draw}
+
+    def strata(*ss: tuple[str, int, int]) -> dict:
+        return {"law": "stratified", "strata": [{"name": n, "size": s, "k": k} for n, s, k in ss]}
+    assert PC.draw_rate(level(10, {"subset": 3})) == (3, 10)
+    assert PC.draw_rate(level(10, strata(("E", 1, 1), ("S", 4, 1), ("R", 5, 2)))) == (1, 4)
+    assert PC.draw_rate(level(10, strata(("E", 1, 1), ("R", 8, 8)))) == (0, 1)
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
                   [(Facts(1, 1, Fraction(1, 15), 0), 0, 0)] * 2)["eps"] == "2/15"

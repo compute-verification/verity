@@ -12,7 +12,8 @@ the schedule (`warden.WardenParams`) and the verifier's read of each row registr
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
 `PeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
-and `eps`, the union of those deltas as an exact ratio string.
+in the rows form `capacity`, the tied audits' term once a monitoring period, and its `pool` (`_tied_pool`), and `eps`,
+the union of those deltas as an exact ratio string.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases). In the clock form: the link-windows of one link from the session's window
@@ -1020,13 +1021,65 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
         {} if entries is None else {"faulty_entries": entries})
 
 
+def draw_rate(lv: dict) -> tuple[int, int] | None:
+    """`drawRate`: a sample's least per-proof-block detection probability, as (k, n): k / n for `subset:k` of a level of
+    n, the least k_s / n_s over a stratified sample's strata of at least one proof block, and (0, 1) when its strata
+    leave one of the level's proof blocks out."""
+    draw = lv["draw"]
+    if isinstance(draw, dict) and "subset" in draw:
+        return min(draw["subset"], lv["size"]), lv["size"]
+    if not (isinstance(draw, dict) and draw.get("law") == "stratified"):
+        return None
+    if sum(s["size"] for s in draw["strata"]) < lv["size"]:
+        return 0, 1
+    r = None
+    for s in draw["strata"]:
+        k = min(s["k"], s["size"])
+        if s["size"] and (r is None or k * r[1] < r[0] * s["size"]):
+            r = (k, s["size"])
+    return r
+
+
+def tied_f(delta: Fraction, k: int, n: int) -> int | None:
+    """`tiedF`: F_t = ⌈L · 0.6931471808 / q⌉ at q = k / n and L = ⌈log2 δ.den⌉, so q · F_t ≥ ln(1/δ); None at δ = 0,
+    k = 0 or n = 0."""
+    if delta.numerator == 0 or k == 0 or n == 0:
+        return None
+    return (clog2(delta.denominator) * 6931471808 * n + 10 ** 10 * k - 1) // (10 ** 10 * k)
+
+
+def _tied_pool(p: Params, c: Commitment, audits: list[dict], facts: list[Facts], charged: dict[int, Facts]) -> dict | None:
+    """`tiedPool`: the tied audits' pool over the monitoring period: δ_t the least δ of a charged one, q_t the least
+    detection probability of a tied audit's sample (`draw_rate`), N_t their proof blocks over the link-windows, R the
+    scan's E_w and F_t (`tied_f`); None when none is charged or a tied sample detects nothing."""
+    if not charged:
+        return None
+    delta = min(f.delta for f in charged.values())
+    k, n = 1, 1
+    for i in range(len(c.audits)):
+        if not _tied_in(c.audits, c.windows, i):
+            continue
+        levels = CC.integrity(audits[i]["profile"])["levels"]
+        if len(levels) != 1 or (r := draw_rate(levels[0])) is None:
+            return None
+        if r[0] * n < k * r[1]:
+            k, n = r
+    if (f := tied_f(delta, k, n)) is None:
+        return None
+    blocks = sum(facts[i].units for reg in c.windows for i in _tied_audits(c.audits, reg))
+    return {"f": f, "reach": p.scan.entries, "blocks": blocks, "delta": delta, "q": Fraction(k, n)}
+
+
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | None = None,
-           charged: list[Facts] = ()) -> dict:
+           charged: list[Facts] = (), pool: dict | None = None) -> dict:
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
-    where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
-    incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit drawn in part (`charged`) is in `eps`."""
+    where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free`, and the δ
+    of a tied audit drawn in part (`charged`) is in `eps`. The entry bits the tied audits' incorrect proof blocks can set
+    are charged once a period as `capacity` (`Pool.capacity`): min(F_t (R + ⌈log2 (N_t + 1)⌉), Σ_w β_w) at the tied
+    audits' `pool` (`_tied_pool`), whose δ is in `eps` when its count is the smaller."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
+    capacity, shown = 0, None
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
         schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
@@ -1035,10 +1088,17 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
         s = p.scan
         units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
         schedules = cells
-        out = {"audits": [_facts_json(f) for f in facts], "scans": units}
-    K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
-                                + t.get("faulty_entries", 0) for t in units)
-    eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
+        span = sum(b for _, _, b in scans)
+        bits = None if pool is None else pool["f"] * (pool["reach"] + clog2(pool["blocks"] + 1))
+        capacity = span if bits is None else min(bits, span)
+        shown = pool if bits is not None and bits < span else None
+        out = {"audits": [_facts_json(f) for f in facts], "capacity": capacity,
+               "pool": None if shown is None else {"blocks": shown["blocks"], "delta": str(shown["delta"]),
+                                                   "f": shown["f"], "q": str(shown["q"]), "reach": shown["reach"]},
+               "scans": units}
+    K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in units) + capacity
+    eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0)) + (
+        Fraction(0) if shown is None else shown["delta"])
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
 
 
@@ -1088,8 +1148,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
     beta = [p.scan.entries if any(i in charged and charged[i].wrong >= 1 for i in _tied_audits(c.audits, reg)) else 0
             for reg in c.windows]
-    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values())), {
-        "link": p.link, "windows": p.windows}
+    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values()),
+                          _tied_pool(p, c, audits, facts, charged)), {"link": p.link, "windows": p.windows}
 
 
 def reference(case) -> dict:
