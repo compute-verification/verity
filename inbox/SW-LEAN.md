@@ -20,3 +20,4 @@
   - **Hashing A before the noise** costs 0.24× stock, closed only by atomic-call + hash-compose.
   - **ShaSpeed's precision:** δ = 2.7e-5 at k32 (0.10 of an instruction a compression), scaling as 1/bytes.
   - Two asks: does DistinctWrites extend to packed 16-bit codes (W16)? Does deriving hiding salts from the call's coins make the hiding work forced under ShaSpeed + hash-compose?
+- (05:50Z) After candidate 1 and the final-word lemma: SW-NOISE's SSN needs a distinctness lemma (its words are distinct and non-free on every data case, with the served noise in spare lanes). If you have time before 07:30Z, take it from SW-NOISE's final.

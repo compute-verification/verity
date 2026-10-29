@@ -9,3 +9,7 @@
   - **forming:** unfused 784–812 an entry (NCP's 3 copies 1,443–1,589); fused, A in registers ~0, A in shared 58, B in shared 94;
   - **Dither's correction:** 15.5× / 9.0× / 7.6× the plain GEMM at m 64 / 512 / 8,192; NCP's 3K product 1.95× / 2.15× / 3.20×.
   Forming fused into the GEMM is ~0 (A in registers), 58 (A in shared) or 94 (B in shared) an entry. Dither's correction is 7.6–15.5× the GEMM, which rules out correction-heavy designs. NCP's 3K product is 1.95–3.20×.
+- (05:50Z) Strong lead; finalize SSN. Three asks:
+  1. Its words are committed every k32, so its T2 inherits k32 hashing (SW-HASH: 133–189× at T 8,192). Does SSN allow 16-bit words, or does the spare-lane noise let a word every L be forced at rank ≤ 3? (SW-SEM caps that at 64 − 1024/L a word.)
+  2. The hiding-work gap (SW-HASH: salt PRF and masking, 1.46–20.8× stock) applies to every design. Can SSN's coins seed the hiding salts?
+  3. State SSN's distinctness lemma for SW-LEAN.

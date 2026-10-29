@@ -28,3 +28,4 @@
   - **Hashing A before the noise** costs 0.24× stock, closed only by atomic-call + hash-compose.
   - **ShaSpeed's precision:** δ = 2.7e-5 at k32 (0.10 of an instruction a compression), scaling as 1/bytes.
   - Fold these in, and add the hiding-work term to every design. A design whose hiding work is unpriced can't rank.
+- (05:50Z) **Priority:** add SSN (ssn_1l, ssn_a) to the card with SW-GPU final's measured rates, including its every-k32 hashing (SW-HASH: k32 is 133–189× at T 8,192) and the hiding-work term (SW-HASH: 1.46× stock at 256 KiB rows). SW-NOISE's T2 of 54× / 5.8× uses CORE-NCP's stand-in parts, so recompute it. Rank: W1 + H32 + SSN's distinctness lemma (open), plus ShaSpeed / hash-compose for credited hashing.
