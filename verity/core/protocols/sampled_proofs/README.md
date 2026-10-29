@@ -71,8 +71,11 @@ without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, 
 than one, so every subcircuit is exercised in every audit. `work:K` keeps those strata and that sampler
 but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
-A work draw may add a closure, proof blocks proved with the drawn ones. Each verifier derives the strata from its own program and
-query, never from the prover.
+A work draw may add a closure, proof blocks proved with the drawn ones. `whole:K:B1,B2,...` keeps those strata too: each
+stratum of a subcircuit of a named base id (`Name_vN`, or a specialization `Name_vN{...}`) draws all its `n_s` proof
+blocks, and every other `k_s = min(n_s, max(1, ⌈K n_s / N⌉))`, the work rule at unit work and floor one; its design is
+that work design with each stratum's `k_s` its floor. Each verifier derives the strata from its own program and query,
+never from the prover.
 
 **What an accepted audit establishes.** Under a stratified draw, a set of faulty proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
@@ -210,7 +213,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   registered root's commitment domain (`verity.ml.commitments.window`'s, which an integration commits under).
 - `draw`: `parse_law` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a draw to the registration and the verifier's sampling design, and `check_proved`
-  holds the proved proof blocks to the draw; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
+  holds the proved proof blocks to the draw; `stratum_k`, `work_k`, `whole_k`, `of_base`, `work_table` and `proved` are the
+  pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
   and the population programs `population_program` and `mixed_population_program` (`verity.ml.circuits.population`'s,
   which an integration builds its window's program with).
@@ -387,12 +391,13 @@ which `tests/test_one_stage.py` replays (`test_the_partition_is_cores_on_the_pin
 Code and records call a sampling design a `law`; the name stays until a format version renames it.
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
-  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
-  (`draw.digits`, as the Lean reads them; a draw's `p` too).
-- As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
-  `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
-  `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
-  sampling design expanded.
+  --draw`'s syntax), or one of the rules `stratified:K`, `work:K` and `whole:K:B1,B2,...` with `K ≥ 1` and non-empty base
+  ids (`draw.parse_law`), each number in ASCII digits (`draw.digits`, as the Lean reads them; a draw's `p` too).
+- As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "whole", "k": K,
+  "whole": [B1, B2, ...]}`, and the rules expanded by `draw.derive`: `{"law": "stratified", "k": K, "strata":
+  [{"template", "units", "k"}, ...]}` (the whole rule's too) and `{"law": "work", "k": K, "strata": [{"template", "units",
+  "work", "floor", "k"}, ...]}`. The registration carries the sampling design expanded. A stratified object's `k_s` are all
+  the stratified rule's or all the whole rule's (each `n_s` or its work-rule size), never a mix (`draw.strata_problem`).
 - `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a subcircuit the
   table does not name, and a population that does no work.
 - Two sampling designs are the same when their canonical JSON bytes are (`draw.same_law`), so `true` is not `1`, as the
