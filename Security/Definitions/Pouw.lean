@@ -40,6 +40,7 @@ import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
 import Definitions.Pouw.NCP.Witness
 import Definitions.Pouw.NCP.Word
+import Definitions.Pouw.OnsiteFreed
 import Definitions.Pouw.PearlC.Accum
 import Definitions.Pouw.PearlC.Completeness
 import Definitions.Pouw.PearlC.Deadline
