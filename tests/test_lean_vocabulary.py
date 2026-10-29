@@ -592,6 +592,8 @@ KNOWN: dict[str, str] = {
         "homonym, relative security's proof-local gate: rename (compute-accounting)",
     "Security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog":
         "homonym, relative security's proof-local program: rename (compute-accounting)",
+    "Security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
+        "homonym, the memory challengers a property ranges over: rename (lean)",
     # Security/Properties/
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
@@ -608,22 +610,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
     "benchmarks/circuit_properties/circuit_properties/ops.py::Site":
         "homonym, an op's site in a Definition: rename (training)",
-    "benchmarks/datacenter/datacenter/account.py::Ledger":
-        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (network-accounting)",
-    "benchmarks/datacenter/datacenter/binding.py::Placement":
-        "duplicate of `CircuitRequirement.Placement`: becomes a client of it (network-accounting)",
     "benchmarks/datacenter/datacenter/logical.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it (network-accounting)",
-    "benchmarks/datacenter/datacenter/memory.py::Store":
-        "duplicate of `CircuitRequirement.Store`: becomes a client of it (network-accounting)",
-    "benchmarks/datacenter/datacenter/observe.py::Answer":
-        "homonym, the challenger's record of one request: rename (network-accounting)",
-    "benchmarks/datacenter/datacenter/observe.py::Record":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (network-accounting)",
-    "benchmarks/datacenter/datacenter/physical.py::Block":
-        "duplicate of the Site (`Verity.Site`): becomes a zone of it (the old word for one) (network-accounting)",
-    "benchmarks/datacenter/datacenter/physical.py::Device":
-        "duplicate of the Site (`Verity.Site`): becomes its device entry (network-accounting)",
     "benchmarks/datacenter/datacenter/physical.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes its link (network-accounting)",
     "benchmarks/harness/verity_bench/settings.py::Registry": "homonym, one distribution's settings: rename (benchmarks)",
@@ -822,6 +810,8 @@ KNOWN: dict[str, str] = {
     "tools/config/verity_config/registry.py::Machine": "homonym, a pod's machine type: rename (ci)",
     "tools/config/verity_config/settings.py::Registry":
         "homonym, one distribution's settings from the environment: rename (ci)",
+    "verity/core/attest/__init__.py::Period":
+        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "tools/move/layout.py::Layout": "homonym, a layout move's directory map: rename (ci)",
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
@@ -877,8 +867,18 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/certifier/replay_chain.py::Window": "homonym, a replay row: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":
         "homonym, a link-window's witness: rename (network-accounting)",
+    "verity/core/protocols/certifier/window_charge.py::Window":
+        "homonym, what one sampling block of the network certifier is charged: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
+        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
+        "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Site":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
     "verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean::NetworkCheck.LinkWindow.Verdict":
@@ -891,6 +891,8 @@ KNOWN: dict[str, str] = {
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean::NciCheck.Circuit":
         "duplicate of `Flock.Program`: becomes a reading of it: one gate-level Boolean type beside `Flock.Program.Prog`, which both read (proofs)",
+    "verity/core/protocols/pous/challenger_party.py::Challenger":
+        "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
     "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
         "homonym, what a PoUS audit establishes: rename (memory-accounting)",
@@ -944,6 +946,14 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest; prices stay the scheme's (compute-accounting)",
     "verity/core/protocols/pouw/schemes/pearl_kw.py::Device":
         "homonym, a code's parameters: rename (compute-accounting)",
+    "verity/core/protocols/registration.py::Card":
+        "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
+    "verity/core/protocols/registration.py::Hardware":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
+    "verity/core/protocols/registration.py::Link":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
+    "verity/core/protocols/registration.py::Site":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
     "verity/core/protocols/remote_bandwidth/audit.py::Ledger": "homonym, the γ cost terms: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (memory-accounting)",
