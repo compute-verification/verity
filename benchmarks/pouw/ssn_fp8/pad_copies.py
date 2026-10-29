@@ -12,7 +12,7 @@ vector by 1 or 2 and never copies it. Data chosen to cancel the lift (a lane of 
 again; that isn't modelled here. `blc4a` gives up lanes 28-30 of each later step to three odd coins in [-127, 127]
 against a constant 1, one a (tile, step, column), on every later step: a committed padding row makes the tile full.
 
-Two counts, over salts:
+Counts, over salts:
 
 - `repeat`: the share of row-step vectors equal to any earlier vector of the call (a whole-vector copy), and
   `own_prev`, the padding rows' later-step vectors equal to their own previous one;
@@ -42,6 +42,8 @@ Cases (`m` real rows of uniform int8 data, the rest padding, in a 64-row tile):
   keep their products and pays only the word writes, which the honest prover pays too.
 - `sparse` and `sparse-lift`: no padding (m = 64 real rows), each real row's later chunks zero with probability 0.98,
   as the stock int8 recipe's sink-token rows on the down projection, under a_t and under the lift.
+- `same-blc4a`: no padding, 64 identical real rows of uniform int8 (one prompt in every row), under the lift and
+  `blc4a`'s lanes. They differ as zero padding rows do, so their boxes repeat at about zero padding's rate.
 """
 
 from __future__ import annotations
@@ -67,7 +69,8 @@ CASES = {"zero": ("zero", 0, 0, None), "onehot": ("onehot", 0, 0, None), "zero-l
          "zero-blc4a": ("zero", 1, BLC_LANES, None), "zero-blc4a-even": ("zero", 1, BLC_LANES, "even"),
          "zero-blc4a-distinct": ("zero", 1, BLC_LANES, "distinct"),
          "onehot-blc4a": ("onehot", 1, BLC_LANES, None), "dense-blc4a": ("dense", 1, BLC_LANES, None),
-         "sparse": ("sparse", 0, 0, None), "sparse-lift": ("sparse", 1, 0, None)}
+         "sparse": ("sparse", 0, 0, None), "sparse-lift": ("sparse", 1, 0, None),
+         "same-blc4a": ("same", 1, BLC_LANES, None)}
 #: the in-column word copies dense padding stays under, and zero and one-hot padding over
 WORD_DENSE = 0.01
 WORD_OVER = {"zero": 0.2, "onehot": 0.1}
@@ -80,6 +83,8 @@ BOX = 4
 #: the second at every m
 BOX_EVEN = 0.0005
 BOX_DISTINCT = 0.0002
+#: identical real rows repeat more than this share of their boxes
+BOX_SAME = 0.0002
 
 
 def later(coins: int) -> int:
@@ -138,6 +143,8 @@ def words(a: np.ndarray, b: np.ndarray, g: np.ndarray, a1: np.ndarray, at: np.nd
 
 def padded(rng: np.random.Generator, m: int, k: int, case: str, coins: int = 0) -> np.ndarray:
     pad = CASES[case][0]
+    if pad == "same":
+        return np.repeat(rng.integers(-127, 128, size=(1, k)), ROWS, axis=0)
     if pad == "sparse":
         a = rng.integers(-127, 128, size=(ROWS, k))
         for t, sl in enumerate(chunks(k, coins)):
@@ -228,11 +235,11 @@ def main(argv: list[str] | None = None) -> int:
     g = rng.integers(-3, 4, size=(TAG_LANES, args.n))
     rep = {"n": args.n, "k": args.k, "salts": args.salts, "rows": ROWS, "sparse": SPARSE, "cases": []}
     runs = [(m, c) for m in (int(x) for x in args.m.split(",")) for c in CASES if CASES[c][0] != "sparse"]
-    runs += [(ROWS, "sparse"), (ROWS, "sparse-lift")]
+    runs += [(ROWS, "sparse"), (ROWS, "sparse-lift"), (ROWS, "same-blc4a")]
     for m, case in runs:
         pad, lift, coins, lane = CASES[case]
         s = steps(args.k, coins)
-        first = 0 if pad == "sparse" else m
+        first = 0 if pad in ("sparse", "same") else m
         a = padded(np.random.default_rng(100 + m), m, args.k, case, coins)
         tot = {"repeat": 0.0, "own_prev": 0.0, "word": 0.0, "word_tile": 0.0, "word_real": 0.0, "word_kept": 0.0,
                "box": 0.0, "box_tile": 0.0, "box_real": 0.0}
@@ -252,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
                 tot[key] += val / args.salts
         rep["cases"].append({"m": m, "case": case, "steps": s, **tot})
         print(f"m {m:2d} {case:12s}: vectors equal to an earlier one {tot['repeat']:.4f}; "
-              f"{'rows' if pad == 'sparse' else 'padding rows'}' later steps equal to their previous "
+              f"{'rows' if pad in ('sparse', 'same') else 'padding rows'}' later steps equal to their previous "
               f"{tot['own_prev']:.4f}; words held before, in the column {tot['word']:.5f}, in the tile "
               f"{tot['word_tile']:.5f}; real rows' in the column {tot['word_real']:.5f}; kept in place "
               f"{tot['word_kept']:.5f}; {BOX}-word boxes held before, at their columns {tot['box']:.5f}, in the tile "
@@ -278,13 +285,15 @@ def main(argv: list[str] | None = None) -> int:
             ok &= c["box"] > BOX_EVEN
         if c["case"] == "zero-blc4a-distinct":
             ok &= c["box"] < BOX_DISTINCT
+        if c["case"] == "same-blc4a":
+            ok &= c["box"] > BOX_SAME
     rep["ok"] = ok
     print("ok" if ok else "FAIL: zero chunks should copy about half their steps, one-hot padding and the lift no "
           f"vector, zero padding more than {WORD_OVER['zero']:.0%} of its words in the column, one-hot more than "
           f"{WORD_OVER['onehot']:.0%}, dense padding under {WORD_DENSE:.0%}, and zero padding keep none in place "
           f"under the lift or an even row lane, but more than {KEPT_BLC4A:.1%} under blc4a, as one-hot padding does; "
           f"no real row's box repeat, zero padding's boxes repeat more than {BOX_EVEN:.2%} at m 1 with one row lane "
-          f"of 2, and under {BOX_DISTINCT:.2%} with distinct ones")
+          f"of 2, and under {BOX_DISTINCT:.2%} with distinct ones; identical real rows more than {BOX_SAME:.2%}")
     if args.json:
         with open(args.json, "w") as f:
             json.dump(rep, f, indent=1)
