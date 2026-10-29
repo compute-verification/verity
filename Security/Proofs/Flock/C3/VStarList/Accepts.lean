@@ -333,7 +333,7 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
   rcases HiddenExec.setupTables_okH innerTags_hiddenOutputs hpub with ⟨-, st₀, hst₀, -, hsts₀⟩ | ⟨hc1, -⟩
   · obtain rfl : st = st₀ := by simpa using hsts₀
     obtain ⟨hcc, hmm, hrr⟩ := setupHidden_same hst₀ (stmt_setupHidden hst')
-    rw [HiddenExec.setupHidden_parseC hst₀] at hc
+    rw [HiddenExec.setupHidden_parseC (HmOut.parse_isTmpl hc) hst₀] at hc
     cases hc
     obtain ⟨d, sh, hb, hic, -⟩ := commits_ok htr hreg hcs
     obtain ⟨hsh, hd⟩ := metaBound_ok (hmb.trans hb)

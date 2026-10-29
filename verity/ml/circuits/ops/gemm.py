@@ -45,7 +45,7 @@ over it names no architecture (`prims`), and a refusal for any other step:
                                       `ScaledMmS8Coordinate_v1` over W's rows (each coordinate a `Q_word` proof block)
 
 census/v1 counts `GemmAccumulatorS8_v1`'s products as served by none (`census.serves_none`): it has no committed words of its
-own, so Lean's `Accounting.Gates.roleOf` puts its steps at `Site.other`.
+own, so Lean's `Accounting.Gates.roleOf` puts its steps at `Place.other`.
 
 `bind` refuses a K that isn't a multiple of the Definition's step width k (16, 32 or 64): its K/k steps would drop the last
 K mod k products. The s8 Definitions also refuse K >= `S8_K_LIMIT` = 2^17 (`integer.exact_k_limit`), where an s8 x s8 sum can
@@ -180,7 +180,7 @@ def GemmCoordinatePad(B, S, x, wrow):
 def PvRow(B, S, p, *vs):
     """One head's attention output row at T <= K keys: for each of V's D dims, `GemmCoordinatePad_v1{T, K, DOT}` of the
     probability row p and that dim's column of the T key rows v0..v{T-1}. One proof block a head: each key row is D words (128 bytes
-    at D = 64), over the 111 bytes C-Flock needs of some row of a proof block, where a coordinate's own two rows are 2T bytes."""
+    at D = 64), over the 111 bytes Flock needs of some row of a proof block, where a coordinate's own two rows are 2T bytes."""
     v = Coll(Array(S.T, Array(S.D, BF16)), concat([r.refs for r in vs]))
     return B.batch(bind(GemmCoordinatePad, T=S.T, K=S.K, DOT=S.DOT), p, v, axes=(None, 1))
 

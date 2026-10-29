@@ -62,20 +62,20 @@ the scope admits. -/
 def inStmt : Flock.Stmt where
   m := 22
   kLog := 6
-  C := ⟨0, [], []⟩
-  inp _ := []
-  out _ := []
+  C := ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩
+  inp _ _ := .pub 0
+  out _ _ := .pub 0
   pub := []
   form := { hm96Rows := true, typed := false, retainedRounds := true, leaf := "hm96-sha512/v1", tables := 1,
             publicInputs := false, sharedRows := false, registeredReads := false, hiddenOutputs := false,
             unitInputGroups := 1, tail := false, unitLog := 0, readsOnlyPortBits := true, rowsV1 := true,
-            rowsV2OrSeg := false, wiresAcyclic := false }
+            rowsV2OrSeg := false, wiresAcyclic := false, templated := false }
 
 theorem inScope_inStmt : Flock.InScope false inStmt := by
   unfold Flock.InScope
   decide
 
-theorem relS_inStmt (w : Flock.Wit) : Flock.RelS inStmt w := fun _ _ => rfl
+theorem relS_inStmt (w : Flock.Wit) : Flock.RelS inStmt w := fun _ _ o => o.elim0
 
 /-- **A plain record of `rejV`**: its parser reads every message as `inStmt`, its reference prover is `silent`, and its
 error `0`. -/
@@ -106,8 +106,8 @@ def rejD : Flock.Deploy Unit Unit Unit where
 def nilStmt : Sampling.AuditStatement := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
 
 theorem inScope_nilStmt : Sampling.InScope ⟨[]⟩ nilStmt := by
-  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩,
-    ⟨rfl, ?_⟩⟩ <;> simp [Sampling.Partition.rus, Sampling.Partition.gates, nilStmt]
+  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_⟩,
+    ⟨rfl, ?_⟩⟩ <;> simp [Sampling.Partition.blocks, Sampling.Partition.gates, nilStmt]
 
 /-- **A sampling record of `rejV`**: its parser reads every message as `nilStmt`, its partition is the empty one, its
 sessions are `rejD`'s, its reference prover is `silent`, and its error `0`. -/
@@ -136,7 +136,7 @@ def rejSD : Sampling.Deploy Unit Unit Unit where
 
 theorem rhon_rejSD (H : Msg → Msg) (x : Msg) (w : Sampling.Wit) :
     Sampling.Rhon H rejSD.commit rejSD.parse rejSD.partition x w :=
-  ⟨nilStmt, ⟨[]⟩, rfl, rfl, by simp [Sampling.faulty, Sampling.Partition.rus]⟩
+  ⟨nilStmt, ⟨[]⟩, rfl, rfl, by simp [Sampling.faulty, Sampling.Partition.blocks]⟩
 
 end Claims.CompleteFails
 

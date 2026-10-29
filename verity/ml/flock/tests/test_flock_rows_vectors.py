@@ -1,5 +1,5 @@
 """`flock-rows --archive`, the verifier's `Flock.DeriveAll.deriveAll` compiled, gives the prover's mirror's rows on
-#206's derive vectors (`derive_vectors.json`): each inner layout's physical rows, the unit's own region, its parts and Δ,
+the derive vectors (`derive_vectors.json`): each inner layout's physical rows, the unit's own region, its parts and Δ,
 and the logical list, by SHA-512: calls placed and inlined, exports, and reads inline and placed. Those rows pass
 `Flock.DeriveAll.deriveChecked`'s check, the one `compose_sound` is proved from."""
 from __future__ import annotations
@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VECTORS = HERE / "derive_vectors.json"
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"),
-              pytest.mark.skipif(not VECTORS.exists(), reason="#203's derive vectors are not in this tree yet")]
+              pytest.mark.skipif(not VECTORS.exists(), reason="the derive vectors are not in this tree yet")]
 
 
 def cases():

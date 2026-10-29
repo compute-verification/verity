@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Regenerate tests/fixtures/randomness_lean.json from the security proofs package's Lean spec of verity.ml.randomness v2 and the
-# PoUW window draw (tests/lean/RandomnessVectors.lean). PACKAGE_DIR defaults to this checkout's
+# PoUW window sample (tests/lean/RandomnessVectors.lean). PACKAGE_DIR defaults to this checkout's
 # Security/Proofs; pass another checkout's to keep its Lake build directory apart. The fixture records the sha256
 # of each file the vectors depend on, which the tests compare with the tree.
 #   bash tests/lean/generate.sh [PACKAGE_DIR]
