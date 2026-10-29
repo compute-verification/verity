@@ -791,9 +791,9 @@ def HelloParses (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
 
 /-- **`flock-firewall coins` reads the coin layer's `Hello` with its nonce** at `x`: at every nonce, `Hello.parse`
 reads `CoinLayer.helloD` (`coinHello`), and the nonce it reads is the nonce's bytes. A statement about Lean functions
-alone, and a named hypothesis only because the kernel cannot evaluate them: `Hello.parse` reads the JSON through
-`Lean.Json.parse`, whose parser (`Lean.Json.Parser.anyCore`, `strCore`, `objectCore`) is a `partial def` and so opaque
-to the kernel, and `CoinLayer.helloD` is itself built through it (`CoinLayer.helloJson`).
+alone, all total (`Hello.parse` reads the JSON through `Flock.JsonParse.parse`, and `CoinLayer.helloD` is itself built
+through it, `CoinLayer.helloJson`). The parser reads `canon`'s output back alike (`FlockComplete.JsonRT.parse_canon`);
+it stays a named hypothesis because `Hello.parse` accepting what it reads depends on the statement's own `Hello`.
 `verity/ml/flock/tests/test_lean_coin_open.py` runs it on the `Hello`s of the sessions Rust's `Checked` is held to
 (`verity/ml/flock/live/src/coin_open_vectors.json`). -/
 def HelloDParses (x : Msg) : Prop :=

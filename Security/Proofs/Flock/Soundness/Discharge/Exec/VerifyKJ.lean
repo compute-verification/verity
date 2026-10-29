@@ -203,8 +203,8 @@ its parsed value** (`Record.decodeWithK_of_parse`; a record that doesn't parse i
 theorem decodeWithK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec) (text : String)
     (sess : RunRecord) :
     Record.decodeWithK keep hs spec text = .ok sess ↔
-      ∃ j, Json.parse text = .ok j ∧ Record.decodeJWithK keep hs spec j = .ok sess := by
-  cases hp : Json.parse text with
+      ∃ j, Flock.JsonParse.parse text = .ok j ∧ Record.decodeJWithK keep hs spec j = .ok sess := by
+  cases hp : Flock.JsonParse.parse text with
   | error e =>
     refine ⟨fun h => ?_, fun ⟨_, hj, _⟩ => by cases hj⟩
     unfold Record.decodeWithK at h
@@ -220,8 +220,8 @@ its parsed value** (`verifyWithMK_of_parse`). -/
 theorem verifyWithMK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup)
     (record : String) (proofs : Array ByteArray) :
     verifyWithMK keep hs spec tabs record proofs = .ok () ↔
-      ∃ j, Json.parse record = .ok j ∧ verifyJWithMK keep hs spec tabs j proofs = .ok () := by
-  cases hp : Json.parse record with
+      ∃ j, Flock.JsonParse.parse record = .ok j ∧ verifyJWithMK keep hs spec tabs j proofs = .ok () := by
+  cases hp : Flock.JsonParse.parse record with
   | error e =>
     refine ⟨fun h => ?_, fun ⟨_, hj, _⟩ => by cases hj⟩
     obtain ⟨_, _, hd, -⟩ := verifyWithMK_tables_cap keep hs h
@@ -233,7 +233,7 @@ theorem verifyWithMK_ok_iff (keep : Bool → Bool) (hs : Hashes Flock.V) (spec :
     exact ⟨fun h => ⟨j, rfl, h⟩, fun ⟨_, hj, h⟩ => by cases hj; exact h⟩
 
 /-- **At `keep := id` and SHA-512, the decoder at a record's parsed value is `Record.decode` on the record.** -/
-theorem decode_eq_decodeJWithK_id {spec : SessionSpec} {text : String} {j : Json} (h : Json.parse text = .ok j) :
+theorem decode_eq_decodeJWithK_id {spec : SessionSpec} {text : String} {j : Json} (h : Flock.JsonParse.parse text = .ok j) :
     Record.decode spec text = Record.decodeJWithK id With.std spec j :=
   (decodeWithK_id_std spec text).symm.trans (Record.decodeWithK_of_parse id With.std spec h)
 
