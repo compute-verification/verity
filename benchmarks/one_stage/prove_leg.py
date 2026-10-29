@@ -845,9 +845,9 @@ def units_for(k_log: int, per_block: int) -> int:
 
 
 def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -> tuple[Member, dict]:
-    """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows, its outputs hidden, values seeded
-    by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own (`chunk_rows.reads`)."""
-    import a11_kinds as K
+    """``shape``'s served unit as a member of ``n`` units: its parameters the prover's rows (`interface.unit_rows`), its outputs
+    hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
+    (`chunk_rows.reads`)."""
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.windows import interface as IF
     from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
@@ -860,12 +860,10 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
         tp = SRW.template(did)
         tfn, layout, own = tp.fn, tp.layout, CR.reads(tp)
     reads = reads or own
-    params, ret = fn.signature()
-    rows = [(nm, V2, K.leaf_bits(t), [nm]) for nm, t in params]
-    out_rows = K.out_rows(len(ret.fields) if hasattr(ret, "fields") else 1)
+    rows, out_rows = IF.unit_rows(fn)
     values = gen(np.random.default_rng(seed), n)
-    if set(values) != {nm for nm, _t in params}:
-        raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, _t in params]}")
+    if set(values) != {nm for nm, *_ in rows}:
+        raise AssertionError(f"{shape}: values for {sorted(values)}, parameters {[nm for nm, *_ in rows]}")
     info = {"descriptor_id": did, "layout": layout, "values": "stand-in: seeded inputs, outputs by the Definition's own evaluator",
             "seed": seed, "rows": [[r, b] for r, _s, b, _p in rows], "n": n, "reads": reads}
     return Member(shape.replace(":", "-"), tfn, rows, out_rows, values, reads=reads), info
