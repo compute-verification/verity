@@ -1,5 +1,6 @@
 """`pouw_h1_hooks.weight_roots`: each window's install reuses a linear's root while its weight is the tensor the root was
-computed from, and computes it again when the weight was replaced or written."""
+computed from and the process's salt key the one it was computed under, and computes it again when the weight was replaced
+or written; and `pouw_h1.weight_root` hides the rows under that key."""
 from __future__ import annotations
 
 import types
@@ -29,8 +30,33 @@ def computed(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     """The linears whose root was computed, not reused, in call order, from an empty cache."""
     monkeypatch.setattr(PHK, "_ROOTS", {})
     seen: list[int] = []
-    monkeypatch.setattr(PH, "weight_root", lambda w, rows: seen.append(w) or FRESH(w, rows))
+    monkeypatch.setattr(PH, "weight_root", lambda w, rows, key=None: seen.append(w) or FRESH(w, rows, key))
     return seen
+
+
+def test_another_key_computes_every_root_again(computed, monkeypatch):
+    layers = _layers(6, n=2)
+    before = PHK.weight_roots(layers)
+    monkeypatch.setattr(PH, "WEIGHT_KEY", bytes(range(32)))
+    after = PHK.weight_roots(layers)
+    assert computed == [0, 1, 0, 1] and after == _fresh(layers) and all(after[w] != before[w] for w in after)
+
+
+def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_key():
+    """A root is core's hiding tree over the rows (``audit.commit_rows(weight_binding(w), -2, rows, HM96, key,
+    HM96_WEIGHTS + w)``) under this process's 32-byte key: another weight set's root differs, and the same rows under any
+    other key, or in the unsalted tree, give another root."""
+    from verity.core.protocols.pouw.audit import HM96, HM96_WEIGHTS, commit_rows, weight_binding
+
+    first, second = (m.weight.detach().numpy() for m in _layers(7, n=2, shape=(16, 32)))
+    key = PH.WEIGHT_KEY
+    root = PH.weight_root(3, first)
+    assert len(key) == 32 and root == PH.weight_root(3, first, key) == commit_rows(
+        weight_binding(3), -2, [r.tobytes() for r in first], HM96, key, HM96_WEIGHTS + 3).commitment.root
+    assert PH.weight_root(3, second) != root
+    for other in (bytes(32), b"\xff" * 32, key[:-1] + bytes([key[-1] ^ 1]), bytes(range(32))):
+        assert PH.weight_root(3, first, other) != root
+    assert commit_rows(weight_binding(3), -2, [r.tobytes() for r in first], hash="sha512").commitment.root != root
 
 
 def test_a_reused_root_is_the_fresh_one_and_is_computed_once(computed):
