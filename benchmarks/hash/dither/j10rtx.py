@@ -11,8 +11,8 @@ with the banded reference's tree, else `j10b_ref.LABEL`. Measured only: nothing 
           mix-cpeel-bGs    the same with block2's rows staged in its noise buffers (forms 4 and 5); split always stages
           mix-cpeel-bGp    mix-cpeel-bG with the units launched as the pass's programmatic dependents (h1o_band_launch's
                            mode 3: their seeds, midstates and column tiles overlap the pass, which decode's latency is)
-    gate  per arm and window, as h1ogate.py: a dither_one.Window over NL layers with the served shapes, a step of m rows
-          captured per Window.captures (0xA5 first, the band workspace too) and dither_one.check on each, the gate
+    gate  per arm and window, as h1ogate.py: a dither_one.DitherState over NL layers with the served shapes, a step of m rows
+          captured per DitherState.captures (0xA5 first, the band workspace too) and dither_one.check on each, the gate
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
           reference at band G (h1r.cu's h1r_launch_band: v1, full compressions, the rows from the leader's seed_j in the
           seeds buffer), its CPU units on j10b_ref's noise (h1v3_ca's word functions: dither_one.h1v3_unit with h1tile's
@@ -65,7 +65,7 @@ A5 = -1515870811
 NLS = {64: 4, 256: 2, 2048: 1, 8192: 1}  # layers a window, by T
 
 
-class BandWindow(DO.Window):
+class BandWindow(DO.DitherState):
     """dither_one's window whose units_call is h1o_band_launch at g (mode 0 the pass and the units, 1 the units, 2 the
     pass), each call with its own band workspace (poisoned with the window's buffers at a captured step)."""
 
@@ -222,7 +222,7 @@ def gate(arm: str, t: int, ms: list[int], dev, rng: random.Random) -> tuple:
     h1c, h1o = settings.need("DITHER_H1C"), settings.need(DO.LIB_ENV)
     tail = None if arm == "mix-cpeel" else arm.rsplit("-b", 1)[1]
     g = None if tail is None else int(tail.rstrip("sp"))
-    win = DO.Window(t, os.urandom(64), h1c, h1o, True, dev) if g is None else BandWindow(t, os.urandom(64), h1c, h1o,
+    win = DO.DitherState(t, os.urandom(64), h1c, h1o, True, dev) if g is None else BandWindow(t, os.urandom(64), h1c, h1o,
                                                                                          True, dev, g, "s" in tail,
                                                                                          "p" in tail)
     res = {}

@@ -1,4 +1,4 @@
-# The coverage table (MODEL-COVER, CMP-166): the evidence for MODEL-MIN's one coverage premise, that every instruction a
+# The coverage table (MODEL-COVER): the evidence for MODEL-MIN's one coverage premise, that every instruction a
 # card executes is dominated by an envelope op (envelope.toml: MODEL-MIN's `Accel.Op` and the entries MODEL-COVER
 # proposes) at no fewer units of the same resource. It is evidence, not the trusted base: `machine-model cover` renders
 # it, and tests/test_cover.py fails when an opcode has no row or a dominated row's rate exceeds its resource's ρ.
@@ -31,7 +31,7 @@
 # out, but RT's RM7 calls that a coarsening for an opcode a run places elsewhere.
 #
 # The lowering probe is benchmarks/pouw/sass_census/lowering.sh (ptxas 13.0, sm_90a and sm_120a; no GPU), and a row's
-# "lowering probe" is its run r20261027-002822-0a69: 'verdict: 30/30 cases lower as expected'.
+# "lowering probe" is its run, whose verdict was '30/30 cases lower as expected'.
 
 # ---- tensor cores -----------------------------------------------------------------------------------------------------
 
@@ -46,7 +46,7 @@ fmt = "s8"
 rate = { sm_90 = "tensor.s8.k32.sync", sm_120 = "tensor.s8.k32" }
 cost = "4,096 products × 1 = 4,096 tensor units a warp instruction"
 argument = "each s32 output element is a function of its accumulator and a 32-element row and column (.SAT clamps it)"
-source = "θ tensor.s8.k32 (census IMMA16832 M 16 SMSP-cycles, r20260930-111747-26f3); sm_90 θ tensor.s8.k32.sync"
+source = "θ tensor.s8.k32 (census IMMA16832 M 16 SMSP-cycles); sm_90 θ tensor.s8.k32.sync"
 
 [[row]]
 ops = ["IMMA"]
@@ -147,7 +147,7 @@ fmt = ["f16", "bf16"]
 rate_value = { sm_90 = 4096, sm_120 = 1024 }
 cost = "2,048 kept products × 2 a warp instruction"
 argument = "mmaSp's tile at 16-bit elements, at twice the dense logical rate"
-source = "sm_120 WP Table 4 FP16 sparse 1007.6 TFLOPS at 2,617 MHz, 188 SMs (1,024 a SM-clock; measured 1023.6 logical, r20261015-064426-11ec; census HMMASP16832 DS_tensor 16); sm_90 DS 'FP16 Tensor Core 1,979 TFLOPS' sparse at 1,830 MHz (4,096)"
+source = "sm_120 WP Table 4 FP16 sparse 1007.6 TFLOPS at 2,617 MHz, 188 SMs (1,024 a SM-clock; measured 1023.6 logical; census HMMASP16832 DS_tensor 16); sm_90 DS 'FP16 Tensor Core 1,979 TFLOPS' sparse at 1,830 MHz (4,096)"
 
 [[row]]
 ops = ["HMMA"]
@@ -159,7 +159,7 @@ fmt = "tf32"
 rate_value = { sm_90 = 2048, sm_120 = 512 }
 cost = "kept products × 4"
 argument = "mmaSp's tile at tf32 elements"
-source = "sm_120 WP Table 4 TF32 sparse 503.8 (512 a SM-clock; measured 511.8 logical, r20261015-064426-11ec); sm_90 DS 'TF32 Tensor Core 989 TFLOPS' sparse (2,048)"
+source = "sm_120 WP Table 4 TF32 sparse 503.8 (512 a SM-clock; measured 511.8 logical); sm_90 DS 'TF32 Tensor Core 989 TFLOPS' sparse (2,048)"
 
 [[row]]
 ops = ["HMMA"]
@@ -211,7 +211,7 @@ fmt = ["mxf8", "mxf6", "mxf4"]
 rate = "tensor.e4m3.k32.sf"
 cost = "4,096 products × 1 a warp instruction"
 argument = "the block scales are row inputs mma's output (the opcode's dot) reads; FP8, FP6 and FP4 operands at the FP8 rate"
-source = "census QMMASF16832 M 16 SMSP-cycles, 1023.8 (θ tensor.e4m3.k32.sf, r20260930-111747-26f3); lowering probe: QMMA.SF.16832.F32.E4M3.E4M3.E8 and .E3M2.E2M3.E8 native"
+source = "census QMMASF16832 M 16 SMSP-cycles, 1023.8 (θ tensor.e4m3.k32.sf); lowering probe: QMMA.SF.16832.F32.E4M3.E4M3.E8 and .E3M2.E2M3.E8 native"
 
 [[row]]
 ops = ["QMMA"]
@@ -225,7 +225,7 @@ fmt = ["e4m3", "e5m2", "e2m1"]
 rate_value = 2048
 cost = "4,096 kept products × 1 (8,192 logical) a warp instruction"
 argument = "mmaSp's tile at 8-bit elements"
-source = "WP Table 4 FP8 sparse 2015.2 at 2,617 MHz (2,048 a SM-clock); census QMMASP16864 M 16 SMSP-cycles for 8,192 logical MACs (2047.3 logical, r20261015-064426-11ec)"
+source = "WP Table 4 FP8 sparse 2015.2 at 2,617 MHz (2,048 a SM-clock); census QMMASP16864 M 16 SMSP-cycles for 8,192 logical MACs (2047.3 logical)"
 
 [[row]]
 ops = ["QMMA"]
@@ -277,7 +277,7 @@ fmt = ["nvf4", "mxf4"]
 rate_value = 4096
 cost = "8,192 kept products × 1/2 (16,384 logical) a warp instruction"
 argument = "mmaSp's tile at 4-bit elements with block scales; the WP's sparse FP4 figure is twice the dense, the dense rate in kept products"
-source = "WP Table 4 FP4 sparse 4030.4 at 2,617 MHz (4,096 a SM-clock); measured 4094.4 logical, 16.01 SMSP-cycles a warp instruction (r20261015-064426-11ec, note:20261015T0608Z-draft-census-sm120 §1); lowering probe: OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X is native"
+source = "WP Table 4 FP4 sparse 4030.4 at 2,617 MHz (4,096 a SM-clock); measured 4094.4 logical, 16.01 SMSP-cycles a warp instruction; lowering probe: OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X is native"
 
 [[row]]
 ops = ["OMMA"]
@@ -301,7 +301,7 @@ fmt = "f64"
 rate = "tensor.f64"
 cost = "products × 32"
 argument = "f64 elements at weight 32; on the H200 the f64 tensor rate times 32 is exactly the INT8 rate, on sm_120 it is 1/18 of it"
-source = "θ tensor.f64 (sm_90 DS FP64 Tensor 67 TFLOPS, 128 a SM-clock; sm_120 DMMA.8x8x4 584 SMSP-cycles for 256 FMAs, r20261017-041103-d35d); lowering probe: DMMA.8 native on both"
+source = "θ tensor.f64 (sm_90 DS FP64 Tensor 67 TFLOPS, 128 a SM-clock; sm_120 DMMA.8x8x4 584 SMSP-cycles for 256 FMAs); lowering probe: DMMA.8 native on both"
 
 [[row]]
 ops = ["BMMA"]
@@ -512,7 +512,7 @@ words = [3, 2]
 rate = { sm_90 = ["alu.lop3", "alu.shf", "alu.lea_hi"], sm_120 = ["alu.lop3", "alu.shf", "alu.lea_hi", "alu.prmt"] }
 cost = "a lane of alu a lane"
 argument = "each lane's result is a function of ≤ 3 register words, a word and a predicate out; the census runs them on one ALU pipe at 2 warp instructions a SM-clock (64 lanes), shared in pairs, which is alu's ρ"
-source = "θ alu.lop3, alu.shf, alu.lea_hi, alu.prmt; sm_120 census 'LOP3 with IADD3, SHF, PRMT or F2FP: 2.0 total (one ALU pipe)' (note:20261015T0608Z-draft-census-sm120 §2); sm_90 census row A 'ALU pipe: LOP3, SHF, LEA.HI (and IADD3) 1.9691 /SM/clk, one pipe'; sm_90 PRMT by DS_alu"
+source = "θ alu.lop3, alu.shf, alu.lea_hi, alu.prmt; sm_120 census 'LOP3 with IADD3, SHF, PRMT or F2FP: 2.0 total (one ALU pipe)'; sm_90 census row A 'ALU pipe: LOP3, SHF, LEA.HI (and IADD3) 1.9691 /SM/clk, one pipe'; sm_90 PRMT by DS_alu"
 
 [[row]]
 ops = ["LOP", "LOP32I", "SHL", "SHR", "ISCADD", "ISCADD32I", "PSETP", "P2R", "R2P"]
@@ -551,7 +551,7 @@ rate_value = 1.9431
 rate_unit = "warp instructions/SM/clk"
 cost = "a lane of alu a lane"
 argument = "≤ 3 words (PLOP3: 3 predicates of the predicate word) in, a word or 2 predicates out a lane. Each runs on the ALU pipe: PLOP3.LUT 1.9431 alone and 1.9948 with LOP3, SGXT and BMSK 1.6815 alone and 1.8739 with LOP3 (on separate pipes the pairs would reach 3.4 and more)"
-source = "pipes.cu, r20261027-015018-838b: plop3, sgxt, bmsk and their mix_X_lop3"
+source = "pipes.cu: plop3, sgxt, bmsk and their mix_X_lop3"
 
 [[row]]
 ops = ["IADD3", "IADD", "IADD32I", "ISETP", "IMNMX", "VIMNMX", "IABS", "SEL"]
@@ -579,7 +579,7 @@ words = [4, 2]
 rate = ["alu.iadd3", "issue"]
 cost = "1/32 of an issue slot a lane (fma)"
 argument = "≤ 2 64-bit or 3 32-bit words and carries in, a word pair or a word and a predicate out a lane. The CPG gives CC 12.0's integer add and compare/min/max 128 results a SM-clock (DS_lop: held by the issue slot), past alu's 64, so they're on fma, issue-bound; VIMNMX runs at 3.916 and SEL at 1 SMSP-cycle a warp instruction (the issue rate), while IADD3 measured 64 on the ALU pipe beside LOP3, and so did IADD.64 (1.6831 alone, 1.8529 with LOP3) and IABS (1.6817, 1.8739); fma holds each at its issue slot either way. ptxas 13.0 lowers add.u32 and sub.u32 to IADD3 or IMAD, never IADD"
-source = "θ alu.iadd3 (sheet 128, measured 64), θ issue; DS_lop; census VMNX 3.916, KSEL (SEL 1.000 SMSP-cycles), A; pipes.cu, r20261027-015018-838b: iadd64, iabs and their mix_X_lop3"
+source = "θ alu.iadd3 (sheet 128, measured 64), θ issue; DS_lop; census VMNX 3.916, KSEL (SEL 1.000 SMSP-cycles), A; pipes.cu: iadd64, iabs and their mix_X_lop3"
 
 [[row]]
 ops = ["IMAD", "IMUL", "IMUL32I", "IDP", "IDP4A"]
@@ -657,7 +657,7 @@ words = [1, 1]
 rate = "alu.popc"
 cost = "a lane of sfu a lane"
 argument = "a function of one word a lane; the census runs them on the XU with MUFU, at 16 lanes together"
-source = "θ alu.popc (16); census 'POPC, BREV, FLO, MUFU.EX2 0.500 16' (note:20261015T0608Z-draft-census-sm120 §2)"
+source = "θ alu.popc (16); census 'POPC, BREV, FLO, MUFU.EX2 0.500 16'"
 
 [[row]]
 ops = ["POPC", "FLO", "BREV"]
@@ -699,7 +699,7 @@ words = [1, 1]
 rate = "mufu"
 cost = "a lane of sfu a lane"
 argument = "a word to a word a lane. Each measured pair runs on the XU: 0.4999 warp instructions a SM-clock alone (16 lanes, sfu's ρ) and 0.5000 with MUFU.EX2 (on separate units the pair would reach 1.0); its rounding mode is a field of the same instruction"
-source = "DS_xu; θ mufu; pipes.cu, r20261027-020842-385c: i2f_f2i (I2F.U32.RP, F2I.FTZ.U32.TRUNC.NTZ), i2f16_f2i16 (I2F.S16), cvt_s32 (I2F.RP, F2I.TRUNC.NTZ), cvt_u16, cvt_s8 (I2F.S8, F2I.S8.NTZ), frnd (FRND.FLOOR), cvt_frnd (FRND.TRUNC, FRND) and their mix_X_mufu"
+source = "DS_xu; θ mufu; pipes.cu: i2f_f2i (I2F.U32.RP, F2I.FTZ.U32.TRUNC.NTZ), i2f16_f2i16 (I2F.S16), cvt_s32 (I2F.RP, F2I.TRUNC.NTZ), cvt_u16, cvt_s8 (I2F.S8, F2I.S8.NTZ), frnd (FRND.FLOOR), cvt_frnd (FRND.TRUNC, FRND) and their mix_X_mufu"
 
 [[row]]
 ops = ["F2F", "F2I", "FRND", "I2F"]
@@ -717,7 +717,7 @@ rate_value = 0.0625
 rate_unit = "warp instructions/SM/clk"
 cost = "a lane of f64 a lane"
 argument = "≤ 2 words to ≤ 2 a lane. Each measured pair runs on the f64 pipe: 0.0580 to 0.0625 warp instructions a SM-clock alone (2 lanes, f64's ρ) and 0.0552 to 0.0566 with DFMA (on separate pipes about 0.087); beside 24 MUFU.EX2 one pair adds 0.0416 to MUFU's 0.4994 (0.5411, past sfu's 0.5), so they aren't the XU's"
-source = "census ROW_CVT64 0.06252 (r20261016-151430-a2aa); pipes.cu, r20261027-015905-5712 and r20261027-020842-385c: f2f64, i2f64, s64, cvt_u64, cvt_frnd64, cvt_f64_u32, cvt_f64_s64 and their mix_X_dfma and mix_X_mufu24"
+source = "census ROW_CVT64 0.06252; pipes.cu: f2f64, i2f64, s64, cvt_u64, cvt_frnd64, cvt_f64_u32, cvt_f64_s64 and their mix_X_dfma and mix_X_mufu24"
 
 [[row]]
 ops = ["F2F", "F2I", "F2IP", "FRND", "I2F", "I2I", "I2IP"]
@@ -730,7 +730,7 @@ words = [2, 2]
 rate = "issue"
 cost = "1/32 of an issue slot a lane (fma)"
 argument = "≤ 2 words to ≤ 2 a lane, on fma, which holds an opcode on any pipe at the issue slot it takes: no run places these forms on a pipe, and I2I.S8.S32.SAT (0.9408 alone) and I2IP.S8.S32.SAT (1.6831) run past sfu's 0.5 and beside MUFU.EX2 at their own rate (0.4989 and 0.4999 with MUFU's), so they aren't the XU's"
-source = "θ issue; pipes.cu, r20261027-020842-385c: cvt_i2i, cvt_i2ip and their mix_X_mufu"
+source = "θ issue; pipes.cu: cvt_i2i, cvt_i2ip and their mix_X_mufu"
 
 [[row]]
 ops = ["F2F", "F2I", "F2IP", "FRND", "I2F", "I2FP", "I2I", "I2IP", "F2FP"]
@@ -847,7 +847,7 @@ rate_value = 1.3903
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and 16 alu lanes a warp instruction"
 argument = "the warp's 32 predicates to a word (or a predicate) a lane. A fold in the card's lane opcodes (LEA, 2 words in) is 31 alu lanes, past the 16 the card spends, so no fold of `lane`s dominates it at the card's rate; beside LOP3 the card spends about half a LOP3 of alu on each VOTE (LOP3 + VOTE/2 = 1.930, 1.955, 2.000 at Q 16, 32, 64), so a collective charging 16 alu lanes does"
-source = "collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): VOTE.ANY 1.3903, VOTE.ALL 0.4716 alone; mix_vote_lop3_16, 32, 64; r20261027-022445-0a1b the same, collective_verdict.py: held"
+source = "collective.cu (reproduced): VOTE.ANY 1.3903, VOTE.ALL 0.4716 alone; mix_vote_lop3_16, 32, 64; reproduced again, collective_verdict.py: held"
 
 [[row]]
 ops = ["REDUX"]
@@ -862,7 +862,7 @@ rate_value = 0.4990
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and a unit of collective a warp instruction"
 argument = "32 words to one uniform word. A fold of IADD3s is 16 alu lanes and beside LOP3 the card spends less (LOP3 + MOV + REDUX/2 = 2.007, 0.35% past the cap: RM7), but REDUX runs on MATCH.ANY's unit: 0.4990 alone, 0.2498 + 0.2498 beside MATCH.ANY, so it is a unit of `collective` at 0.5"
-source = "collective.cu, r20261027-004019-4f84 (r20261027-003755-9b60 the same): REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64; r20261027-022445-0a1b the same, collective_verdict.py: held"
+source = "collective.cu (reproduced): REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64; reproduced again, collective_verdict.py: held"
 
 [[row]]
 ops = ["MATCH"]
@@ -878,7 +878,7 @@ rate_value = 0.24997
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and 2 units of collective a warp instruction"
 argument = "32 word pairs to a mask a lane; .U64 runs at half MATCH.ANY's rate on its unit (0.25/k for k classes), 2 units"
-source = "match.cu, r20261027-002237-fa90: .U64 0.24997 (1 class), 0.00781 (32); r20261027-022445-0a1b the same, collective_verdict.py: held"
+source = "match.cu: .U64 0.24997 (1 class), 0.00781 (32); reproduced, collective_verdict.py: held"
 
 [[row]]
 ops = ["MATCH"]
@@ -906,7 +906,7 @@ rate_value = 0.4999
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and a unit of collective a warp instruction"
 argument = "32 words to a mask a lane. `lane`s simulate it in about 280 alu lanes (4 words in), or 119 provisional 6-word units, past ρ beside LOP3 and FFMA (a load of 1.11); it runs on a unit of its own beside the issue slots at 0.5/k warp instructions a SM-clock for k distinct values, which REDUX shares, so it is a unit of `collective`: 0.4999 at 1 class"
-source = "match.cu, r20261027-002237-fa90: alone 0.4999 (1 class), 0.24998 (2), 0.12500 (4), 0.01562 (32); beside LOP3 and FFMA 0.3790 with 1.516 and 1.516 (mix_u32_lop3_32_ffma_32); r20261027-001518-aaf8 the same within 0.3%; r20261027-004019-4f84 (REDUX beside it); r20261027-022445-0a1b the same, collective_verdict.py: held"
+source = "match.cu: alone 0.4999 (1 class), 0.24998 (2), 0.12500 (4), 0.01562 (32); beside LOP3 and FFMA 0.3790 with 1.516 and 1.516 (mix_u32_lop3_32_ffma_32); reproduced within 0.3%, and with REDUX beside it; reproduced again, collective_verdict.py: held"
 
 [[row]]
 ops = ["VOTE", "VOTEU"]
@@ -921,7 +921,7 @@ rate_value = 0.9365
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and 16 alu lanes a warp instruction"
 argument = "the warp's 32 predicates to a word (or a predicate) a lane. A fold of 2-word `lane`s is 31 alu lanes, past the 16 the card spends, so no fold of `lane`s dominates it at the card's rate; beside LOP3 the card spends at most half a LOP3 of alu on each VOTE (LOP3 + VOTE/2 = 1.691, 1.795, 1.876 at Q 16, 32, 64), so a collective charging 16 alu lanes does"
-source = "collective.cu for sm_90a (built r20261027-022612-3c62), r20261027-032627-6722 on vy-dc-h200-2: VOTE.ANY 0.9365, VOTE.ALL 0.5815 alone; mix_vote_lop3_16, 32, 64; collective_verdict.py: held"
+source = "collective.cu for sm_90a (built), run on an H200: VOTE.ANY 0.9365, VOTE.ALL 0.5815 alone; mix_vote_lop3_16, 32, 64; collective_verdict.py: held"
 
 [[row]]
 ops = ["REDUX"]
@@ -937,7 +937,7 @@ rate_value = 0.4990
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and a unit of collective a warp instruction"
 argument = "32 words to one uniform word. REDUX runs on MATCH.ANY's unit, as on sm_120: 0.4990 alone, 0.2498 + 0.2498 beside MATCH.ANY, and beside LOP3 it gives way only once LOP3 nears the alu's 2 (0.4985, 0.4462, 0.2451 beside 0.9970, 1.7847, 1.9604), so it is a unit of `collective` at 0.5; the census's REDUX kind is this row"
-source = "collective.cu for sm_90a (built r20261027-022612-3c62), r20261027-032627-6722 on vy-dc-h200-2: REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64; census REDUX (sm_90: issue rows only); collective_verdict.py: held"
+source = "collective.cu for sm_90a (built), run on an H200: REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64; census REDUX (sm_90: issue rows only); collective_verdict.py: held"
 
 [[row]]
 ops = ["MATCH"]
@@ -953,7 +953,7 @@ rate_value = 0.2499
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and 2 units of collective a warp instruction"
 argument = "32 word pairs to a mask a lane; .U64 runs at half MATCH.ANY's rate on its unit (0.25/k for k classes), 2 units"
-source = "match.cu for sm_90a (built r20261027-022612-3c62), r20261027-032627-6722 on vy-dc-h200-2: .U64 0.2499 (1 class), 0.0078 (32); beside LOP3 at most 0.2500 (mix_u64_lop3_16); collective_verdict.py: held"
+source = "match.cu for sm_90a (built), run on an H200: .U64 0.2499 (1 class), 0.0078 (32); beside LOP3 at most 0.2500 (mix_u64_lop3_16); collective_verdict.py: held"
 
 [[row]]
 ops = ["MATCH"]
@@ -968,7 +968,7 @@ rate_value = 0.4999
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and a unit of collective a warp instruction"
 argument = "32 words to a mask a lane. It runs on a unit of its own beside the issue slots at 0.5/k warp instructions a SM-clock for k distinct values, which REDUX shares, so it is a unit of `collective`: 0.4999 at 1 class, and beside LOP3 and FFMA it stays within the unit (0.4604 with 0.921 and 0.921, mix_u32_lop3_16_ffma_16)"
-source = "match.cu for sm_90a (built r20261027-022612-3c62), r20261027-032627-6722 on vy-dc-h200-2: alone 0.4999 (1 class), 0.2500 (2), 0.1250 (4), 0.0156 (32); mix_u32_lop3_*, mix_u32_lop3_*_ffma_*; collective_verdict.py: held"
+source = "match.cu for sm_90a (built), run on an H200: alone 0.4999 (1 class), 0.2500 (2), 0.1250 (4), 0.0156 (32); mix_u32_lop3_*, mix_u32_lop3_*_ffma_*; collective_verdict.py: held"
 
 [[row]]
 ops = ["ELECT"]
@@ -1097,7 +1097,7 @@ resource = "dram"
 rate = "hbm"
 cost = "a dram word a word"
 argument = "the card has no multicast object (no NVLink or NVSwitch, θ nvlink.reduce absent; the driver refuses one), so no address is a multimem one, and LDGMC on any other address faults: it ends the kernel and writes nothing. multimem.red lowers to a plain REDG...STRONG.SYS, which adds once at the L2 (the RED row)"
-source = "sass_census/multimem.sh, r20261027-000210-ac40: 'CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED = 0; cuMulticastGetGranularity: CUDA_ERROR_NOT_SUPPORTED; cuMulticastCreate: CUDA_ERROR_NOT_SUPPORTED' and 'verdict: hypothesis held: multicast unsupported; LDGMC on unicast memory faults; multimem.red on unicast memory adds once (an L2 reduction)'; lowering probe"
+source = "sass_census/multimem.sh: 'CU_DEVICE_ATTRIBUTE_MULTICAST_SUPPORTED = 0; cuMulticastGetGranularity: CUDA_ERROR_NOT_SUPPORTED; cuMulticastCreate: CUDA_ERROR_NOT_SUPPORTED' and 'verdict: hypothesis held: multicast unsupported; LDGMC on unicast memory faults; multimem.red on unicast memory adds once (an L2 reduction)'; lowering probe"
 
 [[row]]
 ops = ["ATOMS", "REDS"]
@@ -1109,7 +1109,7 @@ resource = "smem"
 rate = "smem.atom"
 cost = "a smem word a 32-bit word of the location"
 argument = "the new word is a function of the old and ≤ 2 register words (CAS), the old returned; ≤ 32 a SM-clock through the shared-memory port, 15.9 measured"
-source = "θ smem.atom (sheet 32); census ROW_ATOMS32 0.497 warp instructions a SM-clock (r20261016-183617-3914)"
+source = "θ smem.atom (sheet 32); census ROW_ATOMS32 0.497 warp instructions a SM-clock"
 
 [[row]]
 ops = ["ATOM", "ATOMG", "RED", "REDG", "SURED", "SUATOM"]
@@ -1136,7 +1136,7 @@ rate_value = 2.33
 rate_unit = "words/SM/clk"
 cost = "an l2 word a 32-bit word of the location (4 for a 128-bit vector)"
 argument = "an elementwise function of the old location and ≤ 2 register words, done at the L2. The card's measured rates are ≤ 2.33 words a SM-clock (ATOMG.32 on 16 SMs; 1.91 on every SM for ATOMG, RED.64 and RED.v4), within MODEL-MIN's L2 ρ of 5; θ's sheet bound is the L1 port's 32, past it, so this rests on the runs, not a ceiling (RM6)"
-source = "census ROW_ATOMG32 0.0727 warp instructions a SM-clock (r20261016-144147-4597), ATOMG32 L2red 0.0597, RED64 0.0298, REDV 0.01492 (r20261015-043430-0a05); θ l2.red (sheet 32)"
+source = "census ROW_ATOMG32 0.0727 warp instructions a SM-clock, ATOMG32 L2red 0.0597, RED64 0.0298, REDV 0.01492; θ l2.red (sheet 32)"
 
 [[row]]
 ops = ["REDAS"]
@@ -1199,7 +1199,7 @@ rate_value = 1.90
 rate_unit = "words/SM/clk"
 cost = "a smem word and an l2 word a word"
 argument = "an elementwise function of the old word and the shared-memory word, at the L2: measured 1.90 words a SM-clock (a 512 B UBLKRED, 128 words, at 0.01486), within L2's 5; θ's sheet bound is shared memory's 32, past L2's ρ, so this rests on the run (RM6)"
-source = "census ROW_UBLKRED 0.01486 warp instructions a SM-clock (r20261016-145213-5ed0); θ tma.red (sheet 32)"
+source = "census ROW_UBLKRED 0.01486 warp instructions a SM-clock; θ tma.red (sheet 32)"
 
 [[row]]
 ops = ["SYNCS", "SYNCSU", "USYNCS", "ACQBULK", "ACQSHMINIT", "ARRIVES"]
@@ -1223,7 +1223,7 @@ envelope = "tex"
 rate = "tex"
 cost = "a unit of tex a lane's fetch"
 argument = "a filtered fetch weighs ≤ 4 texels (8 trilinear, at half rate) by 9-bit fixed-point weights and converts each channel's format, ≤ 16 products a channel and ≤ 64 over 4 channels a SM-clock (6% of the tensor rate on sm_120, 1.6% on the H200): no op of MODEL-MIN's list has the texture unit's power, so it is a proposed `tex` at 4 fetches a SM-clock; a point fetch or a gather is one"
-source = "θ tex (WP: 4 texture units a SM, one filtered texel a unit a clock), θ texture's bound; sm_120 measured: bilinear TEX 0.1248 warp instructions a SM-clock, 3.99 filtered fetches (rows.csv ROW_TEXBIL, r20261016-093909-ac84), any TEX 0.2493 (ROW_TEXI); census TEX*, TLD*"
+source = "θ tex (WP: 4 texture units a SM, one filtered texel a unit a clock), θ texture's bound; sm_120 measured: bilinear TEX 0.1248 warp instructions a SM-clock, 3.99 filtered fetches (rows.csv ROW_TEXBIL), any TEX 0.2493 (ROW_TEXI); census TEX*, TLD*"
 
 [[row]]
 ops = ["TMML", "TXQ"]
@@ -1269,7 +1269,7 @@ pipe = "alu"
 units = 16
 words = [32, 1]
 argument = "each thread gets the AND, OR or count of a predicate over the CTA, a function of other warps' registers, which no one envelope op computes (`collective` is a warp's). Simulated as a vote, a `red` of its word into shared memory and a `move` of the result to every lane, it costs about one issue slot a warp more than the card's one. On sm_120 the barrier holds 16 alu lanes: BAR.RED.OR runs at 0.2105 warp instructions a SM-clock alone (one 1024-thread CTA a SM), and on a named barrier in 16 warps beside a LOP3 stream in the other 16, LOP3 + BAR/2 = 1.8107 + 0.1535/2 = 1.8874; smaller CTAs, which may run it faster, aren't measured, and no H200 run measures it. MODEL-MIN's README puts BAR under none (no data effect)"
-source = "corpus BAR.RED.AND.DEFER_BLOCKING, BAR.RED.OR.DEFER_BLOCKING; pipes.cu, r20261027-015018-838b (bar_or, mix_bar_or_lop3), r20261027-015905-5712 and r20261027-020842-385c (bar16, mix_bar16_lop3)"
+source = "corpus BAR.RED.AND.DEFER_BLOCKING, BAR.RED.OR.DEFER_BLOCKING; pipes.cu (bar_or, mix_bar_or_lop3; bar16, mix_bar16_lop3)"
 
 [[row]]
 ops = ["BAR"]
@@ -1471,7 +1471,7 @@ what = "clock and timer reads (S2R/CS2R/S2UR of SR_CLOCKLO/HI, SR_GLOBALTIMER)"
 mark = "hole"
 severity = "low"
 envelope = "-"
-argument = "computes nothing a lane can't, but its value is the time, which no op of the model produces; MODEL-MIN keeps clock reads Open (CMP-165 item 5), so a program that reads one is outside the premise's claim until the model has a time read"
+argument = "computes nothing a lane can't, but its value is the time, which no op of the model produces; MODEL-MIN keeps clock reads Open, so a program that reads one is outside the premise's claim until the model has a time read"
 
 [[unit]]
 key = "compression"

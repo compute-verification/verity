@@ -217,7 +217,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
 ## Public outputs
 
-Under the proof service, an
+Under the proof system, an
 audit makes public its verdict and nothing about a single round:
 
 - the verdict;
@@ -485,7 +485,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
 protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's draws). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
-prover proves `verdict` of it through the proof service, and only the verdict is published. The labels and `K` are the
+prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
 
 **The bound.** For every prover of the sequential wipe, with `M` bits inside the boundary when the fill ends (every
@@ -574,12 +574,12 @@ probe in Tuesday's window on vy-dc-h200-2 is to measure it, and the 8×H200 rows
 
 Each of `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB` and
 `StreamedWipeMeetsServerH200` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's
-verdict, with two lemmas beside it (`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one
-(`Pous.Claims.<name>_meets`): its numeric premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the
-5 GB point, hold at the measured H200 at `k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against a verdict
-that accepts everything, a prover that writes its prior content into its memory and reads it back is accepted and
-keeps it with probability 1, while the PRF's advantage against the distinguisher built from it
-(`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
+acceptance rule (`Pous.StreamedWipe.Acceptance`), with two lemmas beside it
+(`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one (`Pous.Claims.<name>_meets`): its numeric
+premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the 5 GB point, hold at the measured H200 at
+`k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against an acceptance rule that accepts everything, a
+prover that writes its prior content into its memory and reads it back is accepted and keeps it with probability 1,
+while the PRF's advantage against the distinguisher built from it (`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
 
 **Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
@@ -613,7 +613,7 @@ which was not measured. The node's load average was about 930 during the run, wh
   fetch from outside the boundary, neither measured.
 - **The guarantee isn't stated against the Lean verdict, and there is no Program.** `MemoryChallenger.StreamedWipe.verdict`
   decides the verdict, but the guarantees read the game's `Accepts`, not that function, so they stay frozen (no-function)
-  until restated against it. `verdict` has no circuit for the proof service, so it is not yet proved in zero knowledge.
+  until restated against it. `verdict` has no circuit for the proof system, so it is not yet proved in zero knowledge.
 
 ## API
 
