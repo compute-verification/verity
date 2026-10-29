@@ -11,8 +11,8 @@ K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lea
 - a share is of one copy of the weights, labelled with what it is;
 - ε is the scans' δ summed, m·δ_scan over the period's sampling blocks and the links.
 
-At δ = 1% for the whole datacenter, the pooled form's faulty proof blocks alone pass the weights. A window class stands
-in for its scan class and its T, and the calculator refuses what it can't count."""
+At δ = 1% for the whole datacenter, the pooled form's incorrect proof blocks alone pass the weights. A window class
+stands in for its scan class and its T, and the calculator refuses what it can't count."""
 
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def test_eps_is_the_scans_delta_summed():
     assert LB.world(one, "week", "registered").eps == 18_550_229 * Fraction(189_000, 2 ** 20)
 
 
-def test_the_pooled_datacenters_faulty_blocks_alone_pass_the_weights():
+def test_the_pooled_datacenters_incorrect_blocks_alone_pass_the_weights():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
     faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))

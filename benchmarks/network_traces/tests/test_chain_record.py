@@ -2,10 +2,12 @@
 certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
-each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, and each
-kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it;
+each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, each
+kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it, and each
+window's sync the Lean's read of the clock openings, which leaves no window one beside a reference that signs a changed
+clock certificate;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
-several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
 the scan's class doesn't serve; the job's copy of the
@@ -108,6 +110,7 @@ def test_certs_accepts_the_kept_files(honest):
     assert got["window_buckets"] == json.loads((honest / "calibration.json").read_text())["grid"]["window_buckets"]
     assert all(r["by"] == "lean" and r["reference"] is True for r in got["rows"])
     assert got["client_check"]["by"] == "lean" and not got["client_check"]["refused"]
+    assert got["clocks_by"] == "lean" and got["clocks_refused"] == 0
     assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
     assert got["signed_are_declared"] and not got["key"]["deployed"]
     assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
@@ -122,6 +125,7 @@ def test_certs_refuses_a_changed_signature(honest, tmp_path):
     _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
     got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
     assert got["verdict"] == "refused" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
+    assert got["clocks_refused"] == 1
     _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
     got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
     assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"]
@@ -162,6 +166,31 @@ def test_a_kept_certificate_is_the_lean_checks_and_a_reference_that_keeps_it_doe
     cc = got["client_check"]
     assert cc["by"] == "lean" and len(cc["refused"]) == 3 and all("disagree" in r for r in cc["refused"])
     assert cc["certificates"] == 2 * got["windows"] - 2 and got["verdict"] == "refused"
+
+
+class _SigningAll:
+    """A reference clock source that takes every opening's sync, refusing none."""
+
+    def __init__(self, key, session, openings):
+        self.refused, self.split, self.openings = (), (), openings
+        self.codes = (None,) * len(openings)
+
+    def syncs(self, link):
+        return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
+
+
+def test_a_windows_sync_is_the_lean_openings_and_a_reference_that_signs_a_forged_one_doesnt_sign_it(honest, tmp_path,
+                                                                                                   monkeypatch):
+    """Each window's sync is the Lean's read of the clock openings (`NetworkCheck.Period.signedSyncs`): beside a
+    reference that takes every opening's sync, a run whose window-0 clock signature is changed has no sync, every
+    window is refused as the two's disagreement, and the step refuses."""
+    monkeypatch.setattr(lean_audit, "SignedClocks", _SigningAll)
+    assert cr.certs(honest, honest / "client")["verdict"] == "accepted"
+    _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
+    got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
+    assert got["clocks_by"] == "lean" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
+    assert got["clocks_refused"] == got["clock_certificates"] and all("disagree" in r["why"] for r in got["rows"])
+    assert got["verdict"] == "refused"
 
 
 def test_certs_refuses_a_client_without_clocks(honest, tmp_path):
@@ -266,9 +295,9 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     n2s = got["steps"]["n2"]
     assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
-    assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
+    assert n2s["members"]["moved"]["escaped_the_draw"] == {"incorrect_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
-    assert n2s["eps_at_delta"]["wrong_units_at_delta"]["0.5"] == 1
+    assert n2s["eps_at_delta"]["incorrect_at_delta"]["0.5"] == 1
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
@@ -449,6 +478,19 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
 
 
+def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negative(tmp_path):
+    def rnd(accepted):
+        return {"audit": {"window_accepted": accepted}}
+
+    def scan(block):
+        return {"ok": True, "T": 1, "rounds": {"block": rnd(block), "honest": rnd(True), "chain": rnd(False)}}
+
+    got = cr.scan_step(scan(True), "g1/warden")
+    assert got["verdict"] == "accepted" and got["negatives"] == {"chain": True}, got
+    got = cr.scan_step(scan(False), "g1/warden")
+    assert (got["verdict"], got["why"]) == ("failed", "block: window refused")
+
+
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     import math
     from dataclasses import asdict
@@ -489,7 +531,7 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
-    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    # one incorrect proof block of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
     assert cr.subset_bound(4, 2, 0.5) == 1
 
 

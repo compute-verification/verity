@@ -10,7 +10,7 @@ sizes (the note's gap G1).
 **Cuts.**  An op type is cut into proof blocks one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
 op is a partition of it; a shared piece is either its own subcircuit, committed once and read by the others, or
 recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), and the planner picks per density.  A proof block
-whose wrong output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
+whose incorrect output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
@@ -209,7 +209,7 @@ class CostModel:
 
 @dataclass(frozen=True)
 class Objective:
-    """The harm a faulty proof block does: `work` times its credited work and influence plus `bits` times its output bits.  No
+    """The harm an incorrect proof block does: `work` times its credited work and influence plus `bits` times its output bits.  No
     target: targets and budgets are queries on the frontier.  Every subcircuit draws at least `floor` proof blocks."""
 
     delta: float
@@ -388,7 +388,7 @@ def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Frac
 
 
 def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
-    """The most harm a faulty set accepted with probability at least `delta` holds, when a stratum of n proof blocks with k drawn
+    """The most harm an incorrect set accepted with probability at least `delta` holds, when a stratum of n proof blocks with k drawn
     and harm h per proof block, holding x of the set, is accepted with probability at most (1 - x/n)^k <= exp(-k x / n), and never once
     x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value (`fill`).  In
     floats, the budget and the value raised by `HARM_MARGIN` (the budget also by 2^-60, for delta near 1), so it is at
@@ -445,7 +445,7 @@ def acceptance_parts(n: int, k: int, x: int) -> tuple[int, int]:
 
 def max_harm_check(rows: Iterable[tuple[int, int, float | Fraction, int, int, int]], delta: float | Fraction,
                    lam: float | Fraction) -> tuple[Fraction, Fraction]:
-    """(lower, upper) around the most harm a faulty set accepted with probability at least `delta` holds,
+    """(lower, upper) around the most harm an incorrect set accepted with probability at least `delta` holds,
     `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate: rows (n, k, h, take, lo, hi) and
     a multiplier `lam > 0`.  `lower` is the harm of the counts `take`, whose exact acceptance probability is at least `delta`; `upper`
     the dual bound `lam ln(1/delta) + sum_s max_x (h_s x - lam c_s(x))`, `c(x) = -ln(C(n - x, k)/C(n, k))`, whose
