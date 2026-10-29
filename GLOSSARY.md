@@ -235,8 +235,8 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | D for the chosen-state budget | Λ (D is the registered circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
 
-The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep their spelling, which the `*_FAMILY_DIGEST`
-pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
+The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep the spelling their `*_FAMILY_DIGEST`
+pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
 
 ## The ACCEL model and Dither
 
