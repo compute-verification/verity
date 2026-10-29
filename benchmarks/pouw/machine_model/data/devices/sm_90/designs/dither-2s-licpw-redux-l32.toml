@@ -3,7 +3,7 @@
 # at L = 32 on the H200 (sm_90): two-sided dither serving the last checked word and P·V's peel, LI receipts on every
 # committed word and ffill's filler (benchmarks/pouw/dc/ffill.cuh: an IMAD and two FFMA on 3 of a thread's 128 words a
 # MMA, 0.0703 a word, its receipt recomputed bit for bit). The noise is dither-2s-l32's, and ε_skip is this design's own
-# at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's: LI binds honest on the H200's lane
+# at its ♭ (eps_budget's `design_skip`); the fold, honest and ε_mand are measured: LI binds honest on the H200's lane
 # facet, so output counting closes the lane route.
 name = "dither-2s-licpw-redux-l32"
 title = "Dither-2S, LI-CP-W redux, ffill (0.0703 a word), L = 32"
@@ -55,7 +55,7 @@ cp-red-generic = { ALU = 0.53125, IMAD = 0.5, ATOME32 = 0.0078125 }     # 4 LOP3
 cp-red2-generic = { ALU = 0.5234375, IMAD = 0.5, ATOME32 = 0.015625 }   # 3 LOP3, 2 ATOM.E
 cp-red8-generic = { ALU = 0.5, IMAD = 0.5, ATOME32 = 0.0625 }           # 8 ATOM.E
 cp-xt = { ALU = 0.53515625, IMAD = 0.5, STS32 = 0.0078125, LDS128 = 0.001953125, STG32 = 0.000244140625 }   # 4.5 LOP3, STS, a quarter LDS.128, a 32nd of an STG
-# RT4-SHEET-13's and -14's counted folds on every lane route above and [fold]'s li, LI's 64 LOP3 and 64 IMAD a
+# The counted folds on every lane route above and [fold]'s li, LI's 64 LOP3 and 64 IMAD a
 # segment moved: -rt3 its XORs as a memory round trip of three issue slots (ATOM.E.XOR and two LD.E back), -wideh its
 # multiplies as IMAD.WIDE (UNLISTED), -rt3-wideh both
 li-rt3 = { ALU = 0.03125, IMAD = 0.5, SHFL = 0.0234375, ATOME32 = 0.5, UNLISTED = 1.0 }
@@ -97,7 +97,7 @@ cp-red8-generic-rt3-wideh = { ATOME32 = 0.5625, UNLISTED = 1.5 }
 cp-xt-rt3 = { ALU = 0.03515625, IMAD = 0.5, STS32 = 0.0078125, LDS128 = 0.001953125, STG32 = 0.000244140625, ATOME32 = 0.5, UNLISTED = 1.0 }
 cp-xt-wideh = { ALU = 0.53515625, STS32 = 0.0078125, LDS128 = 0.001953125, STG32 = 0.000244140625, UNLISTED = 0.5 }
 cp-xt-rt3-wideh = { ALU = 0.03515625, STS32 = 0.0078125, LDS128 = 0.001953125, STG32 = 0.000244140625, ATOME32 = 0.5, UNLISTED = 1.5 }
-# li-bulk (RT4-SHEET-17, -21, -22): li's XOR through STG.128 states and STS.128 words, UBLKRED.G.S.XOR with the static
+# li-bulk: li's XOR through STG.128 states and STS.128 words, UBLKRED.G.S.XOR with the static
 # key slab, LDG.128 back and li's IMAD, at lbl's sm_90a SASS; LDG.E.128 and UBLKRED are UNLISTED
 li-bulk = { ALU = 0.1015625, ATOME32 = 0.0625, IMAD = 0.5859375, ISETP = 0.0078125, STG128 = 0.125, STS128 = 0.125, UNI = 0.0703125, UNLISTED = 103.638675 }   # lbl<128> as built, padded with UNLISTED to its measured 3.2724 SMSP-cycles a word (32 x 3.2724 lane instructions)
 li-bulk-bt1024 = { ALU = 0.01953125, ATOME32 = 0.0625, IMAD = 0.5859375, ISETP = 0.0078125, STG128 = 0.125, STS128 = 0.125, UNI = 0.015625, UNLISTED = 0.59765625 }   # 32 warps a block, counted
@@ -130,7 +130,7 @@ p = 0.75
 checks = 48000
 source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8 }
 source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"

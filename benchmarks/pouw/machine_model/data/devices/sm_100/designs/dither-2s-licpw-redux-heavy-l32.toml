@@ -1,4 +1,4 @@
-# LI-CP-W with the checkpoint reduced across the warp by ONE redux.sync.xor.b32 a segment (DC EPS1 r9's measurement),
+# LI-CP-W with the checkpoint reduced across the warp by ONE redux.sync.xor.b32 a segment (measured),
 # in place of dither-2s-licpw-heavy-l32's 5-shuffle fallback: measured +7.1% honest cycles against the bare LI loop,
 # where the 5-shuffle costs +40.6%. One 4-byte word a warp a segment still leaves the SM. Dither-2S at L = 32 on the
 # B200 with dither-2s-licp-fill-l32's 3/4 lane instruction a word of filler moved into the fold as extra keyed rounds
@@ -46,7 +46,7 @@ p = 0.75
 checks = 48000
 source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8 }
 source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
