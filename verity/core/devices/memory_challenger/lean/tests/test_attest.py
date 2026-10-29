@@ -1,8 +1,9 @@
 """A device's HSS role digests and checks in Lean (`Lms.Hss`, `Attest.Period`, served by
-`memory-challenger-difftest`) against `verity.ml.crypto.lms` and `verity.core.attest`: the three role digests, two-level
-verification, the period tree's root, the verifier's acceptance of a period (the public key check in the clear, then the
-period check a period's proof runs) and the liveness check, each on drawn inputs around a real device's signatures (a
-small identity, H = 2) that include what both sides must refuse."""
+`memory-challenger-difftest`) against `verity.ml.crypto.lms`, `verity.ml.commitments.merkle` and `verity.core.attest`: the
+three role digests, two-level verification, the range-u64 domain id, the period tree's root, the verifier's acceptance
+of a period (the public key check in the clear, then the period check a period's proof runs) and the liveness check,
+each on drawn inputs around a real device's signatures (a small identity, H = 2) that include what both sides must
+refuse."""
 
 from __future__ import annotations
 
@@ -15,6 +16,8 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 from verity.core import attest
+from verity.ml.commitments.indexed import RangeU64Domain
+from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -99,6 +102,27 @@ def test_role_digests(server):
     for fn, reference, inputs in cases:
         stats = D.run(port(fn, reference, inputs), examples=200, server=server)
         assert stats.outputs > 40 and stats.rejects > 10, (fn, stats)
+
+
+def domain_u64(v) -> str:
+    owner = M._get(v, "owner")
+    if not isinstance(owner, int) or isinstance(owner, bool):
+        raise D.Reject("owner: not an integer")
+    return CommitmentDomain(M.hex_(v, "binding"), owner, RangeU64Domain(0, M.nat(v, "count")), hash="sha512").domain_id.hex()
+
+
+def test_domain_u64(server):
+    """`Domain.makeU64` against `merkle`'s range-u64 domain over drawn bindings, owners and counts up to 2^64 - 1, the
+    period tree's binding and owner among them, and what both refuse: a binding not 64 bytes, an owner below -2 or
+    whose owner + 2 is past a u64, a count past a u64."""
+    bindings = mostly(st.one_of(st.just(attest.BINDING), st.binary(min_size=64, max_size=64)),
+                      st.one_of(st.binary(min_size=32, max_size=32), st.binary(max_size=70)))
+    owners = mostly(st.sampled_from([-2, -1, 0, 7, 2 ** 64 - 3]), st.sampled_from([-3, 2 ** 64 - 2, 2 ** 70]))
+    counts = mostly(st.one_of(st.sampled_from([0, 1, 2, 255, 256, 2 ** 32, 2 ** 64 - 1]), st.integers(0, 2 ** 64 - 1)),
+                    st.sampled_from([2 ** 64, 2 ** 70]))
+    inputs = st.fixed_dictionaries({"binding": hexed(bindings), "owner": owners, "count": counts})
+    stats = D.run(port("domain_u64", domain_u64, inputs), examples=200, server=server)
+    assert stats.outputs > 60 and stats.rejects > 20, stats
 
 
 def test_attest_root(server):

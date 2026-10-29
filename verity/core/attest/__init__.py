@@ -5,8 +5,10 @@ An auditor party (a memory challenger, a network certifier) on a device holds a 
 certified for it in the deployment (`verity.ml.crypto.lms.Identity.issue`, `PartyKey`). Over one certification period it
 commits every sampling block's records, each a byte string, as the leaves of one frame-v3-sha512 tree (`root`):
 
-* the domain is `verity.ml.commitments.merkle.CommitmentDomain(BINDING, -1, RangeIndexedDomain(0, count), "sha512")`,
-  ``BINDING`` = SHA-512(``verity/period-records/v1``), and record ``r`` is leaf ``(rank r, position r, SCHEMA)``;
+* the domain is `verity.ml.commitments.merkle.CommitmentDomain(BINDING, -1, RangeU64Domain(0, count), "sha512")`,
+  ``BINDING`` = SHA-512(``verity/period-records/v1``), and record ``r`` is leaf ``(rank r, position r, SCHEMA)``; its id
+  frames the owner, the start and the count as u64be words (`merkle.range_u64_domain_message`), so a period's proof binds
+  the count it signs to the tree its reads open in one compression (``AttestPeriod_v1``);
 * the tree pads to ``2^depth`` leaves, ``depth = bit_length(count - 1)``, and a period with no records has the empty root.
 
 `Period` is the party's side. `Period.block` appends a sampling block's records and returns the block's liveness record,
@@ -35,7 +37,6 @@ Stdlib only, as a core unit with no ml edge is: the tree is written out here, an
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -47,12 +48,14 @@ __all__ = ["BINDING", "SCHEMA", "Period", "Read", "SignedPeriod", "Signer", "dom
 BINDING = hashlib.sha512(b"verity/period-records/v1").digest()
 SCHEMA = "verity/period-record/v1"
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
-_TAGGED = b"verity/tagged-sha512/v1\0"
-_RANGE = b"veritor/indexed-domain/range/v1"
 
 
 def _uint(n: int) -> bytes:
     return n.to_bytes(max(1, (n.bit_length() + 7) // 8), "big")
+
+
+def _u64(n: int) -> bytes:
+    return n.to_bytes(8, "big")
 
 
 def _hash(tag: bytes, *parts: bytes) -> bytes:
@@ -61,11 +64,10 @@ def _hash(tag: bytes, *parts: bytes) -> bytes:
 
 
 def domain_id(count: int) -> bytes:
-    """The domain id of a period's tree of ``count`` records (``merkle.CommitmentDomain.domain_id``)."""
-    payload = json.dumps({"start": 0, "step": 1, "stop": count}, sort_keys=True, separators=(",", ":")).encode()
-    identity = hashlib.sha512(_TAGGED + len(_RANGE).to_bytes(4, "big") + _RANGE + len(payload).to_bytes(8, "big")
-                              + payload).digest()
-    return _hash(b"domain", BINDING, _uint(-1 + 2), identity, _uint(count))
+    """The domain id of a period's tree of ``count`` records, a u64 (``merkle.CommitmentDomain.domain_id``)."""
+    if not 0 <= count < 1 << 64:
+        raise ValueError(f"a period's record count is a u64, not {count}")
+    return _hash(b"domain/range-u64", BINDING, _u64(-1 + 2), _u64(0), _u64(count))
 
 
 def leaf(did: bytes, position: int, record: bytes) -> bytes:
@@ -106,7 +108,7 @@ def path(records: Sequence[bytes], position: int) -> tuple[bytes, ...]:
 def verify_opening(root_: bytes, count: int, position: int, record: bytes, siblings: Sequence[bytes]) -> bool:
     """Whether ``record`` at ``position`` climbs ``siblings`` to ``root_`` in a period tree of ``count`` records
     (`Attest.check`'s test of each read, ``FrameV3Sha512.verifyOpening``)."""
-    if len(root_) != 64 or not 0 <= position < count or len(siblings) != _depth(count):
+    if len(root_) != 64 or not 0 <= position < count < 1 << 64 or len(siblings) != _depth(count):
         return False
     if any(len(s) != 64 for s in siblings):
         return False
