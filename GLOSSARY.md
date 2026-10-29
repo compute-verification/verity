@@ -152,7 +152,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
-| "remote bandwidth audit" | proof of useful bandwidth (PoUB) |
+| "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the ZK server |
 | "verifier gateway" | the challenger |
@@ -181,7 +181,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
-| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
+| "work", "FLOPs", "MAC-times", "pricing" for what a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |

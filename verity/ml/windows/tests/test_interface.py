@@ -467,7 +467,7 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
     """A template passes with the k_log its rows alone need, and is refused, its message naming it, its cuts, its rows and
     the fix, when its rows are more than Flock's composer takes, none is past 111 bytes, or they alone need a Flock block
     past 2^27 bits."""
-    assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == 21
+    assert I.check_proof_block(GEMM) == I.check_proof_block(GEMM, {"x": 2}) == I.PACK_LOG
     wide = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
     with pytest.raises(ValueError, match=re.escape(f"{descriptor_id(wide)} cut {{'w': 256}}: x 32 B, w 256 rows of 32 B, "
                                                    "o0 512 B: 258 rows, past a proof block's 256")):
@@ -478,28 +478,66 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
         I.check_proof_block(bind(G.Gemm, K=2048, N=48, **G.GEMM_AMPERE))
 
 
-def test_the_proof_block_limits_are_c_flocks_composers():
-    """`check_proof_block`'s sizes are Flock's composer's, and `rows_k_log` is the k_log its ranges give a unit's rows,
-    holding every gate range's k_log at or above it: a row has a compression before its last block exactly past
-    ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block room."""
-    from verity_flock import circuit as FC
+def test_proof_block_k_log_is_the_composers_arithmetic():
+    """`proof_block_k_log` is `circuit.compose`'s ``k_log`` for one proof block a VU: on random rows, split into inputs and
+    outputs, and logic of up to 2^26 rows, the k_log `circuit._ranges` gives its sha512x3, hm96, logic and mask ranges at
+    the most VUs compose's packing loop takes (and at one VU, ``packed=False``), the logic's slot `ir_lower.layout`'s cells (each port group a power of two
+    of `ir_lower.WORD`-bit words, the logic between, a constant last). A row has a compression before its last block
+    exactly past ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block
+    room."""
+    from verity_flock import circuit as FC, ir_lower as IL
 
-    assert (I.K_MAX, I.SLOT_LOG, I.PER_SLOT, I.MASK_LOG) == (FC.K_MAX, FC.SHA_LOG, FC.PER_SLOT, FC.MASK_LOG)
+    def cells(row_bytes: list[int]) -> int:
+        return IL.WORD * IL.ceil_pow2(max(1, -(-8 * sum(row_bytes) // IL.WORD))) if row_bytes else 0
+
+    def composed(ins: list[int], outs: list[int], ands: int) -> tuple[int, int]:
+        ports = [FC.Port(f"r{j}", b // 2, 8 * b) for j, b in enumerate(ins + outs)]
+        n_sha, n_hm, i, o = FC._row_slots(ports)[0], FC._pow2(len(ports)), cells(ins), cells(outs)
+        logic = FC._slot_log((-(-(i + ands) // o) * o if o else i + ands) + o + 1)
+
+        def fits(G: int) -> int:
+            return FC._ranges([("unit", FC.SHA_LOG, G * n_sha, {"packed": True}), ("unit", FC.HM_LOG, G * n_hm, {}),
+                               ("unit", logic, G, {}), ("mask", FC.MASK_LOG, 1, {})])[1]
+
+        G, k1 = 1, fits(1)
+        while 2 * G <= 4096 and fits(2 * G) <= max(k1, I.PACK_LOG):
+            G *= 2
+        return k1, fits(G)
+
     assert FC.HM_LOG == FC.SHA_LOG and FC._ranges([("mask", FC.MASK_LOG, 1, {})])[1] == I.K_MIN
     assert all((FC.Port("r", b // 2, 8 * b).comps > 0) == (b > I.LAST_BLOCK_BYTES) for b in range(2, 2048, 2))
     rng = np.random.default_rng(0)
     for n in (*range(1, 10), 16, 17, 100, 255, 256, 257):
-        for _ in range(4):
+        for _ in range(8):
             rb = [int(b) for b in 2 * rng.integers(1, rng.choice([56, 1 << 9, 1 << 17]), n)]
-            ports = [FC.Port(f"r{j}", b // 2, 8 * b) for j, b in enumerate(rb)]
-            if (n_sha := FC._row_slots(ports)[0]) == 0:
+            if all(b <= I.LAST_BLOCK_BYTES for b in rb):
                 continue
-            rows = [("unit", FC.SHA_LOG, n_sha, {"packed": True}), ("unit", FC.HM_LOG, FC._pow2(n), {}),
-                    ("mask", FC.MASK_LOG, 1, {})]
-            assert I.rows_k_log(rb) == FC._ranges(rows)[1], rb
-            gates = ("unit", int(rng.integers(7, 26)), int(rng.integers(1, 64)), {"packed": bool(rng.integers(2))})
-            assert I.rows_k_log(rb) <= FC._ranges([*rows, gates])[1]
-    assert I.rows_k_log([112] * I.MAX_ROWS) == I.K_MAX < I.rows_k_log([112] * (I.MAX_ROWS + 1))
+            cut, ands = int(rng.integers(0, n + 1)), int(rng.integers(0, 1 << int(rng.integers(1, 27))))
+            ins, outs = rb[:cut], rb[cut:]
+            assert (I.proof_block_k_log(ins, outs, ands, packed=False),
+                    I.proof_block_k_log(ins, outs, ands)) == composed(ins, outs, ands), (rb, cut, ands)
+    assert I.proof_block_k_log([112] * I.MAX_ROWS) == I.K_MAX < I.proof_block_k_log([112] * (I.MAX_ROWS + 1))
+
+
+@pytest.mark.slow
+def test_proof_block_k_log_is_the_composed_k_log():
+    """Staged as `UnitStager` stages `unit_rows`, a template's composed META ``k_log`` (the Lean verifier's
+    ``HmRow.kLogOf``) is `proof_block_k_log` of its rows and its logic (ANDs, table reads' rows and assertions): GEMM at
+    2^PACK_LOG, two proof blocks to a Flock block; GEMM cut into 10 rows, its hm96 range deciding; and a GEMM whose
+    sha512x3 range and logic decide, one past `check_proof_block`'s k_log at no logic. It catches a change to compose's
+    packing or the lowering's layout, which `test_proof_block_k_log_is_the_composers_arithmetic` mirrors. A proof block
+    whose logic alone decides has over 2^22 ANDs, a minute or more to stage, so that test holds that case to the
+    composer's ranges."""
+    from verity_flock import class_statement as CS
+
+    long = bind(G.Gemm, K=1024, N=1, **G.GEMM_AMPERE)
+    for fn, cuts, k, vus in ((GEMM, None, 22, 2), (bind(G.Gemm, K=64, N=8, **G.GEMM_AMPERE), {"w": 8}, 23, 1),
+                             (long, None, 23, 1)):
+        st, lay = CS.UnitStager(fn, "unit/k-log", *I.unit_rows(fn, cuts)), I.layout(fn)
+        logic = st.low.layout.counts["ands"] + st.low.layout.counts["asserts"]
+        est = I.proof_block_k_log([2 * w for _p, w, _ps in lay.cut(cuts)], [2 * w for _p, w in lay.outs], logic)
+        assert (st.meta["k_log"], st.meta["vus_per_block"]) == (est, vus) and est == k, descriptor_id(fn)
+    assert I.check_proof_block(long) == 22
 
 
 def sliced_values(seed: int = 0) -> tuple[list[np.ndarray], ...]:

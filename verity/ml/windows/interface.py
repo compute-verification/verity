@@ -283,31 +283,47 @@ def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None) -> tuple[list[tupl
     return [(p, V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
 
 
-#: C-Flock's composer's sizes (`verity_flock.circuit`, which ``verity`` may not import; the windows tests hold them to
-#: its own): a C-Flock block of at most 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits,
-#: PER_SLOT compressions a sha512x3 slot, the mask's 2^MASK_LOG
-K_MAX, K_MIN, SLOT_LOG, PER_SLOT, MASK_LOG = 27, 20, 18, 3, 14
+#: C-Flock's composer's sizes, which `verity_flock.circuit` and the benchmarks read from here: a C-Flock block of at most
+#: 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits, PER_SLOT compressions a sha512x3
+#: slot, the mask's 2^MASK_LOG, and 2^PACK_LOG bits, up to which it packs a template's proof blocks into one C-Flock block
+K_MAX, K_MIN, SLOT_LOG, PER_SLOT, MASK_LOG, PACK_LOG = 27, 20, 18, 3, 14, 22
 #: the row bytes a row's last SHA-512 block holds beside the padding's 17: a longer row has a compression before it
 LAST_BLOCK_BYTES = 111
 #: the most rows a proof block may have: at one more, its hm96 range alone fills a C-Flock block of 2^K_MAX bits
 MAX_ROWS = 1 << (K_MAX - SLOT_LOG - 1)
 
 
-def rows_k_log(row_bytes: Sequence[int]) -> int:
-    """The log of the C-Flock block that rows of ``row_bytes`` bytes alone need (C-Flock's composer's ranges for one unit:
-    its hm96 slots, one a row and a power of two in all, the mask, then its sha512x3 slots); the unit's gates come on top."""
-    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in row_bytes if b > LAST_BLOCK_BYTES)
-    bits = ((1 << (len(row_bytes) - 1).bit_length()) + 1 + -(-comps // PER_SLOT)) << SLOT_LOG
-    return max(K_MIN, (bits - 1).bit_length())
+def proof_block_k_log(in_bytes: Sequence[int], out_bytes: Sequence[int] = (), ands: int = 0, *,
+                      packed: bool = True) -> int:
+    """The ``k_log`` C-Flock's composer gives a template's proof block (`verity_flock.circuit.compose`'s META ``k_log``,
+    which the Lean verifier reads): input rows of ``in_bytes`` bytes, output rows of ``out_bytes``, and ``ands`` rows of
+    logic between them (its ANDs, inline table reads' rows and assertions), its statement as `UnitStager` stages
+    `unit_rows`. The proof block's circuit lays out its input bits, the logic, its output bits and a constant, each of the
+    two port groups an aligned power of two of 128-bit words, in a slot of at least 2^7 cells. A C-Flock block holds the
+    hm96 slots (one a row, a power of two in all), that slot and the mask, then the sha512x3 slots; and the composer
+    packs proof blocks into it while it stays within 2^`PACK_LOG` bits or one proof block's size, which doubling, at most
+    doubling the block, ends at exactly the larger. ``packed=False``: one proof block's own block before that packing
+    (compose's ``k1``, at least 2^`K_MIN`), which a sampling plan's statement cap reads, counting the packing itself."""
+    def cells(row_bytes: Sequence[int]) -> int:
+        return 128 << (-(-8 * sum(row_bytes) // 128) - 1).bit_length() if sum(row_bytes) else 0
+
+    rows = [*in_bytes, *out_bytes]
+    i, o = cells(in_bytes), cells(out_bytes)
+    useful = (-(-(i + ands) // o) * o if o else i + ands) + o + 1
+    plain = ((1 << (len(rows) - 1).bit_length()) << SLOT_LOG) + (1 << max(7, (useful - 1).bit_length())) + (1 << MASK_LOG)
+    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in rows if b > LAST_BLOCK_BYTES)
+    bits = (-(-plain >> SLOT_LOG) + -(-comps // PER_SLOT)) << SLOT_LOG
+    return max(PACK_LOG if packed else K_MIN, (bits - 1).bit_length())
 
 
 def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:
-    """Refuse (ValueError) a template whose proof block, its unit's rows under ``cuts`` (`unit_rows`), C-Flock's composer
-    would refuse: more than `MAX_ROWS` rows, none past `LAST_BLOCK_BYTES` bytes (the sha512x3 range, which holds the pin,
-    would have no slot), or past a C-Flock block of 2^`K_MAX` bits. Its message names the template, its cuts, its rows and
-    the fix. Returns the rows' `rows_k_log`, the least the proof block's ``k_log`` can be."""
+    """Refuse (ValueError) a template whose proof block, its rows under ``cuts`` (`unit_rows`), C-Flock's composer would
+    refuse: more than `MAX_ROWS` rows, none past `LAST_BLOCK_BYTES` bytes (the sha512x3 range, which holds the pin, would
+    have no slot), or past a C-Flock block of 2^`K_MAX` bits at no logic. Its message names the template, its cuts, its
+    rows and the fix. Returns `proof_block_k_log` at no logic, the least the proof block's ``k_log`` can be."""
     lay = layout(fn)
-    rows = [(p, 2 * w) for p, w, _ in lay.cut(cuts)] + [(p, 2 * w) for p, w in lay.outs]
+    ins, outs = [(p, 2 * w) for p, w, _ in lay.cut(cuts)], [(p, 2 * w) for p, w in lay.outs]
+    rows = ins + outs
     sizes: dict[str, list[int]] = {}
     for p, b in rows:
         sizes.setdefault(p.split("#")[0], []).append(b)
@@ -320,7 +336,7 @@ def check_proof_block(fn: Any, cuts: Mapping[str, int] | None = None) -> int:
         raise ValueError(f"{name}: no row past {LAST_BLOCK_BYTES} B, so none has a compression before its last SHA-512 block "
                          "and C-Flock's sha512x3 range, which holds the pin, has no slot: cut its ports fewer ways, or bind "
                          "the Definition larger")
-    if (k := rows_k_log([b for _, b in rows])) > K_MAX:
+    if (k := proof_block_k_log([b for _, b in ins], [b for _, b in outs])) > K_MAX:
         raise ValueError(f"{name}: its rows alone need a C-Flock block of 2^{k} bits, past 2^{K_MAX}: bind the Definition "
                          "smaller, so that each unit reads and writes fewer row bytes")
     return k
