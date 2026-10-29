@@ -4,4 +4,4 @@ q = 1.22                  # lane instructions a table word
 bytes = 3.5               # L2 bytes a table word (6.0 single-field: --lookup-bytes 6)
 sms = 108
 mhz = 1410                # f_max at default clocks: NVML's max SM clock, which every light probe ran at
-source = "SPEC's SCALAR-ROUTE as restated (named assumption): a right fresh word costs >= 2.03 issue slots, or >= 1.22 slots and 3.5 B of table loads (6.0 B single-field); the A100's L2 unmeasured, so unbounded"
+source = "SCALAR-ROUTE as restated (named assumption): a right fresh word costs >= 2.03 issue slots, or >= 1.22 slots and 3.5 B of table loads (6.0 B single-field); the A100's L2 unmeasured, so unbounded"
