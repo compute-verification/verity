@@ -63,7 +63,7 @@ def b_words(k: int) -> int:
     return (k + 5) // 2
 
 
-#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills C-Flock's 2^27 block
+#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills Flock's 2^27 block
 CHUNK_MAX = 4096
 #: a chunk is whole blocks of its rows' and columns' noise streams (`circuit.seeds.BLOCK_BITS`, 512 bits)
 CHUNK_ALIGN = 512

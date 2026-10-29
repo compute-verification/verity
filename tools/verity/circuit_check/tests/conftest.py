@@ -255,10 +255,14 @@ def catalog_guard():
 
 @pytest.fixture(scope="session")
 def catalog() -> Catalog:
+    """The catalog, with its Calls (`targets.call_families` of its suite), so a check that doesn't say whether its target is a
+    Call is told from them, as ``--all`` tells it, where `targets.is_call` alone would refuse a family it can't decide."""
     if _UNMARKED:
         pytest.fail(f"these tests build circuit-check's catalog without the slow mark, which --quick would build it for: mark "
                     f"them slow: {_UNMARKED}")
-    return build()
+    built = build()
+    TG.call_families(built.suite)
+    return built
 
 
 @pytest.fixture(scope="session")

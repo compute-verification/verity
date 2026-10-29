@@ -1,4 +1,4 @@
-"""`flock-rows`, C-Flock's Lean rows, against a unit's size: the flat MoE classes (no calls, no table reads; 41k to 2M
+"""`flock-rows`, Flock's Lean rows, against a unit's size: the flat MoE classes (no calls, no table reads; 41k to 2M
 ANDs) and the derive vectors' fan-out unit at M placed calls and M placed reads (`test_derive.fanout_case`).
 
     python benchmarks/verifier_cost/flock_rows.py --out DIR --bin LABEL=PATH [--bin LABEL=PATH ...] [--target NAME ...]
@@ -14,7 +14,7 @@ of `verity_flock.derive`'s unit rows, Δ and logical list for the parts, and `ok
 seconds, peak RSS, exit code and whether the output equals the mirror's (null past `--cap`). `flock_rows.sh` builds the binaries
 before and after a change and runs this on a node.
 
-The MoE targets need circuits' static MoE forms (`verity.ml.circuits.ops.moe`) and C-Flock's MoE select pieces where their
+The MoE targets need circuits' static MoE forms (`verity.ml.circuits.ops.moe`) and Flock's MoE select pieces where their
 definitions do; each target imports only its own.
 """
 from __future__ import annotations
@@ -124,7 +124,7 @@ def write_target(name: str, scratch: Path) -> list[dict]:
         stem = f"{name}.{k}"
         (scratch / f"{stem}.types.json").write_text(json.dumps({"types": [t.content()]}))
         (scratch / f"{stem}.netlist").write_text(IL.netlist(IL.layout(C, ins, outs), f"moe/{name}"))
-        lay = LY.Layout(t.digest(), None, (), (), ("derive",), (), ())
+        lay = LY.BlockLayout(t.digest(), None, (), (), ("derive",), (), ())
         (scratch / f"{stem}.archive.json").write_text(json.dumps(
             {"types": [t.content()], "tables": {}, "layouts": [lay.to_json()], "unit_layout": 0}))
         out.append({"unit": stem, "definition": U.definition, "ands": c.counts["ands"], "in_ports": len(U.in_widths),
@@ -140,7 +140,7 @@ def write_fanout(m: int, scratch: Path) -> dict:
     from verity_flock import layouts as LY
 
     def lay(t, rl, calls=(), reads=(), own=("derive",)):
-        return LY.Layout(t.digest() if t is not None else None, rl, (), (), own, tuple(calls), tuple(reads))
+        return LY.BlockLayout(t.digest() if t is not None else None, rl, (), (), own, tuple(calls), tuple(reads))
 
     callee = CT.CircuitType(library.PROGRAM, ((1, 1),), ((1, 1),), (), (), ((CT.AND, ((0,), 0), ((0,), 1)),), (((1,), 0),))
     ws = [(i * 7 + 3) & 0xF for i in range(16)]

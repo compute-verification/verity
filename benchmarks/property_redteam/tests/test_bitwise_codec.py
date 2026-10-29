@@ -1,5 +1,5 @@
 """The bit-level codec (`bitwise_codec.py`): a block of codec words for 8 units a key byte under Model.lean's budgeted
-count, right on every draw tried, `Proven`, with no budgeted gate and no run input: the counterexample to
+count, right on every sample tried, `Proven`, with no budgeted gate and no run input: the counterexample to
 `EncodeChainHardness` at every `E ≥ 1`. In nonlinear units (`nonlinear`: the budgeted units and the data products) each
 of its ANDs on two run-time bits is a data product and costs a unit, and its words cost what `SquaringFloor` and
 `ChainSum` price."""
@@ -83,7 +83,7 @@ def block8():
 
 def test_units_do_not_grow_with_the_block(block8):
     """One word or eight: the circuit reads the key once, and word `i`'s tweak is `i·t_1 mod p`, so the units stay
-    `8·(k + 2)·n/8` = 40 at n = 8, k = 3, and the eight words are right on every draw tried."""
+    `8·(k + 2)·n/8` = 40 at n = 8, k = 3, and the eight words are right on every sample tried."""
     n, c, k = 8, 5, 3
     p = (1 << n) - c
     words = WORDS8

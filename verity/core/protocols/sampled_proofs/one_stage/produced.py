@@ -1,8 +1,8 @@
-"""Produced values: a value committed after the draw that several statements of a session read, each read opened
+"""Produced values: a value committed after the sample that several statements of a session read, each read opened
 against the one root the record names (a served H1 leaf proved as its 32 lanes and a combine, which share the
 leaf's lane partials, `pouw.leaf_lanes`).
 
-A *produced value* is rows the prover computes after the draw from what it committed before it (H1's partials: lane l's
+A *produced value* is rows the prover computes after the sample from what it committed before it (H1's partials: lane l's
 share of the leaf's receipt, row l), committed as a registered value's rows are (`registered.Registered.commit`, in the
 row format of the ports that read them) under its own domain. It is never a statement's output: outputs are public and at
 most 16 bits, and a partial is 8,320 bits at K = 4096. It stays hidden: the statements read it as inputs under the tree's
@@ -12,22 +12,22 @@ hiding salts, and only their check bits leave.
   digest of the registration record whose draw the values follow (`registration.digest`): a produced tree opens under no
   other registration's domain, so a leaf's partials are refused in any other leaf's, window's or prover's session, and a
   registered value's root (whose binding never has ``produced``) opens under none.
-* **The record** (`record`, `FORMAT`), fixed after the draw and before any session that reads the values or draws its
-  audit coins: ``{"format", "registration": D, "draw": the draw's digest, "produced": [{"value", "root", "leaves", "words",
+* **The record** (`record`, `FORMAT`), fixed after the sample and before any session that reads the values or flips its
+  audit coins: ``{"format", "registration": D, "draw": the sample's digest, "produced": [{"value", "root", "leaves", "words",
   "domain"} ...], "openings": {value: [[position, b || c] ...]}}`` (``"word_bits"`` beside an entry whose leaves are not 16
   bits). ``openings`` is each row's commit-time opening, by its digest ``b || c`` (the hiding commitment the tree's leaf
   is over): every row of each produced value, and every row of a registered value the sessions read (H1's leaf: its rows
-  of ``a``, ``b``, ``zy`` and ``receipt``). `check` holds it to the verifier's registration digest, its draw's and its own
+  of ``a``, ``b``, ``zy`` and ``receipt``). `check` holds it to the verifier's registration digest, its sample's and its own
   entries (`entry`, each value's shape as the protocol states it): its codes ``P-keys``, ``P-format``,
   ``P-registration``, ``P-draw``, ``P-produced``, ``P-values``, ``P-openings`` and, per value, ``P-root``, ``P-leaves``,
   ``P-words``, ``P-word_bits``, ``P-domain``.
 * **The reads** are the protocol's (H1's: `pouw.leaf_lanes.reads`), each a ``--registered`` port (`port`) at the row the
   verifier derives: a read at a position the verifier doesn't derive is no public read. Rows swapped in the tree open at
   no read's position under the root, and a row of another tree opens under no root the record names.
-* **The opened roots** (`opened`): the roots the verifiers of record report opening the sessions' reads of the produced
+* **The opened roots** (`opened`): the roots the verdicts of record report opening the sessions' reads of the produced
   values against (`audit.session_registered`, unfiltered) must each be the record's: ``P-opened`` otherwise, a produced
   value not opened included.
-* **The shared openings** (`shared`): every row the verifiers of record report opening (the verdicts' ``openings``) of a
+* **The shared openings** (`shared`): every row the verdicts of record report opening (their ``openings``) of a
   value the verifier holds openings of (the record's, `openings`, and its own ports', `known`) must be that opening:
   ``P-shared`` otherwise. Two openings of one root are a SHA-512 collision; this check makes every session that reads a
   row read the one opening the record fixed, so no argument about the sessions' sharing rests on collision resistance.
@@ -103,7 +103,7 @@ def port(value: str, e: Mapping[str, Any], root: str, rows: Sequence[int | None]
 
 
 def check(rec: Any, registration: str, draw: str, mine: Mapping[str, Mapping[str, Any]]) -> tuple[str, ...]:
-    """The produced record's failure codes against the verifier's registration digest, its draw's digest and its own
+    """The produced record's failure codes against the verifier's registration digest, its sample's digest and its own
     entries (`entry`'s ``{value: {"leaves", "words", "word_bits", "domain"}}``): empty when it holds."""
     if not isinstance(rec, dict) or sorted(rec) != sorted(KEYS):
         return ("P-keys",)
@@ -207,7 +207,7 @@ def known_port(program: str, value: str, row: Sequence[int], salt: bytes, regist
 
 def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] | None) -> tuple[str, ...]:
     """``("P-opened",)`` unless each produced value of the accepted record ``rec`` was opened against its root: the
-    ``{value: root}`` the verifiers of record report (`audit.session_registered` without a registration, a value two of
+    ``{value: root}`` the verdicts of record report (`audit.session_registered` without a registration, a value two of
     them report under different roots None), at every produced value."""
     want = {e["value"]: e["root"] for e in rec["produced"]}
     got = dict(session_registered or {})
