@@ -75,7 +75,7 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
            "words_tree": clock.get("words_tree", 0), "rowseg_leaf": clock.get("rowseg_leaf", "segment digests"),
            "prio": clock.get("prio", 0), "layout": clock.get("layout", "ssn_1l"), "l1": clock.get("l1", 0),
            "l1_cta": clock.get("l1_cta", 0), "split_sms": clock.get("split_sms", [0, 0]),
-           "beside_buffers": clock.get("beside_buffers", 0),
+           "beside_buffers": clock.get("beside_buffers", 0), "blc_w": clock.get("blc_w", [1, 1, 1]),
            "small_threads": clock.get("small_threads", 0),
            "small_rows_max": clock.get("small_rows_max", 0),
            "small_leaves_check": {"cases": len(small), "leaves": sum(r["leaves"] for r in small),
@@ -145,7 +145,8 @@ def main() -> None:
             if x["lane_link_us"] is not None:
                 print(f"- blc4a-t64-e7's link, {n}: A_j to the host and the call's {x['lane_coin_bytes'] / 1e6:.2f} MB of lane "
                       f"coins back, {x['lane_link_us']:.1f} µs")
-        print(f"- layout {r['layout']}")
+        print(f"- layout {r['layout']}" + (f", A' = ({', '.join(map(str, r['blc_w']))}) in the lane-coin lanes"
+                                           if r["layout"].startswith("blc") else ""))
         if r["l1"] == 2:
             print(f"- the forwards below run L1 + (a)'s seed path for latency (CTAs of at least {r['l1_cta']}), its noise "
                   "blocks, G and forming in one launch, ahead of each call's GEMM")
