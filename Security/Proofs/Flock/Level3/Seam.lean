@@ -1,5 +1,5 @@
 /-
-The refinement seam with the soundness lane's `Arith F K` (PROTOCOL.md §17.4): the embedding `F ⊂ K` and `u` on the
+The refinement seam with the soundness package's `Arith F K` (PROTOCOL.md §17.4): the embedding `F ⊂ K` and `u` on the
 executable's representation. An executable `F256` value `⟨c0, c1⟩` is `embed c0 + embed c1 · u` (`Arith.ofLimbs`), and `u`
 is a root of `Y^2 + Y + x⁻¹`.
 -/
