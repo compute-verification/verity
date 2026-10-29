@@ -48,9 +48,9 @@ def rand_of(seed: int) -> F.Rand:
     return random.Random(seed).randbytes
 
 
-def sampled(m: int, k: int, n: int, seed: int = 0) -> tuple[F.Call, F.Coins, F.Feed]:
+def sampled(m: int, k: int, n: int, seed: int = 0) -> tuple[F.Call, F.CallCoins, F.Feed]:
     call = F.Call(0, 0, 0, m, k, n)
-    coins = F.Coins.sample(call.shape, rand_of(seed))
+    coins = F.CallCoins.sample(call.shape, rand_of(seed))
     return call, coins, F.Feed.of(call, coins)
 
 
@@ -125,7 +125,7 @@ def test_g_is_sampled_by_rejection():
     u32 = lambda *ws: np.array(ws, dtype="<u4").tobytes()  # noqa: E731
     first = u32(F.G_KEEP, 2**32 - 1, 2400, 0, 1, 2, 3, 4)
     src = Script(bytes(16), bytes(64), first, u32(5, 6), bytes(3 * 8))
-    coins = F.Coins.sample(sh, src)
+    coins = F.CallCoins.sample(sh, src)
     assert src.asked == [16, 64, 32, 8, 24]
     assert [F.g_digits(v) for v in (2400, 0, 1, 2, 3, 4, 5, 6)] == [tuple(col) for col in coins.g.T]
     feed = F.Feed.of(F.Call(0, 0, 0, 1, 1, 8), coins)
@@ -203,7 +203,7 @@ def test_coins_refuse_a_wrong_shape_dtype_or_range():
     for name, bad in [("u", coins.u | 0x80), ("g", np.full_like(coins.g, 7)), ("b", coins.b.astype(np.int8)),
                       ("a1", coins.a1[:-1])]:
         with pytest.raises(F.FeedError, match=f"coins.{name}"):
-            F.Coins(**{**ok, name: bad})
+            F.CallCoins(**{**ok, name: bad})
     with pytest.raises(F.FeedError, match="coins of"):
         F.Feed.of(F.Call(0, 0, 0, 17, 30, 8), coins)
 
