@@ -12,9 +12,10 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 
-def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
-    """The linear layers by type in module order; ValueError names every one not on the int8_exact plain arm
-    (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and scales.
+def layers(model: Any, types: tuple[type, ...], scheme: str = PH.SCHEME) -> list[Any]:
+    """The linear layers by type in module order; ValueError, naming `scheme`, names every one not on the int8_exact
+    plain arm (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and
+    scales.
 
     A MoE layer's routed experts (a module whose quant method is a ``FusedMoEMethodBase``) count in its place as their
     sites (`engine.int8_experts.ExpertSite`), each expert's gate_up then its down in expert order, the order the method
@@ -31,7 +32,7 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
             seen.add(id(qm))
             out += list(getattr(qm, "sites", None) or [m])
     if not out:
-        raise ValueError(f"pouw:{PH.SCHEME}: the model has no linear layer")
+        raise ValueError(f"pouw:{scheme}: the model has no linear layer")
     bad = []
     for w, layer in enumerate(out):
         method = layer.quant_method
@@ -41,7 +42,7 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
             bad.append(f"linear {w}: {type(method).__name__} with a {dtype} weight is not the int8_exact plain arm"
                        + (" (a MoE layer's routed experts record as their sites)" if not hasattr(layer, "weight") else ""))
     if bad:
-        raise ValueError(f"pouw:{PH.SCHEME} refused at install: " + "; ".join(bad))
+        raise ValueError(f"pouw:{scheme} refused at install: " + "; ".join(bad))
     return out
 
 
