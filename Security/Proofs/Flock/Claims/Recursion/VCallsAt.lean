@@ -82,7 +82,7 @@ evaluations**: `VStarAccepts`, its escape a collision among the witnesses' recor
 own evaluations at the run's V\* statements (`setupCalls`). -/
 def VStarAcceptsV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (s : Stmt), D.parse x = some s → shape s.form →
+  ∀ (x : Msg) (s : CompiledStatement), D.parse x = some s → shape s.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (∀ e ∈ D.calls x ws, H e.1 = e.2) →
         (D.innerView H x r ws).out = .acc ∨
