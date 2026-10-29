@@ -1,5 +1,5 @@
 """The auditor host's verifier service (vy-auditor-1): the remote bandwidth audit's verifier
-(`benchmarks/remote_session/verifier.py`, the Lean verifier of record deciding) runs only as the `auditor` user,
+(`benchmarks/remote_session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 
     vy-verifier-gate run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS]
@@ -20,7 +20,7 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   (`pinned`): a run whose pin moved before its unit started doesn't run. pin.sh appends each pin (commit, UTC time) to
   `/opt/vy-verifier/pins.jsonl`, root's and append-only (`record_pin`, `chattr +a`), before it moves `current`; a run
   starts only from the log's last pin, and its request names that line (`pin_log`), so every session can be held to a
-  pin infra made (RT4-INT-40). State is `auditor`'s, in `/var/lib/vy-verifier`
+  pin infra made. State is `auditor`'s, in `/var/lib/vy-verifier`
   (0700): `runs/<run>/`, the verifier's registry (`registry.json`, kept across runs, `verifier.py --registry`) and the key
   that reaches the challenger's gate (`.ssh/vy-challenger-gate`, which infra registers there for the lane in
   `verifier.json`).

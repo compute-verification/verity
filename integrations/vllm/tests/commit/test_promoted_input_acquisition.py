@@ -1,4 +1,4 @@
-"""R19 int-20 (F-r19-int-20), collector side: MANIFEST-DRIVEN input acquisition for PROMOTED members.
+"""Collector side: MANIFEST-DRIVEN input acquisition for PROMOTED members.
 
 A value produced in a PARENT module's forward body (no module output carries it) and consumed by a CHILD leaf is required by the manifest
 as the promoted member (parent, `out`) with the child named as its consumer.  The collector then acquires the child's first positional

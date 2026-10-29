@@ -1,4 +1,4 @@
-"""The H200 window writer (CIR-115): where each proof block's input ports read their bytes in the step commitments, for
+"""The H200 window writer: where each proof block's input ports read their bytes in the step commitments, for
 circuits' FAMILIES map (`plan.Map`).
 
 **The layout.** `shared_layout` is FAMILIES' shared-row commit layout, one commit unit a row of at most

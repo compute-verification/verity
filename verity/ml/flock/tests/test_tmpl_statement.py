@@ -6,7 +6,7 @@ section, which the Lean verifier reads with ``HmOut.parseTmpl`` (PRF-133).
 ``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
 toy's templated statement unrolls to its flat unit and differs from the flat statement's META in the templated keys alone.
 The Lean verifier derives from it the class `circuit.class_digest` computes and the regions, Δ and partition check it
-derives from the flat statement. Until the templated statement's proof lands it is outside the verifier's ``Tags.all``, and
+derives from the flat statement. It is outside the verifier's ``Tags.all``, in its own list (``Tags.templated``), and
 the Lean test skips unless the verifier knows it, as TMPL1's does (``FLOCK_VERIFY_TMPL``: its flock-verify)."""
 from __future__ import annotations
 
@@ -191,6 +191,7 @@ CS.UnitStager(d, "unit/tmpl-no-torch", [("ab", V2, 32, ["a", "b"]), ("w", V2, 20
 """
 
 
+@pytest.mark.slow
 def test_the_templated_statement_is_written_without_torch(tmp_path):
     """`UnitStager`'s templated statement, the file the auditor's lowering writes on a host with numpy and no torch, is
     written with torch (and the numerical benchmarks) unimportable, byte for byte the file it writes with them."""
@@ -230,7 +231,7 @@ def verifier() -> Path:
     p = subprocess.run([str(b), "statement", "--statement", FC.TMPL_STATEMENT, "--circuit", os.devnull, "--public", os.devnull],
                        capture_output=True, text=True)
     if "unknown statement" in p.stderr:
-        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (outside Tags.all until its proof lands; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
+        pytest.skip(f"{b} does not know {FC.TMPL_STATEMENT} (not in its Tags.templated; FLOCK_VERIFY_TMPL: TMPL1's flock-verify)")
     return b
 
 

@@ -40,9 +40,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
 * **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
   what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
   `deferred_rows.stand_in`'s) or what the in-Commit hook wrote (`served`, its run the Commit's run root, no stand-in link). Each
-  holds `registration.json` (core's v1 record), `window.json`, and per member k `m<k>-public.bin` and `m<k>-private.bin` (prover
-  only). The prover wraps each member's bodies under the circuit for its template (`flock_inputs.flock_input_files`): every
-  member's public file before the draw, and a drawn member's prover's file (`inst`, its rows and salts) after it, under the
+  holds `registration.json` (core's v1 record), `window.json`, per member k `m<k>-public.bin` and `m<k>-private.bin`, and per
+  registered value its members read by reference `v<j>-private.bin` (the private files: prover only). The prover wraps each
+  member's bodies under the circuit for its template (`flock_inputs.flock_input_files`): every member's public file before the
+  draw, and a drawn member's prover's file (`inst`, its rows and salts, gathered from both private files) after it, under the
   header its public file was held to (`stage`).
 * **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
   the verifier derives its window and the record's commitment from them alone (`deferred_rows.of_record`, `window_of`). A TP
@@ -906,7 +907,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
                session_roots: dict, served: list[int]) -> None:
     """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
     (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
-    audit's as an exact ratio), in ``out/case.json``, and today's Python on it (`replay.python`) in
+    audit's as an exact ratio), in ``out/case.json``, and the current Python on it (`replay.python`) in
     ``out/case-python.json``."""
     try:
         import replay as RP

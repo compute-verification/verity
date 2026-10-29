@@ -839,7 +839,7 @@ POINTS_SCHEMA = "verity/hbm-step-points/v0"
 
 
 def step_points(res: dict, run_id: str | None) -> dict:
-    """The step's points for ra-overhead-frontier's model, one a k: d and the step over plain, and the weights' decode
+    """The step's points for the overhead frontier's model, one a k: d and the step over plain, and the weights' decode
     o_W and receipt τ_W per weight pass (its `o_w`, `tau_w` at the linears' M), attention per KV pass, the append."""
     pts = []
     for k, r in res["model"]["k"].items():

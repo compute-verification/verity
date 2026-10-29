@@ -33,7 +33,7 @@ from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.records.weights_registration import WeightsRegistration
 
 from .window_builder import WEIGHTS, Grain, table_param, weight_param
-from .window_circuit import WindowClass, class_circuit, class_program
+from .window_circuit import WindowClass, class_program, lower
 
 #: the class `weights_record` reads the weights record and the weight parameters of: every class's are the model's, at a grain
 WEIGHTS_CLASS = WindowClass(1, 2, 2)
@@ -140,9 +140,10 @@ def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
 
 
 def _weights(registered: Any, grain: Grain) -> tuple[Any, list[tuple[str, list[int], int]], dict[str, int], dict[str, list[str]]]:
-    """`_fields`, the weight parameters the class circuit registers at ``grain`` (their words) and those by field."""
+    """`_fields`, the weight parameters the class circuit registers at ``grain`` (their words), wired or not, and those by
+    field."""
     r, fields = _fields(registered)
-    every = class_circuit(registered, WEIGHTS_CLASS, None, grain).registered.params
+    every = lower(registered, WEIGHTS_CLASS, None, grain, wired=False).circuit.registered.params
     params = {p: every[p] for p in weight_params(every)}
     of: dict[str, list[str]] = {}
     for p in params:

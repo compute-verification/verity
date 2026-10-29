@@ -648,7 +648,7 @@ theorem h1tRange : H1TRange := by
   · have hq : (p : ℚ) + 1 ≤ 2 * U.T := by exact_mod_cast hp
     norm_num; nlinarith
 
-/-- X-M2-4 (a): the forming table's keys cover every slice. -/
+/-- The forming table's keys cover every slice. -/
 theorem h1tFormCover : H1TFormCover := floorF_index
 
 end Pouw.Fp8Atom.H1T.Proofs

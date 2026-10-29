@@ -1,4 +1,4 @@
-"""The price of hashed seeds' grinding (GRIND, decision 112; Derived): ε_grind per family, model, regime and kind.
+"""The price of hashed seeds' grinding (Derived): ε_grind per family, model, regime and kind.
 
     uv run benchmarks/pouw/grind_price.py [--md OUT] [--json OUT]
 
@@ -31,11 +31,11 @@ must exceed 3.
 **h sensitivities.** At h bits a unit (compile's unit, a tile), π* = log₂(T/δ)/h tiles a seed group; h = 0.415 is
 p = ¾'s log₂(4/3).
 
-**Deployed attention's floor (ATTN-NOISE, note:compute-accounting/20261018T0634Z-draft-attn-noise §5).** H1's QKᵀ and P·V
+**Deployed attention's floor.** H1's QKᵀ and P·V
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
 and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`; `visible_premium`,
-`verity.core.protocols.pouw.grind`'s, which compile's seed-group check reads too). ATTN-NOISE's own form,
+`verity.core.protocols.pouw.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
 the (query head, request) pairs a decode seed must cover. A seed over several query heads draws a KV head's K rows' and
@@ -79,7 +79,7 @@ H_BITS = (0.415, 1.44, 6.0, 16.0)    # sensitivities, bits a tile
 PREFILL = (2048, 32768)
 DECODE_BATCH = (1, 8, 64, 256)
 DECODE_CTX = (2048, 32768)
-#: ATTN-NOISE §5's operand rows: (rows a seed group, noise bits a row, units reading a row) for one head; a unit is a
+#: attn_noise's operand rows: (rows a seed group, noise bits a row, units reading a row) for one head; a unit is a
 #: QKᵀ score or a P·V output coordinate
 H1_NOISE = {"q": 448, "k": 128, "p": 224}
 
@@ -212,7 +212,7 @@ def h1_rows(shape: EB.Shape, regime: str, n: int, ctx: int, group: str | int = "
 
 def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
                  group: str | int = "head") -> dict[str, float]:
-    """ATTN-NOISE's deployed QKᵀ and P·V floor under hashed seeds: ε per kind, the cheater matching the rows it picks
+    """attn_noise's deployed QKᵀ and P·V floor under hashed seeds: ε per kind, the cheater matching the rows it picks
     after the seed (`visible_premium`)."""
     return {kind: min(visible_premium(rows, t_bits) / units, 1.0)
             for kind, (rows, units) in h1_rows(shape, regime, n, ctx, group).items()}
@@ -220,7 +220,7 @@ def h1_attention(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
 
 def h1_h_form(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
               group: str | int = "head") -> dict[str, float]:
-    """ATTN-NOISE §5's form of the same floor: log₂(T/δ)/(h·N), with h the least, over operand rows, of a row's noise
+    """attn_noise's form of the same floor: log₂(T/δ)/(h·N), with h the least, over operand rows, of a row's noise
     bits over the units reading it, and N the units under the seed. It leaves out the cheater's choice of rows after
     the seed, which `h1_attention` charges, so it sits slightly below it."""
     return {kind: min((t_bits + DELTA_BITS) / (min(b / u for _, b, u in rows) * units), 1.0)
@@ -229,7 +229,7 @@ def h1_h_form(shape: EB.Shape, regime: str, n: int, ctx: int, t_bits: int,
 
 def decode_cover(t_bits: int, ctx: int = 2048, gmax: int = 1 << 16) -> dict[str, dict[str, int]]:
     """The least (query head, request) pairs of one layer under one decode seed that bring H1's QKᵀ and P·V under 0.1%,
-    in ATTN-NOISE's h form and with the rows picked after the seed. It is the same for every model: a pair's rows don't
+    in attn_noise's h form and with the rows picked after the seed. It is the same for every model: a pair's rows don't
     depend on the head count, and the query's rows bind, so query heads sharing a KV head's rows don't change it."""
     shape = EB.MODELS["llama-3.1-8b"]
     out = {}

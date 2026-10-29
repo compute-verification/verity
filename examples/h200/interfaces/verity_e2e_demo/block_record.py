@@ -222,18 +222,18 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
     return bad
 
 
-# --- tonight's records ---------------------------------------------------------------------------------------------------
+# --- the records from the runs' outputs ----------------------------------------------------------------------------------
 
 #: `benchmarks/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
 REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machine": 8, "window_s": 600, "role": "reference",
              "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows"}
 
 
-def tonight(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
-    """The fixtures from the runs' outputs: r20261025-210358-993e's period 0 (``r2``: its ``reports.jsonl``),
-    r20261025-203534-186b's window 10 (``r1``) and the wipe run r20261025-224222-91e2 (``wipe``: its ``results.json``, with
-    ``leg/wipe.json`` beside it). Each loop served 2 requests for 2 steps: ``[0, 2)``. The wipe's server is its session
-    report's host, the hostname the runner names its node by (its ``placement`` names the node's alias)."""
+def from_runs(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
+    """The fixtures from the runs' outputs: period 0 of one all-protocols run (``r2``: its ``reports.jsonl``), window 10 of
+    another (``r1``) and a wipe run (``wipe``: its ``results.json``, with ``leg/wipe.json`` beside it). Each loop served 2
+    requests for 2 steps: ``[0, 2)``. The wipe's server is its session report's host, the hostname the runner names its
+    node by (its ``placement`` names the node's alias)."""
     p0 = next(json.loads(x) for x in r2.read_text().splitlines() if json.loads(x)["period"] == 0)
     w10 = next(json.loads(x) for x in r1.read_text().splitlines() if json.loads(x)["window"] == 10)
     row = json.loads((wipe.parent / "leg" / "wipe.json").read_text())
@@ -243,11 +243,11 @@ def tonight(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="The block record: check one, or write tonight's from the runs' outputs.")
+    ap = argparse.ArgumentParser(description="The block record: check one, or build the fixture records from the runs' outputs.")
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check")
     c.add_argument("record")
-    t = sub.add_parser("tonight")
+    t = sub.add_parser("from-runs")
     t.add_argument("--r2", required=True, type=Path)
     t.add_argument("--r1", required=True, type=Path)
     t.add_argument("--wipe", required=True, type=Path)
@@ -258,7 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"ok": not bad, "bad": bad}, sort_keys=True))
         return 0 if not bad else 1
     a.out.mkdir(parents=True, exist_ok=True)
-    for name, rec in tonight(a.r2, a.r1, a.wipe).items():
+    for name, rec in from_runs(a.r2, a.r1, a.wipe).items():
         (a.out / f"{name}.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True, ensure_ascii=False) + "\n")
         print(a.out / f"{name}.json")
     return 0

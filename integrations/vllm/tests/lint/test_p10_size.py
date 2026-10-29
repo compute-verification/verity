@@ -9,7 +9,7 @@ decorators excluded), methods and nested functions each counted on their own.  T
 * a listed one that grew more than `slack` past its recorded size fails (split it; do not raise the cap), so a fix in a
   file at its cap needs no line-trimming;
 * a listed one that is now within the limit (or gone) fails until its entry is deleted.  One that only shrank keeps its
-  recorded size: the allowlist is a file every lane's change would otherwise edit.
+  recorded size: the allowlist is a file every change would otherwise edit.
 """
 from __future__ import annotations
 

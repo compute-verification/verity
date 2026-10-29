@@ -8,9 +8,9 @@ window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; lea
 warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
-let through as negatives; d1's K is #4404's horizon count over the compute audits' draws and free inputs and the
-network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted` (exit 0) when the
-honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
+let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' draws and free
+inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
+(exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
 on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
 period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
 block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
@@ -242,7 +242,7 @@ def period():
 
 
 def _period(d: Path, case: dict, answer: dict) -> str:
-    """#4404's runner's pair, ``certifier.answer.json`` with ``certifier.case.json`` beside it."""
+    """all_protocols' runner's pair, ``certifier.answer.json`` with ``certifier.case.json`` beside it."""
     d.mkdir(parents=True, exist_ok=True)
     (d / "certifier.case.json").write_text(json.dumps(case))
     (d / "certifier.answer.json").write_text(json.dumps(answer))

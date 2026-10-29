@@ -1,6 +1,6 @@
 """load_commit's host side: its streamed commitments are their references' (the certifier's hm96 root is
 `Registered.commit`'s, the store's leaves and root are `pous.verifier`'s), and the frozen shape's load is the 130.10 GiB
-of INT8 weights and the 68 M P2 blocks MEM-69 encodes, each matrix a power of two of 256-byte rows. Nothing here times
+of INT8 weights and the 68 M P2 blocks they encode into, each matrix a power of two of 256-byte rows. Nothing here times
 anything (`load_commit.main` does, on a node)."""
 
 from __future__ import annotations

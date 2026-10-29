@@ -5,7 +5,7 @@
 #     bash benchmarks/network_traces/active_live_cells.sh NAME="ARGS" ... -- COMMON ARGS
 # Each cell writes out/NAME/ with its own vLLM; out/cells.jsonl has each cell's start, end, rc and load averages, and
 # out/loadavg.log samples /proc/loadavg every 30 s. A cell gets at most CELL_MINUTES (default 42) and never more than
-# what is left of JOB_MINUTES less 4 minutes; one that can't get 10 is skipped. CPUs as in the 6 Oct sweep: a 16-core
+# what is left of JOB_MINUTES less 4 minutes; one that can't get 10 is skipped. CPUs: a 16-core
 # half of the allocation (flock /tmp/nw-sweep-cpus.<h>), 8 of them for vLLM.
 set -uo pipefail
 OUT=${RESEARCH_RUN_DIR:?run this under research run}/out
