@@ -70,6 +70,9 @@ LEAD_MMA = 32 / 28
 SKETCH_BYTES = 4
 #: RFP-4's uncredited share of stock with the reuse lemma replaced by N-DENSE's argued projection bound.
 RFP_REUSE_ARGUED = 0.35
+#: mirror-π-4-w4's worst pool on sketched words with 32-bit salts and the free order (`sketch_pools`, literal P),
+#: MAC-weighted over Llama's K: A2r's chance collisions and the column, row and block pools.
+SKETCH_POOLS_T1 = 0.00071
 TILE_WORDS = 128
 LEAD_A = {0: (127, 1, 1), 1: (1, 127, 1)}
 COMMIT_BITS = (32, 16, 8, 4, 2, 1)
@@ -555,7 +558,7 @@ def score(chk: dict, predicates: str = "dataflow", sketch_bytes: int = SKETCH_BY
     rows = []
     base = {"lead": {"t1": 0.00066, "t3": "-0.029% (served, measured)", "rank": 5},
             "mirror": {"t1": 0.0062, "t3": "code part served", "rank": 5},
-            "mirror-pi": {"t1": 0.0062, "t3": "code part served (as mirror)", "rank": 5},
+            "mirror-pi": {"t1": SKETCH_POOLS_T1, "t3": "code part served (as mirror)", "rank": 5},
             "bilinear": {"t1": 0.0096, "t3": "fails: the lanes' noise is served", "rank": 5},
             "rfp4": {"t1": 0.0, "t3": "3.68% (int7 data)", "rank": 5}}
 
@@ -613,7 +616,7 @@ def score(chk: dict, predicates: str = "dataflow", sketch_bytes: int = SKETCH_BY
                                "edges_and_blocks_eq_a_word": round(parts, 4)}
         add(fam, "every", 32, f"quad-l{lanes}" + (f"-w{r0}" if r0 else ""), hr,
             {"base": base[fam]["t1"], "sketch": gap},
-            ["SketchWrites2 (new)", "H32"] + (["mirror's"] if fam.startswith("mirror") else []), "4a+",
+            ["SketchWrites2 (new)", "H32"] + (["mirror's"] if fam.startswith("mirror") else []), "4b",
             {"decomposition": detail, "replay fold": fam == "mirror", "edges and blocks": sv,
              "sketch_bytes": sketch_bytes}, hr)
     for words, label in ((3, "blocks"), (7, "half-blocks")):
