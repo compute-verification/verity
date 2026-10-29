@@ -111,9 +111,10 @@ def ShaWrites (isA : Hash.Msg → Bool) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, ((σ.exec ω).hashed.map (shaCredit isA)).sum ≤ (σ.exec ω).shaRegs
 
 /-- `pouw-honest-hash-ruled` (proposed; a ruling: the honest hashing is the minimum). **An accepted execution that
-exchanges nothing hashes the honest commitment's messages**: for each message the honest commitment of the call's
-words hashes, a realizable strategy's accepted execution at a coin value where it exchanges nothing hashes a message
-with its digest.
+exchanges nothing hashes the honest commitment's messages**: for each message the honest commitments of the call's
+words and of `A` hash, a realizable strategy's accepted execution at a coin value where it exchanges nothing hashes a
+message with its digest. An accepted strategy registered `A`'s honest root (`Accepted`), so `A`'s messages are the
+ones that root commits.
 
 Rationale: the premise counts registers; with no link out, a digest is reached only by hashing on the node. -/
 def HonestHashRuled (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
@@ -141,16 +142,20 @@ def CommitL1w (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (isA : Has
 
 /-- `pouw-outsource-egress` (proposed; class L, the lead's instance at `β`). **An exchanged bit replaces at most `β`
 of priced W1 work**: every realizable strategy has a realizable twin that exchanges nothing, with the same pre-coin
-tables, and at every coin value registering the same root, hashing beyond what it hashes only the honest commitment's
-messages, at priced W1 work at most its own plus `β` a bit it exchanges.
+tables and `A` root, and at every coin value registering the same words root, hashing beyond what it hashes only the
+honest commitment's messages, at priced W1 work at most its own plus `β` a bit it exchanges.
 
 Rationale: what an outside machine computes for the node, the node can compute itself, the honest commitment's
 hashing included; a coin bit carries at most `n_max` MACs of the coins' work (every step carries the three coin
 lanes), each worth at most the call's honest W1 work a MAC (`betaLead`). The bits are the protocol's: `Accepted`
-bounds them by the call's share of the cap. -/
+bounds them by the call's share of the cap. `A` is fixed before the coins, so its root carries no coin bit: an outside
+machine that holds `A` can return its 512-bit root, and the twin then hashes `A`'s messages on the node at
+`3,449.05` registers a compression, more than `β · 512` once `rows · K` passes about 210,000. On such a call the
+premise is false for a node that some outside machine holding `A` serves. -/
 def OutsourceWithinEgressLead (pr : Prices100) (β : ℚ) (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (Real : Strategy L → Prop) : Prop :=
-  ∀ σ, Real σ → ∃ σ', Real σ' ∧ σ'.pre = σ.pre ∧ ∀ ω, (σ'.exec ω).egress = 0 ∧ (σ'.exec ω).root = (σ.exec ω).root ∧
+  ∀ σ, Real σ → ∃ σ', Real σ' ∧ σ'.pre = σ.pre ∧ σ'.aRoot = σ.aRoot ∧
+    ∀ ω, (σ'.exec ω).egress = 0 ∧ (σ'.exec ω).root = (σ.exec ω).root ∧
     (∀ x ∈ (σ'.exec ω).hashed, x ∈ (σ.exec ω).hashed ∨ x ∈ C.msgs H (word L κ ω) ++ C.aMsgs) ∧
     (σ'.work pr ω : ℚ) ≤ σ.work pr ω + β * (σ.exec ω).egress
 

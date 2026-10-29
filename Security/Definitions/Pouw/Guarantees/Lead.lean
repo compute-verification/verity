@@ -14,8 +14,9 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   `E_ω[work] ≥ honest − gap`. The gap is `gapRegs`, a defined function of the layout. An
   accepted call exchanges at most its share of its forward's egress cap (`Layout.callBits`), so a forward's network
   terms sum to at most its cap's. Acceptance is what the verifier sees: a call it admits (`Layout.Admits`: an inner
-  dimension of at least 1 and at most `2^40` MMA tiles; it refuses every other call), the honest root registered
-  within the call's bits. So `G` is conditional on the registered root being the honest one.
+  dimension of at least 1 and at most `2^40` MMA tiles; it refuses every other call), `A`'s honest root registered
+  before the coins, and the words' honest root registered within the call's bits. So `G` is conditional on both
+  registered roots being the honest ones.
 * `GapAt`: the gap's share of stock at T 512 × 64, T 512 × 512 and T 8,192, for every call of `n, K ≥ 4,096`, at cap
   32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.514%, 0.492% and 0.489%. At these points
   every row is served, and stock and served compute differ only by the padding of `n` to a multiple of 8.

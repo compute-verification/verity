@@ -10,7 +10,7 @@ import Proofs.Pouw.Lead.Network.Term
 # The lead's guarantee from its pieces
 
 `G`'s proof, at each accepted coin value with no break, on the egress-free twin (`OutsourceWithinEgressLead`), which
-is accepted where the original is (it registers its root and exchanges nothing) and hashed no collision where the
+is accepted where the original is (it registers its roots and exchanges nothing) and hashed no collision where the
 original hashed none (beyond the original's, it hashes only the honest commitment's messages):
 1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so each committed tile is one of
    its run's whole-tile writes or a tile it starts with (`TileGrain`), and its whole-tile writes are at least the
@@ -96,11 +96,11 @@ theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
   · exact Or.inr hB
   refine Or.inl ?_
   push Not at hB
-  obtain ⟨σ', hσ', -, htwin⟩ := hout σ (hcard σ hcan)
+  obtain ⟨σ', hσ', -, haroot', htwin⟩ := hout σ (hcard σ hcan)
   have hacc' : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ' ω := fun ω hω => by
     obtain ⟨he, hr, -, -⟩ := htwin ω
-    obtain ⟨hadm, hroot, hbits⟩ := hacc ω hω
-    refine ⟨hadm, hr.trans hroot, ?_⟩
+    obtain ⟨hadm, haroot, hroot, hbits⟩ := hacc ω hω
+    refine ⟨hadm, haroot'.trans haroot, hr.trans hroot, ?_⟩
     rw [he]
     exact (Nat.cast_nonneg _).trans hbits
   have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω hb => by
@@ -132,7 +132,7 @@ theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     have h1 := perCoin pr H T m n K κ stream C isA Real hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
       (hacc' ω hω) (hnb' ω hω)
     have h2 := (htwin ω).2.2.2
-    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2.2 hβ
+    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2.2.2 hβ
     rw [htw] at h1 ⊢
     linarith
   have hsum := Finset.sum_le_sum hstep

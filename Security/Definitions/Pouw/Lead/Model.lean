@@ -23,12 +23,13 @@ takes).
   - `root`: the words' commitment it registers.
 * **The certifier's coin stream** (`CoinStream`): raw coins in a fixed arrangement, each coin once at most.
 * **The commitment format** (`Commit`): the messages the honest commitment of a call's words hashes (leaves and
-  nodes), its root, and their SHA-512 compressions.
+  nodes), its root, the messages and root of `A`'s commitment, and their SHA-512 compressions.
 * **Accepted** (`Accepted`): what the verifier sees. The call is one it admits (`Layout.Admits`: an inner dimension of
-  at least 1 and at most `2^40` MMA tiles, by the call's public shape), and the execution registers the honest
-  commitment's root and exchanges at most the call's bits (`Layout.callBits`), which the network certifier counts and
-  refuses past. How it computed the words is not part of acceptance: that it writes each committed tile it doesn't
-  start with is the copy model's premise (`Pouw.Assumptions.Lead.TileGrain`).
+  at least 1 and at most `2^40` MMA tiles, by the call's public shape), the strategy registered `A`'s honest root
+  before the coins, and the execution registers the words' honest root and exchanges at most the call's bits
+  (`Layout.callBits`), which the network certifier counts and refuses past. How it computed the words is not part of
+  acceptance: that it writes each committed tile it doesn't start with is the copy model's premise
+  (`Pouw.Assumptions.Lead.TileGrain`).
 * **The break** (`Break`): a SHA-512 collision among what the execution hashed and what the honest commitment hashes.
 -/
 
@@ -131,10 +132,12 @@ order) and its root, at the hash `H`. -/
 structure Commit (L : Layout) where
   /-- Every message the honest commitment of the words hashes. -/
   msgs : (Hash.Msg → Hash.Digest) → (Fin L.m → Fin L.S → Fin L.n → ℤ) → List Hash.Msg
-  /-- The honest root. -/
+  /-- The words' honest root. -/
   root : (Hash.Msg → Hash.Digest) → (Fin L.m → Fin L.S → Fin L.n → ℤ) → Hash.Digest
   /-- The messages A's commitment hashes, fixed before the coins. -/
   aMsgs : List Hash.Msg
+  /-- A's honest root, fixed before the coins: the digest the certifier reads before it draws them. -/
+  aRoot : (Hash.Msg → Hash.Digest) → Hash.Digest
   /-- The words chunks: leaves holding at most `chunkWords` words each. -/
   chunks : ℕ
 
@@ -174,12 +177,13 @@ is zero while tiles still repeat, and past `2^40` tiles the call's pairs of tile
 agreeing (`2^−56` a pair) to stay within `coinBranchGap`. -/
 def Layout.Admits (L : Layout) : Prop := 1 ≤ L.K ∧ L.rowBlocks * L.colBlocks * L.S ≤ 2 ^ 40
 
-/-- **The execution at `ω` is accepted**: the verifier admits the call (`Layout.Admits`), and the execution registers
-the honest root and exchanges at most the call's bits (the network certifier refuses a call past them). All three are
-what the verifier sees. -/
+/-- **The execution at `ω` is accepted**: the verifier admits the call (`Layout.Admits`), the strategy registered `A`'s
+honest root before the coins, and the execution registers the words' honest root and exchanges at most the call's
+bits (the network certifier refuses a call past them). All four are what the verifier sees. -/
 def Accepted (L : Layout) (H : Hash.Msg → Hash.Digest) (C : Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (σ : Strategy L) (ω : Coins L) : Prop :=
-  L.Admits ∧ (σ.exec ω).root = C.root H (word L κ ω) ∧ ((σ.exec ω).egress : ℚ) ≤ L.callBits
+  L.Admits ∧ σ.aRoot = C.aRoot H ∧ (σ.exec ω).root = C.root H (word L κ ω) ∧
+    ((σ.exec ω).egress : ℚ) ≤ L.callBits
 
 /-- The break a statement ends in: two different messages with one SHA-512 digest, both among what the execution at
 `ω` hashed and what the honest commitment of its words hashes (the verifier's check hashes those). -/
