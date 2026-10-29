@@ -1,7 +1,7 @@
 """N2's period draw (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
 period's salted roots committed before any coin is read, K of its link-windows drawn, only those registered and proved,
-the draw of record the Lean verifier's on the coins the draw read (`lean_draw`, stood in here by the sampler
-`coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the draw
+the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
+`coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the sample
 established stated as wrong units at δ."""
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from test_network_certifier_service import SALTS, Run, lean  # noqa: F401  (lean
 
 @pytest.fixture(autouse=True)
 def lean_draw(monkeypatch):
-    """The Lean's draw stood in by its Python twin on the same bytes; each call's (k, n, coins) recorded."""
+    """The Lean's sample stood in by its Python twin on the same bytes; each call's (k, n, coins) recorded."""
     calls = []
 
     def draw(k: int, n: int, read: bytes) -> dict:
@@ -98,7 +98,7 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
 
 
 def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
-    """K = n leaves nothing to draw: no coin is read, no Lean draw runs, and the draw of record is every window."""
+    """K = n leaves nothing to sample: no coin is read, no Lean draw runs, and the sample of record is every window."""
     run, coins = Run(tmp_path), Coins()
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), None, coins)
@@ -112,7 +112,7 @@ def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
 
 def test_a_sampled_link_is_accepted_on_its_drawn_windows_and_states_its_wrong_units_at_delta(tmp_path, lean_draw):
     """Two of three windows drawn, registered and proved, the third never registered: the AND over every window refuses
-    the missing one, the sampled verdict accepts on the Lean's draw from the very coins the period draw read, and
+    the missing one, the sampled verdict accepts on the Lean's sample from the very coins the period flip read, and
     K = 2 of 3 leaves at most one wrong window at any δ < 1/3."""
     run = Run(tmp_path)
     openings = committed(run)
@@ -133,13 +133,13 @@ def test_a_sampled_link_is_accepted_on_its_drawn_windows_and_states_its_wrong_un
 
 
 def _other(drawn: dict, n: int = 3) -> list[int]:
-    """The first K-subset of the n windows, in order, that isn't the draw's."""
+    """The first K-subset of the n windows, in order, that isn't the sample's."""
     return next(list(c) for c in itertools.combinations(range(n), drawn["k"]) if list(c) != drawn["units"])
 
 
 @pytest.mark.parametrize("k", [1, 2])
 def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
-    """The prover registers and proves K windows the draw didn't hold, every one accepted, under a draw object listing
+    """The prover registers and proves K windows the sample didn't hold, every one accepted, under a sample object listing
     them (the period's own coins and commitment, which hold): the verdict draws its own with the Lean on those coins and
     refuses the link by name, `period-draw`, whether it is handed the prover's object or the challenger's."""
     run = Run(tmp_path)
@@ -158,7 +158,7 @@ def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
 
 def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_path, monkeypatch):
     """An honest period, proved: the verdict refuses it by name where the Lean can't draw on its coins, draws other
-    windows than the draw object lists, or answers with a draw that isn't subset:K over the period's windows."""
+    windows than the sample object lists, or answers with a sample that isn't subset:K over the period's windows."""
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())

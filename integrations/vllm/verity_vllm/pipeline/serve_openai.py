@@ -26,7 +26,7 @@ Sampling parameters are values the request brings: the server applies vLLM's neu
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
 engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
 `engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
-pinned yet, so its draw is not a function of the committed values.
+pinned yet, so its sample is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
@@ -94,7 +94,7 @@ record is ``remote_session.json``, and a rejected session fails the exit.
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
 ``--switch-interval-ms`` (0.1 ms; Python's is 5 ms) and seals in a spawned process (``--seal-process``, `seal_process.sealer_of`),
-the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_seal.Watchdog`) records each stall of 0.2 s or more.
+the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_guard.Watchdog`) records each stall of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -114,12 +114,11 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import (seal_process as SP, serve_h1 as SH, serve_release as RL, serve_remote as SR, serve_row as RW,
-                                   serve_seal as SS)
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
+                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
-from verity_vllm.pipeline import serve_learn as SL
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -640,7 +639,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
-    if (floor := SS.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+    if (floor := SG.disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
@@ -701,7 +700,7 @@ def main(opts: Options) -> int:
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
-                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=SS.disk_floor_of(opts), mirror=mirror,
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=SG.disk_floor_of(opts), mirror=mirror,
                                 request_cap=opts.window_requests, arm=arm, release=draws)
         if arm is not None:
             arm.drawing(draws)
@@ -732,7 +731,7 @@ def main(opts: Options) -> int:
     bound = [http.address]
     if opts.switch_interval_ms:
         sys.setswitchinterval(opts.switch_interval_ms / 1000)
-    watchdog = SS.Watchdog(out / "pauses.jsonl")
+    watchdog = SG.Watchdog(out / "pauses.jsonl")
     watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),

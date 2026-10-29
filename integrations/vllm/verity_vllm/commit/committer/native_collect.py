@@ -423,7 +423,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                         so = res[0] if isinstance(res, tuple) else res
                         st = getattr(so, "sampled_token_ids", None)
                         ib = a[1] if len(a) > 1 else kw.get("input_batch")
-                        draw_srcs = [s for s in me.sources if hasattr(s, "on_sample")]      # a source of the draw's inputs (served_record)
+                        draw_srcs = [s for s in me.sources if hasattr(s, "on_sample")]      # a source of the sample's inputs (served_record)
                         owned = {n for s in draw_srcs for n in getattr(s, "own_names", ())}
                         if isinstance(st, torch.Tensor) and st.device.type == "cuda":
                             me._acquire("runner.sampler/sampled_token_ids", st, job)
