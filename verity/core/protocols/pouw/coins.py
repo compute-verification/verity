@@ -29,13 +29,13 @@ from dataclasses import dataclass
 
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                            VerificationLimits, verify_opening)
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.core.protocols.sampled_proofs.challenger import coin_claim
 
 from .protocol import DomainError, tagged
 
-SCHEME = "verity/pouw/epoch-coins/v1"
-COIN_TAG = b"verity/pouw/epoch-coin/v1\0"
+SCHEME = domains.POUW_EPOCH_COINS
+COIN_TAG = domains.POUW_EPOCH_COIN.encode() + b"\0"
 LABELS = ("salt", "draw")
 COIN_BYTES = 32
 HM96 = hm96.SHA512
