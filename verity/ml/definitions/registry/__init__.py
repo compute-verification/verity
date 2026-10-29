@@ -24,9 +24,8 @@ PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Progra
     `GatherBf16x64_v1`, `Lifted[..]_v2`) are resolved on demand through the regex families registered here.
   Outputs: a populated `verity.ml.circuits.defs.REGISTRY`; every Program descriptor (descriptor.json.gz) decodes only against it.
   Invariants: importing ANY `verity.ml.definitions.registry.*` module registers the lazy families first (Python imports the package), so a
-    descriptor decoded after such an import resolves as it did in veritor; family ORDER matters -- the two catch-alls (`{ORD=n}`,
+    descriptor decoded after such an import resolves the same way; family ORDER matters -- the two catch-alls (`{ORD=n}`,
     `Lifted[..]`) are registered last; a spec id no family matches is a decode failure, never a guessed definition.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 
