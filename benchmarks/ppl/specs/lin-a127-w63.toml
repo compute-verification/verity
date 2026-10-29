@@ -1,0 +1,6 @@
+description = "the linears with activations on ±127 (one scale per token) and weights on ±63 (one per output row), rounded, no rotation, the exact product; lm_head and attention bf16: noise on the weights' side only"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+weight_top = 63

@@ -1,0 +1,10 @@
+description = "the linears on ±47 after each linear's input is rotated online alone (x Q, W Q offline; no SmoothQuant): activations one scale per token and weights one per output row, rounded, the exact product; lm_head and attention bf16. A rung of the rotated operand-width ladder"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "rotate"
+
+[[linear]]
+step = "int8"
+act_top = 47
+weight_top = 47

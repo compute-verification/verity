@@ -1,3 +1,4 @@
+import json
 import tomllib
 
 import pytest
@@ -65,6 +66,21 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
                  "fpx-g1h-w4a8-nvi9-gptq-lm8-c6"):
         want[name] = ("all", "int8-all", True)
     want["int8-channel127-v3"] = want["fp8-block"] = ("linears", "int8-linears", False)
+    for name in ("int8-channel127-v1", "ncp-v1-served", "ncp-v1-served-head", "ncp-linears"):
+        want[name] = ("linears", "int8-linears", False)
+    want["ncp-v1-served-attn"] = want["ncp-v1-served-pv"] = ("all", "int8-all", False)
+    stock = "int8-channel127-v1"
+    for name in ("ncp-smooth", "ncp-rotate", "ncp-smooth-rotate", "lin-a63-w127", "lin-a127-w63",
+                 *(f"lin-t{t}" for t in (31, 47, 79, 95, 111)), *(f"rot-t{t}" for t in (15, 31, 47))):
+        want[name] = ("linears", stock, False)
+    for name in ("ncp-v1-served-qk", "ncp-pv-sink", "ncp-pv-sink-b128", "ncp-pv-p127", "ncp-pv-p127-sink"):
+        want[name] = ("all", stock, False)
+    for name in ("ncp-qk-rot", "ncp-attn-fix", "ncp-linears-attn-fix"):
+        want[name] = ("all", stock, True)
+    want["int8-act124-v1"] = ("linears", stock, False)
+    for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
+                 "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1"):
+        want[name] = ("linears", stock, True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():
@@ -124,6 +140,30 @@ def test_lm_head_takes_only_the_steps_that_name_it():
     for bad in ('step = "smooth"\nalpha = 0.5', 'step = "int8"\nlayers = [0]', 'step = "int8"\ngptq = true'):
         with pytest.raises(ValueError, match="lm_head takes steps without calibration or layers"):
             parse(f'[[linear]]\n{bad}\nlinears = ["lm_head"]')
+
+
+def test_an_attention_step_takes_only_the_matmuls_it_names():
+    pv, both = spec.load("ncp-v1-served-pv"), spec.load("ncp-v1-served-attn")
+    assert pv.linear == both.linear
+    (s,) = pv.attention
+    assert s.matmuls == {"pv"} and s.applies(0, "pv", "pv") and not s.applies(0, "qk", "qk")
+    assert all(t.applies(0, "qk", "qk") and t.applies(0, "pv", "pv") for t in both.attention)
+    assert s.key != parse('[[attention]]\nstep = "int8"\np_top = 63\nv_top = 63').attention[0].key
+    assert parse(tomllib_dumps({"attention": [s.to_toml()]})).attention == pv.attention
+    for bad in ("[]", '["qk", "sv"]'):
+        with pytest.raises(ValueError, match="matmuls are some of"):
+            parse(f'[[attention]]\nstep = "int8"\nmatmuls = {bad}')
+    with pytest.raises(ValueError, match="unknown parameters"):
+        parse('[[linear]]\nstep = "int8"\nmatmuls = ["pv"]')
+
+
+def tomllib_dumps(data: dict) -> str:
+    out = []
+    for kind, tables in data.items():
+        for t in tables:
+            out.append(f"[[{kind}]]")
+            out += [f"{k} = {json.dumps(v)}" for k, v in t.items()]
+    return "\n".join(out)
 
 
 @pytest.mark.parametrize("b", [1, 2, 3, 4])
@@ -268,10 +308,21 @@ def test_defaults_are_filled_and_typed():
     ('[[attention]]\nstep = "int8"\nq = "dither"\nq_top = 7\nqk_bits = 4', "no room under"),
     ('[[attention]]\nstep = "int8"\nv = "dither"\nqk_bits = 2', "widens a dither"),
     ('[[linear]]\nstep = "int8"\n[mlp]\nx = 1', "unknown keys ['mlp']"),
+    ('plain = "int8-stock"\n[[linear]]\nstep = "int8"', "names no arm in specs/"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "dense"', "served.rule is one of"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn2"\nbits = 4', "widens only ssn_a"),
 ])
 def test_rejections_name_the_problem(text, message):
     with pytest.raises(ValueError, match=message.replace("[", r"\[").replace("]", r"\]")):
         parse(text)
+
+
+def test_a_spec_may_name_its_plain_arm():
+    import run
+    a = parse('plain = "int8-channel127-v1"\n[[attention]]\nstep = "int8"\nmatmuls = ["pv"]', "pv")
+    assert (a.scope, a.plain) == ("attention", "int8-channel127-v1")
+    names = [x.name for x in run.arms_for([str(spec.SPECS / "ncp-pv-p127.toml")])]
+    assert names == ["ncp-pv-p127", "int8-channel127-v1"]
 
 
 def test_bf16_is_not_a_spec():

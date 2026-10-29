@@ -147,6 +147,56 @@ def test_linear_variants_pass_their_gates(llama, ids, calib):
         assert abs(ppl(r["nll"][f"{a.name}/s0"]) / bf - 1) < 0.1, a.name
 
 
+def test_noise_corrected_whole_is_the_plain_product(llama, ids):
+    lin = {"step": "int8", "act_top": 95, "weight_top": 95}
+    plain = spec.parse({"linear": [lin]}, "t95")
+    arms = [plain] + [spec.parse({"linear": [lin, {"step": "noise", "x_width": 32, "w_width": 32, "period": p,
+                                                   "correct": c}]}, f"n-{c}-{p}")
+                      for c, p in (("all", 0), ("all", 32), ("ew+xf", 0), ("none", 32))]
+    r = evaluate(llama, ids[:4], arms)
+    assert passed(r), r["gates"]
+    nll = {a.name: r["nll"][f"{a.name}/s0"] for a in arms}
+    assert np.array_equal(nll["n-all-0"], nll["t95"]) and np.array_equal(nll["n-all-32"], nll["t95"])
+    assert ppl(nll["t95"]) < ppl(nll["n-ew+xf-0"]) < ppl(nll["n-none-32"])
+    wide = spec.parse({"linear": [{"step": "int8", "act_top": 127}, {"step": "noise", "x_width": 1}]}, "wide")
+    assert not passed(evaluate(llama, ids[:4], [wide]))
+
+
+def test_ssn_a_w0_is_the_formats_pattern():
+    def literal(n, k):
+        s = -(-k // 28)
+        w0 = np.zeros((s, 4, n), dtype=np.int64)
+        zero = sum(6 * 13 ** e for e in range(4))
+        for j in range(n):
+            c = j + 1 if j + 1 < zero else j + 2
+            for e in range(4):
+                w0[0, e, j] = c % 13 - 6
+                c //= 13
+            for st in range(1, s):
+                w0[st, (j + st) % 4, j] = 1
+        return w0
+
+    for n, k, off in ((40, 100, 0), (24, 2048, 2048), (16, 64, 14270)):
+        assert np.array_equal(steps.ssn_a_w0(n, k, off).numpy(), literal(off + n, k)[:, :, off:]), (n, k, off)
+    codes = steps.ssn_a_w0(28559, 28)[0].T
+    assert len({tuple(c) for c in codes.tolist()}) == 28559 and not bool((codes == 0).all(1).any())
+    with pytest.raises(ValueError, match="outrun"):
+        steps.ssn_a_w0(28560, 28)
+
+
+def test_served_noise_stays_in_the_product(llama, ids):
+    stock = spec.parse({"linear": [{"step": "int8"}]}, "stock")
+    rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn_1l", 1), ("ssn_1l", 4), ("ssn2", 1), ("raw_byte", 1))
+    arms = [stock] + [spec.parse({"linear": [{"step": "int8"}, {"step": "served", "rule": r, "bits": b}]}, f"{r}-{b}")
+                      for r, b in rules]
+    r = evaluate(llama, ids[:4], arms)
+    assert passed(r), r["gates"]
+    nll = {a.name: r["nll"][f"{a.name}/s0"] for a in arms}
+    assert all(not np.array_equal(nll[a.name], nll["stock"]) for a in arms[1:])
+    rise = {a.name: abs(ppl(nll[a.name]) / ppl(nll["stock"]) - 1) for a in arms[1:]}
+    assert max(rise["ssn_a-1"], rise["ssn_1l-1"]) < rise["raw_byte-1"]
+
+
 def test_seeds(llama, ids, calib):
     r = evaluate(llama, ids[:4], ["int8-linears", "adopted-linears"], seeds=(0, 1), calib=calib)
     assert set(r["nll"]) == {"bf16/s0", "int8-linears/s0", "adopted-linears/s0", "adopted-linears/s1"}
@@ -166,6 +216,38 @@ def test_shards_are_one_run(llama, ids, calib):
     for k in whole["nll"]:
         assert np.array_equal(whole["nll"][k], np.concatenate([p["nll"][k] for p in parts])), k
     assert parts[1]["gates"]["peel"]["checked"] == 0 and parts[0]["gates"]["peel"]["checked"] > 0
+
+
+def test_parts_merge_to_one_run(llama, ids, monkeypatch, tmp_path):
+    """`merge` of the parts `eval --part I/N` writes gives the results.json one run over every window gives."""
+    import json
+    monkeypatch.setitem(methodology.CONTEXTS, ids.shape[1], len(ids))
+    arms, wrec = run.arms_for(["int8-linears"]), {"sha256": "0" * 64}
+    a = types.SimpleNamespace(model="llama-3.2-1b", set="wikitext2", ctx=ids.shape[1])
+
+    def scored(w):  # HF's layers stand compared on the check window, so the gates pass without transformers
+        r = evaluate(llama, ids[w], arms, windows=w)
+        r["gates"]["hf_reference"] = {"checked": int(methodology.CHECK_WINDOW in w), "failed": 0, "first_failure": None}
+        return r
+
+    whole = scored(list(range(len(ids))))
+    one = run.merge(a, arms, (0,), wrec, [whole], whole.pop("nll"), 0.0, 1)
+    dirs = []
+    for i, w in enumerate(engine.shards(len(ids), 2)):
+        r, d = scored(w), tmp_path / f"part{i}"
+        d.mkdir()
+        np.savez(d / "part.npz", **{k.replace("/", "|"): v for k, v in r.pop("nll").items()})
+        (d / "part.json").write_text(json.dumps(r))
+        (d / "part-args.json").write_text(json.dumps({**vars(a), "spec": ["int8-linears"], "seeds": "0", "plugin": None,
+                                                       "part": f"{i}/2", "windows": w, "wrec": wrec, "seconds": 0.0,
+                                                       "run": f"r{i}"}))
+        dirs.append(str(d))
+    assert run.main(["merge", "--out", str(tmp_path / "merged"), *reversed(dirs)]) == 0
+    got = json.loads((tmp_path / "merged" / "results.json").read_text())
+    assert got["passed"] and got["env"]["run"] == "r0,r1"
+    assert {k: v["seeds"] for k, v in got["arms"].items()} == {k: v["seeds"] for k, v in one["arms"].items()}
+    with pytest.raises(SystemExit, match="every window once"):
+        run.main(["merge", "--out", str(tmp_path / "half"), dirs[0]])
 
 
 def _sabotage(monkeypatch, kind):

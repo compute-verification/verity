@@ -1,0 +1,7 @@
+description = "the linears on ±95: activations one scale per token and weights one per output row, rounded, no rotation, the exact product; lm_head and attention bf16. A rung of the operand-width ladder: a noise alphabet of width w beside NCP's three copies leaves operands ±(127 - 2w)"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act_top = 95
+weight_top = 95

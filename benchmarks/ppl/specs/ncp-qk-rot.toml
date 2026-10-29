@@ -1,0 +1,17 @@
+description = "ncp-v1's served linears with Q K^T on ±63 after a random Hadamard R of the head dimension on Q and K (S unchanged before rounding): Q and K one scale per (head, token), rounded; P V and lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[attention]]
+step = "rotate"
+matmuls = ["qk"]
+
+[[attention]]
+step = "int8"
+matmuls = ["qk"]
+q_top = 63
+k_top = 63

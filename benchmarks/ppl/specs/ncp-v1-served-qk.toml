@@ -1,0 +1,13 @@
+description = "ncp-v1's served linears (±63 on both operands) with attention's Q K^T alone on ±63: Q and K one scale per (head, token), rounded, the exact product; P V and lm_head bf16. The QK^T half of ncp-v1-served-attn"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[attention]]
+step = "int8"
+matmuls = ["qk"]
+q_top = 63
+k_top = 63

@@ -1,0 +1,12 @@
+description = "ncp-v1's served linears (±63 on both operands) with attention's P V on ±63 too and Q K^T bf16: P one scale per query row on [0, 63], V one per (KV head, channel), both rounded, the exact products; lm_head bf16. P V is the attention matmul NCP could take on rows of enough keys"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[attention]]
+step = "int8"
+matmuls = ["pv"]
+p_top = 63
+v_top = 63

@@ -13,6 +13,9 @@ labeled run, `served.py` the served arm's runs).
   (the specs `*-rtx-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
   kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs.
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
+- `ncp_k32_price.py`: what committing NCP's checkpoint words (every k32 or depth-16 step) as SHA-512 rows costs
+  Llama-3.2-1B's served step on the H200, from the measured hash rates and 3K-wide GEMM costs it cites, and what NCP covers
+  (estimates; stdlib, no GPU).
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`

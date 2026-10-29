@@ -7,6 +7,8 @@ its docstring lists the commands.
 ~~~text
 verity bench ppl submit --model llama-3.1-8b --set c4 --ctx 2048 adopted        # a `research run` on vy-nebius-2
 verity bench ppl eval --model M --set S --ctx T --out DIR SPEC...                 # the same, on a GPU node
+verity bench ppl eval ... --device cpu --part I/N --out DIR SPEC...               # part I of N windows, on a CPU's cores
+verity bench ppl merge --out DIR PART_DIR...                                      # the parts as one run's results.json
 verity bench ppl report DIR/results.json...                                       # a run's tables
 verity bench ppl baseline [DIR/results.json...]                                   # the locked baseline (and a check)
 verity bench ppl steps | specs                                                    # what an arm can be made of
@@ -47,7 +49,8 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
   seeds' range, its Δ% against bf16 and against its scope's plain int8 arm, and the significance rule's verdict.
 - **Plain int8**, for each scope: `int8-linears` (rotated, one scale per token and per output row, rounded to ±127),
   `int8-attention` (rotated, one limb, Q, K, P and V rounded) and `int8-all` (both). Every run includes the plain arm
-  of each spec's scope.
+  of each spec's scope, or the arm a spec names with `plain = "NAME"` (a served baseline such as the stock int8
+  checkpoint's `int8-channel127-v1`).
 - **Significance rule** (`methodology.compare`). Arm A is better than arm B (`<`) only when both hold:
   - their seed ranges of perplexity are disjoint;
   - a paired sign test over windows, on each window's seed-mean NLL, favours A at one-sided α = 0.025: at least 13 of
@@ -60,7 +63,8 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
 
 An arm is a TOML file: a list of steps for the linears (`[[linear]]`: q, k, v, o, gate, up and down, each y = x Wᵀ) and
 one for attention (`[[attention]]`: S = Q Kᵀ and O = P V). Each step names a registered function and its parameters.
-`layers = [...]` and, on linears, `linears = [...]` restrict where a step applies. The output head (`lm_head`) takes
+`layers = [...]`, on linears `linears = [...]` and on attention `matmuls = ["qk"]` or `["pv"]` restrict where a step
+applies. The output head (`lm_head`) takes
 only the linear steps that name it in `linears`, without calibration or `layers`. `specs/adopted.toml`:
 
 ~~~toml
@@ -179,8 +183,8 @@ exits 1.
   int8 one it replaces.
 - `product_exact`: on the check window (window 0), every layer, each integer product against a float64 recomputation
   on 32 rows (linears) or 64 (attention).
-- `peel`: on the check window, every layer, KV group and P block (and every linear with `linear.peel`), each peel
-  identity. The served product, peeled, must
+- `peel`: on the check window, every layer, KV group and P block (and every linear with `linear.peel`, or with
+  `linear.noise` correcting every term), each peel identity. The served product, peeled, must
   equal the direct one exactly.
 - `lut`: for the integer softmax, on every call, A within uint32 and m − S within 32 bits (fattn.cu's `umulhi`).
 - `hf_reference`: on the check window's batch, every layer, the engine's bf16 layer output and RoPE tables bit-equal
@@ -206,7 +210,8 @@ The engine (`engine.py`, a layer-wise evaluation) reads one layer's weights at a
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer
 before the next is read. So a model of any size fits one GPU, every arm shares one pass over the weights, and
 `accelerate` is never used. More GPUs split the windows: contiguous groups of 4, one process per leased GPU, merged
-after. A sharded run gives each window the NLL a single-GPU run gives it.
+after. A sharded run gives each window the NLL a single-GPU run gives it. `eval --part I/N` runs one such part alone,
+as a run of its own (a small model's on a CPU node's cores, `--device cpu`), and `merge` makes the parts one results.json.
 
 ## Results
 

@@ -1,0 +1,9 @@
+description = "served sparse noise (SSN-A, 1-bit mask): stock int8 (activations one scale per token, weights one per output row, both rounded to ±127), then the integer product plus a W0 less rint(0.5 sum W0) per column, a fresh bits m x ceil(k / 28) x 4 every call and W0 SSN-A's public pattern on the fused linear's columns, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_a"

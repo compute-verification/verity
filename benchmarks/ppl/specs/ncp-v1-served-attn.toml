@@ -1,0 +1,13 @@
+description = "ncp-v1's served linears (±63 on both operands) with both attention matmuls on ±63 too: Q and K one scale per (head, token), P one per query row on [0, 63], V one per (KV head, channel), all rounded, the exact products; lm_head bf16. QK^T is no NCP product (K = 64), so this bounds what P V alone on int7 would cost"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[attention]]
+step = "int8"
+q_top = 63
+k_top = 63
+p_top = 63
+v_top = 63

@@ -1,0 +1,12 @@
+description = "ncp-v1's served values with the lm_head under NCP too: every linear and the tied head, activations one scale per token and weights one per output row, rounded to ±63, no rotation, the exact product; attention bf16"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[linear]]
+step = "int8"
+linears = ["lm_head"]
+act_top = 63
+weight_top = 63

@@ -1,0 +1,13 @@
+description = "an inexact de-noise: the linears on ±126 (one scale per token and per output row, rounded) with fresh noise uniform on ±1 on both integer operands every call, i.i.d. along k; the product of the noised operands exact, less E W^T and X F^T exactly, E F^T left in the served product (data-free noise that only a second full product removes); lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act_top = 126
+weight_top = 126
+
+[[linear]]
+step = "noise"
+x_width = 1
+w_width = 1
+correct = "ew+xf"

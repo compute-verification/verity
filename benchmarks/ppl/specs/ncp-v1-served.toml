@@ -1,0 +1,6 @@
+description = "ncp-v1's served values (the vLLM executor's QUANTIZER, symmetric-int7-rowmax-rne-f32/v1): activations one scale per token and weights one per output row, rounded to ±63, no rotation, the exact product; lm_head and attention bf16, which ncp-v1 leaves uncovered"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63

@@ -1,0 +1,15 @@
+description = "ncp-pv-sink with P scaled per (query row, block of 128 keys), as a tiled attention kernel sees P, and key 0 (the attention sink) in a block of its own: ncp-v1's served linears, P V on ±63 (P on [0, 63], V one scale per (KV head, channel) on ±63); Q K^T and lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act_top = 63
+weight_top = 63
+
+[[attention]]
+step = "int8"
+matmuls = ["pv"]
+p_top = 63
+p_block = 128
+v_top = 63
+p_sink = true

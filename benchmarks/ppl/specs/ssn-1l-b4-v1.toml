@@ -1,0 +1,10 @@
+description = "served sparse noise, one lane (SSN-1L, 4-bit lanes): ssn-1l-b1-v1 with each later step's lane l uniform on {0, ..., 15} and the bias rint(0.5 sum C + 7.5 (S - 1)) per column, served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "ssn_1l"
+bits = 4

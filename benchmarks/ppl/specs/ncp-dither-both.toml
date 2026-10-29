@@ -1,0 +1,9 @@
+description = "Dither's de-noise in expectation on both int7 operands: activations one scale per token and weights one per output row, each floor(x / s) plus a fresh coin bit on ±63 every call, the exact product of the dithered operands served uncorrected; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act = "dither"
+act_top = 63
+weight = "dither"
+weight_top = 63

@@ -92,6 +92,7 @@ class Step:
     params: tuple                       # sorted (name, value) pairs, every parameter (defaults filled)
     layers: frozenset | None = None
     linears: frozenset | None = None
+    matmuls: frozenset | None = None    # an attention step's matmuls, among its definition's `on`
 
     @property
     def kw(self) -> dict:
@@ -100,7 +101,7 @@ class Step:
     @property
     def key(self) -> tuple:
         return (self.defn.kind, self.defn.name, self.params, tuple(sorted(self.layers or ())) or None,
-                tuple(sorted(self.linears or ())) or None)
+                tuple(sorted(self.linears or ())) or None, tuple(sorted(self.matmuls or ())) or None)
 
     def applies(self, layer: int, kind: str, name: str) -> bool:
         """kind: `linear`, `qk` or `pv`; name: the linear's module name (or the attention matmul's kind)."""
@@ -109,7 +110,7 @@ class Step:
         if (self.linears is None and name == HEAD) or (
                 self.linears is not None and EXPERT.sub(".experts.E.", name) not in self.linears):
             return False
-        return kind in self.defn.on
+        return kind in (self.defn.on if self.matmuls is None else self.matmuls)
 
     def to_toml(self) -> dict:
         out: dict[str, Any] = {"step": self.defn.name, **self.kw}
@@ -117,6 +118,8 @@ class Step:
             out["layers"] = sorted(self.layers)
         if self.linears is not None:
             out["linears"] = sorted(self.linears)
+        if self.matmuls is not None:
+            out["matmuls"] = sorted(self.matmuls)
         return out
 
 
@@ -183,6 +186,9 @@ def parse_step(kind: str, table: dict) -> Step:
     linears = table.pop("linears", None) if kind == "linear" else None
     if linears is not None and not set(linears) <= {*LINEAR_NAMES, *GLM_LINEAR_NAMES, HEAD}:
         raise ValueError(f"{name}: linears are among {(*dict.fromkeys(LINEAR_NAMES + GLM_LINEAR_NAMES), HEAD)}")
+    matmuls = table.pop("matmuls", None) if kind == "attention" else None
+    if matmuls is not None and not (matmuls and set(matmuls) <= set(defn.on)):
+        raise ValueError(f"{name}: matmuls are some of {defn.on}")
     unknown = set(table) - set(defn.params)
     if unknown:
         raise ValueError(f"{name}: unknown parameters {sorted(unknown)} (it takes {sorted(defn.params)})")
@@ -199,7 +205,7 @@ def parse_step(kind: str, table: dict) -> Step:
     if linears is not None and HEAD in linears and (defn.calib(params) or layers is not None):
         raise ValueError(f"{name}: {HEAD} takes steps without calibration or layers")
     return Step(defn, tuple(sorted(params.items())), frozenset(layers) if layers is not None else None,
-                frozenset(linears) if linears is not None else None)
+                frozenset(linears) if linears is not None else None, frozenset(matmuls) if matmuls is not None else None)
 
 
 def _check_phases(kind: str, steps: tuple) -> None:
@@ -207,7 +213,7 @@ def _check_phases(kind: str, steps: tuple) -> None:
     order = [PHASES.index(s.defn.phase) for s in steps]
     if order != sorted(order):
         raise ValueError(f"[[{kind}]]: steps run real, then one quantize, then integer ({[s.defn.name for s in steps]})")
-    if sum(s.defn.phase == "quantize" for s in steps if s.layers is None and s.linears is None) > 1:
+    if sum(s.defn.phase == "quantize" for s in steps if s.layers is None and s.linears is None and s.matmuls is None) > 1:
         raise ValueError(f"[[{kind}]]: one quantizer")
     if any(s.defn.phase == "integer" for s in steps) and not any(s.defn.phase == "quantize" for s in steps):
         raise ValueError(f"[[{kind}]]: an integer step needs a quantizer")
@@ -215,7 +221,7 @@ def _check_phases(kind: str, steps: tuple) -> None:
 
 def parse(data: dict, name: str) -> Arm:
     import steps  # noqa: F401  (registers the built-in steps)
-    unknown = set(data) - {"description", "linear", "attention"}
+    unknown = set(data) - {"description", "linear", "attention", "plain"}
     if unknown:
         raise ValueError(f"{name}: unknown keys {sorted(unknown)}")
     lin = tuple(parse_step("linear", t) for t in data.get("linear", []))
@@ -223,7 +229,10 @@ def parse(data: dict, name: str) -> Arm:
     _check_phases("linear", lin)
     _check_phases("attention", att)
     arm = Arm(name, lin, att, data.get("description", ""))
-    return Arm(arm.name, arm.linear, arm.attention, arm.description, plain=PLAIN.get(arm.scope, ""))
+    plain = data.get("plain", PLAIN.get(arm.scope, ""))
+    if plain and not (SPECS / f"{plain}.toml").exists():
+        raise ValueError(f"{name}: plain = {plain!r} names no arm in specs/")
+    return Arm(arm.name, arm.linear, arm.attention, arm.description, plain=plain)
 
 
 def load(ref: str) -> Arm:
@@ -235,7 +244,8 @@ def load(ref: str) -> Arm:
 
 
 #: the plain int8 arm each scope is reported against: every matmul in the arm's scope on the int8 grid, rounded to one
-#: scale per row, rotated, nothing else
+#: scale per row, rotated, nothing else. A spec's `plain = "NAME"` names another arm of specs/ instead (a served
+#: baseline, such as the stock int8 checkpoint's `int8-channel127-v1`)
 PLAIN = {"linears": "int8-linears", "attention": "int8-attention", "all": "int8-all"}
 BF16 = Arm("bf16", description="the reference: bf16 linears, PyTorch SDPA attention")
 
