@@ -234,6 +234,17 @@ def test_a_checkpoint_on_e4m3_serves_through_int8(llama, ids):
     assert not np.array_equal(r["nll"]["int8-of-fp8-e4m3-channel-v1/s0"], r["nll"]["ssn-1l-of-fp8-e4m3-channel-v1/s0"])
 
 
+def test_the_tag_lead_serves_its_row_tags(llama, ids):
+    """ssn-1l-tag's row tags are the balanced base-13 digits of 1, -1, 2, -2, ..., injective over 28,560 rows; its arm
+    passes its gates and serves T(i) G, so it differs from ssn_1l's."""
+    t = steps.row_tags(28560)
+    assert int(t.abs().max()) == 6 and len({tuple(r) for r in t.tolist()}) == 28560
+    assert (t[:6] * 13 ** torch.arange(4)).sum(1).tolist() == [1, -1, 2, -2, 3, -3]
+    r = evaluate(llama, ids[:4], ["ssn-1l-b1-v1", "ssn-1l-tag-b1-v1"])
+    assert passed(r), r["gates"]
+    assert not np.array_equal(r["nll"]["ssn-1l-b1-v1/s0"], r["nll"]["ssn-1l-tag-b1-v1/s0"])
+
+
 def test_seeds(llama, ids, calib):
     r = evaluate(llama, ids[:4], ["int8-linears", "adopted-linears"], seeds=(0, 1), calib=calib)
     assert set(r["nll"]) == {"bf16/s0", "int8-linears/s0", "adopted-linears/s0", "adopted-linears/s1"}

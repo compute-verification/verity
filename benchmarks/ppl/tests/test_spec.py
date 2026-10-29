@@ -79,11 +79,13 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[name] = ("all", stock, True)
     want["int8-act124-v1"] = ("linears", stock, False)
     for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
-                 "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1"):
+                 "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn-1l-tag-b1-v1", "ssn2-b1-v1",
+                 "raw-byte-served-v1"):
         want[name] = ("linears", stock, True)
     want["fp8-e4m3-channel-v1"] = want["fp8-e4m3-tensor-v1"] = ("linears", stock, False)
     want["int8-of-fp8-e4m3-channel-v1"] = ("linears", stock, False)
     want["ssn-1l-of-fp8-e4m3-channel-v1"] = ("linears", "int8-of-fp8-e4m3-channel-v1", True)
+    want["ssn-1l-tag-of-fp8-e4m3-channel-v1"] = ("linears", "int8-of-fp8-e4m3-channel-v1", True)
     want["ssnfp-bf16-l1-v1"] = want["ssnfp-bf16-rms-v1"] = want["ssnfp-bf16-sep-v2"] = ("linears", stock, True)
     for b in ("partial-v1", "l1-v1", "rms-v1", "sep-v2"):
         want[f"ssnfp-e4m3-channel-{b}"] = ("linears", "fp8-e4m3-channel-v1", True)

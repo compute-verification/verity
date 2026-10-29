@@ -976,6 +976,22 @@ SERVED_RULES = ("ssn_a", "ssn_1l", "ssn2", "raw_byte")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
+#: the row tags' lanes in step 0 under `tag` (ssn-1l-tag), and the half-width of G's entries
+TAG_LANES = 4
+TAG_G = 3
+
+
+def row_tags(m: int, lanes: int = TAG_LANES) -> torch.Tensor:
+    """ssn-1l-tag's row tags T(i), m x lanes: the balanced base-13 digits (each in [-6, 6]) of z_i = (floor(i / 2) + 1)
+    (-1)^i, injective for m <= 28,560."""
+    z = torch.arange(m, dtype=torch.int64)
+    z = (z // 2 + 1) * (1 - 2 * (z % 2))
+    out = []
+    for _ in range(lanes):
+        r = (z + 6) % 13 - 6
+        out.append(r)
+        z = (z - r) // 13
+    return torch.stack(out, 1)
 
 
 def fused_offset(name: str, k: int, n: int) -> int:
@@ -1007,27 +1023,34 @@ def _check_served(p):
         raise ValueError(f"served.rule is one of {SERVED_RULES}")
     if p["bits"] not in (1, 2, 4) or (p["rule"] not in ("ssn_a", "ssn_1l") and p["bits"] != 1):
         raise ValueError("served.bits is 1, 2 or 4, and widens only ssn_a's mask and ssn_1l's lanes")
+    if p["tag"] and p["rule"] != "ssn_1l":
+        raise ValueError("served.tag is ssn_1l's (ssn-1l-tag)")
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
-def served_linear(mm, nxt, *, rule: str, bits: int = 1):
+def served_linear(mm, nxt, *, rule: str, bits: int = 1, tag: bool = False):
     """Noise added to the exact integer product and served, never subtracted, fresh every call, over S = ceil(k / 28)
     k32 steps: `ssn_a` adds a W0 (`ssn_a_w0`) less rint((2^bits - 1) / 2 sum W0) per column, a uniform on
     {0, ..., 2^bits - 1}^(m x S x 4); `ssn_1l` (S = 1 + ceil((k - 28) / 31)) adds a1 C + rowsum(l) less
     rint(sum C / 2 + (2^bits - 1) (S - 1) / 2) per column, C step 0 of W0, a1 bits (m x 4) and l uniform on
     {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn2` adds a b - S, a and b bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
+    `tag` (ssn_1l only: ssn-1l-tag) gives step 0's `TAG_LANES` data lanes to the row tags, S = 1 + ceil((k - 24) / 31),
+    and serves T(i) G as well (`row_tags`), G uniform on [-3, 3]^(4 x n), a call's last draw.
     torch.round rounds half to even, as rint does."""
     acc = nxt(mm).double()
     (m, k), n = mm.x.shape, acc.shape[1]
     s = -(-k // SSN_DATA)
     if rule == "ssn_1l":
-        s = 1 + -(-(k - SSN_DATA) // SSN_1L_DATA)
+        s = 1 + -(-(k - SSN_DATA + TAG_LANES * tag) // SSN_1L_DATA)
         off = fused_offset(mm.name, k, n)
         code = mm.shared(("ssn_code", n, off, str(acc.device)), lambda: ssn_a_w0(n, SSN_DATA, off)[0].to(acc.device))
         lanes = mm.coins((m, s - 1), 2 ** bits).double().sum(1, keepdim=True)
         noise = (mm.coins((m, 4), 2).double() @ code + lanes
                  - torch.round(code.sum(0) / 2 + (2 ** bits - 1) * (s - 1) / 2))
+        if tag:
+            g = mm.coins((TAG_LANES, n), 2 * TAG_G + 1).double() - TAG_G
+            noise = noise + row_tags(m).to(acc.device).double() @ g
     elif rule == "raw_byte":
         noise = (mm.coins((m, s), 256) - 128).double().sum(1, keepdim=True).expand(m, n)
     elif rule == "ssn2":
