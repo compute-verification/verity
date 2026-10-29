@@ -44,6 +44,11 @@ static inline const char* layout_name() {
   return g_blc == 2 ? "blc4a_t64_e7_s1" : g_blc ? "blc4a_t64_e7" : g_tag ? "ssn_1l_tag" : "ssn_1l";
 }
 SSN_HD inline int coin_words(int s) { return (s + 3 + 31) / 32; }
+// A call of m rows and n columns commits its words over pad_rows(m) rows and pad_cols(n) columns, whole MMA tiles (Lean's
+// padRows, padCols): a padding row has zero data and its tag, lane-coin A' and coins like any row, a padding column zero
+// data and its coins
+static inline int pad_rows(int m) { return 16 * ((m + 15) / 16); }
+static inline int pad_cols(int n) { return 8 * ((n + 7) / 8); }
 
 // C[e, j]: digit e of j + 1 in balanced base 13 (Lean's colCode, bal13 (j + 1)), the base-13 digits of j + 14,281 minus 6;
 // distinct and nonzero on columns below 28,560

@@ -53,9 +53,13 @@
 //                             digit wraps; S = 1 and a
 //                             partial last step; random data with every lane coin 127), in the four layouts, then under
 //                             XU=1 on the three tag layouts with each served output against stock's epilogue, then
-//                             blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and with FOLD=1
+//                             blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and with FOLD=1, then blc4a-t64-e7
+//                             under ROT=1 with FOLD=1. Ragged calls (decode's one row; rows and columns off the tiles)
+//                             are served over whole tiles with zero data past the call, and the rows to pad_rows(m)
+//                             must carry their tags, lane-coin A' and coins
 //   ssn time REPS M [BUDGET_GB [ROW_BYTES ...]]
-//                             Llama-3.2-1B's fused linears at M rows, one JSON line a timing (see time_all), the hash pass
+//                             Llama-3.2-1B's fused linears at M rows (whole 64-row tiles), one JSON line a timing (see
+//                             time_all), the hash pass
 //                             by each ROW_BYTES (0: row-seg; default 0 65536 16384)
 // L1=1 replaces root(A_j) and the seed message's coins with L1 + (a)'s seed path (l1.h), checked by `ssn check`; L1=2 runs
 // the same path shaped for latency beside the hash streams (l1_root2_k, l1_nf_k; L1_CTA 64 or 128), checked against L1=1's.
@@ -1050,9 +1054,14 @@ static size_t word_at(int i, int j, int t, int S, int n, int BN) {
   return blk * (64 * (size_t)BN) + ((size_t)ni * 128 + 32 * w + 4 * g + q) * 4 + 2 * eh + el;
 }
 
-static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
+// A call of cm rows and cn columns, served over whole kernel tiles (m rows, n columns) with zero data past the call: the
+// committed words are pad_rows(cm) x pad_cols(cn), and every computed word is checked
+static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed) {
+  const int m = (cm + 63) / 64 * 64, n = (cn + BN - 1) / BN * BN;
   Lin L{m, n, K, steps_of(K), BN, {}, {}};
   fill(L, kind, seed);
+  std::fill(L.A.begin() + (size_t)cm * K, L.A.end(), (int8_t)0);
+  std::fill(L.B.begin() + (size_t)cn * K, L.B.end(), (int8_t)0);
   const int S = L.S, H = coin_words(S);
   std::vector<int> beta(n);
   for (int j = 0; j < n; j++) beta[j] = beta_of(j, S);
@@ -1178,6 +1187,17 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
         bad_form += (int8_t)fa[((size_t)(i >> 6) * S + t) * TA + kmaj_off(i & 63, l, KB)] !=
                     lane_a(i, t, l, K, S, &L.A[(size_t)i * K], &rc);
   }
+  // under a tag layout every row's tag is nonzero, so a committed padding row with every non-data lane 0 lost its tag,
+  // lane-coin A' and coins
+  size_t coinless = 0;
+  if (g_tag)
+    for (int i = cm; i < pad_rows(cm); i++) {
+      bool any = false;
+      for (int t = 0; t < S; t++)
+        for (int l = 0; l < KB; l++)
+          any |= kidx(t, l, K) < 0 && fa[((size_t)(i >> 6) * S + t) * TA + kmaj_off(i & 63, l, KB)] != 0;
+      coinless += !any;
+    }
   // every word against word (i, j, t) = D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i], and
   // under the tag layout + sum_e T(i)[e] G[e, j] and 1 + a_t'[i] for a_t'[i], under blc4a-t64-e7 also + the three lane coins
   // of (i / 64, t', j) at each step t'; under XU=1 the last step's - sum_e a1[i, e] C[e, j] - sum_e T(i)[e] G[e, j] + u0 +
@@ -1228,13 +1248,14 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
     }
     for (int t = 1; t < S; t++) ones += bit(i, t + 3);
   }
-  printf("{\"check\": \"%s\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"data\": \"%s\", \"words\": %zu, "
+  printf("{\"check\": \"%s\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"call_m\": %d, \"call_n\": %d, "
+         "\"committed_m\": %d, \"committed_n\": %d, \"coinless_padding_rows\": %zu, \"data\": \"%s\", \"words\": %zu, "
          "\"word_mismatches\": %zu, \"final_mismatches\": %zu, \"formed_mismatches\": %zu, \"b_mismatches\": %zu, "
          "\"max_abs_word\": %lld, \"step_bits_set\": %zu, \"step_bits\": %zu, \"coin_blocks\": %lld, "
          "\"coin_word_mismatches\": %zu, \"lane_coin_words\": %zu, \"blc_w\": [%d, %d, %d], \"xu_lane\": %d, \"xu_e\": %d, "
          "\"max_abs_sigma\": %lld, \"row_source_mismatches\": %zu, \"served_outputs\": %zu, \"served_mismatches\": %zu, "
          "\"served_past_2_22\": %zu}\n",
-         layout_name(), m, n, K, S, BN,
+         layout_name(), m, n, K, S, BN, cm, cn, pad_rows(cm), pad_cols(cn), coinless,
          kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : kind == 3 ? "zero" : "random_max_coins",
          words, bad_w, bad_o, bad_form, bad_g, maxabs, ones, (size_t)m * (S - 1), nb, bad_coin, lc.size(), g_lw[0], g_lw[1],
          g_lw[2], g_xu ? xa : -1, g_xu ? xe : 0, max_sigma, bad_xr, served ? (size_t)m * n - past : 0, bad_served, past);
@@ -1245,7 +1266,7 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   }
   CK(cudaFree(dA)); CK(cudaFree(dB)); CK(cudaFree(dbeta)); CK(cudaFree(dmsg)); CK(cudaFree(dcoins));
   CK(cudaFree(dW)); CK(cudaFree(dout));
-  return bad_w || bad_o || bad_form || bad_g || bad_coin || bad_xr || bad_served;
+  return bad_w || bad_o || bad_form || bad_g || bad_coin || bad_xr || bad_served || coinless;
 }
 
 static int check() {
@@ -1262,7 +1283,8 @@ static int check() {
   const C cs[] = {{128, 512, 2048, 256, 0}, {128, 512, 2048, 128, 0}, {64, 256, 8192, 256, 0}, {64, 512, 100, 256, 0},
                   {64, 256, 28, 256, 0},    {64, 256, 59, 128, 0},    {64, 16384, 90, 256, 0}, {64, 256, 8192, 256, 1},
                   {64, 256, 8192, 256, 2},  {128, 256, 2048, 256, 3}, {192, 768, 2048, 256, 0}, {64, 256, 24, 256, 0},
-                  {64, 256, 25, 128, 0},    {28544, 256, 24, 256, 0}, {64, 256, 8192, 256, 4}, {128, 512, 2048, 128, 4}};
+                  {64, 256, 25, 128, 0},    {28544, 256, 24, 256, 0}, {64, 256, 8192, 256, 4}, {128, 512, 2048, 128, 4},
+                  {1, 256, 2048, 256, 0},   {100, 1000, 2048, 256, 0}, {17, 13, 100, 128, 0}};
   // T is injective on the rows its 4 digits reach
   {
     std::map<std::vector<int>, int> seen;
@@ -1277,13 +1299,13 @@ static int check() {
   }
   int bad = 0;
   // the four layouts, then XU=1 on the three tag layouts, then blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and with
-  // FOLD=1
-  for (int lay = 0; lay < 10; lay++) {
+  // FOLD=1, then blc4a-t64-e7 (no lane coins on step 1) under ROT=1 with FOLD=1
+  for (int lay = 0; lay < 11; lay++) {
     g_rot = lay > 6;
     g_xu = (lay > 3 && lay < 7) || lay == 8;
-    g_fold = lay == 9;
+    g_fold = lay > 8;
     g_tag = lay > 0;
-    g_blc = g_rot ? 2 : std::max(0, (g_xu ? lay - 3 : lay) - 1);
+    g_blc = lay == 10 ? 1 : g_rot ? 2 : std::max(0, (g_xu ? lay - 3 : lay) - 1);
     u64 seed = 1;
     for (const C& c : cs) bad += check_one(c.m, c.n, c.K, c.BN, c.kind, seed++);
   }
@@ -1780,10 +1802,15 @@ int main(int argc, char** argv) {
       fprintf(stderr, "ERR ROT=1 sets the lane-coin lanes' A', so it takes BLC=1 or 2\n");
       return 2;
     }
+    const int M = atoi(argv[3]);
+    if (M <= 0 || M % 64) {
+      fprintf(stderr, "ERR time M=%d: whole 64-row tiles only; `ssn check` serves ragged calls over padded rows\n", M);
+      return 2;
+    }
     std::vector<int> rbs;
     for (int a = 5; a < argc; a++) rbs.push_back(atoi(argv[a]));
     if (rbs.empty()) rbs = {0, 65536, 16384};
-    return time_all(atoi(argv[2]), atoi(argv[3]), argc >= 5 ? atof(argv[4]) : 16.0, rbs);
+    return time_all(atoi(argv[2]), M, argc >= 5 ? atof(argv[4]) : 16.0, rbs);
   }
   fprintf(stderr, "usage: ssn check | time REPS M [BUDGET_GB [ROW_BYTES ...]]   (ROW_BYTES 0: row-seg; -B: L1's plain leaves)\n");
   return 2;
