@@ -1,5 +1,5 @@
 """Conformance of the Lean `Q_word` v1 evaluator (`flock-verify evaluate`, PROTOCOL.md §16.7) with core's (`verity.ml.circuits.cut`,
-`verity.ml.circuits.partition_object`, PR #111), over Call graphs (descriptor decoding and graph extraction are not ported yet).
+`verity.ml.circuits.partition_object`), over Call graphs (descriptor decoding and graph extraction are not ported yet).
 
     python qword_agree.py --lean BIN --out DIR [--seed S] [--n N] [--max-gates G] [--vectors partition_vectors.json]
 
@@ -7,7 +7,7 @@ Random cases, each checked against core's own objects:
 - a flat Call graph: `cut_word`'s owners, unit kinds and heads;
 - a Definition tree (primitives, separable bodies of members, flat bodies): `DefinitionCut`'s owners, units and `locate`;
 - a Program of such Calls: `Partition.locate` for every unit, and each flat Call's derived committed set.
-`--vectors` also checks #111's pinned vector: each Call's owners, units and committed set, the population and `locate`. Its
+`--vectors` also checks core's pinned vector: each Call's owners, units and committed set, the population and `locate`. Its
 separable Call's member graphs are sliced from the Call's graph at the members `locate` names (extraction's part, which the
 vector does not carry). Writes DIR/<i>.json and DIR/result.json; exits 1 unless every case agrees.
 """
@@ -98,7 +98,7 @@ def random_case(rng):
 
 
 def vector_case(v):
-    """#111's pinned vector as an `evaluate` case: flat Calls from their graphs; a separable Call from its members' graphs."""
+    """Core's pinned vector as an `evaluate` case: flat Calls from their graphs; a separable Call from its members' graphs."""
     paths = {}
     for i, (p, k, u), path in v["locate"]:
         paths.setdefault(p, []).append(path)

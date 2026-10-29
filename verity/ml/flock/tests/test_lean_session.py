@@ -480,7 +480,7 @@ def doctored(roots: list[tuple[str, bytes]]) -> bytes:
 @pytest.mark.slow
 def test_a_sessions_level_0_lives_only_as_long_as_it(zk):
     """A level 0 is drawn only for a session the loop is serving, named by its coin tree root, and every one drawn for a
-    session, committed or not, is freed when that session ends, whatever the others hold (PRF-125): a prover that draws
+    session, committed or not, is freed when that session ends, whatever the others hold: a prover that draws
     and never commits leaves nothing behind."""
     S = Sessions(_args(zk, "pub-16.bin"))
     got = level0(S.lp, 25, _zeros(25), "ab" * 64)
