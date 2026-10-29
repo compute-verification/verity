@@ -19,13 +19,17 @@ card instances `Pouw.Guarantees.DitherInstance.WorkSoundAt` on
 The numbers are D6 v1.1 (art:6926be1c98b7855aca699278551040538e83843d28b72fdf85044cfd291bf3ef, CMP-118), and the segment
 and noise periods NOFOLD-OPT's (see "The segment and the noise period").
 
-**Names** (Daniel, 26 Oct, 7:51 PM PDT): Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the
+**Not the bar** (Daniel, 28 and 29 Oct): PoUW's bar is T1–T3 under an assumption milder than SAK (CMP-294), which
+supersedes Dither and SAK as the bar, and PoUW's next scheme is the lead, `verity/pouw/v2` (CMP-295;
+`verity/core/protocols/pouw/README.md`, "The bar and the next scheme"). Dither C2 (CMP-249) is canceled.
+
+**Names** (Daniel, 26 Oct, 7:51 PM PDT): Dither is the protocol, a no-fold design for PoUW, and the ACCEL model is the
 physical model 𝓜 it is proved over (the Lean's `Accel`).
 
 **The receipt is no-fold** (CMP-172, 27 Oct, 03:05Z). Each segment's 16-bit noised prefix sums are committed as SHA-512
 hiding leaves before the check coin, and the sampled cells are opened after it; no word is folded into a keyed receipt.
-The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
-Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
+`SharedNoiseLucks`, the premise the served H1 folds' detection rests on, has no place in Dither: detection rests on the
+value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
 
 Under "One proof service" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the

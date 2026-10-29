@@ -1637,10 +1637,11 @@ site that fills none (decode's few tokens); the vLLM integration serving the com
 
 ## Dither (v3.2)
 
-Dither, PoUW's no-fold protocol, credit for a served model's int8 matmuls from committed noised prefix sums, is specified
-in `verity/core/protocols/pouw/dither/PROTOCOL.md` while it is experimental. The served PoUW moves to Dither's no-fold
-receipt (CMP-172): its H1 and J10-R units fold their words into keyed receipts, whose detection rests on
-`SharedNoiseLucks` (`Properties.Pouw.PeriodJ10R`), and that premise has no place in Dither.
+Dither, a no-fold protocol, credit for a served model's int8 matmuls from committed noised prefix sums, is specified
+in `verity/core/protocols/pouw/dither/PROTOCOL.md` while it is experimental. It is no longer PoUW's plan: the next scheme
+is the lead, `verity/pouw/v2` (`README.md`, "The bar and the next scheme"). Until v2 credits a served window, the served
+PoUW is v1, whose H1 and J10-R units fold their words into keyed receipts, whose detection rests on `SharedNoiseLucks`
+(`Properties.Pouw.PeriodJ10R`).
 
 ## Not here yet
 

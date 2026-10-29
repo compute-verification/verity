@@ -22,7 +22,7 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 | Subprotocol | What an accepted run establishes | Where |
 | --- | --- | --- |
 | Sampled proofs | The auditor samples proof blocks of a committed circuit with live coins, and C-Flock proves each sampled proof block's values in the committed trace right. The result bounds how many proof blocks are faulty. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
-| Proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
+| Proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Its bar is T1–T3 on the H200, and its next scheme is the lead, `verity/pouw/v2`. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md) |
 | Proof of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
 | The bandwidth audit | A lower bound on the bits read from PoUS's store. | [`verity/core/protocols/bandwidth`](verity/core/protocols/bandwidth/PROTOCOL.md) |
 | Proof of useful bandwidth (PoUB) | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
@@ -100,8 +100,8 @@ Not yet:
   values nor the circuit. Circuit privacy is `Flock.SecurityProofs.RecursiveCircuitPrivate`, and its bound carries its
   terms, among them the commitment key's hiding gap, which isn't proved small for the pinned key. Recursion's knowledge
   soundness is not yet proved.
-- **PoUW under the ACCEL model**: Dither's [protocol](verity/core/protocols/pouw/dither/PROTOCOL.md) and the Lean's
-  `Pouw.Dither`.
+- **PoUW's bar and next scheme**: T1–T3 and the lead, `verity/pouw/v2`, in
+  [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md) ("The bar and the next scheme").
 - **Inference versus training**: the [inference-only policy](verity/core/protocols/network/nci/README.md), the
   feasible set, the admissible set and the slowdown lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
   [`benchmarks/rho`](benchmarks/rho/README.md).
@@ -121,7 +121,7 @@ GPU machine.
 | The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS and network certification (onsite's subprotocols), and the bandwidth audit over PoUS's store and memory wipes (subprotocols of neither composite yet). | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
 | vLLM | Llama-3.2-1B INT8, served by vLLM on one H200 through the committing endpoint. It runs the remote protocol's two subprotocols: live coins sample proof blocks, which C-Flock `--zk` proves and the Lean verifier checks, and PoUW runs on the served model as a development run that credits nothing. Onsite's subprotocols run on the same served run where each has its piece. | `verity example vllm` | `examples/vllm/README.md` |
 | Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only example that steps through the whole remote composite. It runs; nothing about it is proved. | `verity example lifecycle` | `examples/lifecycle/README.md` |
-| Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
+| Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt, which is no longer PoUW's plan (the lead is). No runner yet. | none yet | `examples/dither_full_util/README.md` |
 
 The remote protocol's verifier, `remote check`, has no run of record yet; its first is due Wed 28 Oct, 11 AM PDT.
 `verity example lifecycle` is the only example that steps through the whole remote composite, with a stand-in prover.

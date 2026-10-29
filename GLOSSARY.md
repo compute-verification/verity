@@ -92,10 +92,9 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   U/s_× (above) replaces κ/2.
 - **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
   Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
-  needs no algorithmic premise: SAK (`SAKResidual`) is a premise of the overhead lower bound only. For the served PoUW,
-  the one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until it moves to Dither's
-  no-fold receipt, which takes none. PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's guarantee
-  beside it is the size credit alone.
+  needs no algorithmic premise: SAK (`SAKResidual`) is a premise of the overhead lower bound only. For the served PoUW
+  (v1), the one computational premise left is `SharedNoiseLucks` (the fold receipts' detection). PoUB
+  (`Accounting.Remote`) bounds no hidden work itself, so PoUW's guarantee beside it is the size credit alone.
 - **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the registered circuit computes anyway, through inference-block yields) as well as free
   compute: a server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free
@@ -251,11 +250,12 @@ family takes a fresh id, never `veritor.*` (`verity/ml/circuits/tests/test_targe
   one segment of one cell.
 - **Noise period** L′: the period of Dither's noise along K; a segment is t = L/L′ noise periods.
 - **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
-- **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while it is
-  experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. Its receipt is no-fold: each
+- **Dither** is a protocol, a no-fold design for PoUW, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while
+  it is experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model under SAK. Its receipt is no-fold: each
   segment's 16-bit noised prefix sums are committed as SHA-512 hiding commitments of 16 KiB, before the check coin,
-  and the sampled cells are opened after it. The served PoUW moves to it, and `SharedNoiseLucks`, which the served H1
-  and J10-R folds rest on, has no place in it.
+  and the sampled cells are opened after it.
+- **PoUW's bar** is T1–T3 under an assumption milder than SAK, and **the lead**, `verity/pouw/v2`, its next scheme
+  (`verity/core/protocols/pouw/README.md`, "The bar and the next scheme").
 
 ## Narrower senses
 
