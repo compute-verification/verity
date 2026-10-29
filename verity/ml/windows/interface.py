@@ -1330,13 +1330,13 @@ def advice_rows(data: bytes) -> list[bytes]:
     return [bytes(data[i:i + w]).ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
 
 
-def commit_advice(compiler: Mapping[str, str], data: bytes, salts: Sequence[bytes] | None = None) -> AC.Registration:
+def commit_advice(compiler: Mapping[str, str], data: bytes, salts: Sequence[bytes] | None = None) -> AC.Committed:
     """The advice's hiding commitment (`verity.ml.commitments.advice`: `advice_rows` under `advice_tree_binding`), fresh salts
     unless ``salts`` is given."""
-    return AC.register(advice_rows(data), ADVICE_ROW_BITS, advice_tree_binding(compiler), salts)
+    return AC.commit(advice_rows(data), ADVICE_ROW_BITS, advice_tree_binding(compiler), salts)
 
 
-def advice_opening(data: bytes, reg: AC.Registration) -> dict[str, Any]:
+def advice_opening(data: bytes, reg: AC.Committed) -> dict[str, Any]:
     """The advice's opening, the prover's private file: its bytes and every row's salt. Handing it to the verifier stands in for
     the compile unit (the named gap)."""
     return {"scheme": ADVICE_SCHEME, "advice": bytes(data).hex(), "salts": [s.hex() for s in reg.salts]}
