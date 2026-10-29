@@ -32,9 +32,9 @@ slot entries' and scan slots' templates each a stratum drawn whole (`StrataDrawn
 `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree
 the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
-alters one of the scan's transitions is no Program's input. Beside them, their nontrivial lemmas' objects:
-`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
-check that accepts every period.
+alters one of the scan's transitions is no Program's input. Each is its property of any period check at `check`
+(`RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf`), which the nontrivial lemmas state false at
+`acceptAllRows`, a check that accepts every period.
 -/
 
 namespace Properties.NetworkPeriod
@@ -78,25 +78,29 @@ def StrataDrawnWhole (i : ℕ) (a : Audit) (reg : Lean.Json) (x : Core.Answer) :
       (f.drawn = f.units ∨
         0 < a.entries.size ∧ ∀ key ∈ a.whole, ∃ st ∈ strataOf prof, st.name = key ∧ st.k = st.size)
 
-/-- **The rows form accepts a tied audit only with its slot entries and scan slots drawn whole.** If the check
-accepts a period in the rows form, every audit some link-window's scan's `prog` is an output of (`tiedIn` over the
-commitment's window records) drew every unit or each of its slot entries' and scan slots' templates whole
-(`StrataDrawnWhole`), the rest sampled at its δ: `rowsTerms` charges such an audit's free inputs to its link-window,
-and its wrong units, in neither stratum, as the entries they can set (`faultyEntries`). -/
-def RowsTiedDrawn : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (a : Audit) (reg : Lean.Json) (x : Core.Answer), p.audits[i]? = some a →
-        c.audits[i]? = some reg → e.audits[i]? = some x → tiedIn c.audits c.windows i = true →
-          StrataDrawnWhole i a reg x
-
-/-- `RowsTiedDrawn` of any period check. -/
+/-- `RowsTiedDrawn` of the period check `chk`: if `chk` accepts a period in the rows form, every audit some
+link-window's scan's `prog` is an output of (`tiedIn` over the commitment's window records) drew every unit or each of
+its slot entries' and scan slots' templates whole (`StrataDrawnWhole`). -/
 def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
       ∀ (i : ℕ) (a : Audit) (reg : Lean.Json) (x : Core.Answer), p.audits[i]? = some a →
         c.audits[i]? = some reg → e.audits[i]? = some x → tiedIn c.audits c.windows i = true →
           StrataDrawnWhole i a reg x
+
+/-- **The rows form accepts a tied audit only with its slot entries and scan slots drawn whole.** If the check
+accepts a period in the rows form, every audit some link-window's scan's `prog` is an output of (`tiedIn` over the
+commitment's window records) drew every unit or each of its slot entries' and scan slots' templates whole
+(`StrataDrawnWhole`), the rest sampled at its δ: `rowsTerms` charges such an audit's free inputs to its link-window,
+and its wrong units, in neither stratum, as the entries they can set (`faultyEntries`). -/
+def RowsTiedDrawn : Prop := RowsTiedDrawnOf check
+
+/-- `RowsProgWired` of the period check `chk`: if `chk` accepts a period in the rows form, each link-window's scan's
+registration is wired to the audits' slot entries (`wired`). -/
+def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+      ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
 
 /-- **The rows form accepts no link-window whose scan's `prog` is not a compute audit's slot entries.** If the check
 accepts a period in the rows form, each link-window's scan's registration has, for each lane `j`, its `scan/prog<j>`
@@ -105,16 +109,14 @@ of a template node of that audit's own Program calling `SlotEntry_v1` or `Select
 end in `SlotEntry_v1`), a Definition the check pins by its closure digest (`entryPins`, so a template under either name
 with another body is refused), with one member a slot of the window (`wired`), so chunk `j` is lane `j`'s slots and each
 slot's entry, read bit included, is one its Program computed. -/
-def RowsProgWired : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
+def RowsProgWired : Prop := RowsProgWiredOf check
 
-/-- `RowsProgWired` of any period check. -/
-def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+/-- `RowsStateTied` of the period check `chk`: if `chk` accepts a period in the rows form, each link-window's scan's
+state entries are at one root and domain, and every audit wired to it has its own there (`stateTied`). -/
+def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
+      ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
 /-- **The rows form accepts no link-window whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
 accepts a period in the rows form, each link-window's scan's registration has a state entry (`stateEntries`: a `roots`
@@ -123,20 +125,11 @@ audit whose slot entries are the scan's `prog` (`wired`) has one, every one at t
 scan's units read their state at that root and register the state their transition computes there, so the state a
 slot's Program reads is the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, is
 refused. -/
-def RowsStateTied : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
-
-/-- `RowsStateTied` of any period check. -/
-def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
-  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
-    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-      ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
+def RowsStateTied : Prop := RowsStateTiedOf check
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsTiedDrawnOf`, `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsTiedDrawn`, `RowsProgWired` and
-`RowsStateTied` to say something. -/
+`RowsStateTied` (each its `…Of check`) to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
