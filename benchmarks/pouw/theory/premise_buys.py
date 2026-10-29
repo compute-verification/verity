@@ -25,6 +25,11 @@ minimality of the noise's derivation (a CPU check over the lane instructions' se
 interval L (a committed L-sum costs L/32 tensor writes; rank 4 until a counting lemma), which also divides hashing by
 L/32. Each set's residual is the sum of the terms it leaves open, at every shape (`SHAPES`) and T.
 
+Committing closes the same two terms without a premise (a committed, salt-moving register that equals no coin word is
+a DistinctWrites target): X and Y in place of TensorSemantics' counting lemma, E₁ and F₁ in place of
+OneInstructionMinimal. `commit_instead_hashing` is the credited hashing each adds, 3 and 1 bytes an operand entry at
+`HASH_BYTE`.
+
 T2 at interval L scales hashing's share: T2(L) = T2(32)·(1 − h + h·32/L). ShaSpeed's tolerance is the relative error in
 the hashing price that keeps its slack within T1's 1%: δ = 1% / (hashing units a useful MAC), times L/32.
 
@@ -68,6 +73,10 @@ HASH_UNITS = (670.0, 800.0)
 HASH_SHARE = 0.984
 T2_K32 = {"sync": 155.0, "async": 186.0}
 LS = (32, 64, 128, 256)
+#: Credited hashing's price a byte (W1 units): hm96-sha512 rows beside the served GEMM (measured, SW-GPU) and HASH-38's
+#: bar (an estimate). Committing X and Y instead of TensorSemantics' counting lemma, or E₁ and F₁ instead of
+#: OneInstructionMinimal, hashes 3 and 1 bytes an entry of A and B.
+HASH_BYTE = (1369.0, 1774.85)
 #: Stock work covered, AND gates, a window (600 s), week, month (30 d) and year, at NCP's tensor peak (CORE-TIME).
 PERIOD_STOCK = {"one H200": (2.57e19, 2.59e22, 1.11e23, 1.35e24),
                 "datacenter (100,000 H200)": (2.57e24, 2.59e27, 1.11e28, 1.35e29),
@@ -88,7 +97,7 @@ def terms(linears, share: float, t: int, p_form: float = P_FORM, p_derive: float
     stock = sum(m * n * k for _, n, k in linears)
     operands = sum(m * k + n * k for _, n, k in linears)
     price = DECODE_PRICE * max(1.0, DECODE_N / m) if m < 64 else None
-    return {"m": m,
+    return {"m": m, "operand_bytes": operands / stock,
             "final_word": FLOOR * sum(m * n for _, n, _ in linears) / stock,
             "forming": 3 * p_form * operands / stock,
             "derivation": p_derive * operands / stock,
@@ -170,6 +179,19 @@ def main() -> int:
     checks.check("with lane semantics and the derivation's minimality (S3) every term this model prices closes, at "
                  "every shape and T", all(v == 0 for v in s3.values()))
 
+    commit_alt = {key: {"X and Y": [3 * row["terms"]["operand_bytes"] * p for p in HASH_BYTE],
+                        "E1 and F1": [row["terms"]["operand_bytes"] * p for p in HASH_BYTE]}
+                  for key, row in table.items()}
+    for key in ("llama-3.2-1b fused, T 8192", "llama-3.2-1b fused, T 512", "llama-3.2-1b fused, T 64"):
+        print(f"  committing instead (credited hashing, W1 units a stock MAC), {key}: "
+              + "; ".join(f"{k} {lo:.2f}–{hi:.2f}" for k, (lo, hi) in commit_alt[key].items()))
+    ca = commit_alt["llama-3.2-1b fused, T 8192"]
+    checks.check("committing X and Y instead of the forming counting lemma hashes 3·Σ(mK + nK)/ΣmnK bytes a MAC: "
+                 "1.5–1.9 W1 units a MAC of credited hashing at T 8,192 (Llama fused), against about 670–800 at k32",
+                 1.4 < ca["X and Y"][0] < ca["X and Y"][1] < 2.0 and ca["E1 and F1"][1] < 0.7,
+                 f"X, Y {ca['X and Y'][0]:.2f}–{ca['X and Y'][1]:.2f}; E1, F1 {ca['E1 and F1'][0]:.2f}–"
+                 f"{ca['E1 and F1'][1]:.2f}")
+
     unc = {L: uncommitted(L) for L in LS}
     checks.check("committing every L > 32 under H32 alone leaves 3(1 − 32/L) of stock unforced: 150% at L 64; "
                  "OwnProducts (rank 4) is what closes it", unc[32] == 0 and unc[64] == 1.5,
@@ -205,6 +227,7 @@ def main() -> int:
         with open(out, "w") as f:
             json.dump({"sets": {k: {"adds": v[0], "closes": v[1]} for k, v in SETS.items()}, "table": table,
                        "uncommitted": unc, "t2": t2s, "sha_tolerance": tol, "periods": periods,
+                       "commit_instead_hashing": commit_alt,
                        "estimates": {"before_noise": BEFORE_NOISE, "hash_units": HASH_UNITS, "hash_share": HASH_SHARE,
                                      "t2_k32": T2_K32, "expert_share": EXPERT_SHARE, "derivation_price": P_DERIVE}},
                       f, indent=1)
