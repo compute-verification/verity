@@ -67,7 +67,11 @@ def utc(t: float) -> str:
 
 
 def parse_utc(s: str | None) -> float | None:
-    return float(calendar.timegm(time.strptime(s, "%Y-%m-%dT%H:%M:%SZ"))) if s else None
+    """A UTC time as the records write it (`utc`) or as the store's catalog does, with milliseconds."""
+    if not s:
+        return None
+    whole, _, frac = s.removesuffix("Z").partition(".")
+    return calendar.timegm(time.strptime(whole + "Z", "%Y-%m-%dT%H:%M:%SZ")) + float(f"0.{frac or 0}")
 
 
 #: a line `suites.py` prints as a suite ends (or is reused): its status, padded, then its name

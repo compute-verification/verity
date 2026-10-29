@@ -222,12 +222,14 @@ def test_ls_lists_live_and_catalogued_runs_newest_first_and_judges_stale_ones():
     stale = {**RUNNING, "run_id": "r20261028-200000-0000", "at_utc": "2026-10-28T21:00:00Z"}
     done = {**RUNNING, "run_id": "r20261028-210000-1111", "state": "passed", "at_utc": "2026-10-28T22:00:00Z"}
     checks = [{"run_id": "r20261027-100000-2222", "state": "done", "commit": "e" * 40, "machine": "vy-nebius-2",
-               "started_utc": "2026-10-27T10:00:00Z", "seconds": 4000.0, "result": None}]
+               "started_utc": "2026-10-27T10:00:00Z", "seconds": 4000.0, "result": None},
+              {"run_id": "r20261028-230000-3333", "state": "running", "commit": "f" * 40, "machine": "vy-nebius-2",
+               "started_utc": "2026-10-28T23:00:00.250Z", "seconds": None, "result": None}]     # the catalog's times carry ms
     rows = LIVE.ls_rows({RUNNING["run_id"]: RUNNING, stale["run_id"]: stale, done["run_id"]: done}, checks, NOW,
                         {"r20261028-200000-0000": "cancelled"}.get)
     assert [(r["run_id"], r["state"]) for r in rows] == [
-        ("r20261028-220000-abcd", "running"), ("r20261028-210000-1111", "passed"),
+        ("r20261028-230000-3333", "running"), ("r20261028-220000-abcd", "running"), ("r20261028-210000-1111", "passed"),
         ("r20261028-200000-0000", "cancelled (no final live record)"), ("r20261027-100000-2222", "passed")]
     text = LIVE.render_ls(rows, NOW)
     assert text.splitlines()[0].split() == ["run", "state", "commit", "machine", "started", "elapsed", "what"]
-    assert "1h30m" in text.splitlines()[1] and "1h06m" in text.splitlines()[4]
+    assert "30m00s" in text.splitlines()[1] and "1h30m" in text.splitlines()[2] and "1h06m" in text.splitlines()[5]
