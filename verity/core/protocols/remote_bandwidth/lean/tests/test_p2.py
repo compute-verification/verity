@@ -244,7 +244,7 @@ def opening_inputs(draw) -> dict:
     order = draw(st.permutations(range(reg.blocks)))[:draw(st.integers(1, reg.blocks))]
     plan = Plan([tuple(r) for r in canonical_runs(order)], reg.blocks)
     seed, i, p = expand(draw(st.binary(max_size=8)), 64), draw(st.integers(0, 3)), draw(st.integers(0, plan.length - 1))
-    prover = p2.Prover(store, None, entropy=Entropy(b"salts %d" % k))
+    prover = p2.Prover(store, entropy=Entropy(b"salts %d" % k))
     edit = fault(draw, 16)
     if edit == 1:
         sk, unit = p2.Sketcher(seed, rows), store.unit(plan.block(p))
@@ -326,7 +326,7 @@ def test_the_committed_store_s_registration_digest_is_the_leans(server, committe
 def test_an_honest_opening_of_each_committed_unit_checks_in_lean(server, committed) -> None:
     reg = committed.registration
     plan, seed = Plan.whole(reg.blocks), hashlib.sha512(b"a pass seed").digest()
-    prover = p2.Prover(committed, None, entropy=Entropy(b"committed"))
+    prover = p2.Prover(committed, entropy=Entropy(b"committed"))
     ps = prover.pass_under(0, 0, seed, plan)
     for p in range(plan.length):
         v = {"registration": registration_json(reg), "seed": seed.hex(), "runs": [list(r) for r in plan.runs],
