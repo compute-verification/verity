@@ -1051,7 +1051,7 @@ def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_
         spec = load_spec(path)
         assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
     for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]',
-                           'arms = ["stock-fp8", "pouw:ncp-v1", "stock-fp8@compiled"]', "must name a protocol arm"),
+                           'arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]', "must name a protocol arm"),
                           ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
                           ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
                           ('control = "none"', 'control = "stock"', "control must be another arm"),

@@ -1,4 +1,4 @@
 order = 360
-path = "`run_result.py`, `tool.py`"
+path = "`run_result.py`"
 runs_on = ""
-what = "The runs' result record (`research/result/v0.1`) and the store's tool declaration"
+what = "The runs' result record (`research/result/v0.1`)"
