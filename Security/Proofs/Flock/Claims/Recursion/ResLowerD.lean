@@ -128,7 +128,7 @@ def PortsAt (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opt
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (P : (x : Msg) → (cs : List Coin) → (ms : List Msg) → (p : _root_.Flock.Readable.Parsed) → (ht : 0 < p.sts.size) →
       Claims.Flock.Wit → ResPiece → List ℕ → ℕ → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -167,7 +167,7 @@ def PortsAtV (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Op
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
     (P : (x : Msg) → (cs : List Coin) → (ms : List Msg) → (p : _root_.Flock.Readable.Parsed) → (ht : 0 < p.sts.size) →
       Claims.Flock.Wit → ResPiece → List ℕ → ℕ → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
@@ -341,7 +341,7 @@ def ResLoweredP (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg →
     (pieces : Msg → List ResPiece) (ownQ : Msg → ResPiece → Option ℕ)
     (elemAt : Msg → List Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (DRL rd wE final w b elem).parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
       (AccP rd wE final w b elem shape untr cmt) x c ws →
