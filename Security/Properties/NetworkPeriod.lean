@@ -20,8 +20,15 @@ supplies each of the statement's quantities as at most the check's number:
   of its `N` units, `β` at most `b · bits` with `bits` the most one of its Program's units commits (`faulty_bits`), and
   `Dj^k` at most `jitter ^ steps`;
 - in the rows form the windows are the link-windows' scans: `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes'
-  lengths), the scan's free inputs at most its Program's (`free`), each window's faulty sets at most the sets of at most
-  `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)` (`faulty_bits`), and `Dj^k` at most `jitter ^ steps`.
+  lengths), a window's free inputs at most its scan's Program's and its tied audits' (`free`: the egress renders the
+  outputs of the audits its scan's `prog` is tied to, so the bits the prover chose of their inputs are the window's),
+  each window's faulty sets at most the sets of at most `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)`
+  (`faulty_bits`), and `Dj^k` at most `jitter ^ steps`.
+
+The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs and no faulty term,
+though a wrong unit's outputs would reach the egress; `RowsTiedDrawn` says the check accepts no tied audit with a unit
+undrawn. Beside it, its nontrivial lemma's objects: `RowsTiedDrawnOf`, the property of any period check, and
+`acceptAllRows`, a check that accepts every period.
 -/
 
 namespace Properties.NetworkPeriod
@@ -41,14 +48,43 @@ def ClockKBoundsCount : Prop :=
       2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
 
 /-- **The rows form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
-connections and the facts `w` of `n` link-windows' scans, under one scan's terms `scan` and the jitter bound `jitter`:
-`#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)` (`schedules` and `cells`), and window `i`'s `2^#(free inputs)`
-at `2 ^ scan.free`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` and `Dj^k` at
-`jitter ^ scan.steps`, their product is at most `2 ^ K`. -/
+connections, the facts `w` of `n` link-windows' scans and their tied audits' free inputs `tied` (`tiedAudits`), under
+one scan's terms `scan` and the jitter bound `jitter`: `#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)`
+(`schedules` and `cells`), and window `i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#faultySets` at
+`atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` and `Dj^k` at `jitter ^ scan.steps`, their product is at most
+`2 ^ K`. -/
 def RowsKBoundsCount : Prop :=
-  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts),
-    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ scan.free * atMost (w i).units (w i).wrong *
+  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
+    (tied : Fin n → ℕ),
+    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
         2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps)) ≤
-      2 ^ (rowsTerms facts scan (Array.ofFn w) (Array.ofFn caps) jitter windows).K
+      2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i)) (Array.ofFn caps) jitter windows).K
+
+/-- Audit `i`'s answer drew every unit: one-stage accepted its registration with a profile of one level, drawn
+`subset:k` or stratified, whose `Σ k` is the level's size (`factsOf`'s `drawn` and `units`). -/
+def DrawnWhole (i : ℕ) (reg : Registration) (x : Core.Answer) : Prop :=
+  ∃ (prof : Core.Integrity) (pub : Lean.Json) (f : Facts),
+    answered s!"audit {i}" reg x = .ok (prof, pub) ∧ factsOf s!"audit {i}" prof pub = .ok f ∧ f.drawn = f.units
+
+/-- **The rows form accepts no tied audit with a unit undrawn.** If the check accepts a period in the rows form, every
+audit some link-window's scan's `prog` is an output of (`tiedIn` over the commitment's registrations) drew every unit
+(`DrawnWhole`): `rowsTerms` charges such an audit's free inputs to its link-window and no faulty term for it. -/
+def RowsTiedDrawn : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+      ∀ (i : ℕ) (reg : Registration) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
+        tiedIn c.audits c.windows i = true → DrawnWhole i reg x
+
+/-- `RowsTiedDrawn` of any period check. -/
+def RowsTiedDrawnOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+      ∀ (i : ℕ) (reg : Registration) (x : Core.Answer), c.audits[i]? = some reg → e.audits[i]? = some x →
+        tiedIn c.audits c.windows i = true → DrawnWhole i reg x
+
+/-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
+`RowsTiedDrawnOf` must fail at for `RowsTiedDrawn` to say something. -/
+def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
+  .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
 end Properties.NetworkPeriod
