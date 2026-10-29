@@ -93,6 +93,35 @@ def steps1l(k: int) -> int:
 
 
 SSN_CODE_N_MAX = 13 ** 4 - 2
+SSN5_CODE_N_MAX = 13 ** 5 - 1
+
+
+def steps1l5(k: int) -> int:
+    """ssn_1l5's k32 steps: step 1 holds 27 data entries and a 5-lane column code, every later step 31 and one lane."""
+    return 1 + math.ceil(max(0, k - (DATA_PER_STEP - 1)) / 31)
+
+
+def ssn_1l5_words(s: int) -> int:
+    """Coin words a row: step 1's five code bits and S - 1 lane bits, 32 to a word."""
+    return 1 + math.ceil(max(0, s + 4 - 32) / 32)
+
+
+def ssn_1l5_forming_writes(s: int) -> int:
+    """ssn_1l's writes (a LOP3 a step, a rotate for every later step not at bit 24) and two for the 5th code lane."""
+    return s + (s - ssn_1l5_words(s)) + 2
+
+
+def ssn_1l5_code(n: int) -> np.ndarray:
+    """5 × n balanced base-13 digits of the column's index z in +-1, +-2, …: injective and nonzero up to 13^5 - 1."""
+    j = np.arange(n, dtype=np.int64)
+    r = np.where(j % 2 == 0, j // 2 + 1, -(j // 2 + 1))
+    out = []
+    for _ in range(5):
+        d = ((r + 6) % 13) - 6
+        out.append(d)
+        r = (r - d) // 13
+    assert (r == 0).all(), f"ssn_1l5's code holds {SSN5_CODE_N_MAX} columns"
+    return np.stack(out)
 
 
 def ssn_1l_layout(s: int) -> list[tuple[int, int]]:
@@ -203,8 +232,17 @@ def designs() -> list[Design]:
                lambda m, n, k: H32 * s1(k) / (n * k), _zero, _zero, False, "data-independent",
                "none: stock int8 +-127", "~0 (estimate on SW-PPL's ladder: std 6.0 / 9.2 units at K 2,048 / 8,192)",
                "F7 ssn-1l-b1-v1", lambda m, n, k: 4 * s1(k) / (n * k),
-               "lead: no C1, no M1 needed; alpha 32/31",
+               "lead: no C1, no M1 needed; alpha 32/31; n <= 28,559 (ssn_1l5 past it)",
                coin_bits=lambda m, n, k: 32 * ssn_1l_words(s1(k)) * m),
+        Design("ssn_1l5", "ssn_1l with a 5-lane step-1 code: 27 data + 5 bits against the balanced base-13 digits of the "
+               "column (ssn_1l5_code, n <= 371,292); every later k32 step 31 data + 1 bit a row",
+               lambda k: H32 * steps1l5(k) / k,
+               lambda m, n, k: H32 * ssn_1l5_forming_writes(steps1l5(k)) / (n * k), _zero,
+               lambda m, n, k: H32 * (steps1l5(k) + 1) / (n * k), _zero, _zero, False, "data-independent",
+               "none: stock int8 +-127", "~0 (estimate: ssn_1l's served noise and one more code lane)",
+               "F7 ssn-1l-b1-v1", lambda m, n, k: 4 * (steps1l5(k) + 1) / (n * k),
+               "ssn_1l for any n up to 371,292 (lm_head, V4's wide projections); no C1, no M1 needed",
+               coin_bits=lambda m, n, k: 32 * ssn_1l5_words(steps1l5(k)) * m),
         Design("ssn2", "per k32 step: 28 data + 4 bits a per row and 4 bits b per column (both (h>>q)&0x01010101)",
                lambda k: H32 * s(k) / k, lambda m, n, k: 2 * H32 * s(k) / (n * k),
                lambda m, n, k: 2 * H32 * s(k) / (m * k), lambda m, n, k: H32 * s(k) / (n * k),
@@ -250,7 +288,8 @@ def designs() -> list[Design]:
     ]
 
 
-DUP_ESTIMATE = {"ncp3": 0.0, "os2": 0.0, "per2": 0.0, "ssn_a": 0.0, "ssn_1l": 0.0, "ssn2": 0.0, "lowrank1": 0.0, "dither32": 0.0,
+DUP_ESTIMATE = {"ncp3": 0.0, "os2": 0.0, "per2": 0.0, "ssn_a": 0.0, "ssn_1l": 0.0, "ssn_1l5": 0.0, "ssn2": 0.0,
+                "lowrank1": 0.0, "dither32": 0.0,
                 "nsf": None, "disp2s": None, "perm": None, "rowsign": None, "signs2": 1.0, "init": None}
 #: the share of words a data-dependent design repeats, from noise_data.py's summary: nsf and disp2s repeat a word on a
 #: zero k32 block dot product (zero rows included); perm's words are equal functions of the salt only on identical rows
@@ -442,32 +481,38 @@ def _bits(rng: np.random.Generator, shape) -> np.ndarray:
     return rng.integers(0, 2, shape, dtype=np.int64)
 
 
-def _sim_ssn_1l(case: str, salts: int, m: int, n: int, rng: np.random.Generator, skip: int | None = None) -> dict:
+def _sim_ssn_1l(case: str, salts: int, m: int, n: int, rng: np.random.Generator, skip: int | None = None,
+                lanes: int = 4) -> dict:
     """ssn_1l on 4 steps (121 data entries), its bits read from the row's raw coin words by the served extraction, which
-    are the free set; `skip` drops one later step's lane (a mutation)."""
+    are the free set; `skip` drops one later step's lane (a mutation). `lanes` 5 is ssn_1l5: its code bits are the
+    row's first coin word's bits 0, 8, 16, 24 and 31 (which 4 steps' later lanes, bits 1 to 3, don't read)."""
     s = 4
-    k = DATA_PER_STEP + 31 * (s - 1)
+    d1 = 32 - lanes
+    k = d1 + 31 * (s - 1)
     a, b = _data(case, m, n, 128, rng)
     a, b = a[:, :k], b[:k]
-    code = ssn_a_w0(n, DATA_PER_STEP)[0]
+    code = ssn_a_w0(n, DATA_PER_STEP)[0] if lanes == 4 else ssn_1l5_code(n)
     lane = np.ones((1, n), dtype=np.int64)
-    ycols = [b[:DATA_PER_STEP], code]
+    ycols = [b[:d1], code]
     for t in range(1, s):
-        lo = DATA_PER_STEP + 31 * (t - 1)
+        lo = d1 + 31 * (t - 1)
         ycols += [b[lo:lo + 31], lane if t != skip else 0 * lane]
     y1 = np.concatenate(ycols, axis=0)
     xs, raw, formed = [], [], []
     for _ in range(salts):
         h = rng.integers(0, 2 ** 32, (m, ssn_1l_words(s)), dtype=np.int64)
         b1, bl = ssn_1l_bits(h, s)
-        parts = [a[:, :DATA_PER_STEP], b1]
+        if lanes == 5:
+            b1 = np.concatenate([b1, (h[:, :1] >> 31) & 1], axis=1)
+        parts = [a[:, :d1], b1]
         for t in range(1, s):
-            lo = DATA_PER_STEP + 31 * (t - 1)
+            lo = d1 + 31 * (t - 1)
             parts += [a[:, lo:lo + 31], bl[:, t - 1:t]]
         x = np.concatenate(parts, axis=1)
         xs.append(x)
         raw.append(h)
-        formed.append(np.concatenate([_pack(x[:, 32 * t + 28:32 * t + 32]) for t in range(s)], axis=1))
+        regs = [_pack(x[:, 4 * r:4 * r + 4]) for r in range(d1 // 4, 8)]
+        formed.append(np.concatenate(regs + [_pack(x[:, 32 * t + 28:32 * t + 32]) for t in range(1, s)], axis=1))
     x = np.stack(xs)
     y = np.broadcast_to(y1, (salts, *y1.shape))
     bias = np.rint((code.sum(axis=0) + (s - 1 - (skip is not None))) / 2).astype(np.int64)
@@ -479,8 +524,9 @@ def _sim_ssn_1l(case: str, salts: int, m: int, n: int, rng: np.random.Generator,
 
 def sim_design(name: str, case: str, salts: int = 24, m: int = 4, n: int = 6, seed: int = 1) -> dict:
     rng = np.random.default_rng(seed)
-    if name in ("ssn_1l", "ssn_1l_skip"):
-        return _sim_ssn_1l(case, salts, m, n, rng, skip=2 if name == "ssn_1l_skip" else None)
+    if name in ("ssn_1l", "ssn_1l_skip", "ssn_1l5"):
+        return _sim_ssn_1l(case, salts, m, n, rng, skip=2 if name == "ssn_1l_skip" else None,
+                           lanes=5 if name == "ssn_1l5" else 4)
     if name in ("ssn_a", "ssn2"):
         k = DATA_PER_STEP * 4
         a, b = _data(case, m, n, 128, rng)
@@ -611,7 +657,7 @@ def check() -> list[dict]:
     for name in ("ncp3", "os2", "per2", "disp2s", "perm"):
         r = sim_design(name, "random")
         ok(f"{name} cancels exactly", r["exact"] is True, r["exact"])
-    for name in ("ssn_a", "ssn_1l", "ssn2"):
+    for name in ("ssn_a", "ssn_1l", "ssn_1l5", "ssn2"):
         bad = {c: sim_design(name, c)["bad_share"] for c in CASES}
         ok(f"{name} words distinct and non-free on every data case", all(v == 0 for v in bad.values()), bad)
     lay = {s: ssn_1l_layout(steps1l(k)) for k, s in ((2048, 67), (8192, 265))}
@@ -625,6 +671,14 @@ def check() -> list[dict]:
        bool((np.concatenate([a1, al], axis=1) == direct).all()), "rotr/mask against (h >> p) & 1")
     ok("ssn designs' priced shapes fit the column code (n <= 28,559)",
        all(n <= SSN_CODE_N_MAX for shp in (LLAMA, V4_DENSE, V4_EXPERT) for n, _ in shp.values()), SSN_CODE_N_MAX)
+    c5 = ssn_1l5_code(SSN5_CODE_N_MAX)
+    ok("ssn_1l5's code is injective and nonzero for 371,292 columns, within [-6, 6]",
+       len({tuple(c) for c in c5.T}) == SSN5_CODE_N_MAX and bool((np.abs(c5).sum(0) > 0).all())
+       and int(np.abs(c5).max()) == 6, SSN5_CODE_N_MAX)
+    ok("ssn_1l5: S, coin words and forming at K 2,048 / 8,192 (67 / 265 steps, 3 / 9 words, 133 / 523 writes)",
+       [(steps1l5(k), ssn_1l5_words(steps1l5(k)), ssn_1l5_forming_writes(steps1l5(k))) for k in (2048, 8192)]
+       == [(67, 3, 133), (265, 9, 523)],
+       [(steps1l5(k), ssn_1l5_words(steps1l5(k)), ssn_1l5_forming_writes(steps1l5(k))) for k in (2048, 8192)])
     r = sim_design("ssn_1l_skip", "zero_blocks")
     ok("ssn_1l without one step's lane loses words on zero_blocks (mutation)", r["dup"] > 0, r["bad_share"])
     r = sim_design("ssn_1l", "random", salts=400)
@@ -727,7 +781,7 @@ def main(argv: list[str] | None = None) -> int:
     rep = report()
     rep["data"] = {"path": args.data, "per2_limbs_by_k": DATA.get("per2_limbs_by_k"), "scopes": DATA_SCOPE,
                    "dup_kind": DUP_KIND}
-    for name in ("ssn_1l", "ssn_a", "ncp3", "nsf", "per2"):
+    for name in ("ssn_1l", "ssn_1l5", "ssn_a", "ncp3", "nsf", "per2"):
         r = next(r for r in rep["rows"] if r["design"] == name and r["model"] == "M0" and not r["c1"])
         for gap in ("gap", "gap_coins_uncredited"):
             rep[f"periods_{name}_M0_noC1_llama_T8192_{gap}"] = periods(r["llama_T8192"][gap], r["llama_T8192"]["alpha"])
