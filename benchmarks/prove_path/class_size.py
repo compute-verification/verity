@@ -38,6 +38,8 @@ from verity_vllm.program.predict import scan_state as SS
 from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
 
 FIRST = "AttnBlockFirst_v1"
+#: a first block's families: `AttnBlockFirst_v2{..., VS}` is v1 over a key's value as slices of VS columns
+FIRSTS = (FIRST, "AttnBlockFirst_v2")
 END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
@@ -114,9 +116,11 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     if P0 < 2 or NP0 < 2:
         raise ValueError(f"a probe of {P0} positions and {NP0} prompt ids: it needs 2 of each, for a head and a feed past the "
                          "first")
-    hs = {lab: n for lab, n in probe.items() if lab.startswith(FIRST + "{")}
+    hs = {lab: n for lab, n in probe.items() if lab.split("{")[0] in FIRSTS}
     ss = [statics(lab)[1] for lab in hs]
     D, BN = (_one([s[k] for s in ss], k) for k in ("D", "BN"))
+    fam, VS = _one([lab.split("{")[0] for lab in hs], "family"), _one([s.get("VS") for s in ss], "VS")
+    vs = "" if VS is None else f",VS={VS}"
     by_t = {s["NVIS"]: hs[lab] for lab, s in zip(hs, ss)}
     if P0 > BN or sorted(by_t) != list(range(1, P0 + 1)) or len(set(by_t.values())) != 1:
         raise ValueError(f"the probe's heads are not one count of first blocks at each T of 1..{P0}, within one key block of "
@@ -133,7 +137,7 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     for T in range(1, P + 1):
         nb, mf = -(-T // BN), fa2_masked_from(T, 1, 0, BN, False)
         nvis = T - (nb - 1) * BN
-        out[f"{FIRST}{{D={D},NVIS={nvis},BN={BN}}}"] += H
+        out[f"{fam}{{D={D},NVIS={nvis},BN={BN}{vs}}}"] += H
         for b in range(nb - 1):
             out[f"{BLOCK}{{D={D},NVIS={BN},FIRST=false,BN={BN},CHECK={json.dumps(b >= mf)}}}"] += H
         out[end] += H
