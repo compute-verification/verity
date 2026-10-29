@@ -184,12 +184,12 @@ OPENINGS = ("unforced", "forced (a)", "pad")
 def opening_ands(layout: str, b: dict, rows: int, R: int, mode: str) -> dict:
     """In-circuit ANDs for a drawn unit to open its words and its A rows against their instances, beyond the bytes it
     reads itself. Each instance costs c (unforced), c and the PRF (forced (a)) or one pad compression (pad); (a) and the
-    pad also open ks once (its inner digest and c; the verifier computes its leaf), and the pad computes the window's
-    midstate once. Under L1 a call's A rows are one instance and a forward's words another; under L2 both sit in the
-    forward's (or the window's) one tree."""
+    pad also open ks once (its inner digest and c; the verifier computes its leaf), (a) computes k_w = SHA-512(ks ‖ salt_w)
+    (two compressions) and the pad the window's midstate (one). Under L1 a call's A rows are one instance and a forward's
+    words another; under L2 both sit in the forward's (or the window's) one tree."""
     gadget = {"unforced": 2 * S.ANDS_COMPRESSION, "forced (a)": 2 * S.ANDS_COMPRESSION + 3 * S.ANDS_FROM_8,
               "pad": S.ANDS_COMPRESSION}[mode]
-    once = {"unforced": 0, "forced (a)": 3 * S.ANDS_COMPRESSION, "pad": 4 * S.ANDS_COMPRESSION}[mode]
+    once = {"unforced": 0, "forced (a)": 5 * S.ANDS_COMPRESSION, "pad": 4 * S.ANDS_COMPRESSION}[mode]
     if layout == "L0":
         return {"words row, whole": S.blocks(R) * S.ANDS_COMPRESSION + gadget + once,
                 "words row over the unit's own outputs":
