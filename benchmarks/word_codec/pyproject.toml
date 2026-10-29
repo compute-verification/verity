@@ -11,7 +11,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # check it against PoUS's reference codec (verity.core.protocols.pous), which reads verity.errors and verity.ml.commitments;
 # kv.py, codec.py and wide.py take the remote bandwidth audit's codec, on verity.ml.commitments.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
+          "verity/core/protocols/bandwidth", "verity/core/protocols/pous", "verity/core/protocols/record.py",
           "verity/core/protocols/remote_bandwidth/__init__.py", "verity/core/protocols/remote_bandwidth/codec.py",
-          "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
-          "verity/core/protocols/record.py"]
+          "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness"]
