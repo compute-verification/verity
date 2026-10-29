@@ -430,6 +430,17 @@ LEDGER = [
      "adaptive-dw under W, no lock); bare model P stays the conservative column", "3",
      "— (a choice of cost model; N-W1 states it as a lane semantics)", "N-W1 / Daniel",
      "copy-and-patch and N-ADAPT's masked channel, with tile-grain"),
+    ("detection-price", "N-RED's: finding a coin-lane entry equal to one d steps back costs the prover enough that "
+     "revisits don't pay at e = 7", "1", "open; in time 194 units a lane-entry a lag where issue slots bind "
+     "(N-FLOOR), 0 in W1; beside the lead's wgmma a selection costs ≤ 0.12 units a lane-entry (N-FLOOR), so likely "
+     "false there", "5", "N-NOISE's criterion (an entry pays only for its distinct values, detection free) gives the "
+     "walk (A2r) 4.48% of stock on the lead's full tiles at A′ = 1", "N-RED (premise) / N-FLOOR (measure)",
+     "the lead's chosen-weight walk at A′ = 1 without model-public; N-LIT's weighting A′ = (1, 127, 1) takes it to "
+     "0.060% without this premise (N-NOISE, counted)"),
+    ("mirror-window", "A nonzero int8 window weight in B′'s lane 31, drawn per column and step after B", "3",
+     "design (N-NOISE: mirror's premise, proposed for the lead's decode)", "5", "— (protocol structure, as g-private)",
+     "N-NOISE", "the lead's decode walk (A2r 3.74% at one row, 0.76% at 16, whatever A′; 0.55% / 0.58% with it), "
+     "which model-public also closes"),
     ("adaptive-dw", "The lifted DistinctWrites bound holds pointwise in the coins for a prover that reads them as "
      "they arrive (the lift needs no premise; a design supplies the pointwise count, here on data a public model "
      "reaches)", "0", "open", "5",
