@@ -321,12 +321,12 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
+    rs = audit.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
                      lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
-    s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
-                   not_before_ns=0, clock=clock)
+    s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
+                       not_before_ns=0, clock=clock)
     prover = audit.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)
