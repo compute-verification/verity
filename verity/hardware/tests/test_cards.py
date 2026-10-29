@@ -87,9 +87,10 @@ def test_the_quoted_numbers() -> None:
     one is deliberate: among them the RTX node's host figures, which the remote bandwidth audit's node reads
     (`verity.hardware.node`)."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
-    assert [value(server, k) for k in ("clock.sm", "clock.memory")] == [2430, 12481]
-    assert [value(h200, k) for k in ("clock.sm", "clock.memory")] == [1980, 3201]
-    assert [value(b200, k) for k in ("clock.sm", "clock.memory")] == [1965, 3996]
+    clocks = ("clock.sm", "clock.tensor", "clock.memory")
+    assert [value(server, k) for k in clocks] == [2430, 2430, 12481]
+    assert [value(h200, k) for k in clocks] == [1980, 1830, 3201]
+    assert [value(b200, k) for k in clocks] == [1965, 1965, 3996]
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6
     assert value(h200, "memory.bandwidth") == 4916736 * 10 ** 6
     granite, sapphire = load("xeon-6776p-2s"), load("xeon-platinum-8468-2s")

@@ -40,9 +40,10 @@ degenerate set with probability at most `κ_deg(B)` (the union over `n` windows)
 `Pouw.Assumptions.ShaSpeed` in Lean) doesn't enter. The proof system's soundness (`ProofSystemSound` in prose) enters as
 the words guarantee's `TileServiceSound`.
 
-**Non-vacuity rests on a model that prices register reductions.** 𝓜 as written makes `SAKMatmul` and `SAKResidual`
-false (free register reductions, the four Russians), and `SAKServed` with them, so `ServedWork` says something only on
-a model where a register word that an atomic or a reduction writes costs an `alu` lane and L2 writes are priced.
+**Non-vacuity is open.** 𝓜 as written prices register reductions (a register word that an atomic or a reduction
+writes costs an `alu` lane, and L2 writes are priced), so the four Russians' method pays at least an `alu` lane a MAC.
+`SAKMatmul` as written still fails at a dual price that leaves those pipes cheap, and `SAKResidual` is not adopted, so
+whether `SAKServed` holds on 𝓜 is open.
 
 The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its honest and nontrivial lemmas.
 -/
@@ -78,7 +79,7 @@ the salt (`FixedBeforeSalt`). With SAK at the served words (`SAKServed`: `p ≥ 
 salts `κ_deg`) and the play's fixed words the inventory's right words (`FixedAreRight`), then except with probability
 `δ_s + n·(δ_bind + δ_ks) + n·κ_deg(B)`, an accepted period's priced work on the inventory is at least `p` times
 `(1 − ε(j))₊` of its accepted prefix's live words, less the windows' luck allowances:
-`Σ_w cost_μ(work_w) ≥ p · creditPrefix − Σ_w lam(inst_w)`. Non-vacuous only on a model that prices register reductions (module doc). -/
+`Σ_w cost_μ(work_w) ≥ p · creditPrefix − Σ_w lam(inst_w)`. Whether it is non-vacuous on 𝓜 is open (module doc). -/
 def ServedWork : Prop :=
   ∀ {ι K T L U C Ξ V I W St : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty C] [Nonempty Ξ] [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)

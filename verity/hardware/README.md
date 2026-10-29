@@ -17,13 +17,14 @@ no second card). Each number is an entry `{ value, unit, mark, source }`:
 | Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 
-Every card of a kind has the same sections. A GPU card's are `sm`, `clock`, `power`, `store` (with `chip`, all on-chip
-storage), `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers, bandwidth and measured
-read), `hash` (SHA-512 compressions a second), `squaring` (the squaring ceiling at each codec width), `weight` (the
-tensor units a MAC of each format uses) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu`
-(sockets and cores), `clock`, `rate` (AMX MACs and the host's op peak), `memory` (DRAM's channels, speed, bandwidth,
-measured read and write ceiling), `store` (its caches and allowances, and `chip`, the host's on-chip bytes in S_chip)
-and `link` (`window`, what the boundary link lands in host memory at once beyond its rate).
+Every card of a kind has the same sections. A GPU card's are `sm`, `clock` (`tensor` the tensor's, `sm` every other
+resource's, `memory` device memory's), `store` (with `chip`, all on-chip storage), `rate` (each resource's units a
+SM-clock), `memory` (device memory's bus, transfers, bandwidth and measured read), `hash` (SHA-512 compressions a
+second), `squaring` (the squaring ceiling at each codec width), `weight` (the tensor units a MAC of each format uses)
+and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (sockets and cores), `clock`, `rate` (AMX
+MACs and the host's op peak), `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling), `store`
+(its caches and allowances, and `chip`, the host's on-chip bytes in S_chip) and `link` (`window`, what the boundary
+link lands in host memory at once beyond its rate).
 
 `node.py` reads a node's figures off its cards, the value of the Site's `node h`: `node(devices, host, placeholders)`
 sums its devices' GPU cards and its host card (`node(*VY_NEBIUS)`, a vy-nebius node's eight RTX PRO 6000s on two Xeon
