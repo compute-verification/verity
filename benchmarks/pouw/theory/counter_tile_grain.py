@@ -16,25 +16,32 @@ anyway), so a lane saves `max(0, k (32 − c) − p)` and a tile `max(0, Σ_lane
 Sources: `uniform`, one a tile (a warp-uniform choice, unpriced); `own+load`, each lane its own at 32 more (a
 data-dependent load); `own`, each lane its own unpriced, a bound past what's realizable.
 
-**What falsifies it** (`judge`): a measured skip form whose `(p, c)` puts the copy term above `coinBranchGap` at any
-searched call, `uniform` or `own+load`. Every measured form issues the patch arm it would skip (`c = 32`), so it saves
-nothing a lane at any `K`; that is the first line. The boundary is computed on the lead's words (`thresholds`, by `K`):
+**The falsification test** (`falsified`; `main` exits 1 on any entry). Two lines, each per reading:
 
-- `p_star`: with `c = 0` (an arm that doesn't issue), the least decision price that fits. A decision cheaper than it
-  falsifies the charge once arms stop issuing. It grows as `K` shrinks: early steps' words match more.
-- `c_star`: at the cheapest measured decision (a predicate, `p = 13.5`) and at W1's (`p = 0`), the least cost of a
-  skipped word's arm that fits. A predicated-off patch or an untaken divergent arm cheaper than it falsifies.
-- `b_star`: a warp-uniform branch skips whole registers (32 words, one a lane), at most `⌊b / 32⌋` of a tile whose
-  best source matches `b` words; the least branch price at which those skips fit (`register_bound` is their saving
-  with branches free). A branch under `3 · 1,024 − 128 COPY` units makes a 3-register skip pay, which falsifies "only
-  a whole m16n8 tile pays" whether or not it breaks the budget.
+- *To the letter* (`letter`, no search): every tile that isn't a whole-tile copy costs its 128 registers. Its worst
+  tile keeps all but one word of one source (31 lanes keep 4, one keeps 3), or each lane all 4 of its own at
+  `own+load`. A form falsifies the letter when its skipped arm costs under `c_letter` at its decision price, and the
+  warp branch when it costs under `3 · 1,024 − 128 COPY` (a 3-register skip pays). Every measured form issues the patch
+  arm it would skip (`c = 32`), so no form saves a word at any `p`: the letter rests on the arms issuing, and on the
+  warp branch's price, not on the decision's. With arms free, the letter would need a decision of
+  `128 − 128 COPY / 31` a lane.
+- *In effect* (`verdict`, by `K` over the searched calls): a form past the letter breaks the budget only once its copy
+  term passes it, `uniform` or `own+load`, at some call. The boundary on the lead's words (`thresholds`):
+  - `p_star`: with `c = 0` (an arm that doesn't issue), the least decision price that fits. It grows as `K` shrinks:
+    early steps' words match more.
+  - `c_star`: at the cheapest measured decision (a predicate, `p = 13.5`), at W1's (`p = 0`) and at each reading's,
+    the least cost of a skipped word's arm that fits.
+  - `b_star`: a warp-uniform branch skips whole registers (32 words, one a lane), at most `⌊b / 32⌋` of a tile whose
+    best source matches `b` words; the least branch price at which those skips fit (`register_bound` is their saving
+    with branches free).
 
 The readings (`READINGS`) are units of W1's issue pricing (32 a register), measured alone where issue slots bind.
 Beside the lead's `wgmma` a selection costs 0.12 a lane-entry and a copy 0.40 a word (N-FLOOR time7, time6): the
 figure is priced W1 work, so time beside `wgmma` doesn't enter, except the copy, taken at its cheapest.
 
 `python counter_tile_grain.py --json OUT` runs the searched calls (`counter_patch`'s spread columns, in-tile sources);
-`--readings FILE` judges new measurements (a JSON list of `READINGS`' fields) in place of these.
+`--readings FILE` judges new measurements (a JSON list of `READINGS`' fields) in place of these, and `--letter` judges
+them to the letter alone, with no calls.
 """
 
 from __future__ import annotations
@@ -151,6 +158,30 @@ def _prices(readings) -> list[float]:
     return sorted({0.0, 13.5} | {r.p for r in readings})
 
 
+WHOLE_TILES_PAY_FROM = 3 * REGISTER - 128 * COPY
+
+
+def letter_gain(p: float, c: float, copy: float = COPY) -> float:
+    """The most the skip form `(p, c)` saves on a tile that isn't a whole-tile copy: one source keeping all but one
+    word (31 lanes keep 4, one keeps 3), or each lane all 4 of its own at `own+load`, less the copy."""
+    g, h = _lane_gain(p, c), _lane_gain(p + LOAD, c)
+    return max(0.0, float(max(31 * g[3] + g[2], 32 * h[3])) - 128 * copy)
+
+
+def letter(readings=READINGS) -> dict:
+    """The letter: each reading's `c_letter` (the least arm cost at its `p` at which no such tile saves), the
+    decision price the letter needs with arms free, and the warp branch against `WHOLE_TILES_PAY_FROM`."""
+    forms = {}
+    for r in readings:
+        c_min = _least(lambda c: letter_gain(r.p, c), 0.0, H32, 0.0)
+        forms[r.name] = {"p": r.p, "c": r.c, "c_letter": c_min, "arm_headroom": _headroom(r.c, c_min),
+                         "gain": letter_gain(r.p, r.c), "holds": letter_gain(r.p, r.c) == 0.0}
+    wb = {"p": WARP_BRANCH.p, "from": WHOLE_TILES_PAY_FROM,
+          "headroom": _headroom(WARP_BRANCH.p, WHOLE_TILES_PAY_FROM), "holds": WARP_BRANCH.p >= WHOLE_TILES_PAY_FROM}
+    return {"forms": forms, "p_letter_free_arms": _least(lambda p: letter_gain(p, 0.0), 0.0, 4 * H32, 0.0),
+            "warp_branch": wb, "holds": all(f["holds"] for f in forms.values()) and wb["holds"]}
+
+
 def thresholds(h: dict, stock: int, readings=READINGS, budgets=None) -> dict:
     """Per budget: `p_star` by source, `c_star` at W1's, the predicate's and each reading's decision price, and
     `b_star`, the least warp-branch price at which whole-register skips fit."""
@@ -232,10 +263,21 @@ def verdict(calls: dict, readings=READINGS, budgets=None) -> dict:
         }
     out |= {
         "register_bound": {k: max(c["thresholds"]["register_bound"] for c in g) for k, g in by_k.items()},
-        "warp_branch": asdict(WARP_BRANCH) | {"only_whole_tiles_pay_from": 3 * REGISTER - 128 * COPY},
+        "warp_branch": asdict(WARP_BRANCH) | {"only_whole_tiles_pay_from": WHOLE_TILES_PAY_FROM},
         "copy": {"price": COPY, "source": COPY_SOURCE},
+        "letter": letter(readings),
         "holds": all(b["holds"] for b in out["by_budget"].values()),
     }
+    return out
+
+
+def falsified(v: dict) -> list[str]:
+    """Each line a verdict breaks: a reading or the warp branch past the letter, or past a budget."""
+    out = [f"letter: {name}" for name, f in v["letter"]["forms"].items() if not f["holds"]]
+    out += [] if v["letter"]["warp_branch"]["holds"] else [f"letter: {WARP_BRANCH.name}"]
+    for b, w in v.get("by_budget", {}).items():
+        out += [f"{b}: {name}" for name, f in w["forms"].items() if not f["holds"]]
+        out += [] if w["warp_branch"]["holds"] else [f"{b}: {WARP_BRANCH.name}"]
     return out
 
 
@@ -254,12 +296,25 @@ def main() -> None:
     ap.add_argument("--seeds-8192", type=int, nargs="+", default=[1, 2])
     ap.add_argument("--spread", type=int, default=4096)
     ap.add_argument("--readings", default=None, help="a JSON list of readings ({name, p, c, what, source})")
+    ap.add_argument("--letter", action="store_true", help="judge the readings to the letter alone, with no calls")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
     readings = READINGS
     if args.readings:
         with open(args.readings) as f:
             readings = tuple(Reading(**r) for r in json.load(f))
+    rep = {"config": vars(args), "verdict": {"letter": letter(readings)}} if args.letter else search(args, readings)
+    print("letter", json.dumps(rep["verdict"]["letter"]), flush=True)
+    if args.json:
+        with open(args.json, "w") as f:
+            json.dump(rep, f, indent=1, default=str)
+    bad = falsified(rep["verdict"])
+    if bad:
+        print("FALSIFIED:", "; ".join(bad), flush=True)
+        sys.exit(1)
+
+
+def search(args: argparse.Namespace, readings) -> dict:
     cpatch.PARTIAL = True
     cpatch.use_head(HEAD)
     rep: dict = {"config": vars(args), "head": HEAD, "port": cpatch.check_port()}
@@ -291,9 +346,7 @@ def main() -> None:
             print(f"  {name}: copy term {100 * v['forms'][name]['copy_term']:.5f}%, with free arms "
                   f"{100 * v['forms'][name]['copy_term_if_arms_free']:.5f}% (holds {f['holds_if_arms_free']}), "
                   f"c* at its p by K {f['c_star']}", flush=True)
-    if args.json:
-        with open(args.json, "w") as f:
-            json.dump(rep, f, indent=1, default=str)
+    return rep
 
 
 if __name__ == "__main__":
