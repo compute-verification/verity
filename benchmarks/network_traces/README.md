@@ -117,7 +117,10 @@ rejecting the served window is a reject: with no fetch kept, a rehearsal the gat
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
 on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
-whose rows count each Commit window's requests, stays beside the fetch.
+whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
+does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
+report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
+bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory.
 
 ## The chain's run of record
 

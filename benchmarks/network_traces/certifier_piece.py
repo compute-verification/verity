@@ -53,10 +53,12 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
      their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
      not placed.
-  DIR also gets the chain's public files (`PUBLISHED`) and the check's three input files in DIR/period.
-  All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only
-  through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's witness,
-  moves what holds a piece of it to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The period files
+  DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
+  endpoint's report, the report's counts or a step's summary, which are private) and the check's three input files in
+  DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach
+  DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
+  witness, DIR declared to hold those files and the piece's log alone (`PIECE_FILES`), moves what holds a piece of it
+  or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The period files
   it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment",
   "evidence", "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline,
   since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params). DIR/period then
@@ -108,14 +110,26 @@ PROTOCOL = "verity/certifier/v0"
 PREMISE = "trusted-host"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
-#: the chain's files the piece publishes; never endpoint/report.json, whose Commit-window rows give each window's
-#: request, carried and output counts and its opening time, of which only a padded count may be public
-PUBLISHED = ("report/report.json", "report/report.md", "job.json", "leak-guard.json", "certs.json", "scan/summary.json",
-             "scan/answers.json", "n2/summary.json", "tie/summary.json")
+#: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
+#: every key at its level). Each is public as the protocol's output, its draw or its structure: the chain's and each
+#: step's verdict, ε at δ (the draw's law, population and size) and where it runs in the clear, what the path stubs
+#: and how its negatives came out; and the scan's answers, each link-window's answer and the registrations it is
+#: checked against (hiding commitments), the period check's evidence. Everything else stays in the kept run: the
+#: endpoint's report (each Commit window's request, carried, step and output counts, its opening time and its advice's
+#: bits), of which only a padded count may be public, report.md and the report's other keys (the certified I/O's
+#: counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions and response lengths, the
+#: tie's prompt lengths and releases, the warden's check of its witness).
+PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
+                                 "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear"),
+          "scan/answers.json": ("format", "delta", "registration", "windows")}
 #: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
 REFUSED = "refused.txt"
 #: the piece's case, as `composite.py` reads it
 CASE = "case.json"
+#: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the log
+#: `served_verdicts.py` writes, the period check's three input files and `PUBLIC`'s
+PIECE_FILES = ("answer.json", "piece.log", "period/commitment.bin", "period/evidence.json", "period/params.json",
+               *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
@@ -469,11 +483,25 @@ def case_of(warden: Path, scan: Path) -> dict:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
 
+def public(doc: dict, keys: tuple[str, ...]) -> dict:
+    """``doc`` with only the key paths ``keys`` name (`PUBLIC`'s form)."""
+    out = {}
+    for k, v in doc.items():
+        rest = [r for head, _, r in (p.partition(".") for p in keys) if head in ("*", k)]
+        if "" in rest:
+            out[k] = v
+        elif rest and isinstance(v, dict):
+            out[k] = public(v, tuple(rest))
+    return out
+
+
 def publish(chain_out: Path, d: Path) -> None:
-    for rel in PUBLISHED:
+    """``d``/chain: each `PUBLIC` file the chain wrote, less every key `PUBLIC` doesn't name."""
+    for rel, keys in PUBLIC.items():
         if (chain_out / rel).is_file():
             (d / "chain" / rel).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(chain_out / rel, d / "chain" / rel)
+            doc = public(json.loads((chain_out / rel).read_text()), keys)
+            (d / "chain" / rel).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 
 
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int],
@@ -522,12 +550,14 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
 
 
 def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
-    """The record's leak guard on DIR and the hold against the warden run's witness, which releases the hold to DIR once
-    it passes (0 when nothing of the witness was found, 3 when a find was moved to the quarantine)."""
+    """The record's leak guard on DIR and the hold against the warden run's witness, DIR declared to hold only
+    `PIECE_FILES`, which releases the hold to DIR once it passes (0 when nothing was found, 3 when a find, a file
+    holding a piece of the witness or of another path, was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
     got = captured([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
                     *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
-                    "--release-to", str(d), "--report", str(quarantine / "piece-guard.json")])
+                    "--release-to", str(d), *(x for f in PIECE_FILES for x in ("--public", f)),
+                    "--report", str(quarantine / "piece-guard.json")])
     print(f"leak guard (exit {got.returncode}): {got.stdout.strip()[-400:]}", flush=True)
     return got.returncode
 
