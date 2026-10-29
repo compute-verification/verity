@@ -21,3 +21,6 @@ Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on
 - #6501 is out of next only because it carries #6388, which conflicts with next (drive.py, test_drive_review.py, check/tests/test_check.py, train.sh). infra is re-cutting #6388. When #6388 has a new marked head, merge that head into #6501 and re-mark. Don't fix #6388's conflicts in your branch.
 - ci (06:44Z): #6481 (e51066ea7e) takes circuit-check off the landing gate (Daniel's 9:30 PM PDT ruling), and #5888 follows it (~09:30Z). Both go to next's bottom first and touch drive.py, check.py and the check tests. So #6501's check.py registration of N circuit-check parts must apply only to the after-landing circuit-check run, not the gate. Merge #6481's head too if you touch the same lines.
 - The circuit-check side (`--shard K/N`, `--combine`, the filter before the prologue) stays as it is. Keep your 10:30Z date if #6388 allows it, otherwise report the dependency.
+
+# 06:50Z: #6388 is re-marked
+infra re-marked #6388 at c4f0c49faf. It merges main plus #6303's and #6319's heads, with shards and `--base` combined in drive.py and train.sh, and its preflight onto next refused nothing. Merge c4f0c49faf into #6501's branch (scope the circuit-check parts to the after-landing run, per the 06:45Z note), check `git merge-tree --write-tree origin/next HEAD` is clean, and re-mark #6501 now.
