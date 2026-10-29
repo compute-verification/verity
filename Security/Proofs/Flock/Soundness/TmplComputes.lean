@@ -21,7 +21,7 @@ theorem defComputes_of_layout {t : Tmpl} {d : ℕ} (hd : d < t.defs.size)
     (hord : ∀ r ∈ (t.defs.getD d default).rows.toList, ∀ w ∈ r.2.1.toList ++ r.2.2.toList,
       (t.defs.getD d default).cols ≤ w ∨ w < r.1)
     (hcols : ∀ r ∈ (t.defs.getD d default).rows.toList, r.1 < (t.defs.getD d default).cols)
-    {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+    {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hdc : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j ≠ unit) {ty : CircuitType}
     (ht : (ls.getD j default).type.bind types = some ty) (F : ℕ) (hF : j < F)
