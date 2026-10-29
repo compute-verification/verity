@@ -31,11 +31,12 @@ Families: `mulxor` (FOLD-OPT's step, the keys drawn), `arith` (the first four ki
 `all` (the seven fold kinds uniform), `round` (`xoradd`).
 
 `--sweep=KIND` replaces the drawn members by KIND's one-step members at every w-bit c (k drawn). An unsat at c then
-holds for every 32-bit constant whose low w bits are c.
+holds for every 32-bit constant whose low w bits are c. `--grids=AxBxC,AxBxC` sets the zero target's two grids (rows ×
+columns × entry states); at width 4, 16x16x1 is every (R, C) pair, so a sat there is a width-4 program, not a fit.
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
-[--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]` (from
-this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
+[--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]
+[--grids=3x3x4,4x4x6]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
 """
 from __future__ import annotations
 
@@ -162,6 +163,7 @@ def specs(opt):
     fams = str(opt.get("--families", ",".join(FAMILIES))).split(",")
     targets = str(opt.get("--targets", "zero,words")).split(",")
     timeout = float(opt.get("--timeout", 300))
+    zgrids = [tuple(map(int, g.split("x"))) for g in str(opt.get("--grids", "3x3x4,4x4x6")).split(",")]
     sweep = opt.get("--sweep")
     if sweep:
         rng = random.Random(f"sweep-{sweep}")
@@ -175,8 +177,8 @@ def specs(opt):
                 member = drawn[i] if sweep else draw_member(rng, fam, s, w)
                 for target in targets:
                     h = honest(target, member)
-                    for L, grid in ((h - 1, (3, 3, 4) if target == "zero" else (1, 1, 24)),
-                                    (h - 1, (4, 4, 6) if target == "zero" else (1, 1, 48)), (h, (2, 2, 3))):
+                    for L, grid in ((h - 1, zgrids[0] if target == "zero" else (1, 1, 24)),
+                                    (h - 1, zgrids[1] if target == "zero" else (1, 1, 48)), (h, (2, 2, 3))):
                         if L == h and i:
                             continue
                         out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}",
