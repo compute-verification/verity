@@ -94,17 +94,19 @@ the hosts. -/
 def CardWithinAccelW1 (can Real : Strategy L → Prop) : Prop :=
   ∀ σ, can σ → Real σ
 
-/-- The registers ShaWrites credits a message: `3,449.05` a compression for an A message (`isA`) and `3,515.38` for a
+/-- The registers ShaWrites credits a message: `3,449.05` a compression for an A message (`isA`) and `3,530.92` for a
 words message. -/
 def shaCredit (isA : Hash.Msg → Bool) (x : Hash.Msg) : ℚ :=
   (if isA x then shaARegs else shaWordsRegs) * blocks x
 
 /-- `pouw-sha-writes` (proposed; a standing ruling admits it, a premise milder than SAK). **A SHA-512
 compression writes about 3,500 registers**, credited per form: at every coin value, a realizable strategy's
-compressions write at least `3,515.38` registers each for the words and `3,449.05` for A (`shaCredit`), over the
+compressions write at least `3,530.92` registers each for the words and `3,449.05` for A (`shaCredit`), over the
 messages it hashes.
 
-Rationale: the measured compression forms on the card; the ruling accepts the count as a premise. -/
+Rationale: the measured compression forms on the card, the words at the lead's 256 KiB chunks (a chunk's padding block
+and its first block from a constant midstate are its cheaper compressions, so the figure rises with the chunk); the
+ruling accepts the count as a premise. -/
 def ShaWrites (isA : Hash.Msg → Bool) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, ((σ.exec ω).hashed.map (shaCredit isA)).sum ≤ (σ.exec ω).shaRegs
 
@@ -122,7 +124,7 @@ def HonestHashRuled (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ 
 /-- `pouw-commit-l1w` (proposed; the commitments' layout `l1w`, until the Lean code is the served format).
 **The honest commitment is the lead's layout**: each 256 KiB words chunk and each row of A is a frame-v3 leaf at its
 own position, whose message holds the chunk's or the row's bytes. So its words chunks number `wordChunks L`, and at
-every coin value its distinct messages' ShaWrites credit is at least `3,515.38` a words compression of `wordsBlocks`
+every coin value its distinct messages' ShaWrites credit is at least `3,530.92` a words compression of `wordsBlocks`
 and `3,449.05` an A compression of `aBlocks`, whatever A is: equal chunks or equal rows sit at different positions, so
 they are different messages.
 
