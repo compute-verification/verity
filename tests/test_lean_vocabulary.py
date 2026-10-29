@@ -478,6 +478,7 @@ KNOWN: dict[str, str] = {
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Stmt": "homonym, the sampling statement: rename (lean)",
     "Security/Definitions/Core/Accel/Card.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Op": "homonym, an opcode over stores: rename (proofs)",
+    "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
     "Security/Definitions/Core/Advice.lean::Verity.Advice.Registration":
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
     "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
@@ -869,6 +870,8 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
     "verity/core/protocols/certifier/replay_chain.py::Window": "homonym, a replay row: rename (network-accounting)",
+    "verity/core/protocols/certifier/window_charge.py::Window":
+        "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":
         "homonym, a link-window's witness: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
