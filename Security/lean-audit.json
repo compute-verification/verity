@@ -1228,7 +1228,7 @@
   },
   "Nci.Assumptions.CoversEfficientMethods": {
    "owner": "@training",
-   "digest": "1da6410237fea7622af465d92377764d24c77080d022cae138c2a1e82daff6ad"
+   "digest": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4"
   },
   "Nci.Assumptions.Fits": {
    "owner": "@lean",
@@ -12782,9 +12782,9 @@
    ]
   },
   "Definitions.Accounting.Assumptions.Coverage": {
-   "digest": "657df0a53e66457fbfe17a30f8a641e3624e343f36393d555f460725de93594b",
+   "digest": "f62ed9f999d7fe5203d8f384c8967fbe257493aae068e8b3b41912ac0d9cefac",
    "definitions": {
-    "Nci.Assumptions.CoversEfficientMethods": "1da6410237fea7622af465d92377764d24c77080d022cae138c2a1e82daff6ad"
+    "Nci.Assumptions.CoversEfficientMethods": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4"
    },
    "guarantees": ["Nci.SecurityProofs.CapabilityFloorStated"]
   },
@@ -14376,9 +14376,9 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Definitions.Accounting.Guarantees.Coverage": {
-   "digest": "bf1eca8370e128a98ef8ed7de49576be24a0c4e0f862d8f7034cb5b47d703306",
+   "digest": "fc73240dbdc665ae4414635f5b37f677d6693925932cc33e1a8168c0bc79cb37",
    "definitions": {
-    "Nci.Guarantees.CapabilityFloor": "ec07c701d065891540e14def96865f781d8418fdc2dfe9748ae6dc6bbf5cad5b",
+    "Nci.Guarantees.CapabilityFloor": "8c5e7c4d36328b5d1116a8c783e8acb418382194255718e89bd353073460f713",
     "Nci.Guarantees.CapabilityFloorStated": "6fdddbff08873612bc4fe0b62a84f1590d0132af7231c427b166fd5f720585a2"
    },
    "guarantees": ["Nci.SecurityProofs.CapabilityFloorStated"]
@@ -15671,21 +15671,6 @@
     "Accounting.SecurityProofs.Memory.CountingAdvice"
    ]
   },
-  "Definitions.Accounting.Overhead": {
-   "digest": "93158847fbe7e48daff5eeba9fbcdef759ccb3169f101b758901cb4e88b2fc5a",
-   "definitions": {
-    "Accounting.Overhead.Class": "6d258b1cc63a22f15d1136ca1d8596d652b6183cad93df2470a38e4950e69c71",
-    "Accounting.Overhead.Reads": "44ce7c2b524a572c096396eb92583332d7760dae10dda3757b37195496016b60",
-    "Accounting.Overhead.Succeeds": "9d9a4ce45d005fb936abcd966665ec1a9813c7cbd09aad8e5c46c56ee63ac472",
-    "Accounting.Overhead.Task": "ae9c966618fffb1c475c1f09a123e80058ce48b6b45dc05223b20536d0e1a720",
-    "Accounting.Overhead.Task.draw": "f92e7f4077218998f94161f9bff0366d333c2fb8a8cceb5356b9b227faf4af7a",
-    "Accounting.Overhead.Task.fintype": "a65ccd39e0ba1e01cbf17c53166a12726e2e009b24de866123933c003335cb2a",
-    "Accounting.Overhead.Task.game": "a9e8db6f1bb249aac1cf833175b98ff0382b6cb5ad3ec1dcb01817f2732f8f7f",
-    "Accounting.Overhead.Task.prob": "6d723a2bd0a1a1c110e70f695e4f3bc789e84e5936492d521e02ca77c3ac78b8",
-    "Accounting.Overhead.Task.Ω": "5d29d0793b3e25a64b500585f254375ba12971e4910a4832417e235079c8283a"
-   },
-   "guarantees": ["Nci.SecurityProofs.CapabilityFloorStated"]
-  },
   "Definitions.Accounting.PerRun": {
    "digest": "3d15cf5b17ad2b0db821784954e54ccaf734833a6174899da32e95b0636935c1",
    "definitions": {
@@ -16695,6 +16680,21 @@
     "Accounting.Served.Held": "7f0e04f7760c1c5d90e49708cf9ee8a3ccbf3a3e5b57b5a7e7f3136e31e67486"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
+  },
+  "Definitions.Accounting.Slowdown": {
+   "digest": "922d639e6355b1e5e9b1c790db75e22a18cf817849475cdbda08b49f595831cb",
+   "definitions": {
+    "Accounting.Slowdown.Class": "e14b71aaf6712df20dbd9bf4a76ee00e85a0f58ca2b399f8a90ee1b9639589f5",
+    "Accounting.Slowdown.Reads": "fd1150ad8c34aaf515f331fff51fe346b8e7c1e86150b9a5b21724ee287c1168",
+    "Accounting.Slowdown.Succeeds": "371a82f6faf92376d8e24317c960efe8199274efa5fdd795b44913ccbaef2787",
+    "Accounting.Slowdown.Task": "52ef473e49156183aa83d6880a9450af67b4623135a7fa56a073d428414b82b8",
+    "Accounting.Slowdown.Task.draw": "532cf0c40724df995361140d62e4109b3aa00010b59c25508bdc87a19de77d49",
+    "Accounting.Slowdown.Task.fintype": "a8f8f5434b10cb0e5841b01a0bd930e9506a7adb31f02ef844e3b1a23cbbf60d",
+    "Accounting.Slowdown.Task.game": "918c83f55ee3b20e332a32011b0b2c9a6aef167f536e9d91f161ea5cd396c190",
+    "Accounting.Slowdown.Task.prob": "71bc28c217ec6d33c00ad57681384f0eed22a14280da15d2c93f9c37c7d0b1a2",
+    "Accounting.Slowdown.Task.Ω": "99b693a9dda86da4a1a8ee58fd853eac7dad1a48f8be818e865dc178f13b45b2"
+   },
+   "guarantees": ["Nci.SecurityProofs.CapabilityFloorStated"]
   },
   "Definitions.Accounting.TS.Drawn": {
    "digest": "32e35a1db7d3af15b74e44f1f18f6aff730ab88a5967e84247b1902da1b09e59",
