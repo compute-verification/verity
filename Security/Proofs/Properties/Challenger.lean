@@ -103,13 +103,27 @@ theorem oneStageZk_source {p : SampledProofs.OneStageZk.Params} {c : SampledProo
     cases o with
     | none => simp [h1, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hξ
     | some ξ' =>
+      -- `simp` can't take `OneStage.coinsOf`'s match apart here: its equations, realized in `Properties.Challenger`,
+      -- aren't retrievable from this module. Each arm reduces by `cases` on the discriminants instead.
+      have hpure : ∀ (b : Bool) (s : String),
+          (if b = true then pure none else throw s : Except String (Option ByteArray)) ≠ .ok (some ξ') := by
+        intro b s h
+        cases b <;> simp [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+      have hthrow : ∀ s : String, (throw s : Except String (Option ByteArray)) ≠ .ok (some ξ') := by
+        intro s h
+        simp [throw, throwThe, MonadExceptOf.throw] at h
       unfold SampledProofs.OneStage.coinsOf at h1
-      rcases hch : p.base.challenger with _ | ⟨key, label⟩ <;>
-        rcases hw : p.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h1 ⊢
-      · split at h1 <;> simp [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h1
-      · split at h1 <;> simp [pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h1
-      · simp [throw, throwThe, MonadExceptOf.throw] at h1
-      · exact ⟨_, rfl⟩
+      revert h1
+      generalize p.base.challenger = ch
+      generalize p.base.verifier.windowRoot = w
+      intro h1
+      cases ch with
+      | none => exact absurd h1 (hpure _ _)
+      | some kl =>
+        obtain ⟨key, label⟩ := kl
+        cases w with
+        | none => exact absurd h1 (hthrow _)
+        | some w => exact ⟨_, rfl⟩
 
 /-- **What v2 accepts on the blobs `bs`, it accepts at coins its challenger device drew, or the run carries a break**
 (`CoinsFromLog` for v2): its answer's byte strings decode, and it accepts at the coins `ξ` its evidence's record shows,
