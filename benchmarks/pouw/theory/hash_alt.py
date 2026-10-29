@@ -346,6 +346,47 @@ def tile_credit(B: np.ndarray, rows: int = 8) -> dict:
     return out
 
 
+def planes_for(lo: int, hi: int) -> int:
+    p = 0
+    while not (-(1 << p) <= lo and hi <= (1 << p) - 1):
+        p += 1
+    return p + 1
+
+
+def sorted_tile_credit(B: np.ndarray, r_bits: int, group: int, cols: int = 8, block: int = 1) -> float:
+    """The cheapest exact R·Bᵀ when the adversary reorders the reduction index once for every `group` tiles of 8
+    columns, by their largest magnitude, so outliers share chunks. Per chunk it takes the least of b1 planes
+    (r_bits · planes · 0.125, 256 deep), u4 nibbles (0.5 each, 64 deep, R of up to 4 bits) and s8 (1.0). A reordering
+    of single indices rewrites R's block (m·K bits, 32 to a register at 32 units), 1/(8·group) units a MAC; one of whole
+    32-index blocks is a 4-byte copy, free in W1. Group 0 keeps K's order."""
+    n, K = B.shape
+    span = cols * (group or n // cols)
+    tot = 0.0
+    for j0 in range(0, n, span):
+        blk = B[j0:j0 + span]
+        if group:
+            key = np.abs(blk).max(axis=0).reshape(-1, block).max(axis=1)
+            idx = (np.argsort(key, kind="stable")[:, None] * block + np.arange(block)).ravel()
+            blk = blk[:, idx]
+        for j in range(0, blk.shape[0], cols):
+            t = blk[j:j + cols]
+            for g in range(0, K, 256):
+                c256 = t[:, g:g + 256]
+                b1 = r_bits * 0.125 * planes_for(int(c256.min()), int(c256.max()))
+                u4 = np.mean([0.5 if planes_for(int(c.min()), int(c.max())) <= 4 else 1.0
+                              for c in (c256[:, h:h + 64] for h in range(0, 256, 64))]) if r_bits <= 4 else 1.0
+                tot += min(b1, u4, 1.0) * c256.size
+    return tot / B.size + (1.0 / (cols * group) if group and block == 1 else 0.0)
+
+
+def best_tile_credit(B: np.ndarray, r_bits: int) -> dict:
+    groups = [1 << i for i in range(int(math.log2(B.shape[0] // 8)) + 1)]
+    by = {"none": sorted_tile_credit(B, r_bits, 0), "blocks32": sorted_tile_credit(B, r_bits, 1, block=32),
+          **{f"single g{g}": sorted_tile_credit(B, r_bits, g) for g in groups}}
+    route = min(by, key=by.get)
+    return {"credit": by[route], "route": route, "free_reorder_credit": sorted_tile_credit(B, r_bits, 1) - 1.0 / 8}
+
+
 def synth_weights(rng: np.random.Generator, n: int, K: int, kind: str) -> np.ndarray:
     x = rng.standard_normal((n, K)) if kind == "gauss" else rng.standard_t(3, (n, K))
     s = np.abs(x).max(axis=1, keepdims=True) / 127.0
@@ -472,6 +513,25 @@ def run_checks(ck: Checks, res: dict) -> None:
              tc["t3"]["256x8192"]["best"] < 0.99,
              ", ".join(f"{k} {v['best']:.3f}" for k, v in tc["t3"].items())
              + f"; down's gap MAC-weighted {res['tile_gap_t3_down_mac_weighted']:.3%}")
+    srt = {}
+    for kind in ("gauss", "t3"):
+        for n_, k_ in ((256, 2048), (256, 8192)):
+            Bw = synth_weights(nrng, n_, k_, kind)
+            srt[f"{kind} {n_}x{k_}"] = {f"r{b}": best_tile_credit(Bw, b) for b in (1, 2)}
+    res["sorted_tile_credit"] = srt
+    macs_w = [k * n for k, n in LL["linears"]]
+    gap = {}
+    for kind in ("gauss", "t3"):
+        for b in (1, 2):
+            for field in ("credit", "free_reorder_credit"):
+                per = [srt[f"{kind} 256x{2048 if k == 2048 else 8192}"][f"r{b}"][field] for k, _ in LL["linears"]]
+                gap[f"{kind} r{b} {field}"] = max(0.0, sum((1 - c) * w for c, w in zip(per, macs_w)) / sum(macs_w))
+    res["sorted_gap_mac_weighted"] = gap
+    detail = ", ".join(f"{k} {v:.2%}" for k, v in gap.items())
+    ck.check("with the reordering priced, b1 planes undercut 1-bit noise by > 1% on Student-t(3) weights", 
+             gap["t3 r1 credit"] > 0.01, detail)
+    ck.check("with 2-bit noise the priced routes stay within 1% on Gaussian weights",
+             gap["gauss r2 credit"] < 0.01, ", ".join(f"{k} {v}" for k, v in srt.items()))
 
     if ck.mutations:
         with ck.mutant("Four Russians table off by one bit"):
