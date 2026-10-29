@@ -6,12 +6,13 @@ For each program (A4 P6's six-template population, as #164's test builds it, and
   `partition.units`;
 - the units on a given stream: against `reference_draw`, the sampler of record written out here (each stratum's
   `subset k_s n_s` on its own segment of `2 k_s · width(n_s) + 64` bytes, local index j to the stratum's j-th unit);
-- the draw: `draw.check_draw` accepts it, from a given stream, and given no stream Lean refuses it unless it is of every
-  unit (the verifier has no coins of its own);
+- the sample: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
 - U2: `flock-verify draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted draw;
 - one draw over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same draw where both
   take it and the same refusal where both refuse;
-- on a small program, each unit's inclusion frequency over draws on fresh streams against `k_s / n_s`;
+- on a small program, each unit's inclusion frequency over draws on fresh streams from the operating system against
+  `k_s / n_s`; given no stream, Lean draws only a law of every unit and refuses any other (the verifier has no coins of
+  its own);
 - A4's law as core's `Stratified` (`audit.core_law`): the count bound and a 287-unit stratum's own bound at 2^-20.
 
 Needs core with #164 on PYTHONPATH (the repository root). Prints one JSON line; exit 0 iff

@@ -6,7 +6,7 @@
 # fixture (`research data put --kind fixture/v1 --preserve`), whose id `out/fixture.txt` names. Run from the verity tree
 # (research run --cwd source); CPU only. Outputs under out/: host.txt, stage.json, statement.txt, serve.log, prove.txt and
 # prove.err, live.json (the LIVE record), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
-# ZK=0 is the plain session instead (no --zk anywhere): a stratified draw of K units, Lean's (`flock-verify draw
+# ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's own (`flock-verify draw
 # --stratified K` on the stage's program and partition, on COINS=FILE, the challenger's bytes: the verifier has none of
 # its own, so ZK=0 without COINS refuses), served from its file and verified with
 # `--stratified K --coins os` (FC_COINS=os: every round's coins the OS's); Lean also verifies it without --registered
