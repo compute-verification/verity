@@ -298,7 +298,7 @@ namespace Properties.CertifierNetwork.Instance
 
 def grid : _root_.CertifierDevice.Params := ⟨1, 1, 9, 1, 1⟩
 
-def syncSet : _root_.NetworkCertifier.SyncSet := ⟨[0], [1], by simp, by simp, by simp, by simp, by simp⟩
+def syncSet : _root_.NetworkCertifier.SyncSet := ⟨[0], [1], by simp, by simp, by decide, by simp, by simp⟩
 
 def sync : _root_.NetworkCertifier.ClockSync := ⟨0, 1, by decide⟩
 
