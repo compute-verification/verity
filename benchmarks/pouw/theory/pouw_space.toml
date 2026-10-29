@@ -364,13 +364,22 @@ owner = "Daniel"
 closes = ["pre_noise_hashing", "final_rows"]
 source = "each A·B call is atomic, with fresh noise every call (Daniel, Wed 28 Oct 4:30 and 4:49 PM PDT; CORE.md §1, §2a). The call's noise seed reads root(A), so A's commitment is hashed by any program that gets the noise: credited hashing (SW-SMELL P3; CORE-SMELL C28), as are rows of final words. N-COMPOSE interim (note compute-research/20261029T0745Z-report-np-compose §6, atomicCall_closes, scratch NCompose.lean at 23c5552e0f): AtomicCall is a rank-3 protocol premise, and with ShaWrites over every digest of the call, root(A)'s included, the card is charged A's hashing beside the targets; its own-card part needs no PeriodInventory (N-PREM interim 1 agrees), which is the egress layer's"
 
+[premise.row-bound]
+rank = 0
+part = "hashing"
+status = "open"
+owner = "frame-v3's and hm96's owners (N-COMPOSE's ask c)"
+requires = ["atomic-call"]
+closes = ["row_repeat"]
+source = "N-COMPOSE interim 2 §3 (note compute-research/20261029T0830Z-report-np-compose; ncompose_check.py, run r20261029-080144-3297 at e1cb0bd736, art:95ad912ce8775340b1252af4b81d5a62efdf3fb755e0b7735f033f8401897aea): an hm96 row digest x = H(prefix ‖ row ‖ suffix) is a function of the row alone, and MH100w's programs are straight-line, so a program that compares compression inputs hashes 8 identical rows in 4 compressions of 32 (random or zero rows); padding and chosen repeated tokens repeat A's rows within a call, and a replayed request (N-RED's H1) every row across calls, which AtomicCall's call-local free set excludes only by fiat. Binding (salt, forward, position) in each row digest's prefix block makes all 32 compression inputs distinct (a binding after the row leaves 11 of 32), so no input repeats in a period but by a SHA-512 collision (cr/sha-512); it costs one compression a row that frame-v3 precomputes today, 1/130 of a row's hash at 16 KiB and 1/2,050 at 256 KiB, credited (the card adds 128 B a row to every design's hashing). A protocol change, not started"
+
 [premise.hash-compose]
 rank = 0
 part = "hashing"
 status = "scratch"
 owner = "N-COMPOSE"
 requires = ["sha-writes", "carried-words"]
-source = "N-COMPOSE interim §1-5 (note compute-research/20261029T0745Z-report-np-compose; Security/Proofs/Pouw/Dimension/Scratch/NCompose.lean on cursor/compute-research-np-compose-0616 at 23c5552e0f, `verity lean try` run r20261029-073643-1db7, axioms propext/Classical.choice/Quot.sound only, art:828c2cd710caca37bd2c13cd0f7dcf1d03d5340c3462696a2a0a933b9ce7bfa6; in no lock): hashCompose_by / hashCompose_floor, a program writing a register related to each separated target and outputting the digests costs at least 32·(|T| + R), given ShaWrites and CarriedWords. On frame-v3's little-endian rows no SHA-512 register carries a committed word (bswap32_shift_not_const, checked); on big-endian rows the fold is a counterexample (1/16 of the target credit), so the word order is load-bearing. Was SW-SMELL P3's unstated composition"
+source = "N-COMPOSE interim §1-5 (note compute-research/20261029T0745Z-report-np-compose; Security/Proofs/Pouw/Dimension/Scratch/NCompose.lean on cursor/compute-research-np-compose-0616 at 23c5552e0f, `verity lean try` run r20261029-073643-1db7, axioms propext/Classical.choice/Quot.sound only, art:828c2cd710caca37bd2c13cd0f7dcf1d03d5340c3462696a2a0a933b9ce7bfa6; in no lock): hashCompose_by / hashCompose_floor, a program writing a register related to each separated target and outputting the digests costs at least 32·(|T| + R), given ShaWrites and CarriedWords. On frame-v3's little-endian rows no SHA-512 register carries a committed word (bswap32_shift_not_const, checked); on big-endian rows the fold is a counterexample (1/16 of the target credit), so the word order is load-bearing. Was SW-SMELL P3's unstated composition. N-COMPOSE interim 2 §1-2 (NCompose.lean at a7adc61388, `verity lean try` run r20261029-080634-29e2, 33 theorems on propext/Classical.choice/Quot.sound or fewer, art:95ad912ce8775340b1252af4b81d5a62efdf3fb755e0b7735f033f8401897aea): HashComposeW1, the ledger's form, is a theorem of ShaWrites (hashComposeW1_of_shaWrites) and does not follow from ShaSpeed's form and distinct targets (hashComposeW1_not_of_shaSpeedW1), so the ledger cites ShaWrites (4a) and this is rank 0; the pair (ShaWrites without the words and their carriers, CarriedWords, SSN's words carrier-separated) recommended over the joint form, which fold_joint_not_carried shows strictly weaker"
 
 [premise.sha-writes]
 rank = "4a"
@@ -559,11 +568,12 @@ owner = "CORE-RANK"
 source = "symmetric algorithmic knowledge on a distribution (CORE.md §2's rank 4): the Dither and Accel families' SAKMatmul"
 
 [premise.ShaSpeed]
-rank = "4a"
+rank = 0
 part = "hashing"
-status = "assumed"
-owner = "SW-HASH"
-source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster than the best implementation; CORE-SMELL C27: SAK for SHA-512, rank 4, needed to delta* = (1% - the other terms) / hashing's work"
+status = "scratch"
+owner = "N-COMPOSE"
+requires = ["sha-writes"]
+source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster than the best implementation; CORE-SMELL C27: SAK for SHA-512, rank 4, needed to delta* = (1% - the other terms) / hashing's work. N-COMPOSE interim 2 §1 (NCompose.lean at a7adc61388, run r20261029-080634-29e2, in no lock): its cost form in MH100w, ShaSpeedW1, is a theorem of ShaWrites (shaSpeedW1_of_shaWrites), so the 4a premise the hashing part rests on is sha-writes, whose falsifiable form is ShaLB(3,534); the lock's ShaSpeed is Accel's statement, not ShaSpeedW1"
 
 [premise.SAK-U]
 rank = "4bU"
@@ -675,10 +685,10 @@ source = "a noise whose words repeat on data (a zero k32 block dot product, iden
 [space]
 slots = [["N", "noise"], ["D", "denoise"], ["F", "format"], ["C", "density"], ["C", "operands"], ["H", "rows"],
          ["H", "hiding"], ["P", "final"], ["P", "forming"], ["P", "derivation"]]
-base = ["H32", "W1", "adaptive-dw", "atomic-call", "period-inventory", "host-row", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
+base = ["H32", "W1", "adaptive-dw", "atomic-call", "row-bound", "period-inventory", "host-row", "ShaSpeed", "sha-writes", "carried-words", "hash-compose"]
 fields = { pre_noise_bytes = "m*K", rows_mix_final = 1, word_bits = 32, format_forming = 0 }
 probe = { m = 64, n = 2048, K = 2048 }
-source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise (N-COMPOSE), PeriodInventory with HostsCounted at θ's rows and its host row (N-FLOOR final), and the hashing credit (ShaSpeed at ShaLB's count, its count ShaWrites, CarriedWords and the composition, NIGHT §1 default 1)"
+source = "NIGHT.md §2's axes; base: the DistinctWrites price at H32 in W1, stated for programs that read the coins (adaptive-dw), the atomic call for A's commitment hashed before the noise and each row digest bound to (salt, forward, position) (N-COMPOSE), PeriodInventory with HostsCounted at θ's rows and its host row (N-FLOOR final), and the hashing credit (ShaWrites at ShaLB's count, ShaSpeed's form and the composition its theorems, with CarriedWords, NIGHT §1 default 1)"
 
 # N, the noise. Fields: noise_x / noise_y the derived noise entries (one LOP3 a packed register from XOF bytes, CORE-SMELL
 # C28), derive_extra the derivation's intermediates no commitment holds, dup the share of words the data repeats, n_max

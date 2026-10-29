@@ -32,6 +32,10 @@ costs `reg`. Under DistinctWrites each committed, pairwise-distinct, noise-depen
 - de-noise: the de-noise's correction work, unless forced;
 - pre-noise hashing: bytes hashed before the noise (A's commitment feeds the call's seed), credited once the call is
   atomic; so are rows holding only final words (`final_rows`, C28);
+- row repeat: an hm96 row digest is a function of the row alone, so a prover that branches on equal compression inputs
+  hashes a repeated row once, and in M0 padding, chosen repeated tokens and a replayed request repeat every row of A
+  and of the final words: that credited hashing is gap (N-COMPOSE), unless each row digest's prefix block binds
+  (salt, forward, position) (`row-bound`), which costs one compression a row, credited;
 - hiding: each salt's work (the PRF and c, and M_key·y, which salt-forced credits; `price.salt`, N-HIDE's W1 count at
   the floor), which a prover with one fixed salt skips with nothing checked changing (SW-HASH §7), unless forced. The
   rows module's `layout` says how many salts: l0 one a leaf, l1 one for A's call and `forward_salts` a forward, l2
@@ -89,7 +93,7 @@ from exact_kit.checks import Checks
 
 CARD = Path(__file__).with_name("pouw_space.toml")
 TERMS = ("final_word", "uncommitted_steps", "coin_branch", "forming", "lane_fix", "noise_derivation", "denoise",
-         "pre_noise_hashing", "final_rows", "hiding", "host", "hashing_slack")
+         "pre_noise_hashing", "final_rows", "row_repeat", "hiding", "host", "hashing_slack")
 GAP_TERMS = ("final_word", "uncommitted_steps", "forming", "lane_fix", "noise_derivation", "denoise")
 PRICED = ("r", "formed_x", "formed_y", "noise_x", "noise_y", "derive_extra", "denoise", "pre_noise_bytes", "operand_max",
           "lane_fix", "wide_measured", "final_target", "dup", "L", "word_bits", "commit_formed_x", "commit_formed_y",
@@ -578,10 +582,14 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
         t["pre_noise_hashing"] = pre_b * hw
     if not f["rows_mix_final"] and "final_rows" not in closes:
         t["final_rows"] = m * n * WORD_BYTES * hw
+    if d.get("data_model", "m0") == "m0" and "row_repeat" not in closes:
+        t["row_repeat"] = (pre_b * hw if "pre_noise_hashing" in closes else 0.0) + (
+            m * n * WORD_BYTES * hw if not f["rows_mix_final"] and "final_rows" in closes else 0.0)
 
     a_leaf = min(f["a_row"], pre_b)
     row = f["row"]
     objects = [(pre_b, a_leaf), (word_b, min(row, word_b)), (op_b, min(row, op_b) if op_b else 1.0)]
+    bound_b = BLOCK * sum(math.ceil(b / leaf) for b, leaf in objects if b) if "row_repeat" in closes else 0.0
     layout = d.get("layout", "l0")
     if layout == "l0":
         salts = [math.ceil(b / leaf) if b else 0 for b, leaf in objects]
@@ -600,7 +608,7 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
     if not xof and not d["fields"].lenient:
         raise Refused([f"N.{d['choice'].get('noise')}.coins unpriced"])
     coin_b = sum(map(sum, xof.values())) * price["coin_bytes"]["value"]
-    credited_b = word_b + op_b + coin_b + salt_b + (pre_b if "pre_noise_hashing" in closes else 0.0)
+    credited_b = word_b + op_b + coin_b + salt_b + bound_b + (pre_b if "pre_noise_hashing" in closes else 0.0)
 
     lat = price["latency"]
     a_leaves = math.ceil(pre_b / a_leaf) if a_leaf else 0
@@ -614,8 +622,10 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
     nwords = m * n * words
     ratio = (lambda leaf: f["hash_time_ratio"]) if "hash_time_ratio" in d["fields"].exprs else (
         lambda leaf: leaf_time_ratio(card, leaf))
-    bulk = ((word_b * ratio(objects[1][1]) + (op_b * ratio(objects[2][1]) if op_b else 0.0)) / rate if rate else 0.0)
-    return {"stock": stock, "terms": t, "credited_bytes": credited_b, "hashed_bytes": word_b + op_b + pre_b,
+    bulk = ((word_b * ratio(objects[1][1]) + (op_b * ratio(objects[2][1]) if op_b else 0.0) + bound_b) / rate
+            if rate else 0.0)
+    return {"stock": stock, "terms": t, "credited_bytes": credited_b, "bound_bytes": bound_b,
+            "hashed_bytes": word_b + op_b + pre_b,
             "word_bytes": word_b, "operand_bytes": op_b, "pre_noise_bytes": pre_b, "coin_bytes": coin_b, "r": r,
             "x_entries": ent["formed_x"] + ent["noise_x"], "y_entries": ent["formed_y"] + ent["noise_y"],
             "noise_y": ent["noise_y"], "mK": m * K, "nK": n * K, "words": nwords, "word_units": nwords * u_word,
@@ -660,7 +670,7 @@ def attacked(card: dict, d: dict) -> list[str]:
             and ("with_any" not in v or targets & set(v["with_any"]))]
 
 
-SUM_KEYS = ("stock", "credited_bytes", "hashed_bytes", "word_bytes", "operand_bytes", "pre_noise_bytes", "coin_bytes",
+SUM_KEYS = ("stock", "credited_bytes", "bound_bytes", "hashed_bytes", "word_bytes", "operand_bytes", "pre_noise_bytes", "coin_bytes",
             "x_entries", "y_entries", "noise_y", "mK", "nK", "words", "word_units", "coinform_ms", "a_ms", "a_chain",
             "bulk_hash_ms",
             "sts_ms", "stg_ms", "extra_macs", "hiding_closed", "hiding_a", "hiding_words", "hiding_operands", "salts")
@@ -744,6 +754,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
             "pre_noise_units": agg["pre_noise_bytes"] * hw / stock,
             "committer_gap": committer_gap, "sha_regs": hw * BLOCK / card["price"]["reg"]["value"],
             "f_host": f_host, "host_route": host_route,
+            "row_bound_share": agg["bound_bytes"] / agg["credited_bytes"] if agg["credited_bytes"] else 0.0,
             "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
             "t3": t3, "t3_worst": t3w, "t3_pass": t3w is not None and t3w <= TARGET["t3"], "ranks": rk,
             "rank": rk["overall"], "rank_effective": rk["overall_effective"], "premises": ids, "choice": d["choice"],
@@ -881,9 +892,11 @@ def needs(row: dict) -> list[str]:
     elif not row["t3_pass"]:
         out.append(f"T3 {row['t3_worst']:+.2%} > 5%")
     regs = row["sha_regs"] * min(row["delta_star"], 1.0)
-    out.append(f"ShaSpeed as ShaLB({row['sha_regs']:,.0f}) (rank 4a, N-SHALB) exact to {regs:.2f} registers a compression "
-               f"(delta* = {row['delta_star']:.2e} of its {row['hash_units_per_mac']:.0f} W1 units a useful MAC), and "
-               f"its composition with DistinctWrites (hash-compose); if the honest hasher is our committer (3,632 "
+    out.append(f"ShaWrites as ShaLB({row['sha_regs']:,.0f}) (rank 4a, N-SHALB) exact to {regs:.2f} registers a compression "
+               f"(delta* = {row['delta_star']:.2e} of its {row['hash_units_per_mac']:.0f} W1 units a useful MAC; "
+               f"ShaSpeed's form and the composition with DistinctWrites, hash-compose, are its theorems in scratch, "
+               f"N-COMPOSE), {row['row_bound_share']:.2%} of it the row binding's prefix blocks; if the honest hasher "
+               f"is our committer (3,632 "
                f"registers), not the best, its excess alone is {row['committer_gap']:.2f}x stock; with the coins' "
                f"expansion uncredited T1 is {row['t1_coins_uncredited']:.3%}")
     return out
@@ -1223,6 +1236,10 @@ def main() -> int:
                  "0.42x at the bar's issue-time price, credited under the atomic call (SW-SMELL P3), not left as gap",
                  0.40 < r["pre_noise_units"] * bar < 0.44 and 0.20 < r["pre_noise_units"] < 0.22
                  and r["terms"]["pre_noise_hashing"] == 0, f"{r['pre_noise_units']:.3f}x ({r['pre_noise_units'] * bar:.3f}x at the bar)")
+    checks.check("binding (salt, forward, position) into each row digest's prefix block costs one compression a row: at "
+                 "16 KiB rows 1/128 of the credited hashing (N-COMPOSE: 1/130 of a row's hash, framing included), and "
+                 "it closes the repeated-row branch", 1 / 132 < r["row_bound_share"] < 1 / 124
+                 and r["terms"]["row_repeat"] == 0, f"{r['row_bound_share']:.3%} ({1 / r['row_bound_share']:.0f} to one)")
     checks.check("deriving E1 and F1 from XOF bytes is 8/n + 8/m: 0.29% fused at T 8,192 (CORE-SMELL C28)",
                  abs(r["terms"]["noise_derivation"] - 0.0029) < 0.0002, f"{r['terms']['noise_derivation']:.3%}")
     grid = {"data_model": "grid"}
@@ -1307,9 +1324,11 @@ def main() -> int:
                  and abs(r256["terms"]["uncommitted_steps"] - 3 * (1 - 48 / 256)) < 1e-9,
                  f"k64 rank {rk(r64)}, k256 uncommitted {r256['terms']['uncommitted_steps']:.1%}")
     t = row("t8192", nm("ncp", "cancel", "int7-U", "k32", "w", "r16k", "mask", "fw"))
-    checks.check("ranks split by part: ShaSpeed and mask-optimal are 4a on the hashing part, W1 and PeriodInventory 3 on "
-                 "the matmul part, and the overall rank is the larger; PeriodInventory is open, so the effective rank "
-                 "is 5", t["ranks"]["hashing"] == 4.0 and t["ranks"]["matmul"] == 3.0 and t["rank"] == 4.0
+    checks.check("ranks split by part: ShaWrites (ShaSpeed's form its theorem) and mask-optimal are 4a on the hashing "
+                 "part, W1 and PeriodInventory 3 on the matmul part, and the overall rank is the "
+                 "larger; PeriodInventory "
+                 "is open, so the effective rank is 5", t["ranks"]["hashing"] == 4.0 and t["ranks"]["matmul"] == 3.0
+                 and t["rank"] == 4.0 and card["premise"]["ShaSpeed"]["rank"] == 0
                  and t["rank_effective"] == 5.0 and RANKS["4a"] < RANKS["4bU"] < RANKS["4b"] < RANKS[5], rk(t))
     llama = ("t512", "t512r512", "t8192")
     exact = {p: [r for r in results[p]["rows"] if r["choice"]["denoise"] == "cancel"] for p in llama}
@@ -1486,6 +1505,13 @@ def main() -> int:
                         "and words off the card: the host term is what period-inventory and host-row close",
                         not e["t1_pass"] and e["terms"]["host"] > 4 and e0["t1_pass"],
                         f"T1 {e['t1']:.0%} vs {e0['t1']:.3%}")
+        c = mutated(lambda c: c["premise"]["row-bound"].pop("closes"))
+        e = one(c, tag)
+        checks.mutation("leave the row digests unbound and the lead fails T1 in M0: padding, chosen repeated tokens and a "
+                        "replayed request let a branching prover skip A's credited hashing (N-COMPOSE), about 0.21x stock "
+                        "at T 8,192", not e["t1_pass"] and abs(e["terms"]["row_repeat"] - e["pre_noise_units"]) < 1e-9
+                        and 0.20 < e["terms"]["row_repeat"] < 0.22 and e0["t1_pass"],
+                        f"row repeat {e['terms']['row_repeat']:.3f}x, T1 {e['t1']:.1%}")
         pool = {k: v for k, v in designs.items() if v["choice"]["noise"] in ("ssn-1l-tag", "ssn-1l-hw")}
         c = mutated(lambda c: c["attack"].__setitem__("x", {"targets": ["ssn-tag-distinct"], "status": "open", "source": "test"}))
         rows_c, _ = ranking(c, pool, "t8192")
