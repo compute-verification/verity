@@ -26,6 +26,15 @@ from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _step
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
 
 
+def test_the_after_landing_run_runs_circuit_check_which_is_off_the_merge_gate():
+    """circuit-check is off the merge gate (ci.toml's `gate = false`): no recorded check runs it, so the after-landing run must,
+    and must pass it to verify `main` (it is no step the run may skip by name)."""
+    from research.drive import CHECK_STEPS
+
+    assert AFTER_LANDING == tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
+    assert "circuit-check" in AFTER_LANDING and "circuit-check" not in AFTER_LANDING_OPTIONAL and "circuit-check" in EVERY
+
+
 @pytest.fixture
 def world(tmp_path):
     return World(tmp_path)

@@ -46,7 +46,9 @@ Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` ab
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
+time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), circuit-check and any
+other job off the merge gate (`gate = false`, which no recorded check runs, no merge requires and `_promote` doesn't wait for)
+among them, `--no-cache
 --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
@@ -136,7 +138,8 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
 REVIEWED = "a land verdict at each head"
 #: the keys of drive's state that only train landing kept, dropped from a state that has them
 TRAIN_STATE = ("launched", "deferred", "resent", "base", "bisect", "orphans", "per_pr", "prewarm")
-#: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none)
+#: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the
+#: merge gate (`gate = false`: circuit-check) among them, which no check before landing runs
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")

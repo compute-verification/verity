@@ -147,7 +147,9 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
-`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes.
+`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. `circuit-check` is off the
+merge gate (`gate = false` in `tools/verity/check/ci.toml`) until `circuit-check --all` fits inside the rest of the check: a
+recorded check and `research merge` leave it out, and it runs after landing on `main`'s tip, where a red reverts its culprit.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
