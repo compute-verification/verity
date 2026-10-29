@@ -38,6 +38,9 @@ def main() -> int:
     ap.add_argument("--top", type=int, default=40)
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--out", required=True, type=Path)
+    ap.add_argument("--under", action="append", default=[],
+                    help="a frame (`name (file.py)`): print each thread's call tree beneath it, by path, to --depth")
+    ap.add_argument("--depth", type=int, default=5)
     a = ap.parse_args()
     t0 = float(a.t0.read_text().strip())
     st = su.steps(a.steps)
@@ -47,7 +50,7 @@ def main() -> int:
         raise SystemExit(f"no full step of {a.T} tokens after the main load's start")
     lo, hi = (st[idx[0] - 1]["t"] - t0) * 1e6, (st[idx[-1]]["t"] - t0) * 1e6
     n = len(idx)
-    events = json.loads(a.trace_json.read_text())
+    events = json.loads(a.trace_json.read_bytes().decode("utf-8", "replace"))
     events.sort(key=lambda e: e["ts"])
     stack: dict[tuple, list[str]] = defaultdict(list)
     last: dict[tuple, float] = {}
@@ -55,6 +58,7 @@ def main() -> int:
     thr: dict[tuple, str] = {}
     incl: dict[tuple, Counter] = defaultdict(Counter)
     self_: dict[tuple, Counter] = defaultdict(Counter)
+    paths: dict[tuple, Counter] = defaultdict(Counter)
     changes: Counter = Counter()
     for e in events:
         k, ts = (e["pid"], e["tid"]), float(e["ts"])
@@ -65,6 +69,11 @@ def main() -> int:
                 for f in set(s):
                     incl[k][f] += dt
                 self_[k][s[-1]] += dt
+                for u in a.under:
+                    if u in s:
+                        i = s.index(u)
+                        for d in range(1, min(len(s) - i, a.depth + 1) + 1):
+                            paths[k][tuple(s[i:i + d])] += dt
         last[k] = ts
         f = frame(e)
         if e["ph"] == "B":
@@ -93,6 +102,11 @@ def main() -> int:
             print(f"  incl {v:9.3f} s/step {sh:6.1%}  {f[:150]}")
         for f, v, sh in t["self_s_per_step"]:
             print(f"  self {v:9.3f} s/step {sh:6.1%}  {f[:150]}")
+    for k, p in paths.items():
+        print(f"UNDER pid {k[0]} tid {k[1]} {thr.get(k, '?')[:60]}")
+        for path in sorted(p, key=lambda q: [(-p[q[:j]], q[j - 1]) for j in range(1, len(q) + 1)]):
+            if p[path] >= 0.002 * span:
+                print(f"  {p[path] / 1e6 / n:7.3f} s/step  {'  ' * (len(path) - 1)}{path[-1][:120]}")
     return 0
 
 

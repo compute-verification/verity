@@ -6,8 +6,8 @@
 # of record (`serve_row.row_refusal`), which `verity-vllm predict row` writes into PRED (the run's scratch) on the CPU
 # before the lease.
 #
-# The mix: N requests of exactly 1,024 prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py --varied N
-# --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with T/1024 requests a step and a window
+# The mix: N requests of exactly PROMPT_IDS (1,024) prompt ids, max_tokens 1, greedy, all queued at once (`serve_load.py
+# --varied N --prompt-range 1024:1024 --max-tokens 1 --rate 1000`), served at T tokens a step with SLOTS requests a step and a window
 # (--max-num-seqs, --window-requests), --window-steps 1, --admit arrival, no prefix cache. WARM requests are served first,
 # outside the capture. Arms (ARM):
 #   stock   --no-commit, no protocol: the ceiling
@@ -20,23 +20,27 @@
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
-#           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/1024
+#           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/PROMPT_IDS
 #   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
 #           row, as graphs: not the served stack either (the B4 row's Build declares synchronous scheduling), so util.json's
 #           served_stack is false for both
 # ASYNC=1 serves a Commit arm (noseal, seal, h1) with --async-scheduling, in a tree whose serve-openai takes it with the
-# Commit on (its `serve_row` module), as <arm>-async; SEQS defaults to 2·T/1024, as for async. With a ROW whose Build
+# Commit on (its `serve_row` module), as <arm>-async; SEQS defaults to 2·T/PROMPT_IDS, as for async. With a ROW whose Build
 # declares async scheduling (LAG 1), serve-openai's row check (`serve_row.of`) holds the engine to it and the arm is the
 # served stack. With a row that declares sync (B4's), the check is bypassed, as `tests/pipeline/serve_async_commit_gpu.py`
 # does: its records attest the row's LAG 0 Programs, so the arm is not the served stack.
-# Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
+# Env: ARM, T (8192), N (64), PROMPT_IDS (1024: each request's prompt ids, so T/PROMPT_IDS requests a step), SLOTS (the
+# requests a step and a window, T/PROMPT_IDS; fewer leave the step part empty, and the steady state is then the steps of
+# SLOTS·PROMPT_IDS tokens: V3's own window, the certifier front's group, is SLOTS 4 of PROMPT_IDS 16 at T 512),
+# MAX_MODEL_LEN (1088; V3 serves 64), H1_PROVER=1 (the h1 arm keeps H1's prover state in the scratch, --h1-prover, as
+# V3's runner does, in a tree whose serve-openai takes it), WARM (2·SLOTS), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
 # children, and records it and its subprocesses at PYSPY_HZ, 20, without pausing them (blocking samples at 250 Hz doubled a
 # 26 ms step), as a Chrome trace in the scratch, which `pyspy_steps.py`
-# cuts to the full steps into pyspy_steps.json), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
-# rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
+# cuts to the full steps into pyspy_steps.json; PYSPY_UNDER, a frame, adds its call tree to PYSPY_DEPTH, 5), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
+# rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/PROMPT_IDS, 2·T/PROMPT_IDS for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), SEAL_HOLD_GB (--seal-hold-gb, 32: the committed bytes of the windows
@@ -53,7 +57,8 @@
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
-ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
+ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; PROMPT_IDS=${PROMPT_IDS:-1024}
+SLOTS=${SLOTS:-$(( T / PROMPT_IDS ))}; STEP_TOKENS=$(( SLOTS * PROMPT_IDS )); WARM=${WARM:-$(( 2 * SLOTS ))}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-1088}
 case $ARM:${ASYNC:-0} in graphs:*|async:*|*:1) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
 LABEL=$ARM; [ "${ASYNC:-0}" = 1 ] && LABEL=$ARM-async
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
@@ -65,14 +70,15 @@ NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve; PRED=${PRED:-$SCR/predicted}
 PORT=${PORT:-18190}
-export TREE ARM LABEL T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT
+export TREE ARM LABEL T N PROMPT_IDS SLOTS SEQS WARM MAX_MODEL_LEN ROOT VENV PY REPO REV ROW ROW_ID HIDDEN_SO NORM_TAP_SO NSYS SCR D PRED PORT OUT
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
   case $ARM in stock|noseal|seal|h1|graphs|async) ;; *) say "ARM $ARM: not stock, noseal, seal, h1, graphs or async"; exit 2 ;; esac
   case $ARM:${ASYNC:-0} in *:0|noseal:1|seal:1|h1:1) ;; *) say "ASYNC=1 is for the Commit's arms (noseal, seal, h1): stock's is ARM=async"; exit 2 ;; esac
   { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
-  [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
+  [ "$PROMPT_IDS" -ge 1 ] && [ "$PROMPT_IDS" -le 1024 ] && [ "$SLOTS" -ge 1 ] && [ "$STEP_TOKENS" -le "$T" ] \
+    || { say "SLOTS $SLOTS of PROMPT_IDS $PROMPT_IDS (1 to 1,024): not one to T $T tokens a step"; exit 2; }
   [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
   if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
@@ -102,15 +108,18 @@ if [ "${1:-}" != leased ]; then
     --why "vllm-util80: serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
   say "ARM $LABEL T $T N $N WARM $WARM SEQS $SEQS row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
     "learn budget ${VERITY_LEARN_HOST_BUDGET_MB:-4096} MiB heads ${HEADS:-}"
-  GPU_LEASE_WHO=vllm-util80 gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
+  GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-util80} gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
   rc=$?
   say "LEASED PART rc=$rc"
+  [ -d "$SCR/private/h1" ] && say "PROVER STATE $(du -sh "$SCR/private/h1" | cut -f1) in $(find "$SCR/private/h1" -name '*.npz' | wc -l) call files, $(grep -E '^(Dirty|Writeback):' /proc/meminfo | tr -s ' \n' ' ')$([ "${KEEP_PROVER:-0}" = 1 ] || { rm -rf "$SCR/private/h1"; echo ', deleted'; })"
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
-    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
+    --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$LABEL" --T "$T" --N "$N" --step-tokens "$STEP_TOKENS" \
+    --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
-      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
+      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$STEP_TOKENS" --out "$OUT/pyspy_steps.json" \
+      ${PYSPY_UNDER:+--under "$PYSPY_UNDER"} --depth "${PYSPY_DEPTH:-5}" > "$OUT/pyspy_steps.txt" 2>&1
     say "PYSPY ANALYSIS rc=$?"; cat "$OUT/pyspy_steps.txt"
   fi
   if [ -d "$D/windows" ]; then
@@ -129,9 +138,14 @@ export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
+if [ -n "${GPU_TESTS:-}" ]; then
+  # shellcheck disable=SC2086
+  (cd "$TREE/integrations/vllm" && "$PY" -m pytest -q -p no:cacheprovider -rs $GPU_TESTS) > "$OUT/gpu_tests.txt" 2>&1
+  say "GPU TESTS (exit $?): $(tail -1 "$OUT/gpu_tests.txt" | cut -c1-200)"
+fi
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
       --admit arrival --window-requests "$SEQS" --max-num-seqs "$SEQS"
-      --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
+      --max-num-batched-tokens "$T" --max-model-len "$MAX_MODEL_LEN" --window-steps 1 --no-prefix-caching)
 [ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$PRED/manifest.json")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
@@ -142,7 +156,8 @@ case $ARM in
   stock) args+=(--no-commit) ;;
   noseal) args+=("${commit[@]}" --no-seal) ;;
   seal) args+=("${commit[@]}" --seal) ;;
-  h1) args+=("${commit[@]}" "$([ "${H1_SEAL:-0}" = 1 ] && echo --seal || echo --no-seal)" --protocols pouw:eps1-sm120-h1fx1) ;;
+  h1) args+=("${commit[@]}" "$([ "${H1_SEAL:-0}" = 1 ] && echo --seal || echo --no-seal)" --protocols pouw:eps1-sm120-h1fx1)
+      [ "${H1_PROVER:-0}" = 1 ] && { (umask 077; mkdir -p "$SCR/private"); args+=(--h1-prover "$SCR/private/h1"); } ;;
   graphs|async)
     args+=(--no-commit)
     sizes=1; s=2; while [ "$s" -le "$T" ]; do sizes+=",$s"; s=$(( 2 * s )); done
@@ -156,6 +171,15 @@ print("UTIL engine options overridden (not the served stack):", json.dumps(over)
 sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
+if [ "${H1_NODUMP:-0}" = 1 ]; then
+  # measurement only: --h1-prover without each window's live rows (pouw_h1_live.dump), to size what that dump costs the step
+  serve=("$PY" -c 'import sys
+from verity_vllm.pipeline import cli
+from verity_vllm.protocols.pouw.h1 import live as LV
+LV.dump = lambda run, out: {"dir": str(out), "rounds": 0, "skipped": "H1_NODUMP"}
+print("UTIL pouw_h1_live.dump skipped (H1_NODUMP, measurement only)", flush=True)
+sys.exit(cli.main())' serve-openai)
+fi
 if [ "${ASYNC:-0}" = 1 ]; then
   args+=(--async-scheduling)
   serve=("$PY" -c 'import json, sys
@@ -243,7 +267,7 @@ fi
 spid=$(ss -Hltnp "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200) (pid ${spid:-unknown})"
 load() {  # $1 requests, $2 seed, $3 name
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
+  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range "$PROMPT_IDS:$PROMPT_IDS" \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$SCR/$3.jsonl" > "$SCR/$3.log" 2>&1
 }
 load "$WARM" 7 warm; say "WARM $WARM requests (exit $?)"

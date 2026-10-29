@@ -2,9 +2,10 @@
 metric over the engine's steady state, the step wall time from the server's step trace, and where the rest of the step went.
 
     python benchmarks/one_stage/served_util.py --sqlite PROF.sqlite --trace ADVICE_TRACE.jsonl --T 8192 [--serve-dir D]
-        [--timings MAIN.timings.json] [--arm A] [--N N] --out util.json
+        [--timings MAIN.timings.json] [--arm A] [--N N] [--step-tokens S] --out util.json
 
-The steady state is the longest run of consecutive full steps (T tokens scheduled) inside the capture; a step spans the
+The steady state is the longest run of consecutive full steps (``--step-tokens`` scheduled, T by default; a load whose
+steps don't fill T, as V3's window of 4 prompts of 16 ids at T 512, names its own) inside the capture; a step spans the
 previous step's end to its own (the trace's ``t``, taken once the engine has taken the step's output, so window opens and
 closes, seals waited on and every other host gap between steps fall in the step they delay). ``queued`` is the same over
 the steps that start once the last request has arrived. ``<window>_body`` is a window without its last step, the load's
@@ -229,7 +230,8 @@ def steady_cut(ts: list[int], tv: list[float], clock: tuple[list[int], list[floa
 
 
 def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None, ref_mhz: float = 1830.0) -> dict[str, Any]:
-    """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts."""
+    """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts; ``T`` the
+    tokens a full step schedules."""
     db = sqlite3.connect(sqlite)
     z = utc0_ns(db)
     names, series = metrics(db)
@@ -354,7 +356,8 @@ def windows(serve_dir: Path) -> dict[str, Any]:
         recs = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
         keep = ("window", "steps", "committed_bytes", "passed", "seconds", "close_phases_s", "on_loop_phases_s", "error")
         rows = [{k: r[k] for k in keep if k in r} | ({"pouw_h1_seconds": r["pouw_h1"].get("seconds"), "pouw_h1_tied": r["pouw_h1"].get("tied"),
-                                                      "pouw_h1_error": (r["pouw_h1"].get("error") or None) and str(r["pouw_h1"]["error"])[:300]}
+                                                      "pouw_h1_error": (r["pouw_h1"].get("error") or None) and str(r["pouw_h1"]["error"])[:300],
+                                                      "pouw_h1_kept": r["pouw_h1"].get("kept")}
                                                      if isinstance(r.get("pouw_h1"), dict) else {})
                 for r in recs]
         got["windows"] = rows
@@ -384,11 +387,13 @@ def main() -> int:
     ap.add_argument("--serve-dir", type=Path, default=None)
     ap.add_argument("--timings", type=Path, default=None)
     ap.add_argument("--ref-mhz", type=float, default=1830.0)
+    ap.add_argument("--step-tokens", type=int, default=None, help="the tokens a full step schedules (default T)")
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
     served = a.arm not in NOT_SERVED and (not str(a.arm).endswith("-async") or row_declares_async(a.serve_dir))
-    doc: dict[str, Any] = {"arm": a.arm, "served_stack": served, "T": a.T, "N": a.N,
-                           **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
+    full = a.step_tokens or a.T
+    doc: dict[str, Any] = {"arm": a.arm, "served_stack": served, "T": a.T, "step_tokens": full, "N": a.N,
+                           **analyse(a.sqlite, a.trace, full, last_send(a.timings), a.ref_mhz)}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
     if a.timings is not None and a.timings.exists():
@@ -405,13 +410,18 @@ def main() -> int:
         why = next((r["pouw_h1_error"] for r in doc["serve"].get("windows", []) if r.get("pouw_h1_error")), None)
         print(f"H1 {h1.get('windows')} windows released, {h1.get('tied')} tied, untied {h1.get('untied')}, failed {h1.get('failed')}, "
               f"gate-passed rows {h1.get('gate_passed_rows')}" + (f"; first failure: {why}" if why else ""))
+        kept = [r["pouw_h1_kept"] for r in doc["serve"].get("windows", []) if r.get("pouw_h1_kept")]
+        if kept:
+            print(f"KEPT {len(kept)} windows' prover state written off the loop: {sum(k['calls'] for k in kept)} calls, "
+                  f"{sum(k['bytes'] for k in kept) / 1e9:.2f} GB, the loop waited on a full ring {sum(k['waits'] for k in kept)} times")
     for key in ("queued", "queued_body", "all", "all_body"):
         w = doc.get(key)
         if not isinstance(w, dict) or "tensor_active_pct" not in w:
             continue
         clock = (f" at {w['sm_clock_mhz']:.0f} MHz ({w['tensor_active_pct_at_ref']:.2f}% at {w['ref_mhz']:.0f} MHz)"
                  if w.get("sm_clock_mhz") is not None else "")
-        print(f"UTIL {a.arm}{'' if doc['served_stack'] else ' (not the served stack)'} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}%{clock} over {w['steps']} full steps, "
+        steps = f"{w['steps']} full steps" if full == a.T else f"{w['steps']} steps of {full} tokens"
+        print(f"UTIL {a.arm}{'' if doc['served_stack'] else ' (not the served stack)'} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}%{clock} over {steps}, "
               f"step wall {w['step_wall_ms']['mean']:.2f} ms (median {w['step_wall_ms']['median']:.2f}), GPU busy {w['gpu_busy_pct']:.1f}%, "
               f"D2H {w['copies']['d2h']['GB']:.1f} GB ({w['copies']['d2h']['busy_pct']:.1f}% of the time)")
         if (s := w.get("steady")) and s.get("tensor_active_pct") is not None:

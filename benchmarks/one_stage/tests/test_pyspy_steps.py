@@ -30,9 +30,13 @@ def test_the_full_steps_split_by_frame(tmp_path: Path) -> None:
     (tmp_path / "tr.jsonl").write_text("".join(json.dumps(r) + "\n" for r in steps))
     (tmp_path / "tm.json").write_text(json.dumps({"start_unix": T0}))
     out = tmp_path / "o.json"
-    subprocess.run([sys.executable, str(SCRIPT), "--trace-json", str(tmp_path / "p.json"), "--t0", str(tmp_path / "t0"),
-                    "--steps", str(tmp_path / "tr.jsonl"), "--timings", str(tmp_path / "tm.json"), "--T", "8192",
-                    "--out", str(out)], check=True, capture_output=True)
+    run = subprocess.run([sys.executable, str(SCRIPT), "--trace-json", str(tmp_path / "p.json"), "--t0", str(tmp_path / "t0"),
+                          "--steps", str(tmp_path / "tr.jsonl"), "--timings", str(tmp_path / "tm.json"), "--T", "8192",
+                          "--out", str(out), "--under", "step (b.py)"], check=True, capture_output=True, text=True)
+    tree = run.stdout.split("UNDER ", 1)[1].splitlines()[1:]
+    assert [line.split() for line in tree] == [["2.000", "s/step", "step", "(b.py)"],
+                                               ["1.000", "s/step", "hash", "(d.py)"],
+                                               ["1.000", "s/step", "seal_wait", "(c.py)"]]
     doc = json.loads(out.read_text())
     assert (doc["window_s"], doc["full_steps"], doc["step_s"], doc["first_step"], doc["last_step"]) == (4.0, 2, 2.0, 2, 3)
     th = doc["threads"][0]
