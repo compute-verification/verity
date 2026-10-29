@@ -513,14 +513,15 @@ theorem refusedAt_honest :
   ⟨check_honestLog, check_staleLog⟩
 
 /-- `RefusedAt`'s nontrivial witness: a log check that refuses everything at its first entry, as not following the
-head, refuses `honestLog` with a refusal the spec doesn't give its first entry. -/
+head, refuses `honestLog` with a refusal the spec doesn't give that entry, at every index of `honestLog` it may name. -/
 theorem refusedAt_nontrivial :
-    ∀ hi : 0 < honestLog.length,
+    ∀ i : Fin honestLog.length,
       ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
-          (Verity.Site.ofLog (log (honestLog.take 0)))
-          (Verity.Registration.head (digests witnessDigests) (composite .remote) (log (honestLog.take 0)))
-          (regEntry honestLog[0]) = some (refusal .previous) := by
-  intro _
+          (Verity.Site.ofLog (log (honestLog.take i)))
+          (Verity.Registration.head (digests witnessDigests) (composite .remote) (log (honestLog.take i)))
+          (regEntry honestLog[i]) = some (refusal .previous) := by
+  rintro ⟨i, hi⟩
+  obtain rfl : i = 0 := by simp only [honestLog, List.length_singleton] at hi; omega
   have h := refuses witnessDigests witnessAuditor .remote emptySite "genesis" honestEntry
   rw [honestEntry_refusal] at h
   show ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
