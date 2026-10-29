@@ -51,7 +51,7 @@ deploy bindings:
 | `OUT` | the run | `STATE/out`, the served window's public record |
 
 `BANDWIDTH_CMD` has no piece in the tree yet, so the record names PoUB's row missing and composes `pending` while it is.
-The inference-only policy has no hook: no served window produces the declared division yet, so the record has no row
+The inference-only policy has no hook: no served window produces the division yet, so the record has no row
 for it, and the onsite check's verdict stays `undecided` while a listed subprotocol has no row.
 The serve dir stays where the runner keeps it on the node (`D`, `SERVE_ROOT` and the runner's other variables pass
 through from the environment).

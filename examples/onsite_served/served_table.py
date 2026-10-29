@@ -291,7 +291,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "inference-only": {
         VERIFIER: Piece("inference-only", VERIFIER, CHECK, "the inference-only policy's row: no served window produces "
-                        "the declared division yet, so the record has none and the onsite check stays undecided"),
+                        "the division yet, so the record has none and the onsite check stays undecided"),
     },
     "pous": {
         PROVER: Piece("pous", PROVER, SERVED_WINDOW, "PoUS's served piece: one period over the served weights held as "

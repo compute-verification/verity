@@ -1,7 +1,7 @@
 """a_out, a_in, |𝒥| and s_× of a circuit's counted operations, exactly, and which of them a partition computes whole.
 
 The circuit is a Program in the `verity-ir/descriptor/v1` format (anything with a lowered ``root``: `Program`, or
-`codec.decode_program`'s result), read through its canonical layout (PROTOCOL.md §6), the format NCI's check reads gate by
+`codec.decode_program`'s result), read through its canonical layout (PROTOCOL.md §6), the format the inference-only check reads gate by
 gate and `Nci.Cover.Circuit` formalizes. A served layer is 10^9 to 10^12 Boolean gates, so nothing is flattened except one
 counted operation's Definition (`ops.OpShape`): every quantity is summarized once per Definition and context and mapped
 through the call hierarchy, which equals the gate-by-gate definitions `flat` computes on small circuits (the tests hold
