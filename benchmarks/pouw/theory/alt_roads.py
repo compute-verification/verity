@@ -24,6 +24,7 @@ import math
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+ENGINES = ("t_stock_s", "t_stock_async_s")
 
 
 def load(path: Path) -> dict:
@@ -111,39 +112,26 @@ def r1_egress(inp: dict, ll: dict) -> dict:
     for key, point in inp["points"].items():
         macs = ll["macs_per_token"] * point["m"]
         byts = b * macs + ll["a_bytes_per_token"] * point["m"]
-        base = (point["t_stock_s"] + (alpha - 1.0) * point["t_gemm_s"] + inp["ssn_1l"]["coin_latency_s"]
-                + export_s(inp, b * macs))
+        extra = (alpha - 1.0) * point["t_gemm_s"] + inp["ssn_1l"]["coin_latency_s"] + export_s(inp, b * macs)
+        base = point["t_stock_s"] + extra
         row = {"point": key, "label": point["label"], "bytes_per_step": byts,
                "rate_at_stock_speed_bytes_per_s": byts / point["t_stock_s"],
                "hbm_factor_at_stock_speed": byts / point["t_stock_s"] / inp["h200"]["hbm_bytes_per_s"]}
+        slow = inp["links"]["gemm_slowdown_under_d2h_measured"][1]
         for lname, rate in (("census_100g", inp["links"]["census_reference_bytes_per_s"]),
                             ("gpu_400g", inp["links"]["per_gpu_400g_bytes_per_s"])):
             t_e = byts / rate
+            judged = max(max(point[e] + extra + (slow - 1.0) * alpha * point["t_gemm_s"], t_e) / point[e]
+                         for e in ENGINES)
             row[lname] = {"egress_s": t_e,
                           "t2_overlapped": max(base, t_e) / point["t_stock_s"],
                           "t2_serial": (base + t_e) / point["t_stock_s"],
-                          "passes_t2": max(base, t_e) / point["t_stock_s"] <= 100.0}
+                          "t2_judged": judged, "passes_t2": judged <= 100.0}
         if "t_stock_band_s" in point:
             row["t2_overlapped_band_gpu_400g"] = [max(base - point["t_stock_s"] + t, byts / inp["links"]["per_gpu_400g_bytes_per_s"]) / t
                                                   for t in point["t_stock_band_s"]]
-        slow = inp["links"]["gemm_slowdown_under_d2h_measured"][1]
-        row["gpu_400g_measured_slowdown"] = {
-            "t2_overlapped": max(base + (slow - 1.0) * alpha * point["t_gemm_s"],
-                                 byts / inp["links"]["per_gpu_400g_bytes_per_s"]) / point["t_stock_s"],
-            "pcie_egress_s": byts / inp["links"]["pcie_d2h_measured_bytes_per_s"][0]}
+        row["pcie_egress_s"] = byts / inp["links"]["pcie_d2h_measured_bytes_per_s"][0]
         out.append(row)
-    # Rows that fit T2 <= 100, with the stock step interpolated linearly between decode (1 row) and 64 tokens.
-    d, s64 = inp["points"]["decode1"], inp["points"]["t64"]
-    per_row = b * ll["macs_per_token"] + ll["a_bytes_per_token"]
-    max_rows = {}
-    for lname, rate in (("census_100g", inp["links"]["census_reference_bytes_per_s"]),
-                        ("gpu_400g", inp["links"]["per_gpu_400g_bytes_per_s"])):
-        fit = 0
-        for m in range(1, 65):
-            t_s = d["t_stock_s"] + (s64["t_stock_s"] - d["t_stock_s"]) * (m - 1) / 63.0
-            if per_row * m / rate <= 100.0 * t_s:
-                fit = m
-        max_rows[lname] = fit
     sha_rate = inp["h200"]["sms"] * inp["h200"]["fmax_hz"] * 128.0 / inp["sha512"]["sm_clk_per_compression"]
     certifier = {"h200_sha512_bytes_per_s": sha_rate,
                  "certifier_h200s_per_prover_gpu_at_400g": inp["links"]["per_gpu_400g_bytes_per_s"] / sha_rate}
@@ -153,15 +141,14 @@ def r1_egress(inp: dict, ll: dict) -> dict:
              "nvlink_900g": inp["links"]["nvlink_domain_bytes_per_s"][0],
              "nvlink_1800g": inp["links"]["nvlink_domain_bytes_per_s"][1]}
     criterion = {name: {f"t2_le_{x}": x * rate / b / peak(inp) for x in (10, 100)} for name, rate in links.items()}
-    stock_share = {key: ll["macs_per_token"] * p["m"] / p["t_stock_s"] / peak(inp) for key, p in inp["points"].items()}
+    stock_share = {key: ll["macs_per_token"] * p["m"] / min(p[e] for e in ENGINES) / peak(inp) for key, p in inp["points"].items()}
     p8 = inp["points"]["t8192"]
-    t8192_nvlink = {name: b * ll["macs_per_token"] * p8["m"] / rate / p8["t_stock_s"]
+    t8192_nvlink = {name: b * ll["macs_per_token"] * p8["m"] / rate / min(p8[e] for e in ENGINES)
                     for name, rate in links.items() if name.startswith("nvlink")}
-    rtt = {f"{r * 1e6:g}us": {key: 64 * r / p["t_stock_s"] for key, p in inp["points"].items()}
+    rtt = {f"{r * 1e6:g}us": {key: 64 * r / min(p[e] for e in ENGINES) for key, p in inp["points"].items()}
            for r in (2e-6, 10e-6, 1e-3)}
     pcie = inp["links"]["pcie_d2h_measured_bytes_per_s"]
     return {
-        "max_rows_t2_le_100": max_rows,
         "certifier_hashing": certifier,
         "pcie_egress_measured": {"d2h_bytes_per_s": pcie,
                                  "port_400g_share_of_pcie": [inp["links"]["per_gpu_400g_bytes_per_s"] / x for x in reversed(pcie)],
@@ -177,8 +164,7 @@ def r1_egress(inp: dict, ll: dict) -> dict:
         "t1_hiding_on_prover": 0.0,
         "t1_hashing_before_noise_on_prover": 0.0,
         "premises": ["H32 (1, measured)", "W1 (3)", "trusted-host (3, a named assumption the design rules admit)",
-                     "SSN distinctness lemma (0 once locked)", "grinding bound (open: 5 until settled)",
-                     "the link's bytes are the GPU's (PeriodInventory, 3)"],
+                     "SSN distinctness lemma (0 once locked)", "the link's bytes are the GPU's (PeriodInventory, 3)"],
         "points": out,
     }
 
@@ -219,15 +205,17 @@ def r1_shapes(inp: dict, ll: dict) -> dict:
         experts[ln] = {"max_tokens_t2_le_100": max((m for m in range(1, 65537) if rows_per_expert(m) <= cap), default=0),
                        "rows_per_expert_allowed": cap}
     per_row = b * ll["macs_per_token"] + ll["a_bytes_per_token"]
-    base = lambda m: (stock_step_s(inp, m) + (alpha - 1.0) * stock_step_s(inp, m, "t_gemm_s")
-                      + inp["ssn_1l"]["coin_latency_s"] + export_s(inp, b * ll["macs_per_token"] * m))
+    extra = lambda m: ((alpha - 1.0) * stock_step_s(inp, m, "t_gemm_s") + inp["ssn_1l"]["coin_latency_s"]
+                       + export_s(inp, b * ll["macs_per_token"] * m))
     llama = {}
     for ln, rate in links.items():
-        t2 = lambda m: max(base(m), per_row * m / rate) / stock_step_s(inp, m)
+        t2 = lambda m: max(max(stock_step_s(inp, m, e) + extra(m), per_row * m / rate) / stock_step_s(inp, m, e)
+                           for e in ENGINES)
         fit = max((m for m in range(1, 8193) if t2(m) <= 100.0), default=0)
-        llama[ln] = {"t2_overlapped_512_rows": t2(512), "t2_overlapped_256_rows": t2(256),
-                     "max_rows_t2_le_100": fit, "stock_step_at_max_rows_s": stock_step_s(inp, fit),
-                     "stock_share_at_max_rows": ll["macs_per_token"] * fit / stock_step_s(inp, fit) / pk}
+        fast = min(stock_step_s(inp, fit, e) for e in ENGINES)
+        llama[ln] = {"t2_judged_512_rows": t2(512), "t2_judged_256_rows": t2(256),
+                     "max_rows_t2_le_100": fit, "stock_step_at_max_rows_s": fast,
+                     "stock_share_at_max_rows": ll["macs_per_token"] * fit / fast / pk}
     return {"roofline": roofline, "roofline_knee_rows": knee_rows,
             "v4_experts_uniform_routing": experts, "v4_rows_per_expert_at": {m: rows_per_expert(m) for m in (64, 256, 512, 8192)},
             "llama_interpolated": llama}
@@ -411,7 +399,7 @@ def per_period_bounds(inp: dict, res: dict) -> dict:
     r1 = {p["point"]: p for p in res["R1"]["points"]}
     hw = inp["ssn_1l_hw"]
     r4 = next(r for r in res["R4"]["rows"] if r["point"] == "t8192" and r["schedule"] == "overlapped")
-    t2 = lambda key: r1[key]["gpu_400g_measured_slowdown"]["t2_overlapped"]
+    t2 = lambda key: r1[key]["gpu_400g"]["t2_judged"]
     bounds = [
         ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 512, 64 rows", t2("t64"), hw["t1_closed"]["t64"]),
         ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 512, 512 rows", t2("t512"), hw["t1_closed"]["t512rows"]),
@@ -532,18 +520,16 @@ def table(res: dict) -> str:
         lines.append(f"    {p['point']:>8}: {p['bytes_per_step']:.3e} B a step, {p['rate_at_stock_speed_bytes_per_s']:.3e} B/s at stock "
                      f"speed ({p['hbm_factor_at_stock_speed']:.2f}x HBM); T2 overlapped / serial: 100 Gb/s "
                      f"{p['census_100g']['t2_overlapped']:.1f} / {p['census_100g']['t2_serial']:.1f}, 400 Gb/s "
-                     f"{p['gpu_400g']['t2_overlapped']:.1f} / {p['gpu_400g']['t2_serial']:.1f}"
+                     f"{p['gpu_400g']['t2_overlapped']:.1f} / {p['gpu_400g']['t2_serial']:.1f}; judged (the faster stock step, "
+                     f"the worst measured slowdown) 100 Gb/s {p['census_100g']['t2_judged']:.1f}, 400 Gb/s {p['gpu_400g']['t2_judged']:.1f}"
                      + (f"; 400 Gb/s over a 0.3-3 ms stock step: {p['t2_overlapped_band_gpu_400g'][0]:.1f}-"
                         f"{p['t2_overlapped_band_gpu_400g'][1]:.1f}" if "t2_overlapped_band_gpu_400g" in p else ""))
-    fits = {k: (f"{v}" if v < 64 else "64 or more") for k, v in r1["max_rows_t2_le_100"].items()}
-    lines.append(f"    rows that fit T2 <= 100 (stock step interpolated, an estimate): 100 Gb/s {fits['census_100g']}, "
-                 f"400 Gb/s {fits['gpu_400g']}; the certifier hashes 400 Gb/s with "
-                 f"{r1['certifier_hashing']['certifier_h200s_per_prover_gpu_at_400g']:.3f} H200s of SHA-512 a prover GPU")
+    lines.append(f"    the certifier hashes 400 Gb/s with {r1['certifier_hashing']['certifier_h200s_per_prover_gpu_at_400g']:.3f} "
+                 "H200s of SHA-512 a prover GPU")
     pe = r1["pcie_egress_measured"]
     lines.append(f"    measured PCIe Gen5 x16 device-to-host {pe['d2h_bytes_per_s'][0]:.3e}-{pe['d2h_bytes_per_s'][1]:.3e} B/s: a 400 Gb/s "
                  f"port is {pe['port_400g_share_of_pcie'][0]:.1%}-{pe['port_400g_share_of_pcie'][1]:.1%} of it; int8 GEMMs under the "
-                 f"stream {pe['gemm_slowdown_under_d2h'][0]:.4f}-{pe['gemm_slowdown_under_d2h'][1]:.4f}x; 400 Gb/s T2 with the worst "
-                 "slowdown: " + ", ".join(f"{p['point']} {p['gpu_400g_measured_slowdown']['t2_overlapped']:.1f}" for p in r1["points"]))
+                 f"stream {pe['gemm_slowdown_under_d2h'][0]:.4f}-{pe['gemm_slowdown_under_d2h'][1]:.4f}x")
     crit = r1["criterion_max_stock_tensor_share"]
     lines.append("    fits when stock's useful tensor share is at most (T2 <= 100 / <= 10): "
                  + "; ".join(f"{k} {v['t2_le_100']:.2%} / {v['t2_le_10']:.3%}" for k, v in crit.items()))
@@ -562,8 +548,8 @@ def table(res: dict) -> str:
     lines.append("    V4 routed experts at the roofline, uniform top-8 of 256: " + "; ".join(
         f"{ln} fits to {v['max_tokens_t2_le_100']} tokens ({v['rows_per_expert_allowed']:.2f} rows an expert)"
         for ln, v in sh["v4_experts_uniform_routing"].items()))
-    lines.append("    Llama on the interpolated stock step: " + "; ".join(
-        f"{ln} T2 {v['t2_overlapped_256_rows']:.0f} at 256 rows and {v['t2_overlapped_512_rows']:.0f} at 512, fits to "
+    lines.append("    Llama on the interpolated stock steps, judged: " + "; ".join(
+        f"{ln} T2 {v['t2_judged_256_rows']:.0f} at 256 rows and {v['t2_judged_512_rows']:.0f} at 512, fits to "
         f"{v['max_rows_t2_le_100']} rows (stock at {v['stock_share_at_max_rows']:.2%} of the peak there)"
         for ln, v in sh["llama_interpolated"].items()))
     for r in res["R4"]["certifier_rows"]:
