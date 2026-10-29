@@ -4,6 +4,8 @@ lean-audit.json merge=lean-audit
 *.lean merge=lean-imports
 # a conflict only in `[[require]]` blocks or a string array (`roots`) merges as a set or list; any other stays git's (merge.py --lakefile)
 lakefile.toml merge=lakefile-lists
+# a conflict only in the ratchet caps' lines (`UNWITNESSED`, `INLINE`) merges as counters; any other stays git's (merge.py --caps)
+tests/test_lean_packages.py merge=lean-caps
 # the fixture replica map key by key; a key set two ways refuses (tools/verity/check/merge_map.py)
 fixtures/artifacts.json merge=fixture-map
 # the vLLM lints' shrink-only lists entry by entry; an entry changed two ways refuses (integrations/vllm/tests/lint/merge_allowlist.py)
