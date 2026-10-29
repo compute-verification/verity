@@ -322,7 +322,7 @@ LEDGER = [
 FIELDS = ["id", "statement", "rank", "status", "rank_today", "falsify", "owner", "closes"]
 #: other lanes' names for a ledger row (or the row it generalizes)
 ALIASES = {"forced-PRF": ("salt-forced",), "CopyGrain": ("copy-floor", "CopyGrain(w₀) at w₀ = 4"),
-           "CopyGrain-row": ("copy-priced",), "coin-branch": ("adaptive-dw, per path",),
+           "CopyGrain-row": ("copy-priced",),
            "LaneSemantics": ("lane-semantics",), "OneInstructionMinimal": ("one-instruction-minimal",),
            "PeriodInventory": ("period-inventory",), "CarriedWords": ("carried-words",),
            "ShaWrites": ("ShaSpeed + hash-compose",), "ShaLB": ("ShaLB(3,534)",)}
