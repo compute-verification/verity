@@ -5,7 +5,7 @@ import RemoteAudit.Difftest
 /-!
 # A remote bandwidth session as a core protocol
 
-The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`),
+The verifier's session (`Shared.run g`, which `audit.AuditRun` is held to) behind the core interface (`Core.Protocol`),
 the bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms
 the difftest's `session` reads (`Difftest.sessionFn`):
 

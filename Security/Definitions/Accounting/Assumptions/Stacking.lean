@@ -133,7 +133,7 @@ is what the schedule check bounds (`Accounting.ScheduleDeterministic`): the veri
 unless every pass's plan is its own plan (`RemoteAudit.Schedule.plan`) of the schedule the prover publishes (when each
 block is written and freed, and each pass's step), and that schedule is within the cap on its bits the prover
 committed before the session's first coin (`audit.Params.schedule_cap`), which is what it credits
-(`audit.Ledger.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
+(`audit.GammaTerms.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
 published after the coins, whose length can follow them. A layout the check accepts at cap `a` at every coin is
 `SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, at the verifier's own layout,
 `Properties.RemoteAudit.sessionLayout`: its positions of the plan the pass sent, where it checks each opened block),
