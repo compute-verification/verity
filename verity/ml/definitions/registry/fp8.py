@@ -36,7 +36,7 @@ Registered functions (all `Name_v1`):
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS};
               DotE4m3_v2{K,DOT}, ScaledMmFp8NoSwapCoordinate{K,BIAS,DOT}, ScaledMmFp8NoSwap{K,N,BIAS,DOT} (the same GEMM
               dispatched without swap_ab, on the target's e4m3 step: `targets.scaled_mm_fp8_spec`)
-`verity/ml/definitions/registry/b1.py` (TA1) and `hopper.py` (HP) are not modified; the Hopper bf16 composites (RMSNorm, RoPE,
+`verity/ml/definitions/registry/b1.py` and `hopper.py` are not modified; the Hopper bf16 composites (RMSNorm, RoPE,
 AttentionFA3, SiluMul, Embedding, GemmHopper for lm_head, TokenSelect) are reused as registered.
 """
 
@@ -501,7 +501,7 @@ FP8_BLOCK_COMPOSITES = [Fp8GroupScale, Fp8GroupQuant, ScaledMmFp8BlockCoordinate
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the layer functions with FP8 linears (structure: TA1's LayerPre/LayerPost with Gemm(+BiasAdd) -> Fp8ActQuant + ScaledMmFp8)
+# the layer functions with FP8 linears (structure: b1's LayerPre/LayerPost with Gemm(+BiasAdd) -> Fp8ActQuant + ScaledMmFp8)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -537,7 +537,7 @@ BN = H.KBLOCK_N_FA3
                             Array(S.C["KVH"], Array(S.C["D"], BF16)), Array(S.C["KVH"], Array(S.C["D"], BF16)))),
            conformance="model-untested")
 def LayerPreFp8(B, S, h, res, w, cs):
-    """TA1's LayerPre with the QKV projection as `Fp8ActQuant` + `ScaledMmFp8` (bias fused in the epilogue; no BiasAdd node).
+    """b1's LayerPre with the QKV projection as `Fp8ActQuant` + `ScaledMmFp8` (bias fused in the epilogue; no BiasAdd node).
     Returns (residual_out, q[NH][D], k[KVH][D], v[KVH][D])."""
     C = S.C
     Hd, NH, KVH, D = C["H"], C["NH"], C["KVH"], C["D"]
@@ -564,7 +564,7 @@ def LayerPreFp8(B, S, h, res, w, cs):
                       Tuple(Array(S.C["H"], BF16), Array(S.C["H"], BF16))),
            conformance="model-untested")
 def LayerPostFp8(B, S, attn, res, w):
-    """TA1's LayerPost with o_proj, gate_up_proj and down_proj as `Fp8ActQuant` + `ScaledMmFp8` (no bias).  Returns (mlp_out, residual)."""
+    """b1's LayerPost with o_proj, gate_up_proj and down_proj as `Fp8ActQuant` + `ScaledMmFp8` (no bias).  Returns (mlp_out, residual)."""
     C = S.C
     Hd = C["H"]
     a = _Coll(Array(C["NH"] * C["D"], BF16), attn.refs)
@@ -581,7 +581,7 @@ def LayerPostFp8(B, S, attn, res, w):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Serve: TA1's `_forward_positions` / `Serve` bodies over the FP8 layer functions (HP's re-instantiation idiom)
+# Serve: b1's `_forward_positions` / `Serve` bodies over the FP8 layer functions (`hopper.py`'s re-instantiation idiom)
 # ---------------------------------------------------------------------------------------------------------
 
 ENV: dict = dict(H.ENV)  # Hopper environment (P bound to Hopper prims, BN = 128, Attention -> AttentionFA3, Final -> FinalHopper)
@@ -594,8 +594,8 @@ ENV["_forward_positions"] = H._reinstantiate(b1._forward_positions, ENV)
 
 ServeFp8 = CompositeDefinition("ServeFp8", 1, b1.Serve.statics, H._reinstantiate(b1.Serve.signature, ENV),
                                H._reinstantiate(b1.Serve.body, ENV),
-                               doc=f"{b1.Serve.doc.strip()}\n\n[b1-fp8] TA1's Serve over LayerPreFp8/LayerPostFp8 (every decoder linear "
-                                   "a QuantLinearFp8), HP's AttentionFA3 and FinalHopper (bf16 lm_head); weights record weights_type_fp8.",
+                               doc=f"{b1.Serve.doc.strip()}\n\n[b1-fp8] b1's Serve over LayerPreFp8/LayerPostFp8 (every decoder linear "
+                                   "a QuantLinearFp8), hopper's AttentionFA3 and FinalHopper (bf16 lm_head); weights record weights_type_fp8.",
                                conformance="model-untested")
 ServeFp8.ported_from = b1.Serve  # type: ignore[attr-defined]
 LayerPreFp8.ported_from = b1.LayerPre  # type: ignore[attr-defined]
