@@ -45,13 +45,13 @@ SHAMIN_HD constexpr uint64_t IVt(int i) {
   return IV[i];
 }
 
-constexpr uint64_t r64(uint64_t x, int n) { return x >> n | x << (64 - n); }
+SHAMIN_HD constexpr uint64_t r64(uint64_t x, int n) { return x >> n | x << (64 - n); }
 
 // K_t + W_t for the padding block of a message whose BITS bits end on a block boundary (W_0 = 2^63, W_15 = BITS, the
 // rest 0): a compile-time constant, so each round's K_t + W_t is its first add's immediate.
 struct PadBlock {
   uint64_t kw[80];
-  constexpr explicit PadBlock(uint64_t bits) : kw{} {
+  __host__ __device__ constexpr explicit PadBlock(uint64_t bits) : kw{} {
     uint64_t w[80] = {};
     w[0] = 1ull << 63;
     w[15] = bits;
