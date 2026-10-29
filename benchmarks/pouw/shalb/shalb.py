@@ -206,11 +206,18 @@ def l1_call(leaves: int, value_bytes: int = 1024, schema: str = "u8") -> dict:
     """One call's hashing under L1 (`hm96-sha512/subtree/v1`): `leaves` frame-v3-sha512 leaves of `value_bytes` each in
     the call's own range-u64 domain (positions 0..leaves − 1), their tree, the domain id and the call's hm96 instance
     (c, its leaf and the salt PRF, 3 compressions). Shared work is counted once: the leaves' prefix through the domain id
-    (a midstate a call), each level's node midstate, the domain id. Per call, by level."""
+    (a midstate a call), each level's node midstate, the domain id. Per call, by level; and what a value the prover
+    makes constant saves (its blocks' schedule is then a constant: `constant_value_share`, of the leaf and of the
+    call)."""
     depth = (leaves - 1).bit_length()
     rl = _ulen(leaves - 1)
-    leaf = message_cost(frame_message(b"leaf", [(64, CALL), (rl, ITEM), (rl, ITEM), (schema.encode(), CONST),
-                                                (value_bytes, DATA)]))
+
+    def leaf_cost(value: tuple[bytes | int, int]) -> dict:
+        return message_cost(frame_message(b"leaf", [(64, CALL), (rl, ITEM), (rl, ITEM), (schema.encode(), CONST),
+                                                    value]))
+
+    leaf = leaf_cost((value_bytes, DATA))
+    constant = leaf_cost((bytes(value_bytes), CONST))
     rows = [{"what": f"leaf ({value_bytes} B value)", "n": leaves, **leaf}]
     for lvl in range(1, depth + 1):
         width, real = 1 << depth - lvl, -(-leaves // (1 << lvl))
@@ -249,10 +256,14 @@ def l1_call(leaves: int, value_bytes: int = 1024, schema: str = "u8") -> dict:
     items = sum(r["n"] * r["registers"] for r in rows)
     data = sum(r["n"] * r["by_level"][DATA] for r in rows)
     total = items + sum(shared.values())
+    leaf_regs = sum(leaf["by_level"][lv] for lv in (ITEM, DATA))
+    constant_drop = leaf_regs - sum(constant["by_level"][lv] for lv in (ITEM, DATA))
     return {"leaves": leaves, "value_bytes": value_bytes, "rows": rows, "shared_once_a_call": shared,
             "registers": total, "compressions": comp, "per_compression": total / comp,
             "data": data, "data_independent": total - data, "chained_3532": 3532 * comp,
-            "leaf_repeat_share": leaf["repeat"] / sum(leaf["by_level"][lv] for lv in (ITEM, DATA))}
+            "leaf_repeat_share": leaf["repeat"] / leaf_regs,
+            "leaf_constant_value_share": constant_drop / leaf_regs,
+            "constant_value_share": leaves * constant_drop / total}
 
 
 def and_gates() -> int:
@@ -475,6 +486,9 @@ def main() -> None:
     ap.add_argument("--l1-leaves", default="1,4,64,512,4096")
     ap.add_argument("--l1-value", type=int, default=1024)
     ap.add_argument("--lead-w1", type=float, default=233.0, help="the lead's hashing, W1 a useful MAC")
+    ap.add_argument("--honest-extra-per-leaf", type=float, default=0.0,
+                    help="registers a leaf an honest build writes beyond R (a measured SASS count less R): priced as "
+                         "honest-only work")
     ap.add_argument("--json", default="")
     args = ap.parse_args()
     out: dict = {}
@@ -612,6 +626,21 @@ def main() -> None:
           f"{over * args.lead_w1:.3g}× stock against T1's 0.01×")
     print(f"- with the salt fixed on the grid, the data-independent {di:.2%} is constant there, so free: a T1 term of "
           f"{di * args.lead_w1:.3g}× stock")
+    cv_share = l1["constant_value_share"]
+    print(f"- a value the prover makes constant (or an exact repeat) has a constant (or shared) schedule: the leaf "
+          f"{l1['leaf_constant_value_share']:.2%}, the call {cv_share:.2%}; credited at R, a T1 term of "
+          f"{cv_share * args.lead_w1:.3g}× stock")
+    keyed = compression_levels(CALL, [DATA] * 16)
+    print(f"- a compression from a per-window midstate (a keyed first block): {keyed.at(ITEM, DATA)} registers a "
+          f"digest and {keyed.at(CALL)} once a window (from the IV: {compression(False, [True] * 16)['registers']})")
+    leaf_per_call = l1["registers"] / l1["leaves"]
+    honest_only = args.honest_extra_per_leaf / leaf_per_call
+    if args.honest_extra_per_leaf:
+        print(f"- an honest build {args.honest_extra_per_leaf:g} registers a leaf above R: honest-only "
+              f"{honest_only:.3g} of the hashing, {honest_only * args.lead_w1:.3g}× stock")
+    out["sha_writes_l1"].update({"constant_value_share": cv_share, "t1_constant_value": cv_share * args.lead_w1,
+                                 "keyed_per_digest": keyed.at(ITEM, DATA), "keyed_once_a_window": keyed.at(CALL),
+                                 "honest_only_share": honest_only})
     scopes = [(scope, rate * s, p) for scope, rate in (("one H200", H200_MACS_PER_S),
                                                        ("datacenter (100,000 H200)", H200_MACS_PER_S * DC_GPUS))
               for p, s in PERIODS.items()]
@@ -623,13 +652,16 @@ def main() -> None:
                "stock_and": macs * AND_PER_MAC, "R": (1 - delta) * regs, "delta_registers": delta * regs,
                "over_credit_and": over * comp * ands, "data_independent_and": di * comp * ands,
                "t1_allowance_w1": 0.01 * macs, "over_credit_w1": over * args.lead_w1 * macs,
-               "data_independent_w1": di * args.lead_w1 * macs}
+               "data_independent_w1": di * args.lead_w1 * macs, "constant_value_w1": cv_share * args.lead_w1 * macs,
+               "constant_value_and": cv_share * comp * ands, "honest_only_w1": honest_only * args.lead_w1 * macs}
         out["sha_writes_l1"]["periods"].append(row)
         print(f"- {scope}, {p}: {comp:.3g} compressions ({row['hash_and']:.3g} AND gates; stock {row['stock_and']:.3g}"
               f"); R = {row['R']:.4g} registers, δ·R = {row['delta_registers']:.3g}; T1 allows "
               f"{row['t1_allowance_w1']:.3g} W1; over-credit at 3,532 {row['over_credit_w1']:.3g} W1 "
               f"({row['over_credit_and']:.3g} AND gates); data-independent {row['data_independent_w1']:.3g} W1 "
-              f"({row['data_independent_and']:.3g} AND gates)")
+              f"({row['data_independent_and']:.3g} AND gates); constant values {row['constant_value_w1']:.3g} W1 "
+              f"({row['constant_value_and']:.3g} AND gates)"
+              + (f"; honest-only {row['honest_only_w1']:.3g} W1" if args.honest_extra_per_leaf else ""))
 
     if args.minimal:
         out["minimal"] = json.loads(Path(args.minimal).read_text())["summary"]
