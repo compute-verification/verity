@@ -8,7 +8,7 @@ For each program (A4 P6's six-template population, as #164's test builds it, and
   `subset k_s n_s` on its own segment of `2 k_s · width(n_s) + 64` bytes, local index j to the stratum's j-th unit);
 - the sample: `draw.check_draw` accepts it, from a given stream and from the operating system's randomness;
 - U2: `flock-verify draw-test` with the stratified flags against `draw.check_draw` on mutations of an accepted draw;
-- one draw over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same draw where both
+- one sample over J = 2 and 3 tables: `flock-verify draw --tables J` against `draw.tables_problem`, the same draw where both
   take it and the same refusal where both refuse;
 - on a small program, each unit's inclusion frequency over draws on fresh streams from the operating system against
   `k_s / n_s`; given no stream, Lean draws only a law of every unit and refuses any other (the verifier has no coins of
@@ -96,7 +96,7 @@ def _lines(p: subprocess.CompletedProcess, tag: str) -> list:
 
 
 def _mutations(good: dict, rng: random.Random) -> list[tuple[str, dict]]:
-    """Mutations of an accepted stratified draw, each a change U2 or the law check should see (or not)."""
+    """Mutations of an accepted stratified sample, each a change U2 or the law check should see (or not)."""
     def m(f):
         d = json.loads(json.dumps(good))
         f(d)

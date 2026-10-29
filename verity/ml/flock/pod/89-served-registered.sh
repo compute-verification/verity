@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The served-registered fixture (tests/served_registered.py, tests/test_lean_served_registered.py): a RoPE d64 statement
 # whose `cs` rows are a served tree registered as a port (`one_stage.served.register_served`), proved in one loopback --zk
-# session under a subset draw, then Lean's `flock-verify verify --zk --registered` on it with the verifier's own file
+# session under a subset sample, then Lean's `flock-verify verify --zk --registered` on it with the verifier's own file
 # (accepted) and with the tree's root changed (refused). The staged files and the session go into the evidence store as a
 # fixture (`research data put --kind fixture/v1 --preserve`), whose id `out/fixture.txt` names. Run from the verity tree
 # (research run --cwd source); CPU only. Outputs under out/: host.txt, stage.json, statement.txt, serve.log, prove.txt and
@@ -12,7 +12,7 @@
 # (lean-none.log, refused). Its fixture adds vectors/: honest, root and none, each the session with its case.json (the live
 # server's verdict, from serve's index.jsonl) and a registered.json for the two negatives (agree.py's per-session reads;
 # vectors.json's live set).
-# env: CPUS=16  K=16 (the draw's units, of the stage's 32)  ZK=1  SCHEMA=v1 (the tree's row format: v1, v2 or seg,
+# env: CPUS=16  K=16 (the sample's units, of the stage's 32)  ZK=1  SCHEMA=v1 (the tree's row format: v1, v2 or seg,
 #      served_registered.py's --schema)  FLOCK_WORK=/workspace, or /workspace/jobs/pc-read-gadget
 #      where /workspace isn't writable (node 1) (the prover build and its venv, shared as 76-read-gadget.sh's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
