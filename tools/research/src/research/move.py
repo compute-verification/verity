@@ -29,10 +29,6 @@ class Unmovable(Exception):
     """Why a run can't be moved; nothing was launched or cancelled."""
 
 
-class NotYet(Unmovable):
-    """A waiting run that hasn't waited `--waiting-over` yet."""
-
-
 def unwrap(command: list[str]) -> dict[str, Any]:
     """The pool line's lane, run time and pool slots file, and the command inside it; Unmovable for a command no pool line wraps."""
     if not command or command[0] != "env" or "tools/verity/check/slot.py" not in command or "--" not in command:
@@ -118,8 +114,9 @@ def _worktree(sha: str) -> Path:
 
 
 def move(run_dir: Path, *, to: str, reason: str, by: str | None, cpus: int | None, dry_run: bool, now: datetime,
-         min_wait_s: float = 0) -> str:
-    """Resend `run_dir`'s waiting pool run onto `to` and cancel the waiting copy; the new run's id, or the argv with `dry_run`."""
+         min_wait_s: float = 0) -> str | None:
+    """Resend `run_dir`'s waiting pool run onto `to` and cancel the waiting copy; the new run's id, the argv with `dry_run`, or None
+    when it has waited less than `min_wait_s`."""
     from . import remote
 
     remote.fetch(run_dir)
@@ -128,7 +125,7 @@ def move(run_dir: Path, *, to: str, reason: str, by: str | None, cpus: int | Non
         raise Unmovable(f"{run_dir.name} isn't waiting in a pool's line (slot.json: {slot.get('state') or 'none'}), so moving it "
                         f"would throw away what it has run")
     if w < min_wait_s:
-        raise NotYet(f"{run_dir.name} has waited {w / 60:.0f} min")
+        return None
     req = _request(run_dir)
     if not req.get("_source_sha"):
         raise Unmovable(f"{run_dir.name}'s remote.json records no source commit to resend")
@@ -174,11 +171,10 @@ def main(argv: list[str]) -> int:
         try:
             got = move(d, to=ns.to, reason=ns.reason, by=ns.by, cpus=ns.cpus, dry_run=ns.dry_run, now=now,
                        min_wait_s=(ns.waiting_over or 0) * 60)
-        except NotYet:
-            continue
         except (Unmovable, remote.Refused, subprocess.CalledProcessError, ValueError) as e:
             print(f"research move: {d.name}: {e}", file=sys.stderr)
             rc = 1
             continue
-        print(f"research move: {d.name}: " + (f"would send: {got}" if ns.dry_run else f"moved to {got}"))
+        if got is not None:
+            print(f"research move: {d.name}: " + (f"would send: {got}" if ns.dry_run else f"moved to {got}"))
     return rc
