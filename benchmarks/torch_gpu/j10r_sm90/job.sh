@@ -38,7 +38,7 @@ build() {
     "$D/j10r_ref.cu" -o "$lib/j10r_ref.so" > "$lib/ptxas.txt" 2>&1 || { cat "$lib/ptxas.txt"; return 2; }
   { echo "commit $(cat "$OUT/commit.txt")"; "$nv" --version | tail -2
     echo "flags -O3 -std=c++17 -shared -Xcompiler -fPIC -gencode arch=compute_90a,code=sm_90a"
-    sha256sum "$lib/j10r_ref.so" "$D/j10r_ref.cu" benchmarks/torch_gpu/sha512_rows/sha512x.cuh; } > "$lib/BUILD.txt"
+    sha256sum "$lib/j10r_ref.so" "$D/j10r_ref.cu" verity/ml/kernels/sha512.cuh; } > "$lib/BUILD.txt"
   cat "$lib/BUILD.txt"; grep -E 'registers|spill' "$lib/ptxas.txt"
 }
 
