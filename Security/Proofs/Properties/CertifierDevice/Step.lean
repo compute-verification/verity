@@ -388,7 +388,7 @@ theorem bucketer_tick (b : Bucketer) :
   simp only [follow_certifier]
   split
   · exact ⟨t1.trans hc.1, t2.trans hc.2.1, fun r h => nomatch h⟩
-  · simp only [Certifier.closeWindow]
+  · simp only [Certifier.closeSamplingBlock]
     exact ⟨t1.trans hc.1, t2.trans hc.2.1, fun r h => by cases h; exact t1.trans hc.1⟩
 
 /-- `ingressTick` after its late check. -/
