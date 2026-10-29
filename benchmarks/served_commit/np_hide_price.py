@@ -42,7 +42,8 @@ the leaf kernels' time without the salt side and the leaf hash), the words' move
 fold, or HBM stores), and each call's coin expansion at its floor. Overlap is the larger of everything but the hash, and the
 hash: hashing beside the step is cheaper only while the step runs. "At the bar" prices every compression at the bar's.
 ShaSpeed's precision δ is the T1 budget over the hash's W1 a useful MAC. The hashing frontier is the bytes a useful MAC at
-which the hash alone, at the bar, fits in (T2 − 1) stock steps. Hashing before the noise is A's commitment: under L0 a
+which the hash alone, at the bar, fits in T2 stock steps overlapped (where the serial part fits) or T2 − 1 serially, at
+T2's bar (T2_BAR) and at 2 and 1.1. The V4-like layers (`v4`) get the hiding term under each layout and the seed path. Hashing before the noise is A's commitment: under L0 a
 row-seg row with its hm96 leaf and tree share (its salt is in the hiding term); under L1 a row-seg or flat SHA-512 row and its
 tree share.
 """
@@ -85,6 +86,13 @@ CALLS = 4 * N.LAYERS
 UNIT_OUT_BYTES = 262_144 // 8                       # a proof block's outputs at the largest public size class
 BUDGET = 0.01
 TARGET = 0.001
+T2_BAR = 100
+# V4-like shapes: a dense layer (K = n = 7,168) and a routed expert pair (gate-up n 4,096 K 7,168; down n 7,168 K 2,048),
+# each expert reading TOP_K / EXPERTS of the rows; the H200's data-sheet HBM bandwidth bounds a call's weight read
+V4_DENSE = {"dense": (7168, 7168)}
+V4_EXPERT = {"gate-up": (4096, 7168), "down": (7168, 2048)}
+EXPERTS, TOP_K = 256, 8
+HBM_B_S = 4.8e12
 SSN = {"ssn_1l": lambda k: 1 + math.ceil((k - 28) / 31), "ssn_a": lambda k: math.ceil(k / 28)}
 SSN_T1 = {"ssn_1l": {"credited": 0.00049, "uncredited": 0.00255}, "ssn_a": {"credited": 0.00054, "uncredited": 0.00944}}
 POINTS = {**N.POINTS, "decode, 16 rows": (16, 64), "decode, 1 row": (1, 64)}   # (real rows, the GEMM table's m)
@@ -180,6 +188,42 @@ def seed_path(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> 
     return leaf + NODE[arity] * levels(leaves, arity) + NODE[2] + HM96_LEAF + 2 + 1
 
 
+def v4(price: dict, lat: dict | None, sizes: list[int]) -> dict:
+    """ssn_1l's hiding work on the V4-like layers at each point's rows m: the dense layer; the experts with a seed group per
+    expert call, or one per linear over the layer's experts (calls committed together share a slot of `pouw.roots`). A
+    layer's L1 instances are its seed groups (the forward's one extra amortizes over its layers). With a latency, each
+    linear's seed path in one stream over its GEMM alone (an estimate: the larger of its MACs at the sheet's rate and its
+    weights at HBM_B_S; the layer's other operations would lower the ratio)."""
+    s = SSN["ssn_1l"]
+    out: dict = {}
+    for pname, (m, _gm) in POINTS.items():
+        m_e = max(1.0, m * TOP_K / EXPERTS)
+        active = min(EXPERTS, m * TOP_K)
+        cases = {"V4 dense": (V4_DENSE, m, 1, {"one per call": 1}),
+                 "V4 experts": (V4_EXPERT, m * TOP_K, active, {"one per expert call": active * len(V4_EXPERT),
+                                                               "one per linear over the experts": len(V4_EXPERT)})}
+        for case, (lins, rows_l, n_exp, groups) in cases.items():
+            macs = rows_l * sum(n * k for n, k in lins.values())
+            words = rows_l * sum(n * 4 * s(k) for n, k in lins.values())
+            sp: dict = {f"L0 {R // 1024} KiB rows": rows_l * len(lins) + words / R for R in sizes}
+            sp.update({f"L1, {g}": c for g, c in groups.items()})
+            e: dict = {"rows_a_linear": rows_l, "macs": macs, "bytes_a_mac": words / macs, "salts": sp, "hiding": {
+                lay: {f: {p: n * v / macs for p, v in price[f].items() if p != "time"} for f in ("unforced", "forced (a)")}
+                for lay, n in sp.items()}}
+            if lat:
+                e["seed_path"] = {}
+                for g in groups:
+                    span = rows_l if "over" in g or case == "V4 dense" else m_e
+                    tot = gemm = 0.0
+                    for n, k in lins.values():
+                        chain = seed_path(math.ceil(span), k) * lat["tree_ns"] * 1e-9 + lat["launch_us"] * 1e-6
+                        g_s = max(rows_l * n * k / SHEET_MAC_S, n_exp * n * k / HBM_B_S)
+                        tot, gemm = tot + g_s + chain, gemm + g_s
+                    e["seed_path"][g] = {"us": (tot - gemm) * 1e6, "gemm_us": gemm * 1e6, "t2_floor_over_gemm": tot / gemm}
+            out[f"{case}, {pname}"] = e
+    return out
+
+
 def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict, chain_ms: float | None = None) -> dict:
     """t_H/t_S for each engine and hash rate. What the GEMMs wait on serially is the calls' coin floor, or, given
     `chain_ms`, the seed path, which contains it."""
@@ -203,7 +247,7 @@ def t2(design: str, b: dict, pname: str, rows: int, m: int, rates: dict, chain_m
     for eng, (stock, _gap, src) in engines.items():
         e = {"stock_ms": stock, "src": src, "stock_mac_times_a_useful_mac": stock * 1e-3 * UNITS_S / fwd_macs,
              "bytes a useful MAC for T2 at the bar, L1 16 KiB chunks": {
-                 f"{sched} ≤ {x}": max(0.0, budget) * 1e-3 * UNITS_S / per_byte / fwd_macs for x in (2, 1.1)
+                 f"{sched} ≤ {x}": max(0.0, budget) * 1e-3 * UNITS_S / per_byte / fwd_macs for x in (T2_BAR, 2, 1.1)
                  for sched, budget, per_byte in (("overlap", x * stock if stock + gemm_ms + coins <= x * stock else 0.0, bar),
                                                  ("serial, HBM export", (x - 1) * stock - gemm_ms - coins,
                                                   bar + EXPORT_WORD["stg"] / 4))}}
@@ -322,6 +366,7 @@ def main() -> None:
             pt["pre_noise"] = pre
             d["points"][pname] = pt
         out["designs"][design] = d
+    out["v4"] = v4(price, lat, sizes)
     dc_mac_s = S.CENSUS["datacenter GPUs"] * S.CENSUS["H200 int8 dense ops/s"] / 2
     scopes = {"datacenter": {"window": dc_mac_s * S.CENSUS["window s"], **{p: dc_mac_s * s for p, s in S.PERIODS.items()}},
               "world": {p: S.CENSUS["world FLOP a year"] / 2 * s / S.PERIODS["year"] for p, s in S.PERIODS.items()}}
@@ -388,6 +433,15 @@ def main() -> None:
                 if "compressions a call for the seed path's T2 floor" in e:
                     print(f"    T2 {eng}: compressions a call for the seed path's T2 floor " + ", ".join(
                         f"{k} {n:.1f}" for k, n in e["compressions a call for the seed path's T2 floor"].items()))
+    print("\nssn_1l on the V4-like layers (hiding unforced, then forced (a), floor / alone)")
+    for name, e in out["v4"].items():
+        shown_l = [k for k in e["hiding"] if not k.startswith("L0") or k in ("L0 16 KiB rows", "L0 1024 KiB rows")]
+        print(f"  {name}: {e['rows_a_linear']:g} rows a linear, {e['bytes_a_mac']:.4f} B a MAC; " + "; ".join(
+            f"{k} {e['hiding'][k]['unforced']['floor']:.4%} / {e['hiding'][k]['unforced']['alone']:.4%}, "
+            f"{e['hiding'][k]['forced (a)']['floor']:.4%} / {e['hiding'][k]['forced (a)']['alone']:.4%}" for k in shown_l))
+        for g, v in e.get("seed_path", {}).items():
+            print(f"    seed path, {g}: {v['us']:.0f} us a layer beside {v['gemm_us']:.1f} us of GEMM, "
+                  f"T2 floor over the GEMM {v['t2_floor_over_gemm']:.1f}")
 
 
 if __name__ == "__main__":
