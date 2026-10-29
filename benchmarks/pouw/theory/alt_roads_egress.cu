@@ -1,8 +1,8 @@
 // R1's GPU side: can one H200 source a 400 Gb/s (50 GB/s) stream of its words while it runs int8 GEMMs?
 // Device-to-host copies into pinned memory stand in for a NIC's GPUDirect reads: both pull HBM over the GPU's PCIe
-// link. Prints one JSON object: copies alone (both directions), cuBLAS int8 GEMMs alone at Llama-3.2-1B's shapes, and
-// the same GEMMs under a device-to-host stream sized to outlast them. The host buffer is poisoned with 0xA5 and the
-// device's with 0x3C, so a copy that moved nothing fails the check.
+// link. Prints one JSON object: copies alone (both directions), and cuBLAS int8 GEMMs at Llama-3.2-1B's shapes, alone
+// and under a device-to-host stream sized to outlast them, in TRIALS interleaved pairs. The host buffer is poisoned with
+// 0xA5 and the device's with 0x3C, so a copy that moved nothing fails the check.
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 
@@ -32,6 +32,7 @@
 
 static const size_t BUF = size_t(2) << 30;
 static const size_t CHUNK = size_t(64) << 20;
+static const int TRIALS = 5;
 
 struct Gemm {
   int m, k, n;
@@ -72,6 +73,45 @@ static bool host_holds(const unsigned char* h, unsigned char want) {
   for (size_t off = 0; off < BUF; off += CHUNK)
     if (h[off] != want || h[off + CHUNK - 1] != want) return false;
   return true;
+}
+
+struct Under {
+  float gemm_ms, stream_ms, lag_ms;
+  size_t stream_bytes;
+  bool moved;
+};
+
+// The stream is sized to outlast the GEMMs at 60 GB/s, so every GEMM runs under it.
+static Under under_stream(cublasHandle_t h, const Gemm& g, int reps, const int8_t* A, const int8_t* B, int32_t* C,
+                          unsigned char* host, const unsigned char* dev, float alone, cudaStream_t s0, cudaStream_t s1,
+                          cudaEvent_t a0, cudaEvent_t b0, cudaEvent_t a1, cudaEvent_t b1) {
+  size_t want = size_t(alone * 1e-3 * 60e9 * 1.5);
+  Under u{0, 0, 0, std::max(size_t(4), (want + CHUNK - 1) / CHUNK) * CHUNK, false};
+  memset(host, 0xA5, BUF);
+  CK(cudaEventRecord(a1, s1));
+  for (size_t off = 0; off < u.stream_bytes; off += CHUNK)
+    CK(cudaMemcpyAsync(host + off % BUF, dev + off % BUF, CHUNK, cudaMemcpyDeviceToHost, s1));
+  CK(cudaEventRecord(b1, s1));
+  CK(cudaEventRecord(a0, s0));
+  for (int r = 0; r < reps; ++r) gemm(h, g, A, B, C);
+  CK(cudaEventRecord(b0, s0));
+  CK(cudaEventSynchronize(b0));
+  CK(cudaEventSynchronize(b1));
+  CK(cudaEventElapsedTime(&u.gemm_ms, a0, b0));
+  CK(cudaEventElapsedTime(&u.stream_ms, a1, b1));
+  CK(cudaEventElapsedTime(&u.lag_ms, a1, a0));
+  u.moved = u.stream_bytes >= BUF ? host_holds(host, 0x3C) : (host[0] == 0x3C);
+  return u;
+}
+
+static std::string list(const std::vector<float>& v) {
+  std::string out = "[";
+  char buf[32];
+  for (size_t i = 0; i < v.size(); ++i) {
+    snprintf(buf, sizeof buf, "%s%.4f", i ? ", " : "", v[i]);
+    out += buf;
+  }
+  return out + "]";
 }
 
 int main() {
@@ -134,31 +174,25 @@ int main() {
     double macs = double(g.m) * g.k * g.n;
     int reps = std::max(20, int(2e12 / macs));
     gemm_ms(h, g, reps, A, B, C, s0, a0, b0);
-    float alone = gemm_ms(h, g, reps, A, B, C, s0, a0, b0);
+    std::vector<float> alone, under, stream, lag;
+    size_t stream_bytes = 0;
+    bool moved = true;
+    for (int t = 0; t < TRIALS; ++t) {
+      alone.push_back(gemm_ms(h, g, reps, A, B, C, s0, a0, b0));
+      Under u = under_stream(h, g, reps, A, B, C, host, dev, alone.back(), s0, s1, a0, b0, a1, b1);
+      under.push_back(u.gemm_ms);
+      stream.push_back(u.stream_ms);
+      lag.push_back(u.lag_ms);
+      stream_bytes = std::max(stream_bytes, u.stream_bytes);
+      moved = moved && u.moved;
+    }
     int32_t c00 = 0;
     CK(cudaMemcpy(&c00, C, 4, cudaMemcpyDeviceToHost));
-    // The stream is sized to outlast the GEMMs at 60 GB/s, so every GEMM runs under it.
-    size_t want = size_t(alone * 1e-3 * 60e9 * 1.5);
-    size_t stream_bytes = std::max(size_t(4), (want + CHUNK - 1) / CHUNK) * CHUNK;
-    memset(host, 0xA5, BUF);
-    CK(cudaEventRecord(a1, s1));
-    for (size_t off = 0; off < stream_bytes; off += CHUNK)
-      CK(cudaMemcpyAsync(host + off % BUF, dev + off % BUF, CHUNK, cudaMemcpyDeviceToHost, s1));
-    CK(cudaEventRecord(b1, s1));
-    CK(cudaEventRecord(a0, s0));
-    for (int r = 0; r < reps; ++r) gemm(h, g, A, B, C);
-    CK(cudaEventRecord(b0, s0));
-    CK(cudaEventSynchronize(b0));
-    CK(cudaEventSynchronize(b1));
-    float under = 0, stream = 0, lag = 0;
-    CK(cudaEventElapsedTime(&under, a0, b0));
-    CK(cudaEventElapsedTime(&stream, a1, b1));
-    CK(cudaEventElapsedTime(&lag, a1, a0));
-    bool moved = stream_bytes >= BUF ? host_holds(host, 0x3C) : (host[0] == 0x3C);
-    printf("%s\n  {\"m\": %d, \"k\": %d, \"n\": %d, \"reps\": %d, \"alone_ms\": %.4f, \"under_stream_ms\": %.4f, "
-           "\"stream_bytes\": %zu, \"stream_ms\": %.4f, \"gemm_start_after_stream_start_ms\": %.4f, \"c00\": %d, "
+    printf("%s\n  {\"m\": %d, \"k\": %d, \"n\": %d, \"reps\": %d, \"alone_ms\": %s, \"under_stream_ms\": %s, "
+           "\"stream_bytes_max\": %zu, \"stream_ms\": %s, \"gemm_start_after_stream_start_ms\": %s, \"c00\": %d, "
            "\"c00_want\": %d, \"stream_moved\": %s}",
-           i ? "," : "", g.m, g.k, g.n, reps, alone, under, stream_bytes, stream, lag, c00, g.k, moved ? "true" : "false");
+           i ? "," : "", g.m, g.k, g.n, reps, list(alone).c_str(), list(under).c_str(), stream_bytes, list(stream).c_str(),
+           list(lag).c_str(), c00, g.k, moved ? "true" : "false");
   }
   printf("\n ]}\n");
   CB(cublasDestroy(h));
