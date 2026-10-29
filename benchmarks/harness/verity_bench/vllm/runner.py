@@ -74,7 +74,7 @@ class EngineFactory(Protocol):
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine: ...
 
 
-def _summary(values: list[float]) -> dict[str, Any]:
+def summarize(values: list[float]) -> dict[str, Any]:
     if not values:
         return {"mean": None, "n": 0}
     mean = statistics.fmean(values)
@@ -100,7 +100,7 @@ def _numeric_leaves(value: Any, prefix: str = "") -> dict[str, float]:
 def _numeric_summaries(values: list[Any]) -> dict[str, dict[str, Any]]:
     leaves = [_numeric_leaves(v) for v in values]
     keys = sorted({k for d in leaves for k in d})
-    return {key: _summary([d[key] for d in leaves if key in d]) for key in keys}
+    return {key: summarize([d[key] for d in leaves if key in d]) for key in keys}
 
 
 def _delta(after: Any, before: Any) -> dict[str, float]:
@@ -395,10 +395,10 @@ def _aggregate(
             metrics = {}
             present = tuple(m for m in OPTIONAL_METRICS if all(r["metrics"].get(m) is not None for r in reps + base))
             for metric in METRICS + present:
-                absolute = _summary([float(r["metrics"][metric]) for r in reps])
+                absolute = summarize([float(r["metrics"][metric]) for r in reps])
                 pairs = [(float(r["metrics"][metric]), float(b["metrics"][metric])) for r, b in zip(reps, base)]
                 # A zero baseline rep is a broken measurement; dropping it would report a mean over the other reps.
-                ratios = _summary([x / y for x, y in pairs]) if all(y != 0 for _, y in pairs) else {"mean": None, "n": 0}
+                ratios = summarize([x / y for x, y in pairs]) if all(y != 0 for _, y in pairs) else {"mean": None, "n": 0}
                 metrics[metric] = {**absolute, "ratio_to_stock": ratios}
             row["arms"][arm.id] = {
                 "metrics": metrics,
