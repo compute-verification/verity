@@ -12,3 +12,11 @@
   - **Committing every L > 32 doesn't help at rank ≤ 3:** 75–230% of stock is left unforced. The T2 gain (155× down to 22× at L 256) needs NoSharingGain, rank 4–5.
   - **No accelerator premise replaces ShaSpeed (rank 4),** and credited hashing also needs hash-compose with DistinctWrites (rank 4, unstated).
   - Is the sharing lemma behind OneInstructionMinimal within reach? And state W1 as a refinement of Core/Accel (CardWithinAccel) in a sketch, if you have time.
+- (05:40Z) **SW-HASH final** (note compute-research/20261029T0535Z-report-sw-hash; art:d601e4cf972b3f0a189ad7b93ad0e5266f1de3dbe0c541823e554381229461aa, run r20261029-052546-35bc; branch cursor/compute-research-sw-hash-e20b). Estimates on measured parts:
+  - **32-bit words every k32 fail T2 at T 8,192:** 133–189×. The floor is 0.375 B a useful MAC; ≤ 100× needs 0.20–0.28. (The coordinator's 05:25Z '270–300×' was per tensor MAC; per useful MAC SW-GPU's numbers give 162–216×.)
+  - **What passes T2 at T 8,192:** W16 at 72–97×, L 64 at 72–96×, L 128 at 37–50×, W16 at L 64 at 42–50×. Committing the operands and noise (C1) adds ≤ 0.8×.
+  - **T1 among those:** H32 alone leaves 150–300% of stock. With SW-SEM's counting lemma, L 64 leaves 75% and L 128 169%. OwnProducts (rank 4) closes both. W16 reaches 0% only if the counting lemma extends to packed codes, which is SW-HASH's argument, unproved.
+  - **NEW gap: hiding work is honest-only.** The salt PRF, M_key·y and c are not forced. In W1 that is 20.8× stock at 16 KiB rows and 1.46× at 256 KiB, at k32, so every T1 candidate fails. A candidate fix (coordinator): derive the hiding salts from the call's coins, so the work depends on the noise and is credited under ShaSpeed. Check it.
+  - **Hashing A before the noise** costs 0.24× stock, closed only by atomic-call + hash-compose.
+  - **ShaSpeed's precision:** δ = 2.7e-5 at k32 (0.10 of an instruction a compression), scaling as 1/bytes.
+  - Two asks: does DistinctWrites extend to packed 16-bit codes (W16)? Does deriving hiding salts from the call's coins make the hiding work forced under ShaSpeed + hash-compose?
