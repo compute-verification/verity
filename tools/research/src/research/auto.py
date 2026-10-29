@@ -16,8 +16,8 @@ then takes, in order:
 
 A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
-run waits up to an hour in its line (slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from
-taking the slot.
+run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
+the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
 """
 from __future__ import annotations
 

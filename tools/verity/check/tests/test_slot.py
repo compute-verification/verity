@@ -437,6 +437,29 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
             SLOT.main([*bad, "--", "true"])
 
 
+def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):
+    """`defer_run` adds the wait to the run's timeout as it stands: the control file's (a slot's --run-max, a bare number too) over
+    status.json's launch value; nothing to move outside a run, without a wait or without a timeout; a control file the job can't
+    write (a --job-user run) leaves the timeout as it was and says so."""
+    run = tmp_path / "run"
+    run.mkdir()
+    assert SLOT.defer_run(60, "line", None) is None and SLOT.defer_run(0, "line", str(run)) is None
+    assert SLOT.defer_run(60, "line", str(run)) is None
+    (run / "status.json").write_text(json.dumps({"timeout_s": None}))
+    assert SLOT.defer_run(60, "line", str(run)) is None and not (run / SLOT.RUN_TIMEOUT).exists()
+    (run / "status.json").write_text(json.dumps({"timeout_s": 3600}))
+    assert SLOT.defer_run(60, "line", str(run)).startswith("line: the run's timeout is now 3660 s from its start")
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 3660
+    (run / SLOT.RUN_TIMEOUT).write_text("9000")
+    SLOT.defer_run(1000, "line", str(run))
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 10000
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    (run / SLOT.RUN_TIMEOUT).parent.rmdir()
+    (run / SLOT.RUN_TIMEOUT.parent).write_text("not a directory")
+    said = SLOT.defer_run(60, "line", str(run))
+    assert said.startswith("line: the run's timeout stays 3600 s from its start, counting this 60 s wait")
+
+
 def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
     """af2d (10 Oct) waited 95 min in node 1's line and was reported running since its launch: its run's slot.json says waiting,
     and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
