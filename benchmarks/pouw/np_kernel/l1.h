@@ -7,7 +7,8 @@
 //   A_j's leaves   leaf(D_j, r, r, "pouw/a-seg/v1", A_j[1024 r, 1024 r + 1024)), D_j the range-u64 domain over the call's
 //                  leaves under binding SHA-512("verity/pouw/a-domain/v1\0" || salt || u64be(forward) || u64be(call))
 //   x              the frame-v3-sha512 root over them (pads to a power of two)
-//   y              (a)'s PRF: y_r = SHA-512(ks || salt || u64be(call) || u64be(r)), r = 0, 1, 2
+//   y              (a)'s PRF: y_r = SHA-512(ks || salt || u64be(pos) || u64be(r)), r = 0, 1, 2, pos = forward · calls + call
+//                  the instance's position in the window (a y used twice would leak x ^ x')
 //   b || c         hm96-sha512: b = x ^ M_key y, c = SHA-512(salt_prefix || y); h = SHA-512(leaf_prefix(key) || b || c)
 //   root(A_j)      leaf(I, call, call, "hm96-sha512/subtree/v1", h), I the range-u64 domain over the forward's calls under
 //                  SHA-512("verity/pouw/a-instances/v1\0" || salt || u64be(forward))
@@ -255,7 +256,7 @@ inline Ref reference(const Window& w, u64 call, const uint8_t* a, size_t bytes) 
   r.dom = range_u64_domain(a_binding(w.salt, w.forward, call), -1, 0, n);
   for (u64 i = 0; i < n; i++) r.leaves.push_back(leaf(r.dom, i, i, A_SCHEMA, Bytes(a + SEG * i, a + SEG * (i + 1))));
   r.x = root(r.dom, r.leaves);
-  r.y = prf_y(w.ks, w.salt, call);
+  r.y = prf_y(w.ks, w.salt, w.forward * w.calls + call);
   const Bytes m = mask(w.key, r.y), c = sha512(cat({salt_prefix(), r.y}));
   Bytes b(64);
   for (int i = 0; i < 64; i++) b[i] = r.x[i] ^ m[i];
@@ -299,7 +300,7 @@ inline Call call_of(const Window& w, u64 call, u64 n) {
     const auto pw = padded(frame_message("node", {dom, Bytes(1, 0), Bytes(ni, 0), Bytes(64, 0), Bytes(64, 0)}));
     for (int i = 0; i < 32; i++) k.node_tpl[ni - 1][i] = pw[16 + i];
   }
-  const Bytes y = prf_y(w.ks, w.salt, call);
+  const Bytes y = prf_y(w.ks, w.salt, w.forward * w.calls + call);
   words(mask(w.key, y), k.my, 8);
   words(sha512(cat({salt_prefix(), y})), k.c, 8);
   {

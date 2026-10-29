@@ -46,7 +46,7 @@ def main() -> None:
     dom = CommitmentDomain(binding, -1, RangeU64Domain(0, n), hash="sha512")
     leaves = [dom.leaf(r, r, "pouw/a-seg/v1", a[SEG * r:SEG * (r + 1)]) for r in range(n)]
     x = tree_levels(dom, leaves)[-1][0]
-    y = b"".join(sha(ks + salt + u64(call) + u64(r)) for r in range(3))
+    y = b"".join(sha(ks + salt + u64(forward * calls + call) + u64(r)) for r in range(3))
     inst = hm96.SHA512
     key = inst.default_key
     bc = inst.commit_string(key, x, y)
