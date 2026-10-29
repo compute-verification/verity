@@ -11,9 +11,9 @@ its own coins and answers with the registration and the session's coin commitmen
 
 `python -m verity.core.protocols.remote_bandwidth.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
 it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
-prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `period_with(party, request,
-store)` is the leg's side: it starts the verifier's side with `party.command`, connects to `party.address` (by default
-the port it printed, on this machine) and plays the prover (`prove`).
+prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `side_of(period, node)` is
+where `period.json` puts that side (`stream.Side`), and `period_with(side, request, store)` is the leg's: it starts the
+side, connects to it and plays the prover (`prove`).
 """
 
 from __future__ import annotations
@@ -23,12 +23,12 @@ import json
 import os
 import secrets
 import socket
-import subprocess
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
 from typing import Any, BinaryIO
+
+from verity.core.deploy.stream import Side
 
 from . import audit, wire
 from . import coins as C
@@ -118,31 +118,16 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Calla
     return out
 
 
-@dataclass(frozen=True)
-class Party:
-    """Where the verifier and its challenger run: `host`, the machine's name; `command`, the argv that starts their side
-    there and speaks `main`'s stdin and stdout; `address`, where the prover connects, `None` for this machine at the
-    port the side prints."""
+def command() -> tuple[str, ...]:
+    """The argv that starts the verifier's side as a process on this machine."""
+    return (sys.executable, "-m", MODULE, "--listen", "127.0.0.1:0")
 
-    host: str
-    command: tuple[str, ...]
-    address: tuple[str, int] | None = None
 
-    @classmethod
-    def of(cls, period: Mapping[str, Any], node: str) -> Party:
-        """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-        node, else `challenger.bandwidth`'s `command` and `address` (`"HOST:PORT"`), which infra writes once the host
-        serves the verifier's side (`benchmarks/live_verifier`)."""
-        host = period.get("challenger_host") or node
-        if host == node:
-            return cls(node, (sys.executable, "-m", MODULE, "--listen", "127.0.0.1:0"))
-        entry = (period.get("challenger") or {}).get("bandwidth") or {}
-        if not entry.get("command") or not entry.get("address"):
-            raise RuntimeError(f"the challenger host {host} isn't wired for bandwidth: period.json's "
-                               f"challenger.bandwidth.command and .address start the verifier there and reach it from "
-                               f"{node} (infra's)")
-        h, _, p = entry["address"].rpartition(":")
-        return cls(host, tuple(entry["command"]), (h, int(p)))
+def side_of(period: Mapping[str, Any], node: str) -> Side:
+    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
+    node, else `challenger.bandwidth`'s `command` and `address`, which infra writes once the host serves the verifier's
+    side (`benchmarks/live_verifier`)."""
+    return Side.of(period, node, "bandwidth", command())
 
 
 def placement(node: str, host: str) -> dict[str, Any]:
@@ -160,22 +145,16 @@ def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = a
             "windows": windows}
 
 
-def period_with(party: Party, request: Mapping[str, Any], store: bytes, *,
+def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
                 entropy: Callable[[int], bytes] = os.urandom) -> tuple[P.Period, dict[str, Any]]:
-    """One session with the verifier's side `party` starts and this process the prover of `store`: the period, and the
+    """One session with the verifier's side `side` starts and this process the prover of `store`: the period, and the
     side's report (`host`, `passes`)."""
-    p = subprocess.Popen(list(party.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-    try:
-        p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
-        p.stdin.close()
-        port = json.loads(p.stdout.readline())["listening"]
-        with socket.create_connection(party.address or ("127.0.0.1", port)) as s, s.makefile("rwb") as f:
-            passes = prove(f, P.Local(request["node"], store, entropy=entropy))
-        got = json.loads(p.stdout.readline())
-    finally:
-        rc = p.wait()
-    if rc != 0:
-        raise RuntimeError(f"the verifier's side on {party.host} exited {rc}")
+
+    def drive(s: socket.socket) -> int:
+        with s.makefile("rwb") as f:
+            return prove(f, P.Local(request["node"], store, entropy=entropy))
+
+    got, passes = side.talk(request, drive)
     return P.Period(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
 
 
@@ -195,7 +174,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PREMISE", "Party", "Remote", "main", "period_with", "placement", "prove", "request_of", "serve"]
+__all__ = ["PREMISE", "Remote", "command", "main", "period_with", "placement", "prove", "request_of", "serve",
+           "side_of"]
 
 if __name__ == "__main__":
     sys.exit(main())
