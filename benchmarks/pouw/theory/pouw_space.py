@@ -299,8 +299,9 @@ def compose(card: dict, choice: dict, extra: list[str] | None = None, lenient: b
         if "when" in mod:
             try:
                 ok = bool(eval(_code(mod["when"]), FNS, probe))  # noqa: S307 - the card's condition
-            except Refused:
-                ok = False
+            except Refused as e:
+                raise Refused(["incompatible", f"{slot} {choice.get(slot)}: {mod['when']} reads "
+                                               f"{'; '.join(e.reasons)}"]) from e
             if not ok:
                 raise Refused(["incompatible", f"{slot} {choice.get(slot)}: {mod['when']}"])
         for cond, ps in mod.get("premises_when", []):
