@@ -157,6 +157,14 @@ Protocols and claims:
   finds a reason this is wrong floats it at once.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
+- A demo shows that the code works, so it runs fast: it samples one or two proof blocks, or whatever keeps it quick.
+  What the theorems give at an operating point (a sampling design, δ, a datacenter's size) is a separate result computed
+  from the bounds; no demo is sized up to show one.
+- Network accounting is two things for each execution block. First, its consistency with the network certificates: its
+  committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
+  from the sampled proofs, its transfers' covert capacity, in three terms reported apart: side channels, the timing
+  channel (which the network certifier, as an active warden, mostly fixes) and what the sampled proofs fail to check;
+  at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
@@ -174,9 +182,8 @@ Protocols and claims:
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
 - No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
-  bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
-  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
-  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
+  bound on `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a compare-select unit), with the claims
+  resting on them listed as conditional.
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
