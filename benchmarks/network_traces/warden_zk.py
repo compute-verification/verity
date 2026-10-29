@@ -1,5 +1,5 @@
-"""warden-zk: the warden's bucket rows read by the proof system. A toy proof block over one row's bits, its port
-registered against the warden's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind the Lean ZK
+"""warden-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its port
+registered against the network certifier's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind the Lean ZK
 server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through the one-stage
 audit as `n2_zk.py` proves N2's head checks.
 
@@ -7,10 +7,10 @@ audit as `n2_zk.py` proves N2's head checks.
       [--units 16] [--dry]
 
 * **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
-  rows the warden committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
-  registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the warden hands the prover alone).
+  rows the network certifier committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
+  registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the network certifier hands the prover alone).
 * **The registration.** An egress execution phase's: its registration read by the verifier
-  (`warden_rows.check_registration`, under the deployment's key and session and the schedule), and the warden's
+  (`warden_rows.check_registration`, under the deployment's key and session and the schedule), and the network certifier's
   opening (the record's rows and wiring under the salts) held to its head.
 * **The proof block** (`WardenRowIdentity{B}`, B a row's S·B bytes): one bucket row's 8·B bits in (`row`), the same bits
   out (`o0`), each through two NOTs (the partition refuses a template with no gate; no AND).
@@ -18,7 +18,7 @@ audit as `n2_zk.py` proves N2's head checks.
   cells' bytes: the connection admitted in an execution phase (its first row past the window's first, or window 0) with
   the most cells, at least D·r + n, and proof block i reading its egress cell i, its cell D·r + i (the D buckets before
   are its delay's pads, the schedule's). Each is at its bucket's row, the cell at its slot's words
-  (`warden_rows.Wiring.place`, with the warden's wiring, opened to the verifier: the named gap). The verifier's port
+  (`warden_rows.Wiring.place`, with the network certifier's wiring, opened to the verifier: the named gap). The verifier's port
   names the proof blocks' digest in its value (`warden_rows.port`), so a statement made for any other proof blocks'
   wiring is refused by Lean's registered
   reads, even at the same rows.
@@ -27,11 +27,11 @@ audit as `n2_zk.py` proves N2's head checks.
   - ``sender``: ``o0`` registered, under the warden's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, proof block 0's cell one byte off: rows the
-    warden didn't sign (and the prover's registration of its own root, under the warden's certificate, is refused by
+    network certifier didn't sign (and the prover's registration of its own root, under the network certifier's certificate, is refused by
     `check_registration`);
-  - ``altered``: ``o0`` under the warden's salts and paths, proof block 0's input row one bit off in its cell, so its
-    output differs from the warden's row;
-  - ``pad``: ``o0`` under the warden's salts and paths, made for proof blocks whose proof block 0 reads the connection's
+  - ``altered``: ``o0`` under the network certifier's salts and paths, proof block 0's input row one bit off in its cell, so its
+    output differs from the network certifier's row;
+  - ``pad``: ``o0`` under the network certifier's salts and paths, made for proof blocks whose proof block 0 reads the connection's
     cell 0, a pad of its delay, where the Program's reads its egress cell 0: the header names the pad's proof blocks'
     wiring;
   - ``pad-named``: ``pad``'s rows under the Program's value, which is public: proof block 0's row isn't the Program's;
@@ -101,9 +101,9 @@ WardenRowIdentity = CompositeDefinition(
 # --- the run ----------------------------------------------------------------------------------------------------------
 
 def attestation(run: Path, n: int) -> SimpleNamespace:
-    """The egress execution phase to read, its registration as the verifier reads it, the warden's opening, and the
+    """The egress execution phase to read, its registration as the verifier reads it, the network certifier's opening, and the
     Program's proof blocks' wiring (`units`, the module docstring's), from public structure alone: `reads` its
-    (connection, cell) each, the row and slot the warden's wiring places each at (`positions`, `slots`), and how many of
+    (connection, cell) each, the row and slot the network certifier's wiring places each at (`positions`, `slots`), and how many of
     them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
@@ -184,7 +184,7 @@ def member_rows(name: str, at: SimpleNamespace) -> SimpleNamespace:
 
 
 def opened(at: SimpleNamespace, mr: SimpleNamespace) -> list[bool]:
-    """Whether each of a member's rows, committed under its salt, climbs its path to the warden's signed root at the
+    """Whether each of a member's rows, committed under its salt, climbs its path to the network certifier's signed root at the
     position the member's entry names."""
     return [WR.opens(at.dom, at.head.root, p, WR.bc(r, s), bytes.fromhex(path))
             for p, r, s, path in zip(mr.entry["positions"], mr.rows, mr.salts, mr.entry["paths"])]
@@ -356,7 +356,7 @@ def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
 
 
 def pad_cells(at: SimpleNamespace) -> bytes:
-    """Each connection's pad as the warden writes it, (PAD, q) and zeros: fixed by the ordinal, which the wiring
+    """Each connection's pad as the network certifier writes it, (PAD, q) and zeros: fixed by the ordinal, which the wiring
     (opened to the verifier) names, so a 16-byte piece of it matches any small integer among zeros."""
     return b"".join(cell(PAD, q, b"", at.params.cell_bytes) for q, _, _ in at.opening.wiring.connections)
 
@@ -448,7 +448,7 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="warden_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="the toy proof block's ports registered against the warden's egress root, "
+    p = sub.add_parser("prove", help="the toy proof block's ports registered against the network certifier's egress root, "
                                      "proved --zk")
     p.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory")
     p.add_argument("--bin")

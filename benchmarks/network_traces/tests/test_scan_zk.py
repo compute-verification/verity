@@ -1,5 +1,5 @@
-"""scan_zk's host side: the run it reads (each execution phase's rows the warden's committed ones, each egress bucket
-computing the warden's row from the view its ingress bucket wrote, w63's request 5 in request 1's slot past its egress)
+"""scan_zk's host side: the run it reads (each execution phase's rows the network certifier's committed ones, each egress bucket
+computing the network certifier's row from the view its ingress bucket wrote, w63's request 5 in request 1's slot past its egress)
 and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the references' outputs) as the
 round's: honest accepted with every output 1, its state and view chains wires through the registered roots
 (`scan_zk.wired`); chain's ingress member refused at unit A's o1 and tampered's egress member at the re-signed row
@@ -133,7 +133,7 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
               late: tuple[int, ...] = ()) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
-    and salts), under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a
+    and salts), under a network certifier key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a
     void run, their reasons in ``fails.records``)."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
@@ -204,7 +204,7 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
 
 def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
-    passes it, and a Lean verdict's ``registered`` reports its roots) holds each warden port at the root and domain of
+    passes it, and a Lean verdict's ``registered`` reports its roots) holds each network certifier port at the root and domain of
     the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from the
     run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
     rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
@@ -308,9 +308,9 @@ def _program(G: int, T: int) -> tuple:
 
 
 def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail(tmp_path):
-    """A warden run whose warden failed a connection late (its server sent nothing: a FAIL in the egress row the
-    warden signed, its reason in ``fails.records``) is read, not refused: the scan renders the connection's END where
-    the warden wrote FAIL, that bucket alone differs from the warden's row, and the run's one round, honest, is refused
+    """A network certifier run whose network certifier failed a connection late (its server sent nothing: a FAIL in the egress row the
+    network certifier signed, its reason in ``fails.records``) is read, not refused: the scan renders the connection's END where
+    the network certifier wrote FAIL, that bucket alone differs from the network certifier's row, and the run's one round, honest, is refused
     ("does not open") at the egress member of the FAIL's execution phase, every other member held."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path / "host", published(tmp_path / "run", sz.TEST, windows=G, late=(1,)), setup=sz.TEST, group=G)
@@ -442,7 +442,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
 
 
 def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outside_the_group_is_not_read(tmp_path):
-    """A connection's reason in the warden's ``fails`` record is in the bucket of its egress `FAIL` (a void run, whose
+    """A connection's reason in the network certifier's ``fails`` record is in the bucket of its egress `FAIL` (a void run, whose
     execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL` is refused,
     naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase past the
     group is another group's, and the group is read as if it weren't there."""
@@ -478,7 +478,7 @@ def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_run
 
 
 def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
-    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a warden run's is read from its
+    """Each run's root is its own (the synthetic run's registrations carry fresh salts), a network certifier run's is read from its
     published registrations alone, and a group's covers each of its execution phases."""
     syn = sz.link(tmp_path / "syn")
     root = sz.window_root(syn)

@@ -30,7 +30,7 @@ Commit window and writes ``summary.json``.
   ``engine.engine_kwargs.max_model_len``, the address, the run id), ``advice_trace.jsonl`` (`verity_vllm.engine.step_trace`'s
   schema: the scheduler's configuration, each request's arrival, each step's rows, emitted tokens and finishes, each
   Commit window's open and close, with unix clock readings), ``requests.jsonl`` (one line a finished request: its
-  engine id, ``user``, the warden's release headers on it when it has them, prompt and streamed ids, finish, and the
+  engine id, ``user``, the network certifier's release headers on it when it has them, prompt and streamed ids, finish, and the
   clock at its arrival, first token and finish) and ``windows.jsonl`` (one line a closed Commit window: its run id
   and run root). A Commit window opens at the first step after the engine was idle and closes when it is idle again or
   after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run root
@@ -170,7 +170,7 @@ class Request:
     finish: dict | None = None
     windows: set = field(default_factory=set)
     queue: asyncio.Queue | None = None
-    release: list | None = None                 # the warden's release headers on it (N, run hex), when it has them
+    release: list | None = None                 # the network certifier's release headers on it (N, run hex), when it has them
     times: dict = field(default_factory=dict)   # the clock's readings at its arrive record, first token and finish
 
     @property

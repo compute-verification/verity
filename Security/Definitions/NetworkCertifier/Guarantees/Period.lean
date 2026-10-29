@@ -8,7 +8,7 @@ import Definitions.NetworkCertifier.Tap
 
 A monitoring period is `n` windows, each audited by the sampled verifier at a statement it registered (`sw i`, with its
 partition `Pw i` and the values `ρ i` the registration commits at its registered inputs). The network certifier is one
-device on the server's uplink, and it functions as an active warden (`Definitions.NetworkCertifier.Tap`): one run of its
+device on the server's uplink, and it functions as an active network certifier (`Definitions.NetworkCertifier.Tap`): one run of its
 code gives the cells the client receives and the observations the audits read, its record of those cells, so on every
 schedule its record format holds the client's view reads back from the observations. The network certifier registers its records at the transfer gates: its
 openings `tops s` under the statement's roots, its signed root for the window, so they vary with what the server did

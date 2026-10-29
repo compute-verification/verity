@@ -686,8 +686,8 @@ WARDEN_DIGEST = bytes(range(64))
 
 
 def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(tmp_path):
-    """A warden link (`WardenProfile`) is the plain proof block on the warden's records: its public items are
-    `PUBLIC_WARDEN` and its charge 0, a window whose two records the warden certified under its parameters digest is
+    """A network certifier link (`WardenProfile`) is the plain proof block on the network certifier's records: its public items are
+    `PUBLIC_WARDEN` and its charge 0, a window whose two records the network certifier certified under its parameters digest is
     accepted with no sync declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check
     alike, and a window whose egress record was certified under the certifier's digest instead is a reject. It takes no
     occupancy profile, and its two ends are one grid."""

@@ -1,28 +1,28 @@
 """The I/O tie (`PROTOCOL.md`, "The I/O tie"), a prototype on a fake upstream: the reference of one egress
 execution phase's tie, a proof block a bucket row that opens every cell of it, and the Boolean Definitions it is built
-from. Nothing here is in a Spec or proved. The cells are the warden's (`warden`, its rows as `warden_rows` registers
+from. Nothing here is in a Spec or proved. The cells are the network certifier's (`warden`, its rows as `warden_rows` registers
 them, registration v2); no Commit writes the port yet, so the fake upstream commits it as the design has the Commit
 commit it, under `hm96-sha512/row/v2` rows in a `frame-v3-sha512` tree.
 
-**The cells are the warden's.** An execution phase's egress is T rows, row t bucket t's R = lanes·r slots of B bytes, so
+**The cells are the network certifier's.** An execution phase's egress is T rows, row t bucket t's R = lanes·r slots of B bytes, so
 cell i is slot i mod R of bucket ⌊i / R⌋. A bucket's live connections hold r slots each, ranked by ordinal (slots
 ρ·r … ρ·r + r − 1 for rank ρ), and a slot no connection holds is B zero bytes (`pad_cell(B)`, a `PAD` on stream 0).
 Connection q, admitted at bucket s, has a `PAD` on q in each of its slots before s + D (`pad_cell(B, q)`); then its
 egress cell i is in bucket s + D + ⌊i / r⌋, its slot i mod r: its n events (`data_cell`) and its `END`
-(`end_cell`), and the rest of that bucket a `PAD` on q; it holds no slot after it. A `DATA` cell is the warden's cut
+(`end_cell`), and the rest of that bucket a `PAD` on q; it holds no slot after it. A `DATA` cell is the network certifier's cut
 of the server's bytes, P = B − 9 of them, and a response is its events, each `id_event` padded with spaces to P, then
-`TRAILER`, shorter than P: so the warden's cut (`warden.Warden._egress`) is exactly n `DATA` cells, one event each,
+`TRAILER`, shorter than P: so the network certifier's cut (`warden.Warden._egress`) is exactly n `DATA` cells, one event each,
 and an `END` that holds `TRAILER`, whenever the bytes are there by their deadlines. q is the request's ingress ordinal
-on the wire, from 1 as `active.Requests` numbers it, which the warden writes from the connection it terminated.
+on the wire, from 1 as `active.Requests` numbers it, which the network certifier writes from the connection it terminated.
 
-**The map is a function of the advice** (`window_map`): for each slot, the cell the warden must have released
+**The map is a function of the advice** (`window_map`): for each slot, the cell the network certifier must have released
 there, as a record (q, e): a `DATA` on q whose id is entry e of its bucket's port, an `END` on q (`END_ENTRY`) or a
 `PAD` on q (`EMPTY`), q = 0 a slot no connection holds. Advice request i is on stream order[i] + 1 (order[i] its
 arrival order from 0: advice v1's order permutation, which carries and charges how the engine's numbering departs
-from the warden's; v0's is the identity) and was admitted at bucket admitted[i], which the warden's FIFO makes
+from the network certifier's; v0's is the identity) and was admitted at bucket admitted[i], which the network certifier's FIFO makes
 non-decreasing in arrival order; its output k must be released at admitted[i] + D + ⌊k / r⌋, so advice v0's release
 is held to the schedule. No prover value says where a cell goes. The advice is private; here the verifier computes
-the map in the clear from the opened advice and the admissions (which the warden's wiring gives, opened to the
+the map in the clear from the opened advice and the admissions (which the network certifier's wiring gives, opened to the
 verifier for now), the named gap ("the advice is opened to the verifier until the compile slice's proof block exists").
 The target reads the map inside the proof under the advice's hiding root.
 
@@ -33,7 +33,7 @@ proof block reads S rows (`Shape.S`), at the steps its bucket's outputs were sam
 with the map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vLLM's Commit (its binding map's
 `sampled_token_ids` under the run root), which this fake upstream stands in for.
 
-**What 1 means** (`reference`): every bucket row is row t of the warden's registered root, and every port row bucket t
+**What 1 means** (`reference`): every bucket row is row t of the network certifier's registered root, and every port row bucket t
 reads is its step's row of the Commit's registered root (the verifier's registered reads, outside the proof block; here
 `rows_root` and the port's openings), and each bucket's proof block is 1 (`bucket_reference`): every cell is its map's
 (`cells_match`): the record's kind on the record's stream, a `DATA` cell's id port entry e. So a duplicated, dropped,
@@ -52,13 +52,13 @@ fabricated output, an early, late or missing `END`, a `FAIL`, a wrong id and a f
     IoTieBucket{B, R, P, S}(row: Array<8·R·B>, map, port: Array<S, Array<4P, Byte>>, switches) -> Value<1>
         E = S·P port entries a bucket, M = 2^D ≥ max(R, E)
 
-`IoTieBucket` is the proof block, one a bucket row. Its `row` is the warden's registered row t and its `port` S rows of
+`IoTieBucket` is the proof block, one a bucket row. Its `row` is the network certifier's registered row t and its `port` S rows of
 the Commit's registered port, which the proof system reads (the Lean verifier's registered reads, `flock-verify
 --registered`: proof block t reads row t by `warden_rows.bucket_port`, and its `port[s]` its bucket's s-th step by
 `port_reads`), so no gate of it hashes. It holds every cell to the map (`IoTieContent`): the port's E entries, each its
 id and its index e, routed to the slots by the prover's switches; any setting is a permutation, and `IoTieMatch` holds
 each `DATA` cell's id to the entry the map names, by its index. An execution phase's tie is its T proof blocks. Public:
-the warden's root and domain id (its registration), the port's root and domain id (the Commit's), and, until the named
+the network certifier's root and domain id (its registration), the port's root and domain id (the Commit's), and, until the named
 gap closes, the steps (the port's read positions) and the map. Witness: the rows and the read port rows (each with its
 salt and path, the registered reads'), and the switches.
 """
@@ -91,9 +91,9 @@ ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_TAIL)
 ID_AT = HEADER.size + len(ID_EVENT_HEAD)
 #: the least cell: the header and one event, which a `DATA` cell holds with no padding
 CELL_USED = HEADER.size + ID_EVENT_BYTES
-#: the warden's `END` kind (`warden.END`), beside `active`'s `PAD` and `DATA`
+#: the network certifier's `END` kind (`warden.END`), beside `active`'s `PAD` and `DATA`
 END = 0x20
-#: a response's last bytes, after its events: the warden's `END` holds them
+#: a response's last bytes, after its events: the network certifier's `END` holds them
 TRAILER = b"data: [DONE]" + EVENT_END
 #: `IoTieCell`'s output: ok, data, end, the stream and the id
 CELL_OUT = 3 + 32 + 32
@@ -132,7 +132,7 @@ def _check_stream(stream: object) -> None:
 
 
 def data_cell(token_id: int, stream: int, cell_bytes: int) -> bytes:
-    """A `DATA` cell on the request's stream: the warden's P = B − 9 bytes of the response, its id's event."""
+    """A `DATA` cell on the request's stream: the network certifier's P = B − 9 bytes of the response, its id's event."""
     _check_cell_bytes(cell_bytes)
     _check_stream(stream)
     p = cell_bytes - HEADER.size
@@ -201,7 +201,7 @@ def route_depth(cells: int, entries: int) -> int:
 
 @dataclass(frozen=True)
 class Shape:
-    """An execution phase's egress, T ≥ 2 buckets of R slots of B-byte cells (N = T·R cells, the warden's T rows of R =
+    """An execution phase's egress, T ≥ 2 buckets of R slots of B-byte cells (N = T·R cells, the network certifier's T rows of R =
     lanes·r slots), and each bucket's port: S read rows of P ids each (E = S·P entries) from a port tree of depth
     DS. A bucket's routing is over M = 2^D ≥ max(R, E) positions."""
 
@@ -283,7 +283,7 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], 
                ) -> tuple[tuple[MapEntry, ...], tuple[tuple[int, ...], ...]]:
     """The verifier's map of egress window `window` (buckets window·T … window·T + T − 1), from the advice's outputs
     (`advice.outputs(a)`) and release buckets (`a.release`), each request's admission bucket `admitted[i]`, and the
-    warden's D = `delay` and r = `slots`; with each bucket's S steps, whose port rows its proof block opens. Advice
+    network certifier's D = `delay` and r = `slots`; with each bucket's S steps, whose port rows its proof block opens. Advice
     request i is on stream order[i] + 1, its ingress ordinal on the wire (order[i] its arrival order from 0, advice v1's
     order permutation; None is v0's identity). Its output k must be released at admitted[i] + D + ⌊k / r⌋, and its
     `END` is its cell n_i, so it holds r slots of every bucket from admitted[i] to admitted[i] + D + ⌊n_i / r⌋, at
@@ -362,14 +362,14 @@ def port_id(shape: Shape, port: Sequence[bytes], e: int) -> int:
 
 
 def bucket_rows(shape: Shape, cells: Sequence[bytes]) -> list[bytes]:
-    """The warden's rows: each bucket's R cells, R·B bytes."""
+    """The network certifier's rows: each bucket's R cells, R·B bytes."""
     if len(cells) != shape.N:
         raise ValueError(f"a window has {shape.N} cells, not {len(cells)}")
     return [b"".join(cells[t * shape.R:(t + 1) * shape.R]) for t in range(shape.T)]
 
 
 def domain(binding: bytes, count: int) -> CommitmentDomain:
-    """A dense frame-v3-sha512 domain of `count` rows, as the warden's per-window cells and the port use."""
+    """A dense frame-v3-sha512 domain of `count` rows, as the network certifier's per-window cells and the port use."""
     return CommitmentDomain(binding, -1, RangeIndexedDomain(0, count), hash="sha512")
 
 
@@ -390,7 +390,7 @@ def rows_levels(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes])
 
 
 def rows_root(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes]) -> bytes:
-    """The rows tree's root: the warden's registered root, which the proof system's registered read holds a row to."""
+    """The rows tree's root: the network certifier's registered root, which the proof system's registered read holds a row to."""
     return rows_levels(domain_id, rows, salts)[-1][0]
 
 
@@ -409,7 +409,7 @@ def fake_salt(seed: bytes, i: int) -> bytes:
 
 @dataclass(frozen=True)
 class Instance:
-    """One egress execution phase's tie: the shape; the warden's cells with one salt a bucket row, their root and domain
+    """One egress execution phase's tie: the shape; the network certifier's cells with one salt a bucket row, their root and domain
     id (its registration: proof block t reads row t there); the verifier's map and each bucket's S steps; each bucket's
     opened port rows (its steps' rows of the Commit's tree), their salts and paths; and the Commit's root and domain
     id. Public: the roots, the domain ids, the map and the steps; the rest is witness."""
@@ -503,7 +503,7 @@ def port_reads(steps: Sequence[Sequence[int]], root: bytes, domain_id: bytes, co
     (`port` when S = 1, as `registered.reads` keys a parameter of one row), the proof block's s-th port row, has proof
     block `reads_from + u` read row steps[u][s]. The steps are the verifier's map's, so every read is at a public
     position, and the Lean verifier holds each read row to its leaf of the Commit's root by its b ‖ c
-    (`registered.verify_read`), as it holds a bucket row to the warden's (`warden_rows.bucket_port`)."""
+    (`registered.verify_read`), as it holds a bucket row to the network certifier's (`warden_rows.bucket_port`)."""
     widths = {len(st) for st in steps}
     if len(widths) != 1 or 0 in widths:
         raise ValueError("every unit reads the same S >= 1 port rows")

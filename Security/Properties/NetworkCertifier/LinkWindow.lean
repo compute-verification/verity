@@ -7,8 +7,8 @@ import Lms.Sign
 The property of `NetworkCheck.LinkWindow.verdict`, the verdict of record on one execution phase of N2
 (`service.OF_RECORD` in `verity/core/protocols/certifier/service.py`), stated against its functions as they run: for
 every case, if the verdict accepts, the execution phase's proof block was proved, its rows opened to an output word of
-3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a warden link, which declares none,
-nothing is asked of the syncs, and the public row its ``pub`` commitment opens to holds both ends' grids at the warden's
+3, both certificates are the certifier's, its declared sync is one of Σ_sync (on a network certifier link, which declares none,
+nothing is asked of the syncs, and the public row its ``pub`` commitment opens to holds both ends' grids at the network certifier's
 parameters digest), and its public outputs are verdict 1 and deadline 1. `Proofs.Properties.NetworkCertifier.LinkWindow`
 proves it.
 
@@ -19,7 +19,7 @@ certificate's message are the code's own functions, read as they are.
 Its two lemmas (`Proofs.Properties.NetworkCertifier.LinkWindow`) read the predicates below that, which put another
 function in the verdict's place (`LinkWindowAcceptMeansBy`, `AcceptsAll`) and say what the certifier's device signs
 (`CertifierSigned`): the honest one, that an execution phase the property's conclusion holds of is accepted, and on a
-warden link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier accepting
+network certifier link one whose certificates the device signed whatever its syncs; the nontrivial one, that no verifier accepting
 every execution phase has the property.
 -/
 
@@ -61,7 +61,7 @@ def WindowCertificate (c : Case) (d : Nat) (x : Cert) : Prop :=
 def WindowCertified (c : Case) : Prop :=
   c.certificates.size = 2 ∧ ∀ d < 2, ∃ x, c.certificates[d]? = some (some x) ∧ WindowCertificate c d x
 
-/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ equal to one of the rhos. A warden
+/-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ equal to one of the rhos. A network certifier
 link declares no sync, so nothing is asked of the syncs there. -/
 def WindowSynced (c : Case) : Prop :=
   match c.kind with
@@ -85,7 +85,7 @@ def WindowVerdict (c : Case) : Prop :=
   ∃ v, verdict c = .ok v ∧ v.outputs = acceptedOutputs c ∧ verdictDigest c true v.outputs = .ok v.digest
 
 /-- **An accepted execution phase is proved, opened to the word 3, certified on both ends and synced within Σ_sync (on a
-warden link, no sync asked), and its public outputs are verdict 1 and deadline 1.** -/
+network certifier link, no sync asked), and its public outputs are verdict 1 and deadline 1.** -/
 def LinkWindowAcceptMeans : Prop :=
   ∀ c : Case, (verdict c).map Verdict.accepted = .ok true → WindowAccepted c ∧ WindowVerdict c
 
@@ -104,8 +104,8 @@ def LinkWindowAcceptMeansBy (v : Case → Flock.V Verdict) : Prop :=
 def AcceptsAll (v : Case → Flock.V Verdict) : Prop :=
   ∀ c : Case, (v c).map Verdict.accepted = .ok true
 
-/-- The execution phase's two certificates as the certifier's device issues them under its key `k` (on a warden link,
-where it functions as an active warden): the link's key is `k`'s public key, and each end's certificate (egress first)
+/-- The execution phase's two certificates as the certifier's device issues them under its key `k` (on a network certifier link,
+where it functions as an active network certifier): the link's key is `k`'s public key, and each end's certificate (egress first)
 names the link, the end and the window, carries `k`'s identifier, and its signature is the encoding of the one
 `Lms.signAt` gives, at a leaf of `k`, over the certificate's message in the session. -/
 def CertifierSigned (c : Case) (k : Lms.PrivateKey) : Prop :=

@@ -1,4 +1,4 @@
-"""The wipe's egress count (`wipe_egress.py`) over a gate warden run built here at the gate's scan schedule and signed
+"""The wipe's egress count (`wipe_egress.py`) over a gate network certifier run built here at the gate's scan schedule and signed
 under a small LMS key: the execution phases meeting [t0 − pad, t1 + pad) and none other, each at the schedule's
 capacity; a window reaching before the session's origin or past its last window, a certificate missing or failing to
 verify, a run the gate's check refused, and an `out/` file other than the one `end.json` hashed each leave the record
@@ -56,7 +56,7 @@ def _certificate(link: str, w: int, q: int, session: bytes = SESSION) -> dict:
 
 def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset = frozenset(),
              accepted: bool = True) -> Path:
-    """A warden run's `end.json` and `out/` as the gate publishes them: each window's egress and fails certificates
+    """A network certifier run's `end.json` and `out/` as the gate publishes them: each window's egress and fails certificates
     (signed in another session when (link, w) is in `forged`, left out when in `missing`) and a signer's refusal."""
     run = root / "c-test"
     (run / "out").mkdir(parents=True)
