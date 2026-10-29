@@ -2,6 +2,10 @@
 
     run.py eval --model M --set c4|wikitext2 --ctx 2048|8192|32768 --out DIR [--gpus N] [--seeds 0,1,2]
                 [--data DIR] [--hf-home DIR] [--plugin FILE.py]... SPEC...     on a GPU node: one results.json
+                [--device cpu] [--part I/N]                                 on a CPU's cores; only part I of N (no
+                                                                            results.json: `merge` takes the parts)
+    run.py merge --out DIR PART...                                          the parts' --out DIRs (eval --part) as one
+                                                                            run's results.json
     run.py submit (eval's flags but --out) [--max-min M] [--dry-run]        the same as a `research run` on vy-nebius-2
                                                                             (job.sh), the datasets sent with it
     run.py report RESULTS.json...                                           the tables
@@ -22,6 +26,7 @@ import importlib.util
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -137,6 +142,12 @@ def cmd_eval(a) -> int:
     if len(devs) < gpus:
         raise SystemExit(f"{gpus} GPUs asked, {len(devs)} visible")
     parts = __import__("engine").shards(len(ids), gpus)
+    if a.part:
+        i, k = (int(x) for x in a.part.split("/"))
+        parts = __import__("engine").shards(len(ids), k)
+        if not 0 <= i < len(parts):
+            raise SystemExit(f"--part {a.part}: {len(ids)} windows make {len(parts)} parts")
+        parts = [parts[i]]
     t0 = time.time()
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
@@ -158,19 +169,58 @@ def cmd_eval(a) -> int:
             log.close()
         if any(codes):
             raise SystemExit(f"shards exited {codes} (see {out}/shard*.log)")
-        shard_out = [json.loads((tmp / f"shard{i}.json").read_text()) for i in range(len(parts))]
-        nll = {}
-        for i in range(len(parts)):
-            with np.load(tmp / f"shard{i}.npz") as z:
-                for k in z.files:
-                    nll.setdefault(k, []).append(z[k])
-        nll = {k.replace("|", "/"): np.concatenate(v) for k, v in nll.items()}
+        if a.part:
+            for x in ("json", "npz"):
+                shutil.copy(tmp / f"shard0.{x}", out / f"part.{x}")
+            (out / "part-args.json").write_text(json.dumps(
+                {"model": a.model, "set": a.set, "ctx": a.ctx, "spec": a.spec, "seeds": a.seeds, "plugin": a.plugin,
+                 "part": a.part, "windows": parts[0], "wrec": wrec, "seconds": round(time.time() - t0, 1),
+                 "run": os.environ.get("RESEARCH_RUN_ID", "")}, indent=1))
+            print(f"part {a.part}: windows {parts[0]} in {out}")
+            return 0
+        shard_out, nll = load_shards([tmp / f"shard{i}" for i in range(len(parts))])
     res = merge(a, arms, seeds, wrec, shard_out, nll, round(time.time() - t0, 1), len(parts))
+    return write_results(out, res, nll)
+
+
+def load_shards(stems: list[Path]) -> tuple[list[dict], dict]:
+    import numpy as np
+    shard_out, nll = [json.loads(Path(f"{s}.json").read_text()) for s in stems], {}
+    for s in stems:
+        with np.load(f"{s}.npz") as z:
+            for k in z.files:
+                nll.setdefault(k, []).append(z[k])
+    return shard_out, {k.replace("|", "/"): np.concatenate(v) for k, v in nll.items()}
+
+
+def write_results(out: Path, res: dict, nll: dict) -> int:
+    import numpy as np
     np.savez_compressed(out / "nll.npz", **{k.replace("/", "|"): v for k, v in nll.items()} if res["passed"] else {})
     (out / "results.json").write_text(json.dumps(res, indent=1))
     print(report.table(res))
     (out / "table.md").write_text(report.table(res) + "\n")
     return 0 if res["passed"] else 1
+
+
+def cmd_merge(a) -> int:
+    """The parts `eval --part` wrote, as the results.json one run over every window writes."""
+    got = sorted(((json.loads((Path(d) / "part-args.json").read_text()), Path(d)) for d in a.parts),
+                 key=lambda x: x[0]["windows"][0])
+    first = got[0][0]
+    for k in ("model", "set", "ctx", "spec", "seeds", "plugin", "wrec"):
+        if any(g[k] != first[k] for g, _ in got):
+            raise SystemExit(f"the parts differ in {k}")
+    if [w for g, _ in got for w in g["windows"]] != list(methodology.windows(first["ctx"])):
+        raise SystemExit(f"the parts' windows {[g['windows'] for g, _ in got]} aren't every window once")
+    load_plugins(first["plugin"])
+    run = argparse.Namespace(model=first["model"], set=first["set"], ctx=first["ctx"])
+    shard_out, nll = load_shards([d / "part" for _, d in got])
+    res = merge(run, arms_for(first["spec"]), parse_seeds(first["seeds"]), first["wrec"], shard_out, nll,
+                round(sum(g["seconds"] for g, _ in got), 1), len(got))
+    res["env"]["run"] = ",".join(g["run"] for g, _ in got)
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    return write_results(out, res, nll)
 
 
 def merge(a, arms, seeds, wrec, shard_out, nll, seconds, n_gpus) -> dict:
@@ -372,8 +422,12 @@ def main(argv: list[str]) -> int:
             q.add_argument("--data", default=str(DATA))
             q.add_argument("--device", choices=("cuda", "cpu"), default="cuda",
                            help="cpu: one shard on the host's cores, for a model small enough (Llama-3.2-1B)")
+            q.add_argument("--part", help="I/N: only the I-th of N parts of the windows (engine.shards), for `merge`")
 
     run_flags(sub.add_parser("eval"), True)
+    q = sub.add_parser("merge")
+    q.add_argument("--out", required=True)
+    q.add_argument("parts", nargs="+", metavar="PART", help="an `eval --part` run's --out")
     q = sub.add_parser("submit")
     run_flags(q, False)
     q.add_argument("--data", default=str(LOCAL_DATA), help="where the datasets are staged to be sent")
@@ -399,7 +453,8 @@ def main(argv: list[str]) -> int:
     q.add_argument("--data", default=str(DATA))
     sub.add_parser("selftest")
     a = p.parse_args(argv)
-    return {"eval": cmd_eval, "submit": cmd_submit, "report": cmd_report, "baseline": cmd_baseline, "steps": cmd_steps,
+    return {"eval": cmd_eval, "merge": cmd_merge, "submit": cmd_submit, "report": cmd_report, "baseline": cmd_baseline,
+            "steps": cmd_steps,
             "specs": cmd_specs, "tables": cmd_tables, "windows": cmd_windows, "setup": cmd_setup,
             "selftest": cmd_selftest}[a.cmd](a)
 

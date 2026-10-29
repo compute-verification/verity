@@ -7,6 +7,8 @@ its docstring lists the commands.
 ~~~text
 verity bench ppl submit --model llama-3.1-8b --set c4 --ctx 2048 adopted        # a `research run` on vy-nebius-2
 verity bench ppl eval --model M --set S --ctx T --out DIR SPEC...                 # the same, on a GPU node
+verity bench ppl eval ... --device cpu --part I/N --out DIR SPEC...               # part I of N windows, on a CPU's cores
+verity bench ppl merge --out DIR PART_DIR...                                      # the parts as one run's results.json
 verity bench ppl report DIR/results.json...                                       # a run's tables
 verity bench ppl baseline [DIR/results.json...]                                   # the locked baseline (and a check)
 verity bench ppl steps | specs                                                    # what an arm can be made of
@@ -206,7 +208,8 @@ The engine (`engine.py`, a layer-wise evaluation) reads one layer's weights at a
 its own reader. Every stream of every window, the reference, calibration and each (arm, seed), goes through that layer
 before the next is read. So a model of any size fits one GPU, every arm shares one pass over the weights, and
 `accelerate` is never used. More GPUs split the windows: contiguous groups of 4, one process per leased GPU, merged
-after. A sharded run gives each window the NLL a single-GPU run gives it.
+after. A sharded run gives each window the NLL a single-GPU run gives it. `eval --part I/N` runs one such part alone,
+as a run of its own (a small model's on a CPU node's cores, `--device cpu`), and `merge` makes the parts one results.json.
 
 ## Results
 

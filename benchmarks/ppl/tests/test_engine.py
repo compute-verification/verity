@@ -168,6 +168,38 @@ def test_shards_are_one_run(llama, ids, calib):
     assert parts[1]["gates"]["peel"]["checked"] == 0 and parts[0]["gates"]["peel"]["checked"] > 0
 
 
+def test_parts_merge_to_one_run(llama, ids, monkeypatch, tmp_path):
+    """`merge` of the parts `eval --part I/N` writes gives the results.json one run over every window gives."""
+    import json
+    monkeypatch.setitem(methodology.CONTEXTS, ids.shape[1], len(ids))
+    arms, wrec = run.arms_for(["int8-linears"]), {"sha256": "0" * 64}
+    a = types.SimpleNamespace(model="llama-3.2-1b", set="wikitext2", ctx=ids.shape[1])
+
+    def scored(w):  # HF's layers stand compared on the check window, so the gates pass without transformers
+        r = evaluate(llama, ids[w], arms, windows=w)
+        r["gates"]["hf_reference"] = {"checked": int(methodology.CHECK_WINDOW in w), "failed": 0, "first_failure": None}
+        return r
+
+    whole = scored(list(range(len(ids))))
+    one = run.merge(a, arms, (0,), wrec, [whole], whole.pop("nll"), 0.0, 1)
+    dirs = []
+    for i, w in enumerate(engine.shards(len(ids), 2)):
+        r, d = scored(w), tmp_path / f"part{i}"
+        d.mkdir()
+        np.savez(d / "part.npz", **{k.replace("/", "|"): v for k, v in r.pop("nll").items()})
+        (d / "part.json").write_text(json.dumps(r))
+        (d / "part-args.json").write_text(json.dumps({**vars(a), "spec": ["int8-linears"], "seeds": "0", "plugin": None,
+                                                       "part": f"{i}/2", "windows": w, "wrec": wrec, "seconds": 0.0,
+                                                       "run": f"r{i}"}))
+        dirs.append(str(d))
+    assert run.main(["merge", "--out", str(tmp_path / "merged"), *reversed(dirs)]) == 0
+    got = json.loads((tmp_path / "merged" / "results.json").read_text())
+    assert got["passed"] and got["env"]["run"] == "r0,r1"
+    assert {k: v["seeds"] for k, v in got["arms"].items()} == {k: v["seeds"] for k, v in one["arms"].items()}
+    with pytest.raises(SystemExit, match="every window once"):
+        run.main(["merge", "--out", str(tmp_path / "half"), dirs[0]])
+
+
 def _sabotage(monkeypatch, kind):
     reg = {k: dict(v) for k, v in spec.REGISTRY.items()}
     monkeypatch.setattr(spec, "REGISTRY", reg)
