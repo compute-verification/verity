@@ -5836,10 +5836,11 @@
     "          { name := \"\", value := \"\", root := Claims.Sampling.bytes root, leaves := 1, words := Option.none,",
     "            wordBits := 16, domain := dom, readsRel := List.nil.toArray }",
     "          List.nil).toArray) :",
-    "  Eq (Claims.Sampling.Commitment.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o) Bool.true"
+    "  Eq (Claims.Sampling.CommitmentScheme.Opens Claims.Sampling.sha512Msg (SamplingDeploy.deploy rel c).commit roots o)",
+    "    Bool.true"
    ],
    "assumptions": [],
-   "type_hash": "228d2031db26cf931eafbc26dda441a509a744c6aae755ff0e636ff293ff2297"
+   "type_hash": "4a1317dddcb169b5fecb54f61bb61966bc49e4006529e09c5ad4a182bb32d143"
   },
   "Claims.Sampling.BitsLin_fails": {
    "owner": "@proofs",

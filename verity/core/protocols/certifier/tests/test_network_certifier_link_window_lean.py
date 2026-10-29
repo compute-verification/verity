@@ -225,6 +225,21 @@ def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
         SVC.LA.SERVER.call("link-window", case)
 
 
+def test_an_advised_link_window_is_refused_by_name(tmp_path):
+    """No advised link has a verdict of record (`OF_RECORD`): the Lean refuses a case of kind ``advised`` by name, its
+    view and advice included or not, as it does a kind it doesn't know."""
+    c = _plain(tmp_path)
+    case = c.lw.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions())
+    assert case["kind"] == "plain" and SVC.LA.SERVER.call("link-window", case)["accepted"]
+    assert "advised" not in SVC.OF_RECORD
+    view = {"view": {"released": [0], "floor": [0], "received": 0}, "advice": "00" * 64}
+    for advised in ({**case, "kind": "advised"}, {**case, "kind": "advised", **view}):
+        with pytest.raises(ValueError, match="an advised link is refused"):
+            SVC.LA.SERVER.call("link-window", advised)
+    with pytest.raises(ValueError, match="plain, served or a warden's, not shaped"):
+        SVC.LA.SERVER.call("link-window", {**case, "kind": "shaped"})
+
+
 def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypatch):
     """The switch names whose verdict is the record's (`by`), the other's accept bit is `reference`'s; where the two
     differ, or the Lean has no case (a key other than an `LmsKey`), the link-window is rejected with deadline 0."""
