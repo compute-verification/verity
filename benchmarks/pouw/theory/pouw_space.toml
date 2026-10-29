@@ -1154,29 +1154,37 @@ targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2", "N.n
 priced = "unpriced (estimate: the share p of a chosen step's words whose increment is the likeliest value, a quarter for fix2)"
 source = "N-LEAN interim 1 §2b (estimate, unchecked; N-RED to check, N-NOISE to price): chosen data with a step dot of -1 in every column (A[i, k_t] = -1, B[j, k_t] = 1, fixed before w_t) makes fix2's step increment -1 + (1 + b_t[i])·w_t[j] zero wherever b_t[i] = 0 and w_t[j] = +1, a quarter of the step's entries, with no row vector repeating (4-word tiles repeat about 3.1%). The prover groups B's columns by w_t once a window and the rows by b_t each call (TMA row moves, A1's premise) and skips that quadrant's MMA, about 2 coordinates a row-step against n/4 words. Its general form holds for any per-step increment that is a function of row coins and window-fixed column weights, so every 1-bit and 4-bit SSN variant (fix, fix2, hw); N-NOISE's sv4 and sv28 codes are such increments (N-CARD's reading, unchecked by either lane). As written it needs chosen weights, a weight lane equal to 1 across every output column; with 31 activation lanes against n columns chosen activations can't make it on generic weights (N-SMELL interim 1 item 45), so it stands while M0 lets the prover choose the model, the coordinator's open model-choice question"
 
-# N-COVER interim 1's whole served step (note compute-research/20261029T0745Z-report-np-cover; step_cover.py on
-# cursor/compute-research-np-cover-5f9b, run r20261029-073342-47ea, art:f00fddacf69da4869d35b6a4e019684fea9a3919aac28035df6da24d5da22676;
-# estimates): T1 over the whole step, the linears under ssn_1l and every other component by plan, and the share of
-# W1 no target covers. Printed beside each point's ranking; the card's T1 is the linears' term alone.
+# N-COVER interim 2's whole served step (note compute-research/20261029T0910Z-report-np-cover; step_cover.py on
+# cursor/compute-research-np-cover-5f9b, run r20261029-090037-17a8, art:05a42138487feb2affcb82f4d7cae6ff4fccb9fcee24e5ba07c491748afd56b8;
+# estimates): T1 over the whole step (paired), the linears under ssn_1l with N-RED's coin-reading prover and every
+# other component by plan, and the share of W1 no target covers. Printed beside each point's ranking; the card's T1 is
+# the linears' term alone. Interim 1's coin-keyed dither (best_p4_dither) is withdrawn by interim 2: its u words are
+# functions of the coins, which a coin-reading prover computes for free.
 [cover.t8192]
-step_t1 = { stock = 0.329, best = 0.113, best_p4 = 0.042, best_p4_dither = 0.021 }
-uncovered = { best = 0.064, best_p4_dither = 0.0195 }
-t3_added = { best = 0.0026, best_p4_dither = 0.0146 }
-source = "N-COVER interim 1 TL;DR: Llama T 8,192; best: int8 lm_head under ssn_1l, int8 attention under ssn_sh, fused C-all lane epilogues; p4: MeasuredFloor, CvtMinimal, TensorSemantics, MufuSpeed (rank 4a); dither: int8 rounds dithered by an in-kernel xorshift"
+step_t1 = { linears = 0.3412, best = 0.1177, best_p4 = 0.0477, best_p4_all = 0.0298, best_p4_nkd = 0.0153, best_p4_dither_withdrawn = 0.0781 }
+uncovered = { best_p4_nkd = 0.0152 }
+t3_added = { best_p4_all = 0.0026, best_p4_nkd = 0.0146 }
+source = "N-COVER interim 2 §2: Llama T 8,192 (8 x 1K, stock 37.77 ms measured; at 1 x 8K best_p4_nkd 4.99%); best: H32 alone; p4: MeasuredFloor, CvtMinimal, TensorSemantics, MufuSpeed (rank 4a); all: the strided row max, resident operands, the two-pass argmax and the two-call max block; nkd: noise-keyed dither (u the pre-round f32's low mantissa byte), T3 +1.2% of its 1.46% unmeasured; the u8 P zero share is an assumed 0.9"
 
 [cover.t512]
-step_t1 = { stock = 0.292, best = 0.086, best_p4 = 0.025, best_p4_dither = 0.013 }
-uncovered = { best_p4_dither = 0.0129 }
-source = "N-COVER interim 1 TL;DR: Llama T 512 (64 tokens)"
+step_t1 = { linears = 0.3058, best = 0.0927, best_p4 = 0.0322, best_p4_all = 0.0193, best_p4_nkd = 0.0049, best_p4_dither_withdrawn = 0.0444 }
+uncovered = { best_p4_nkd = 0.0049 }
+t3_added = { best_p4_all = 0.0026, best_p4_nkd = 0.0146 }
+source = "N-COVER interim 2 §2: Llama T 512 (64 tokens), stock time scaled (estimate)"
+
+[cover.t512r512]
+step_t1 = { linears = 0.2822, best = 0.0946, best_p4 = 0.0373, best_p4_all = 0.0228, best_p4_nkd = 0.0077, best_p4_dither_withdrawn = 0.0548 }
+uncovered = { best_p4_nkd = 0.0077 }
+source = "N-COVER interim 2 §2: Llama T 512 (512 tokens), stock time scaled (estimate)"
 
 [cover.v4like]
-step_t1 = { stock = 0.212 }
-source = "N-COVER interim 1 TL;DR: V4 T 8,192 (at T 512 with 64 tokens, best_p4 0.71% and dither 0.44%)"
+step_t1 = { linears = 0.2212, best = 0.0778, best_p4 = 0.0380, best_p4_all = 0.0199, best_p4_nkd = 0.0097, best_p4_dither_withdrawn = 0.0567 }
+source = "N-COVER interim 2 §2: one V4 layer at T 8,192 (8 x 1K), stock time scaled (estimate); T3 1.43% under best_p4_nkd; at T 512 with 64 tokens best_p4_nkd 0.13%"
 
 [cover.decode]
-step_t1 = { stock = 0.683, best = 0.184, best_p4 = 0.052, best_p4_dither = 0.028 }
-uncovered = { best_p4_dither = 0.0246 }
-source = "N-COVER interim 1 TL;DR: Llama decode with 2K context (8K: stock 85.7%, dither 3.7%); best pads every matmul to 64 rows for 12.6%"
+step_t1 = { linears = 0.6859, best = 0.1861, best_p4 = 0.0531, best_p4_all = 0.0328, best_p4_nkd = 0.0244, best_p4_dither_withdrawn = 0.0949 }
+uncovered = { best_p4_nkd = 0.0243 }
+source = "N-COVER interim 2 §2: Llama decode, 64 rows at 2K context (8K: linears 85.8%, best_p4_nkd 3.94%), stock time scaled (estimate)"
 
 # Cards (the format in the N-CARD note): a design named by its module on each axis, with the premises it adds, its
 # own claimed numbers (checked against the calculator: `basis` "t1", "gap", "hiding_words" or a term, and the terms it
