@@ -57,6 +57,10 @@ in a lock, and nothing imports it.
   values are fixed and only the window's coins vary gives it on the data grid, not conversely; the data grid credits
   the digest of a value the prover chose, which the slice can't. So `R` is counted on the slice, and a chosen block's
   constant work drops out of it.
+* **A keyed mix on the slice** (`mix_const_card_le`, `mix_nonconst`, `mix_nonconst_strict_needed`): a value word
+  mixed with a key word (XOR or addition) is one constant on the slice only if the value takes at least as many values
+  there as the key. So the mixed blocks' schedule stays in `R` unless the prover's choices after the coins reach as
+  many values as the key has, and that count is tight.
 * **Lifting a data-case result to the call grid** (`distinctOn_lift`, `sepBy_lift`): a target set distinct at one
   data case, with that case's free values, is distinct on the call grid with the call's free values, when each call
   free value restricts to a data-case free value.
@@ -1263,6 +1267,41 @@ theorem shaWrites_grid_not_slice :
   rw [hr] at hrS
   exact hD.2 t ht _ (consts_mem 0) fun g hg => (hrS g hg).symm
 
+/-- **A keyed mix is one constant on the slice only if the value has as many values as the key** (rank 0). A value word
+`V` is mixed with a key word `Z` by `mix`, cancellative in the key (XOR, or addition). If the mixed word is one constant
+on the finite slice `S`, `Z` is a function of `V` there, so `V` takes at least as many values on `S` as `Z`. -/
+theorem mix_const_card_le {W : Type} [DecidableEq W] (mix : W → W → W)
+    (hmix : ∀ v z z', mix v z = mix v z' → z = z') (S : Finset G) (V Z : G → W) {c : W}
+    (h : ∀ g ∈ S, mix (V g) (Z g) = c) : (S.image Z).card ≤ (S.image V).card := by
+  have hinj : Set.InjOn Prod.fst (↑(S.image fun g => (V g, Z g)) : Set (W × W)) := by
+    rintro ⟨v, z⟩ hp ⟨v', z'⟩ hp' hvv
+    change v = v' at hvv
+    obtain ⟨g, hg, hgp⟩ := Finset.mem_image.1 (Finset.mem_coe.1 hp)
+    obtain ⟨g', hg', hgp'⟩ := Finset.mem_image.1 (Finset.mem_coe.1 hp')
+    simp only [Prod.mk.injEq] at hgp hgp'
+    have e1 : mix v z = c := by rw [← hgp.1, ← hgp.2]; exact h g hg
+    have e2 : mix v z' = c := by rw [hvv, ← hgp'.1, ← hgp'.2]; exact h g' hg'
+    exact Prod.ext hvv (hmix v z z' (e1.trans e2.symm))
+  calc (S.image Z).card = ((S.image fun g => (V g, Z g)).image Prod.snd).card := by
+        rw [Finset.image_image]; rfl
+    _ ≤ (S.image fun g => (V g, Z g)).card := Finset.card_image_le
+    _ = ((S.image fun g => (V g, Z g)).image Prod.fst).card := (Finset.card_image_of_injOn hinj).symm
+    _ = (S.image V).card := by rw [Finset.image_image]; rfl
+
+/-- **Fewer values than the key leave the mix live** (rank 0): if `V` takes fewer values on the slice than `Z`, no
+constant equals the mixed word on all of it, so its schedule isn't free there. -/
+theorem mix_nonconst {W : Type} [DecidableEq W] (mix : W → W → W)
+    (hmix : ∀ v z z', mix v z = mix v z' → z = z') (S : Finset G) (V Z : G → W)
+    (hlt : (S.image V).card < (S.image Z).card) : ¬ ∃ c, ∀ g ∈ S, mix (V g) (Z g) = c :=
+  fun ⟨_, h⟩ => absurd (mix_const_card_le mix hmix S V Z h) (not_le.mpr hlt)
+
+/-- **The count is tight** (rank 0): on the two-point grid, a value that takes the key's two values cancels the XOR
+mix everywhere, so `mix_nonconst` needs fewer values, not at most as many. -/
+theorem mix_nonconst_strict_needed :
+    ∃ V Z : Bool → Bool, (Finset.univ.image V).card = (Finset.univ.image Z).card ∧
+      ∀ g ∈ (Finset.univ : Finset Bool), Bool.xor (V g) (Z g) = false :=
+  ⟨id, id, rfl, fun g _ => by cases g <;> rfl⟩
+
 end Slice
 
 end Pouw.Dimension.NCompose
@@ -1315,3 +1354,6 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.routeH_toy
 #print axioms Pouw.Dimension.NCompose.shaWrites_of_slice
 #print axioms Pouw.Dimension.NCompose.shaWrites_grid_not_slice
+#print axioms Pouw.Dimension.NCompose.mix_const_card_le
+#print axioms Pouw.Dimension.NCompose.mix_nonconst
+#print axioms Pouw.Dimension.NCompose.mix_nonconst_strict_needed
