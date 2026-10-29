@@ -1836,19 +1836,18 @@ def test_the_three_vacuous_guarantees_of_26_october_fail_the_witnesses_rule():
         ["witnesses.nontrivial-assumes"]
 
 
-def test_witnesses_may_state_a_premise_as_an_order_and_fail_the_conclusion_beside_the_premises():
+def test_an_honest_witness_may_state_a_premise_as_an_order_and_a_nontrivial_one_negates_alone():
     """An `honest` lemma may state a plain-range premise at the deployed numbers (`0 ≤ 0`, applying no definition) beside
-    a conjunct that applies one, though not on its own; and a `nontrivial` lemma may be `premises ∧ ¬ C …`, which says
-    that C fails while the premises hold."""
+    a conjunct that applies one, though not on its own. A `nontrivial` lemma is `¬ C …` itself: a conjunction with a `¬ C`
+    conjunct is refused, since `Facts.lean` reports no binders inside a conjunct, so `True ∧ (0 = 1 → ¬ C …)` would
+    pass."""
     order = {"head": "LE.le", "defs": [], "refl": False, "assumed": False}
     both = wbody("And", conclusion=[wk("P.Compiled"), order])
     assert witness_codes(*witnessed(honest={"body": both})) == []
     assert witness_codes(*witnessed(honest={"body": wbody("LE.le", conclusion=[order])})) == \
         ["witnesses.honest-form", "witnesses.honest-uncovered"]
     fails = {"head": "Not", "defs": ["P.Holds"], "refl": False, "assumed": False, "negated": True, "inner": "P.Holds"}
-    assert witness_codes(*witnessed(nontrivial={"body": wbody("And", conclusion=[wk("P.Compiled"), fails])})) == []
-    other = fails | {"inner": "P.Other"}
-    assert witness_codes(*witnessed(nontrivial={"body": wbody("And", conclusion=[wk("P.Compiled"), other])})) == \
+    assert witness_codes(*witnessed(nontrivial={"body": wbody("And", conclusion=[wk("True", []), fails])})) == \
         ["witnesses.nontrivial-form"]
 
 
