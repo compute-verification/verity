@@ -109,9 +109,10 @@ class Inst:
     data: str
     rec: str
     seed: int
+    coins: str = "bilinear"
 
     def __str__(self):
-        return f"{self.m}x{self.n} S{self.S} q{self.q} {self.data} {self.rec} s{self.seed}"
+        return f"{self.m}x{self.n} S{self.S} q{self.q} {self.data} {self.rec} {self.coins} s{self.seed}"
 
 
 def mulmod(a, b):
@@ -128,6 +129,9 @@ class Draw:
         m, n, S, q = inst.m, inst.n, inst.S, inst.q
         self.U = g.integers(-128, 128, (m, S, q), dtype=np.int64)
         self.V = g.integers(-128, 128, (n, S, q), dtype=np.int64)
+        if inst.coins == "sep":
+            self.V[:, :, : q // 2] = 1
+            self.U[:, :, q // 2:] = 1
         shape_a, shape_b = (m, S, 32 - q), (n, S, 32 - q)
         if inst.data == "zero":
             self.A, self.B = np.zeros(shape_a, np.int64), np.zeros(shape_b, np.int64)
@@ -360,6 +364,29 @@ def bsketch(rule, inst, d):
     return cost, s, "bitslice + b1 IMMA on r's bit planes"
 
 
+def expand(rule, inst, d):
+    """A squared sketch over separable words w_t = R_t(i) + C_t(j): Σ r R² per row, Σ r C² per column, and the cross
+    term 2 Σ_t (r_t R_t)·C_t, one u8 IMMA chain a digit weight (digit pairs a + b ≤ 3) of depth (a + b + 1)·|P|."""
+    if inst.coins != "sep" or inst.data != "zero" or inst.rec != "add" or rule.agg != "sq" or rule.k != 32:
+        return None
+    h = inst.q // 2
+    R = np.cumsum(d.U[:, :, :h].sum(axis=2), axis=1)[:, d.P] & M32
+    C = np.cumsum(d.V[:, :, h:].sum(axis=2), axis=1)[:, d.P] & M32
+    rr = d.r[None, :]
+    A = mulmod(rr, mulmod(R, R)).sum(axis=1) & M32
+    B = mulmod(rr, mulmod(C, C)).sum(axis=1) & M32
+    rR = mulmod(rr, R)
+    X = np.zeros((inst.m, inst.n), np.int64)
+    for a, b in itertools.product(range(4), range(4)):
+        if a + b <= 3:
+            X += np.einsum("it,jt->ij", (rR >> (8 * a)) & 0xFF, (C >> (8 * b)) & 0xFF) << (8 * (a + b))
+    s = (A[:, None] + B[None, :] + 2 * X) & M32
+    nP = len(d.P)
+    cost = sum(math.ceil((w + 1) * nP / 32) for w in range(4)) + 3 + 2
+    cost += (3 * nP + 4 * nP) / CALL_N + (2 * nP + 4 * nP) / CALL_M
+    return cost, s, "row and column squares + cross-term IMMA"
+
+
 def copy(rule, inst, d):
     """Entries whose inputs repeat: computed once, then moved."""
     rows = np.concatenate([d.U.reshape(inst.m, -1), d.A.reshape(inst.m, -1)], axis=1)
@@ -388,7 +415,7 @@ def table(rule, inst, d):
 
 
 STRATEGIES = {"honest": honest, "skip": skip, "fold": fold, "bitslice": bitslice, "four_russians": four_russians,
-              "bsketch": bsketch, "copy": copy, "table": table}
+              "bsketch": bsketch, "expand": expand, "copy": copy, "table": table}
 
 
 def evaluate(rule: Rule, inst: Inst, strategies=STRATEGIES):
@@ -446,6 +473,8 @@ def instances(quick: bool):
     for S, q, data, rec, seed in itertools.product(S_set, q_set, ["zero", "random"], ["add", "mul"], [0, 1]):
         if not (quick and seed) and not (S == 1024 and seed):
             yield Inst(64, 16, S, q, data, rec, seed)
+    for S, q in itertools.product(S_set, [2, 4] if quick else [2, 4, 8]):
+        yield Inst(64, 16, S, q, "zero", "add", 0, "sep")
 
 
 def mutations(checks: Checks):
@@ -479,6 +508,13 @@ def mutations(checks: Checks):
     inst3z = Inst(64, 16, 64, 4, "zero", "add", 7)
     _, out3, _ = skip(rule3, inst3z, d3)
     checks.mutation("skip on random data (data term dropped)", not np.array_equal(out3, ref3))
+    rule4, inst4 = Rule("all", "32", "sq"), Inst(64, 16, 64, 4, "zero", "add", 7, "sep")
+    d4 = Draw(inst4, rule4)
+    _, ref4, _ = honest(rule4, inst4, d4)
+    d4.V = d4.V.copy()
+    d4.V[:, :, 2:] = 0
+    _, out4, _ = expand(rule4, inst4, d4)
+    checks.mutation("expand with the column term dropped", not np.array_equal(out4, ref4))
 
 
 def main() -> int:
@@ -504,6 +540,10 @@ def main() -> int:
     checks.check("fold beats stock on every zero-data all/32/lin instance with q ≤ 4",
                  all(r["cheapest"] == "fold" and r["breaks_T1"] for r in known["fold"] if r["inst"]["q"] <= 4))
     checks.check("no strategy beats honest on random data", all(not r["breaks_T1"] for r in known["random"]))
+    sep_sq = [r for r in results if r["rule"] == "all/32/sq" and r["inst"]["coins"] == "sep"]
+    checks.check("expand is cheapest on every separable all/32/sq instance",
+                 bool(sep_sq) and all(r["cheapest"] == "expand" for r in sep_sq),
+                 [(r["inst"]["S"], r["inst"]["q"], r["gap_share"]) for r in sep_sq])
     checks.check("bitslice op counts", [bitslice_ops(k) for k in (1, 2, 3, 4)] == [1, 5, 12, 22],
                  [bitslice_ops(k) for k in (1, 2, 3, 4)])
     hash32 = [r for r in results if r["rule"] == "all/32/hash"]
