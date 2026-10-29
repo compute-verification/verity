@@ -49,7 +49,7 @@ def andCircuit (N : ℕ) : FlockSoundness.Audit.Circuit where
   outputs := Finset.univ.filter fun g => 2 ≤ g.val
 
 /-- The declaration of `andCircuit N`, with nothing registered. -/
-def andDecl (N : ℕ) : Verity.RegisteredCircuit := ⟨(andCircuit N).toCircuit, ∅, by simp⟩
+def andDecl (N : ℕ) : Verity.RegisteredCircuit := .ofCircuit (andCircuit N).toCircuit ∅ (by simp)
 
 /-- Block `t`'s gate, the AND gate `t + 2`. -/
 def gateOf {N : ℕ} (t : Fin N) : Fin (andDecl N).D.N := ⟨t.val + 2, show t.val + 2 < N + 2 by omega⟩
