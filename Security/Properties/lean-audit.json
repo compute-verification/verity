@@ -2060,9 +2060,6 @@
    "assumptions": [],
    "type_hash": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad"
   },
-  "Properties.NetworkPeriod.rowsProgWired_honest": {
-   "owner": "@network-accounting"
-  },
   "Properties.NetworkPeriod.rowsProgWired_nontrivial": {
    "owner": "@network-accounting",
    "signature": [
@@ -2077,9 +2074,6 @@
    "signature": ["Properties.NetworkPeriod.rowsStateTied : Properties.NetworkPeriod.RowsStateTied"],
    "assumptions": [],
    "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b"
-  },
-  "Properties.NetworkPeriod.rowsStateTied_honest": {
-   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsStateTied_nontrivial": {
    "owner": "@network-accounting",
@@ -16493,11 +16487,9 @@
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
   },
   "Properties.NetworkPeriod.rowsProgWired": {
-   "honest": ["Properties.NetworkPeriod.rowsProgWired_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsProgWired_nontrivial"
   },
   "Properties.NetworkPeriod.rowsStateTied": {
-   "honest": ["Properties.NetworkPeriod.rowsStateTied_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStateTied_nontrivial"
   },
   "Properties.NetworkPeriod.rowsTiedDrawn": {
@@ -16577,6 +16569,16 @@
   "Properties.NetworkCertifier.malformedEvidenceRejects": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953",
   "Properties.NetworkCertifier.undecidedPending": "a05ea3c29485b57f1351694086727a7e589280465cbb3946d268bc09227a7edb",
   "Properties.NetworkCertifier.undigestedParamsReject": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5",
+  "Properties.NetworkPeriod.rowsProgWired": {
+   "type_hash": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad",
+   "missing": "honest",
+   "why": "rowsProgWired_honest concludes wired and tiedIn at a slot audit and a link-window, not check's acceptance of a period holding them: an accepting rows-form period's link-window carries three certificates and two rows heads signed under Lms.deployed over domains Flock.canon computes, which the kernel doesn't evaluate; that accepting period, built once for the three rows guarantees, brings the honest lemma"
+  },
+  "Properties.NetworkPeriod.rowsStateTied": {
+   "type_hash": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
+   "missing": "honest",
+   "why": "rowsStateTied_honest concludes stateTied at a slot audit and a link-window, not check's acceptance of a period holding them: an accepting rows-form period's link-window carries three certificates and two rows heads signed under Lms.deployed over domains Flock.canon computes, which the kernel doesn't evaluate; that accepting period, built once for the three rows guarantees, brings the honest lemma"
+  },
   "Properties.NetworkPeriod.rowsTiedDrawn": {
    "type_hash": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb",
    "missing": "honest",
