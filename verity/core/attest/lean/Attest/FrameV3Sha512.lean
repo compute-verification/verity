@@ -4,17 +4,21 @@ import Randomness
 /-!
 # frame-v3-sha512 over a range of positions
 
-`verity.ml.commitments.merkle.CommitmentDomain` with `hash = "sha512"` and `positions = RangeIndexedDomain(0, count)`, and
-`tree_levels`, `verify_opening` over it. Every hash is C-Flock's frame (`Flock.FV3.hash`) through SHA-512. Integers are
-`_uint`'s minimal big-endian bytes (`FlockSoundness.Randomness.natBytes`), of any size: `Flock.FV3.uint` is 8 bytes at most.
+`verity.ml.commitments.merkle.CommitmentDomain` with `hash = "sha512"` and `positions = RangeIndexedDomain(0, count)` or
+`RangeU64Domain(0, count)`, and `tree_levels`, `verify_opening` over it. Every hash is C-Flock's frame (`Flock.FV3.hash`)
+through SHA-512. Integers are `_uint`'s minimal big-endian bytes (`FlockSoundness.Randomness.natBytes`), of any size:
+`Flock.FV3.uint` is 8 bytes at most.
 
-* domain id: `H(frame "domain" [binding, uint(owner + 2), identity_sha512(range), uint count])`, the range's identity
-  `tagged_sha512("veritor/indexed-domain/range/v1", {"start":0,"step":1,"stop":count})`;
+* domain id (`Domain.make`): `H(frame "domain" [binding, uint(owner + 2), identity_sha512(range), uint count])`, the
+  range's identity `tagged_sha512("veritor/indexed-domain/range/v1", {"start":0,"step":1,"stop":count})`;
+* the `range-u64` kind's (`Domain.makeU64`): `H(frame "domain/range-u64" [binding, u64be(owner + 2), u64be 0,
+  u64be count])` (`merkle.range_u64_domain_message`);
 * leaf `H(frame "leaf" [id, uint rank, uint position, schema, value])`, node `H(frame "node" [id, uint level, uint index,
   left, right])`, pad `H(frame "pad" [id, uint rank])`, empty root `H(frame "empty" [id])`;
 * the tree pads its leaves to a power of two, `2^depth` with `depth = bit_length(count − 1)` (0 for one leaf).
 
-Separable from the memory challenger: a later shared package of core's commitments takes it as it is.
+The memory challenger's session records and every auditor party's period tree (`Attest.Period`) are trees of this
+frame; a later shared package of core's commitments takes it as it is.
 -/
 
 namespace FrameV3Sha512
@@ -45,6 +49,12 @@ structure Domain where
 `owner ≥ −2`, which the callers here fix. -/
 def Domain.make (binding : ByteArray) (owner : Int) (count : Nat) : Domain :=
   ⟨hash "domain" [binding, uint (owner + 2).toNat, rangeIdentity 0 count 1, uint count], count⟩
+
+/-- `CommitmentDomain(binding, owner, RangeU64Domain(0, count), hash="sha512")`, the `range-u64` kind: `owner + 2`, the
+start 0 and `count` as u64be words. The binding is 64 bytes, `owner ≥ −2` and `count < 2^64`, which the callers here
+fix. -/
+def Domain.makeU64 (binding : ByteArray) (owner : Int) (count : Nat) : Domain :=
+  ⟨hash "domain/range-u64" [binding, be64 (owner + 2).toNat.toUInt64, be64 0, be64 count.toUInt64], count⟩
 
 def Domain.leaf (d : Domain) (rank position : Nat) (schema : String) (value : ByteArray) : ByteArray :=
   hash "leaf" [d.id, uint rank, uint position, schema.toUTF8, value]
