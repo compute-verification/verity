@@ -113,7 +113,7 @@ def spec_z3(name, xs, T, b):
     raise ValueError(name)
 
 
-class Program:
+class Candidate:
     """L symbolic instructions over n free inputs: opcode, three operand selectors (an input, an earlier result or the
     immediate), immediates, the lop3 truth table, the shift kind and amount, the lin coefficients and the add3 signs."""
 
@@ -221,7 +221,7 @@ def synth(name, T, b, L, timeout_s, seed=1, ring=False):
     import random
     rng = random.Random(seed)
     n = T * SKETCHES[name][2]
-    prog = Program(n, L, b, ring)
+    prog = Candidate(n, L, b, ring)
     syn = z3.SolverFor("QF_BV")
     syn.set("timeout", int(timeout_s * 1000))
     syn.add(prog.wf())
