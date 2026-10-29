@@ -22,7 +22,7 @@ open Claims
 
 section Links
 
-variable {Coin W Col T Tb : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+variable {Coin W Col T Tb : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- `E*`'s coins for `E_O` at its judged draw. -/
 def judgedC {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
@@ -179,6 +179,7 @@ theorem PrBad_le_PrBad_EL (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
   refine Pr_mono ?_
   rintro s ⟨hacc, hbad⟩
   refine ⟨hacc, ?_⟩
+  show ¬ (RL D I Q).ext x ((EL H D I DO decO rows).eval H P x s.1 s.2.1 s.2.2).1
   rw [EL_eval_fst]
   cases hw : ((E H D I DO decO).eval H P x s.1 s.2.1 s.2.2).1 with
   | none => exact id
