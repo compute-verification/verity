@@ -13,6 +13,13 @@
 3. **The stacks' terms on Llama-3.2-1B's linears.** Forming, coin entries and committed bytes a useful MAC, at T 512
    and T 8,192, from one 32-unit instruction per four s8 lanes formed (a permuted block reads its buffer in `π`'s
    order, and a block of coins as drawn is not formed) and SHA-512 at the floor's 908 units a byte.
+4. **The projection bound on the repeated blocks** (a lower bound on pure lanes, argued, not in Lean). A coin pair
+   produced by one lane only has its instruction's signature over the committed words, so an instruction's
+   once-produced pairs lie in one piece. Projected onto those pairs the program is a linear straight-line program in
+   one variable an instruction, which by the transposition principle needs at least `n + p − m'` additions for `n`
+   such instructions, `p` pieces and `m'` words. The instructions supply `n` and a merge at most two, so a dot
+   product's repeated pair of blocks costs at least
+   `2K − (the piece (J−1, 0)) − (its 2J−1 largest other pieces) − Σ (s − 16)⁺ over the rest`.
 
     python3 benchmarks/pouw/theory/rfp_stack.py [--seeds 16] [--out PATH]
 """
@@ -130,6 +137,43 @@ def intersections(seeds, shapes=((2048, 64), (2048, 128), (2048, 256), (2048, 51
     return out
 
 
+def projection_bound(K, L, perm):
+    """The most a pure-lane program can save, in products a dot product, on a repeated pair of blocks in `perm`."""
+    J = K // L
+    block = [i // L for i in range(K)]
+    pieces = {}
+    for jp, ch in enumerate(chunks_of(perm, L)):
+        for i in ch:
+            pieces[(block[i], jp)] = pieces.get((block[i], jp), 0) + 1
+    corner = pieces.pop((J - 1, 0), 0)
+    sizes = sorted(pieces.values(), reverse=True)
+    free = sizes[:2 * J - 1]
+    gain = corner + sum(free) + sum(max(0, s - 16) for s in sizes[2 * J - 1:])
+    return {"gain": gain, "credited_share_of_pair": 1 - gain / (2 * K), "uncredited_share_of_stock": gain / K}
+
+
+def projection_bounds(seeds, shapes=((2048, 64), (2048, 128), (2048, 256), (8192, 64), (8192, 128), (8192, 256),
+                                     (8192, 512), (7168, 128), (7168, 256))):
+    out = []
+    for K, L in shapes:
+        runs = []
+        for s in range(seeds):
+            rng = random.Random(1000 * K + 10 * L + s)
+            perm = list(range(K))
+            rng.shuffle(perm)
+            runs.append(projection_bound(K, L, perm))
+        worst = max(r["gain"] for r in runs)
+        out.append({
+            "K": K, "L": L, "seeds": seeds,
+            "mean_credited_share_of_pair": sum(r["credited_share_of_pair"] for r in runs) / seeds,
+            "worst_credited_share_of_pair": 1 - worst / (2 * K),
+            # RFP-4 has two repeated pairs, so its uncredited tensor work is twice a pair's gain, against stock's K.
+            "rfp4_uncredited_share_of_stock_worst": 2 * worst / K,
+            "identity_order": projection_bound(K, L, list(range(K))),
+        })
+    return out
+
+
 STACKS = {
     # blocks, X adds per entry of A, Y adds per entry of B, coin entries per entry of A and of B
     "RFP-3": {"blocks": 3, "x_adds": 1, "y_adds": 1, "coins_a": 1, "coins_b": 1},
@@ -177,7 +221,8 @@ def main():
     ap.add_argument("--seeds", type=int, default=16)
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
-    res = {"purity": purity(), "intersections": intersections(a.seeds), "llama_3_2_1b": llama_terms()}
+    res = {"purity": purity(), "intersections": intersections(a.seeds), "projection_bounds": projection_bounds(a.seeds),
+           "llama_3_2_1b": llama_terms()}
     text = json.dumps(res, indent=1)
     if a.out:
         with open(a.out, "w") as f:
