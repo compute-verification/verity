@@ -51,7 +51,7 @@ is the zero, the constant or a computed gate of the unit (`Layout.single_gate`),
 output's (`OutsOut`), so an output row's bit (`outBitRow_ne_none`), as in `keyProgH_valPinned`. -/
 theorem rowOfH_ne_none_of_io
     (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+      HmOut.unrolled (si.acc S R u h).st.c = c)
     (outs : Finset (Fin (keyN c hU n))) (ho : c.outNet = c.unitNet) (hrf : Hidden.Any.RowsFitS c)
     (houts : OutsOut c hU n outs) (hkeys : KeysRow c hU (portRowW c)) {S : Finset (Fin n)} {R : Reg} {u : Fin n}
     (hu : u ∈ S) {g : Fin (keyN c hU n)} (hg : g ∈ ((keyProg c hU n).partition outs).io u)
@@ -66,20 +66,17 @@ theorem rowOfH_ne_none_of_io
   obtain ⟨u'', j, t, hoc⟩ := houts u _ hg hm x rfl
   have hno' : outRowOf c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = none := hno
   rw [outRowOf_wire outs x hm (unit_wire outs x hm).2, Layout.outDecode_of hoc] at hno'
-  have hc := (si.acc S R u hu).c_eq (hparse S R u hu)
-  have hcr : HmOut.checkRows c = .ok () := hc ▸ (si.acc S R u hu).checkRows
-  have P := parse_facts (hparse S R u hu)
-  obtain ⟨ls, hls⟩ := P.check
-  obtain ⟨-, -, hlo⟩ := Layout.check_out P.typed ho hls
+  have hcr : Hidden.RowsOut c := (si.acc S R u hu).checkRowsU (hparse S R u hu)
+  have hlo := (si.acc S R u hu).leavesOut_ltU (hparse S R u hu) ho
   obtain ⟨hu', hj, ht, -⟩ := hoc
   have hget : c.leavesOut.getD u'' #[] = c.leavesOut[u'']! := by
     rw [Hidden.getElem!_eq_getD']; rfl
   have hwlt : outWordOf c (u'', j, t) < c.outWords := by
     rw [show outWordOf c (u'', j, t) = (c.leavesOut.getD u'' #[])[j] from getElem!_pos _ j hj]
-    refine (hlo u'' hu').2 _ ?_
+    refine hlo u'' hu' _ ?_
     rw [← hget]
     exact Array.getElem_mem_toList _
-  exact outBitRow_ne_none hcr hrf u hwlt ht hno'
+  exact outBitRow_ne_none_of_rowsOut hcr hrf u hwlt ht hno'
 
 end FlockSoundness.Discharge.HiddenExec
 

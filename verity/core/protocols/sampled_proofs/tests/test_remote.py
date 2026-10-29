@@ -1263,7 +1263,7 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
 
 
 def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
-    """The period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
+    """The period's open commits its circuit (the registered circuit's SHA-512), and `credited_session` counts the
     window only when the descriptor of the circuit its sessions prove hashes to it. The rehearsal's shape is credited;
     a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
     isn't bytes, and a window in no period count toward none, each naming the fix."""
@@ -1461,13 +1461,12 @@ def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_
             C.ledger_head(heads, pinned_key(), lms_verify)
 
 
-def test_an_end_whose_reason_is_past_ascii_is_never_signed(tmp_path, signer):
-    """A ledger entry's signed digest is canonical JSON, so an end whose reason is past ASCII without DEL is refused
-    before it is signed."""
+def test_an_end_whose_reason_is_past_ascii_is_read_escaped(tmp_path, signer):
     host = Host(tmp_path, signer)
     honest(host)
-    with pytest.raises(ValueError, match=re.escape("outside the canonical JSON domain: $.body.ended")):
-        _resealed(tmp_path, host, ended="the client closed it \u2026")
+    path = _resealed(tmp_path, host, ended="the client closed it \u2026")
+    assert "\\u2026" in path.read_text()
+    assert host.trusted(ledger=path)[0] == host.challenger.commitment
 
 
 def test_the_pin_is_read_from_the_operators_key_record():

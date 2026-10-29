@@ -5,10 +5,10 @@ import Properties.Verity.Game
 
 `Vocab.ComponentBound k a` is what subprotocol `a`'s owner proves of its compiled component at composite `k` in the
 causal game: the probability that `a`'s component at `k` accepts its own case in what the prover sent while `a`'s
-claim fails is at most `a`'s error at the strategy (`Vocab.error`: its published `δ`, its LMS-forgery term and its
-collision term, where its finder meets `FinderCR`). It is `Vocab.Target k a` without the commit phase's file check and
-`k`'s acceptance as a `same` composition, so each target follows from it (`Vocab.pouwSound_of`, `pousSound_of`,
-`poubSound_of`, `networkSound_of`, and `Vocab.sound_of` at any subprotocol, in
+claim fails is at most `a`'s error at the strategy (`Vocab.error`: its published `δ`, the published `ε_forge(t, Q)` and
+its collision term, where its finder meets `FinderCR` and its forger `Unforgeable`). It is `Vocab.Target k a` without
+the commit phase's file check and `k`'s acceptance as a `same` composition, so each target follows from it
+(`Vocab.pouwSound_of`, `pousSound_of`, `poubSound_of`, `networkSound_of`, and `Vocab.sound_of` at any subprotocol, in
 `Proofs.Properties.Verity.Subprotocols`, with the period guarantees that give it).
 
 `Vocab.TargetFor acc k a` is `a`'s target at `k` with the verdict `acc` in place of `Vocab.Verdict k a` (`Target k a`

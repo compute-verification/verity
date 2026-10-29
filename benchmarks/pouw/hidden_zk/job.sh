@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Pearl-C4's hidden-check units under C-Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean
+# Pearl-C4's hidden-check units under Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean
 # `verify --zk`, a row unit's anchors held to the verifier's own `TileAnchors.public_inputs` file. Run from the source tree's
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
 #   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
-#      drawing all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
+#      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
 #      controls, drawn the same way, and the Lean
 #      verifier on all of them:
 #        honest-own     the honest session, the verifier's own anchors file                         ACCEPT

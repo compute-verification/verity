@@ -14,9 +14,10 @@ Each file below is a probe, gated before it is timed; none is on the served path
 
 ## Write ceilings
 
-PoUB's write ceilings, `timing.GPU_WRITE_BYTES_PER_S` and `timing.HOST_WRITE_BYTES_PER_S`, bound how fast a fill can
-write labels into a tier. These files measure what the node's writers reach, each arm gated before it is timed (the
-destination poisoned with 0xA5, sampled slots checked, and a control that writes nothing rejected).
+The write ceilings of PoUB, `timing.GPU_WRITE_BYTES_PER_S` and
+`timing.HOST_WRITE_BYTES_PER_S`, bound how fast a fill can write labels into a tier. These files measure what the node's
+writers reach, each arm gated before it is timed (the destination poisoned with 0xA5, sampled slots checked, and a
+control that writes nothing rejected).
 
 - `write.cu` (`bwwrite`) on one card: labels derived on the device by 16-byte stores (plain and evict-first) and by
   bulk (TMA) stores from shared memory, the driver's memset, labels streamed in over PCIe by the copy engines (H2D)
