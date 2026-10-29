@@ -324,6 +324,8 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
 ### Decisions for Daniel (gathered; each with a default)
 
 1. Is rank 4a, ShaWrites / ShaSpeed on SHA-512, "milder than SAK"? Default: yes, reported as 4a.
+   **Decided, Daniel 16:00Z: yes** ("I'm fine with it taking 3,500 registers"). The LEAN program (inbox/LEAN.md) takes
+   ShaWrites as a named assumption.
    **Measured (N-SHALB final, 1234Z): the best honest committer built tonight** writes 3,517.36 registers a compression
    against R = 3,515.38, bit for bit with the host. That is 0.056% over R, short of δ (4.3e-5), so it **leaves 0.131×
    stock of honest hashing uncredited, 13× T1's budget** (the served committer: 5.0–7.7×). Only Daniel's "the honest
