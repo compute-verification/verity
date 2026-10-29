@@ -156,8 +156,7 @@ Since 12 Oct `research queue drive` moves `main`; the lander handles only what d
 
 `research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
 one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
-`checked` whose after-landing run passed every step on the merge gate (circuit-check, off it, holds no move of `main`: a red
-one reverts its culprit on `checked` at once and lands no PR touching its inputs until it passes). A PR is admitted when it's open (drafts too),
+`checked` whose after-landing run passed every step on the merge gate (`research.drive`). A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
 `pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
