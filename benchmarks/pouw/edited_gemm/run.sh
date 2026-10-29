@@ -15,7 +15,7 @@
 # filler's stand-ins, EG_SET=eps1fill the four linears at 6016 tokens (whole waves) against 6144. The small gate's seed has
 # a key that key_ok_r9 rejects. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/run.sh
 set -uo pipefail
 export O=${OUT:?}

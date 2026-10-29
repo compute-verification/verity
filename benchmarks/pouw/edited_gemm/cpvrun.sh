@@ -7,7 +7,7 @@
 # if every gate passes, lease 2 times PV_ARMS at PV_BENCH (interleaved hot items) and runs ncu's sections on PV_NCU at
 # PV_NCU_SHAPES (out/ncu/, read by eps_profile.py, whose profile and TOML end the run). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/cpvrun.sh
 set -uo pipefail
 export O=${OUT:?}

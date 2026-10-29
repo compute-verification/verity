@@ -1,4 +1,4 @@
-// Distributed shared memory atomics and reductions in a 2-CTA cluster: RS-W′'s cl.cu (round 7, pi_32) DA and DR forms on
+// Distributed shared memory atomics and reductions in a 2-CTA cluster, pi_32: the DA and DR forms on
 // probe.cuh, mode 0 (each lane its own word), into the peer CTA's shared memory (peer) or the CTA's own through its
 // cluster address (self). One 1024-thread block an SM, 8 an iteration. The loop and a cluster barrier after it are
 // timed, so the reductions are timed to completion; a cluster barrier before it waits for the peer's shared memory.
@@ -116,7 +116,7 @@ CL_KERNEL64(dsm_atom_exch64_self, D_ATOM_EXCH)
 CL_KERNEL64(dsm_atom_cas64_self, D_ATOM_CAS)
 CL_KERNEL64(dsm_red_add64_self, D_RED_ADD)
 
-// The own CTA through its cluster address is ATOM.E on ROW_ATOME32 ("generic or DSMEM address"). RS-W′'s rows have none
+// The own CTA through its cluster address is ATOM.E on ROW_ATOME32 ("generic or DSMEM address"). The machine model's rows have none
 // for the peer CTA's shared memory, so the peer forms are joint points (rows.jsonl only) until one is added.
 #define CL_SELF(nm, SASS)                                                                                           \
   {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = "ATOME32", .row = "ROW_ATOME32", .expect = SASS "=8", \
@@ -124,7 +124,7 @@ CL_KERNEL64(dsm_red_add64_self, D_RED_ADD)
 #define CL_PEER(nm, SASS)                                                                                           \
   {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .expect = SASS "=8", .words = 32, .dyn_smem = SMEM,         \
    .cluster = 2, .iters = 16, .note = "the peer CTA's shared memory: no row in RS-W′'s rows.csv yet"}
-// The own CTA's 64-bit forms are ATOM.E.<op>.64 on ROW_ATOME64, the class RS-W′'s round 7 priced from red.add.u64 here.
+// The own CTA's 64-bit forms are ATOM.E.<op>.64 on ROW_ATOME64, the class red.add.u64 here prices.
 #define CL_SELF64(nm, SASS, ...)                                                                                     \
   {.name = #nm, .kernel = (const void*)nm, .tpb = TPB, .kind = "ATOME64", .row = "ROW_ATOME64", .expect = SASS "=8", \
    .words = 64, .dyn_smem = SMEM, .cluster = 2, .iters = 256 __VA_OPT__(,) __VA_ARGS__}
