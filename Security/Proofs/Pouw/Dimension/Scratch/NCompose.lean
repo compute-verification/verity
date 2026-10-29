@@ -640,6 +640,20 @@ theorem bswap32_shift_not_const (s k : ℕ) (h0 : 0 < s) (h1 : s < 4294967296) :
 /-- **The swapped word is no carrier of the word**: `bswap32 w − w` differs at `w = 0` and `w = 1`. -/
 theorem bswap32_not_carrier : (bswap32 1 : ℤ) - 1 ≠ (bswap32 0 : ℤ) - 0 := by decide
 
+/-- A misaligned message word: the four bytes from byte `o` of the little-endian pair `w0 ‖ w1`, read big-endian. A row
+whose length is no multiple of 4 puts its later words at such an offset in SHA-512's block. -/
+def asm32 (o w0 w1 : ℕ) : ℕ :=
+  bswap32 ((w0 / 256 ^ o + w1 * 256 ^ (4 - o)) % 4294967296)
+
+/-- **A misaligned word is no free value** (rank 0): at each offset `o ∈ {1, 2, 3}` it reads both committed words, and
+on the grid where each is `0` or `2³² − 1` it is no constant and equals neither word. So a register holding it counts in
+`ShaWrites`' `R` beside the hash's own; that a program must write it is the premise at the larger `R`. -/
+theorem asm32_not_free : ∀ o ∈ ({1, 2, 3} : Finset ℕ),
+    asm32 o 0 4294967295 ≠ asm32 o 0 0 ∧ asm32 o 4294967295 0 ≠ asm32 o 0 0 ∧
+      asm32 o 0 4294967295 ≠ 0 ∧ asm32 o 0 4294967295 ≠ 4294967295 ∧
+      asm32 o 4294967295 0 ≠ 0 ∧ asm32 o 4294967295 0 ≠ 4294967295 := by
+  decide
+
 end Bswap
 
 /-! ## 6. The call model: `AtomicCall` and the cards' `PeriodInventory` (T1's) -/
@@ -1374,6 +1388,7 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.bswap32_bswap32
 #print axioms Pouw.Dimension.NCompose.bswap32_shift_not_const
 #print axioms Pouw.Dimension.NCompose.bswap32_not_carrier
+#print axioms Pouw.Dimension.NCompose.asm32_not_free
 #print axioms Pouw.Dimension.NCompose.atomicCall_closes
 #print axioms Pouw.Dimension.NCompose.costOn_outside
 #print axioms Pouw.Dimension.NCompose.costOn_split
