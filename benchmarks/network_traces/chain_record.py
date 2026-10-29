@@ -507,7 +507,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
-                "why": (job.get("why") or {}).get("scan"), "in_the_clear": CLEAR["scan"]}
+                "why": scan_exit(s, job), "in_the_clear": CLEAR["scan"]}
     rounds = {}
     for name, r in (s.get("rounds") or {}).items():
         a = r.get("audit") or {}
@@ -531,6 +531,19 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
             "in_the_clear": CLEAR["scan"]}
+
+
+def scan_exit(s: dict | None, job: dict) -> str | None:
+    """Why the scan step didn't run or failed: the job's own line for it and, when `scan_zk.py prove` exited nonzero,
+    from its summary each round's witness pieces found at the verifier and its own ``ok``."""
+    rc, said = (job.get("rc") or {}).get("scan"), (job.get("why") or {}).get("scan")
+    if rc in (None, "0"):
+        return said
+    found = {n: ((r.get("audit") or {}).get("received") or {}).get("verifier_found")
+             for n, r in ((s or {}).get("rounds") or {}).items()}
+    return "; ".join([*([said] if said else []), f"scan_zk exited {rc}",
+                      *(f"{n}: witness pieces found at the verifier: {v}" for n, v in found.items() if v),
+                      *(["scan_zk's ok is not true"] if s is not None and s.get("ok") is not True else [])])
 
 
 def free_inputs(circuit: dict) -> int:
@@ -936,11 +949,14 @@ def report(a) -> dict:
     verdict = ("scan " if scan_only else "") + ("accepted" if accepted else "refused")
     runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
                               if r))
+    why = ({k: ": ".join(str(x) for x in (steps[k].get("verdict") or "no verdict", steps[k].get("why")) if x)
+            for k in required if steps[k].get("verdict") != "accepted"}
+           | {k: f"stand-in: {steps[k]['stand_in']}" for k in ("n2", "scan") if steps[k].get("stand_in")})
     return {"schema": SCHEMA, "job": job, "verdict": verdict, "path": job.get("path"),
             "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust, endpoint),
             "negatives_refused": negatives, "steps": steps,
             "d1": d1_terms(cert, n2, scan, cust, endpoint, audits),
-            "block": period_block(a, verdict, runs, cert=cert, n2=merged, audit_dirs=audit_dirs)}
+            "block": period_block(a, verdict, runs, cert=cert, n2=merged, audit_dirs=audit_dirs), "why": why or None}
 
 
 def markdown(r: dict) -> str:
