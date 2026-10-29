@@ -17,7 +17,8 @@ reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth
   block's π alone (a GEMM against S_i's four block columns, the one of j mod 4 kept), which the fixture is held to
   first.
 - **y** (`receipts.cu`): a thread a unit, one SHA-512 compression from `sketch_prefix(seed)`'s midstate over
-  u64be g ‖ σ_g, with sha512_rows' compression; `receipts_host.cpp` is its host twin.
+  u64be g ‖ σ_g, with the GPU's one SHA-512 compression (`verity/ml/kernels/sha512.cuh`); `receipts_host.cpp` is its
+  host twin.
 - **root** (`Tree`): sha512_rows' engine over the y buffer: each leaf's 16 receipts (1,024 bytes) a sha512/row/v2 row,
   its hm96-sha512 leaf under the leaf's 192-byte salt, its frame-v3-sha512 leaf in the pass's domain
   (`receipts.domain(seed, Plan.whole(units))`), and the root.
@@ -45,6 +46,7 @@ import torch
 
 from verity.core.protocols.remote_bandwidth import p2
 from verity.core.protocols.remote_bandwidth import receipts as R
+from verity.ml.kernels import SHA512
 from verity_config.settings import of
 
 settings = of(__file__)
@@ -54,8 +56,8 @@ sys.path.insert(0, str(ROWS_DIR))
 import engine as SE  # noqa: E402
 
 BLOCK, UNIT, PER = p2.BLOCK_BYTES, p2.UNIT_BYTES, p2.UNIT_BLOCKS
-DEVICE_SOURCES = (ROWS_DIR / "sha512x.cuh", HERE / "receipts.cuh", HERE / "receipts.cu")
-HOST_SOURCES = (ROWS_DIR / "sha512x.cuh", HERE / "receipts.cuh", HERE / "receipts_host.cpp")
+DEVICE_SOURCES = (SHA512, HERE / "receipts.cuh", HERE / "receipts.cu")
+HOST_SOURCES = (SHA512, HERE / "receipts.cuh", HERE / "receipts_host.cpp")
 BUILD_DIR = Path(settings.P2_RECEIPTS_BUILD or Path.home() / ".cache" / "verity" / "p2_receipts")
 vp, u64 = ctypes.c_void_p, ctypes.c_uint64
 
