@@ -1036,12 +1036,16 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 
 #: the noise rules `served` adds to the integer product and serves
-SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_pd", "ssn2", "raw_byte")
+SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "ssn_pd", "ssn2", "raw_byte")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
 #: `ssn_1l5`'s step 0: 27 data entries and 5 noise lanes
 SSN_1L5_DATA = 27
+#: `ssn_1l_tag`'s step 0: 24 data entries, 4 row-tag lanes and 4 coin lanes; G's entries lie in [-TAG_G, TAG_G]
+SSN_TAG_DATA = 24
+TAG_LANES = 4
+TAG_G = 3
 #: the fused linear each projection is served in: one call, so one draw of row coins for all its columns
 FUSED = {"self_attn.q_proj": "self_attn.qkv", "self_attn.k_proj": "self_attn.qkv", "self_attn.v_proj": "self_attn.qkv",
          "mlp.gate_proj": "mlp.gate_up", "mlp.up_proj": "mlp.gate_up"}
@@ -1055,20 +1059,46 @@ def fused_offset(name: str, k: int, n: int) -> int:
     return {"self_attn.k_proj": k, "self_attn.v_proj": k + n, "mlp.up_proj": n}.get(name, 0)
 
 
-def ssn_code5(n: int, offset: int = 0) -> torch.Tensor:
-    """SSN-1L5's public column code, 5 x n, for columns offset .. offset + n - 1 of the fused linear: the balanced
-    base-13 digits (in [-6, 6], least significant first) of z_j = (floor(j / 2) + 1) (-1)^j, an injective code into
-    [-6, 6]^5 \\ {0} for j < 371,292."""
+def zigzag_digits(n: int, lanes: int, offset: int = 0) -> torch.Tensor | None:
+    """lanes x n: the balanced base-13 digits (in [-6, 6], least significant first) of z_j = (floor(j / 2) + 1) (-1)^j
+    for j = offset .. offset + n - 1, injective into [-6, 6]^lanes \\ {0}; None if some z_j needs more lanes."""
     j = torch.arange(offset, offset + n, dtype=torch.int64)
     r = torch.where(j % 2 == 0, j // 2 + 1, -(j // 2 + 1))
     digits = []
-    for _ in range(5):
+    for _ in range(lanes):
         d = (r + 6) % 13 - 6
         digits.append(d)
         r = (r - d) // 13
-    if bool((r != 0).any()):
+    return None if bool((r != 0).any()) else torch.stack(digits).double()
+
+
+def ssn_code5(n: int, offset: int = 0) -> torch.Tensor:
+    """SSN-1L5's public column code, 5 x n, for columns offset .. offset + n - 1 of the fused linear (`zigzag_digits`),
+    injective for j < 371,292."""
+    code = zigzag_digits(n, 5, offset)
+    if code is None:
         raise ValueError(f"ssn_1l5: {offset + n} columns outrun the 5-digit balanced base-13 code")
-    return torch.stack(digits).double()
+    return code
+
+
+def row_tags(m: int) -> torch.Tensor:
+    """`ssn_1l_tag`'s row tags T(i), m x 4: row i's `zigzag_digits`, injective for m <= 28,560."""
+    tags = zigzag_digits(m, TAG_LANES)
+    if tags is None:
+        raise ValueError(f"ssn_1l_tag: {m} rows outrun the 4-digit balanced base-13 tag")
+    return tags.T.contiguous()
+
+
+def tag_matrix(key: torch.Tensor, n: int, offset: int = 0) -> torch.Tensor:
+    """`ssn_1l_tag`'s G, 4 x n uniform on [-3, 3], for columns offset .. offset + n - 1 of the fused linear: entry
+    (e, j) a fixed integer hash of (key[e], j) mod 7, so every projection of a fused call reads one G. A 64-bit key
+    stands in for G's 4 n log2(7) coin bits; each entry's distribution is the same."""
+    mask = 2 ** 31 - 1
+    j = torch.arange(offset, offset + n, dtype=torch.int64)[None, :]
+    x = (j * 1103515245 + key.to(torch.int64)[:, None] * 2246822519 + 0x5BD1E995) & mask
+    for mul, shift in ((1597334677, 13), (1013904223, 16), (668265263, 15)):
+        x = ((x ^ (x >> shift)) * mul) & mask
+    return (x % (2 * TAG_G + 1) - TAG_G).double()
 
 
 def column_signs(steps: int, n: int, offset: int = 0) -> torch.Tensor:
@@ -1120,7 +1150,9 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
     {0, ..., 2^bits - 1}^(m x (S - 1)), one lane a row a later step; `ssn_1l5` the same with five step-0 lanes
     (S = 1 + ceil((k - 27) / 31), a1 bits m x 5, C `ssn_code5`); `ssn_1l_hw` is `ssn_1l` hardened: a1 uniform on
     {0, ..., 15}^(m x 4) and every later step t adds s_t[j] (1 + 2 b_t), b bits m x (S - 1) and s the public column
-    signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn_pd` is `ssn_1l` with its later steps' row bits
+    signs (`column_signs`), less rint(7.5 sum C + 2 sum_t s_t[j]); `ssn_1l_tag` is `ssn_1l` with row tags (S = 1 +
+    ceil((k - 24) / 31)): it adds T(i) G (`row_tags`, `tag_matrix`, G fresh every call) and serves 1 + l, so its bias is
+    rint((sum C + 3 (S - 1)) / 2), drawing ssn_1l's coins first; `ssn_pd` is `ssn_1l` with its later steps' row bits
     folded out at the conversion (the same coins drawn, a1 C less rint(sum C / 2) served); `ssn2` adds a b - S, a and b
     bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
@@ -1130,18 +1162,23 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False):
     (m, k), n = mm.x.shape, acc.shape[1]
     s = -(-k // SSN_DATA)
     stream = FUSED.get(mm.name) if fused else None
-    if rule in ("ssn_1l", "ssn_1l5", "ssn_pd"):
-        five, pd = rule == "ssn_1l5", rule == "ssn_pd"
-        s = 1 + -(-(k - (SSN_1L5_DATA if five else SSN_DATA)) // SSN_1L_DATA)
+    if rule in ("ssn_1l", "ssn_1l5", "ssn_pd", "ssn_1l_tag"):
+        five, pd, tag = rule == "ssn_1l5", rule == "ssn_pd", rule == "ssn_1l_tag"
+        s = 1 + -(-(k - (SSN_1L5_DATA if five else SSN_TAG_DATA if tag else SSN_DATA)) // SSN_1L_DATA)
         off = fused_offset(mm.name, k, n)
         code = mm.shared(("ssn_code5" if five else "ssn_code", n, off, str(acc.device)),
                          lambda: (ssn_code5(n, off) if five else ssn_a_w0(n, SSN_DATA, off)[0]).to(acc.device))
-        lanes = mm.coins((m, s - 1), 2 ** bits, name=stream).double().sum(1, keepdim=True) * (not pd)
+        lanes = (mm.coins((m, s - 1), 2 ** bits, name=stream).double() + tag).sum(1, keepdim=True) * (not pd)
         a1 = mm.coins((m, code.shape[0]), 2, name=stream).double()
-        bias = torch.round(code.sum(0) / 2 + (not pd) * (2 ** bits - 1) * (s - 1) / 2)
+        bias = torch.round(code.sum(0) / 2 + (not pd) * ((2 ** bits - 1) / 2 + tag) * (s - 1))
+        if tag:
+            tags = mm.shared(("ssn_tags", m, str(acc.device)), lambda: row_tags(m).to(acc.device))
+            g = tag_matrix(mm.coins((TAG_LANES,), 2 ** 16, name=stream), n, off).to(acc.device)
         top = 0.0
         for i in range(0, m, NOISE_ROWS):
             noise = a1[i:i + NOISE_ROWS] @ code + lanes[i:i + NOISE_ROWS] - bias
+            if tag:
+                noise += tags[i:i + NOISE_ROWS] @ g
             top = max(top, G.absmax(noise))
             acc[i:i + NOISE_ROWS] += noise
         bound = k * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top

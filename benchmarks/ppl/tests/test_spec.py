@@ -81,7 +81,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
     for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both",
                  "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1",
                  "ssn-1l-b1-fused-v1", "ssn-1l5-lin-b1-v1", "ssn-1l5-b1-v1", "dither-int8-v1",
-                 "ssn-1l-hw-v1", "ssn-pd-v1"):
+                 "ssn-1l-hw-v1", "ssn-1l-tag-v1", "ssn-pd-v1"):
         want[name] = ("linears", stock, True)
     for name in ("int8-qk-had-v1", "int8-pv-u8-v1", "int8-attn-v1", "dither-int8-pv-v1", "ssn-all-v1"):
         want[name] = ("all", stock, True)

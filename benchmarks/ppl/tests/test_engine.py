@@ -223,7 +223,7 @@ def test_fused_projections_draw_one_calls_coins():
         mm = matmul.MM("linear", name, run, x, torch.ones(n, k)).integer(x, torch.ones(n, k))
         return steps.served_linear(mm, lambda _m: torch.zeros(m, n, dtype=torch.int64), rule=rule, fused=fused)
 
-    for rule in ("ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_pd", "ssn_a", "raw_byte"):
+    for rule in ("ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "ssn_pd", "ssn_a", "raw_byte"):
         whole = noise("self_attn.qkv", k + 2 * 32, rule, False)
         q, kk, v = (noise(f"self_attn.{p}_proj", n, rule, True) for p, n in (("q", k), ("k", 32), ("v", 32)))
         assert torch.equal(torch.cat([q, kk, v], 1), whole), rule
@@ -233,6 +233,28 @@ def test_fused_projections_draw_one_calls_coins():
     lead, pd = (noise("mlp.down_proj", 40, r, False) for r in ("ssn_1l", "ssn_pd"))
     rows = (lead - pd) - (lead - pd)[:1]
     assert torch.equal(rows, rows[:, :1].expand_as(rows)) and not bool((rows == 0).all())
+    tag = noise("mlp.down_proj", 40, "ssn_1l_tag", False)
+    s = 1 + -(-(k - steps.SSN_TAG_DATA) // steps.SSN_1L_DATA)
+    assert s == 1 + -(-(k - steps.SSN_DATA) // steps.SSN_1L_DATA)
+    c = steps.ssn_a_w0(40, steps.SSN_DATA)[0].sum(0)
+    mm = matmul.MM("linear", "mlp.down_proj", run, x, torch.ones(40, k))
+    mm.coins((m, s - 1)), mm.coins((m, 4))
+    g = steps.tag_matrix(mm.coins((steps.TAG_LANES,), 2 ** 16), 40)
+    want = steps.row_tags(m) @ g + (s - 1) - torch.round(c / 2 + 1.5 * (s - 1)) + torch.round(c / 2 + (s - 1) / 2)
+    assert torch.equal(tag - lead, want) and len({tuple(r) for r in (tag - lead).tolist()}) == m
+
+
+def test_row_tags_and_g():
+    tags = steps.row_tags(28560)
+    assert tags.shape == (28560, 4) and len({tuple(r) for r in tags.tolist()}) == 28560
+    assert not bool((tags == 0).all(1).any()) and float(tags.abs().max()) == 6
+    with pytest.raises(ValueError, match="outrun"):
+        steps.row_tags(28561)
+    key = torch.tensor([3.0, 70.0, 65535.0, 0.0])
+    g = steps.tag_matrix(key, 3072)
+    assert set(g.unique().tolist()) == set(range(-3, 4)) and abs(float(g.mean())) < 0.1
+    assert torch.equal(steps.tag_matrix(key, 512, 2048), g[:, 2048:2560])
+    assert not torch.equal(steps.tag_matrix(key + 1, 3072), g)
 
 
 def test_u8pv_is_the_online_softmax_kernel():
@@ -292,9 +314,8 @@ def test_attention_formats_pass_their_gates(llama, ids):
 
 def test_served_noise_stays_in_the_product(llama, ids):
     stock = spec.parse({"linear": [{"step": "int8"}]}, "stock")
-    rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn_1l", 1), ("ssn_1l", 4), ("ssn_1l5", 1), ("ssn_1l_hw", 1), ("ssn_pd", 1),
-             ("ssn2", 1),
-             ("raw_byte", 1))
+    rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn_1l", 1), ("ssn_1l", 4), ("ssn_1l5", 1), ("ssn_1l_hw", 1),
+             ("ssn_1l_tag", 1), ("ssn_pd", 1), ("ssn2", 1), ("raw_byte", 1))
     arms = [stock] + [spec.parse({"linear": [{"step": "int8"}, {"step": "served", "rule": r, "bits": b}]}, f"{r}-{b}")
                       for r, b in rules]
     arms.append(spec.parse({"linear": [{"step": "int8"}, {"step": "served", "rule": "ssn_1l", "fused": True}]},
