@@ -8,7 +8,7 @@
     position    (layer, site) from the registered layout: layer << 32 | site                 `position`
     weight id   the registered id of the matrix whose rows B opens under the weights root    `weight`
     row ids     the call's global row indices, distinct                                      `rowids`
-    column ids  the weight's global column indices, shards included (X-SPC-40), distinct     `colids`
+    column ids  the weight's global column indices, shards included, distinct                `colids`
 
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
