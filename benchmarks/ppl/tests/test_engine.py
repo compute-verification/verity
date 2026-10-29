@@ -1,3 +1,4 @@
+import json
 import math
 import types
 
@@ -197,21 +198,37 @@ def test_served_noise_stays_in_the_product(llama, ids):
     assert max(rise["ssn_a-1"], rise["ssn_1l-1"]) < rise["raw_byte-1"]
 
 
-def test_pinned_float_ssn_passes_and_differs(llama, ids):
+def test_pinned_float_ssn_passes_and_differs(llama, ids, monkeypatch, tmp_path):
     """`ssnfp` runs the pinned MMA's exact words (benchmarks/pouw/ssn_fp8/check_ppl_step.py holds them to the bit-exact
-    simulator): each arm passes its gates, the noise moves the output, and the oracle bound is no coarser than l1."""
+    simulator): each arm passes its gates, the noise moves the output, the oracle bound is no coarser than l1, and no
+    servable bound (l1, cs, holder, rms) is ever below the oracle on any row."""
+    monkeypatch.setenv("SSNFP_STATS", str(tmp_path / "stats"))
+    steps.SSNFP_STATS.clear()
     plain = spec.parse({"linear": [{"step": "fp", "fmt": "e4m3", "scale": "channel"}]}, "fp8")
     arms = [plain] + [spec.parse({"linear": [{"step": "ssnfp", "fmt": f, "bound": b, "noise": z}]}, f"{f}-{b}-{z}")
                       for f, b, z in (("e4m3", "partial", True), ("e4m3", "partial", False), ("e4m3", "l1", False),
-                                      ("bf16", "l1", True))]
+                                      ("e4m3", "rms", False), ("bf16", "l1", True), ("bf16", "rms", True))]
     r = evaluate(llama, ids[:4], arms)
     assert passed(r), r["gates"]
     nll = {a.name: r["nll"][f"{a.name}/s0"] for a in arms}
     assert all(np.isfinite(v).all() for v in nll.values())
     assert not np.array_equal(nll["e4m3-partial-True"], nll["e4m3-partial-False"])
     assert not np.array_equal(nll["e4m3-partial-False"], nll["fp8"])
+    assert not np.array_equal(nll["bf16-rms-True"], nll["bf16-l1-True"])
     base = ppl(nll["fp8"])
     assert abs(ppl(nll["e4m3-partial-False"]) / base - 1) <= abs(ppl(nll["e4m3-l1-False"]) / base - 1) + 1e-3
+    steps._ssnfp_dump()
+    stats = [json.loads(line) for f in tmp_path.glob("stats.*.jsonl") for line in f.read_text().splitlines()]
+    assert stats and all(s["violated"][b] == 0 for s in stats for b in ("l1", "cs", "holder", "rms"))
+    assert any("q_proj" in s["where"] and "-rms-" in s["where"] for s in stats)
+
+
+def test_a_checkpoint_on_e4m3_serves_through_int8(llama, ids):
+    """`checkpoint` rounds only the weights, so int8 then serves the E4M3 checkpoint: the gates pass and the result
+    isn't int8 of the bf16 weights."""
+    r = evaluate(llama, ids[:4], ["int8-channel127-v1", "int8-of-fp8-e4m3-channel-v1"])
+    assert passed(r), r["gates"]
+    assert not np.array_equal(r["nll"]["int8-channel127-v1/s0"], r["nll"]["int8-of-fp8-e4m3-channel-v1/s0"])
 
 
 def test_seeds(llama, ids, calib):

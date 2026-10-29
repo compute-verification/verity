@@ -1,0 +1,8 @@
+description = "served sparse noise on the H200's FP8 MMA, binade-pinned (ssnfp), as ssnfp-e4m3-channel-l1-v1 but with each row's p from the bound that costs nothing to serve: where the input is an RMSNorm's output (q, k, v, gate, up) the norm's sqrt(k) against max_j |gamma w_j|_2 read at load, over the row's own E4M3 scale, and the l1 bound on o and down; lm_head and attention bf16"
+plain = "fp8-e4m3-channel-v1"
+
+[[linear]]
+step = "ssnfp"
+fmt = "e4m3"
+scale = "channel"
+bound = "rms"

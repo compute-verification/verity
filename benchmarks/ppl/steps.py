@@ -1160,12 +1160,28 @@ def fp_linear(mm, nxt, *, fmt: str, scale: str, keep_weight: bool = False):
     return nxt(mm.replace(x=x, w=mm.cached("fp", weights)))
 
 
+@linear_step("checkpoint", phase="real", check=_check_fp, source="N-FP8")
+def checkpoint_linear(mm, nxt, *, fmt: str, scale: str):
+    """The checkpoint as stored on `fmt`: the weights rounded as `fp` rounds them, the activations untouched, so the
+    quantizer after it serves a checkpoint shipped on that format (an FP8 checkpoint requantized to int8)."""
+    def weights():
+        w = mm.weight()
+        amax = w.abs().amax()
+        return torch.cat(by_rows(lambda r: fake_quant(r, fmt, scale, amax=amax), w))
+
+    return nxt(mm.replace(w=mm.cached("checkpoint", weights)))
+
+
 #: the pinned float SSN (`ssnfp`): data entries in step 0 and in each later step (one MMA's k less the code lanes, then
 #: less the one coin lane), the word's fraction bits at the pinned binade, the exact powers of two an operand holds, and
 #: the weight-side noise scale (C 2^sigma must be a format value for |C| <= 6)
 SSNFP = {"e4m3": {"first": 28, "later": 31, "fb": 13, "pow2": (-9, 8), "sigma": 6},
          "bf16": {"first": 12, "later": 15, "fb": 23, "pow2": (-133, 127), "sigma": 0}}
-SSNFP_BOUNDS = ("partial", "l1", "cs", "holder")
+SSNFP_BOUNDS = ("partial", "l1", "cs", "holder", "rms")
+#: the linears whose input is an RMSNorm's output, and that norm's weight (Llama's names)
+SSNFP_RMS_FED = {"self_attn.q_proj": "input_layernorm", "self_attn.k_proj": "input_layernorm",
+                 "self_attn.v_proj": "input_layernorm", "mlp.gate_proj": "post_attention_layernorm",
+                 "mlp.up_proj": "post_attention_layernorm"}
 #: elements a (rows, columns, k) block of the emulation holds
 SSNFP_BLOCK = 1 << 25
 
@@ -1178,16 +1194,27 @@ def ssnfp_layout(fmt: str, k: int) -> tuple[int, torch.Tensor]:
     return s, step
 
 
-def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str) -> dict:
+def ssnfp_bound(fmt: str, xv: torch.Tensor, wv: torch.Tensor, bound: str, gamma: torch.Tensor | None = None,
+                sx: torch.Tensor | None = None) -> dict:
     """Each row's bound on |every product| and |every step-boundary partial sum| of xv wv^T (format values, float64):
     `partial` the exact maximum (an oracle: it is the product itself), `l1` sum_k |x_ik| max_j |w_jk| (|X| against one
-    extra weight column), `cs` |x_i|_2 max_j |w_j|_2, `holder` |x_i|_inf max_j |w_j|_1. Every one is returned, with the
-    chosen one under "dmax"."""
+    extra weight column), `cs` |x_i|_2 max_j |w_j|_2, `holder` |x_i|_inf max_j |w_j|_1, and `rms` where the input is
+    gamma * z, z an RMSNorm's output (|z|_2 <= sqrt(k)), read nothing of the row but its scale sx: (1 + 2^-8)^2
+    sqrt(k) max_j |gamma w_j|_2 (bf16's two roundings), for e4m3 times (1 + 2^-4) / sx_i plus the subnormals'
+    2^-10 max_j |w_j|_1; `rms` is `l1` where gamma is None. Every one is returned, with the chosen one under "dmax"."""
     m, k = xv.shape
     s, step = ssnfp_layout(fmt, k)
     ax, aw = xv.abs(), wv.abs()
     out = {"l1": ax @ aw.amax(0), "cs": xv.norm(dim=1) * wv.norm(dim=1).max(),
            "holder": ax.amax(1) * aw.sum(1).max()}
+    if gamma is None:
+        out["rms"] = out["l1"]
+    else:
+        top = (1 + 2.0 ** -8) ** 2 * math.sqrt(k) * (wv * gamma[None, :]).norm(dim=1).max()
+        if fmt == "e4m3":
+            out["rms"] = ((1 + 2.0 ** -4) * top / sx.double().reshape(-1) + 2.0 ** -10 * aw.sum(1).max()).expand(m).clone()
+        else:
+            out["rms"] = top.expand(m).clone()
     part = (ax * aw.amax(0)).amax(1)
     rows = max(1, SSNFP_BLOCK // max(1, wv.shape[0] * s))
     for a in range(0, m, rows):
@@ -1222,14 +1249,14 @@ def ssnfp_product(fmt: str, xv: torch.Tensor, wv: torch.Tensor, dmax: torch.Tens
     s, _ = ssnfp_layout(fmt, k)
     x32, w32 = xv.float(), wv.float()
     y = torch.zeros(m, n, dtype=torch.float64, device=xv.device)
-    rows = 8
+    rows = 32 if xv.is_cuda else 8
     if fmt == "e4m3":
         # 256 truncated products of |x w / u| < 2^12 sum exactly in FP32
         kc = 256
         for a in range(0, m, rows):
             inv = (1.0 / u[a:a + rows]).float()[:, None, None]
             for b in range(0, k, kc):
-                y[a:a + rows] += _ssnfp_kernel("e4m3")(x32[a:a + rows, b:b + kc], w32[:, b:b + kc], inv).double()
+                y[a:a + rows] += _ssnfp_kernel("e4m3", xv.device)(x32[a:a + rows, b:b + kc], w32[:, b:b + kc], inv).double()
         return y * u[:, None], u, p, unpinnable
     # step 0's `first` entries padded in front to `later`, so every step is one block of `later`
     pad = c["later"] - c["first"]
@@ -1240,7 +1267,7 @@ def ssnfp_product(fmt: str, xv: torch.Tensor, wv: torch.Tensor, dmax: torch.Tens
         inv = (4.0 / u[a:a + rows]).float()[:, None, None]
         for t in range(0, s, sc):
             e = slice(t * c["later"], min(s, t + sc) * c["later"])
-            y[a:a + rows] += _ssnfp_kernel("bf16")(x32[a:a + rows, e], w32[:, e], inv)
+            y[a:a + rows] += _ssnfp_kernel("bf16", xv.device)(x32[a:a + rows, e], w32[:, e], inv)
     return y * u[:, None], u, p, unpinnable
 
 
@@ -1257,18 +1284,20 @@ def _ssnfp_bf16(x, w, inv):
 _SSNFP_KERNELS: dict = {}
 
 
-def _ssnfp_kernel(fmt: str):
-    """The fused (torch.compile) form of one block's truncated products, or the eager one where compiling fails."""
-    if fmt not in _SSNFP_KERNELS:
+def _ssnfp_kernel(fmt: str, device):
+    """The fused (torch.compile) form of one block's truncated products on `device`, or the eager one where compiling
+    fails there."""
+    key = (fmt, torch.device(device).type)
+    if key not in _SSNFP_KERNELS:
         eager = _ssnfp_e4m3 if fmt == "e4m3" else _ssnfp_bf16
         try:
             fn = torch.compile(eager, dynamic=True)
-            probe = torch.ones(2, 30 if fmt == "bf16" else 4)
-            fn(probe, probe, torch.ones(2, 1, 1))
-        except Exception:  # noqa: BLE001 (no compiler on this node: the eager form is the same arithmetic)
+            probe = torch.ones(2, 30 if fmt == "bf16" else 4, device=device)
+            fn(probe, probe, torch.ones(2, 1, 1, device=device))
+        except Exception:  # noqa: BLE001 (no compiler on this device: the eager form is the same arithmetic)
             fn = eager
-        _SSNFP_KERNELS[fmt] = fn
-    return _SSNFP_KERNELS[fmt]
+        _SSNFP_KERNELS[key] = fn
+    return _SSNFP_KERNELS[key]
 
 
 def ssnfp_noise(mm, fmt: str, m: int, n: int, k: int) -> tuple[torch.Tensor, int]:
@@ -1336,7 +1365,9 @@ def ssnfp_linear(mm, nxt, *, fmt: str = "e4m3", scale: str = "channel", bound: s
     m, k = xv.shape
     n = wv.shape[0]
     nz, nmax = ssnfp_noise(mm, fmt, m, n, k) if noise else (None, 24 + ssnfp_layout(fmt, k)[0] - 1)
-    b = ssnfp_bound(fmt, xv, wv, bound)
+    norm = SSNFP_RMS_FED.get(mm.name)
+    gamma = mm.run.layer.t[f"{norm}.weight"].double() if norm and f"{norm}.weight" in mm.run.layer.t else None
+    b = ssnfp_bound(fmt, xv, wv, bound, gamma, sx)
     data, u, p, unpinnable = ssnfp_product(fmt, xv, wv, b["dmax"], nmax)
     y = data + (nz * u[:, None] if noise else 0)
     exact = xv @ wv.T
@@ -1344,6 +1375,7 @@ def ssnfp_linear(mm, nxt, *, fmt: str = "e4m3", scale: str = "channel", bound: s
     live = b["partial"] > 0
     SSNFP_STATS.append({
         "where": mm.where, "m": m, "n": n, "k": k, "unpinnable": int(unpinnable.sum()),
+        "violated": {name: int((b[name] < b["partial"]).sum()) for name in SSNFP_BOUNDS},
         "err_data": float((data - exact).norm() / ref), "err_noise": float((nz * u[:, None]).norm() / ref) if noise else 0.0,
         "err_total": float((y - exact).norm() / ref),
         "loose_bits": {name: float(torch.log2(b[name][live] / b["partial"][live]).mean()) if live.any() else 0.0
