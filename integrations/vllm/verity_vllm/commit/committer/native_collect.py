@@ -1413,7 +1413,6 @@ class NativeCollectCommitter(NativeHostCommitter):
         from verity_vllm.commit import scheme
         from verity_vllm.acquire.committer_api import StepCommitment
 
-        self._gpu_ext_load()                                       # openings use HG.gpu_open on the levels (loaded once)
         side = self._side_stream()
         t0 = time.perf_counter()
         keep_mode = {"device": 0, "host": 1, "none": 2, "sample": 2}[self.retain]   # retention policy (see native_host.RETAIN_MODES)
@@ -1464,52 +1463,9 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     def _commit_step_gpu_faulty(self, job: _StepJob) -> None:
         """DELIBERATE ordering bug (negative test only): the arena block is handed back for reuse before the retained copy is taken; the
-        worker then waits until the serving thread has reused it.  The tree was computed over the step's bytes; the retained copy holds the
-        next step's bytes -> openings must fail against the (correct) root.  Same code as `_commit_step_gpu` otherwise."""
-        e = self._gpu_ext_load()
-        side = self._side_stream()
-        t0 = time.perf_counter()
-        with torch.inference_mode(), torch.cuda.stream(side):
-            side.wait_event(job.event)
-            used = job.cursor
-            padded = -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
-            if padded > used:
-                job.arena[used:padded].zero_()
-            for m in job.metas:
-                m.stream_off = m.dev_off
-                m.dev_block = None
-            stream_i32 = job.arena[:padded].view(torch.int32)
-            leaves = e.chunk_leaves(stream_i32, GPU_CHUNK_BYTES // 4, job.step, self.GPU_TREE_SRC, job.step, padded // 4, 0)
-            levels = e.tree_levels(leaves)
-            mr_t = levels[-1].to("cpu", non_blocking=True)
-            torch.cuda.current_stream().synchronize()
-            blk = job.arena
-            self.arena.release(blk)                                # BUG: released before the retained copy exists
-            deadline = time.perf_counter() + 2.0
-            while time.perf_counter() < deadline and any(b is blk for b in self.arena.free):
-                time.sleep(0.001)                                  # wait until the serving thread has taken (and is overwriting) the block
-            time.sleep(0.05)
-            keep = torch.empty(padded, dtype=torch.uint8, device=blk.device)
-            keep.copy_(blk[:padded])                               # retained copy taken AFTER the block was reused
-            torch.cuda.current_stream().synchronize()
-        mr = mr_t.numpy().astype("uint32").tobytes()
-        t1 = time.perf_counter()
-        from verity_vllm.commit import scheme
-        from verity_vllm.acquire.committer_api import StepCommitment
-
-        n = int(leaves.shape[0])
-        nbytes = sum(m.nbytes for m in job.metas)
-        layout_dig = self.layout_digest(job.metas)
-        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
-        t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
-        self.spans.add("root_finalisation", t2 - t1, step=job.step)
-        self._gpu_levels[job.step] = levels
-        self._gpu_blocks[job.step] = (keep, used)
-        self._layouts[job.step] = job.metas
-        job.arena = None
-        self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(job.metas), layout_dig, job.t_step_end, t2, job.backlog,
-                                              hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
+        per-step GPU tree it was run on is gone with vllm-v1: under rows-sha512 the fault is the window ring's (VERITY_FAULT above), and
+        `_commit_step` refuses a step that was not staged through it before reaching here."""
+        raise RuntimeError(f"{step_rows.NAME}: release_before_keep is the window ring's fault: step {job.step} was not staged through it")
 
     # ------------------------------------------------------------------ reporting
 
