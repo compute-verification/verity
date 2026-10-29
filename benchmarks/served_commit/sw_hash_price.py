@@ -27,7 +27,8 @@ T1 terms, MAC-weighted over the linears and additive over stock's m·n·K (W1 un
   noise derivation: 8/n + 8/m, closed when E₁ and F₁ are committed;
   hiding: per leaf the salt kernel's time less the frame leaf's first block, which a prover with one fixed salt skips, as a
   share of the hash's time, times the hash's W1 work a MAC (priced as compression-time, an estimate). ShaSpeed credits it
-  only where the drawn unit's proof checks y = PRF_ks(pos) and c (then M_key y alone remains, under no premise).
+  only where the drawn unit's proof checks y = PRF_ks(pos) and c; then M_key y alone remains, under no premise (the salt
+  kernel's time from given salts less c's two compressions and the frame leaf's first block).
 ShaSpeed's precision δ: 0.01 / (the hash's W1 work a useful MAC), at the floor and alone, and as instructions a compression.
 """
 from __future__ import annotations
@@ -72,22 +73,26 @@ def blocks(R: int) -> int:
 
 
 class Rows:
-    """Each measured row size's cost a byte (leaves alone, timed; plus the tree), its data kernel's time a compression, and
-    the salt kernel's time a leaf, from ROWS_JSON."""
+    """Each measured row size's cost a byte (the leaves' GPU time by kernel, plus the tree), its data kernel's time a
+    compression, and the salt kernel's time a leaf, from ROWS_JSON. The kernels' sum, not the event-timed leg: a size's
+    first-timed leg can carry time outside its kernels whichever its salts."""
 
     def __init__(self, path: Path) -> None:
         d = json.loads(path.read_text())
         self.src = {"device": d["device"], "sms": d["sms"], "phases": d["phases"]}
         self.by = {}
         for rb, e in d["sizes"].items():
-            rb, m, x = int(rb), e["rows"], e["derived"]
+            rb, m, x, gv = int(rb), e["rows"], e["derived"], e["given"]["kernels_ms"]
             k = x["kernels_ms"]
             c_ns = k["data"] * 1e6 / m / (blocks(rb) + 3)
             salt_ns = k["salt"] * 1e6 / m
-            self.by[rb] = {"ns_byte": (x["ms"] * 1e6 / m + 3 * c_ns) / rb, "c_ns": c_ns, "salt_ns_leaf": salt_ns,
-                           "leaf_ns": x["ms"] * 1e6 / m, "mhz": x["mhz"],
-                           "hiding_share": (salt_ns - 65 / 80 * c_ns) / (x["ms"] * 1e6 / m + 3 * c_ns),
-                           "prf_ns_leaf": (x["ms"] - e["given"]["ms"]) * 1e6 / m}
+            leaf_ns = (k["salt"] + k["data"]) * 1e6 / m
+            self.by[rb] = {"ns_byte": (leaf_ns + 3 * c_ns) / rb, "c_ns": c_ns, "salt_ns_leaf": salt_ns, "leaf_ns": leaf_ns,
+                           "timed_leaf_ns": x["ms"] * 1e6 / m, "mhz": x["mhz"],
+                           "hiding_share": (salt_ns - 65 / 80 * c_ns) / (leaf_ns + 3 * c_ns),
+                           "mask_share": (gv["salt"] * 1e6 / m - (2 + 65 / 80) * c_ns) / (leaf_ns + 3 * c_ns),
+                           "prf_ns_leaf": (k["salt"] - gv["salt"]) * 1e6 / m,
+                           "salt_given_ns_leaf": gv["salt"] * 1e6 / m}
 
     def ratio(self, R: int) -> float:
         return self.by[R]["ns_byte"] / self.by[ROWS_16K]["ns_byte"]
@@ -167,6 +172,7 @@ def main() -> None:
                          "shaspeed_delta": {p: 0.01 / v for p, v in w1_hash.items()},
                          "shaspeed_instr_compression": {p: 0.01 / v * sass["instructions"] for p, v in w1_hash.items()},
                          "hiding_share_of_hash": hid, "t1_hiding_unforced": {p: hid * v for p, v in w1_hash.items()},
+                         "t1_hiding_mask_only": {p: rows.by[R]["mask_share"] * v for p, v in w1_hash.items()},
                          "engines": {}}
                     for eng, (stock, _gap, src) in N.ENGINES[pname].items():
                         serial = stock + gemm_ms + hm
@@ -193,8 +199,8 @@ def main() -> None:
                     "serial": (99 * stock - gemm_ms) / ms_byte / (t["macs"] * real),
                     "overlap": 100 * stock / ms_byte / (t["macs"] * real)}
     Path(sys.argv[3]).write_text(json.dumps(out, indent=1))
-    print("rows:", "  ".join(f"{R}: {rows.ratio(R):.3f} of 16 KiB's time a byte, hiding {rows.by[R]['hiding_share']:.2%} of the hash, "
-                             f"bar/measured {rows.bar(R):.3f}" for R in sizes))
+    print("rows:", "  ".join(f"{R}: {rows.ratio(R):.3f} of 16 KiB's time a byte, hiding {rows.by[R]['hiding_share']:.2%} of the hash "
+                             f"(M_key y {rows.by[R]['mask_share']:.2%}), bar/measured {rows.bar(R):.3f}" for R in sizes))
     for name, res in out["options"].items():
         line = [f"{name:<44} {res['bytes_mac_token']:.4f} B/MAC a token"]
         for pname in ("T 8,192", "T 512, 64 real rows", "T 512, 512 real rows"):
