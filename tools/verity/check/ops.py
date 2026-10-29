@@ -15,6 +15,7 @@ import importlib
 #: what the check's own code takes from research: {its name here: `module` (the module itself) or `module:attribute`}
 USES = {
     "remote": "research.remote",
+    "targets": "research.checkview:targets",
     "slot_only": "research.pods.nebius.slot_only",
     "rule_touches": "research.merge:rule_touches",
     "shard_set": "research.merge:shard_set",
@@ -32,6 +33,7 @@ USES = {
     "object_key": "research.store.local:object_key",
     "HttpRemote": "research.store.remote:HttpRemote",
     "load_remote": "research.store.remote:load_remote",
+    "S3Remote": "research.store.remote_s3:S3Remote",
     "Tool": "research.store.tool:Tool",
 }
 
@@ -61,6 +63,7 @@ TESTS = {
     "Rules": "research.queue:Rules",
     "Refused": "research.remote:Refused",
     "dump_map": "research.store.fixtures:dump_map",
+    "FsRemote": "research.store.remote:FsRemote",
 }
 
 

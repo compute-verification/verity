@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import importlib.util
 import json
 import os
 import platform
@@ -40,6 +41,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
+
+_spec = importlib.util.spec_from_file_location("live_ops", Path(__file__).with_name("ops.py"))
+#: what the record takes from research (`ops.py`)
+OPS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(OPS)
 
 SCHEMA = "check-live/v1"
 #: the record in the run dir, which `write_result` lists among the run's files
@@ -94,9 +100,7 @@ def circuit_progress(out: Path, step: str) -> dict | None:
     """Targets checked so far and how many failed, by circuit-check's progress lines, and the first failed targets' names: none
     before the first line (a check's out dir is new, so the file holds this run's lines only). The lines are read by `research
     status RUN`'s reader (`research.checkview.targets`)."""
-    from research.checkview import targets
-
-    done = targets(out)
+    done = OPS.targets(out)
     failed = [d["target"] for d in done if d.get("failures") or d.get("killed")]
     return {"targets_done": len(done), "targets_failed": len(failed), "failed": failed[:10]}
 
@@ -121,8 +125,7 @@ def custody_put(custody: Path, timeout: float = 30.0) -> Callable[[str, bytes], 
     this process's environment, which the steps inherit."""
     import tomllib
 
-    from research.store.remote_s3 import S3Remote
-
+    S3Remote = OPS.S3Remote
     cfg = tomllib.loads((custody / "store.toml").read_text())["remote"]
     cred = json.loads((custody / "cred.json").read_text())
     remote = S3Remote(cfg["endpoint"], cfg["bucket"], cred["AWS_ACCESS_KEY_ID"], cred["AWS_SECRET_ACCESS_KEY"],
@@ -450,9 +453,7 @@ def ls_rows(docs: dict[str, dict], checks: list[dict], now: float, attempt_state
 
 
 def _store(refresh_since: str | None):
-    from research.store.local import LocalStore
-
-    store = LocalStore()
+    store = OPS.LocalStore()
     if store.remote is None:
         raise SystemExit(f"verity ci: no store remote here ({getattr(store, 'remote_error', None) or 'no store config or R2_* environment'})")
     if refresh_since:

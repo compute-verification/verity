@@ -117,9 +117,7 @@ def test_steps_report_their_starts_and_ends_to_the_live_record(tmp_path, monkeyp
 
 
 def test_the_newest_record_of_each_run_is_read_back_from_the_remote(tmp_path, clock):
-    from research.store.remote import FsRemote
-
-    remote = FsRemote(tmp_path / "bucket")
+    remote = LIVE.OPS.FsRemote(tmp_path / "bucket")
 
     def put(key: str, data: bytes) -> None:
         (p := tmp_path / "staged").write_bytes(data)
