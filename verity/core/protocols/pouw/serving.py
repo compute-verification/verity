@@ -25,6 +25,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from verity.ml.commitments import domains
+
 
 @dataclass(frozen=True)
 class HashFormat:
@@ -41,7 +43,7 @@ class HashFormat:
 
 HASH_FORMATS: dict[str, HashFormat] = {
     "h0": HashFormat("h0", "sha256", "unit-root"),
-    "h3": HashFormat("h3", "hm96-sha512", "row", row_cap=True, row_digest="sha512/row-seg/v1"),
+    "h3": HashFormat("h3", "hm96-sha512", "row", row_cap=True, row_digest=domains.SHA512_ROW_SEG_DIGEST),
 }
 
 #: `pearl_c_device.DEVICES`' records: the panel's pearl-c-sm120 v1 is ``sm120`` (G = 4), its v2 ``sm120-unpromoted``
@@ -176,10 +178,10 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
     return out
 
 
-MANIFEST_SCHEMA = "verity/pouw/pass-manifest/v1"
+MANIFEST_SCHEMA = domains.POUW_PASS_MANIFEST
 #: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocols.pouw.pearl_c`), v1 (salted
 #: from a beacon, before epoch coins) only as a replay of a recorded pass
-MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v2", "verity-vllm/pouw-pearl-c-run/v1")
+MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, domains.VLLM_PEARL_C_RUN, domains.VLLM_PEARL_C_RUN_V1)
 
 
 @dataclass(frozen=True)
