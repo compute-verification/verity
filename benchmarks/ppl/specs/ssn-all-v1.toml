@@ -1,0 +1,33 @@
+description = "every matmul served under SSN: the linears as ssn-1l-b1-fused-v1 (stock int8, SSN-1L, row coins one draw per fused call), lm_head on stock int8 under SSN-1L5's five-lane code, and attention as int8-attn-v1 (Q K^T Hadamard-rotated in int8, P V in u8 x s8 blocks of 112 keys with the sink apart, both under SSN's step-0 noise)"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "int8"
+linears = ["lm_head"]
+
+[[linear]]
+step = "served"
+rule = "ssn_1l"
+fused = true
+
+[[linear]]
+step = "served"
+rule = "ssn_1l5"
+linears = ["lm_head"]
+
+[[attention]]
+step = "rotate"
+matmuls = ["qk"]
+
+[[attention]]
+step = "int8"
+matmuls = ["qk"]
+
+[[attention]]
+step = "u8pv"
+
+[[attention]]
+step = "served"

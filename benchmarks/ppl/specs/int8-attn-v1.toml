@@ -1,0 +1,19 @@
+description = "int8-qk-had-v1 and int8-pv-u8-v1 together: stock int8 linears, Q K^T Hadamard-rotated in int8 and P V in u8 x s8 blocks of 112 keys with the sink apart, both under SSN's step-0 noise, served; lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[attention]]
+step = "rotate"
+matmuls = ["qk"]
+
+[[attention]]
+step = "int8"
+matmuls = ["qk"]
+
+[[attention]]
+step = "u8pv"
+
+[[attention]]
+step = "served"

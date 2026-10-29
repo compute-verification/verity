@@ -125,9 +125,13 @@ def act_quant(x: torch.Tensor, mode: str, bits: torch.Tensor | None, top: int,
     """Integer rows and per-row scales: rounded to [-top, top], or the dither floor(v) - m + R with v = x / s on
     [-t, t], t = top - 2^(b - 1), R the coins `bits` on {0, ..., 2^b - 1} and m = `dither_shift(b)` (b = 1: floor(v)
     plus a bit on [-top + 1, top - 1]), so -top < X <= top. `coined` (a mask over k): the dither only there, round(v) on
-    the same s elsewhere."""
+    the same s elsewhere. `sr8`: stochastic rounding on round's scale, floor(v + (B + 1/2) / 256), B the coins `bits` on
+    bytes, within [-top, top]."""
     if mode == "round":
         return quant_rows(x, top)
+    if mode == "sr8":
+        s = x.abs().amax(dim=1).clamp(min=1e-30) / top
+        return torch.floor(x / s[:, None] + (bits + 0.5) / 256).clamp(-top, top), s
     m = dither_shift(dither_bits)
     t = top - 1 - m
     s = x.abs().amax(dim=1).clamp(min=1e-30) / t
@@ -222,9 +226,8 @@ def rotate_linear(mm, nxt, *, kind: str = "q"):
 
 
 def _check_int8_linear(p):
-    for x in ("act", "weight"):
-        if p[x] not in ("round", "dither"):
-            raise ValueError(f"int8.{x} is round or dither")
+    if p["act"] not in ("round", "dither", "sr8") or p["weight"] not in ("round", "dither"):
+        raise ValueError("int8.act is round, dither or sr8; int8.weight round or dither")
     if not 1 <= p["weight_top"] <= 127 or not 2 <= p["act_top"] <= 127:
         raise ValueError("int8: tops within 127")
     if p["gptq"] and p["group"]:
@@ -254,7 +257,7 @@ def _check_dither_bits(b: int, name: str, tops: list, floor_room: int) -> None:
         raise ValueError(f"{name} = {b} leaves no room under a dithered operand's top (top >= {2 ** (b - 1) + floor_room})")
 
 
-@linear_step("int8", phase="quantize", seeded=lambda p: "dither" in (p["act"], p["weight"]), calib=lambda p: p["gptq"],
+@linear_step("int8", phase="quantize", seeded=lambda p: {p["act"], p["weight"]} != {"round"}, calib=lambda p: p["gptq"],
              check=_check_int8_linear, source="D4-PPL, D4-70B, LOWBIT-DESIGN, EPS-BUDGET, PPL-DITHER-SIZE")
 def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str = "round", weight_top: int = 127,
                 group: int = 0, gptq: bool = False, density: float = 1.0, dither_bits: int = 1, exact: bool = False):
@@ -262,7 +265,8 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
     b a fresh coin bit, s = absmax / (act_top - 1)), weights one scale per output row (or per (row, `group` inputs),
     each group's s32 read and scaled on its own) on [-weight_top, weight_top], rounded, by GPTQ (blocks of 128, on
     the calibration windows' served inputs) or dithered like the activations (fresh bits every call, drawn after the
-    activations'). The integer product is exact (s8 x s8 -> s32), scaled after. `density` < 1: the activations'
+    activations'), or (`act = sr8`) the activations stochastically rounded on round's scale (`act_quant`, a fresh byte
+    a value). The integer product is exact (s8 x s8 -> s32), scaled after. `density` < 1: the activations'
     dither only on a coin-chosen density * 64 of every k64 word's positions (`coin_positions`), the rest rounded on the
     same scale; a weight-side coin (the `peel` step's U) sits on every position. `dither_bits` = b widens every
     dithered operand's coin to R uniform on {0, ..., 2^b - 1}, served as floor(x / s) - (2^(b - 1) - 1) + R with
@@ -303,7 +307,7 @@ def int8_linear(mm, nxt, *, act: str = "round", act_top: int = 127, weight: str 
 
     wq, sw = mm.cached("int8", weights)
     levels = 2 ** dither_bits
-    bits = mm.coins(mm.x.shape, levels) if act == "dither" else None
+    bits = mm.coins(mm.x.shape, 256 if act == "sr8" else levels) if act != "round" else None
     k = mm.x.shape[1]
     coined = mm.cached("pos", lambda: coin_positions(mm, k, density)) if density < 1 else None
     xq, sa = act_quant(mm.x, act, bits, act_top, coined, dither_bits)
@@ -634,6 +638,70 @@ def int8_attention(mm, nxt, *, q: str = "round", q_top: int = 127, k: str = "rou
         part = sb.double() * prod
         num = part if num is None else num + part
     return (num * sv.double()).float()
+
+
+#: u8pv's P~ top: an unsigned byte
+U8_TOP = 255
+
+
+def _check_u8pv(p):
+    if p["p_round"] not in ("round", "sr8"):
+        raise ValueError("u8pv.p_round is round or sr8")
+    if not 1 <= p["block"] <= 2 ** 16 or not 1 <= p["v_top"] <= 127:
+        raise ValueError("u8pv: block in 1..2^16, v_top in 1..127")
+
+
+@attention_step("u8pv", phase="quantize", on=("pv",), seeded=lambda p: p["p_round"] == "sr8", check=_check_u8pv,
+                source="N-COVER")
+def u8_pv(mm, nxt, *, block: int = 112, v_top: int = 127, p_round: str = "round"):
+    """P V as a tiled kernel with an online softmax serves it: key 0 (the sink) apart in float32, keys 1.. in blocks of
+    `block` keys aligned to key 0 (`p_edges`), m the running row max over keys 1.. so far (key 0 out of it), P~ =
+    rint(255 exp(S - m) s_v[j] / max_b s_v) on [0, 255] with s_v[j] V's scale for key j (one per (KV head, key),
+    absmax / v_top, V8 rounded) and max_b over the block's keys, acc = P~ V8 exact, O += acc max_b s_v / 255 rescaled
+    to the final m. On the softmax's P (rows summing to 1) exp(S - m) is P / R, R the running max of P over keys 1..,
+    so O = P_0 V_0 + sum_b R_b (max_b s_v / 255) acc_b. `p_round = sr8`: P~ = floor(255 exp(S - m) s_v[j] / max_b s_v
+    + (B + 1/2) / 256), B a fresh byte a value (0 stays 0, so a future key is never served)."""
+    rep = mm.extra["rep"]
+    pr = mm.x
+    s = pr.shape[-1]
+
+    def values():
+        vg = mm.weight()
+        vq, sv = quant(vg, v_top, -1)
+        return vq.expand(rep, *vq.shape), sv[:, 0], vg[:1]
+    vi, sv, v0 = mm.cached("u8v", values)
+    out = (pr[..., :1] * v0).double()
+    run_max = torch.zeros_like(pr[..., :1])
+    edges = p_edges(s, block, True)
+    for a, b in zip(edges[1:], edges[2:]):
+        blk = pr[..., a:b]
+        run_max = torch.maximum(run_max, blk.amax(-1, keepdim=True))
+        top_b = sv[a:b].max()
+        x = U8_TOP * (blk / run_max.clamp(min=1e-38)) * (sv[a:b] / top_b)
+        pi = torch.floor(x + (mm.coins(x.shape, 256) + 0.5) / 256) if p_round == "sr8" else torch.round(x)
+        prod = nxt(mm.integer(pi.clamp(0, U8_TOP), vi[..., a:b, :], keys=(a, b), top=U8_TOP))
+        out = out + run_max.double() * (float(top_b) / U8_TOP) * prod
+    return out.float()
+
+
+@attention_step("served", phase="integer", seeded=True, source="N-COVER")
+def served_attention(mm, nxt):
+    """SSN's step-0 noise added to the exact integer product and served, never subtracted: a C[:, j] less
+    rint(sum C[:, j] / 2) per column j, a fresh bits (4 a query row a call) against C SSN-A's step-0 column code
+    (`ssn_a_w0`); the later steps' lane shared by every row cancels in the accumulator's init, so it adds nothing. Q K^T:
+    the columns are the window's keys. P V: each P block's product (`u8pv`'s, or int8's) is a call over V's d
+    channels with its own a, the noise only on the rows that compute the block (a key of it at or before the row)."""
+    acc = nxt(mm).double()
+    n = acc.shape[-1]
+    code = mm.shared(("ssn_code", n, 0, str(acc.device)), lambda: ssn_a_w0(n, SSN_DATA)[0].to(acc.device))
+    noise = mm.coins((*acc.shape[:-1], 4)).double() @ code - torch.round(code.sum(0) / 2)
+    if mm.kind == "pv":
+        r0, r1 = mm.extra["rows"]
+        a = mm.extra.get("keys", (0, 0))[0]
+        noise = noise * (torch.arange(r0, r1, device=acc.device) >= a).double()[:, None]
+    bound = mm.x.shape[-1] * G.absmax(mm.x) * G.absmax(mm.weight()) + G.absmax(noise)
+    mm.gate("accumulator", bound <= G.S32, bound)
+    return acc + noise
 
 
 def draw_nonzero(width: int, shape, gen: torch.Generator, device) -> torch.Tensor:

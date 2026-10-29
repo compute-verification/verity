@@ -225,6 +225,61 @@ def test_fused_projections_draw_one_calls_coins():
     assert run.gates.log["accumulator"]["failed"] == 0
 
 
+def test_u8pv_is_the_online_softmax_kernel():
+    """u8pv's closed form on the softmax's P (P / R for exp(S - m)) is the tiled kernel's loop on S: blocks in order,
+    the running max over keys 1.., O and l rescaled at every new max, the sink added in float at the end."""
+    g = torch.Generator().manual_seed(0)
+    rep, T, d, block = 2, 300, 16, 112
+    S = torch.randn(rep, T, T, generator=g, dtype=torch.float64) * 3
+    S[..., 0] += 6
+    V = torch.randn(T, d, generator=g)
+    causal = torch.arange(T)[None, :] <= torch.arange(T)[:, None]
+    P = torch.softmax(S.masked_fill(~causal, float("-inf")), -1).float()
+    run = types.SimpleNamespace(seed=0, li=0, window=0, rotations={}, gates=matmul.G.Gates(),
+                                arm=types.SimpleNamespace(name="t"), checking=False, cache={})
+    extra = {"rep": rep, "rows": (0, T), "causal": causal, "s": T, "d": d}
+    got = steps.u8_pv(matmul.MM("pv", "pv", run, P, V, extra=extra), matmul.terminal, block=block).double()
+    sv = V.double().abs().amax(1) / 127
+    v8 = torch.round(V.double() / sv[:, None]).clamp(-127, 127)
+    want = torch.empty(rep, T, d, dtype=torch.float64)
+    for h in range(rep):
+        for i in range(T):
+            s, m, o, l = S[h, i], None, torch.zeros(d, dtype=torch.float64), 0.0
+            for a in range(0, T, block):
+                lo, hi = max(a, 1), min(a + block, i + 1)
+                if lo >= hi:
+                    continue
+                new = float(s[lo:hi].max()) if m is None else max(m, float(s[lo:hi].max()))
+                if m is not None:
+                    o, l = o * math.exp(m - new), l * math.exp(m - new)
+                m = new
+                p = torch.exp(s[lo:hi] - m)
+                top = float(sv[a:a + block].max())
+                pt = torch.round(255 * p * sv[lo:hi] / top)
+                o, l = o + (pt @ v8[lo:hi]) * top / 255, l + float(p.sum())
+            m = float(s[0]) if m is None else m
+            p0 = math.exp(float(s[0]) - m)
+            want[h, i] = (o + p0 * V[0].double()) / (l + p0)
+    err = (got - want).abs()
+    assert float(err.max()) < 2 * float(V.abs().max()) / 255 and float(err.median()) < 1e-6
+    assert run.gates.log["grid_range"]["failed"] == 0 and run.gates.log["grid_range"]["checked"] == 3
+
+
+def test_attention_formats_pass_their_gates(llama, ids):
+    names = ("int8-qk-had-v1", "int8-pv-u8-v1", "int8-attn-v1", "dither-int8-v1", "dither-int8-pv-v1", "ssn-all-v1")
+    small = spec.parse({"linear": [{"step": "int8"}], "attention": [{"step": "u8pv", "block": 16}]}, "u8pv-16")
+    noised = spec.parse({"linear": [{"step": "int8"}], "attention": [{"step": "u8pv", "block": 16},
+                                                                          {"step": "served", "matmuls": ["pv"]}]},
+                        "u8pv-16-served")
+    arms = ["int8-channel127-v1", *names, small, noised]
+    r = evaluate(llama, ids[:4], arms)
+    assert passed(r), r["gates"]
+    nll = {k.split("/")[0]: v for k, v in r["nll"].items()}
+    assert all(not np.array_equal(nll[n], nll["int8-channel127-v1"]) for n in (*names, "u8pv-16", "u8pv-16-served"))
+    assert not np.array_equal(nll["u8pv-16"], nll["u8pv-16-served"])
+    assert abs(ppl(nll["u8pv-16"]) / ppl(nll["int8-channel127-v1"]) - 1) < 0.05
+
+
 def test_served_noise_stays_in_the_product(llama, ids):
     stock = spec.parse({"linear": [{"step": "int8"}]}, "stock")
     rules = (("ssn_a", 1), ("ssn_a", 4), ("ssn_1l", 1), ("ssn_1l", 4), ("ssn_1l5", 1), ("ssn2", 1), ("raw_byte", 1))

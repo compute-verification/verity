@@ -1,0 +1,6 @@
+description = "stock int8 with the activations stochastically rounded: every linear's input one scale per token (absmax / 127) and floor(x / s + (B + 1/2) / 256), B a fresh byte a value, weights one scale per output row rounded to ±127, the exact product, no noise; attention and lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act = "sr8"

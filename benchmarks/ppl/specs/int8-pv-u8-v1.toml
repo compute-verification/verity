@@ -1,0 +1,12 @@
+description = "P V served as a tiled online-softmax kernel in u8 x s8 under SSN's step-0 noise: stock int8 linears; key 0 (the sink) apart in float32, keys 1.. in blocks of 112 keys, P~ = rint(255 exp(S - m) s_v[j] / max s_v) with m the running row max over keys 1.. and s_v V's scale per (KV head, key) (absmax / 127, V rounded), max s_v over the block; the exact s32 block product plus a C[:, c] less rint(0.5 sum C[:, c]) over V's 64 channels, a fresh bits m x 4 a row and block, served, scaled by max s_v / 255 and rescaled to the final max; Q K^T and lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[attention]]
+step = "u8pv"
+
+[[attention]]
+step = "served"
+matmuls = ["pv"]

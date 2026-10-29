@@ -1,0 +1,17 @@
+description = "Q K^T served in int8 under SSN's step-0 noise: stock int8 linears; Q and K after a random Hadamard R of the head dimension (signs times Sylvester's H, orthonormal), one scale per (head, token) and per (KV head, key), absmax / 127, rounded; the exact s32 product plus a C[:, j] less rint(0.5 sum C[:, j]) per key j, a fresh bits m x 4 a query row and head against SSN-A's step-0 code over the window's keys, served; P V and lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[attention]]
+step = "rotate"
+matmuls = ["qk"]
+
+[[attention]]
+step = "int8"
+matmuls = ["qk"]
+
+[[attention]]
+step = "served"
+matmuls = ["qk"]

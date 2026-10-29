@@ -1,0 +1,14 @@
+description = "dither-int8-v1's linears with int8-pv-u8-v1's P V, P~ stochastically rounded too: floor(255 exp(S - m) s_v[j] / max s_v + (B + 1/2) / 256), B a fresh byte a value, under SSN's step-0 noise; Q K^T and lm_head bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act = "sr8"
+
+[[attention]]
+step = "u8pv"
+p_round = "sr8"
+
+[[attention]]
+step = "served"
+matmuls = ["pv"]
