@@ -1,7 +1,7 @@
 """Drive's alarms: whatever is past its bound rings its owner once, and again only every `ALARM_EVERY_S` while it stays past
-it.  A step of drive's after-landing run past `SLOW_STEP_FACTOR` times its median rings its ci.toml job's owner; a member
-of `next` marked ready `STUCK_S` ago and not landed rings the owner of what holds it; a red on `checked` rings the
-culprit's lane, or with no culprit the owner of what failed, never ci and top beside it."""
+it.  A step of drive's after-landing run past `SLOW_STEP_FACTOR` times its median (lean-audit's of its machine's runs) rings
+its ci.toml job's owner; a member of `next` marked ready `STUCK_S` ago and not landed rings the owner of what holds it; a red
+on `checked` rings the culprit's lane and the owner of what failed, never ci and top beside them."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from research.drive import ALARM_EVERY_S, AFTER_LANDING, LEAN_STEP, PREFLIGHT, STUCK_S, running_steps
+from research.drive import ALARM_EVERY_S, AFTER_LANDING, LEAN_STEP, PREFLIGHT, STUCK_S, Driver, running_steps
 from test_drive_review import Review, _move_main, _owning
 from test_queue import World, _git
 
@@ -95,7 +95,7 @@ def test_a_step_past_one_and_a_half_times_its_median_rings_its_owner_once_an_int
     h.tick()
     (ring,) = _rings(h, "has run")
     assert ring.startswith("@suites queue: step pytest of the after-landing run of `checked`") and "(run r-post-0)" in ring, ring
-    assert "past 1.5 times its median of 10 min over drive's last 3 uncached passes" in ring, ring
+    assert ring.endswith("past 1.5 times its median of 10 min over drive's uncached passes of it in runs r1, r2, r3"), ring
     h.clock += 60
     h.tick()
     assert len(_rings(h, "has run")) == 1                      # within the interval: no second ring
@@ -112,11 +112,38 @@ def test_an_ended_runs_uncached_passes_are_its_steps_durations(world, monkeypatc
         *_preflights(start), {"step": "pytest", "status": "passed", "seconds": 640.0, "ended": start + 700},
         {"step": "lean-build", "status": "passed", "seconds": 5.0, "cache": {"hit": "k"}, "ended": start + 70},
         {"step": "circuit-check", "status": "failed", "seconds": 90.0, "ended": start + 150}])]
-    h.run_state["r-post-0"] = ("done", 0, None)
+    h.run_state["r-post-0"] = ("done", 0, None, None, "m1")
     h.tick()
     times = h.q.load_state()["drive"]["step_s"]
-    assert times["postland pytest"] == [["r-post-0", 640.0]] and "postland lean-build" not in times, times
-    assert "postland circuit-check" not in times and times[f"postland {PREFLIGHT[0]}"] == [["r-post-0", 20.0]], times
+    assert times["postland pytest"] == [["r-post-0", 640.0, "m1"]] and "postland lean-build" not in times, times
+    assert "postland circuit-check" not in times and times[f"postland {PREFLIGHT[0]}"] == [["r-post-0", 20.0, "m1"]], times
+
+
+def test_lean_audits_median_is_its_machines_with_three_passes_there_and_says_which_runs(world, monkeypatch, tmp_path):
+    h = _landed(world, monkeypatch)
+    state = h.q.load_state()
+    state["drive"]["step_s"] = {f"postland {LEAN_STEP}": [*([f"r{i}", 600.0, "m1"] for i in range(5)),
+                                                          *([f"r{i}", 3000.0, "m2"] for i in (6, 7, 8))]}
+    h.q.save_state(state)
+    h.run_state["r-post-0"] = ("running", None, None, None, "m2")
+    start, ready = h.clock, h.clock + 100
+    h.evidence = [_run_dir(tmp_path, "r-post-0", start, [*_preflights(start), *(
+        {"step": s, "status": "passed", "seconds": 1.0, "ended": ready} for s in AFTER_LANDING[:5] if JOBS[s][1] == 3)])]
+    h.clock = ready + 1000                                     # past 1.5 times every machine's median, under m2's
+    h.tick()
+    assert not _rings(h, "has run"), h.posts
+    h.clock = ready + 4600
+    h.tick()
+    (ring,) = _rings(h, "has run")
+    assert ring.startswith(f"@lean queue: step {LEAN_STEP} of the after-landing run"), ring
+    assert ring.endswith("its median of 50 min over drive's uncached passes of it in runs r6, r7, r8 on m2"), ring
+
+
+def test_lean_audits_median_falls_back_to_every_machines_with_fewer_than_three_on_its_own():
+    got = [["r1", 600.0, "m1"], ["r2", 600.0, "m1"], ["r3", 3000.0, "m2"], ["r4", 600.0]]
+    assert Driver._median_of(LEAN_STEP, got, "m2") == (600.0, "runs r1, r2, r3, r4 on any machine, fewer than 3 on m2")
+    assert Driver._median_of("pytest", got, "m2") == (600.0, "runs r1, r2, r3, r4")
+    assert Driver._median_of(LEAN_STEP, got[:2], "m1") is None
 
 
 def test_a_ready_pr_unlanded_two_hours_for_its_land_verdict_rings_the_reviewer_once_an_interval(world, monkeypatch):

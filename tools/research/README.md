@@ -155,7 +155,7 @@ regression's manifest rebuilds, which label the landing's check attempt.
 Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses.
 
 Drive's alarms (`_alarms`) ring once, then hourly while it lasts: a step past 1.5 times its median, its ci.toml owner; a PR
-on `next` ready 2 h and not landed, the owner of what holds it; a red on `checked`, its culprit's lane.
+on `next` ready 2 h and not landed, the owner of what holds it; a red on `checked`, its culprit's lane and its owner.
 
 `research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
 one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
