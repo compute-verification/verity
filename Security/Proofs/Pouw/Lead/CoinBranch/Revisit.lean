@@ -1,4 +1,4 @@
-import Proofs.Pouw.Dimension.AlphabetProofs
+import Proofs.Pouw.Lead.PStar.AlphabetProofs
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Tactic.FinCases
 

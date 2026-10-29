@@ -1,4 +1,4 @@
-import Proofs.Pouw.Dimension.GrindProofs
+import Proofs.Pouw.Lead.CoinBranch.GrindProofs
 
 /-!
 # Coin branch: a program chosen from the coins, in `MH100w`, cell by cell (proofs; draft semantics, pending review)

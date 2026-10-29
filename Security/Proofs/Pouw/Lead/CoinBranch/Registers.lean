@@ -1,4 +1,4 @@
-import Proofs.Pouw.Dimension.PointwiseProofs
+import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
 
 /-!
 # Coin branch: the chunk model against a program that branches on the coins (proofs; draft model, pending review)
