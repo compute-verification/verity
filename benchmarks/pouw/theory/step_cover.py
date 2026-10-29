@@ -60,7 +60,9 @@ blc4a-t64-e7 (`blc4a_terms`), on every ssn_1l matmul, charge each noised matmul'
 a coined later word; ssn_sh's shared byte, `walk_share`) and read chosen data (`Plan.chosen`): TensorSemantics credits
 nothing there, since a prover that picks the data can make a later step's data part constant, and that word is the
 previous one plus coin terms, an IADD3 at the floor; `lead_blc4a_coin_hd` is the coin plan on honest data, and
-`lead_blc4a_pad64_xu` the lead de-noised by N-EXACT's xu (exact served outputs, as `best_p4_exact_sep`). Without xu the
+`lead_blc4a_pad64_xu` the lead de-noised by N-EXACT's xu (exact served outputs, as `best_p4_exact_sep`). Each
+evaluation gives the chosen-data term (`t1_attack`) and its copy part (`t1_copy`, revisits of a value the entry held);
+the rest is TensorSemantics' credit lost to chosen data. Without xu the
 lead's coin term, a (tile, column) sum, folds in the epilogue's IADD3 column source, so its served noise is the tag
 lead's;
 `best_p4_smlite` commits only the softmax's MUFU outputs. The free part of the de-noise alone (the later steps' row
@@ -85,8 +87,8 @@ prover's row copies, that two attention calls on equal data share last-step vect
 the step (`sim_cross_call`), that zero padding's later steps need no tensor instruction and coin padding's do
 (`sim_pad_fill`) and how each is priced, `p_zero`'s weighting, that exact outputs leave only attention's lanes
 forced, ssn_sh's chosen-data walk against a brute force, the lead's words and residual against N-RED's and N-EGRESS's
-counts, that chosen data takes coin padding's credit and not wgmma's 64 rows', and the small-m instruction choice. Output: a JSON
-report (`--json PATH`) and a text table (`--table`).
+counts, that chosen data takes coin padding's credit and not wgmma's 64 rows', and the small-m instruction choice.
+Output: a JSON report (`--json PATH`) and a text table (`--table`).
 """
 
 from __future__ import annotations
@@ -885,15 +887,16 @@ def tensor_comp(c: Comp, plan: Plan, reading: str, stock: bool) -> dict:
     pad_c = hpad if plan.commit_pad else 1.0
     forced = c.count * a * ((1 - zc) * tile_forced + zc * floor_t
                             + (pad_c - 1) * (tile_forced if plan.pad_fill == "coin" else floor_t))
-    attack = 0.0
+    attack = copy = 0.0
     if plan.blc:
         resid = t["p_attack"] * (t["steps"] - 1) / t["steps"]
-        chosen = (c.count * a * pad_c * floor_t if plan.chosen else forced) * (1 - resid)
-        attack, forced = forced - chosen, chosen
+        base = c.count * a * pad_c * floor_t if plan.chosen else forced
+        attack, copy, forced = forced - base * (1 - resid), base * resid, base * (1 - resid)
     words = c.count * a * pad_c / TENSOR["s8"]["kreg"]
     return {"stock": stock_units, "honest": honest + forming, "forced": forced, "words": words, "forming": forming,
             "coins": coins, "coin_calls": coin_calls, "instr": hinstr, "design": t["design"], "alpha": a,
             "unforced": forming + (honest - forced if not plan.commit_pad else 0.0), "pad": hpad, "attack": attack,
+            "copy": copy,
             **({"zero_chunk": (zc, zsrc)} if zsrc and not plan.chosen else {})}
 
 
@@ -1107,6 +1110,7 @@ def evaluate(model: str, point: str, plan: Plan, reading: str = "paired", lookup
             "t1_matmul": t1_mm, "coverage": cov, "t1": t1_mm + cov, "coins_uncredited": coins,
             "t1_coins_uncredited": t1_mm + cov + coins, "uncovered_share": tot["unforced"] / st,
             "t1_attack": sum(r.get("attack", 0.0) for r in rows) / st,
+            "t1_copy": sum(r.get("copy", 0.0) for r in rows) / st,
             "linears_attack": sum(r.get("attack", 0.0) for r in lin) / max(1e-30, sum(r["stock"] for r in lin)),
             "slack_share": (tot["honest"] - tot["forced"] - tot["unforced"]) / st,
             "hash_bytes": 4 * tot["words"], "groups": groups, "t2": t2, "t3_estimate": t3,
