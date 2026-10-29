@@ -55,7 +55,7 @@ theorem Flock.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Re
 hm96 rows (`rows-v1`) under SHA-512 leaves. -/
 def Flock.scopeStmt (m : ℕ) : Claims.Flock.Stmt :=
   ⟨m, 6, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
-    ⟨true, false, true, "hm96-sha512/v1", 1, false, false, false, false, 1, false, 0, true, true, false, false⟩⟩
+    ⟨true, false, true, "hm96-sha512/v1", 1, false, false, false, false, 1, false, 0, true, true, false, false, false⟩⟩
 
 /-- **The plain record's readable scope holds a statement with a witness in its relation.** -/
 theorem Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
