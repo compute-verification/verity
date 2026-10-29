@@ -1315,13 +1315,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   registered KV block under the registration's block layout, committed in the pass's one tree and listed in its one
   plan with the weights'. A KV block is a registered block like any other: 4,096 bytes of the encoded store, 32 whole
   codec words, \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) (§3), and its kernel's vectors pass `plan_of`
-  (§4). The device's KV receipt as it stands (word_codec's `kv.cu`, its `rc_sha8_kernel`)
-  is a third kind:
-  its own SHA-512 domain (`verity/word-codec/kv-receipt/sha512/v0`), ro-sketch-blake3 signs, and half-block vectors
-  that take their 4,096 bytes from 16 tokens' head shares, zero-padded to whole blocks. The verifier can open
-  none of it, so none of it is credited: no pass's plan holds a KV block until its receipts are the registration's kind
-  over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan and
-  its credited bytes.
+  (§4). The device's KV receipt is `kv.cu`'s attention form 13: sketch-sha512 of each token-layer, a store block
+  (store-order/v0), under the pass's signs. No pass's plan holds a KV block whose receipts aren't the registration's
+  kind over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan
+  and its credited bytes.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one
   twice. Persisting that across challenger restarts, and committing coins that outlive one session, is out of scope.
 - **Keeping receipts for the draws.** Any receipt of a window may be drawn once its roots are final, so the prover
