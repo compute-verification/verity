@@ -1,6 +1,6 @@
 """The red team's attacks on the device side of the remote bandwidth audit: the fused weight GEMM's
 receipt blocks (`sketch_receipt.gemm_vectors`, wt.cu's sketch warps) and attention's KV receipts (`kv_vectors`,
-`kv_fragment_sketch`: kv.cu's form 13), each against what the driver (`remote_bandwidth.receipts`, `audit.Session`)
+`kv_fragment_sketch`: kv.cu's form 13), each against what the driver (`remote_bandwidth.receipts`, `audit.AuditRun`)
 credits and opens.  Each test asserts the property the driver's ledger needs and was marked xfail with its finding id
 while the device broke it; RB-D1's pass since
 store-order/v0, RB-D2's since form 13."""
@@ -63,7 +63,7 @@ def test_rbd1_every_gemm_block_holds_stored_bytes() -> None:
 def test_rbd1_each_codec_word_lies_in_one_gemm_block() -> None:
     """The driver opens block j by decoding its 32 words of 128 bytes at indices 32j + w (`codec.decode`).  A GEMM block
     was row r of a tile's A fragments, 32 scattered bytes of each 512-byte step: every 128-byte stored word landed in 4
-    blocks, so no block was a run of whole words, and an honest fused receipt couldn't pass `Session.verify`'s `codec`
+    blocks, so no block was a run of whole words, and an honest fused receipt couldn't pass `AuditRun.verify`'s `codec`
     and `payload-path` checks."""
     m = vectors_of_store_bytes(17, 1, 2)
     owners: dict[int, set[int]] = {}
@@ -86,7 +86,7 @@ def test_rbd2_a_kv_receipt_is_a_driver_receipt_of_one_registered_block() -> None
     """The step commits its KV receipts in the pass's one tree after the weights' (kv_attn form 13, `kv_rc_receipts`).
     Token-layer u·layers + l of the KV region is the store's block nvec + u·layers + l, 32 whole words of 128 bytes, and
     has one receipt at that index: σ is the KV heads' shares of form 13's MMA over the words its decoder lanes read
-    (`kv_fragment_sketch`) under the pass's signs, and the receipt is `SketchReceipter`'s, so `Session.verify` takes an
+    (`kv_fragment_sketch`) under the pass's signs, and the receipt is `SketchReceipter`'s, so `AuditRun.verify` takes an
     honest KV opening.  It was a third kind: other signs, another hash domain, and 4,096 bytes from 16 tokens' head
     shares under a half-block index."""
     slots, layers, nvec = 5, 3, 4

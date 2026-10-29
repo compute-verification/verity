@@ -32,11 +32,11 @@ opening    a window's draws at once, segment by segment on its GPU's opening str
 skip       the dropped blocks zeroed where they are stored, their true blocks kept on the host for openings
 ~~~
 
-Gates, before anything is timed (`Device.gates`), over a small store across the same GPUs and tiers (three chunks a
+Gates, before anything is timed (`GpuBackend.gates`), over a small store across the same GPUs and tiers (three chunks a
 GPU, and with a host tier one more a GPU in host memory, so its tree has padding on every GPU when there are several):
 the payload root against `audit.payload_tree` and blocks of the store against `codec.encode` (at each segment's first
 block and the store's last), a pass's root against `receipts.tree` over the reference's receipts, and sessions under
-the registration's key, one honest and accepted by `audit.Session`, one with 1/16 of its blocks dropped and rejected at
+the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped and rejected at
 a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; then in
 calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
 against the reference's.
@@ -1098,7 +1098,7 @@ class DeviceStore:
         return self.open_window([(handle, positions)])[0]
 
 
-class Device:
+class GpuBackend:
     """The prover's backend (`prover.ProverSide`): the store across `gpus` GPUs (every visible one if None), its gates
     and calibration, its passes and openings."""
 
@@ -1359,12 +1359,13 @@ class Device:
 
     def gate_session(self, small: DeviceStore, reg: audit.Registration, dropped: set[int]) -> dict:
         """Two windows of two passes each over `small` under a clock the gate turns, `gate_samples` draws a window,
-        checked by `audit.Session`."""
+        checked by `audit.AuditRun`."""
         now = [0]
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows)
-        session = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
-                                clock=lambda: now[0], not_before_ns=0)
+        session = audit.AuditRun(params, reg, None,
+                                 coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
+                                 clock=lambda: now[0], not_before_ns=0)
         small.arm(dropped)
         coin, prev, kept = session.start(), reg.digest, {}
         for t in range(2):
@@ -1426,14 +1427,15 @@ def add_arguments(ap) -> None:
     ap.add_argument("--host-consumers", type=int, default=8, help="a host segment's consumer CTAs")
 
 
-def from_arguments(a, log=print) -> Device:
+def from_arguments(a, log=print) -> GpuBackend:
     import torch
 
     n = int(a.gib * 2 ** 30) // BLOCK
     blocks = n // a.chunk_blocks * a.chunk_blocks
     host = int(a.host_gib * 2 ** 30) // BLOCK // a.chunk_blocks * a.chunk_blocks
-    return Device(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gpus=a.gpus or None, gate_chunk=a.gate_chunk,
-                  gate_samples=a.gate_samples, calibration_passes=a.calibration_passes, warm_openings=a.warm_openings,
-                  chunk=a.chunk_blocks, kept_from=a.kept_from, sketch_ctas=a.sketch_ctas,
-                  payload_kept_from=a.payload_kept_from, trace_allocator=a.trace_allocator, host_blocks=host,
-                  host_ctas=a.host_ctas, host_consumers=a.host_consumers)
+    return GpuBackend(torch, a.lib, a.kv, blocks, seed=a.seed, log=log, gpus=a.gpus or None, gate_chunk=a.gate_chunk,
+                      gate_samples=a.gate_samples, calibration_passes=a.calibration_passes,
+                      warm_openings=a.warm_openings, chunk=a.chunk_blocks, kept_from=a.kept_from,
+                      sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
+                      trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
+                      host_consumers=a.host_consumers)

@@ -15,19 +15,19 @@ from test_remote_bandwidth import N, SCHEDULE, Entropy, drive, params, store  # 
 from test_ledger import node
 from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, ledger, timing
-from verity.core.protocols.remote_bandwidth.audit import Session, SessionError
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, SessionError
 
 SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
 """`SCHEDULE` over eight windows: passes (4, 3, 3, 3, 4, 3, 3, 3), so each draw of four holds 13 passes."""
 
 
-def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.Coins]:
+def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.SessionCoins]:
     """Parameters of `windows` windows drawn `g` a coin, and a challenger in this process committed to their coins."""
     p = params(windows=windows, groups_per_coin=g, **kw)
     return p, coins.local(store.registration.digest, 0, windows, Entropy(b"coins"), appends=APPENDS, per_coin=g)
 
 
-def finish_draws(s: Session, prover: audit.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
+def finish_draws(s: AuditRun, prover: audit.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
     """`finish` a draw at a time: past the last deadline, each draw closed at its last window, then each of its windows
     verified on its own share of the draws, in order, up to the first rejection; a window whose share is none keeps
     the verdict its close gave it."""
@@ -82,14 +82,14 @@ def test_groups_per_coin_is_a_positive_integer_and_the_coins_are_the_sessions() 
 def test_a_session_refuses_coins_drawn_another_number_of_windows_a_coin(store) -> None:
     p, c = shared(store, 4)
     with pytest.raises(ValueError, match="4 a draw"):
-        Session(p, store.registration, None, coins.local(store.registration.digest, 0, 8, Entropy(b"coins"),
+        AuditRun(p, store.registration, None, coins.local(store.registration.digest, 0, 8, Entropy(b"coins"),
                                                          appends=APPENDS), not_before_ns=0, clock=lambda: 0)
     with pytest.raises(ValueError, match="1 a draw"):
-        Session(params(windows=8), store.registration, None, c, not_before_ns=0, clock=lambda: 0)
+        AuditRun(params(windows=8), store.registration, None, c, not_before_ns=0, clock=lambda: 0)
     assert coins.layout_reason(c.commitment, 0, 8, 4) is None
     assert "openings 8" in coins.layout_reason(c.commitment, 0, 8)
     with pytest.raises(coins.CoinError, match="openings 3"):
-        coins.Coins(c.challenger, store.registration.digest, 0, 8, per_coin=3)
+        coins.SessionCoins(c.challenger, store.registration.digest, 0, 8, per_coin=3)
 
 
 def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:

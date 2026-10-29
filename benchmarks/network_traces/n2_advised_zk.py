@@ -16,7 +16,7 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   R_in = 4, salted), egress R = 3, four windows and a burst of requests across each of the 0/1 and 2/3 boundaries, the
   certifier's own frame in every window. Its records are certified under a fresh LMS key and certifier session. The
   tie is IoTieRequest's verdict, from the verifier's own tie source (`service.LinkWindows.ties`), which the proof
-  service doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
+  system doesn't have yet, so the verifier of record refuses every advised link (`advised`, fail closed); here the
   link's tie source is the tests' stand-in (`advised_traffic.StandInTie`) on the link's certified prompts, the
   verifier's own and never the prover's, so this prices the unit and its proof, not IoTieRequest's. Its clock
   source is the verifier of record's: the certifier signs each window's sync salted (`Issuer.salted_clock`), and the
