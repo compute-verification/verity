@@ -48,6 +48,8 @@ CAPS = (32, 320)
 LEAD_COIN_BYTES = (2.24e6, 13.2e6)
 ROW = 64
 KS = (2048, 8192)
+SI_ALG = {"s8": 817.9, "fp8_k64": 841.7, "fp8_fma": 2285.5}
+SI_ALG_ANDS = 136.8
 
 # Software cost of a PRF on the GPU, in W1 writes an output bit (estimate: instruction counts a block / its bits).
 C_SW = {
@@ -417,7 +419,9 @@ def egress(h):
 
 
 def area(blocks: dict):
-    """Δarea a MAC: the PRF's b/32 bits a MAC and the sketch's logic once a 32-MAC write, beside the s8 and FP8 MACs."""
+    """Δarea a MAC: the PRF's b/32 bits a MAC and the sketch's logic once a 32-MAC write, beside this lane's s8 and FP8
+    dp4 MACs and SI-ALG's baseline (`SI_ALG`: its s8 4-wide unit, its 4-wide FP8 into a Kulisch k64 accumulator and its
+    1-wide FP8 FMA, GE a MAC, report-silicon-baseline)."""
     ge_bit = synth_ge_per_bit(blocks)
     s8, fp8 = blocks["mac_s8_dp4"]["ge_per_unit"], blocks["mac_fp8_dp4"]["ge_per_unit"]
     sk = {k: blocks[f"sk_{k}"]["ge_comb"] / (64 if k == "nh" else 32) for k in SKETCHES}
@@ -432,12 +436,15 @@ def area(blocks: dict):
             tot = ge_mac + sk["xorrot"]
             prf.append({"prf": name, "b": b, "M": round(M, 2), "ge_a_mac": round(ge_mac, 2),
                         "with_sketch": round(tot, 2), "pct_s8": round(100 * tot / s8, 2),
-                        "pct_fp8": round(100 * tot / fp8, 2)})
+                        "pct_fp8": round(100 * tot / fp8, 2),
+                        "pct_si_alg": {k: round(100 * tot / v, 2) for k, v in SI_ALG.items()}})
     merit = {k: round(ge_bit[k] / C_SW[k][0], 1) for k in ge_bit}
     return {"mac_ge": {"s8": s8, "fp8": fp8}, "prf_ge_a_bit": {k: round(v, 2) for k, v in ge_bit.items()},
             "c_sw": {k: round(v[0], 3) for k, v in C_SW.items()}, "ge_a_bit_per_write_a_bit": merit,
             "sketch_ge_a_mac": {k: round(v, 2) for k, v in sk.items()},
-            "sketch_pct": {k: (round(100 * v / s8, 2), round(100 * v / fp8, 2)) for k, v in sk.items()}, "prf": prf}
+            "sketch_pct": {k: (round(100 * v / s8, 2), round(100 * v / fp8, 2)) for k, v in sk.items()},
+            "sketch_pct_si_alg": {k: {b: round(100 * v / g, 2) for b, g in SI_ALG.items()} for k, v in sk.items()},
+            "prf": prf}
 
 
 def proof_cost():
@@ -446,7 +453,8 @@ def proof_cost():
     sketch = 31 / 32
     lead = SHA512_AND * 32 / 1024 / CARD["useful_a_word"]
     seal = {K: SHA512_AND / (ROW * 64 * K) for K in KS}
-    return {"basis": AND_PER_MAC, "sketch": round(sketch, 3), "sketch_pct": round(100 * sketch / AND_PER_MAC, 2),
+    return {"basis": AND_PER_MAC, "si_alg_s8": SI_ALG_ANDS, "sketch": round(sketch, 3),
+            "sketch_pct": round(100 * sketch / AND_PER_MAC, 2), "sketch_pct_si_alg": round(100 * sketch / SI_ALG_ANDS, 2),
             "lead_sha": round(lead, 1), "lead_pct": round(100 * lead / AND_PER_MAC, 1),
             "seal": {K: round(v, 5) for K, v in seal.items()}}
 
@@ -519,7 +527,7 @@ def main() -> int:
               f"one per {e['macs_a_seed']:.3g} MACs; {e['vs_lead_64rows']}x / {e['vs_lead_decode']}x under the lead")
     for p in res["area"]["prf"]:
         print(f"{p['prf']:9s} b {p['b']:2d} M {p['M']:6.2f}  {p['ge_a_mac']:7.2f} GE/MAC  +sketch {p['with_sketch']:7.2f}"
-              f"  {p['pct_s8']:5.2f}% s8  {p['pct_fp8']:5.2f}% fp8")
+              f"  {p['pct_s8']:5.2f}% s8  {p['pct_fp8']:5.2f}% fp8  SI-ALG {p['pct_si_alg']}")
     print("sketch GE a MAC:", res["area"]["sketch_ge_a_mac"], "merit:", res["area"]["ge_a_bit_per_write_a_bit"])
     print("proof:", res["proof"])
     return checks.finish()
