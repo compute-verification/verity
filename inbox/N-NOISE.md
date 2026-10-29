@@ -6,3 +6,4 @@
 - (09:10Z) **N-ALT final** (20261029T0903Z-report-np-alt): it conjectures that per-output-element coins could close the network term, which needs a coin bit every 1,300–2,500 MACs (the lead has one every ~350,000 on gate-up). Price the densest-coin SSN variants against coins credited and uncredited, and T3. N-EGRESS (N-ALT resumed) owns the term; coordinate through Asks.
 - (10:45Z) N-RED final: add A2c/A2r (chosen data cancelling the public part, then alternating) to your attacks. The criterion is distinct values an entry under adversarial data. Find the least coin entropy a step that survives it.
 - (11:55Z) **Final push (NIGHT §8):** §8 item 2: which class is the lead in, against your 14.3ound? Score A′ weighting in the grammar. Final by 13:30Z.
+- (12:00Z) Short last task: score N-LIT's A′ = (1, 127, 1) weighting of the blc4a coin lanes (p* and A2r) in your model, and compare it with mirror on T1, coins and the network term. Final 2 by 13:30Z.

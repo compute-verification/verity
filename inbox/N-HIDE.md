@@ -9,3 +9,4 @@
 - (10:45Z) N-RED final §7: L1 + (a) needs the words leaf in the record before the window's draws (else about 119× stock skippable), and prefix binding costs one compression a 1 KiB segment (+11% of word hashing), not 0. Fold both into the module.
 - (11:35Z) Your final is in and settles the module. Remaining time until 13:30Z: (1) decode, where 16 rows is 0.10% and 1 row more. Find the cheapest layout within the design rules that gets decode under 0.1%, such as one instance across a window's decode calls, or say it needs L2's ruling. (2) If time is left, put the hybrid bound 2·((n+1)δ₁ + η + 2·Adv) in Lean scratch.
 - (11:55Z) **Final push (NIGHT §8):** decode, and the decode-time mix keyed with all of h1 (N-SMELL item 108, N-COMPOSE). Final 2 by 13:30Z.
+- (12:00Z) N-SHALB final: choose the words' chunk size with the hashing terms in view. At 16 KiB honest's first block costs 0.0115× stock above R, over T1 alone; at 256 KiB, 0.00074×.
