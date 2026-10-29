@@ -49,16 +49,29 @@ def test_w1_alone_is_falsified(calls):
 
 
 def test_thresholds_are_least(calls):
+    """Each threshold fits its budget and a price 0.01 under it doesn't, at both budgets."""
     for _, h, stock in calls.values():
         th = tg.thresholds(h, stock)
-        p = th["p_star/uniform"]
-        assert tg.share(h, stock, p, 0.0, "uniform") <= tg.COIN_BRANCH
-        if p > 0:
-            assert tg.share(h, stock, p - 0.01, 0.0, "uniform") > tg.COIN_BRANCH
-        c = th["c_star/own+load/p13.5"]
-        assert tg.share(h, stock, 13.5, c, "own+load") <= tg.COIN_BRANCH
-        if c > 0:
-            assert tg.share(h, stock, 13.5, c - 0.01, "own+load") > tg.COIN_BRANCH
+        for b, cap in tg.BUDGETS.items():
+            p = th[b]["p_star/uniform"]
+            assert tg.share(h, stock, p, 0.0, "uniform") <= cap
+            if p > 0:
+                assert tg.share(h, stock, p - 0.01, 0.0, "uniform") > cap
+            c = th[b]["c_star/own+load/p13.5"]
+            assert tg.share(h, stock, 13.5, c, "own+load") <= cap
+            if c > 0:
+                assert tg.share(h, stock, 13.5, c - 0.01, "own+load") > cap
+            x = th[b]["b_star"]
+            assert tg.register_share(h, stock, x) <= cap
+            if x > 0:
+                assert tg.register_share(h, stock, x - 0.01) > cap
+
+
+def test_slack_is_the_tighter_budget(calls):
+    for _, h, stock in calls.values():
+        th = tg.thresholds(h, stock)
+        assert th["coinSlack"]["p_star/uniform"] >= th["coinBranchGap"]["p_star/uniform"]
+        assert th["coinSlack"]["c_star/uniform/p13.5"] >= th["coinBranchGap"]["c_star/uniform/p13.5"]
 
 
 def test_verdict(calls):
@@ -66,7 +79,10 @@ def test_verdict(calls):
     res = {key: {"m": key[0], "n": key[1], "k": key[2], "stock": st, "thresholds": tg.thresholds(h, st),
                  "judge": tg.judge(h, st)} for key, (_, h, st) in calls.items()}
     v = tg.verdict(res)
-    assert v["holds"] and v["worst"]["register_bound"] <= tg.COIN_BRANCH
+    assert v["holds"] and all(b["warp_branch"]["holds"] for b in v["by_budget"].values())
+    assert all(f["holds"] for b in v["by_budget"].values() for f in b["forms"].values())
     free_arm = (tg.Reading("free-arm", 0.0, 0.0, "a skip whose arm doesn't issue, with a free decision", "test"),)
-    res = {key: r | {"judge": tg.judge(calls[key][1], r["stock"], free_arm)} for key, r in res.items()}
-    assert not tg.verdict(res, free_arm)["holds"]
+    res = {key: r | {"thresholds": tg.thresholds(calls[key][1], r["stock"], free_arm),
+                     "judge": tg.judge(calls[key][1], r["stock"], free_arm)} for key, r in res.items()}
+    v = tg.verdict(res, free_arm)
+    assert not v["holds"] and not v["by_budget"]["coinSlack"]["forms"]["free-arm"]["holds"]
