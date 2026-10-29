@@ -37,7 +37,9 @@ DESIGNS = {
     "nh2: IMAD of adjacent accumulators, S += w(j)·w(j+1)": (0.5, 0.0, 1_060 / 2, False, "PairWrites", "4 (rank-2 core)"),
     "nh: IMAD of consecutive steps, S += w_(2k-1)·w_(2k)": (0.5, 0.0, 1_060 / 2, False, "PairWrites", "4 (rank-2 core)"),
     "xor: LOP3, S ^= w ^ w'": (0.5, 0.0, 0.0, False, "XorWrites", "4"),
-    "chain: LOP3 and IADD3 alternating, S = (S ^ w ^ w') + w'' + w'''": (0.5, 0.0, 63 / 4, False, "ChainWrites", "4"),
+    "chain: LOP3 and IADD3 alternating, S = (S ^ w ^ w') + w'' + w'''": (None, None, None, True,
+                                                                          "none holds: the added words enter linearly "
+                                                                          "and fold (synth, T 4)", "-"),
     "sumsq: IMAD, S += w·w": (1.0, 0.0, 600.0, False, "SqWrites (field bound only half)", "4"),
     "tc-bytes: int8 MMA on the accumulators' bytes, N = 8": (0.0, 1.0, 32 * AND_PER_MAC, False, "BytesWrites", "4"),
     "lookups: four byte tables a word": (10.0, 0.0, 1_100.0, False, "LookupWrites (histogram fold risk)", "4-5"),
