@@ -15,8 +15,9 @@ the most words whose window holds one block of digits: the adaptive bound is `c�
 What reading costs is not here: a branch or predicate per coin bit read is priced separately (`adaptive_total`). The
 targets that merge on a cell are the design's: a word that equals another on every point of a cell, or a free value
 there, earns nothing at the points of that cell. For served sparse noise (`ssnWordB_eq_of_zero`), a row's words after
-two steps with equal data constants merge on the cell where the bits between them are 0: reading one bit merges a
-row's `n` words of a step into the step before on half the points.
+two steps with equal data constants merge on the cell where the bits between them are 0 (`ssnWordB_step_merge` for
+consecutive steps). In the served 4-lane layout (`l4_step_merge`) that is one bit: reading it merges a row's `n` words
+of a step into the step before on half the points, so `lost_le`'s `M` is at least `n` there.
 -/
 
 namespace Pouw.Dimension.H100
@@ -98,5 +99,50 @@ theorem ssnWordB_eq_of_zero (src : Fin S → Fin C) (used : Fin S → Fin L → 
   by_cases h : bitCoef src used pos W i j t k = bitCoef src used pos W i j t' k
   · rw [h]
   · simp [hx k h]
+
+/-- Consecutive steps weigh a bit of row `i` the same unless the later step reads it. -/
+theorem bitCoef_step (src : Fin S → Fin C) (used : Fin S → Fin L → Prop) [∀ s q, Decidable (used s q)]
+    (pos : Fin S → Fin L → ℕ) (W : Fin S → Fin L → ℕ → ℤ) (i : Fin m) (j : ℕ) {t t' : Fin S}
+    (htt : (t' : ℕ) + 1 = t) (k : Fin m × Fin C × Fin 32)
+    (hk : ¬ (k.1 = i ∧ ∃ q, used t q ∧ src t = k.2.1 ∧ pos t q = k.2.2)) :
+    bitCoef src used pos W i j t k = bitCoef src used pos W i j t' k := by
+  unfold bitCoef
+  split_ifs with hki
+  · refine Finset.sum_congr rfl fun s _ => Finset.sum_congr rfl fun q _ => ?_
+    by_cases hst : s = t
+    · subst hst
+      have hn : ¬ (used s q ∧ src s = k.2.1 ∧ pos s q = k.2.2) := fun h => hk ⟨hki, q, h⟩
+      have hst' : ¬ s ≤ t' := by rw [Fin.le_iff_val_le_val]; omega
+      simp only [hn, hst', and_false, ite_false]
+    · have hiff : s ≤ t ↔ s ≤ t' := by
+        rw [Fin.le_iff_val_le_val, Fin.le_iff_val_le_val]
+        have := Fin.val_ne_of_ne hst
+        omega
+      simp only [hiff]
+  · rfl
+
+/-- **One step's bits decide a merge**: a row's words after steps `t − 1` and `t` with equal data constants are equal
+wherever every bit step `t` reads in that row is 0. -/
+theorem ssnWordB_step_merge (src : Fin S → Fin C) (used : Fin S → Fin L → Prop) [∀ s q, Decidable (used s q)]
+    (pos : Fin S → Fin L → ℕ) (κ : Fin m → ℕ → Fin S → ℤ) (W : Fin S → Fin L → ℕ → ℤ) (i : Fin m) (j : ℕ)
+    {t t' : Fin S} (htt : (t' : ℕ) + 1 = t) (hκ : κ i j t = κ i j t') (x : Bits m C)
+    (hx : ∀ k : Fin m × Fin C × Fin 32, k.1 = i → (∃ q, used t q ∧ src t = k.2.1 ∧ pos t q = k.2.2) → x k = 0) :
+    ssnWordB src used pos κ W i j t x = ssnWordB src used pos κ W i j t' x :=
+  ssnWordB_eq_of_zero src used pos κ W i j t t' hκ x fun k hne => by
+    by_contra hxk
+    exact hne (bitCoef_step src used pos W i j htt k fun ⟨h1, h2⟩ => hxk (hx k h1 h2))
+
+/-- **The served 4-lane layout: one bit merges a row's step into the one before.** For `t ≥ 1`, in every column whose
+data constants are equal across the step, row `i`'s words after steps `t − 1` and `t` are equal wherever its bit
+`l4Pos t 0` of coin word `l4Src t` is 0: half the coins, for all `n` columns at once. -/
+theorem l4_step_merge (hC : S + 3 ≤ 32 * C) (κ : Fin m → ℕ → Fin S → ℤ) (i : Fin m) (j : ℕ) {t t' : Fin S}
+    (htt : (t' : ℕ) + 1 = t) (hκ : κ i j t = κ i j t') (x : Bits m C)
+    (hx : ∀ k : Fin m × Fin C × Fin 32, k.1 = i → k.2.1 = l4Src hC t → (k.2.2 : ℕ) = l4Pos t 0 → x k = 0) :
+    ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l i j t x =
+      ssnWordB (l4Src hC) (fun s q => (s : ℕ) = 0 ∨ q = 0) (fun s q => l4Pos s q) κ w1l i j t' x := by
+  refine ssnWordB_step_merge _ _ _ κ w1l i j htt hκ x fun k hk ⟨q, hq, hs, hp⟩ => hx k hk hs.symm ?_
+  have hq0 : q = 0 := hq.resolve_left (by omega)
+  subst hq0
+  simpa using hp.symm
 
 end Pouw.Dimension.Ssn
