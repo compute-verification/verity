@@ -19,8 +19,11 @@ witness files whose names no other file has) and the allowlist (``allow``): each
 witness file it is cut from, the record paths it may lie in (fnmatch globs on the run-dir-relative path, an archive
 member's as ``ARCHIVE/MEMBER``) and why its bytes are public. An entry's sha256 ``*`` excuses every piece of its witness
 file in those records: for a record that observes what the witness file also records, in the same format, so that
-which pieces match changes with the values (the runner's resources.jsonl and the stall probe's cgroup counters). An entry
-is written only after its find was read by counts and digests (QUARANTINE/leak-guard.json), never by its bytes.
+which pieces match changes with the values (the runner's resources.jsonl and the stall probe's cgroup counters). An
+entry's ``keys`` (key paths, an object's keys joined by ``/``) narrow it to the pieces cut wholly inside the witness
+file's JSON values at those paths: for a value that is public whatever it holds, such as the certifier's own CPU list,
+whose indented form any indented list of consecutive integers repeats. An entry is written only after its find was read
+by counts and digests (QUARANTINE/leak-guard.json), never by its bytes.
 
 Each find is moved to QUARANTINE/files/ under its run-dir path. QUARANTINE must lie outside RUN_DIR and is kept 0700;
 QUARANTINE/leak-guard.json names each find's pieces (sha256, the witness file and offset, distinct and printable bytes, the
@@ -33,12 +36,14 @@ from __future__ import annotations
 import argparse
 import bz2
 import fnmatch
+import functools
 import gzip
 import hashlib
 import importlib.util
 import json
 import lzma
 import os
+import re
 import shutil
 import sys
 import tarfile
@@ -195,11 +200,11 @@ def reprinted(p: Path) -> tuple[bytes, int]:
     return "\n".join(out).encode(), unparsed
 
 
-def pieces(gates: list[Path]) -> tuple[dict[bytes, tuple[str, int]], int, int]:
-    """The gate runs' witness pieces, each to the witness file (under its gate run's name) and offset it is first cut
-    from, less the pieces any gate run's public files hold; how many pieces those dropped; and how many of the public JSON
-    files' documents weren't JSON, so weren't written again (`reprinted`)."""
-    got: dict[bytes, tuple[str, int]] = {}
+def pieces(gates: list[Path]) -> tuple[dict[bytes, tuple[str, int, Path]], int, int]:
+    """The gate runs' witness pieces, each to the witness file (under its gate run's name), offset and file path it is
+    first cut from, less the pieces any gate run's public files hold; how many pieces those dropped; and how many of the
+    public JSON files' documents weren't JSON, so weren't written again (`reprinted`)."""
+    got: dict[bytes, tuple[str, int, Path]] = {}
     public: list[Path] = []
     for g in gates:
         pub = [p for p in _files(g) if "witness" not in p.relative_to(g).parts]
@@ -212,7 +217,7 @@ def pieces(gates: list[Path]) -> tuple[dict[bytes, tuple[str, int]], int, int]:
             n = TEXT if _is_text(b) else BINARY
             for o in range(0, len(b) - n + 1, n):
                 if len(set(x := b[o:o + n])) >= DISTINCT:
-                    got.setdefault(x, (f"{g.name}/{f.relative_to(g).as_posix()}", o))
+                    got.setdefault(x, (f"{g.name}/{f.relative_to(g).as_posix()}", o, f))
     raw = {nd: x for x in got for nd in forms(x)}
     finder, out, unparsed = Finder(raw), set(), 0
     for p in public:
@@ -226,17 +231,48 @@ def pieces(gates: list[Path]) -> tuple[dict[bytes, tuple[str, int]], int, int]:
 
 def load_declared(path: Path) -> tuple[set[str], list[dict]]:
     """The declared witness names and allowlist, each entry refused unless it names a sha256 (or ``*``), a witness
-    file's name, record globs and why."""
+    file's name, record globs and why, and its ``keys``, when it has them, are key paths."""
     doc = json.loads(path.read_text())
     if doc.get("schema") != DECLARED_SCHEMA:
         raise SystemExit(f"leak_guard: {path} is not {DECLARED_SCHEMA}")
     for i, e in enumerate(doc["allow"]):
-        sha = e.get("sha256", "")
+        sha, keys = e.get("sha256", ""), e.get("keys")
         if not ((sha == "*" or (len(sha) == 64 and set(sha) <= set("0123456789abcdef")))
-                and e.get("witness") and e.get("records") and e.get("why")):
+                and e.get("witness") and e.get("records") and e.get("why")
+                and (keys is None or (isinstance(keys, list) and keys
+                                      and all(isinstance(k, str) and "" not in k.split("/") for k in keys)))):
             raise SystemExit(f"leak_guard: {path} entry {i} needs a sha256 (lower-case hex, or * for any piece of the "
-                             "witness file), the witness file's name, its records and why")
+                             "witness file), the witness file's name, its records and why, and keys, if any, as a "
+                             "list of key paths (keys joined by /)")
     return set(doc["names"]), doc["allow"]
+
+
+_WS = re.compile(r"[ \t\n\r]*")
+
+
+def value_span(b: bytes, key: str) -> tuple[int, int] | None:
+    """The byte offsets [start, end) of the value at `key` (an object's keys joined by ``/``) in the JSON document `b`,
+    or None when it has no value there."""
+    s, dec = b.decode("latin-1"), json.JSONDecoder()
+    at = _WS.match(s).end()
+    try:
+        for k in key.split("/"):
+            if s[at:at + 1] != "{":
+                return None
+            at = _WS.match(s, at + 1).end()
+            while s[at:at + 1] == '"':
+                name, at = dec.raw_decode(s, at)
+                at = _WS.match(s, _WS.match(s, at).end() + 1).end()
+                if name == k:
+                    break
+                at = _WS.match(s, dec.raw_decode(s, at)[1]).end()
+                if s[at:at + 1] == ",":
+                    at = _WS.match(s, at + 1).end()
+            else:
+                return None
+        return at, dec.raw_decode(s, at)[1]
+    except ValueError:
+        return None
 
 
 def _is_archive(head: bytes) -> bool:
@@ -321,7 +357,7 @@ def keypath(doc, at: str, path=()):
     return None
 
 
-def explain(b: bytes | None, nd: bytes, piece: bytes, origin: tuple[str, int], member: str | None) -> dict:
+def explain(b: bytes | None, nd: bytes, piece: bytes, origin: tuple[str, int, Path], member: str | None) -> dict:
     """A find's piece by counts and digests: its sha256, the witness file and offset it is cut from, whether it was found
     raw or as hex, its distinct and printable bytes, and in a plain file `b` the offset, line and JSON key path of the
     find (``"not JSON"`` when its line isn't)."""
@@ -339,9 +375,14 @@ def explain(b: bytes | None, nd: bytes, piece: bytes, origin: tuple[str, int], m
     return out
 
 
-def excused(entry: dict, sha: str, origin: tuple[str, int], where: str) -> bool:
+def excused(entry: dict, piece: bytes, sha: str, origin: tuple[str, int, Path], where: str, span) -> bool:
+    """Whether `entry` excuses `piece` (its sha256, the witness file, offset and path it is cut from) at record path
+    `where`; `span(path, key)` is `value_span` of a witness file, which the guard reads once."""
+    o = origin[1]
     return (entry["sha256"] in ("*", sha) and entry["witness"] == Path(origin[0]).name
-            and any(fnmatch.fnmatchcase(where, g) for g in entry["records"]))
+            and any(fnmatch.fnmatchcase(where, g) for g in entry["records"])
+            and ("keys" not in entry or any(s is not None and s[0] <= o and o + len(piece) <= s[1]
+                                            for s in (span(origin[2], k) for k in entry["keys"]))))
 
 
 def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow: list[dict],
@@ -352,6 +393,7 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
     got, dropped, unparsed = pieces(runs)
     raw = {nd: x for x in got for nd in forms(x)}
     finder = Finder(raw)
+    span = functools.cache(lambda f, key: value_span(f.read_bytes(), key))
     files = list(_files(run))
     size = {p: p.stat().st_size for p in files}
     found, held, used = [], [], {}
@@ -363,7 +405,8 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
         for nd, member in r["hits"].items():
             piece = raw[nd]
             sha, where = hashlib.sha256(piece).hexdigest(), f"{rel}/{member}" if member else rel
-            if (i := next((i for i, e in enumerate(allow) if excused(e, sha, got[piece], where)), None)) is not None:
+            if (i := next((i for i, e in enumerate(allow) if excused(e, piece, sha, got[piece], where, span)),
+                          None)) is not None:
                 u = used.setdefault(i, (set(), set()))
                 u[0].add(piece)
                 u[1].add(where)

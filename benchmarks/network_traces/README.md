@@ -161,9 +161,11 @@ that holds a gate run's witness: one under a `witness/` directory or named as `l
 aligned witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through.
 The run then fails (exit 3), and `out/leak-guard.json` names each find by its path alone. A piece the gate's public
 files hold, as they are or with their JSON written again, is no find. The false positives are declared data,
-`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests; the one there
-excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. A signal before the guard runs, or a
-guard that can't run, withholds `out/`, `inputs/` and the logs whole.
+`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests. Its entries excuse
+the stall probe's cgroup counters and cgroup path in the runner's own records, and by key path in the witness file
+(`keys`) the certifier's own CPU list wherever an indented list of integers repeats it, and its ticker's stalls in
+`out/certs.json`, which `warden_serve.check` publishes. A signal before the guard runs, or a guard that can't run,
+withholds `out/`, `inputs/` and the logs whole.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
