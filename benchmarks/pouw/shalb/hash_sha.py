@@ -33,6 +33,8 @@ Units: W1, 1/32 of a register write; stock is 1 W1 a useful MAC; h is honest has
   XorWrites_m.
 - S. Honest's xor-m on the served form: its IGMMA accumulates in place, so honest folds one write a word (2 a word in
   all, the xor-m-igmma candidates), and the adversaries against that.
+- Z. A packed M0 adversary for trunc-16, bit for bit against honest's message registers, its writes modelled with
+  predicate writes free and priced.
 """
 from __future__ import annotations
 
@@ -712,6 +714,76 @@ def part_s(checks: Checks, r: dict, y: dict) -> dict:
     return out
 
 
+TRUNC_LANES = (0, 24, 48)
+
+
+def trunc16_writes(steps: int, priced: bool, rows: int = 16, groups: int = 2) -> dict:
+    """Writes a word of trunc16_adversary, by part, a thread holding `groups` pairs (three cells) in each of `rows`
+    rows. A pair a step: the 64-bit add of the variant its row's b predicate picks (two IADD3s and their carry
+    predicate), the row's b predicate (one a row and step) and the b register (one a thread and step), the variants'
+    four loads shared by the rows, their forming as in packed_segment_writes, and its half of the three PRMTs that pack
+    two pairs' six low halves into honest's three message registers. A cell a segment: W0 (the first step's IMMA), its
+    centred lane (two LOP3s) and its share of building the pair (a LEA, a shift and a LEA a pair)."""
+    pred = 1 if priced else 0
+    step = (2 + pred) + pred / groups + 1 / (rows * groups) + 4 / rows + (FORMING + pred * FORMING_PREDS) / FORMING_ROWS
+    parts = {"add": step / 3, "pack": 1.5 / 3, "setup": (1 + 2 + 1) / steps}
+    return parts | {"per_word": sum(parts.values()), "rows": rows, "groups": groups}
+
+
+def trunc16_adversary(d: dict) -> tuple[np.ndarray, dict]:
+    """The packed M0 adversary for trunc-16: a row's six adjacent cells in two 64-bit pairs, lanes at bits 0, 24 and
+    48. The two low lanes start centred in [2^22, 3 2^22) (bit 23 flipped where bits 23 and 22 of W0 are equal, which
+    leaves the low 16 bits alone) and never wrap while the segment's reach is below 2^22; the top lane may wrap, its
+    carry leaving the pair. A lane's low 16 bits are byte-aligned, so a PRMT takes any two of them: the six into the
+    three message registers honest commits (columns 2j and 2j + 1, the low halves at one step)."""
+    rows, cols = d["w0"].shape
+    steps = d["delta"].shape[0]
+    assert cols % 6 == 0 and block_reach(d, steps).max() < 1 << 22
+    out = np.zeros((steps, rows, cols // 2), dtype=np.int64)
+    m24, m16 = (1 << 24) - 1, (1 << 16) - 1
+    for g in range(cols // 3):
+        cs = range(3 * g, 3 * g + 3)
+        for i in range(rows):
+            v = []
+            for j, c in enumerate(cs):
+                w = int(d["w0"][i, c])
+                if j < 2:
+                    lo = w & m24
+                    v.append(lo ^ ((1 << 23) if ((lo >> 23) & 1) == ((lo >> 22) & 1) else 0))
+                else:
+                    v.append(w & m16)
+            q = sum(x << s for x, s in zip(v, TRUNC_LANES))
+            for t in range(steps):
+                q = (q + sum(int(d["delta"][t, i, c]) << s for c, s in zip(cs, TRUNC_LANES))) & M64
+                halves = [(q >> s) & m16 for s in TRUNC_LANES]
+                for j, c in enumerate(cs):
+                    k = c // 2
+                    out[t, i, k] |= halves[j] << (16 * (c & 1))
+    return out, {name: trunc16_writes(steps, priced) for name, priced in (("w1_today", False),
+                                                                          ("predicates_priced", True))}
+
+
+def part_z(checks: Checks, rng: np.random.Generator) -> dict:
+    steps = 64
+    d = m0_draw(rng, rows=64, cols=24, steps=steps)
+    w = d["words"] & 0xFFFF
+    honest = w[..., 0::2] | (w[..., 1::2] << 16)
+    adv, info = trunc16_adversary(d)
+    ok = np.array_equal(adv, honest)
+    credit = trunc_honest(16)
+    out = info | {"exact": bool(ok), "honest_per_word": credit,
+                  "ratio": {k: info[k]["per_word"] / credit for k in ("w1_today", "predicates_priced")}}
+    checks.check(f"Z: trunc-16 at M0, the packed adversary's message registers match honest's bit for bit ({steps} "
+                 "steps x 64 rows x 24 columns, a register the low halves of columns 2j and 2j + 1)", ok,
+                 f"{info['w1_today']['per_word']:.3f} writes a word with predicates free, "
+                 f"{info['predicates_priced']['per_word']:.3f} priced, against honest's {credit:.3f}")
+    checks.check("Z: with predicate writes free (today's W1) it pays at least 5% less than honest, so TruncWrites_16 is "
+                 "false unless predicate writes are priced; priced, it pays at least 20% more",
+                 out["ratio"]["w1_today"] < 0.95 and out["ratio"]["predicates_priced"] > 1.2,
+                 f"{out['ratio']['w1_today']:.3f}x free, {out['ratio']['predicates_priced']:.3f}x priced")
+    return out
+
+
 def part_t(checks: Checks, rng: np.random.Generator) -> dict:
     out = {}
     for k in (1, 2, 4):
@@ -739,13 +811,14 @@ def main() -> int:
     r = part_r(checks, rng, x)
     y = part_y(checks, rng, r)
     s = part_s(checks, r, y)
+    z = part_z(checks, rng)
     if "--json" in args:
         Path(args[args.index("--json") + 1]).write_text(json.dumps(
             {"floor": f, "candidates": p, "xor": {str(k): v for k, v in x.items()},
              "trunc": {str(k): v for k, v in t.items()},
              "bitsliced": {n: {str(k): v for k, v in g.items()} for n, g in r.items()},
              "packed_segment": {str(k): v for k, v in y.items()},
-             "served_honest": {str(k): v for k, v in s.items()}},
+             "served_honest": {str(k): v for k, v in s.items()}, "trunc16_packed": z},
             indent=1, sort_keys=True, default=float) + "\n")
     print("\ncandidate      bits  h@t8192  cut   T1 DW-only  T1 premise  T2 t512 s/a     T2 r512 s/a     T2 t8192 s/a")
     for n, v in p.items():
