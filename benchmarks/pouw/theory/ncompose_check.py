@@ -23,6 +23,12 @@ charged, so a write that isn't live (the prefix block's, the padding block's sch
 It also checks the byte-swap facts the Lean states (`bswap32_shift_not_const`, `bswap32_not_carrier`) on random
 words, and which of `M_0..M_15` each use of the schedule and the rounds reads.
 
+*Repeated rows.* A straight-line count can't see a branch, and a program that branches on equal compression inputs
+runs each distinct one once. For `REPEAT` identical rows of one call (a random row and the zero row), it counts the
+compressions and the distinct compression inputs (chaining value ‖ block) with the row digest bound to (salt, forward,
+position) nowhere (`frame-v3`, which binds them in the tree leaf, outside the digest), in a block after the row
+(`suffix`), or in the prefix block (`prefix`).
+
 Exit 0 iff every check passes. `--json OUT` writes the counts.
 """
 
@@ -40,6 +46,7 @@ M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1
 ROWS = 48
 BLOCKS = 2
+REPEAT = 8
 PREFIX = bytes(range(128))
 
 K = [
@@ -157,13 +164,17 @@ def compress(p: Prog, H, Wm, tag: str, fold: bool):
     return [p.add(x, y, f"{tag}H{i}") for i, (x, y) in enumerate(zip(H, [a, b, c, d, e, f, g, h]))]
 
 
+def padded(msg: bytes) -> list[bytes]:
+    pad = msg + b"\x80" + b"\x00" * ((112 - (len(msg) + 1) % 128) % 128) + (8 * len(msg)).to_bytes(16, "big")
+    return [pad[i:i + 128] for i in range(0, len(pad), 128)]
+
+
 def run(words: list[int], variant: str) -> tuple[Prog, bytes, bytes]:
     """Hash PREFIX ‖ row for one row of committed words; return the program, its digest and hashlib's."""
     order = "little" if variant == "le" else "big"
     row = b"".join(x.to_bytes(4, order) for x in words)
     msg = PREFIX + row
-    pad = msg + b"\x80" + b"\x00" * ((112 - (len(msg) + 1) % 128) % 128) + (8 * len(msg)).to_bytes(16, "big")
-    blocks = [pad[i:i + 128] for i in range(0, len(pad), 128)]
+    blocks = padded(msg)
     p = Prog()
     H = [const(v) for v in IV]
     for bi, blk in enumerate(blocks):
@@ -249,6 +260,36 @@ def uses() -> dict[int, list[str]]:
     return {t: sorted(v) for t, v in u.items()}
 
 
+def chain(msg: bytes) -> tuple[list[bytes], bytes]:
+    """SHA-512 over `msg` as its compression inputs (chaining value ‖ block), and its digest."""
+    H = [const(v) for v in IV]
+    keys = []
+    for blk in padded(msg):
+        keys.append(b"".join(big(x).to_bytes(8, "big") for x in H) + blk)
+        H = compress(Prog(), H, [const(int.from_bytes(blk[8 * t:8 * t + 8], "big")) for t in range(16)], "", False)
+    return keys, b"".join(big(x).to_bytes(8, "big") for x in H)
+
+
+def repeats(rng: random.Random) -> dict:
+    salt = rng.randbytes(64)
+    forward = rng.getrandbits(64).to_bytes(8, "big")
+    out = {}
+    for name, row in (("random", rng.randbytes(128 * BLOCKS)), ("zero", bytes(128 * BLOCKS))):
+        for layout in ("frame-v3", "suffix", "prefix"):
+            seen: set[bytes] = set()
+            total, ok = 0, True
+            for pos in range(REPEAT):
+                bind = salt + forward + pos.to_bytes(8, "big")
+                msg = {"frame-v3": PREFIX + row, "suffix": PREFIX + row + bind,
+                       "prefix": PREFIX[:128 - len(bind)] + bind + row}[layout]
+                keys, d = chain(msg)
+                ok &= d == hashlib.sha512(msg).digest()
+                total += len(keys)
+                seen.update(keys)
+            out[f"{name}/{layout}"] = {"compressions": total, "distinct": len(seen), "digest_ok": ok}
+    return out
+
+
 def bswap_checks(rng: random.Random) -> dict:
     bad_shift = 0
     for _ in range(200000):
@@ -307,6 +348,16 @@ def main() -> int:
                    all(any("=wgmma" in L for L in res["be-fold"]["carriers"][j]) for j in range(nw) if j not in m0)))
     checks.append(("the prefix block's registers are constant on the grid",
                    all(res[v]["per_block"]["b0"]["live"] == 0 for v in res)))
+    rep = out["repeats"] = repeats(rng)
+    per_row = BLOCKS + 2
+    checks.append(("repeats: every digest equals hashlib", all(r["digest_ok"] for r in rep.values())))
+    checks.append(("repeats: frame-v3's identical rows share every compression",
+                   all(rep[f"{n}/frame-v3"]["distinct"] == per_row for n in ("random", "zero"))))
+    checks.append(("repeats: a suffix binding leaves the row's blocks shared",
+                   all(rep[f"{n}/suffix"]["distinct"] == per_row - 1 + REPEAT for n in ("random", "zero"))))
+    checks.append(("repeats: a prefix binding makes every compression input distinct",
+                   all(rep[f"{n}/prefix"]["distinct"] == rep[f"{n}/prefix"]["compressions"] == per_row * REPEAT
+                       for n in ("random", "zero"))))
     out["writes"] = {v: res[v]["registers"] for v in res}
     out["live"] = {v: res[v]["live"] for v in res}
     out["distinct_live"] = {v: res[v]["distinct_live"] for v in res}
@@ -321,7 +372,7 @@ def main() -> int:
     for n, ok in checks:
         print(f"{'ok  ' if ok else 'FAIL'} {n}")
     print(json.dumps({k: out[k] for k in ("writes", "live", "distinct_live", "per_block", "sha_carriers",
-                                          "sha_encoders")}, indent=1))
+                                          "sha_encoders", "repeats")}, indent=1))
     for v in res:
         for j in sorted(set(m0) | {2, 33}):
             print(f"{v:8s} word {j:2d}: carriers {res[v]['carriers'][j]}  encoders {res[v]['encoders'][j]}")
