@@ -17,7 +17,8 @@ Words (`family`): the lead's zero-data words w_t = x(i, j) + R_t(i) + C_t(class(
 (COUNTER's `lead:rot` and NOISE's lead words), COUNTER's with x = 0 (`counter_x0`: the per-cell offset is the prover's
 when it is data rather than a live coin), the lead's words with random data, and on-chip noise that no split
 reproduces: `operand` (each step's increment a GEMM of fresh s8 noise operands, k 32) and `cell` (an i.i.d. 32-bit
-increment a cell a step). On-chip noise rides the data lanes, so its stock is the whole MMA. A `_inc` family feeds the
+increment a cell a step). On-chip noise rides the data lanes, so its stock is the whole MMA. `zero` is every word zero:
+zero data with no noise injected, the model of a design that absorbs the raw accumulators. A `_inc` family feeds the
 k-steps' increments c_t in place of the words, for a MAC function acc ← F(acc, c_t; k) applied every k-step.
 
 Attacks, each computing S itself and checked bit for bit against honest's:
@@ -36,6 +37,8 @@ Attacks, each computing S itself and checked bit for bit against honest's:
   A packed word is formed as x + R + C a register, so `pack` runs only where the split reproduces the words.
 - `carry` (for acc ← rotl(acc, r) + c): the fold is linear mod 2³² − 1 once each step's carry out is guessed as the
   increment's sign; counted where that is exact on every cell, at an estimated price.
+- `copy`: where every cell's words are the same and the coins are the call's, one chain a call, its S copied to every
+  cell; counted where every cell's honest S is the same.
 - `tfunc` (shortcut 5): flagged from the op set and verified (S mod 2^b from the words mod 2^b); not priced.
 
 Prices are W1 register writes an S, as `nh_attack`'s: honest pays an MMA a word plus the trace (only the MMA when
@@ -382,6 +385,53 @@ def brw(ms, tp):
     return brw(ms[:2 ** k - 1], tp) * (tp[k] + ms[2 ** k - 1]) + brw(ms[2 ** k:], tp)
 
 
+def _keccak_consts():
+    rc, r = [], 1
+    for _ in range(24):
+        c = 0
+        for j in range(7):
+            if r & 1:
+                c |= 1 << ((1 << j) - 1)
+            r = ((r << 1) ^ (0x71 if r & 0x80 else 0)) & 0xFF
+        rc.append(c)
+    rot, (x, y) = [0] * 25, (1, 0)
+    for t in range(24):
+        rot[x + 5 * y] = ((t + 1) * (t + 2) // 2) % 64
+        x, y = y, (2 * x + 3 * y) % 5
+    return rc, rot
+
+
+KECCAK_RC, KECCAK_ROT = _keccak_consts()
+
+
+def keccak_round(A, rc):
+    C = [A[x] ^ A[x + 5] ^ A[x + 10] ^ A[x + 15] ^ A[x + 20] for x in range(5)]
+    D = [C[(x - 1) % 5] ^ C[(x + 1) % 5].rotl(1, 64) for x in range(5)]
+    A = [A[i] ^ D[i % 5] for i in range(25)]
+    B = [None] * 25
+    for x in range(5):
+        for y in range(5):
+            v = A[x + 5 * y]
+            B[y + 5 * ((2 * x + 3 * y) % 5)] = v.rotl(KECCAK_ROT[x + 5 * y], 64) if KECCAK_ROT[x + 5 * y] else v
+    A = [B[x + 5 * y] ^ (~B[(x + 1) % 5 + 5 * y] & B[(x + 2) % 5 + 5 * y]) for y in range(5) for x in range(5)]
+    A[0] = A[0] ^ rc
+    return A
+
+
+def d_keccak(W, k):
+    """SI-FOLD's FT: τ ← Keccak-f[1600] round(τ ⊕ 32 words in lanes 0–15), τ starting at the call's coin in lane 24."""
+    A = [k["iv"] if i == 24 else 0 for i in range(25)]
+    for r in range(len(W) // 32):
+        for i in range(16):
+            w = W[32 * r + 2 * i].cat(W[32 * r + 2 * i + 1])
+            A[i] = w if isinstance(A[i], int) and A[i] == 0 else w ^ A[i]
+        A = keccak_round(A, KECCAK_RC[r % 24])
+    out = A[0]
+    for a in A[1:]:
+        out = out ^ a
+    return out
+
+
 def tau_pows(tau, n):
     out = [tau]
     for _ in range(max(1, n.bit_length())):
@@ -488,6 +538,13 @@ def d_rho(kind):
     return f
 
 
+def d_xorrot(W, k):
+    S = k["s0"]
+    for w in W:
+        S = S.rotl(1, 32) ^ w
+    return S
+
+
 def d_poly31(W, k):
     S = W[0].embed(P31)
     for w in W[1:]:
@@ -559,6 +616,10 @@ DESIGNS = {
                        what="MAC: acc ← rotl(acc, 13) + c a k-step, on increments"),
     "hw_rho_xs": dict(fn=d_rho("xs"), hw=True, coins={"s0": (M32, u32coin)}, Ts=(16, 64),
                       what="MAC: acc ← (acc ⊕ acc ≫ 15) + c a k-step, on increments"),
+    "hw_keccak": dict(fn=d_keccak, hw=True, coins={"iv": (M64, u64coin)}, Ts=(32, 64),
+                      what="side register: SI-FOLD's FT, a Keccak-f[1600] round a 32 words from the call's coin"),
+    "hw_xorrot": dict(fn=d_xorrot, hw=True, coins={"s0": (M32, u32coin)}, Ts=(16, 64),
+                      what="sketch unit: SI-NOISE's σ ← rotl(σ, 1) ⊕ w a step"),
 }
 
 
@@ -749,6 +810,11 @@ def family(name, hc, cs, S, seed=0):
     elif name == "noise":
         p = nh.noise_parts(cs, S, seed=seed)
         p["row_ops"], p["col_ops"] = 2.0, 4.0
+    elif name == "zero":
+        m, n = 64, 32
+        p = {"W": np.zeros((m, n, S), np.uint64), "d0": np.zeros((m, n), np.uint64), "R": np.zeros((m, S), np.uint64),
+             "C": np.zeros((1, n, S), np.uint64), "cls": np.zeros(m, np.int64), "separable": True, "stock_frac": 1.0,
+             "rows_a_class": TILE, "row_ops": 2.0, "col_ops": 4.0, "label": "zero"}
     else:
         g = np.random.default_rng(seed + 77)
         m, n = 64, 32
@@ -1029,6 +1095,19 @@ def pack(design, coins, W, T, narrow_by=0):
     return exact, cost, b, L
 
 
+def copy(design, coins, W, T):
+    """Every cell's block the same words and the same coins: one chain a call, its S copied to every cell. Exact when
+    every cell's honest S equals cell (0, 0)'s, which an index in the coins or the words breaks."""
+    if any(np.any(W[:, :, t] != W[0, 0, t]) for t in range(W.shape[2])):
+        return None
+    exact = True
+    for t0 in range(0, W.shape[2] - T + 1, T):
+        ref = np.broadcast_to(design["fn"]([Val(W[:, :, t0 + t], M32) for t in range(T)], coin_vals(coins)).a,
+                              W.shape[:2])
+        exact &= bool(np.all(ref == ref[0, 0]))
+    return exact
+
+
 def tfunc_check(design, coins, W, T, bits=16):
     cvb = {k: Val(np.uint64(v % (1 << bits)), 1 << bits) for k, (mod, v) in coins.items() if mod & (mod - 1) == 0}
     if len(cvb) != len(coins):
@@ -1089,6 +1168,14 @@ def evaluate(name, design, parts, seed=0, rng=None):
                 row["attacks"]["pack"] = {"exact": pk[0], "every": round(pk[1], 3), "once": round(pk[1], 3),
                                           "b": pk[2], "L": pk[3]}
                 cands.append(pk[1]), cands_once.append(pk[1])
+        cp = copy(design, coins, parts["W"], T)
+        if cp is False:
+            row["copy_refused"] = "the cells' S differ on equal words"
+        elif cp:
+            one = min(T, sw) if hw else T + sw
+            row["attacks"]["copy"] = {"exact": cp, "every": round(one / (CALL_M * CALL_N), 6),
+                                      "once": round(one / (CALL_M * CALL_N), 6)}
+            cands.append(one / (CALL_M * CALL_N)), cands_once.append(one / (CALL_M * CALL_N))
         if st["tfunc"]:
             row["tfunc_verified"] = tfunc_check(design, coins, parts["W"], T)
         if "rot" in design:
@@ -1159,7 +1246,7 @@ def main() -> int:
 
     S = int(opts.get("steps", 64))
     names = opts["designs"].split(",") if "designs" in opts else list(DESIGNS)
-    fams = opts.get("families", "counter,counter_x0,noise,counter_random,operand,cell,counter_inc,noise_inc,"
+    fams = opts.get("families", "counter,counter_x0,noise,counter_random,operand,cell,zero,counter_inc,noise_inc,"
                                 "operand_inc").split(",")
     parts = {f: family(f, hc, cs, S) for f in fams}
     for f, p in parts.items():
@@ -1188,6 +1275,11 @@ def main() -> int:
     checks.check("SHA-512's first round constant", SHA512_K[0] == 0x428A2F98D728AE22, hex(SHA512_K[0]))
     gm = Val(np.uint64(0x80000000), M32).gfmul(Val(np.uint64(2), M32))
     checks.check("GF(2³²): x³¹·x = x⁷ + x³ + x² + 1", int(gm.a) == 0b10001101, hex(int(gm.a)))
+    A = [Val(np.uint64(0), M64) for _ in range(25)]
+    for r in range(24):
+        A = keccak_round(A, KECCAK_RC[r])
+    checks.check("Keccak-f[1600] of the zero state: lane 0 is 0xF1258F7940E1DDE7", int(A[0].a) == 0xF1258F7940E1DDE7,
+                 hex(int(A[0].a)))
 
     rows = []
     for name in names:
@@ -1250,6 +1342,11 @@ def main() -> int:
         q = increments(p)
         checks.mutation("the carry guess with the rotation off by one",
                         carry_guess(dict(rz, rot=rz["rot"] - 1), draw_coins(rz, 0), q["W"], 16) < 0.5)
+        z = family("zero", hc, cs, S)["W"]
+        cell = Val(np.arange(z.shape[0] * z.shape[1], dtype=np.uint64).reshape(z.shape[:2]), M64)
+        kz = dict(DESIGNS["hw_keccak"], fn=lambda W, k: d_keccak(W, dict(k, iv=k["iv"] ^ cell)))
+        checks.mutation("copy on SI-FOLD's FT with its start state carrying the cell's index",
+                        copy(kz, draw_coins(kz, 0), z, 32) is False)
 
     json.dump({"schema": "si-red/v1", "steps": S, "rows": rows, "frontier": summary}, open(out_path, "w"), indent=1,
               default=str)
