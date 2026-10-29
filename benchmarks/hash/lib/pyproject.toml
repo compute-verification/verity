@@ -11,7 +11,7 @@ testpaths = ["tests"]
 # circuit reaches. vclib reads its variables through settings.py, on verity_config.settings.
 inputs = [
   "tools/config/verity_config",
-  "verity/__init__.py",
+  "verity/__init__.py", "verity/settings.py",
   "verity/errors.py",
   "verity/ml/__init__.py",
   "verity/ml/commitments",
