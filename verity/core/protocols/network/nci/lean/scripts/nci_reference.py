@@ -1,4 +1,4 @@
-"""The NCI policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
+"""The inference-only policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
@@ -9,7 +9,7 @@ docstring gives: the declaration's circuit is the canonical layout of a descript
 gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
 reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
 one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
-A primitive is taken as the descriptor declares it, as C-Flock's decoder takes it, so no registry is needed.
+A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so no registry is needed.
 
     check_desc(instance) -> the same, for `NciCheck.Desc`'s instance: θ and the owners per root node
 
@@ -21,9 +21,10 @@ A primitive is taken as the descriptor declares it, as C-Flock's decoder takes i
 `check_baseline` is `check_desc` followed by the check of each θ entry's `provenance` against the trusted input (the
 deployment's registration log, the run's own record and the program function's parameters), with `NciCheck.Baseline`'s
 codes in its order; `check_baseline_unrolled` is `check` followed by the same, on an instance expanded by
-`expand_baseline`. θ holds registered public data only: an entry of any kind but `registered`, an earlier run's `output`
-among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its first record, the first
-run's own included; any other record is refused `theta-not-at-deployment-start`.
+`expand_baseline`. The run's own record names the Program checked (its `program` is the descriptor's digest), whatever θ
+is, and is refused `run-program` otherwise. θ holds registered public data only: an entry of any kind but `registered`,
+an earlier run's `output` among them, is refused `theta-provenance`. One log is one deployment, and every entry cites its
+first record, the first run's own included; any other record is refused `theta-not-at-deployment-start`.
 """
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ import json
 from fractions import Fraction
 
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import PrimitiveDefinition, Registry
+from verity.ml.circuits.defs import PrimitiveDefinition, DefinitionTable
 from verity.ml.circuits.program import input_id, is_input, is_registered
 from verity.ml.circuits.types import type_from_json
 
@@ -52,9 +53,9 @@ def _unevaluated(*_a):
     raise NotImplementedError("the NCI check evaluates no gate")
 
 
-def declared(desc: dict) -> Registry:
+def declared(desc: dict) -> DefinitionTable:
     """A registry of the descriptor's primitives as it declares them (inputs aside, which the decoder makes itself)."""
-    reg = Registry()
+    reg = DefinitionTable()
     for fid, d in desc["definitions"].items():
         if d.get("form") == "primitive" and input_id(fid) is None:
             name, _, version = fid.rpartition("_v")
@@ -243,22 +244,20 @@ def check_desc(inst) -> dict:
 
 # θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
 
-REGISTRATION_V1 = "verity/registration/v1"
-REGISTRATION_V2 = "verity/registration/v2"
 TRUSTED_KEYS = {"log", "run", "params"}
 REGISTERED_KEYS = {"kind", "registration", "value", "root"}
 
 
 def record_digest(rec: dict) -> str:
-    """`registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its canonical JSON."""
-    import hashlib
-    tag = REGISTRATION_V2 if rec.get("format") == REGISTRATION_V2 else REGISTRATION_V1
-    return hashlib.sha512(tag.encode() + b"\0" + codec.canonical_json(rec)).hexdigest()
+    """The window record's digest, `registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its
+    canonical JSON."""
+    from verity.core.protocols.sampled_proofs.one_stage.registration import digest
+    return digest(rec)
 
 
 def lower(t) -> list[tuple[int, int]]:
     """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`SampledProofs.Registered.lower`)."""
-    from verity.ml.circuits.types import Array, Record, Tuple
+    from verity.ml.circuits.types import Array, RecordType, Tuple
     ws = t.width_set()
     if len(ws) == 1:
         return [(next(iter(ws)), t.leaves)]
@@ -266,7 +265,7 @@ def lower(t) -> list[tuple[int, int]]:
         return lower(t.elem) * t.n
     if isinstance(t, Tuple):
         return [x for f in t.fields for x in lower(f)]
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return [x for _, f in t.fields for x in lower(f)]
     return []
 
@@ -350,6 +349,8 @@ def provenance(inst, tr, node) -> None:
             counts[i] += offs[k + 1] - offs[k]
     digest = codec.program_digest(desc)
     run = T["log"][T["run"]]
+    if run.get("program") != digest:
+        raise Malformed("run-program")
     for t, p in zip(inst["theta"], prov, strict=True):
         k = node(offs, t)
         D = p["registration"]
@@ -360,7 +361,7 @@ def provenance(inst, tr, node) -> None:
         e = last_with(T["log"][0], "registered", "value", p["value"])
         if e is None or e.get("root") != p["root"]:
             raise Malformed("theta-root")
-        if run.get("program") != digest or own[k] is None:
+        if own[k] is None:
             raise Malformed("theta-unbound")
         i = own[k]
         mine = last_with(run, "registered", "value", T["params"][i][0])

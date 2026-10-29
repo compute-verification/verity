@@ -187,7 +187,7 @@ class FakeArm:
     def gate(self, dev, call, shape, flags):
         role = "hash" if "h" in flags else "nohash"
         ok = self.lazy or (role not in self.failing and dev.read(call.outputs["root"].ptr, 32) == b"\x5a" * 32)
-        return A.Gate(ok, {"root": "all"})
+        return A.GateResult(ok, {"root": "all"})
 
     def known_bad(self, dev, shape, operands):
         return FakeCall(dev, 1.0, pattern=b"\x5a" * 32 if self.bad_ok else b"\x00" * 32)
@@ -297,9 +297,9 @@ def test_an_arm_that_cannot_prepare_fails_its_gate():
 def test_a_gate_must_check_one_output_in_full():
     call = FakeCall(FakeDevice(), 1.0)
     with pytest.raises(A.ArmError, match="in full"):
-        A.check_gate(A.Gate(True, {"root": "sampled:32"}), call)
+        A.check_gate(A.GateResult(True, {"root": "sampled:32"}), call)
     with pytest.raises(A.ArmError, match="unknown outputs"):
-        A.check_gate(A.Gate(True, {"y": "all"}), call)
+        A.check_gate(A.GateResult(True, {"y": "all"}), call)
 
 
 def test_check_arm_needs_both_required_roles_and_a_known_precision():
@@ -1289,7 +1289,7 @@ class FakeChainArm(FakeArm):
         m, n, k = shape.m, shape.n, shape.k
         a = F.E4M3_VALUES[np.frombuffer(dev.read(call.ops.a.ptr, m * k), np.uint8)].reshape(m, k)
         want = F.bf16_rne(a[:, np.arange(n) % k] * 3 + 1).astype("<u2").tobytes()
-        return A.Gate(dev.read(call.outputs["y"].ptr, m * n * 2) == want, {"y": "all"})
+        return A.GateResult(dev.read(call.outputs["y"].ptr, m * n * 2) == want, {"y": "all"})
 
 
 @pytest.mark.parametrize("phases", ["groups", True])

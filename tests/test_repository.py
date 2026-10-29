@@ -30,7 +30,7 @@ ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 ALLOWED_EXTRA = (
     "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
 )
-#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. C-Flock
+#: One file per entry behind an index document, so that no one document outgrows its cap: {directory: its index}. Flock
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"Security/Proofs/Flock/Soundness/assumption-notes/": "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
@@ -64,7 +64,6 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
-    "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/ml/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"

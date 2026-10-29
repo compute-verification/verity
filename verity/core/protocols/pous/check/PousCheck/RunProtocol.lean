@@ -32,7 +32,8 @@ blocks; `k` at least its own and `Δ + RTT` within its rounds), `s_bits` is `⌊
 `δ + 2^eps_log2`: a node holding fewer bits when the challenges arrived passes with probability at most `eps`, under
 the certificate's claims. Off it, `s_bits` is 0 and `eps` 0, the vacuous statement, and the profile names each gap.
 At Demo B's store, 1038 segments of `2^16` blocks, that is `Pous.Period.PeriodHeldDemo`'s 1,060,008,348,186 bits at
-`1% + 2^-128`.
+`1% + 2^-128`. At `k` of at least 320 and `2^19` to `2^27` blocks the certificate is `wide320Certificate`'s,
+`Pous.SecurityProofs.ObligationWide320`, and `eps` is `2^-20`.
 
 `protocol` (`verity/pous/p2/v4/run`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
@@ -78,13 +79,19 @@ def SetupEvidence.toJson (s : SetupEvidence) : Json :=
   Json.mkObj [("commitment", hexJ (s.commitment.w ++ s.commitment.salt)),
     ("evidence", hexJ (SetupProtocol.encodeEvidence s.store))]
 
+/-- `hexField` for a field of any size, `C*`'s hex among them (`Core.Canonical.unhex`). -/
+def hexAt (j : Json) (k ctx : String) : V ByteArray := do
+  match Core.Canonical.unhex (← J.str j k ctx) with
+  | .ok b => pure b
+  | .error e => throw s!"{ctx}.{k}: {e}"
+
 /-- The setup's commitment and evidence, each read by `SetupProtocol`'s own decoder. -/
 def SetupEvidence.ofJson (j : Json) : V SetupEvidence := do
   let ctx := "evidence.setup"
-  let c ← match SetupProtocol.commitment (← hexField j "commitment" ctx) with
+  let c ← match SetupProtocol.commitment (← hexAt j "commitment" ctx) with
     | .ok c => pure c
     | .error e => throw s!"{ctx}.commitment: {e}"
-  let store ← match SetupProtocol.evidence (← hexField j "evidence" ctx) with
+  let store ← match SetupProtocol.evidence (← hexAt j "evidence" ctx) with
     | .ok s => pure s
     | .error e => throw s!"{ctx}.evidence: {e}"
   pure ⟨c, store⟩
@@ -97,10 +104,15 @@ structure Evidence where
 def Evidence.toJson (e : Evidence) : Json :=
   Json.mkObj [("digests", hexJ e.digests), ("session", e.session.toJson), ("setup", e.setup.toJson)]
 
+/-- `exactly` on `Core.canonicalJson b`, read in place (`Core.Canonical`): the evidence is gigabytes at a served store,
+`C*`'s hex inside it, so its text is kept to compare the evidence's encoding against rather than written again. -/
 def decodeEvidence (b : ByteArray) : V Evidence := do
-  exactly (fun j => do pure ⟨← hexField j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
-      ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩)
-    Evidence.toJson (← Core.canonicalJson b)
+  let (j, s) ← Core.Canonical.read b
+  let e : Evidence := ⟨← hexAt j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
+    ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩
+  if !(← Core.Canonical.writes e.toJson s) then
+    throw "not the canonical JSON of what it holds (a field extra, or a constant not the protocol's)"
+  pure e
 
 /-- SHA-512 of the setup's public outputs as canonical JSON, the bytes they decoded from. -/
 def digest (pub : SetupProtocol.Public) : ByteArray :=
@@ -118,9 +130,9 @@ def familyCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
   else none
 
 /-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks
-(`P2RingRoundSecureWide`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
+(`P2RingRoundSecureWide`, `RingDeviceAt`). -/
 def WIDE_CLAIMS : List String :=
-  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding"]
+  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at"]
 
 /-- `p2.wide_certificate`: `Pous.Period.SecurityProofs.periodHeldAt` for a store at the registered width and prime of
 any block count from `2^19` to `2^27` (`p2.CERT_WIDE_BLOCKS`), in any number of segments: an accepted period with no
@@ -131,14 +143,31 @@ def wideCertificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
            theoremName := "Pous.Period.SecurityProofs.periodHeldAt", segments := none, claims := WIDE_CLAIMS }
   else none
 
-/-- `period.certificate`: P2's registered certificate (`Certificate.p2`) when the store is its point, segment count and
-all, else P2's proved family's (`familyCertificate`), else the per-period guarantee's (`wideCertificate`), else none. -/
+/-- `p2.CERT_K_WIDE320`: the reads of `Pous.SecurityProofs.ObligationWide320`'s window. -/
+def CERT_K_WIDE320 : Nat := 320
+
+/-- `p2.wide320_certificate`: `Pous.SecurityProofs.ObligationWide320` for a store at the registered width and prime of
+any block count from `2^19` to `2^27`, in any number of segments: a window of 320 reads at the store's snapshot, the
+state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, `δ = 2^-20 − 2^-128`
+beside `2^eps_log2 = 2^-128`. -/
+def wide320Certificate (w c0 blocks : Nat) : Option Certificate.Certificate :=
+  if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
+    some { k := CERT_K_WIDE320, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
+           theoremName := "Pous.SecurityProofs.ObligationWide320", delta := (2 ^ 108 - 1, 2 ^ 128), segments := none,
+           claims := WIDE_CLAIMS }
+  else none
+
+/-- `period.certificate`: at `k` of at least `CERT_K_WIDE320` challenges, the 320-read window's (`wide320Certificate`)
+where it holds the store; else P2's registered certificate (`Certificate.p2`) when the store is its point, segment
+count and all, else P2's proved family's (`familyCertificate`), else the per-period guarantee's (`wideCertificate`),
+else none. -/
 def certificate (q : Run.Point) : Option Certificate.Certificate :=
   let p := q.params
   let rest := (familyCertificate p.w p.c0 p.blocks).orElse fun _ => wideCertificate p.w p.c0 p.blocks
-  match Certificate.p2 p.w p.c0 p.blocksPerSegment with
-  | some c => if c.segments == some p.segments then some c else rest
-  | none => rest
+  let base := match Certificate.p2 p.w p.c0 p.blocksPerSegment with
+    | some c => if c.segments == some p.segments then some c else rest
+    | none => rest
+  if CERT_K_WIDE320 ≤ q.k then (wide320Certificate p.w p.c0 p.blocks).orElse fun _ => base else base
 
 /-- What an accepted run certifies at `pt`: the certificate when it covers the point, and why it doesn't otherwise. -/
 def gaps (pt : Run.Point) : Option Certificate.Certificate × List String :=
@@ -324,6 +353,13 @@ private def TIE_PUB : SetupProtocol.Public :=
 #guard !(certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16 - 1, 2 ^ 11 + 1⟩ }).certified
 #guard (gaps { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 2 ^ 11 + 1⟩ }).2 ==
   [s!"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {2 ^ 27 + 2 ^ 16})"]
+#guard (certify { Run.DEPLOYED with k := 320 }).eps.toString == s!"1/{2 ^ 20}"
+#guard (certify { Run.DEPLOYED with k := 320 }).sBits == 2 ^ 19 * 16448 * 18 / 19
+#guard ((certificate { Run.DEPLOYED with k := 320 }).map (·.theoremName)) == some "Pous.SecurityProofs.ObligationWide320"
+#guard ((certificate { Run.DEPLOYED with k := 319 }).map (·.theoremName)) == some "Pous.SecurityProofs.P2SlackFamilyUncond"
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 2 ^ 16, 1038⟩, k := 320 }).eps.toString == s!"1/{2 ^ 20}"
+#guard (certify { Run.DEPLOYED with params := ⟨16448, 21065, 256, 1⟩, k := 320 }).eps.toString ==
+  s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 
 end PousCheck.RunProtocol

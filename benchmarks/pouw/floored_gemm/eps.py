@@ -15,7 +15,7 @@ First it reproduces Lean's `epsS32_values` and `epsP1mu_values` exactly (exit 1 
   its only forced work: s = eta_cap cap steps, N = s / 256 blocks, Rmin = r_u s Nmin / N.
 
 Each shape's arms at their faster tile config (table.best). Usage: eps.py BENCH.jsonl [nu ...]   (nu as fractions of all issue; default 0 0.005 0.04 and W11's upper ends,
-0.00065 at delta = 0.1%, 0.00268 at 0.5% and 0.00534 at 1%: note:20261015T0713Z-draft-filler-issue-slack)
+0.00065 at delta = 0.1%, 0.00268 at 0.5% and 0.00534 at 1%)
 """
 
 import json
@@ -24,14 +24,17 @@ import sys
 
 from table import best
 
-CAP = 14618880                 # tensor steps (32 s8 MACs) a us: 32 a SM-clock x 188 SMs x 2,430 MHz
-ALL_ISSUE = 233902080          # q (quarter lane-ops) a us: 4 x 128 x 188 x 2,430
+from verity.hardware import load, rate
+
+SERVER = load("rtx-pro-6000-server")
+CAP = int(rate(SERVER) / 32 / 10 ** 6)                  # tensor steps (32 s8 MACs) a us at the card's ceiling clock
+ALL_ISSUE = int(rate(SERVER, "issue") * 128 / 10 ** 6)  # q (quarter lane-ops) a us: 32 lanes x 4 q a warp instruction
 ISSUE0, CHI = 245597184, 4     # wP1mS: the measured line's intercept (q) and slope (q a step)
 KS, KU, KM, WB = 32, 8, 32, 8192
 L2_S32 = 1477593               # rate-capped words: S32 bulk plus L2 red
 S_H, U_H = 8771328, 210511872  # the measured filler's point: 0.6 cap steps, 24 q a step
 RMIN_H = 210278400
-F_REF, F_MAX = 2092.0, 2430.0  # eta_cap = eta x 2,092 / 2,430 (the eta study's)
+F_REF, F_MAX = 2092.0, SERVER["clock"]["sm"]["value"]  # eta_cap = eta x F_REF / F_MAX (the eta study's locked clock)
 MU = 0.0011                    # detection slack: Nmin = floor(N (1 - mu)); Lean's rows differ by <= 2 blocks (< 4e-5 in eps)
 
 

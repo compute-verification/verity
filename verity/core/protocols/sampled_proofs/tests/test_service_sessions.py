@@ -15,7 +15,7 @@ N = 6
 
 
 def _units(*draws):
-    """A sampler that draws `draws[i]` at its i-th call: each round its own proof blocks."""
+    """A sampler that samples `draws[i]` at its i-th call: each round its own proof blocks."""
     it = iter(draws)
     return lambda law, n: next(it)
 
@@ -38,7 +38,7 @@ def _record(row: int, previous: str | None) -> dict:
                     {"kind": "served", "run": RUN, "row": row}, previous=previous)
 
 
-def _register(stream: S.Stream) -> S.Registration:
+def _register(stream: S.Stream) -> S.WindowCommitmentRecord:
     row = len(stream._entries)
     previous = stream._entries[-1].registration.digest if stream._entries else None
     return stream.register(_record(row, previous), _ports(N))
@@ -114,7 +114,7 @@ def test_a_session_opened_before_the_last_rounds_coin_is_refused():
 
 
 def test_a_session_past_the_first_rounds_deadline_is_a_reject():
-    """The session's deadline is its first round's: a proof 61 s after round 0's draw is `late` for both rounds, though
+    """The session's deadline is its first round's: a proof 61 s after round 0's sample is `late` for both rounds, though
     it is 21 s after round 1's; one delivered by round 0's deadline is accepted."""
     for deliver_at, symbols in ((59.5, ("accept", "accept")), (61.0, ("late", "late"))):
         clock = Clock()

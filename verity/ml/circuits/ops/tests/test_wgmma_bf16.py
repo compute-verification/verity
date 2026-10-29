@@ -1,7 +1,7 @@
-"""``sm90.wgmma.m64n8k16.bf16`` against the H100 capture (``fixtures/tc-hopper-wgmma-bf16-2026-09-26``, see the
-fixtures README): every recorded word reproduces through the registered model's total step, one wgmma per record or four
-chained on one accumulator, on both A operand paths; the Ampere pipeline does not.  A run of the legacy ``mma.sync.m16n8k16``
-on a second H100 against the same model shows the two instructions compute the same words, non-finite ones included."""
+"""``sm90.wgmma.m64n8k16.bf16`` against the H100 capture (``CAPTURE``, listed in the fixtures README): every recorded word
+reproduces through the registered model's total step, one wgmma per record or four chained on one accumulator, on both A
+operand paths; the Ampere pipeline does not.  A run of the legacy ``mma.sync.m16n8k16`` on a second H100 against the same
+model shows the two instructions compute the same words, non-finite ones included."""
 
 from __future__ import annotations
 

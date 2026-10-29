@@ -29,6 +29,8 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
     lean                  `skipped`, in place of every Lean part, on a tree without the verifier's Lean package (check
                           skips its Lean group there): a skip passes nothing
     lean-changed          no verdict, never required: it vouches for nothing, the audit decides
+    ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
+                          the train's check runs it
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes
@@ -444,6 +446,9 @@ def plan_tree(tree: Path, sources: list[Source], agreement: bool, local: bool = 
             parts += [p for p in suites if p.step == "lean-suites"]
         elif j == "lean-changed":
             parts.append(Part(j, j, None, "no-verdict", why="it vouches for nothing: the audit decides", required=False))
+        elif j == "ratchet-gate":
+            parts.append(Part(j, j, None, "no-verdict", why="it judges the merges above the check's base, not the tree: "
+                              "the train's check runs it", required=False))
         elif j in IMPLIED:
             parts.append(Part(j, j, None, "implied"))
         elif j != "pytest":

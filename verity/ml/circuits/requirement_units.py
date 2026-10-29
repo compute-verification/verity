@@ -1,4 +1,4 @@
-"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the declared
+"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the registered
 circuit reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the
 blocks a step writes to the circuit's values and every free, of a written block or a registered one, to its values' last
 structural reader (`StoreMatches`' L1, L2 and L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or
@@ -28,7 +28,7 @@ wrote it (word N + 2 b) and the step that freed it (word N + 2 b + 1), `WORD - 1
 takes effect after f's reads, as `Store.resident` and memory-map/v1 read it. The pass row ``pi`` holds, for each of the
 session's T windows, the step of its last pass (the previous window's for a window without one, 0 before any).
 
-**What is public** is the declared circuit's requirement (the census's schedule: each value's birth, its last structural
+**What is public** is the registered circuit's requirement (the census's schedule: each value's birth, its last structural
 reader, which values each step reads; `requirement.Requirement`), the registered store's layout (which registered block
 holds which registered value), each step's count of written blocks and so its first fresh index, each value's epochs
 (the step each re-key moves it at), the session's windows T and lifetime cap L (`Params`), and each pass's plan length.
@@ -113,8 +113,9 @@ statement adds each row's hm96 commitment.
 
 `plan_match`, `plan_shard` and `memory_map` are the references, over plain ints; `plan_rows`, `plan_shard_rows` and
 `memory_map_rows` name each instance's rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments
-from a `requirement.Requirement`, its `Layout` and `Store` (`layout_words`, `map_words` and `pass_words` the shared rows),
-`shard_inputs` a shard's from a pass's plan and the blocks its step reads, and `row_words` an instance's rows from them.
+from a `requirement.Requirement`, its `Store.Placement` and `Store` (`layout_words`, `map_words` and `pass_words` the shared
+rows), `shard_inputs` a shard's from a pass's plan and the blocks its step reads, and `row_words` an instance's rows from
+them.
 """
 from __future__ import annotations
 
@@ -127,7 +128,7 @@ from . import boolean as BL
 from .boolean import trace as TR
 from .boolean.forms import ONE, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
 from .defs import CompositeDefinition
-from .requirement import BLOCK_BITS, Layout, Requirement, Store
+from .requirement import BLOCK_BITS, Requirement, Store
 from .types import Array
 
 __all__ = ["BLOCK_WORDS", "MemoryMapStep", "PlanMatch", "PlanShard", "U16", "layout_words", "map_inputs", "map_value_leaves",
@@ -525,7 +526,7 @@ def _mask(bits, n: int) -> list[int]:
     return out
 
 
-def layout_words(S, req: Requirement, layout: Layout, positions: Sequence[int]) -> list[int]:
+def layout_words(S, req: Requirement, layout: Store.Placement, positions: Sequence[int]) -> list[int]:
     """The layout row at epoch 0: written value ``positions[i]``'s store index and slot at words 2 i and 2 i + 1, zero past
     them and at every later epoch (a re-key's entries, ``(e V + i)``'s words, are its caller's)."""
     vw, out = value_bits(S.SLOTS), [0] * (2 * S.V * S.E)

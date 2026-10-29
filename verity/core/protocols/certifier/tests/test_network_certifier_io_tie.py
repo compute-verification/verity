@@ -451,7 +451,7 @@ def test_the_ports_reads_are_the_commits_registration():
     link = small()
     inst, count = commit(SMALL, link, 0), len(link.port)
     binding, salts = _h(b"portw"), [IT.fake_salt(b"wp", s) for s in range(count)]
-    assert ADV.register(link.port, 32 * SMALL.P, binding, salts).root == inst.port_root
+    assert ADV.commit(link.port, 32 * SMALL.P, binding, salts).root == inst.port_root
     assert ADV.domain(binding, count).domain_id == IT.domain(binding, count).domain_id == inst.port_domain
     ports = IT.port_reads(inst.steps, inst.port_root, inst.port_domain, count, SMALL.P, reads_from=3)
     assert ports == {f"port[{s}]": {
@@ -714,8 +714,7 @@ def _tz(x: int) -> int:
 
 def test_the_parts_ands():
     """Each composite is its parts: what the cost table in PROTOCOL.md extrapolates from."""
-    sh, memo = SMALL, {}
-    a = lambda fn: HC.ands(fn, memo)  # noqa: E731
+    sh, a = SMALL, HC.ands
     route, cell = a(bind(IT.IoTieRoute, W=sh.W, D=sh.D)), a(bind(IT.IoTieCell, B=sh.B))
     assert route == sh.W * sh.switches
     for N, D, E in ((sh.R, sh.D, sh.E), (12, 5, 20), (100, 7, 96)):

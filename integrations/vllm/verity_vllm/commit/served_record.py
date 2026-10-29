@@ -5,7 +5,7 @@ chunk of it, one decode token a step, a recompute from position 0 after a preemp
 under async scheduling, a row past the token that finished it (an EOS, a stop token or string the scheduler hadn't seen
 yet). None of that is a rule here; each is a fact the record states. A `NativeHostCommitter` with a `SamplerInputsSource`
 attached keeps each step's rows (`Row`: the runner's request id, its token rows [lo, hi) of the step, its first position and
-its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
+its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `BlockValues.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
 - ``inputs``: position p -> the committed input id at p (the step-input port's ``step.input/ids``, else ``c00.input/ids`` on
@@ -26,7 +26,7 @@ prefix can be its first turn's prompt and its previous turn's suffix). Rows past
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
 cut short can't pass with its missing ids taken for an overrun; a client's abort ends it anywhere short of ``max_tokens``,
 and then at most one committed sample runs past it (the step in flight when the abort was applied, under async scheduling).
-A request aborted before it was ever scheduled streamed nothing and has no committed row, and `Record.check` passes it.
+A request aborted before it was ever scheduled streamed nothing and has no committed row, and `BlockValues.check` passes it.
 
 Stdlib only, but `committed_ints`, which reads a committer's retained bytes with numpy (and torch for a GPU block).
 """
@@ -35,6 +35,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 SCHEMA = "verity-vllm/served-record/v1"
@@ -200,9 +201,30 @@ def served_rows(committer: Any) -> dict[int, list[tuple]]:
 def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
     """The integer tensor ``name`` as committed at ``step``, read back from the bytes the committer retains (the retained
     GPU-tree block, its host copy, or the packed step stream); None when the step committed no such tensor."""
+    got = committed_raw(committer, step, name)
+    return None if got is None else ints_of(*got)
+
+
+def ints_of(raw: bytes, dtype: str) -> list[int]:
+    """A committed integer tensor's bytes (`committed_raw`) as ints."""
     import numpy as np
 
-    meta = next((m for m in committer._layouts.get(step, ()) if m.name == name), None)
+    return np.frombuffer(raw, dtype=np.dtype(str(dtype).rsplit(".", 1)[-1])).astype(np.int64).tolist()
+
+
+def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | None:
+    """`committed_ints`' bytes of ``name`` at ``step`` and its dtype. A plan's metas (`plan_cache.PlanMetas`) are read from its
+    columns, so no `TensorMeta` is built for the read."""
+    from verity_vllm.commit.committer.plan_cache import PlanMetas
+
+    metas = committer._layouts.get(step, ())
+    if isinstance(metas, PlanMetas):
+        if name not in metas.names:
+            return None
+        i = metas.names.index(name)
+        meta: Any = SimpleNamespace(dtype=metas.dtypes[i], nbytes=metas.sizes[i], dev_off=metas.offsets[i], stream_off=metas.offsets[i])
+    else:
+        meta = next((m for m in metas if m.name == name), None)
     if meta is None:
         return None
     raw: Any = None
@@ -215,9 +237,7 @@ def committed_ints(committer: Any, step: int, name: str) -> list[int] | None:
         raw = bytes(meta.host)
     elif step in (getattr(committer, "_streams", {}) or {}) and int(meta.stream_off) >= 0:
         raw = bytes(committer._streams[step][meta.stream_off: meta.stream_off + meta.nbytes])
-    if raw is None:
-        return None
-    return np.frombuffer(raw, dtype=np.dtype(str(meta.dtype).rsplit(".", 1)[-1])).astype(np.int64).tolist()
+    return None if raw is None else (raw, str(meta.dtype))
 
 
 @dataclass
@@ -359,9 +379,10 @@ class RequestRecord:
                 "discarded": [[p, v] for p, v in sorted(self.discarded.items())], "seeds": sorted(self.seeds)}
 
 
-class Record:
-    """Every request's `RequestRecord` over the windows of one committing engine. ``known`` maps a request id to anything
-    (the admitted requests); a runner id is matched to it by `base_id`."""
+class BlockValues:
+    """The committed values of one committing engine's execution blocks (its windows), by request: each request's
+    `RequestRecord`. ``known`` maps a request id to anything (the admitted requests); a runner id is matched to it by
+    `base_id`."""
 
     def __init__(self, known: Mapping[str, Any] | None = None) -> None:
         self.known = known
@@ -370,8 +391,10 @@ class Record:
 
     def absorb(self, committer: Any, window: int) -> dict[str, Any]:
         """The window just finalized by ``committer`` into the requests' records; returns the window's readback record."""
+        from verity_vllm.commit.committer.plan_cache import PlanMetas
+
         layouts = getattr(committer, "_layouts", {}) or {}
-        names = {m.name for metas in layouts.values() for m in metas}
+        names = {n for metas in layouts.values() for n in (metas.names if isinstance(metas, PlanMetas) else (m.name for m in metas))}
         ids_name = next((n for n in IDS_NAMES if n in names), None)
         errors: list[str] = []
         rows_of = served_rows(committer)

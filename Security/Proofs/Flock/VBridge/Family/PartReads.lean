@@ -17,7 +17,7 @@ what the part sessions' reads files and registered reads say there:
   unit (`OwnReads`, at a part's labels);
 * `nv_part`, `un_val`: a part's statement has two instances (`Stmt.instances`), so rep `r`'s unit is instance `r`;
 * `OwnNamesOne`, `readOne_of`: each part's reads file names each port once, so a read's port is its one entry of that
-  name, read at the unit's position (`Recursion.vRows_tie`'s and `zero_tie`'s `hone` and `hpos`);
+  name, read at the unit's position;
 * `rowColKeys_of`, `sameRow_of`: `RowColKeys` and `SameRow` from those and `HCover`.
 -/
 
@@ -46,7 +46,7 @@ def RowPort (p : ℕ) (j : Fin F.stmts.size) (q' : Fin (F.Vs j).c.ports.size) : 
     Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) = .msg q'.val (k' / 8) (k' % 8)
 
 /-- Obligation: discharged by the parse of the part's circuit (`parse_circuitFile` with `circuitFile`'s emit and parse
-round trip, the lane that proves `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Each row
+round trip, as for `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Each row
 column of a part is keyed by a row bit.** In the circuit of part `p`'s statement, the Δ key (`Aliased.srcKey`, copy 0)
 of every row column `rowColOf` of the unit is message bit `k'` of a port `q'`, within its row. V*'s `InnerRepCheck`
 circuit takes its row ports as its inputs from column 0 (`rowCol`), each a port of the statement under its name
@@ -57,7 +57,7 @@ def PartRowCols : Prop :=
       Aliased.srcKey (F.Vs j).c (0 * (Rows.ofNet (F.Vs j).hU).nIn + rowColOf F.sh p q) = .msg q'.val (k' / 8) (k' % 8)
 
 /-- Obligation: discharged by the parse of the parts' circuits (`parse_circuitFile` with `circuitFile`'s emit and parse
-round trip, the lane that proves `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Two parts'
+round trip, as for `HUnitName`), at V*'s parts the verifier's groups (`HCover`'s lemma). **Two parts'
 columns of one element's bit key one bit of rows of one name.** Where parts `p` and `p'` hold the same element `i` of
 `w` at positions `a` and `a'`, the keys of their columns of bit `e` are the same bit `b` of ports of one name. A part
 reads whole row ports (`wIdx`), each under its name (`rec_residuals.py:125`), so element `i` is bit
@@ -75,8 +75,8 @@ def PartRowBits : Prop :=
       b < Layout.portRowW (F.Vs j).c q → b' < Layout.portRowW (F.Vs j').c q' →
       b = b' ∧ (F.Vs j).c.ports[q].name = (F.Vs j').c.ports[q'].name
 
-/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind (lane
-hv). **Each part's reads file names its row ports.** At every accepted outer proof, the reads file `own` of part `p`'s
+/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind.
+**Each part's reads file names its row ports.** At every accepted outer proof, the reads file `own` of part `p`'s
 session names every row port of its circuit (`RowPort`). V* writes it with an entry per port of the part
 (`rec_vstage.py:356-363`; `rec_residuals.write` refuses reads of other ports, `rec_residuals.py:443`). -/
 def OwnNamesRows : Prop :=
@@ -85,8 +85,8 @@ def OwnNamesRows : Prop :=
       ∀ q' : Fin (F.Vs j).c.ports.size, F.RowPort p j q' →
         ∃ pt' ∈ (F.zs R ω t R₂ j).own, pt'.name = (F.Vs j).c.ports[q'].name
 
-/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind (lane
-hv). **Two parts' entries at a row port of one name are one entry.** At every accepted outer proof, an entry of part
+/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind.
+**Two parts' entries at a row port of one name are one entry.** At every accepted outer proof, an entry of part
 `p`'s reads file named as a row port `q` of its circuit and an entry of part `p'`s named as a row port `q'` of the same
 name are equal. V* writes both as the row's registration (or the verifier's own entry for it) with positions `[0, 1]`
 (`rec_vstage.py:356-357`, `rec_residuals.py:449`), and `acc0`, `acc1` as `rec-acc` at `rep_ends`, the same in every
@@ -129,8 +129,8 @@ theorem un_val (hcov : F.HCover) {p : ℕ} (hp : p < (partsOf F.sh).size) (r : F
   have hsj : F.sess p = j := F.hsess p j ⟨nm, pt, hj⟩
   exact F.hun p r (by rw [hsj, F.nv_part hj]; exact r.isLt)
 
-/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind (lane
-hv), as `OwnNamesRows`. **Each part's reads file names each port once.** At every accepted outer proof, two entries
+/-- Obligation: discharged by a check that the verifier writes each part's reads file itself, of `HOwn`'s kind, as
+`OwnNamesRows`. **Each part's reads file names each port once.** At every accepted outer proof, two entries
 of part `p`'s reads file of one name are one entry. V* writes one entry per port of the part (`rec_vstage.py:356-363`);
 check 5 reads `find?`'s first entry of a name (`RecCoins.checkRows`), so it does not refuse a second. -/
 def OwnNamesOne : Prop :=
@@ -138,8 +138,8 @@ def OwnNamesOne : Prop :=
     ∀ (p : ℕ) (j : Fin F.stmts.size) (nm : String) (pt : VStar.Part), F.stmts[j] = .inner p nm pt →
       ∀ reg ∈ (F.zs R ω t R₂ j).own, ∀ reg' ∈ (F.zs R ω t R₂ j).own, reg.name = reg'.name → reg = reg'
 
-/-- **`Recursion.vRows_tie`'s and `zero_tie`'s `hone` and `hpos` at a part's read** (`ReadsOwn`, `OwnNamesOne`): the
-read's port is `own`'s one entry of its name, read at the unit's position. -/
+/-- **A part's read is at its port's one entry** (`ReadsOwn`, `OwnNamesOne`): the read's port is `own`'s one entry of
+its name, read at the unit's position. -/
 theorem readOne_of (hrd : F.ReadsOwn dg N k Rw) (hnd : F.OwnNamesOne dg N k Rw) {R : Reg} {ω : L.Ω}
     {t : List (Cm × (ℐ).Coin)} {R₂ : Reg₂} {τ o} (hacc : Accepted (I := ℐ) F.zs dg N k Rw R ω t R₂ τ o) {p : ℕ}
     {j : Fin F.stmts.size} {nm : String} {pt : VStar.Part} (hj : F.stmts[j] = .inner p nm pt) {u : Fin (F.Vs j).nv}

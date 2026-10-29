@@ -1,7 +1,7 @@
 """The Python held to PoUW's commitments in Lean (`PouwCommit`), PoUW's verifier of record (`pouw.verifier`).
 
 `tests/difftest_vectors.py` writes generated cases and this checkout's outcome on each (`tagged`, the bindings and
-`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the draw
+`weights_root`, domain ids, `commit_rows` and transcript roots, `verify_opening`, `coin_reason`, the epoch salts, the sample
 keys and the work-weighted draws), and `PouwCommit/DifftestMain.lean` computes every case from the Lean and fails on any
 case whose Python outcome is not the Lean's, naming the Lean's. `test_the_python_is_the_lean` runs it here on the cases
 this checkout writes, so a change to the Python that the Lean doesn't make fails with the Lean's verdict. `check` also runs
@@ -75,6 +75,9 @@ def test_the_tree_cases_reach_every_branch():
     assert any("ok" in c["python"] and c["in"]["hash"] == "hm96-sha512" and not c["in"]["digests"]
                and any(len(r) > 2 * 2048 for r in c["in"]["rows"]) for c in commits), "a row of three segments"
     assert any("error" in c["python"] for c in commits)
+    for h in ("sha256", "sha512"):
+        refused = [c for c in commits if c["in"]["hash"] == h and not c["in"]["public"]]
+        assert refused and all(c["python"] == {"error": "ProtocolError"} for c in refused), h
     verdicts = collections.Counter(json.dumps(c["python"]) for c in _of("verify"))
     assert {'{"ok": true}', '{"ok": false}', '{"error": "ProtocolError"}'} <= set(verdicts)
     assert any(c["in"]["hash"] == "hm96-sha512" and c["python"] == {"ok": True} for c in _of("verify"))

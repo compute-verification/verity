@@ -1,4 +1,4 @@
-"""The adapter from the real certifier's records to `datacenter.observe.Record`s: a record's port is its block's
+"""The adapter from the real certifier's records to `datacenter.observe.PortRecord`s: a record's port is its block's
 certifier in the direction of travel, its counts are its grid's occupancy, and its digest binds the status and the real
 frames; the certifiers' parameters make the declaration's cadence; and on an injected clock an honest run publishes exactly
 the records the Program declares, which `datacenter.check_records` carries, while a block that holds a session late or
@@ -35,7 +35,7 @@ def setup(m):
     return report, m.ar.Setup(report)
 
 
-def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COMPLETE) -> grid.Record:
+def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COMPLETE) -> grid.BlockGrid:
     c = grid.Certifier("responses", GridParams(buckets=len(per_bucket), allocation=2, frame_bytes=8))
     k = 0
     for n in per_bucket:
@@ -44,7 +44,7 @@ def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COM
         k += n
         c.tick()
     r = c.close_window()
-    return grid.Record(r.link, r.window, r.grid, status)
+    return grid.BlockGrid(r.link, r.window, r.grid, status)
 
 
 def test_a_record_is_the_grids_occupancy_and_a_digest_of_its_status_and_real_frames(m):
@@ -165,11 +165,11 @@ def test_a_fleet_is_validated_and_stood_up_merged(m, tmp_path):
     assert dc.name == "east+west" and [b.name for b in dc.blocks] == ["east.b0", "west.b0"]
     assert [(e.a, e.b, e.delay) for e in dc.links if e.kind == "wan"] == [("east.leaf0", "west.leaf0", 0.03)]
     path = tmp_path / "fleets.py"
-    path.write_text("from datacenter import Fleet, Link\n"
+    path.write_text("from datacenter import Fleet, LinkEntry\n"
                     "from datacenter.examples import two_sites\n"
                     "def bad():\n"
                     "    f = two_sites(1)\n"
-                    "    return Fleet(f.datacenters, [Link('east.b0.nic0', 'west.leaf0', f.links[0].capacity)])\n")
+                    "    return Fleet(f.datacenters, [LinkEntry('east.b0.nic0', 'west.leaf0', f.links[0].capacity)])\n")
     assert m.lab(argparse.Namespace(**shape | {"declaration": f"{path}:two_sites"})).name == "east+west"
     with pytest.raises(SystemExit, match="link east.b0.nic0-west.leaf0 passes no certifier"):
         m.lab(argparse.Namespace(**shape | {"declaration": f"{path}:bad"}))

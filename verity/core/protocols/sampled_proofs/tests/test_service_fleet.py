@@ -1,6 +1,6 @@
 """The fleet's halt (R5-all, `service.Fleet`): at the failure that brings any stream of an operator to its budget, every
 stream of the operator halts, each of its outcomes not yet final ends as `halted`, never `accept`, outcomes already final
-stay, and nothing of the operator is registered or accepted again. Each decision is the verifier of record's (`Fleet.run`
+stay, and nothing of the operator is registered or accepted again. Each decision is the verifier's (`Fleet.run`
 and `Stream.run`'s `halt`)."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import test_service_sessions as T
 from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _round, _stream
 
 
-def _open(stream: S.Stream, n: int = 6) -> S.Registration:
+def _open(stream: S.Stream, n: int = 6) -> S.WindowCommitmentRecord:
     """A registration the stream receives and leaves open."""
     previous = R.digest(stream._entries[-1].registration.record) if stream._entries else None
     return stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))
@@ -28,7 +28,7 @@ def _fleet(*operators: str, budget: int = 1, clock: Clock | None = None) -> tupl
 
 
 def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
-    """b = 1: one reject halts every stream of the operator. The other stream's draw, delivered and pending its verdicts,
+    """b = 1: one reject halts every stream of the operator. The other stream's sample, delivered and pending its verdicts,
     ends `halted` with no failure of its own, and its accepted verdicts come too late; every call on either stream is
     refused, so is another stream for the operator, and another operator's stream runs on."""
     fleet, (a, b, c) = _fleet("o", "o", "p")

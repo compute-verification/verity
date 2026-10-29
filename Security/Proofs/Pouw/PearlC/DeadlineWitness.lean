@@ -1,4 +1,5 @@
-import Definitions.Pouw.Assumptions.PearlC.Deadline
+import Definitions.Pouw.Assumptions.Deadline
+import Definitions.Pouw.PearlC.Deadline
 import Definitions.Pouw.PearlC.Device
 import Definitions.Pouw.PearlC.DevicePricesLoop
 
@@ -7,8 +8,8 @@ import Definitions.Pouw.PearlC.DevicePricesLoop
 
 `Definitions/Pouw/Guarantees/Deadline.lean`'s sm_120 guarantees (`PearlCSm120Rev1Cap1000ByDeadline_8192` and the others)
 take, besides TT_OUT, a workload in `pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh`, the honest clock
-`HonestClock CM U A run td` and the budget `A.BoundedBy U run td T q`. These witnesses meet all three, together with
-delivery by the deadline:
+`HonestClock (CM.adversaries U) A run td` and the budget `A.BoundedBy U run td T q`. These witnesses meet all three,
+together with delivery by the deadline:
 
 * `cube_inDomain`: the one-unit workload of shape `sh` is in the sm_120 v1 domain at `sh` (`cube8192_inDomain`,
   `cube16384_inDomain`);
@@ -64,7 +65,7 @@ theorem ownRun_onTime (CM : CostModel Q R S) (U : Workload) (A : Adversary CM) (
 
 /-- The honest clock holds on the adversary's own run at the deadline `1`, with `A' = A`. -/
 theorem honestClock_ownRun (CM : CostModel Q R S) (U : Workload) (A : Adversary CM) :
-    Assumptions.HonestClock CM U A (ownRun CM U A) 1 :=
+    Assumptions.HonestClock (CM.adversaries U) A (ownRun CM U A) 1 :=
   ⟨A, rfl, fun H s => ⟨fun _ => rfl, (ownRun_spentIn CM U A H s).ge, le_refl _⟩⟩
 
 /-- An adversary bounded by `T` and `q` is bounded by them on its own run by the deadline `1`. -/
@@ -77,7 +78,7 @@ domain, and every bounded adversary has a run, on time on every coin, that meets
 theorem byDeadline_premises_8192 (P : Protocol Q R S) (CM : CostModel Q R S) (A : Adversary CM) {T : ℝ} {q : ℕ}
     (h : A.Bounded (cubeWorkload sh8192) T q) :
     (cubeWorkload sh8192).InDomain P (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) ∧
-      ∃ (run : TimedRun Q R S) (td : ℝ), Assumptions.HonestClock CM (cubeWorkload sh8192) A run td ∧
+      ∃ (run : TimedRun Q R S) (td : ℝ), Assumptions.HonestClock (CM.adversaries (cubeWorkload sh8192)) A run td ∧
         A.BoundedBy (cubeWorkload sh8192) run td T q ∧ ∀ H s, run.tr H s ≤ td :=
   ⟨cube8192_inDomain P, ownRun CM _ A, 1, honestClock_ownRun CM _ A, boundedBy_ownRun CM _ A h,
     ownRun_onTime CM _ A⟩

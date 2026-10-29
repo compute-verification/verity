@@ -8,8 +8,8 @@ its reader lives with the application, not in core.  One `delta` serves every co
 union counts it once.
 
 The law is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
-partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`) or only
-groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
+only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
 carries draws, never roles.
 """
 
@@ -28,8 +28,12 @@ from verity.ml.circuits.partition import Hierarchy, Level
 #: (a few units in the last place), so the bound is never below the relaxation's exact optimum
 MARGIN = 2.0 ** -30
 
+#: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
+#: the remote bandwidth audit's pooled bound
+WINDOW_DELTA = Fraction(1, 2 ** 40)
 
-def _neg_log_ratio(a: int, d: int) -> float:
+
+def neg_log_ratio(a: int, d: int) -> float:
     """-ln(a / d) for integers 0 < a <= d, to a few units in the last place: log1p of the correctly rounded 1 - a/d while
     a/d >= 1/2 (no cancellation), the log of the correctly rounded d/a while it fits a float, and the difference of the
     two big-integer logs only beyond that, where -ln(a/d) > 693 and the difference is relatively tiny."""
@@ -42,7 +46,7 @@ def _neg_log_ratio(a: int, d: int) -> float:
 
 @dataclass(frozen=True, slots=True)
 class Bernoulli:
-    """Every member of the level is drawn independently with probability `p`."""
+    """Every member of the level is sampled independently with probability `p`."""
 
     p: Fraction
 
@@ -55,7 +59,7 @@ class Bernoulli:
         return {"bernoulli": str(self.p)}
 
     def count_bound(self, population: int, delta: float) -> int:
-        """The largest M <= population with (1 - p)^M >= delta (Lean `Bound.bernoulliBound`): each member is drawn
+        """The largest M <= population with (1 - p)^M >= delta (Lean `Bound.bernoulliBound`): each member is sampled
         independently, so a set of M wrong members escapes with probability exactly (1 - p)^M, and except with
         probability delta an accepted transcript has at most this many.  All of them when 1 - population * p >= delta
         (Bernoulli's inequality), else the search doubles M while it escapes, then halves, in exact arithmetic."""
@@ -76,7 +80,7 @@ class Bernoulli:
 
 @dataclass(frozen=True, slots=True)
 class Subset:
-    """Exactly `k` members of the level are drawn, uniformly, inside each drawn member of the nearest drawn level
+    """Exactly `k` members of the level are sampled, uniformly, inside each drawn member of the nearest drawn level
     above (the whole transcript when none is)."""
 
     k: int
@@ -94,13 +98,14 @@ class IntegrityProfile:
     """Checked by sampling over `levels`, coarse to fine: `sizes[0]` members at the top level, then `sizes[i]`
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
-    level; undrawn levels only group.  A `Stratified` draw is the only draw, of the checked level, with its strata
-    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
+    level; undrawn levels only group.  A `Stratified` or `Work` draw is the only draw, of the checked level, with its
+    strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
+    `strata`.
     `drawn` counts the members actually drawn at each level, all passed.
 
     A profile of more than one level is valid only when its checked level is committed before the first draw
     (as serving commits every value, at serve time).  When the checked level is committed after
-    a draw it follows, the prover picks how many checked members of a drawn member are wrong after seeing that draw,
+    a sample it follows, the prover picks how many checked members of a drawn member are wrong after seeing that sample,
     and `accept(m)` over m wrong checked members no longer bounds it; such a lifecycle's profile is over the level
     committed first.
 
@@ -114,12 +119,12 @@ class IntegrityProfile:
         `programs`    digests of the evaluated Programs, in commit order;
         `prescribed`  families of `Input` values checked against external sources (e.g. "prompt", "weights", "noise");
         `linked`      every other `Input` equals a committed output of an earlier Program in the transcript;
-        `covered`     gate families proved on every audit, outside the draws (their faults survive with probability 0).
+        `covered`     gate families proved on every audit, outside the samples (their faults survive with probability 0).
     """
 
     levels: Hierarchy
     sizes: tuple[int, ...]
-    draws: Mapping[str, Draw] = field(hash=False)
+    draws: Mapping[str, SamplingDesign] = field(hash=False)
     delta: float
     programs: tuple[str, ...] = field(default=(), kw_only=True)
     prescribed: frozenset[str] = field(default=frozenset(), kw_only=True)
@@ -143,13 +148,13 @@ class IntegrityProfile:
         object.__setattr__(self, "drawn", MappingProxyType({n: int(self.drawn[n]) for n in names if n in self.drawn}))
         bernoulli = [n for n, d in self.draws.items() if isinstance(d, Bernoulli)]
         subsets = [n for n, d in self.draws.items() if isinstance(d, Subset)]
-        stratified = [n for n, d in self.draws.items() if isinstance(d, Stratified)]
+        stratified = [n for n, d in self.draws.items() if isinstance(d, (Stratified, Work))]
         if len(bernoulli) + len(subsets) + len(stratified) != len(self.draws) or len(bernoulli) > 1:
-            raise ValueError("a profile's draws are Bernoulli, Subset or Stratified, with at most one Bernoulli level")
+            raise ValueError("a profile's draws are Bernoulli, Subset, Stratified or Work, with at most one Bernoulli level")
         if names[-1] not in self.draws or subsets not in ([], [names[-1]]):
             raise ValueError("the checked (finest) level is drawn, and only it may be drawn by Subset")
         if stratified and list(self.draws) != [names[-1]]:
-            raise ValueError("a Stratified draw is the profile's only draw, of the checked level")
+            raise ValueError("a Stratified or Work draw is the profile's only draw, of the checked level")
         if any(v < 0 for v in self.drawn.values()):
             raise ValueError("drawn counts are >= 0")
         if stratified:
@@ -182,7 +187,7 @@ class IntegrityProfile:
     def _law(self) -> tuple[int, int, Fraction, int]:
         """(Bernoulli members, checked members n inside each, p, k)."""
         checked = self.levels[-1].name
-        if isinstance(self.draws[checked], Stratified):
+        if isinstance(self.draws[checked], (Stratified, Work)):
             raise ValueError("a stratified profile has no single k: read it through `strata`")
         at = next((n for n, d in self.draws.items() if isinstance(d, Bernoulli)), None)
         p = self.draws[at].p if at is not None else Fraction(1)
@@ -206,13 +211,13 @@ class IntegrityProfile:
         return n, k, p.numerator, p.denominator, comb(n, k)
 
     def rho(self, m: int) -> float:
-        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`_neg_log_ratio`): no
+        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`neg_log_ratio`): no
         underflow where `accept` falls below the smallest float, and no cancellation where it is close to 1."""
         n, k, num, den, top = self._odds()
         if not 0 <= m <= n:
             raise ValueError(f"0 <= m <= {n}")
         a = (den - num) * top + num * comb(n - m, k)
-        return inf if a == 0 else _neg_log_ratio(a, den * top)
+        return inf if a == 0 else neg_log_ratio(a, den * top)
 
     def _rhos(self) -> list[float]:
         """rho(0), ..., rho(n), with C(n - m, k) updated exactly from m to m + 1: one pass, the same values as `rho`."""
@@ -220,7 +225,7 @@ class IntegrityProfile:
         whole, c, out = den * top, top, []
         for m in range(n + 1):
             a = (den - num) * top + num * c
-            out.append(inf if a == 0 else _neg_log_ratio(a, whole))
+            out.append(inf if a == 0 else neg_log_ratio(a, whole))
             c = c * (n - m - k) // (n - m) if n - m > k else 0
         return out
 
@@ -262,13 +267,15 @@ class IntegrityProfile:
         return best if cap is None else min(best, float(cap))
 
     def strata(self) -> Stratified | None:
-        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, or, when a
-        `Subset(k)` of the checked level is the only draw, one stratum of all its members, named after the level.  None
-        when a level is drawn `Bernoulli`."""
+        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, a `Work`
+        draw's at its k_s, or, when a `Subset(k)` of the checked level is the only draw, one stratum of all its members,
+        named after the level.  None when a level is drawn `Bernoulli`."""
         checked = self.levels[-1].name
         law = self.draws[checked]
         if isinstance(law, Stratified):
             return law
+        if isinstance(law, Work):
+            return law.stratified
         if isinstance(law, Subset) and len(self.draws) == 1:
             return Stratified.uniform(self.count(checked), law.k, checked)
         return None
@@ -285,7 +292,7 @@ class IntegrityProfile:
         return self.worst_case(lambda m: float(m))
 
     def stratum_bounds(self) -> dict[str, int]:
-        """Each stratum's own bound at delta (`Stratified.stratum_bound`); empty when a level is drawn `Bernoulli`.  They
+        """Each stratum's own bound at delta (`Stratified.stratum_bound`); empty when a level is sampled `Bernoulli`.  They
         hold jointly with `bound`, not each at its own delta: the one-stage profile bounds a family of wrong-unit sets by
         its likeliest set to escape, and every set breaking one of these bounds escapes with less than delta."""
         law = self.strata()
@@ -321,7 +328,7 @@ HARM_MARGIN = 2.0 ** -20
 
 @dataclass(frozen=True, slots=True)
 class Stratum:
-    """`size` units of the partition, `k` of them drawn uniformly, independently of every other stratum."""
+    """`size` units of the partition, `k` of them sampled uniformly, independently of every other stratum."""
 
     name: str
     size: int
@@ -332,7 +339,7 @@ class Stratum:
             raise ValueError("a stratum needs a name, size >= 0 and 0 <= k <= size")
 
     def escape(self, m: int) -> Fraction:
-        """C(size - m, k) / C(size, k): the draw misses m given units of the stratum."""
+        """C(size - m, k) / C(size, k): the sample misses m given units of the stratum."""
         return Fraction(comb(self.size - m, self.k), comb(self.size, self.k))
 
     def _finite(self) -> int:
@@ -364,7 +371,7 @@ class Stratified:
     law): the uniform k-subset is one stratum, and a template floor is a stratum with
     k >= 1.  The strata are fixed by the agreement before registration, like every law.
 
-    A wrong-unit set with m_s units in stratum s escapes the draw with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
+    A wrong-unit set with m_s units in stratum s escapes the sample with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
     depends only on the counts.  Its risk rho = -ln(escape) is convex in each m_s, the increment from m to m + 1 being
     -ln(1 - k_s / (n_s - m)), so the worst case of any additive harm is a greedy fill in the order of increment per unit
     of harm: `miss` and `count_bound` exactly (increments ordered by k_s / (n_s - m), compared in integers, and the
@@ -401,7 +408,7 @@ class Stratified:
         raise KeyError(f"the law has no stratum {name!r}")
 
     def inclusion(self, name: str) -> Fraction:
-        """The probability that a given unit of the stratum is drawn."""
+        """The probability that a given unit of the stratum is sampled."""
         s = self.stratum(name)
         return Fraction(s.k, s.size) if s.size else Fraction(0)
 
@@ -414,17 +421,17 @@ class Stratified:
         return ms
 
     def escape(self, counts: Mapping[str, int]) -> Fraction:
-        """The exact probability that the draw misses a wrong-unit set with these counts per stratum."""
+        """The exact probability that the sample misses a wrong-unit set with these counts per stratum."""
         return prod((s.escape(m) for s, m in zip(self.strata, self._counts(counts))), start=Fraction(1))
 
     def rho(self, counts: Mapping[str, int]) -> float:
-        """-ln escape, from exact integers to a few units in the last place per stratum (`_neg_log_ratio`)."""
+        """-ln escape, from exact integers to a few units in the last place per stratum (`neg_log_ratio`)."""
         out = 0.0
         for s, m in zip(self.strata, self._counts(counts)):
             a = comb(s.size - m, s.k)
             if a == 0:
                 return inf
-            out += _neg_log_ratio(a, comb(s.size, s.k))
+            out += neg_log_ratio(a, comb(s.size, s.k))
         return out
 
     def _worst(self, K: int) -> list[int] | None:
@@ -577,7 +584,69 @@ class Stratified:
         return {"law": "stratified", "strata": [{"name": s.name, "size": s.size, "k": s.k} for s in self.strata]}
 
 
-Draw = Bernoulli | Subset | Stratified
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's draw under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
+    at most `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset"]
+@dataclass(frozen=True, slots=True)
+class WorkStratum:
+    """A stratum of the work sampling design: `size` members, `k` of them drawn, each doing `work` (an integer in any
+    fixed unit, 0 for members that do none), and `floor`, the fewest it draws."""
+
+    name: str
+    size: int
+    k: int
+    work: int
+    floor: int
+
+
+@dataclass(frozen=True, slots=True)
+class Work:
+    """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform draws inside disjoint strata of the checked
+    level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified one at those
+    k_s, so its bounds are `stratified`'s."""
+
+    k: int
+    strata: tuple[WorkStratum, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "strata", tuple(self.strata))
+        if not all(isinstance(s, WorkStratum) for s in self.strata):
+            raise ValueError("a work design's strata are WorkStratum")
+        if not self.strata or not 1 <= self.k <= self.population:
+            raise ValueError("a work design needs strata and 1 <= k <= population")
+        total = sum(s.work * s.size for s in self.strata)
+        if total == 0:
+            raise ValueError("a work design's population does no work")
+        seen: set[str] = set()
+        for s in self.strata:
+            if s.name in seen:
+                raise ValueError(f"stratum {s.name!r} twice")
+            seen.add(s.name)
+            if s.floor < 1:
+                raise ValueError(f"stratum {s.name!r}: a floor is at least one")
+            if s.k != work_k(self.k, s.work, s.size, total, s.floor):
+                raise ValueError(f"stratum {s.name!r}: k is not the work rule's")
+
+    @property
+    def population(self) -> int:
+        return sum(s.size for s in self.strata)
+
+    @property
+    def stratified(self) -> Stratified:
+        """Its sample's design: the stratified one at its k_s."""
+        return Stratified(tuple(Stratum(s.name, s.size, s.k) for s in self.strata))
+
+    def to_json(self) -> dict:
+        return {"law": "work", "k": self.k,
+                "strata": [{"name": s.name, "size": s.size, "k": s.k, "work": s.work, "floor": s.floor}
+                           for s in self.strata]}
+
+
+SamplingDesign = Bernoulli | Subset | Stratified | Work
+
+
+__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile", "SamplingDesign", "Stratified",
+           "Stratum", "Subset", "neg_log_ratio"]

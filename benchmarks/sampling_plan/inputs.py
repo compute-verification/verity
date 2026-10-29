@@ -4,10 +4,13 @@ the models' shapes; and what every scale commits at serve time, a token a layer,
 table)."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
+from verity.ml.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
 from verity.core.protocols.sampled_proofs.costfit import Observation
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 
 
 @dataclass(frozen=True)
@@ -52,7 +55,7 @@ I = {
 #: ANDs of the pieces (their pins and hm96 PROTOCOL §5)
 S8_STEP = 4_190
 EPILOGUE = 5_000
-SHA512 = 58_120
+SHA512 = SHA512_ANDS
 HM96 = 116_240
 
 
@@ -166,6 +169,27 @@ def tree_chain(leaves: float) -> int:
 
 
 
+def block_k_log(ands: int, rows: Sequence[int]) -> int:
+    """The ``k_log`` of the C-Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each), as
+    C-Flock's composer lays it out (`verity_flock.circuit.compose`'s ranges): the unit's slot, the least power of two above
+    its ANDs and its rows' bits (a row an AND and a column a port bit, as `UnitStager`'s early check counts them), beside an
+    hm96 slot a row (a power of two in all) and the mask, then a sha512x3 slot per `PER_SLOT` compressions before the rows'
+    last SHA-512 blocks. A row's opening is those slots, not ANDs in the unit's slot."""
+    hm = (1 << (len(rows) - 1).bit_length()) << SLOT_LOG
+    slot = 1 << max(7, (ands + 8 * sum(rows)).bit_length())
+    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in rows if b > LAST_BLOCK_BYTES)
+    bits = (-(-(hm + slot + (1 << MASK_LOG)) >> SLOT_LOG) + -(-comps // PER_SLOT)) << SLOT_LOG
+    return max(K_MIN, (bits - 1).bit_length())
+
+
+def cap(ands: int, rows: Sequence[int]) -> int:
+    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a C-Flock block of 2^`block_k_log` under
+    m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
+    proof block, past C-Flock's 2^`K_MAX`."""
+    k = block_k_log(ands, rows)
+    return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
+
+
 def s8_coord_ands(k: int) -> int:
     """One s8 coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 steps, the epilogue, two K-byte
     operand rows and three one-block rows (the scales and the output)."""
@@ -173,8 +197,8 @@ def s8_coord_ands(k: int) -> int:
 
 
 #: the measurements the cost model is fitted from (`costfit`): benchmarks/one_stage/zk_cost.py's sessions of
-#: `ScaledMmS8Coordinate_v1{K}` by `flock-circuit prove --zk --gpu` with the firewall's send check, per (K, staged units,
-#: drawn units): the mean wall of its two cold prover processes (GPU-s: one touched statement's prover today, its statement
+#: `ScaledMmS8Coordinate_v1{K}` by `flock-circuit prove --zk --gpu` with the ZK server's send check, per (K, staged units,
+#: sampled proof blocks): the mean wall of its two cold prover processes (GPU-s: one touched statement's prover today, its statement
 #: build included), the mean CPU time of Lean `verify --zk` on its three sessions and its statement's staging (CPU-s)
 ZK_RUN = "r20261018-060433-b55e"
 ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
@@ -206,8 +230,8 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
 OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
 OPENING_ANDS = 29_617_630
 
-#: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the firewall's send check, per run
-#: and (staged units, drawn units): the GPU-seconds its cold prover process held the lease (its wall less the lease's
+#: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the ZK server's send check, per run
+#: and (staged units, sampled proof blocks): the GPU-seconds its cold prover process held the lease (its wall less the lease's
 #: wait; the mean of two where it ran two). Their device phase is 79 ms an opening at a full statement, 16 ms without the
 #: send check, the GPU's own algebra about 1 ms of it. They
 #: give no `verify`: a8.py times Lean's by wall (478-488 s, flock-verify lean-4e521bba8e1bc519), not CPU. Nor `stage`:

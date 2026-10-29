@@ -4,7 +4,7 @@ the auditor's host signed rather than from the verifier's stamps.
 
 **Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
 `RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
-record's draws) computes each session's line off its record from
+record's samples) computes each session's line off its record from
 the inputs `verifier.recorded_inputs` reads, and `remote_bandwidth.line` computes it beside it from the same JSON
 (`line.line_of_record`):
 the two are compared exactly, every rational as text in lowest terms and every integer, and a session where they
@@ -14,7 +14,7 @@ rounded for display. `--line-by python` computes it in `line.py` alone, a readin
 
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
-names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
+names it (`audit.AuditRun.close` asks for the coin after the window's last root), and a paced window is drawn at its
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. At
 one window in flight (`audit.Pace.in_flight` 1) σ_(g+1)'s request names it and openings coin g's leaves once σ_(g+1)
 is back, so this reading, which doesn't take f, ends L_g about a round trip to the challenger past s_(g+1). Drawn
@@ -85,15 +85,16 @@ and `sketch_outside` every F the run's sessions were charged at.
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
 commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
-draw's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
+sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
 total of a record whose ledger didn't charge them), plus the windows' PRF advantages by name (`NAMED_TERMS`, claim
 prf/sha-512), which have no number and are in no total. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
-**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
-statement C in full, as a premise that no record of the run discharges, so a line says it is conditional on it, until
-certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
+**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
+from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
+check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until certifiers cover
+the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
@@ -185,16 +186,17 @@ NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(pr
 """`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
 prices and no number here does. Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
-    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
-    "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
-    "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
-    "the credited span"),
+    "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
+    "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
+    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-host), which this line didn't check; "
+    "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
+    "entered it over the credited span"),
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
-    "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
-    "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
-    "(PROTOCOL.md §8)")}
+    "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
+    "audit.AuditRun.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
+    "is the statement that the play fixes each window's receipts by its cut (PROTOCOL.md §8)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
 conditional on them, `NoOutsideCompute` unless a lockdown grounds it (`GROUNDED`), and the `memory-line-of-record`
@@ -203,12 +205,12 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
-    "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
-    "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
-    "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
-    "opened before it was applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a "
-    "shared filesystem)")}
+    "the provider's lockdown of the gate node, under trusted-host: while infra's records show it applied, no device "
+    "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
+    "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
+    "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
+    "LineHeld no longer takes it: its Accounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
+    "became, with the certifiers in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
 BOUNDARY = "boundary"
@@ -286,7 +288,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     leave only once that root has come, so a root the prover repeats can't make A_g early, as an earlier request
     naming the same value (σ_(g+1)'s, or another window's) would.
 
-    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a draw's last window closes, so openings coin c's
+    Drawn `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
     request names the last root of draw c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
     σ_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
@@ -454,7 +456,7 @@ def session_error(session: dict) -> dict:
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
     beside it its six parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
     2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_binding`, the receipts' binding term,
-    `delta_sketch`, δs, and `delta_rejection`, the draw's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
+    `delta_sketch`, δs, and `delta_rejection`, the sample's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
     `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`); one written before them
     gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was
     charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
@@ -515,10 +517,10 @@ def recorded_append_coins(session: dict) -> int | None:
 
 
 def recorded_binding(session: dict) -> Fraction:
-    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its draws
-    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a draw of it can have (g times
+    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its samples
+    (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a sample of it can have (g times
     `ledger.window_receipts`, at its pace's k, its registered blocks and, when its append coins aren't recorded
-    (`recorded_append_coins`), the codec's `max_blocks`) and its draw cap `samples`, F·C the queries its sketch term
+    (`recorded_append_coins`), the codec's `max_blocks`) and its sample cap `samples`, F·C the queries its sketch term
     (`sketch_failure`) charged; 0 for a record with no sketch term, which states no C."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
@@ -737,8 +739,8 @@ def with_check(credit: dict, name: str, check: dict) -> dict:
 def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
     """The auditor's clock's rate over the verifier's, less 1, in ppm, from each coin's release on both (`Rv`, `Ra`):
     the median of the rates between each coin and the one half the session after it. The verifier stamps a coin it
-    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.Coins.ahead`) after it came
-    back (`audit.Session._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
+    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.SessionCoins.ahead`) after it came
+    back (`audit.AuditRun._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
     that round trip over the session's span (−441 ppm at 60 s and −8989 ppm at 1 s on gate run 7); here it moves two
     of the pairs. None for a session of fewer than four coins."""
     h = len(Rv) // 2

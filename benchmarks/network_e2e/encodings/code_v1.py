@@ -2,7 +2,8 @@
 
 Advice v1 (`derived.py`) charges nothing for what is certified (the warden's admission order, the request records, the
 release buckets), replayed (the scheduler replay, `replay.py`) or derived (`derived.py`'s rules), and sends only the
-residual, one `Window` per certifier window, each field's values in the order its reader asks for them:
+residual, one `Advice` (the certifier's `window_charge.Advice`) per sampling block, each field's values in the
+order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`replay.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
   (`derived.Residual.hits`);
@@ -20,11 +21,11 @@ then the field's values, under the registered `Book`. Each count and integer is 
 (`code.Binned`), and a field that increases over the run is coded as its gap. Each bit is coded with a public adaptive
 Krichevsky–Trofimov estimate per context (`KT`): counts start from the book's prior, are updated as the bits are decoded,
 and are halved past 2^16, so the model is public. `Encoder` and `Decoder` take the same symbols online, for a reader that
-codes with contexts of its own (the replay's egress contexts). `encode` and `decode` drive them over `Window`s, where a
+codes with contexts of its own (the replay's egress contexts). `encode` and `decode` drive them over `Advice`s, where a
 window's `arrived` bits take as context the run of decisions since the last arrival.
 
-**Prefix-free, canonical, self-delimiting.** LEAK-LEAN's `BitsCount` (#3533) holds when the charge is at least the length
-of a prefix-free encoding.
+**Prefix-free, canonical, self-delimiting.** The sampled leak bound's count (`hAs`: at most 2^c advice values charged c
+or less) holds when the charge is at least the length of a prefix-free encoding.
 - A segment's symbols are fixed by its counts, so the decoder knows where the segment's message ends. The coder's
   termination (`code.ArithEncoder.finish`: the pending bits and two more) names a dyadic interval inside the message's
   final interval. Distinct messages have disjoint final intervals, so no encoder output is a prefix of another's, and
@@ -60,6 +61,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity.core.protocols.certifier.window_charge import Advice
+
 HERE = Path(__file__).resolve().parent
 
 
@@ -77,24 +80,6 @@ C = _load("code")
 
 
 # ------------------------------------------------------------------------------------------------------ the residual
-
-
-@dataclass(frozen=True)
-class Window:
-    """What one certifier window is charged (the module's docstring)."""
-
-    arrived: tuple[bool, ...] = ()
-    hits: tuple[int, ...] = ()
-    resumes: tuple[int, ...] = ()
-    order: tuple[tuple[int, tuple[int, ...]], ...] = ()
-    lag: tuple[bool, ...] = ()
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "arrived", tuple(bool(b) for b in self.arrived))
-        object.__setattr__(self, "hits", tuple(int(h) for h in self.hits))
-        object.__setattr__(self, "resumes", tuple(int(p) for p in self.resumes))
-        object.__setattr__(self, "order", tuple((int(s), tuple(int(i) for i in idx)) for s, idx in self.order))
-        object.__setattr__(self, "lag", tuple(bool(b) for b in self.lag))
 
 
 @dataclass(frozen=True)
@@ -360,7 +345,7 @@ class _State:
         self.run, self.resume, self.step, self.index = 0, -1, -1, -1
 
 
-def _window(c: Any, win: Window | None, st: _State) -> Window:
+def _window(c: Any, win: Advice | None, st: _State) -> Advice:
     """One window's symbols, written once for every direction: `win` is None when decoding."""
     caps = c.book.caps
 
@@ -394,13 +379,13 @@ def _window(c: Any, win: Window | None, st: _State) -> Window:
             got.append(i)
         order.append((st.step, tuple(got)))
     lag = [c._flag("lag", None if win is None else win.lag[j], 0) for j in range(count("n_lag", win.lag if win else ()))]
-    return Window(tuple(arrived), tuple(hits), tuple(resumes), tuple(order), tuple(lag))
+    return Advice(tuple(arrived), tuple(hits), tuple(resumes), tuple(order), tuple(lag))
 
 
 # ------------------------------------------------------------------------------------------------------------ API
 
 
-def encode(windows: Sequence[Window], book: Book) -> Encoded:
+def encode(windows: Sequence[Advice], book: Book) -> Encoded:
     """The run's residual, window by window; `lens[w]` is window w's charge."""
     e, st = Encoder(book), _State()
     for win in windows:
@@ -409,7 +394,7 @@ def encode(windows: Sequence[Window], book: Book) -> Encoded:
     return e.finish()
 
 
-def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Window]:
+def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Advice]:
     """The windows back, refusing (ValueError) any string `encode` wouldn't produce."""
     d, st = Decoder(bits, nbits, book), _State()
     out = []
@@ -420,7 +405,7 @@ def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Window]:
     return out
 
 
-def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
+def ideal_bits(windows: Sequence[Advice], book: Book) -> list[float]:
     """Each window's model cost: its charge less the coder's termination and rounding."""
     c, st, out = _Ideal(book), _State(), []
     for win in windows:
@@ -430,7 +415,7 @@ def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
     return out
 
 
-def fit_book(history: Iterable[Sequence[Window]], caps: Caps = Caps(), prior_weight: int = 32) -> Book:
+def fit_book(history: Iterable[Sequence[Advice]], caps: Caps = Caps(), prior_weight: int = 32) -> Book:
     """The book to register, fit on historical runs (each a sequence of windows), never on the audited run: each integer
     symbol's bin table from its samples, and each bit context's prior from its counts, scaled to at most `prior_weight`
     observations."""

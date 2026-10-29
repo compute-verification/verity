@@ -17,7 +17,7 @@ pv = "peel"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { LDSM_X4 = 0.2 }
-source = "SPEC §3.4: two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+source = "two-sided {0,1} noise is fresh on both operands at every 32-step at every instance, so the register floor stays 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10)"
 
 [fold]
 name = "duo"
@@ -26,7 +26,7 @@ IMAD = 1
 
 [skip.served]
 eps = 0.00285
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 16.283 SMSP-cycles a 4096-MAC MMA on AMPERE-80; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.285%: its tail 0.187%, the sums DG, S and X(0) 0.0824%, the served epilogue 0.0156%. With P·V's served output checked it is 0.223% (8B) / 0.0943% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 10)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 16.283 SMSP-cycles a 4096-MAC MMA on AMPERE-80; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.285%: its tail 0.187%, the sums DG, S and X(0) 0.0824%, the served epilogue 0.0156%. With P·V's served output checked it is 0.223% (8B) / 0.0943% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π"
 
 [mand.fold]
 eps = 0.0
@@ -34,19 +34,19 @@ source = "named assumption: duo at 3 lane instructions a word is the cheapest im
 
 [clock]
 eps = 0.053191
-source = "EPS1 AMPERE r2 (note:20261017T0925Z-draft-eps1-ampere-r2, r20261017-100836-79fe and r20261017-101927-0c99, 40 s holds a kernel): f_max = 1410 MHz (NVML's max SM clock, which every light probe ran at, clocks never set), egemm80 e32 at L = 32 1335 MHz at steady state under the node's 400 W limit (SW power cap, throttle 0x4) in both runs, 1 − 1335/1410"
+source = "f_max = 1410 MHz (NVML's max SM clock, which every light probe ran at, clocks never set; @a100-fmax), egemm80 e32 at L = 32 1335 MHz at steady state over 40 s holds (@a100-egemm80), 1 − 1335/1410"
 
 [luck]
 delta = 4.547473508864641e-13
 p = 0.75
 checks = 48000
-source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+source = "Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IDP4A = 8, LDS128 = 0.5 }
 source = "dp4a at 8 IDP4A a word at L = 32 (IDP4A on the IMAD pipe's row I on sm_80, with FFMA and IMAD), its loads 2(a + b)/(ab) LDS.128 a word at a = b = 8, scaled by L/32"
 
 [routes]
 lanes = true
-uniform = false     # no uniform-datapath line on sm_80: the uniform datapath is unmeasured (EPS1 AMPERE)
+uniform = false     # no uniform-datapath line on sm_80: the uniform datapath is unmeasured

@@ -25,7 +25,7 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
 
 JSON goes to DIR/step.json (with several layouts, DIR/<stem>/step.json), with a line on stdout as each part ends, and the
 host twin's counts from a ``<stem>.count.json`` beside the layout. Each layout ends with a verdict line: its best step
-against the <=0.95 s target at 4,096 slots, with the ratio, and whether its roots equal the reference's; the run ends with one
+against ``--target-s`` at 4,096 slots, with the ratio, and whether its roots equal the reference's; the run ends with one
 over them all, which is also ``$RESEARCH_RUN_DIR/result.json``'s validation when research runs it. Exits 1 if a root differs.
 """
 from __future__ import annotations
@@ -54,19 +54,19 @@ KEY = bytes(range(96, 128))
 STEP = 7
 #: commit_gpu's SHA-512 compressions/s on an H200, in G (sha512_rows/README.md), against which each phase's rate is read
 PEAK_G = 4.79
-#: the target for a step: at most 25% of the 3.78 s served step, at 4,096 slots
-TARGET_S, TARGET_SLOTS = 0.95, 4096
+#: the slots of the step ``--target-s`` is the target for
+TARGET_SLOTS = 4096
 
 
 # --- layouts -----------------------------------------------------------------------------------------------------------
 
-def uniform(row_bytes: int, units: int) -> S.Layout:
+def uniform(row_bytes: int, units: int) -> S.CommitShape:
     """``units`` one-row units of ``row_bytes`` each, the next bytes of one tensor: what a row of that size costs alone."""
     rows = tuple((S.Row((S.Part(0, i * row_bytes, row_bytes),)),) for i in range(units))
-    return S.Layout(f"commit-slots/step/uniform-{units}x{row_bytes}b/v1", (S.Group((units * row_bytes,), rows),))
+    return S.CommitShape(f"commit-slots/step/uniform-{units}x{row_bytes}b/v1", (S.Group((units * row_bytes,), rows),))
 
 
-def describe(layout: S.Layout) -> dict[str, Any]:
+def describe(layout: S.CommitShape) -> dict[str, Any]:
     """Counts a slot: units, rows, bytes, and rows by size."""
     sizes = collections.Counter(r.nbytes for u in layout.units for r in u)
     shapes = collections.Counter(len(u) for u in layout.units)
@@ -79,7 +79,7 @@ def describe(layout: S.Layout) -> dict[str, Any]:
             "units_by_rows": {str(k): v for k, v in sorted(shapes.items())}}
 
 
-def compressions(layout: S.Layout) -> dict[str, int]:
+def compressions(layout: S.CommitShape) -> dict[str, int]:
     """A slot's SHA-512 compressions by phase, as the engine hashes them (tests/test_cost.py):
 
     - a row's digest, one a chunk after its midstated P(l);
@@ -162,11 +162,11 @@ def run(a: argparse.Namespace) -> int:
         if (c := path.with_suffix(".count.json")).exists():
             doc["count"] = json.loads(c.read_text())
             (out / "step.json").write_text(json.dumps(doc, indent=1) + "\n")
-        print(json.dumps({"part": "verdict", "layout": path.stem, "verdict": verdict(path.stem, doc)}), flush=True)
+        print(json.dumps({"part": "verdict", "layout": path.stem, "verdict": verdict(path.stem, doc, a.target_s)}), flush=True)
         gc.collect()
         torch.cuda.empty_cache()
     ok = all(d["ok"] for d in docs.values())
-    line = ("ok: " if ok else "FAILED: ") + "; ".join(verdict(k, d) for k, d in docs.items())
+    line = ("ok: " if ok else "FAILED: ") + "; ".join(verdict(k, d, a.target_s) for k, d in docs.items())
     print(json.dumps({"part": "verdict", "verdict": line}), flush=True)
     if SHARED.RESEARCH_RUN_DIR:
         result(a, docs, ok, line)
@@ -181,9 +181,9 @@ def best_enqueue_s(doc: dict[str, Any], graphs: bool) -> float:
     return min(s["best"]["enqueue_s"] for s in doc["steps"] if s["graphs"] == graphs)
 
 
-def verdict(name: str, doc: dict[str, Any]) -> str:
+def verdict(name: str, doc: dict[str, Any], target_s: float) -> str:
     s, slots, ref = best_s(doc), doc["slots"], doc["reference"]
-    against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target" if slots == TARGET_SLOTS else ""
+    against = f", {s / target_s:.2f}x the <={target_s} s target" if slots == TARGET_SLOTS else ""
     modes = {st["graphs"] for st in doc["steps"]}
     host = "; ".join(f"{'on graphs' if g else 'eager'} {best_s(doc, g):.3f} s with the host enqueueing {best_enqueue_s(doc, g):.3f} s"
                      for g in sorted(modes))
@@ -408,6 +408,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="1: steps whose adds are CUDA graph launches (StepCommitter(graphs=True)), their roots held to the eager "
                          "step's")
     tm.add_argument("--samples", type=int, default=4, help="random slots the reference rebuilds, beside the first and last")
+    tm.add_argument("--target-s", type=float, default=0.95,
+                    help="a step's target at 4,096 slots, at most 25%% of the served step (default 0.95)")
     a = ap.parse_args(argv)
     if a.cmd == "count" and (a.layout is None) == (a.uniform is None):
         ap.error("count takes a layout or --uniform BYTES")

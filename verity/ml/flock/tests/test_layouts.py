@@ -55,7 +55,7 @@ def adders():
 
 
 def _lay(t, rl, calls=(), reads=(), own=("derive",), ins=(), outs=()):
-    return LY.Layout(t.digest() if t is not None else None, rl, tuple(ins), tuple(outs), own, tuple(calls), tuple(reads))
+    return LY.BlockLayout(t.digest() if t is not None else None, rl, tuple(ins), tuple(outs), own, tuple(calls), tuple(reads))
 
 
 def test_own_sizes_follow_the_v2_rule(adders):
@@ -158,7 +158,7 @@ def _reader(sha: str, ib: int, vb: int) -> CT.CircuitType:
 
 
 def test_a_read_is_tied_to_its_types_table_entry():
-    """The red team's ib_mismatch and shape_mismatch cases (review of #200): the held table must have 2^index_bits words
+    """The red team's ib_mismatch and shape_mismatch cases (the layouts' review): the held table must have 2^index_bits words
     for the type's entry, and a placed read's generated layout its index and value widths."""
     ws16 = [(i * 7 + 3) & 0xF for i in range(16)]
     sha16 = hashlib.sha512(b"".join(w.to_bytes(4, "little") for w in ws16)).hexdigest()

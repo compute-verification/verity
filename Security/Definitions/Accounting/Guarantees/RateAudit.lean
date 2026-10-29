@@ -61,15 +61,15 @@ of the window's compute, it is `(1 − τ)/x` when tagging takes the fraction `�
 compute residual (`RateOfAudit`). The bound holds at every `F`; a device whose compute is within `F` on every run has
 the conjunct always.
 
-**The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Bandwidth.Guarantees.AuditRO`'s. A sampled word
-passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h` per
-sampled word); the sample misses the words never queried with chance `((k − 1)/N)^s`. A device that queried `k` words
-under the stream knows those `k·b` bits and all `ρ` bits of the stream at its queries, and it had them from its state,
-the device memory at its footprint, the link (free side bits and stream bits together, at most `L`) and its rebuilt
-words, plus which `k` of its queries named them: compressing the store and the stream together (`C(q, k)·2^-λ`) leaves
-it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, and a rebuilt word costs `c_enc` of the compute
-`F − k·c_tag` that tagging leaves. The stream is what makes `L − ρ`, not `L`, the link's share: its bits are fresh,
-so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
+**The proof** (`Accounting.SecurityProofs.RateAudit`) generalizes `Accounting.Guarantees.Remote.AuditRO`'s. A sampled
+word passes either because the device queried the oracle at its contents under the stream, or by a guessed tag (`2^-h`
+per sampled word); the sample misses the words never queried with chance `((k − 1)/N)^s`. A device that queried `k`
+words under the stream knows those `k·b` bits and all `ρ` bits of the stream at its queries, and it had them from its
+state, the device memory at its footprint, the link (free side bits and stream bits together, at most `L`) and its
+rebuilt words, plus which `k` of its queries named them: compressing the store and the stream together (`C(q, k)·2^-λ`)
+leaves it at least `k·b + ρ − S − L − λ` bits of footprint and rebuilt words, and a rebuilt word costs `c_enc` of the
+compute `F − k·c_tag` that tagging leaves. The stream is what makes `L − ρ`, not `L`, the link's share: its bits are
+fresh, so the link's bits that carried them carried nothing about the store. Its completeness is `RateHonest`.
 
 The game's `rebuild j` is all-or-nothing: it returns the whole word at `c_enc`. Completing part of a word from the rest
 (at one codec round with the payload known, a lattice completes a word's bottom third far below its per-bit price) is
@@ -82,8 +82,8 @@ the rate audit's code computes. -/
 def RateAudit : Prop :=
   ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.Device N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 /-- **Completeness of `RateAudit`: an honest device that reads every word once is accepted on every coin.** For every
@@ -103,7 +103,7 @@ def RateHonest : Prop :=
       A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.compute cTag cEnc E R O = N * cTag
 
 /-- **The rate audit over `n` windows: time-averaged residency.** Over a uniform store and `n` windows, each with its
-own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Windows`: window `i`'s device
+own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Devices`: window `i`'s device
 and its layout any function of the other windows' coins, earlier or later), and for every `m`: `m` times the
 probability that every window is accepted with its compute within `F` while the footprints, summed over the windows,
 fall short of `n + 1 − m` floors,
@@ -121,11 +121,11 @@ coins.
 
 Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model over abstract chip programs. -/
 def RateAuditWindows : Prop :=
-  ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Windows n N b h ρ S L q s),
+  ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Devices n N b h ρ S L q s),
     (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
-        (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
-          (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F) ∧
-        ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1 (x.2 i).2.1 * cEnc < (n + 1 - m) * floor b ρ S L F cTag cEnc k lam)
+        (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1.1 (x.2 i).1.2 (x.2 i).2 ∧
+          (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1.1 (x.2 i).1.2 ≤ F) ∧
+        ∑ i, (A.dev i x.2).footprint x.1 (x.2 i).1.1 (x.2 i).1.2 * cEnc < (n + 1 - m) * floor b ρ S L F cTag cEnc k lam)
       ≤ (n : ℝ≥0∞) * ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam)
 
 /-- **The rate audit as a joint run's bandwidth guarantee, with the rebuilds charged as compute.** For any run on any
@@ -191,8 +191,8 @@ def RateAuditInteractiveRO : Prop :=
   ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Coins N b h ρ s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
 /-- **The rate audit with interactive side sources, in the random-oracle model.** For every `InteractiveDevice` of
@@ -223,8 +223,8 @@ Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model o
 def RateAuditInteractive : Prop :=
   ∀ (N b h ρ S L q s k m F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m)
         + ((q.choose (k - m) : ℕ) : ℝ≥0∞) / 2 ^ lam
 

@@ -1,9 +1,11 @@
 import CoreProtocol.Protocol
 import CoreProtocol.Profile
-import Flock.Hash
+import Flock.Draw
+import Flock.WindowRecord
 import PouwCheck.Json
 import PouwCheck.Tile
 import PouwWindow.Length
+import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
@@ -141,9 +143,9 @@ def rootOf? (j : Json) : Option Root := do
 its salt and the registered weights' entries (`valuesRoot?`). -/
 def WINDOW_VALUES : List String := ["activations", "registered"]
 
-/-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
-(`WINDOW_VALUES`), each `some` exactly when the window has the key, whatever its value. -/
-structure Window where
+/-- The record's `window` item, its execution block: its kind, its context, the items it registers, and its groups of
+committed values (`WINDOW_VALUES`), each `some` exactly when the item has the key, whatever its value. -/
+structure ExecutionBlockItem where
   kind : String
   context : String
   items : Json
@@ -161,7 +163,7 @@ structure Registration where
   population : Nat
   law : Json
   roots : Array Root
-  window : Window
+  window : ExecutionBlockItem
 
 def registrationOf (b : ByteArray) : V Registration := do
   let rec_ ← Core.canonicalJson b
@@ -181,7 +183,7 @@ def registrationOf (b : ByteArray) : V Registration := do
     | _ => none
   let some roots := roots | throw "roots is not a list of {domain, leaves, port, root}"
   let w := get rec_ "window"
-  let window : Option Window := do
+  let window : Option ExecutionBlockItem := do
     guard ((keys w).map (·.filter (!WINDOW_VALUES.contains ·)) == some ["context", "kind", "public"])
     let items := get w "public"
     guard (keys items).isSome
@@ -192,43 +194,21 @@ def registrationOf (b : ByteArray) : V Registration := do
         "and registered")
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
-/-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record). -/
-def Registration.digest (c : Registration) : ByteArray :=
-  Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+/-- `registration.digest`: the window record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
+bytes it was read from. -/
+def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
 
-/-! The service's draw, as one-stage's `draw.py` writes it. -/
+/-! The service's draw, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
+refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its law to `outcome`. -/
 
-/-- A stratum of a stratified or work draw: its template, its units as `[lo, hi)` ranges, its `k`, and a work
-stratum's work and floor. -/
-structure DrawStratum where
-  template : String
-  units : Array (Nat × Nat)
-  k : Nat
-  work : Option (Nat × Nat)
-  deriving DecidableEq, Repr
-
-/-- The draw's law: `subset:k`, `bernoulli:p` (`p` as written), `stratified:k` or `work:k` with their strata, and a work
-draw's closure. -/
-inductive Law where
-  | subset (k : Nat)
-  | bernoulli (p : String)
-  | stratified (k : Nat) (strata : Array DrawStratum)
-  | work (k : Nat) (strata : Array DrawStratum) (closure : Option (Array Nat))
-  deriving DecidableEq, Repr
+deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.Law
 
 /-- `parse_law`'s spelling. -/
-def Law.name : Law → String
+def lawName : Flock.Draw.Law → String
   | .subset k => s!"subset:{k}"
-  | .bernoulli p => s!"bernoulli:{p}"
+  | .bernoulli a b => s!"bernoulli:{a}/{b}"
   | .stratified k _ => s!"stratified:{k}"
-  | .work k _ _ => s!"work:{k}"
-
-/-- The verifier's draw: its law, over a population, and the units it drew. -/
-structure UnitDraw where
-  law : Law
-  population : Nat
-  units : Array Nat
-  deriving DecidableEq, Repr
+  | .work k _ => s!"work:{k}"
 
 def keysAre (j : Json) (ks : List String) (ctx : String) : V Unit :=
   unless keys j == some ks do throw s!"{ctx}: keys are not {", ".intercalate ks}"
@@ -241,23 +221,33 @@ def rangeOf (j : Json) (ctx : String) : V (Nat × Nat) :=
   | .arr #[lo, hi] => do pure (← Flock.J.asNat lo ctx, ← Flock.J.asNat hi ctx)
   | _ => throw s!"{ctx}: not a range [lo, hi]"
 
-def stratumOf (work : Bool) (j : Json) (ctx : String) : V DrawStratum := do
+/-- A stratum's template, units and `k`, and a work stratum's work and floor. -/
+def stratumOf (work : Bool) (j : Json) (ctx : String) : V (Flock.Draw.Stratum × Nat × Nat) := do
   keysAre j (if work then ["floor", "k", "template", "units", "work"] else ["k", "template", "units"]) ctx
   let template ← Flock.J.str j "template" ctx
   let units ← (← Flock.J.arr j "units" ctx).mapM (rangeOf · s!"{ctx}.units")
   let k ← Flock.J.nat j "k" ctx
-  let w ← if work then do pure (some (← Flock.J.nat j "work" ctx, ← Flock.J.nat j "floor" ctx)) else pure none
-  pure ⟨template, units, k, w⟩
+  let (w, f) ← if work then do pure (← Flock.J.nat j "work" ctx, ← Flock.J.nat j "floor" ctx) else pure (0, 0)
+  pure (⟨template, units, k⟩, w, f)
 
-def strataOf (work : Bool) (j : Json) (ctx : String) : V (Array DrawStratum) := do
+def strataOf (work : Bool) (j : Json) (ctx : String) : V (Array (Flock.Draw.Stratum × Nat × Nat)) := do
   let mut strata := #[]
   for s in ← Flock.J.arr j "strata" ctx do
     strata := strata.push (← stratumOf work s s!"{ctx}.strata[{strata.size}]")
   pure strata
 
+/-- A bernoulli draw's `p`: `num/den`, each a natural number in canonical decimal, so `lawName` writes it as written. -/
+def pOf (s ctx : String) : V (Nat × Nat) :=
+  let canon (t : String) : Option Nat := t.toNat?.bind fun n => if toString n == t then some n else none
+  match s.splitOn "/" with
+  | [a, b] => match canon a, canon b with
+    | some a, some b => pure (a, b)
+    | _, _ => throw s!"{ctx}.p: not num/den"
+  | _ => throw s!"{ctx}.p: not num/den"
+
 /-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
 live window's `salt` (`saltOf`). -/
-def drawOf (j : Json) : V UnitDraw := do
+def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
   unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
     throw "public: keys are not draw, and optionally salt"
   let d := get j "draw"
@@ -271,16 +261,17 @@ def drawOf (j : Json) : V UnitDraw := do
     | _ => throw s!"{ctx}.law: not subset, bernoulli, stratified or work"
   keysAre d ks ctx
   let population ← Flock.J.nat d "population" ctx
-  let l ← match law with
-    | "subset" => do pure (.subset (← Flock.J.nat d "k" ctx))
-    | "bernoulli" => do pure (.bernoulli (← Flock.J.str d "p" ctx))
-    | "stratified" => do pure (.stratified (← Flock.J.nat d "k" ctx) (← strataOf false d ctx))
+  let (l, closure) ← match law with
+    | "subset" => do pure (.subset (← Flock.J.nat d "k" ctx), #[])
+    | "bernoulli" => do let (a, b) ← pOf (← Flock.J.str d "p" ctx) ctx; pure (.bernoulli a b, #[])
+    | "stratified" => do
+      pure (.stratified (← Flock.J.nat d "k" ctx) ((← strataOf false d ctx).map (·.1)), #[])
     | _ => do
       let k ← Flock.J.nat d "k" ctx
       let strata ← strataOf true d ctx
-      let closure ← if Flock.J.has d "closure" then some <$> natsOf d "closure" ctx else pure none
-      pure (.work k strata closure)
-  pure ⟨l, population, ← natsOf d "units" ctx⟩
+      let closure ← if Flock.J.has d "closure" then natsOf d "closure" ctx else pure #[]
+      pure (.work k (strata.map fun (s, work, floor) => { toStratum := s, work, floor }), closure)
+  pure ⟨l, population, ← natsOf d "units" ctx, closure⟩
 
 /-- A live window's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
 def saltOf (j : Json) : V (Option Json) :=
@@ -291,7 +282,7 @@ def saltOf (j : Json) : V (Option Json) :=
 
 /-- What the service said. -/
 inductive Said where
-  | accept (profile : Core.Integrity) (draw : UnitDraw)
+  | accept (profile : Core.Integrity) (draw : Flock.Draw.UnitDraw)
   | reject (reason : String)
   | undecided (reason : String)
 
@@ -315,5 +306,9 @@ def evidenceOf (b : ByteArray) : V Evidence := do
     | .reject => pure (Said.reject (a.reason.getD ""), none)
     | .undecided => pure (Said.undecided (a.reason.getD ""), none)
   pure ⟨a.protocol, a.digest.map Flock.hexOf, said, salt⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : formats = [Domains.REGISTRATION_V1, Domains.REGISTRATION] := rfl
 
 end PouwCheck

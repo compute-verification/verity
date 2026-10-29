@@ -133,8 +133,8 @@ keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
 PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
 `Queue.entries`; never by PR number, and never for commits the two merely share), goes
 in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
-mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked PR waits for, once per pair of heads
-(`Driver.tell_unmarked`).  What a sync adds on top goes non-Lean first
+mark (`Queue._carried`); drive tells a marked PR left out so, and the owner of the one it waits for (unmarked, ejected, held
+or waiting itself), with the fix, once per pair of heads (`Driver.tell_contained`).  What a sync adds on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
@@ -167,7 +167,8 @@ with no effect on them; its `sync`, `land` and `drive` still run only on drive (
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
 local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
-the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`).  The clone authenticates as
+the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and one that only reads
+(`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The clone authenticates as
 the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's own config, which a clone
 elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead of answering from what the
 clone fetched last.
@@ -610,8 +611,8 @@ def lean_running(state: dict, pr: int) -> str | None:
 
 def lean_hold(state: dict, chain: list[Member]) -> int:
     """How many members at the bottom of ``chain`` drive's Lean checks keep in place: up to the highest commit of one in drive's
-    state (`drive["lean"]`) that runs, launches or passed, as drive's review tick holds them (`Driver._running_lean`,
-    `_landable`).  A passed one holds whether or not its prefix lands yet; drive's next tick decides that."""
+    state (`drive["lean"]`) that runs, launches or passed, as drive's review tick holds them (`Driver._review`).  A passed one
+    holds whether or not its prefix lands yet; drive's next tick decides that."""
     lean = (state.get("drive") or {}).get("lean") or {}
     held = {c for c, rec in lean.items() if rec.get("state") in (None, "passed")}
     return max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0)
@@ -654,8 +655,8 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 
 #: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked after
-#: landing, a failure reverting it; Lean anywhere else runs as code (C-Flock's verifier and the ZK
-#: server, the PoUS grader, the certifier program, the NCI check, the remote audit's verifier) and keeps its Lean check first
+#: landing, a failure reverting it; Lean anywhere else runs as code (Flock's verifier and the ZK
+#: server, the PoUS grader, the certifier program, the inference-only check, the remote audit's verifier) and keeps its Lean check first
 LEAN_PROOFS_TREE = "Security/"
 
 
@@ -672,6 +673,11 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
         return False
     pkgs = {str(Path(f).parent) for f in _out(repo, "ls-tree", "-r", "--name-only", commit).splitlines() if Path(f).name == LEAN_LOCK}
     return any(p == "." or f.startswith(p + "/") for f in lean for p in pkgs)
+
+
+#: the listings and GETs `StoreLabels.prefetch` makes at once: a fresh VM's store lacks every label of `next`'s ~500 members
+#: (about 1,000 files), which one GET at a time took four minutes to pull
+PREFETCH_JOBS = 32
 
 
 class StoreLabels:
@@ -694,7 +700,7 @@ class StoreLabels:
         if not targets or getattr(self.store, "remote", None) is None:
             return
         try:
-            labels_sync.pull_targets(self.store, targets, jobs=labels_sync.SYNC_JOBS)
+            labels_sync.pull_targets(self.store, targets, jobs=PREFETCH_JOBS)
         except Exception:  # noqa: BLE001
             return
         self._fresh.update(targets)
@@ -826,8 +832,8 @@ class Queue:
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
-        #: how many members at the bottom of `next` a running check covers, or a passed Lean check drive is to land
-        #: (`Driver._landable`): `first` goes above them, so no reorder takes that check's commit off `next`
+        #: how many members at the bottom of `next` a running check covers, or a passed Lean check of drive's (`lean_hold`;
+        #: `Driver._landable`, one drive is to land): `first` goes above them, so no reorder takes that check's commit off `next`
         self.hold = 0
         #: whether a sync merges non-Lean changes first (`_nonlean_order`); None: drive.toml's `nonlean_first` at `main`
         self.nonlean_first = nonlean_first
@@ -836,7 +842,7 @@ class Queue:
         self.reviewed_first = reviewed_first
         #: each (head, base)'s `lean_change`
         self._lean_of: dict[tuple[str, str], bool] = {}
-        #: members a running check (or a `hold`ing passed one) covers that keep their place at the head it checks though their PR's head has moved
+        #: members a running check (or a passed one drive lands this tick) covers that keep their place at the head it checks though their PR's head has moved
         #: (`Driver`: a new head doesn't cancel a running check, and its PR rejoins above once that check ends)
         self.frozen: set[int] = set()
         #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: those
@@ -844,6 +850,9 @@ class Queue:
         self.lift: list[int] = []
         self._lifted: list[int] = []
         self.now: Callable[[], float] = time.time
+        #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
+        #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
+        self.unlock: Callable[[], None] = lambda: None
         self.branch = SHADOW_BRANCH if shadow else BRANCH
         self.state_path = self.workdir.parent / f"{self.workdir.name}.state.json"
         #: whether git takes `--attr-source` (`_merge`), until it refuses it once
@@ -984,7 +993,8 @@ class Queue:
         when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains) is
 
         - a head the queue saw Q at, and the first open PR it saw there (`seen`), that Q's head still contains, as when P
-          branched from Q and Q moved on unmarked (else P would land Q's unmarked commits under P's mark); or
+          branched from Q and Q moved on unmarked (else P would land Q's unmarked commits under P's mark); of several PRs
+          seen at that head, only those marked ready, when any is, since their marks cover it; or
         - one of Q's own commits on Q's first-parent line that P has only through a merge, as when P merged Q's branch and Q
           moved on (P waits for Q, and Q for nothing).
 
@@ -1024,7 +1034,11 @@ class Queue:
                 branch.setdefault(c, []).append(n)
         seen = state.get("seen") or {}
         for n, e in out.items():
-            held = {q for c in own[n] for q in seen.get(c, ()) if q in out and c in below[q]}
+            held: set[int] = set()
+            for c in own[n]:
+                # a head several PRs were seen at is carried by the marked ones among them, whose marks cover it
+                at = [q for q in seen.get(c, ()) if q in out and c in below[q]]
+                held.update([q for q in at if out[q].state == "ready"] or at)
             held |= {q for c in own[n] - line[n] for q in branch.get(c, ())}
             e.older = tuple(sorted(held - {n}))
             e.after = tuple(sorted(e.after + e.older))
@@ -1071,7 +1085,7 @@ class Queue:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
         number, each after the PRs it contains.  The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so they land first; but
-        above the bottom `hold` members, which a running check covers.  With no `hold`, the members of ``lift`` at the heads
+        above the bottom `hold` members, which a running or passed check covers.  With no `hold`, the members of ``lift`` at the heads
         `next` holds go above `first` and below the rest, each only after the PRs it contains (`_lifted`)."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
         kept = [m.pr for m in chain
@@ -1446,6 +1460,7 @@ class Queue:
         state = self.load_state()
         open_prs = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
+        self.unlock()
         entries = self.entries(prs, state)
         entries.update(waiting)
         entries.update(self.off_main(open_prs))
@@ -2804,24 +2819,28 @@ FAST_KIND, LEAN_AUDIT_STEP = "lean-fast/v1", "lean-audit"
 #: the fast path's command, which `RecordsGate` names for each package it can't vouch for
 RECORDS_COMMAND = ("research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
-#: where a records run keeps, under its `--out`, the record `--update` wrote when it differs from the commit's lock
+#: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
+#: package's, PKG's and a requirer's, is also under `record/<path>/`)
 RECORD_KEPT = "record/" + LEAN_LOCK
 #: a requirer's report in a records run's files (`lean_changed.reports`: `requirer-<path, each run of other characters `_`>/`)
 REQUIRER_AUDIT = re.compile(r"(?:^|/)requirer-([^/]+)/audit\.json$")
 #: how many commits below a head `RecordsGate` follows one that only merged `main`, or only committed a record a run regenerated
 RECORDS_WALK = 8
-#: the attempts `RecordsGate` lists from the store's remote: those started after the oldest commit it may read, less the skew of a
-#: machine's clock, and never more than the lookback before now (an older run the catalog here lacks isn't seen)
-RECORDS_SKEW_S, RECORDS_LOOKBACK_S = 3600, 3 * 86400
+#: the attempts `RecordsGate` reads from the store's remote: those started in the lookback before now, whatever the head's history
+#: (a window counted from its commits dropped same-input runs of earlier the same night on a branch with many merges)
+RECORDS_LOOKBACK_S = 3 * 86400
+#: an attempt that may hold a pass of a package (`RecordsGate._commits`): a Lean check (`check.py`), or a records run of the
+#: package it names (`lean_changed.py --records NAME`, NAME a package's path or a part of it, as `lean_changed.py` resolves it)
+RECORDS_CHECK_RE, RECORDS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b"), re.compile(r"lean_changed\.py\b.*?\s--records[=\s]+(\S+)")
 #: the repository's paths besides the packages' own that decide a records run's verdict: the toolchain they may share, and the
 #: checker `RECORDS_COMMAND` runs (`lean_changed.py`, with the `lean_audit.py`, `check.py`, `merge.py` and `sandbox.sh` it loads,
 #: and the `common.py` the audit's key counts among its files; `lean_slot.py` only takes a slot)
 RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py")
-#: the most commits with runs in the window, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
-#: (a safety bound): those this clone lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in
-#: halves until the commits the remote won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read
-#: vouches for nothing
-RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 1000, 200, 48
+#: the most commits with runs in the window that may vouch for a package, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
+#: (a safety bound, above the ~2,500 that 3 days held for `Security/Proofs`, whose inputs span most packages): those this clone
+#: lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in halves until the commits the remote
+#: won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read vouches for nothing
+RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 5000, 200, 48
 #: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
 #: `tests/` or `test/` directory of it, Markdown and READMEs; everything else stays, as a build may read any file
 RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
@@ -2841,8 +2860,9 @@ def _blob(repo: Path, commit: str, path: str) -> bytes | None:
 class RecordsRun:
     """A records run (`lean_changed.py --records PKG`) of one commit, as `research run` published it: its result (`FAST_KIND`:
     PKG, `validation.status`, `path`: `slot`, `dev-cache` or `reused`) and its run files ({path: sha256}), which hold check.py's
-    `audit.json` for PKG and for each requirer (`requirer-<path>/`) and, when `--update` wrote a record that differs from the
-    commit's lock, `record/lean-audit.json`."""
+    `audit.json` for PKG and for each requirer (`requirer-<path>/`) and, for each package whose record `--update` wrote differs
+    from the commit's lock (PKG, or a requirer whose every failure was a record difference), `record/<path>/lean-audit.json`,
+    PKG's also as `record/lean-audit.json`."""
     id: str
     pkg: str
     passed: bool
@@ -2850,9 +2870,12 @@ class RecordsRun:
     files: dict[str, str]
     art: str | None
 
-    def kept_record(self) -> str | None:
-        """The sha256 of the record `--update` wrote that differs from the commit's lock, or None when there's none."""
-        return next((s for p, s in sorted(self.files.items()) if (p == RECORD_KEPT or p.endswith("/" + RECORD_KEPT))
+    def kept_record(self, pkg: str | None = None) -> str | None:
+        """The sha256 of the record `--update` wrote for ``pkg`` (PKG by default) that differs from the commit's lock, or None
+        when there's none."""
+        pkg = self.pkg if pkg is None else pkg
+        want = [f"record/{pkg}/{LEAN_LOCK}", *([RECORD_KEPT] if pkg == self.pkg else [])]
+        return next((s for p, s in sorted(self.files.items()) if any(p == w or p.endswith("/" + w) for w in want)
                      and "requirer-" not in p), None)
 
     def audits(self) -> list[str]:
@@ -2862,9 +2885,12 @@ class RecordsRun:
         return sorted(top) + sorted(p for p in self.files if REQUIRER_AUDIT.search(p))
 
     def reports_of(self, pkg: str) -> list[str]:
-        """The per-package reports (`audit-<name>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
-        beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report."""
-        each = (posixpath.join(posixpath.dirname(a), f"audit-{posixpath.basename(pkg)}", "report.json") for a in self.audits())
+        """The per-package reports (`audit-<tag>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
+        beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report.
+        The tag is lean/check.py's: the package's repository path with each run of other characters as `_`
+        (`audit-Security_Proofs`)."""
+        tag = re.sub(r"[^A-Za-z0-9]+", "_", pkg.strip("/"))
+        each = (posixpath.join(posixpath.dirname(a), f"audit-{tag}", "report.json") for a in self.audits())
         return [p for p in each if p in self.files]
 
 
@@ -2877,8 +2903,8 @@ class RecordsGate:
     minutes later.
 
     Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that commits exactly the
-    record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
-    changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
+    record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/<path>/lean-audit.json`,
+    PKG's or a requirer's), changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
     but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
     for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
@@ -2888,12 +2914,13 @@ class RecordsGate:
     `test/` directory, Markdown, READMEs: `RECORDS_UNREAD_DIRS`), the same blob there as at the head; and `RECORDS_SHARED` (the
     root `lean-toolchain` and the checker: `tools/verity/lean/` and `tools/verity/check/common.py`) the same whole, so a pass
     under another checker vouches for nothing.  A PR that carries another PR's Lean change needs no run of its own for the
-    packages that change passed in.  The candidates are the commits of the attempts in the window read, the newest first
-    (`RECORDS_FETCH` of them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
+    packages that change passed in.  The candidates are the commits of the attempts in the window read that may hold a pass of
+    the package (`RECORDS_CHECK_RE`, `RECORDS_RUN_RE`: a Lean check, or a records run of a package among its inputs), the newest
+    first (`RECORDS_FETCH` of them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
 
-    The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts since the oldest commit the walk may
-    read or the newest that changed those inputs was written, and never more than `RECORDS_LOOKBACK_S` back); a store with no
-    usable remote, or one that can't be listed, refuses: the gate never fails open.  `--no-preflight` doesn't skip it: the lander
+    The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts of the last `RECORDS_LOOKBACK_S`,
+    however many commits the head has gained since); a store with no usable remote, or one that can't be listed, refuses: the
+    gate never fails open.  `--no-preflight` doesn't skip it: the lander
     marks heads whose locks were checked like any other's."""
 
     def __init__(self, repo: Path, remote: str, store, *, log: Callable[[str], None] = print,
@@ -2903,8 +2930,10 @@ class RecordsGate:
         self._runs: dict[str, tuple[list[RecordsRun], list[str]]] = {}
         self._merges: dict[str, bool] = {}
         self._since = ""
-        self._candidates: list[str] | None = None
-        self._readable: list[str] | None = None
+        self._candidates: dict[str, list[str]] = {}
+        self._readable: dict[str, list[str]] = {}
+        #: the commits a fetch has asked the remote for: another package's search doesn't ask again for those it won't serve
+        self._tried: set[str] = set()
         self.notes: list[str] = []
 
     def __call__(self, pr: PR) -> str | None:
@@ -2923,7 +2952,7 @@ class RecordsGate:
             except (QueueError, ValueError, TypeError, AttributeError) as e:   # no search on the same inputs for it; the rest stands
                 self.notes.append(f"{pkg}'s inputs at {pr.head[:12]} can't be read ({type(e).__name__}: {e})")
         try:
-            self._read(pr.head, sorted({p for ps in inputs.values() for p in ps}))
+            self._read()
         except Exception as e:  # noqa: BLE001  (no store, no remote, a failed listing: refuse, never answer from what's here)
             return (f"it changes the Lean lock of {', '.join(locks)}, and the store's records runs can't be read "
                     f"({type(e).__name__}: {e}), so the records gate refuses: it never fails open. Run this where the store's remote "
@@ -2940,8 +2969,8 @@ class RecordsGate:
         for pkg in missing:
             lines += self._failures(pr.head, pkg)
             lines.append(f"start `{RECORDS_COMMAND.format(pkg=pkg)}` and mark once it passed; when its run files hold "
-                         f"`lean-audit/{RECORD_KEPT}`, commit exactly that over {pkg}/{LEAN_LOCK} and mark that commit, which "
-                         f"needs no run of its own")
+                         f"records under `lean-audit/record/` (`lean-audit/record/{pkg}/{LEAN_LOCK}`, a requirer's beside it), "
+                         f"commit exactly each over the lock of its path and mark that commit, which needs no run of its own")
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
         return (f"it changes the Lean lock of {', '.join(missing)} against `main`, and the store holds no records run of "
                 f"{pr.head[:12]} in which {'it' if len(missing) == 1 else 'each'} passed on the head's own lock, nor a Lean check of "
@@ -2959,16 +2988,11 @@ class RecordsGate:
         return {posixpath.dirname(f) or ".": f for f in sorted(files) if posixpath.basename(f) == LEAN_LOCK
                 and _git(self.repo, "cat-file", "-e", f"{pr.head}:{f}", check=False).returncode == 0}
 
-    def _read(self, head: str, inputs: list[str]) -> None:
-        """Bring this store's attempts up to date from its remote, from the oldest commit the walk may read or the write of the
-        newest that changed ``inputs`` (an author's date, which a rebase keeps), whichever is older."""
+    def _read(self) -> None:
+        """Bring this store's attempts of the last `RECORDS_LOOKBACK_S` up to date from its remote."""
         if self.store.remote is None:
             raise QueueError("this machine's store has no remote, so the runs other machines published aren't here")
-        times = [int(t) for t in _out(self.repo, "log", "--first-parent", f"-{RECORDS_WALK + 1}", "--format=%ct", head).split()]
-        if inputs:
-            times += [int(t) for t in _out(self.repo, "log", "-1", "--format=%at", head, "--", *inputs).split()]
-        start = max(min(times) - RECORDS_SKEW_S, self.now() - RECORDS_LOOKBACK_S)
-        self._since = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(start))
+        self._since = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(self.now() - RECORDS_LOOKBACK_S))
         rep = self.store.refresh(attempts_only=True, since=self._since)
         if errs := rep.get("errors"):
             self.notes.append(f"{len(errs)} attempt(s) on the remote couldn't be read, e.g. {errs[0]}")
@@ -3008,23 +3032,47 @@ class RecordsGate:
             raise QueueError(f"git cat-file --batch-check: {r.stderr.strip()[-300:]}")
         return {c for c, ln in zip(commits, lines) if ln.split()[-1] == "commit"}
 
-    def _commits(self) -> list[str]:
-        """The clean commits of the attempts since the window's start, the newest first, `RECORDS_FETCH` at most."""
-        if self._candidates is None:
+    def _commits(self, pkg: str, inputs: list[str]) -> list[str]:
+        """The clean commits of the attempts since the window's start that may hold a pass of ``pkg``, the newest first,
+        `RECORDS_FETCH` at most: a Lean check's, or a records run's of a package NAME names among ``inputs`` (``pkg``, a package
+        it requires, whose run audits it as a requirer, or one whose directory holds it), as `lean_changed.py` resolves NAME (the
+        path, or a part of it).  A store holds thousands of other runs a day, which would push these past the bound."""
+        if pkg not in self._candidates:
+            dirs = [p for p in inputs if p not in RECORDS_SHARED]
             rows = self.store.index.sql(
-                "SELECT source_commit, MAX(id) FROM attempts WHERE id > ? AND source_dirty = 0 AND source_commit IS NOT NULL "
-                "GROUP BY source_commit ORDER BY 2 DESC", (self._since,))
-            self._candidates = [c for c, _ in rows if _SHA.fullmatch(str(c))][:RECORDS_FETCH]
-        return self._candidates
+                "SELECT source_commit, manifest_json FROM attempts WHERE id > ? AND source_dirty = 0 AND source_commit IS NOT NULL "
+                "AND (manifest_json LIKE '%check.py%' OR manifest_json LIKE '%lean_changed.py%') ORDER BY id DESC", (self._since,))
+            out: dict[str, None] = {}
+            bad: list[str] = []
+            for c, doc in rows:
+                if c in out or not _SHA.fullmatch(str(c)):
+                    continue
+                try:
+                    argv = " ".join(map(str, json.loads(doc).get("argv") or []))
+                except (ValueError, AttributeError) as e:
+                    bad.append(f"{str(c)[:12]} ({type(e).__name__})")
+                    continue
+                name = (m := RECORDS_RUN_RE.search(argv)) and m.group(1).strip("'\"").rstrip("/")
+                if (name and any(name in d for d in dirs)) or (not name and RECORDS_CHECK_RE.search(argv)):
+                    out[c] = None
+            if bad:
+                self.notes.append(f"{len(bad)} attempt(s) whose manifest can't be read weren't searched for {pkg}'s, "
+                                  f"e.g. at {bad[0]}")
+            if len(out) > RECORDS_FETCH:
+                self.notes.append(f"{len(out) - RECORDS_FETCH} older commit(s) with runs that may hold {pkg}'s are past the "
+                                  f"search's bound of {RECORDS_FETCH}")
+            self._candidates[pkg] = list(out)[:RECORDS_FETCH]
+        return self._candidates[pkg]
 
-    def _readable_commits(self) -> list[str]:
+    def _readable_commits(self, pkg: str, inputs: list[str]) -> list[str]:
         """`_commits` this clone can read once it fetched those it lacks from the remote by sha, in `RECORDS_FETCH_CHUNK`s,
         a chunk that fails split in halves until the commits the remote won't serve stand alone, `RECORDS_FETCH_CALLS` fetches
         at most."""
-        if self._readable is None:
-            cands = self._commits()
+        if pkg not in self._readable:
+            cands = self._commits(pkg, inputs)
             have = self._present(cands)
-            lacking = [c for c in cands if c not in have]
+            lacking = [c for c in cands if c not in have and c not in self._tried]
+            self._tried.update(lacking)
             todo = [lacking[i:i + RECORDS_FETCH_CHUNK] for i in range(0, len(lacking), RECORDS_FETCH_CHUNK)]
             calls = 0
             while todo and calls < RECORDS_FETCH_CALLS:
@@ -3036,8 +3084,8 @@ class RecordsGate:
                 have = self._present(cands)
             if unread := len(cands) - len(have):
                 self.notes.append(f"{unread} of {len(cands)} commit(s) with runs can't be read here or from {self.remote}")
-            self._readable = [c for c in cands if c in have]
-        return self._readable
+            self._readable[pkg] = [c for c in cands if c in have]
+        return self._readable[pkg]
 
     def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
         """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
@@ -3075,7 +3123,7 @@ class RecordsGate:
     def _same_inputs(self, head: str, pkg: str, inputs: list[str]) -> str | None:
         """Why a pass of ``pkg`` at another commit whose ``inputs`` are the head's (`_differs`) vouches for it, or None."""
         try:
-            cands = [c for c in self._readable_commits() if c != head]
+            cands = [c for c in self._readable_commits(pkg, inputs) if c != head]
             differ = self._differs(head, cands, inputs)
         except Exception as e:  # noqa: BLE001  (a search that can't finish vouches for nothing)
             self.notes.append(f"{pkg}'s inputs can't be compared ({type(e).__name__}: {e})")
@@ -3167,7 +3215,7 @@ class RecordsGate:
             return how and f"{commit[:12]} changes only other packages' locks over {below[:12]}, where {how}"
         sha = hashlib.sha256(_blob(self.repo, commit, lock) or b"").hexdigest()
         for run in self._at(below)[0]:
-            if run.pkg == pkg and run.kept_record() == sha and self._audited(run, pkg)[0]:
+            if run.kept_record(pkg) == sha and self._audited(run, pkg)[0]:
                 return f"{commit[:12]} commits the record records run {run.id} of {below[:12]} regenerated, where {pkg} passed"
         return None
 
@@ -3176,7 +3224,7 @@ class RecordsGate:
         the commit's own lock, or None."""
         runs, checks = self._at(commit)
         for run in runs:
-            if self._audited(run, pkg)[0] and not (run.pkg == pkg and run.kept_record()):
+            if self._audited(run, pkg)[0] and not run.kept_record(pkg):
                 return "records run", run.id, run.path
         for rid in checks:
             if self._checked(rid, pkg):
@@ -3233,9 +3281,10 @@ class RecordsGate:
         out = []
         for run in self._at(head)[0]:
             ok, line = self._audited(run, pkg)
-            if ok and run.pkg == pkg and run.kept_record():
+            if ok and run.kept_record(pkg):
                 out.append(f"records run {run.id} of {head[:12]} passed {pkg} only with the record its `--update` wrote, which "
-                           f"differs from the head's lock: commit its `{RECORD_KEPT}`")
+                           f"differs from the head's lock: commit its "
+                           f"`{RECORD_KEPT if pkg == run.pkg else f'record/{pkg}/{LEAN_LOCK}'}`")
                 break
             if line:
                 out.append(line)
@@ -3426,8 +3475,9 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
 
     q._clone()
     q.fetch()
-    main = _out(q.workdir, "rev-parse", "refs/remotes/origin/main")
-    chain = [m for m in q.chain() if _git(q.workdir, "merge-base", "--is-ancestor", m.commit, main, check=False).returncode]
+    if pr is None:
+        q.unlock()
+    chain = q.chain()
     opened = {p.number: p for p in q.github.open_prs()}
     if pr is None:
         labels.prefetch([(m.pr, m.head) for m in chain])
@@ -3840,7 +3890,8 @@ def main(argv: list[str]) -> int:
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in (a.first or "").split(",") if n),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
-        lock = _lock(a.workdir)  # noqa: F841
+        lock = _lock(a.workdir)
+        q.unlock = lock.close
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
             q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
                   "drive's args")

@@ -14,8 +14,8 @@ import Proofs.Pous.Chain.Flat
 import Proofs.Pous.Chain.Family
 import Proofs.Pous.Chain.FamilyRounds
 import Proofs.Pous.Continuous
-import Proofs.Pous.SecureErasure
 import Proofs.Pous.StreamedWipe
+import Proofs.Pous.StreamedWipeInfo
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
 import Proofs.Pous.P2.Bridge
@@ -60,7 +60,7 @@ import Proofs.Pous.Obligation
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Definitions/Pous/Guarantees.lean`,
-`Security/Definitions/Pous/Guarantees/P2.lean`, `Security/Definitions/Pous/Guarantees/SecureErasure.lean`,
+`Security/Definitions/Pous/Guarantees/P2.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
@@ -182,10 +182,6 @@ theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuou
 theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousContinuous.continuous_time_average
 theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
   PousContinuous.band_family_continuous_time_average
-theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
-theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
-theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
-theorem SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB := PousErase.secure_erasure_meets_96GiB
 theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed_wipe
 theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
   PousStreamedWipe.streamed_wipe_meets_2600GB
@@ -194,8 +190,7 @@ theorem StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily :=
 theorem StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := PousStreamedWipe.streamed_wipe_meets_96GiB
 theorem StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB := PousStreamedWipe.streamed_wipe_meets_141GB
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
-theorem StreamedWipeMeets141GB5 : Pous.Guarantees.StreamedWipeMeets141GB5 :=
-  PousStreamedWipe.streamed_wipe_meets_141GB5
+theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
 theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
   PousStreamedWipe.streamed_wipe_meets_reads_tight
 theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server

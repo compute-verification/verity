@@ -5,6 +5,7 @@ import PouwWindow.Public
 import PouwWindow.Length
 import PouwCheck.Inputs
 import PouwCheck.WindowSalt
+import Identity.Domains
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -12,7 +13,7 @@ import PouwCheck.WindowSalt
 `registered` holds the registration to PoUW's rule: a served window in the verifier's context registering exactly
 `window.REGISTERED` (a registration of `window.LEGACY_REGISTERED`, made before the fixed-length rule, is not of record),
 its `length` item a fixed-length window's at the verifier's max_tokens (`window.length_problem`: no EOS-keyed row, each
-slot served its max_tokens; Daniel, 19 Oct, ASK-39), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
+slot served its max_tokens), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
 population N = point(level + 1), the law subset:K′ with K′ the window's exact `k_prime`, and the check's query and
 scheme. `outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance
 a profile and draw of the registered partition's N units drawn subset:K′ at the window's δ, and a live window's salt its
@@ -163,7 +164,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
     else if prof.drawn ≠ #[(unitLevel, k)] then
       .reject s!"profile: drawn {cs (drawnJson prof.drawn)}, not {k} units"
     else if draw.law ≠ .subset k ∨ draw.population ≠ n then
-      .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
+      .reject s!"draw: {lawName draw.law} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else
@@ -175,5 +176,9 @@ def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public C
   match registered p c with
   | .error r => .reject r
   | .ok f => outcome p c f e
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : oneStage = Domains.ONE_STAGE_PROTOCOL := rfl
 
 end PouwCheck

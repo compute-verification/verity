@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Recursion.KSStated
 # The recursion's KS, linearly
 
 `KSLin` (`Definitions.Claims.RecursionLin`) at the same premises `KS_of_flockKS_binds` reads, which are the deployed
-route's (`RecDeploy.ksBoundRoute_of_bridge`). The inner stage fails where `E^rep` fails against `P_I`'s aborting runs,
+route's (`RecDeploy.ksBoundRoute_of_bridge_cols`). The inner stage fails where `E^rep` fails against `P_I`'s aborting runs,
 at a bad rerun, or where the judged draw's inner view rejects (`PrBadGood_le_abort_rej`):
 
 * against `P_I`'s aborting runs, `κ_I + √(γ_I·Pr[B_I])` (`Inner.KSAbort`, `PrBAbort_le_PrBI`), with `B_I` its own

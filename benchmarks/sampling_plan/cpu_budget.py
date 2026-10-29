@@ -2,11 +2,11 @@
 `subset:k` of its n units, priced by C-Flock `prove --zk` on the CPU nodes instead of the GPU fit, and the share of
 each template's units the budget certifies.
 
-    python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
+    uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
 
 * **A statement** holds up to `UNITS` drawn units of one template, at no more cost than one, since C-Flock pads a
   statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
-  rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_LOG_MAX`, so a unit with more
+  rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_MAX`, so a unit with more
   ANDs is drawn whole and proved as its least number of parts under it, each part a template of its own (a row cut
   where a partial sum is committed).
 * **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
@@ -26,8 +26,12 @@ import json
 from math import ceil, log, log2
 from pathlib import Path
 
-DELTAS = (1e-2, 1e-6)
-PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
+from verity.core.protocols.pous import wipe_monitoring
+from verity.ml.windows.interface import K_MAX
+
+#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`wipe_monitoring`)
+DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
+PERIODS = dict(wipe_monitoring.PERIODS)
 SERVERS = 10_000
 UNITS = 8
 SLOT_CORES, SLOT_GB = 42, 120
@@ -40,9 +44,6 @@ CALIBRATION = {25: (21.0, 34, 5.0, 9.5, 0.8, "r20261026-005203-c613"),
                30: (384.1, 42, 107.4, 276.8, 39.4, "r20261025-234304-229c")}
 #: the least k_log a statement takes: a unit of 21,963 ANDs (ScaledMm K=128) and one of 139,283 (K=1024) both prove at 22
 K_LOG_MIN = 22
-#: `Stmt.InRange`'s k_log bound (`live/src/circuit.rs`'s IN_RANGE_K_LOG, `verity_flock.circuit.K_MAX`): C-Flock refuses an
-#: instance past it, so a unit with more proved ANDs is cut into parts, each its own template.
-K_LOG_MAX = 27
 
 
 def k_log(proved_ands: int) -> int:
@@ -66,7 +67,7 @@ def statement(m: int) -> dict:
 def window(t: dict, k: int, windows: int) -> dict:
     n = t["units"]
     k = min(n, ceil(k / UNITS) * UNITS)
-    parts = ceil(t["proved_ands"] / 2 ** K_LOG_MAX)
+    parts = ceil(t["proved_ands"] / 2 ** K_MAX)
     st = statement(k_log(ceil(t["proved_ands"] / parts)) + 3)
     count = parts * ceil(k / UNITS)
     K0 = {str(d): min(ceil(log(windows / d) * n / k), n - k + 1) for d in DELTAS}

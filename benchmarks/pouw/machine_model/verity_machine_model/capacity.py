@@ -1,6 +1,6 @@
-"""Certified capacity in the tensor–scalar model (FILLER, decision 77; note:20261017T0652Z-draft-filler).
+"""Certified capacity in the tensor–scalar model (FILLER, decision 77).
 
-A window's certified work is a load on Π: n_k warp instructions of class k a SMSP-cycle, counted at the work's floor
+A cell's certified work is a load on Π: n_k warp instructions of class k a SMSP-cycle, counted at the work's floor
 (every MMA it ran and the instructions its mandatory fold costs under FOLD-OPT, never honest's overhead). What it
 certifies is the GPU's capacity: the useful work that any program could still have done beside it is
 
@@ -8,13 +8,13 @@ certifies is the GPU's capacity: the useful work that any program could still ha
 
 with μ_k the useful work one warp instruction of class k does, in tensor slots (an MMA's 4096 int8 MACs = 1; IDP4A's
 128 = 1/32; HFMA2's 64 = 1/64; FFMA's 32 = 1/128), operands free. ε_cap = hidden(n) / hidden(0) is the share of the
-empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_cap is the certified share. A window is a
-set of groups (a share of the cell's SMSP-time and that share's certified load). A receipt says neither where nor when
-in its window and node its work ran, and hidden is concave in n, so the prover's best placement spreads the certified
+empty GPU's useful capacity that the certificate leaves open, and σ = 1 − ε_cap is the certified share. A cell (`Cell`,
+one node over one block's span) is a set of groups (a share of the cell's SMSP-time and that share's certified load). A
+receipt says neither where nor when in its cell its work ran, and hidden is concave in n, so the prover's best placement spreads the certified
 work evenly: σ is read on the pooled load Σ w_g n_g, never as Σ w_g hidden(n_g), which is smaller and would credit a
 placement nobody attests. Each group's own σ is reported beside it as that placement-attested reading.
 
-Beside σ it reports the time-credit reading B(n) = max_r load_r (the share of the window the floor program needs, the
+Beside σ it reports the time-credit reading B(n) = max_r load_r (the share of the cell the floor program needs, the
 floor credit's reading of decision 74), which is never below σ: B credits a saturated facet whole, while σ asks what a
 second program could still issue on the facets that aren't.
 
@@ -174,8 +174,8 @@ def pool(groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...]) -> W
 
 
 @dataclass(frozen=True)
-class Window:
-    """A window and node cell: groups of (share of its SMSP-time, certified work), read on their pooled load."""
+class Cell:
+    """One node over one block's span: groups of (share of its SMSP-time, certified work), read on their pooled load."""
     groups: tuple[tuple[float, Work], ...]
     vector: str
     empty: float                    # hidden(0): the empty GPU's useful tensor slots a SMSP-cycle
@@ -209,11 +209,11 @@ class Window:
                            for (w, g), h in zip(self.groups, self.parts)]}
 
 
-def window(pi: Machine, groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...],
-           useful: dict[str, float] | None = None) -> Window:
+def cell(pi: Machine, groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...],
+         useful: dict[str, float] | None = None) -> Cell:
     tot = sum(w for w, _ in groups)
     if abs(tot - 1.0) > 1e-6:
         raise SystemExit(f"capacity: the groups' shares of SMSP-time sum to {tot:g}, not 1")
     empty = hidden(pi, Work("empty", {}), useful).hidden
-    return Window(tuple(groups), pi.vector, empty, hidden(pi, pool(groups), useful),
+    return Cell(tuple(groups), pi.vector, empty, hidden(pi, pool(groups), useful),
                   tuple(hidden(pi, g, useful) for _, g in groups))

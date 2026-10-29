@@ -48,7 +48,7 @@ def RegistrationKeeps (p : Params) (c : Registration) (f : Fixed) : Prop :=
 of the registered Program over one level, the registered partition's `N` units drawn `subset:K′`, at the window's δ,
 with `K′` units drawn; and a draw `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
 def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
-    (draw : UnitDraw) : Prop :=
+    (draw : Flock.Draw.UnitDraw) : Prop :=
   e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧ e.said = .accept prof draw ∧
   prof.programs = #[c.program] ∧
   prof.levels = #[{ name := unitLevel, query := some c.partition, size := f.work.n, draw := some (.subset f.sampling.k) }] ∧
@@ -115,9 +115,10 @@ def UndecidedOnlyFromService : Prop :=
 
 /-! ## The commitment -/
 
-/-- The digest is one-stage's registration digest, SHA-512 of the format, a zero byte and the canonical record. -/
+/-- The digest is one-stage's window record digest (`Flock.WindowRecord.digestOf`), SHA-512 of the format, a zero byte
+and the canonical record. -/
 def DigestIsOneStage's : Prop :=
-  ∀ c : Registration, protocol.digest c = Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+  ∀ c : Registration, protocol.digest c = Flock.WindowRecord.digestOf c.format c.bytes
 
 /-- A decoded registration keeps the bytes it was read from, so its digest is of exactly those bytes. -/
 def CommitmentKeepsBytes : Prop := ∀ (b : ByteArray) (c : Registration), protocol.commitment b = .ok c → c.bytes = b

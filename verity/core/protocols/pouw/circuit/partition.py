@@ -67,7 +67,7 @@ def partition(shape: Shape, kind: str = "shift24") -> dict[str, Any]:
 
 
 @dataclass(frozen=True)
-class Unit:
+class ProofBlock:
     index: int
     role: str                   # a key of `ncp2.templates`
     template: str               # its descriptor id (the stratum key)
@@ -77,16 +77,16 @@ class Unit:
 
 
 @lru_cache(maxsize=8)
-def units(shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
+def units(shape: Shape, kind: str = "shift24") -> tuple[ProofBlock, ...]:
     """Every unit, in the partition's numbering."""
     return units_of(ncp2.linear(shape, kind), shape, kind)
 
 
-def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
+def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[ProofBlock, ...]:
     """Every unit of a call Definition built from the unit templates (`ncp2.linear`, or a variant a test builds)."""
     roles = {id(v): r for r, v in ncp2.templates(shape.k, kind).items()}
     ms, ns = shape.m // D, shape.n // D
-    out: list[Unit] = []
+    out: list[ProofBlock] = []
     tile_row = deq_node = 0
     for k, nd in enumerate(fn.body.nodes):
         role = roles[id(nd.fn)]
@@ -100,7 +100,7 @@ def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
                 where = ((deq_node // ns) % ms, deq_node % ns, m)
             else:
                 where = ()
-            out.append(Unit(len(out), role, descriptor_id(nd.fn), k, m, where))
+            out.append(ProofBlock(len(out), role, descriptor_id(nd.fn), k, m, where))
         if role == "tile":
             tile_row += 1
         elif role == "dequant":
@@ -109,7 +109,7 @@ def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[Unit, ...]:
     return tuple(out)
 
 
-def window_units(shape: Shape, calls: int, kind: str = "shift24") -> tuple[Unit, ...]:
+def window_units(shape: Shape, calls: int, kind: str = "shift24") -> tuple[ProofBlock, ...]:
     """`NcpWindow`'s units: the weight's Y units, then each call's, in the partition's numbering."""
     return units_of(ncp2.window(shape, calls, kind), shape, kind)
 
@@ -123,7 +123,7 @@ def window_cut(shape: Shape, calls: int, kind: str = "shift24") -> "UnitCut":
 class UnitCut:
     graph: CallGraph
     owner: list[int]                                     # the unit of each computing gate (CallGraph order)
-    units: tuple[Unit, ...]
+    units: tuple[ProofBlock, ...]
     verdict: CutVerdict
 
 
@@ -234,8 +234,8 @@ class WidthRule:
 
 
 def width_rule(shape: Shape, kind: str = "shift24") -> WidthRule:
-    """The width rule by reachability, with the separator pinned (X-SPC-60, X-SPC-66), on the protocol's own Program
-    (`ncp2.linear`, which the verifier builds; X-SPC-73): remove the pinned ports' values, find every unit from which a
+    """The width rule by reachability, with the separator pinned, on the protocol's own Program
+    (`ncp2.linear`, which the verifier builds): remove the pinned ports' values, find every unit from which a
     served output (y's m·n entries, the protocol's designation) is still reachable, and hold each such unit to
     `cut.WIDTH_RULE`; every other unit is behind the separator and exempt. The ports are the protocol's
     (`SEPARATOR_PORTS`), so a wide unit cannot name its own output a separator: a pinned tile whose word leaf reaches a
@@ -279,6 +279,6 @@ def boundary_bits(shape: Shape, kind: str = "shift24") -> dict[str, Counter]:
     return out
 
 
-__all__ = ["POUW_ROLES", "SEPARATOR_PORTS", "Separator", "Unit", "UnitCut", "WidthRule", "boundary_bits", "listed",
+__all__ = ["POUW_ROLES", "SEPARATOR_PORTS", "Separator", "ProofBlock", "UnitCut", "WidthRule", "boundary_bits", "listed",
            "partition", "program", "query", "separator", "unit_cut", "unit_cut_of", "units", "units_of", "weight_program",
            "weight_query", "width_rule", "width_rule_of", "window_cut", "window_units"]

@@ -4,6 +4,7 @@
     AmpereBF16TcDot16_v3        (acc: Array<32, Value<1>>, a, b: Array<16, Array<16, Value<1>>>)
                                 -> Array<32, Value<1>>                                                word view: AmpereBF16TcDot16_v2
     HopperBF16WgmmaDot16_v2     the same signature                                                    word view: HopperBF16WgmmaDot16_v1
+    HopperBF16WgmmaDot16_v3     the same signature                                                    word view: HopperBF16WgmmaDot16_v1
     DotBf16_v3{K, DOT}          (x, w: Array<K, Array<16, Value<1>>>) -> Array<32, Value<1>>          word view: DotBf16_v2{K, DOT'}
     GemmCoordinate_v3{K, DOT}   (x, wrow: Array<K, Array<16, Value<1>>>) -> Array<16, Value<1>>       word view: GemmCoordinate_v2{K, DOT'}
     GemmCoordinatePad_v2{T, K, DOT}  (x, wrow: Array<T, Array<16, Value<1>>>) -> Array<16, Value<1>>  word view: GemmCoordinatePad_v1{T, K, DOT'}
@@ -36,7 +37,9 @@
                                 -> Array<N, Array<16, Value<1>>>                                      word view: ScaledMmS8_v1{K, N, DOT'}
 
 The steps and the cast are traced from `fp`'s builders (`trace.definition`): their bodies are And/Xor/Not gates, with exactly
-the builders' live ANDs. `GemmCoordinate_v3` is `GemmCoordinate_v2`'s body on bits: K/16 calls of `DOT` from the zero
+the builders' live ANDs. `HopperBF16WgmmaDot16_v3` is v2 without the finite stand-ins (`fp.tc_dot16`'s ``stand_ins=False``,
+whose docstring proves it the same function); it is ``opt_in``: `boolean_version` never picks it, so it serves only the
+callers that bind it (the training step's GEMM routes) and the served Programs keep v2. `GemmCoordinate_v3` is `GemmCoordinate_v2`'s body on bits: K/16 calls of `DOT` from the zero
 accumulator (32 constant-0 bits), then `F2fpBf16_v2`; `DotBf16_v3` is the same steps without the cast, and `Gemm_v3` is
 `Gemm_v2`'s: the coordinate batched over W's N rows. `GemmCoordinatePad_v2` is `GemmCoordinate_v3` on its T-word operands
 followed by K - T words of constant-0 bits, and `PvRow_v2` is that coordinate batched over the D columns of V's T key rows;
@@ -78,7 +81,7 @@ __all__ = ["AmpereBF16TcDot16", "BlackwellE4m3QmmaDot32", "BlackwellE5m2QmmaDot3
            "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_HOPPER_E4M3", "GEMM_HOPPER_E4M3_MMAV2", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4",
            "GEMM_SM120_S8", "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8",
            "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4", "GemmCoordinateNvf4", "GemmCoordinatePad",
-           "HopperBF16WgmmaDot16", "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "PvRow", "PvRowPad", "S32ToF32Rn", "ScaledMmS8",
+           "HopperBF16WgmmaDot16", "HopperBF16WgmmaDot16V3", "HopperE4m3MmaV2Dot32", "HopperE4m3QgmmaDot32", "PvRow", "PvRowPad", "S32ToF32Rn", "ScaledMmS8",
            "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "ScaledMmS8ResidualCoordinateRows", "s8_gemm"]
 
 BIT = BL.BIT
@@ -107,6 +110,13 @@ HopperBF16WgmmaDot16 = definition(
     lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133),
     (("acc", F32), ("a", A16), ("b", A16)), F32, word=P.HopperBF16WgmmaDot16,
     doc="wgmma.m64nNk16 bf16, one accumulator coordinate, on bits: HopperBF16WgmmaDot16_v1")
+HopperBF16WgmmaDot16V3 = definition(
+    "HopperBF16WgmmaDot16", 3,
+    lambda C, acc, *ab: fp.tc_dot16(C, acc, list(ab[:16]), list(ab[16:]), groups=(16,), W=26, F=-133, stand_ins=False),
+    (("acc", F32), ("a", A16), ("b", A16)), F32, word=P.HopperBF16WgmmaDot16,
+    doc="wgmma.m64nNk16 bf16, one accumulator coordinate, on bits: HopperBF16WgmmaDot16_v1, its finite part on the raw words "
+        "(fp.tc_dot16's stand_ins=False)")
+HopperBF16WgmmaDot16V3.opt_in = True  # type: ignore[attr-defined]
 HopperE4m3QgmmaDot32 = definition(
     "HopperE4m3QgmmaDot32", 2,
     lambda C, acc, *ab: fp.tc_dot_e4m3(C, acc, list(ab[:32]), list(ab[32:]), groups=(32,), W=14, F=-139),
@@ -148,8 +158,8 @@ BlackwellS8ImmaDot32 = definition(
 S32ToF32Rn = definition("S32ToF32Rn", 2, fp.s32_to_f32, (("a", F32),), F32, word=P.S32ToF32Rn,
                         doc="cvt.rn.f32.s32 on bits: S32ToF32Rn_v1 (round to nearest even, zero +0)")
 
-for _step in (AmpereBF16TcDot16, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32, HopperE4m3MmaV2Dot32, BlackwellE4m3QmmaDot32,
-              BlackwellE5m2QmmaDot32, BlackwellNvf4OmmaDot64, BlackwellMxf4OmmaDot64, BlackwellS8ImmaDot32):
+for _step in (AmpereBF16TcDot16, HopperBF16WgmmaDot16, HopperBF16WgmmaDot16V3, HopperE4m3QgmmaDot32, HopperE4m3MmaV2Dot32,
+              BlackwellE4m3QmmaDot32, BlackwellE5m2QmmaDot32, BlackwellNvf4OmmaDot64, BlackwellMxf4OmmaDot64, BlackwellS8ImmaDot32):
     silicon_step(_step, _step.word.silicon)
 
 

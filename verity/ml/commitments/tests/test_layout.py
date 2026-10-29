@@ -15,7 +15,7 @@ from verity.ml.commitments import layout as L
 from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512_prefix
 
 LAYOUTS = Path(__file__).resolve().parent / "fixtures" / "layouts"
-#: art:16f2faa0…'s file, FAMILIES' shared-row layout at 1 KiB rows (CIR-113), and its sha256
+#: art:16f2faa0…'s file, FAMILIES' shared-row layout at 1 KiB rows, and its sha256
 SHARED = LAYOUTS / "families-shared-1024b.layout.json", "15fd14be19dea4d4d70b18771d0e185881894c3d5e480db35a9dbe4eb5141cd8"
 #: art:a61d745f…'s file, today's ``families/v1`` layout, whose gathers re-commit their parts' bytes, and its sha256
 TODAY = LAYOUTS / "families-today.layout.json", "c3f312ce597f368cb01b7db9c8298fff1c9613d7bf90907d7e72a45190a1e175"
@@ -167,7 +167,9 @@ def test_a_float_never_passes_as_an_earlier_groups_integer() -> None:
     (lambda d: d.update(digest="x"), 'a layout is {"name", "groups"}'),
     (lambda d: d.pop("name"), 'a layout is {"name", "groups"}'),
     (lambda d: d.update(name=7), "a layout's name is a string"),
-    (lambda d: d.update(name="\ud800"), "a layout's name is UTF-8 text"),
+    (lambda d: d.update(name="\ud800"), "a layout's name is ASCII without DEL"),
+    (lambda d: d.update(name="caf\u00e9"), "a layout's name is ASCII without DEL"),
+    (lambda d: d.update(name="t\x7f"), "a layout's name is ASCII without DEL"),
     (lambda d: d.update(groups={}), "a layout's groups are a list"),
     (lambda d: d["groups"][1].update(scale=4), 'group 1: a group is {"sources", "units"}'),
     (lambda d: d["groups"][1].update(sources=(64, 4)), "group 1: a group's sources and units are lists"),

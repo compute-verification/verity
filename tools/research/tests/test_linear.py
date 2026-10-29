@@ -292,6 +292,12 @@ def test_the_state_comment_and_list_verbs(fake, registry, capsys, lin):
     assert rc == 0 and out.strip() == "INF-1 commented"
     (_, v, _), = lin.sent("commentCreate")
     assert v["i"] == {"issueId": "I1", "body": "@infra: picked up"}
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "--as", "infra", "options", "first")
+    assert rc == 0 and lin.sent("commentCreate")[-1][1]["i"]["body"] == "@infra: options first"
+    with pytest.raises(SystemExit):
+        run(capsys, "linear", "comment", "INF-1", "--as", "infra", "x", "--bogus", "y")
+    err = capsys.readouterr().err
+    assert "unrecognized arguments:" in err and "--bogus y" in err
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "no sender")
     assert rc != 0 and "--as HANDLE" in err
     rc, out, _ = run(capsys, "linear", "list", "infra")
@@ -584,6 +590,23 @@ def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, li
         rc, _, err = run(capsys, "send", "--as", "top", *argv, "--parent", "CMP-92", "--text", "more")
         assert rc == 2 and "--parent and --title go with an ask" in err
     assert len(lin.sent("issueCreate")) == 2
+
+
+def test_create_files_an_issue_into_your_own_team_with_its_brief_title_and_due_date(fake, registry, capsys, lin, tmp_path):
+    """`ask` refuses your own handle, so a lane had no command to file its own deliverable."""
+    brief = tmp_path / "brief.md"
+    brief.write_text("**Goal:** the figures.\n**Done when:** published.")
+    argv = ["linear", "create", "--as", "infra", "--title", "Publish the figures", "--file", str(brief)]
+    rc, out, _ = run(capsys, *argv, "--dry-run")
+    assert rc == 0 and out.strip() == "dry-run: would file 'Publish the figures' in INF as infra" and lin.sent("issueCreate") == []
+    rc, out, _ = run(capsys, *argv, "--due", "2026-10-29", "--parent", "CMP-92")
+    (_, v, _), = lin.sent("issueCreate")
+    assert rc == 0 and out.startswith("INF-1 https://linear.app/x/issue/INF-1")
+    assert v["i"]["title"] == "Publish the figures" and v["i"]["description"].startswith("**Goal:**") and v["i"]["parentId"] == "P1"
+    assert lin.updated[-1][1] == {"dueDate": "2026-10-29"}
+    for missing, why in ((["--title", "T"], "--file BRIEF.md"), (["--file", str(brief)], "--title")):
+        rc, _, err = run(capsys, "linear", "create", "--as", "infra", *missing)
+        assert rc == 2 and why in err
 
 
 def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_date_or_nothing_to_set(tmp_path):

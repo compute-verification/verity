@@ -17,7 +17,7 @@ M0's statement proves a template's identical units with every instance's input r
 * each source's row is committed once and opened by every instance that reads it (M0's shared rows), rows being keyed by the
   identity of the values they hold, not by value (`class_lanes`);
 * the instances are every unit of the class in its flat Definition (`class_lanes`: synthetic inputs lifted through the flat
-  Definition, a Call's broadcast parameters drawn once per Call), the statement binds the partition's ``verity/partition/v1``
+  Definition, a Call's broadcast parameters sampled once per Call), the statement binds the partition's ``verity/partition/v1``
   digest and the program's SHA-512 (an owner-function partition, which no record can name, binds the SHA-512 of its description
   under the tag ``verity/flock/experimental-owners``).
 
@@ -27,7 +27,7 @@ are committed values whose row a reading unit can open.  Every class is one plai
 Boolean circuit, with no slot type other than M0's row slots: a unit's pinned-table reads (MUFU) are laid out inline as ordinary
 rows by `ir_lower.layout` (the one-hot construction; 154-309 M matrix entries per read, about 20 B of prover memory each), and each
 record carries the class's table reads and its unit's matrix entries. `UnitStager`'s ``reads="slots"`` instead puts a unit's
-MUFU reads in C-Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a served row's workload from its program graph:
+MUFU reads in Flock's lookup slots (`read_slots`), whose tables count once per statement.  `distinct_calls` builds a served row's workload from its program graph:
 a Program with one Call of each distinct Call Definition, whose per-Call partitions have exactly the row's classes.
 """
 from __future__ import annotations
@@ -57,7 +57,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
+from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 
 from . import circuit as FC
 from . import class_sweep
@@ -146,7 +146,7 @@ class ClassDefinition:
         return params, Array(self.w_out, Value(16))
 
 
-def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
+def sources(act: Activation, uc: ProofBlockCircuit, owner_of: dict[int, str]) -> list[list[int]]:
     """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per class
     (shape) of producing units whose committed outputs it reads (``owner_of``: computing gate -> its unit's shape in the flat cut),
     as serving commits a tensor once, not per element. Each group is one row, and every instance reading the same values opens
@@ -161,7 +161,7 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
+def element_rows(act: Activation, uc: ProofBlockCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
     scales another, each core's bit row (``verity.ml.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
@@ -251,7 +251,7 @@ def _whole_row(reads: Sequence[tuple[int, int] | None], n_out) -> int | None:
     return v
 
 
-def link_ports(uc: UnitCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
+def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
     """Split every source group through which some unit reads another unit's outputs into segments, at each leaf where any unit's
     reads stop being one run (circuit inputs, or one writer's consecutive outputs). Each segment must then be, in every unit,
     circuit inputs only or exactly one writer's whole output row in order (``n_out(v)``: writer ``v``'s output count); a partial
@@ -318,7 +318,7 @@ def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> 
             "ports": [x["port"] for x in meta.get("links") or []], "links": [list(x) for x in triples]}
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
+def class_lowering(act: Activation, uc: ProofBlockCircuit, name: str, groups: list[list[int]] | None = None,
                    packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
     words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
@@ -351,7 +351,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
     return IL.Lowering(name, ClassDefinition(name, port_words, w_out), units, C, lay)
 
 
-def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
+def pack(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
          groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool | Sequence[bool] = False):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
     the layout `class_lowering` reads (``packed`` as there)."""
@@ -567,7 +567,7 @@ def _evaluation(act: Activation, key: tuple, words: list[int]) -> dict[int, int]
 
 def class_lanes(units: PartitionUnits, cl, key, n: int, shared: dict[str, tuple[set[int], int]]) -> tuple[list, list, list]:
     """``n`` instances of the class: every unit of that shape in its flat Definition, from as many evaluations as it takes, each
-    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are drawn once per Call
+    evaluation's parameters uniform words, except those the Call shares across members (``shared``), which are sampled once per Call
     (group of members). Returns (inputs, outputs, rows): per input position every instance's word, and per source group
     (`sources` of the representative) every instance's row identity: the leaves it reads, and the Call they belong to when all
     are parameters the Call broadcasts, else the evaluation. Instances with one identity open one committed row."""
@@ -755,7 +755,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         ({"links": links, "definition": definition} if wiring is not None else {})
 
 
-def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
+def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
     """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
     from verity.ml.commitments.rowleaf import bit_row
@@ -771,7 +771,7 @@ def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
 #: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
-#: hashed once per tile rather than once per coordinate (internal/gemm-column-batch-tiles-layout-scope.md)
+#: hashed once per tile rather than once per coordinate
 GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
 
 
@@ -970,7 +970,7 @@ class _UnitCircuit(gf2.Circuit):
 @dataclass
 class _TmplLayout:
     """What `circuit.compose` and `UnitStager` read of a unit's layout, for a unit given as its template: its port groups
-    (`ir_lower.Layout`'s ``(word column, words, port widths)``) and ``counts``, the unrolled rows (`tmpl.totals`, the
+    (`ir_lower.LoweredUnit`'s ``(word column, words, port widths)``) and ``counts``, the unrolled rows (`tmpl.totals`, the
     root's input and output copy rows not ANDs)."""
 
     in_groups: list
@@ -1057,7 +1057,9 @@ class UnitStager:
     (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit. ``reads`` (``inline`` or ``slots``, flat statements only):
     `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
     `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
-    proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement)."""
+    proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement). A unit
+    whose Definition alone needs more witness bits than C-Flock's proved range is refused before it is lowered
+    (`circuit.refuse_past_range`)."""
 
     def __init__(self, definition, name: str, in_rows: Sequence[tuple[str, str, int, Sequence[str]]],
                  out_rows: Sequence[tuple[str, Sequence[int]]], public_inputs: dict | None = None, circuit: Path | None = None,
@@ -1074,6 +1076,7 @@ class UnitStager:
             raise ValueError(f"{name}: a structural unit is written as its template: name its layout")
         if layout is not None and reads != "inline":
             raise ValueError(f"{name}: a templated statement's unit lays its reads out inline")
+        FC.refuse_past_range(definition, name)
         self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
                                                  structural, reads, stage_ands)
         if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
@@ -1298,7 +1301,7 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
     at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
     system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
     provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
-    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier draws by that law at its
+    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by that law at its
     Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover alike)."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
@@ -1713,7 +1716,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "another pod (FC_VERIFIERS=DIR), then wait for them (FC_SERVE_WAIT_S, default 3600), into served.jsonl")
     ap.add_argument("--serve-points", type=int, default=1, help="with --serve-only: serve that many provers' --warm + --runs "
                     "sessions, one prover after another on the same verifier processes (the points of one GPU session)")
-    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, drawn by a seeded hash of their shapes (0: all)")
+    ap.add_argument("--sample", type=int, default=0, help="prove only this many classes, sampled by a seeded hash of their shapes (0: all)")
     ap.add_argument("--port", type=int, default=7610)
     ap.add_argument("--gpu", action="store_true", help="prove on the GPU (flock-circuit prove --gpu)")
     ap.add_argument("--warm", type=int, default=0)
@@ -1861,7 +1864,7 @@ def _device(gpu: bool) -> str | None:
 
 
 def write_result(results: Path, a) -> None:
-    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``: the settings as the fingerprint, the
+    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run as a recorded run: the settings as the fingerprint, the
     shapes' counts and summed timings as measurements, and every shape's record (keyed by shape digest) in ``results.jsonl``, copied
     beside it as the measurement file."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")

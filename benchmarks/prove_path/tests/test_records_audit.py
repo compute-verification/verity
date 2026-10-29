@@ -115,6 +115,24 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
         RA.verifier_window(written.dir, D.parse_law(LAW), None)
 
 
+def test_a_registry_template_resolves_in_a_fresh_audit_process():
+    """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
+    fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
+    from verity.ml.definitions.registry import boolean_io_shell as BX
+
+    occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
+    tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
+    code = f"""
+import sys
+sys.path.insert(0, {str(HERE.parent)!r})
+import records_audit as RA
+from verity.ml.circuits.codec import descriptor_id
+assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
+"""
+    p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
 def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
     w, doc, op = written.rec["window"], written.doc, written.opening
     v, bound = RA.compile_check(doc, w, op, _compilers(tmp_path, doc), tmp_path / "c")
@@ -232,7 +250,7 @@ def test_a_window_is_compiled_at_its_registered_commit_from_a_tree_at_another(tm
 
 def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_advices_charge(written):
     """2a's audited window, 8 units of SiluMul_v2{I=8192}, counts its two bf16 rows of 8192 a unit, 2,097,152 bits, against
-    1,687 declared advice bits: vacuous. A wired port isn't an input, a shared-row port counts its table's rows, and an
+    1,687 advice bits: vacuous. A wired port isn't an input, a shared-row port counts its table's rows, and an
     external port is reported but not subtracted until a layout lists the ingress at its steps."""
     per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
@@ -584,7 +602,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
 
 def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
     """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
-    the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a draw needing more than ``--ports`` is
+    the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
     import a5 as A5
 
@@ -623,7 +641,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):
-    """The verifier's window, the compile check, `source`, the negatives and the draw-order check, in a fresh process: no
+    """The verifier's window, the compile check, `source`, the negatives and the sample-order check, in a fresh process: no
     `verity_vllm` module is loaded."""
     compilers = tmp_path / "compilers.json"
     compilers.write_text(json.dumps(_compilers(tmp_path, written.doc)))

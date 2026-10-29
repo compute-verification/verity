@@ -7,12 +7,12 @@ import Proofs.Accounting.RateAudit.DeployedSketchSum
 import Proofs.Accounting.RateAudit.DeployedRelay
 import Proofs.Accounting.RateAudit.DeployedRun
 import Proofs.Accounting.RateAudit.Honest
-import Proofs.Accounting.RateAudit.Horizon
 import Proofs.Accounting.RateAudit.Interactive
 import Proofs.Accounting.RateAudit.Joint
 import Proofs.Accounting.RateAudit.Named
 import Proofs.Accounting.RateAudit.Partial
 import Proofs.Accounting.RateAudit.PartialJoint
+import Proofs.Accounting.RateAudit.Pooled
 import Proofs.Accounting.RateAudit.Relay
 import Proofs.Accounting.RateAudit.Session
 import Proofs.Accounting.RateAudit.Sketch
@@ -42,7 +42,7 @@ the table that reads only the digest (`Accounting.SecurityProofs.RateSketchTable
 `RateChainPass`, `RateChainRO`, `RateChain`), and conservation at every count, for a pass and for a window
 (`Accounting.SecurityProofs.RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`), and for a window whose roots
 are ground against the Fiat–Shamir seed (`Accounting.SecurityProofs.RateGrindPaidRO`, `RateGrindPaid`), and the causal
-bound over the monitoring period on the samples (`Accounting.SecurityProofs.HorizonSampling`, `RateHorizon`) with the
+bound over the monitoring period on the samples (`Accounting.SecurityProofs.PooledSampling`, `RatePooled`) with the
 route `Sampled` it gives a window (`Accounting.SecurityProofs.RateChainSampledRO`, `RateChainSampled`), and conservation
 with the compression naming words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`),
 with its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled draw of a window and of a

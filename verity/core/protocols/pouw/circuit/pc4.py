@@ -24,8 +24,8 @@ The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ
 The weight's Program is `Pc4Weight` under hiding too.  The hiding is C-Flock's: every row a unit reads or writes is a
 committed port, which C-Flock commits as an hm96-sha512 row and hashes in the proof, so these Programs hold no leaf and no
 value is computed in two units.  `PORTS` names each unit's committed rows by schema (`leaves.SCHEMAS`): a row unit's input
-row (bf16), the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j) and its ``ok`` row (C-Flock commits every output,
-#757), and a tile unit's TM + TN nvfp4-p rows and its tile digest.  A tile reads each row as its row unit wrote it, the
+row (bf16), the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j) and its ``ok`` row (C-Flock commits every output),
+and a tile unit's TM + TN nvfp4-p rows and its tile digest.  A tile reads each row as its row unit wrote it, the
 same words under the same schema, so the units link by equal commit strings.  The rest are the anchored inputs, each a
 public input region that `PORTS` names with its recomputation (`DERIVATIONS`).
 
@@ -55,6 +55,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, ClassVar
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import descriptor_id
@@ -328,15 +329,15 @@ _LINE = (f"bytes 16·(index mod {S.LINES_PER_BLOCK}) to +15 of SHA-512(\"{S.LABE
 #: matmul u64 LE), seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B), H_ℓ `pearl_c4.labelled`'s SHA-512), each under its rule's
 #: versioned id
 DERIVATIONS = {
-    "ea": A.Derivation("verity/pouw/anchor/pearl-c4/ea/v2", "seed_a",
+    "ea": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_EA, "seed_a",
                        _LINE + f"{S.ROLE_EA:#04x} (ROLE_EA), index A's global row", line_ea, 4, per_row=True),
-    "eb": A.Derivation("verity/pouw/anchor/pearl-c4/eb/v2", "seed_b",
+    "eb": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_EB, "seed_b",
                        _LINE + f"{S.ROLE_EB:#04x} (ROLE_EB), index B's global row", line_eb, 4, per_row=True),
-    "fa": A.Derivation("verity/pouw/anchor/pearl-c4/fa/v2", "seed_b",
+    "fa": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_FA, "seed_b",
                        _LINE + f"{S.ROLE_FA:#04x} (ROLE_FA), index the position t < k", basis_fa, 4),
-    "fb": A.Derivation("verity/pouw/anchor/pearl-c4/fb/v2", "seed_b",
+    "fb": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_FB, "seed_b",
                        _LINE + f"{S.ROLE_FB:#04x} (ROLE_FB), index the position t < k", basis_fb, 4),
-    "g": A.Derivation("verity/pouw/anchor/pearl-c4/g/v2", "seed_b",
+    "g": A.Derivation(domains.POUW_ANCHOR_PEARL_C4_G, "seed_b",
                       f"G_pq = the NVF4 atom chained from +0 over F_B[:, p]·F_A[:, q], k/64 steps, every scale "
                       f"byte UE4M3 1.0 ({S.NVFP4.one:#04x}); FP32 words", gram_g, 32),
 }
@@ -546,7 +547,7 @@ def query(shape: Shape, side: str = "check") -> dict[str, Any]:
 
 
 @dataclass(frozen=True)
-class Unit:
+class ProofBlock:
     index: int
     role: str                   # a key of `templates`, or of `rowk.ROLES`
     node: int                   # its root-body node
@@ -559,19 +560,19 @@ class Unit:
 GRID_ROLES = ("tile", "word", "row_digest", "row_tally", "tally")
 
 
-def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[Unit, ...]:
+def units(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -> tuple[ProofBlock, ...]:
     """Every unit of a Program built from the unit templates, in the partition's numbering (node order, then member);
     ``role_of`` maps each template's Definition (by id) to its role, Pearl-C4's by default."""
     from . import rowk
 
     role_of = _role_of() if role_of is None else role_of
-    out: list[Unit] = []
+    out: list[ProofBlock] = []
     grid_rows = dict.fromkeys(GRID_ROLES, 0)
     for j, nd in enumerate(fn.body.nodes):
         role, tid = role_of[id(nd.fn.defn)], descriptor_id(nd.fn)
         for m in range(nd.n if nd.form == "batch" else 1):
             where = (grid_rows[role], m) if role in grid_rows else (m, rowk.segment(nd.fn)) if role in rowk.FORMS else (m,)
-            out.append(Unit(len(out), role, j, m, tid, where))
+            out.append(ProofBlock(len(out), role, j, m, tid, where))
         if role in grid_rows:
             grid_rows[role] += 1
     return tuple(out)
@@ -597,6 +598,6 @@ def unit_cut(fn: SpecializedDefinition, role_of: dict[int, str] | None = None) -
     return g, owner, check_cut(g, owner, limits=None)
 
 
-__all__ = ["BASIS", "DERIVATIONS", "GRAM", "GRID_ROLES", "LINE", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape", "Unit",
+__all__ = ["BASIS", "DERIVATIONS", "GRAM", "GRID_ROLES", "LINE", "PORTS", "P_ROW", "ROLES", "SEEDS", "TILE", "Shape", "ProofBlock",
            "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "ok_word", "query", "templates", "unit_cut",
            "units", "weight"]

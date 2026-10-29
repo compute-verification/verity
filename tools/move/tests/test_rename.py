@@ -47,8 +47,8 @@ def test_what_is_kept_stands():
     s = WORDS.sub
     tags = 'ROW_TAG = b"verity-network-warden/row/v1"; RECORD_TAG = b"verity-network-warden/record/v1"'
     assert s(tags) == tags
-    assert s("see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234") == \
-        "see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234"
+    ids = "see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234"
+    assert s(ids) == ids
     statement = "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"
     assert s(f'"use": "{statement}"') == f'"use": "{statement}"'
     assert s("node.gateway.id", "tools/check/guard/x.py") == "node.gateway.id"
@@ -137,6 +137,40 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
     assert M.lock_moves(tmp_path, WORDS, ["lean-audit.json"]) == {
         "NetTiming.Interaction.warden": "NetTiming.Interaction.certifier", "NetTiming.Warden": "NetTiming.Certifier",
         "Warden": "NetworkCertifier"}
+
+
+def test_a_namespace_whose_names_are_renamed_inside_too_is_listed_in_full(tmp_path):
+    """`Component` renames a namespace and the names under it that end in it: the prefix alone would give
+    `Subprotocol.LineHeldAtComponent`, and the prefix with its override under it is a move `check.py --moved` can't read
+    back, so each name is listed in full."""
+    words = M.Words({"words": {"Component": "Subprotocol"}})
+    lock = {"guarantees": {"R.Component.SecurityProofs.lineHeldAtComponent": {}},
+            "reads": {"M": {"definitions": {"R.Component.LineHeldAtComponent": "00", "R.Component.Held": "00"}}}}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    moves = M.lock_moves(tmp_path, words, ["lean-audit.json"])
+    assert moves == {"R.Component.Held": "R.Subprotocol.Held",
+                     "R.Component.LineHeldAtComponent": "R.Subprotocol.LineHeldAtSubprotocol",
+                     "R.Component.SecurityProofs.lineHeldAtComponent": "R.Subprotocol.SecurityProofs.lineHeldAtSubprotocol"}
+    assert not [(o, o2) for o, n in moves.items() for o2, n2 in moves.items()
+                if n2.startswith(n + ".") and o2 != o + n2[len(n):]]
+    lock["reads"]["M"]["definitions"]["R.Component"] = "00"
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    with pytest.raises(SystemExit, match="rename them in two moves"):
+        M.lock_moves(tmp_path, words, ["lean-audit.json"])
+
+
+def test_a_read_definition_is_renamed_as_its_modules_file_renames_it(tmp_path):
+    """A [[words_in]] word holds in its files, so a read definition moves where its module's file is one of them, and stands
+    where it is another's, or in a file the map excludes."""
+    words = M.Words({"words": {}, "words_in": [{"files": ["S/Definitions/Compose.lean", "S/Old/Gates.lean"],
+                                                "words": {"Declared": "RegisteredCircuit"}}],
+                     "rewrite": {"exclude": ["S/Old/**"]}})
+    lock = {"reads": {"Definitions.Compose": {"definitions": {"Compose.Declared": "00"}},
+                      "Definitions.Other": {"definitions": {"Other.Declared": "00"}},
+                      "Old.Gates": {"definitions": {"Gates.Declared": "00"}}}}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    files = ["lean-audit.json", "S/Definitions/Compose.lean", "S/Definitions/Other.lean", "S/Old/Gates.lean"]
+    assert M.lock_moves(tmp_path, words, files) == {"Compose.Declared": "Compose.RegisteredCircuit"}
 
 
 def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():

@@ -28,8 +28,8 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `resource_accounting/` | a chain of dependent matmuls at Llama-3.1-8B's shapes on one RTX PRO 6000, natively and under each protocol, with what each run certifies | maintained |
 | `load_time/` | the time from spawn to engine-ready for a large model under vLLM at TP 8, by page-cache, compile-cache and loader state | frozen |
-| `rho/` | a lower bound on the overhead a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
-| `nci/` | the sources, parameters and policies NCI's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
+| `rho/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
+| `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
 
 ## Kernels
 
@@ -38,18 +38,19 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses), the served path's SHA-512 commitment library (`lib/`), and vLLM's int8-exact linear kernels (`exactlin/`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the staging decode with bandwidth receipts (`p2_stage`, `s8_dec_linear`), the decoder's non-matmul ops (`units`), attention (`attn_bf16`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
+| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the staging decode with bandwidth receipts (`p2_stage`), the decoder's non-matmul ops (`units`), attention (`attn_bf16`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, the served vLLM path and its audits, and the ACCEL model (`machine_model/`); `contents.py` lists the rest | maintained |
 | `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and cheaper multipliers (sparse, Strassen, lookup tables) priced against dense NVFP4 | maintained |
 | `native_peak/` | a card's measured dense-GEMM throughput for one datatype (`native-peak/v1`) | maintained |
+| `int8_class_rate/` | the H200's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 at a ratio of compressions a T MAC (timings only) | maintained |
 
 ## Proving and recursion
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the draw, C-Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
-| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a draw on live coins, C-Flock `--zk` behind the Lean firewall, and the Lean verifier | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, C-Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
+| `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, C-Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `multi_unit/` | an FP8 GEMM's proof blocks staged as C-Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
 | `proof_throughput/` | the proof blocks a second C-Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
@@ -58,7 +59,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `private_circuit/` | the universal unit, which runs any private circuit of a size class, proved under `--zk` and verified by the Lean verifier | frozen |
-| `live_challenger/` | the proof service's challenger on an auditor host: each session's live coins, recorded in a signed ledger before the first coin | maintained |
+| `live_challenger/` | the proof system's challenger on an auditor host: each session's live coins, recorded in a signed ledger before the first coin | maintained |
 
 ## Circuits
 
@@ -66,6 +67,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `bool_build_cost/` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule | maintained |
 | `circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
+| `unit_lowering/` | writing a PoUW H1 circuit file (a leaf's lane and combine, or the whole tile unit, at any tile R × C): peak memory and wall time by K, the file's AND rows, bytes and block (k_log), its SHA-512 held to a reference, and where the memory goes | maintained |
 
 ## Network
 

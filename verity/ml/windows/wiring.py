@@ -2,11 +2,11 @@
 one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output rows: its unit i's ``port`` row is global unit
 ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
 inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,
-a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, and a drawn unit's input is the committed output of
+a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, and a sampled proof block's input is the committed output of
 the unit that wrote it.  A unit whose wired row is not its writer's row is faulty in the wired flattening (its outputs
-are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it draws
+are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it samples
 (`check_drawn`, `SampledProofs.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
-drawn units); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its
+sampled proof blocks); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its
 ``x`` its writer's output, its ``w`` a weight row): it is then a shared-row member, its wired port a table of its units' own
 rows, and a unit's string is the row its ref names (`_strings`), the one its statement reads."""
 from __future__ import annotations
@@ -90,6 +90,23 @@ def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | No
     return None if (refs >= counts[j]).any() else table.reshape(counts[j], BC_BYTES)[refs]
 
 
+def string_at(m: Any, body: bytes, port: str, unit: int) -> int | None:
+    """Where member ``m``'s unit ``unit``'s ``b || c`` of its row ``port`` starts in its public body ``body``, as `_strings`
+    reads it: a shared-row member's, the row of the port's table its ref names. None where `_strings` reads none."""
+    names = [q for q, _ in m.all_rows]
+    if port not in names:
+        return None
+    j = names.index(port)
+    if not m.tables:
+        return (unit * len(names) + j) * BC_BYTES if len(body) == m.n * len(names) * BC_BYTES else None
+    counts = [dict(m.tables).get(q, m.n) for q in names]
+    at = BC_BYTES * sum(counts)
+    if len(body) != at + 4 * m.n * len(names):
+        return None
+    ref = int(np.frombuffer(body, dtype="<u4", count=1, offset=at + 4 * (unit * len(names) + j))[0])
+    return None if ref >= counts[j] else BC_BYTES * (sum(counts[:j]) + ref)
+
+
 def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str]:
     """The verifier's wiring check on every member's public body (``publics[member]``, which the leaf layer binds): each wired
     row's ``b || c`` is its writer's output row's.  ``{member: why}``; empty when every wire holds."""
@@ -112,8 +129,8 @@ def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str
 
 
 def check_drawn(members: Sequence[Any], publics: Mapping[str, bytes], units: Any) -> dict[str, str]:
-    """`check` on the drawn units alone (``units``, global unit indices): each drawn unit's wired rows' ``b || c`` are its
-    writers' output rows', work proportional to the drawn units.  ``{member: why}``; empty when every drawn wire holds."""
+    """`check` on the sampled proof blocks alone (``units``, global unit indices): each sampled proof block's wired rows' ``b || c`` are its
+    writers' output rows', work proportional to the sampled proof blocks.  ``{member: why}``; empty when every drawn wire holds."""
     drawn = np.unique(np.asarray(list(units), dtype=np.int64))
     bad: dict[str, str] = {}
     at = bases(members)

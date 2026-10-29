@@ -48,19 +48,25 @@ private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String)
   let m := (← Flock.canon manifest).toUTF8
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
-/-- `registered.domain(program, value, words, leaves, word_bits).domain_id` (one-stage `registered.py`), `leaves` the
-value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the bytes of
+/-- `registered.domain(program, value, words, leaves, word_bits, ...).domain_id` (one-stage `registered.py`), `leaves`
+the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the bytes of
 `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
-`"word_bits"` beside them when it is not 16. -/
-def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray := do
+`"word_bits"` beside them when it is not 16, and `extra` after them (a per-window value's `"window"`, a produced value's
+`"produced"`). -/
+def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
+    V ByteArray := do
   if !WIDTHS.contains wordBits then throw s!"a registered value's leaves are 16 or 32 bits, not {wordBits}"
   let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
     ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
-    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]))
+    (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ extra)
   let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
   let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash
+
+/-- A registered value's domain with nothing beside its binding's keys (`domainWith` at `[]`). -/
+def domain (program value : String) (words leaves wordBits : Nat) : V ByteArray :=
+  domainWith program value words leaves wordBits []
 
 /-- A port of the verifier's own `--registered` file: the value its rows are rows of, the value's registered root, leaf
 count, row width and frame-v3-sha512 domain, the position every unit of the population reads (none: a unit of
@@ -151,31 +157,11 @@ def Port.fits (reg : Port) (p : Flock.Port) : Bool :=
   if reg.schema == HmRow.ROW_SCHEMA then reg.words.all fun w => p.words == rowWords w reg.wordBits
   else reg.words.any fun w => p.bits == w * reg.wordBits
 
-/-- The frame-v3-sha512 node over `l` and `r` at index `idx` of level `d`. -/
-def node (dom : ByteArray) (d idx : Nat) (l r : ByteArray) : ByteArray :=
-  FV3.hash "node" [dom, FV3.uint d, FV3.uint idx, l, r] Sha512.hash
-
-/-- The root a digest `cur` at index `idx` of level `d` climbs to through the siblings `sibs`, lowest first. -/
-def climbL (dom : ByteArray) : ByteArray → Nat → Nat → List ByteArray → ByteArray
-  | cur, _, _, [] => cur
-  | cur, idx, d, sib :: rest =>
-    climbL dom (if idx % 2 = 0 then node dom d (idx / 2) cur sib else node dom d (idx / 2) sib cur) (idx / 2) (d + 1) rest
-
-/-- A path's `depth` siblings, 64 bytes each, leaf level first. -/
-def sibs (path : ByteArray) (depth : Nat) : List ByteArray :=
-  (List.range depth).map fun d => path.extract (64 * d) (64 * d + 64)
-
-/-- The frame-v3-sha512 root a leaf at `i` climbs to through `path` (the siblings, leaf level first, 64 bytes each). -/
-def climb (dom leaf : ByteArray) (i depth : Nat) (path : ByteArray) : ByteArray := climbL dom leaf i 0 (sibs path depth)
+export FV3.Sha512 (node climbL sibs climb leafAs)
 
 /-- The frame-v3-sha512 leaf at `pos` of a registered value's row whose `hm96-sha512/row/v1` leaf is `payload`. -/
 def rowLeaf (dom : ByteArray) (pos : Nat) (payload : ByteArray) : ByteArray :=
   FV3.leaf dom pos HmRow.ROW_SCHEMA payload Sha512.hash
-
-/-- The frame-v3-sha512 leaf at `pos` of a row whose hm96 leaf of schema `schema` is `payload`, as the plain verifier
-frames a port's rows of that schema (`HmRow.checkPublic`); `rowLeaf` at `hm96-sha512/row/v1`. -/
-def leafAs (schema : String) (dom : ByteArray) (pos : Nat) (payload : ByteArray) : ByteArray :=
-  FV3.leaf dom pos schema payload Sha512.hash
 
 /-- A row whose hm96 leaf of `reg`'s schema is `payload` opens `reg`'s registered root at `pos` through `path`: a
 position among its leaves, one 64-byte sibling per level, and the climb ends at the root. -/

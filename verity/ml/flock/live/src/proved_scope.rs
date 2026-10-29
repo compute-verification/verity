@@ -6,7 +6,9 @@
 //! The live build writes only hm96-sha512 row statements with retained rounds and `hm96-sha512/v1` leaves, or, ZK off, plain
 //! SHA-512 leaves (a circuit whose META names [`crate::circuit::leaf_scheme_plain`]; `ProvedScope.leafOk`), so the Lean
 //! check's rules on those hold of every statement it sets up, as do its parse and its public file's load. Its statements
-//! all have hidden outputs, so the circuit's check is `scopeOkI` once the wires passed: the general instance form.
+//! all have hidden outputs, so the circuit's check is `scopeOkI` once the wires passed: the general instance form. A
+//! templated statement's is `scopeOkT` ([`tmpl_why`]), on its committed unit: the rows `flock-tmpl-unit` wrote, whose
+//! `ORDER` line is the template's position map, one column per root column.
 
 use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT, TMPL_STATEMENT};
 use crate::ir_block::IrUnitNet;
@@ -226,6 +228,41 @@ fn rows_why(ports: &[Port], out_row_ports: &[usize], hidden: bool) -> Option<&'s
     }
 }
 
+/// `max 7 (log2ceil cols)`: the rows of a templated unit whose root has `cols` columns.
+fn tmpl_unit_log(cols: usize) -> usize {
+    crate::chunk::log2ceil(cols).max(7)
+}
+
+/// `ProvedScope.scopeWhyT` of a templated circuit outside `scopeOkT`, `None` inside: a `--zk` session of one table at hidden
+/// outputs without the verifier's registered reads, whose unit reads only its leaf group and returns the outputs, of at most
+/// `2^32` rows by its root's columns (the `ORDER` line's), and whose rows `scopeOkI` admits; past those, the refusal is
+/// `scopeWhy true`'s ([`circuit_why`]'s). A templated statement with pinned outputs is refused as every other is.
+pub fn tmpl_why(c: &Composite, hidden: bool, zk: bool, registered: bool, tables: usize) -> Option<String> {
+    let unit = c.unit();
+    let cols = unit.order.as_ref().map_or(0, Vec::len);
+    if !hidden {
+        Some("a templated statement without hidden outputs".into())
+    } else if !zk {
+        Some("a templated statement without --zk".into())
+    } else if registered {
+        Some("a templated statement with the verifier's registered reads (--registered)".into())
+    } else if tables > 1 {
+        Some(format!("a templated statement in {tables} tables"))
+    } else if unit.in_groups.len() != 1 {
+        Some(format!("a templated unit reading {} input groups", unit.in_groups.len()))
+    } else if c.out_net != c.unit_net {
+        Some("a templated circuit whose outputs a tail stage computes (META out_net)".into())
+    } else if tmpl_unit_log(cols) > 32 {
+        Some("a templated unit of more than 2^32 rows".into())
+    } else if rows_why(&c.ports, &c.out_row_ports, true).is_some() {
+        circuit_why(c, true)
+    } else if c.pinned > 0 {
+        Some(PINNED_WHY.into())
+    } else {
+        None
+    }
+}
+
 /// `ProvedScope.zkTableCap`: the most tables a `--zk` session may have.
 pub const ZK_TABLE_CAP: usize = 1 << 16;
 
@@ -268,16 +305,16 @@ pub fn shared_rows_why(shared: bool, registered: bool, plain_leaves: bool) -> Op
 /// The Lean verifier holds its own `--registered F` exactly when the public header names registered reads: without it such
 /// a header is refused at setup, and with it a header naming none is (`Registered.check`).
 pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result<(), String> {
-    // the Lean verifier's verdict on a templated statement (`Tags.templated`), in place of every rule below
-    if c.statement() == TMPL_STATEMENT {
-        return Err(refusal(&format!("{}, a templated statement", lean_name(c))));
-    }
     let typed = c.statement() == crate::typed::STATEMENT;
     if let Some(why) = statement_why(&lean_name(c), typed, zk, tables, !c.public_inputs.is_empty()) {
         return Err(refusal(&why));
     }
-    if let Some(why) = shared_rows_why(inst.tables.is_some(), inst.header.get("registered").is_some(), c.plain_leaves()) {
+    let registered = inst.header.get("registered").is_some();
+    if let Some(why) = shared_rows_why(inst.tables.is_some(), registered, c.plain_leaves()) {
         return Err(refusal(why));
+    }
+    if c.statement() == TMPL_STATEMENT {
+        return tmpl_why(c, true, zk, registered, tables).map_or(Ok(()), |why| Err(refusal(&why)));
     }
     if wires_feed(c) && !wires_acyclic(c) {
         return Err(refusal(WIRES_WHY));
@@ -561,6 +598,52 @@ mod tests {
         c.out_ports = vec![(0, 0), (1, 0)];
         c.out_slotted = true;
         c
+    }
+
+    /// `c` as a templated statement's circuit, its unit committed at a position map of `cols` columns.
+    fn templated(mut c: Composite, cols: usize) -> Composite {
+        c.meta = serde_json::json!({ "statement": TMPL_STATEMENT });
+        c.nets[c.unit_net].1.order = Some((0..cols).collect());
+        c
+    }
+
+    fn flat_unit() -> Composite {
+        circ(vec![wnet(vec![Group { col: 0, words: 1, bits: vec![1] }], 1, vec![1], vec![(vec![0], vec![0])])], vec![1], &[], vec![], vec![])
+    }
+
+    #[test]
+    fn a_templated_statement_takes_lean_scope_ok_t() {
+        // Lean's scopeWhyT, rule for rule and in its order
+        let c = templated(flat_unit(), 130);
+        assert_eq!(tmpl_why(&c, true, true, false, 1), None);
+        let why = |hidden, zk, registered, tables| tmpl_why(&c, hidden, zk, registered, tables).unwrap();
+        assert_eq!(why(false, false, true, 2), "a templated statement without hidden outputs");
+        assert_eq!(why(true, false, true, 2), "a templated statement without --zk");
+        assert_eq!(why(true, true, true, 2), "a templated statement with the verifier's registered reads (--registered)");
+        assert_eq!(why(true, true, false, 2), "a templated statement in 2 tables");
+        assert_eq!(refusal(&why(true, false, false, 1)),
+                   "refused: a templated statement without --zk: a statement form the soundness proof does not cover");
+        let two = templated(rms(0), 130);
+        assert_eq!(tmpl_why(&two, true, true, false, 1).as_deref(), Some("a templated unit reading 2 input groups"));
+        let tail = templated(tail(), 130);
+        assert_eq!(tmpl_why(&tail, true, true, false, 1).as_deref(),
+                   Some("a templated circuit whose outputs a tail stage computes (META out_net)"));
+        assert_eq!((tmpl_unit_log(0), tmpl_unit_log(130), tmpl_unit_log(1 << 32), tmpl_unit_log((1 << 32) + 1)), (7, 8, 32, 33));
+    }
+
+    #[test]
+    fn a_templated_statement_past_its_description_is_refused_as_scope_why_true() {
+        // the rows scopeOkI admits pass whatever the unit's own size; past them, scopeWhy true's first failure
+        let mut c = templated(flat_unit(), 130);
+        c.nets[0].1.unit_log = 33;
+        assert_eq!(tmpl_why(&c, true, true, false, 1), None);
+        c.ports = vec![port(64, 1, 1000, true, None)];
+        assert_eq!(tmpl_why(&c, true, true, false, 1).as_deref(), Some("a unit of 2^33 rows"));
+        c.nets[0].1.unit_log = 9;
+        assert!(tmpl_why(&c, true, true, false, 1).unwrap().starts_with("rows that are neither"));
+        c.ports = vec![];
+        c.pinned = 1;
+        assert_eq!(tmpl_why(&c, true, true, false, 1).as_deref(), Some(PINNED_WHY));
     }
 
     #[test]

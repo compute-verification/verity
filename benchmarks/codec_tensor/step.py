@@ -11,7 +11,7 @@ into their sketch-sha512 receipts, store chunk nvec + u layers + l after the wei
 pass's commit covers. The same step on
 plain data (each linear's fastest native FP8 GEMM, the faster plain attention form, a plain append) is its
 denominator, and a native pass (a read of every byte the step reads) its unit. Writes `step.json` and `step.log` under
-`--out`, and in a `research run` its `result.json`.
+`--out`, and, with `RESEARCH_RUN_DIR` set, its `result.json` there.
 
 Nothing is timed before its gate passed:
 - wt.cu's decode primitives at inputs that take their rare branches (`gate_prims`), which no gate's random words reach;
@@ -72,6 +72,7 @@ import kv_bench as KB  # noqa: E402
 import kv_exhaust as KE  # noqa: E402
 import kv_twin as KT  # noqa: E402
 
+STEP_KV = {"kv_append": [ctypes.c_void_p, ctypes.c_void_p] + [ctypes.c_int] * 7 + [ctypes.c_void_p]}   # step.cu's, beside its kv.cu
 LM_HEAD = {"8b": (128256, 4096), "70b": (128256, 8192), "tiny": (2048, 512)}
 TINY = (2, {"qkv": (384, 512), "o": (512, 512), "gate_up": (1024, 512), "down": (512, 1024)})
 ORDER = ("qkv", "o", "gate_up", "down")          # a layer's linears; attention runs after qkv
@@ -276,7 +277,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
         signs = torch.from_numpy(SR.sign_words(np.packbits(ub, axis=1, bitorder="little")).view(np.int32)).cuda()
         mid = BW.to_dev(torch, BW.receipt_mid(wt, seed))
         kv.call("kv_rc_pass", KB.ptr(signs), KB.ptr(mid), st)
-        head = hashlib.sha512(SR.prefix(seed))
+        receipter = SR.rb.SketchReceipter(seed)
         heads = [SR.kv_positions(g) for g in range(K.KV_HEADS)]
         pos = [torch.from_numpy(p).cuda() for p in heads]
         sk = torch.empty(slots * K.KV_HEADS, 16, dtype=torch.int32, device="cuda")
@@ -293,7 +294,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
             sigma = share.sum(1, dtype=torch.int32)
             whole[f"k{k}"] = bool(torch.equal(sigma, SKT.sketch_torch(torch, blocks, ub)))
             sg = sigma.cpu().numpy().astype("<i4")
-            ys = b"".join(BW.root_words(SR.receipt_of(head, KV_RC_JBASE + u * layers + layer, sg[u].tobytes()))
+            ys = b"".join(BW.root_words(receipter.receipt(KV_RC_JBASE + u * layers + layer, sg[u].tobytes()))
                           for u in range(slots))
             del blocks, share, sigma
         for form in encs:
@@ -609,8 +610,8 @@ class Step:
             nv, few = self.nvec[k], min(64, self.slots)
             kvb = self.KV.view(torch.int8).view(self.slots, self.layers, SR.BLOCK)[:few, 0]
             sk = SKT.sketch_torch(torch, kvb, bits[:SR.ROWS]).cpu().numpy().astype("<i4")
-            head = hashlib.sha512(SR.prefix(seed))
-            ys = b"".join(BW.root_words(SR.receipt_of(head, wt.jbase + nv + u * self.layers, sk[u].tobytes()))
+            receipter = SR.rb.SketchReceipter(seed)
+            ys = b"".join(BW.root_words(receipter.receipt(wt.jbase + nv + u * self.layers, sk[u].tobytes()))
                           for u in range(few))
             rows = self.tags.view(-1, wt.tag_bytes)[nv:nv + few * self.layers:self.layers]
             out["kv_receipts"] = BW.host_bytes(rows) == ys
@@ -937,12 +938,7 @@ def main() -> int:
     if a.model == "tiny":   # the sanitizer's smoke run: gemm_case's L2-defeating ring would be thousands of copies
         BW.L2_DEFEAT_BYTES = 0
     wt = BW.Lib(a.wt_lib)
-    kv = KB.Lib(wt.field.name, a.kv_lib)
-    v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-    kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
-    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v, v, v], [v, v, v]
-    kv.so.kv_rc_receipts.argtypes = [v, q, i, i, q, v]
-    wt.so.wt_prim.argtypes = [i, v, v, v, i, v]
+    kv = KB.Lib(wt.field.name, a.kv_lib, STEP_KV)
     if not wt.field.full_slot or kv.field.n != wt.n or kv.mask != wt.mask or max(ks) > min(wt.kmax, kv.kmax):
         raise SystemExit(f"want full-slot builds of one field and mask with k up to {max(ks)}: wt {wt.name} kmax "
                          f"{wt.kmax}, kv {kv.field.n} bits mask {kv.mask} kmax {kv.kmax}")

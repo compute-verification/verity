@@ -3,7 +3,7 @@ memory-accounting's decode unchanged (`libp2v1.so` from `benchmarks/pous/p2_v1/`
 its own wrapper `p2_v1.gpu.Kernels`), with the refusals the store's reference decode (`p2_v1/store.py`'s `decode_range`)
 makes that the library's fast decode leaves to its caller.
 
-`Store` is the encoded rows of a range of the store's blocks resident on the device (`rows`, [n, 2056] uint8, block
+`EncodedRows` is the encoded rows of a range of the store's blocks resident on the device (`rows`, [n, 2056] uint8, block
 `first` first) under a `layout.StoreLayout`. `decode_matrix(store, layer, tensor, out)` decodes one tensor's blocks (a
 matrix of `layout.MATRICES`: QKV is [16512, 16384] s8 at the frozen shape) `chunk` blocks at a time: `Kernels.decode`
 expands each block's K and t on the device (`p2v1_keys`, v4) and decodes (`p2v1_decode`), and `scatter` copies the
@@ -11,7 +11,7 @@ payload bytes 2 .. 2055 of each decoded row that fall in the tensor to their pla
 staging)` is the fixture's `decode_layer`: every tensor of the layer at its `staging_offset`, zero between them. Nothing
 is re-laid out: W holds each tensor's bytes as the GEMM reads them.
 
-Every chunk is screened on the device and nothing is fixed silently. `Store.check` raises `StoreError`, with the fixture's
+Every chunk is screened on the device and nothing is fixed silently. `EncodedRows.check` raises `StoreError`, with the fixture's
 flag bits, for anything decoded since the last check that the reference refuses: bit 2 for a decoded row whose two lead
 bytes aren't zero (wider than the payload: a corrupt row or other keys) or a row at or above p (a row whose first eight
 bytes are all 0xFF is compared with p exactly), bit 3 for a tensor's last block nonzero past the tensor's end, and the
@@ -21,9 +21,13 @@ library's own flags (bit 0: a tweak's first candidate at or above p, where the s
 With a pass of the remote bandwidth audit attached (`store.sketch = sketch.Pass(...)`), `decode_rows` sketches the units
 each chunk's blocks lie in from the same rows on the device before the decode reads them (`sketch.py`); the rows then
 hold whole units.
+
+`timed` is the drivers' one timer (`layer.py`, `full.py`, `bw_check.py`).
 """
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +78,7 @@ def flat(buf: Any) -> Any:
     return buf.view(-1).view(torch.uint8)
 
 
-class Store:
+class EncodedRows:
     """Encoded rows of the store's blocks `first .. first + rows.shape[0] - 1`, on the decode's device."""
 
     def __init__(self, layout: L.StoreLayout, rows: Any, first: int, lib_dir: str | Path, chunk: int = 1 << 16) -> None:
@@ -152,7 +156,7 @@ class Store:
             raise StoreError("; ".join(why), lib | (WIDE if wide or bad else 0) | (PADDING if padded else 0))
 
 
-def decode_matrix(store: Store, layer: int, tensor: str, out: Any, *, check: bool = True) -> Any:
+def decode_matrix(store: EncodedRows, layer: int, tensor: str, out: Any, *, check: bool = True) -> Any:
     """Decode layer `layer`'s `tensor` (a key of `layout.MATRICES`, or the fixture's name) from `store` into `out`, a
     contiguous tensor of exactly its bytes ([N, K] int8); `out`."""
     t = store.layout.tensor(layer, tensor)
@@ -165,7 +169,7 @@ def decode_matrix(store: Store, layer: int, tensor: str, out: Any, *, check: boo
     return out
 
 
-def decode_layer(store: Store, layer: int, staging: Any, *, check: bool = True) -> Any:
+def decode_layer(store: EncodedRows, layer: int, staging: Any, *, check: bool = True) -> Any:
     """Layer `layer`'s staging buffer into `staging` (contiguous, exactly `staging_bytes(layer)` bytes): each tensor at
     its `staging_offset`, zero between them, as the fixture's `decode_layer(c_star, layout, layer, prefix, staging)`
     writes; `staging`."""
@@ -193,3 +197,29 @@ def encode_rows(kernels: Any, payload: Any, first: int) -> Any:
     if f:
         raise StoreError(f"p2v1_encode raised flags {f:#x} on blocks [{first}, {first + n})", f)
     return c
+
+
+def timed(fn: Callable[[], Any], reps: int, device: torch.device, before: Callable[[], Any] | None = None,
+          warmup: int = 0) -> list[float]:
+    """The seconds of `reps` runs of `fn` on `device`, each timed alone (by CUDA events on a GPU, else the host's clock),
+    after `warmup` untimed runs and a sync, with `before` run untimed ahead of each timed one."""
+    for _ in range(warmup):
+        fn()
+    if warmup and device.type == "cuda":
+        torch.cuda.synchronize()
+    times = []
+    for _ in range(reps):
+        if before is not None:
+            before()
+        if device.type == "cuda":
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            fn()
+            b.record()
+            b.synchronize()
+            times.append(a.elapsed_time(b) / 1e3)
+        else:
+            t0 = time.perf_counter()
+            fn()
+            times.append(time.perf_counter() - t0)
+    return times

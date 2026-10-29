@@ -66,8 +66,9 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
     salt = hashlib.sha256(b"salt/pearl-c4-fixture").digest()
     xa, xb = rows("A", m, k), rows("B", n, k)
     matmul = Matmul(0, Shape(m, k, n), WEIGHT)
-    tree_a = AU.commit_rows(AU.activation_binding(salt, matmul.index), matmul.index, [r.astype("<u2").tobytes() for r in xa])
-    tree_b = AU.commit_rows(AU.weight_binding(WEIGHT), -2, [r.astype("<u2").tobytes() for r in xb])
+    tree_a = AU.commit_rows(AU.activation_binding(salt, matmul.index), matmul.index, [r.astype("<u2").tobytes() for r in xa],
+                            "sha256", public=True)
+    tree_b = AU.commit_rows(AU.weight_binding(WEIGHT), -2, [r.astype("<u2").tobytes() for r in xb], "sha256", public=True)
     ctx = Context(salt, matmul, tree_a.commitment.root, tree_b.commitment.root)
     s.check(ctx.matmul)
     noise = s.noise(ctx)

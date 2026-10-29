@@ -1,4 +1,4 @@
-"""verity.ml.circuits — circuits and their Programs; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
+"""verity.ml.circuits — circuits and their Programs; the program format is ``PROTOCOL.md``, and "IR §" cites a section of veritor's IR document (``docs/verity-ir-*.md``).
 
 Semantics packages register their primitives with this core (``codec``'s ``register_lazy_family`` hook for the lazily
 materialised families).
@@ -27,10 +27,10 @@ Definition's declared intervals, sinks, input kinds and word types, which every 
 descriptor codec whose format and canonical bytes (RFC 8785 JCS) are specified in `PROTOCOL.md`.
 """
 
-from .types import Value, Array, Tuple, Record, Type, leaves_of  # noqa: F401
+from .types import Value, Array, Tuple, RecordType, Type, leaves_of  # noqa: F401
 from .refs import Coll, array_of, tuple_of, record_of  # noqa: F401
 from .defs import (PrimitiveDefinition, CompositeDefinition, SpecializedDefinition, IntrinsicSummary, bind, primitive, composite,  # noqa: F401
-                   Registry, REGISTRY)
+                   DefinitionTable, REGISTRY)
 from .program import Program, input_prim  # noqa: F401
 from .layout import Circuit, GateSelection, Region, FunctionCall, Gate  # noqa: F401
 from .query import query, groups, GapError, QueryError  # noqa: F401

@@ -652,9 +652,8 @@ int kv_fold6() { return kv::FOLD6; }
 // wt_pass's device midstate, so no seed or prefix crosses the host on the measured path.
 int pg_rc_gate_pass(const uint32_t *bits, const uint8_t *prefix, cudaStream_t s) {
   if (!bits || !prefix || !kv::RC3_OK) return -1;
-  uint64_t h[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
-                   0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
-  uint64_t w[16];
+  uint64_t h[8], w[16];
+  sx::iv(h);
   for (int i = 0; i < 16; ++i) {
     w[i] = 0;
     for (int b = 0; b < 8; ++b) w[i] = w[i] << 8 | prefix[8 * i + b];

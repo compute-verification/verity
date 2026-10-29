@@ -1,6 +1,6 @@
 """The pooled bound in exact rationals (`pooled`): the budget's certified root is the largest the power allows, so the
 budget is at least d̄·S and within 2S·2^-64 of it; W is the fractional knapsack's optimum, at least every share
-vector the draw allows; `audit.pooled` rounds both up; every refusal, and the JSON form the Lean reads."""
+vector the sample allows; `audit.pooled` rounds both up; every refusal, and the JSON form the Lean reads."""
 
 from __future__ import annotations
 

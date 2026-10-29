@@ -166,7 +166,7 @@ theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.Inner
   exact (Claims.Bridge.Custody.mapM_forall₂ hmap').imp fun _ _ hx => mapError_forall₂ hx
 
 /-- **The decoded link points are the record's `link.points`, read as `innerLink` reads them.** -/
-theorem held_eq {spec : SessionSpec} {text : String} {sess : Session} {j l : Lean.Json}
+theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : Lean.Json}
     {rp : Array (Array String)} {pts : Array (Array F128)}
     (hdec : Record.decode spec text = .ok sess) (hj : Lean.Json.parse text = .ok j)
     (hl : j.getObjVal? "link" = .ok l) (hrp : l.getObjValAs? (Array (Array String)) "points" = .ok rp)
@@ -283,7 +283,7 @@ open RecDeploy.InnerExtras
 
 /-- **`ExtrasR` at a dense compiled statement**, from the verifier's checks: wherever check 5 loads the inner session
 at a staged part that shows the coins `c`, its extra claims are the deployed table 0's at `pointsOf` the first coin. -/
-theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     ExtrasR recRead b Bk s x c := by
   intro xO hsh i spec sts hsu _ f inn hf hload v hv
@@ -377,21 +377,21 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
 
 /-- **`InnerCoinsR` at a dense compiled statement**, from the verifier's checks alone. -/
 theorem innerCoinsR_staged {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin}
-    {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form)
+    {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form)
     (hB : RestRead.kI x ≤ Bk (xIOf x)) : InnerCoinsR recRead b Bk s x c :=
   innerCoinsR_of hst hd hB (staged_extrasR hst hd hB)
 
 /-- **`PosTieR` at row D's position reader, at a dense compiled statement**, from the verifier's checks and the
 pieces' ranges. -/
 theorem posTieR_dense {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ} {x : Msg}
-    {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0)
+    {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) (hR : PiecesInRangeR pieces) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     PosTieR recRead b pieces posAt Bk s x c :=
   posTieR_staged hst hd hR hB (staged_extrasR hst hd hB)
 
 /-- **Check 5's comb is the deployed table's circuit fold**: wherever check 5 loads the inner session at a staged part,
 its comb at any rep's fold coins is table 0's `CircuitFold.folded` at them. -/
-theorem staged_comb {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem staged_comb {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hsh : showsPart recRead b s x xO c) {i : RecIns} (hins : insO xO = some i)
     {f : RecCoins.Source} {unit : String} {inn : RecCoins.Inner}
     (hf : RecCoins.Source.atC3 i.src i.inner i.commits = some f) (hload : f.load unit = .ok inn) :
@@ -433,7 +433,7 @@ theorem staged_comb {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {st0 
 /-- **The inner session check 5 loads is the deployed setup's, as its algebra reads it**: at a dense compiled
 statement, wherever check 5 loads it at a staged part that shows the coins `c`, its extra claims are table 0's at
 `pointsOf` the first coin (`staged_extrasR`) and its comb is table 0's circuit fold (`staged_comb`). -/
-theorem staged_bridges {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+theorem staged_bridges {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement}
     (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
     ExtrasR recRead b Bk s x c ∧
       ∀ xO, showsPart recRead b s x xO c → ∀ i, insO xO = some i → ∀ (f : RecCoins.Source) unit inn,

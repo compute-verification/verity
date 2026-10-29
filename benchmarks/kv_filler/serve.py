@@ -65,7 +65,6 @@ same token ids as the first policy's (`token_gate` in each run; a mismatch refus
 from __future__ import annotations
 
 import argparse
-import ctypes
 import json
 import os
 import random
@@ -103,7 +102,7 @@ LOGF = None
 
 def trace(seed: int, seconds: float, burst_gap_s: float, burst_mean: int, prompts, outputs) -> list[dict]:
     """Bursts at exponential gaps (mean `burst_gap_s`), each of 1 + Poisson(`burst_mean` − 1) requests arriving
-    together, prompt and output lengths drawn from the lists."""
+    together, prompt and output lengths sampled from the lists."""
     rng = random.Random(seed)
     t, out = rng.expovariate(1 / burst_gap_s) * 0.25, []
     while t < seconds:
@@ -383,8 +382,6 @@ def main() -> int:
             save()
             return 7
     sq = Seq(tu)
-    tu.so.tu_pause.argtypes = [ctypes.c_int]
-    tu.so.tu_throttle.argtypes = [ctypes.c_int]
     least, greatest = torch.cuda.Stream.priority_range()
     least, greatest = max(least, greatest), min(least, greatest)
     eside = torch.cuda.Stream(priority=least)

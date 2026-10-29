@@ -1,7 +1,7 @@
 """The ``PoUWScheme`` interface: what every named proof-of-useful-work scheme exposes to the protocol (`audit`).
 
 A scheme turns one declared matmul's committed operand rows into the checked values of each tile, the tile's
-transcript leaf and the useful output.  Everything else (commitments, the salt, the draw, the openings, the profile) is
+transcript leaf and the useful output.  Everything else (commitments, the salt, the sample, the openings, the profile) is
 the protocol's, in `audit`, and is the same for every scheme.  Like `verity.ml.commitments.scheme.CommitmentScheme`, a
 scheme is a named, versioned object: its ``name`` is what `verity.core.protocols.pouw.schemes.get` looks up, and its spec section in
 ``PROTOCOL.md`` and its pinned vectors under ``tests/vectors`` carry the same string.
@@ -13,7 +13,7 @@ computes ``A·Bᵀ`` and a tile (rows of A, rows of B) reads only its own strips
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Protocol, runtime_checkable
@@ -33,6 +33,13 @@ class DomainError(ValueError):
 def tagged(tag: str, *parts: Part) -> bytes:
     """SHA-512 over ``tag \\0 || frame(part)...`` (`verity.ml.randomness.frame`), all 64 bytes."""
     return hashlib.sha512(tag.encode() + b"\0" + b"".join(frame(p) for p in parts)).digest()
+
+
+def fold_roots(tag: str, roots: Mapping[int, bytes]) -> bytes:
+    """Registered values' roots folded under `tag`: `tagged` of each ``id, root`` by ascending id. Every PoUW weights'
+    root is this fold at its own tag: an H1 window's of θ's ``b/<K>`` roots (`weights.weights_root`), an epoch's of its
+    weights' (`audit.weights_root`, `core_check.weights_root`)."""
+    return tagged(tag, *(p for i in sorted(roots) for p in (i, roots[i])))
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,4 +168,4 @@ class PoUWScheme(Protocol):
         ...
 
 
-__all__ = ["U64", "Certificate", "Context", "DomainError", "Matmul", "PoUWScheme", "Shape", "Tile", "grid_tiles", "tagged"]
+__all__ = ["U64", "Certificate", "Context", "DomainError", "Matmul", "PoUWScheme", "Shape", "Tile", "fold_roots", "grid_tiles", "tagged"]

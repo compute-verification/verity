@@ -2,7 +2,6 @@
 name = "VF3j-8"
 epoch = "VF3j-8"
 summary = "VF3j with every register load at 8 MACs a word."
-note = "note:20261016T1640Z-draft-rs-vf3j-strict-closure"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -39,9 +38,8 @@ credits = [
     ["LDSM_X2", 512], ["LDSM_X4", 1024],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0634
-tau_600w = 0.0495
 uf_low = 1.0938
 margin = 1.935
 

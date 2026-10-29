@@ -1,7 +1,7 @@
 # core_composition: the onsite and remote protocols as compositions of subprotocols
 
 Verity's two composite protocols, onsite and remote, are each one verdict over a list of subprotocols. Three Lake packages
-hold them, each on C-Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
+hold them, each on Flock's verifier and the core interface (`../interface`) by path, onsite and remote also on their
 subprotocols' packages, with no Mathlib:
 
 - `core_composition` (here, lib `CoreComposition`, namespace `Core.Composition`): `product id components`, the
@@ -52,7 +52,8 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| PoUW (its period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
+| PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | proof of useful bandwidth, PoUB (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
@@ -75,7 +76,7 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 (`verity_difftest.protocol.answer`), and each subprotocol's own Python, which that subprotocol's own difftest holds its
 Lean to:
 
-- PoUW: `core_check.case`;
+- PoUW: `core_check.case`, and for its period `period_check.case`;
 - sampled proofs: the one-stage difftest's `answer`, `one_stage` behind the protocol's decoders;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
@@ -84,10 +85,10 @@ Lean to:
   unverified), whose Lean their packages' difftests hold to those verifiers (`../pous/check/tests/test_run_protocol.py`,
   `../remote_bandwidth/lean/tests/test_protocol.py`).
 
-Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
-(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
+Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
+(one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
 composition's inputs or the case itself are often broken. `test_a_reference_without_reject_dominance_is_caught` shows the
-difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a case where
+difftest tells the rule above from one in which a rejection need not reject the whole: such a reference disagrees with the Lean on a case where
 one subprotocol rejects and another is undecided.
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite

@@ -8,7 +8,7 @@ The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladd
 30 layers), word-level and on bits. On bits it is `lift.on_bits`: every Definition Serve_v1 reaches, lifted to bits all
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
-* `measure`, the NCI check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
+* `measure`, the inference-only check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
   the registered inputs and whose isolation blocks are the root's Calls, one each. `--policy` leaves out θ's provenance
   (`NciCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
@@ -37,13 +37,12 @@ wires: rank 0's with its weights bound at registration (θ), one isolation block
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
 `peers_*` inputs, one isolation block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
-per layer, per Call) are out of `NciCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
-gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small. Three of rank 0's Definitions (the
-router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
-`--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
-per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
-peak RSS; `$OUT/ius/` has each verdict's isolation blocks. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
-descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours (r20261023-064803-3874).
+per layer, per Call) aren't checked here: their root would be the request's body, whose reads `NciCheck.Desc` holds as
+segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `nci_cost.py glm` counts and times
+them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
+all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
+(`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict
+summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's isolation blocks.
 
 ~~~sh
 research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
@@ -51,6 +50,16 @@ research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
   -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
+~~~
+
+`nci_cost.sh` times `NciCheck.Desc` step by step (`nci-phases`, `nci_phases/Main.lean`: decode, summaries, root reads,
+the verdict, the slowest Definitions' summaries and their return pieces) beside `nci-check --policy`, on the NCI suite's
+vectors (`suite`), Serve_v1 word-level and on bits (`serve`), and GLM-5.3's rank 0 word-level and lifted to bits (`glm`);
+`nci_cost.py`'s docstring has the cases.
+
+~~~sh
+research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
+  --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/nci_cost.sh [suite|serve|glm ...]
 ~~~
 
 `--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
@@ -83,7 +92,7 @@ research run --project verity --on vy-nebius-cpu-4 --source . --cwd clone --mem-
   -- bash benchmarks/verifier_cost/nci_glm.sh --case registered-node --node-digest HEX --jobs 2
 ~~~
 
-`flock_read.sh K...` measures C-Flock's Lean verifier (`flock-verify verify --zk`) on the H1 tile unit, step by step:
+`flock_read.sh K...` measures Flock's Lean verifier (`flock-verify verify --zk`) on the H1 tile unit, step by step:
 `flock_read.py` builds the 4×8 tile's statement circuit at each contraction K with one instance (`h1unit.Shape` in `benchmarks/pouw/h1_prove/h1unit.py`), and `flock_read/Main.lean`, built in a scratch Lake package against the checkout's verifier, times the
 file's read, its SHA-512, `Zk.maskLogOf`, the decode and line split, each section's `Net.parse` (its tokenizer,
 `Sparse.ofRows` and row checks), the class digest, `HmOut.parse`, `Stmt.setupHiddenOf` and one lincheck fold. Per K,

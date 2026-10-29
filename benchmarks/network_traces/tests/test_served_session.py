@@ -3,16 +3,23 @@ out), which this tree's gate accepts, with the endpoint's sealed flags and its h
 the class refuses is refused with its reason; a session through a stub gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
-nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
-on the endpoint's records artifact it reads requests.jsonl rebuilt in KEEP from the artifact's users map and the
-certified I/O, and refuses an endpoint with neither or an I/O that doesn't read whole; its draw on the gate's coins
-names the auditor's node as the coin link's peer, and the served node is refused."""
+nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint runs the endpoint step on the served
+node's records in a private copy whose requests.jsonl is rebuilt from the users map and the certified I/O (moved out of
+the run dir first), publishes only its report, windows.jsonl and serve.json, and writes nothing from an endpoint that
+didn't serve the session's flags or when a published file would carry a request's values (a planted prompt length,
+seed or trace record); chain runs chain_record.sh's warden path on the kept fetch with the endpoint's art or a dry
+rehearsal's records, and is refused without the leak guard; its draw on the gate's coins names the auditor's node as
+the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
 import shlex
+import shutil
+import signal
+import subprocess
 import sys
 import tarfile
 from datetime import datetime, UTC
@@ -26,22 +33,32 @@ import served_session as SS  # noqa: E402
 import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
+#: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
+PLANTED = hashlib.sha256(b"a certified line").hexdigest()
+#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
+_CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
+STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
 
 STUB = r'''#!PYTHON
-import io, json, os, sys, tarfile
+import io, json, os, signal, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
 if cmd.startswith("warden-rehearse "):
     (d / "prompts.json").write_bytes(sys.stdin.buffer.read())
     (d / "request").write_text(cmd)
-    print(json.dumps({"run": "RUN", "device": "warden"}))
+    print(json.dumps({"device": "warden", "run": "RUN", "unit": "vy-certifier@RUN.service"}, sort_keys=True))
 elif cmd == "status RUN":
-    print(json.dumps({"run": "RUN", "end": {"rc": 0}}))
+    if os.environ.get("STUB_FIFO"):
+        open(os.environ["STUB_FIFO"], "w")
+        signal.pause()
+    print(json.dumps({"run": "RUN", "end": {"rc": 0}, "note": os.environ.get("STUB_NOTE")}))
 elif cmd == "fetch RUN":
     files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True, "problems": 0}}).encode(),
              "out/deployment.json": json.dumps({"windows": 4, "origin_unix": 1.5,
                                                 "params": {"window": 32, "bucket_ms": 100}}).encode(),
-             "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes()}
+             "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes(),
+             "witness/certified.jsonl": b"PLANTED\n", "witness/stalls.json": STALLS}
     if (d / "leak").exists():
         files["out/cells.jsonl"] = (d / "prompts.json").read_bytes()
     buf = io.BytesIO()
@@ -53,7 +70,7 @@ elif cmd == "fetch RUN":
     sys.stdout.buffer.write(buf.getvalue())
 else:
     sys.exit(f"stub gate: no verb {cmd!r}")
-'''.replace("PYTHON", sys.executable).replace("RUN", RUN)
+'''.replace("PYTHON", sys.executable).replace("STALLS", repr(STALLS)).replace("RUN", RUN).replace("PLANTED", PLANTED)
 
 
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
@@ -74,9 +91,17 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
     assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
-        "chain", "ART", "128001", 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
+        "chain", "ART", None, 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
     assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
-                                                 "--disk-floor-gb 40"))
+                                                 "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
+    ep = shlex.split(doc["runs"]["endpoint"])
+    inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])
+    assert ep[ep.index("--") + 1:-1] == ["bash", "-lc"] and ep[ep.index("--on") + 1] == "vy-dc-h200-2"
+    assert ep[ep.index("--send") + 1] == SS.CERTIFIED
+    assert (inner.cmd, inner.out, inner.port, inner.io) == ("endpoint", Path("$OUT"), 18782,
+                                                            f"$RESEARCH_RUN_DIR/inputs/{SS.CERTIFIED}")
+    io_run = shlex.split(doc["runs"]["io"])
+    assert io_run[io_run.index("--on") + 1] == SS.AUDITOR and "served_session.py io --run RUN" in io_run[-1]
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
     long.minutes = a.minutes
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
@@ -115,7 +140,10 @@ def test_a_session_keeps_the_lanes_fetch_apart_and_publishes_the_bundle_less_wit
     assert [p.stat().st_mode & 0o777 for p in (keep, keep / RUN, kept)] == [0o700, 0o700, 0o600]
     assert f"{RUN}/witness/prompts.json" in SS.members(kept.read_bytes())
     out = tmp_path / "out"
-    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "session.json", "start.json", "status.json"]
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json"]
+    report = json.loads((out / "leak-guard.json").read_text())
+    assert (report["verdict"], report["gate_runs"], report["held"], report["released"]) == ("clean", [RUN], 3, 3)
+    assert list((keep / "held").iterdir()) == []
     shown = SS.members((out / "bundle.tgz").read_bytes())
     assert sorted(shown) == [f"{RUN}/end.json", f"{RUN}/out/certificates.jsonl", f"{RUN}/out/deployment.json"]
     doc = json.loads((out / "session.json").read_text())
@@ -129,6 +157,65 @@ def test_a_published_file_holding_a_prompt_is_removed_and_the_session_exits_4(tm
     (tmp_path / "leak").touch()
     assert _session(tmp_path, monkeypatch) == 4
     assert not (tmp_path / "out" / "bundle.tgz").exists() and (tmp_path / "out" / "session.json").exists()
+
+
+def test_a_published_file_holding_a_witness_value_is_moved_out_and_the_session_exits_4(tmp_path, monkeypatch):
+    """The gate's status planting a value of the witness (no prompt's ids): the leak guard moves status.json to KEEP's
+    quarantine and releases the rest."""
+    monkeypatch.setenv("STUB_NOTE", PLANTED)
+    assert _session(tmp_path, monkeypatch) == 4
+    out, q = tmp_path / "out", tmp_path / "keep" / "quarantine"
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json"]
+    assert [p.name for p in q.glob("*/files/status.json")] == ["status.json"]
+    assert [d["path"] for d in json.loads((out / "leak-guard.json").read_text())["found"]] == ["status.json"]
+
+
+def test_sigterm_mid_session_releases_nothing(tmp_path):
+    """A timeout's SIGTERM to the job's process group while it polls the gate (its status held on a FIFO the test opens)
+    ends the session (exit 143) with nothing released: --out stays empty and its files stay in KEEP's hold."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "ssh").write_text(STUB)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    (tmp_path / "out").mkdir()
+    fifo = tmp_path / "status.fifo"
+    os.mkfifo(fifo)
+    env = dict(os.environ, PATH=f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}", STUB_DIR=str(tmp_path),
+               STUB_FIFO=str(fifo))
+    p = subprocess.Popen([sys.executable, str(HERE / "served_session.py"), "session", "--out", str(tmp_path / "out"),
+                          "--keep", str(tmp_path / "keep"), "--key", str(tmp_path / "key"), "--prompts", "3"],
+                         env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    with open(fifo, "rb"):
+        os.killpg(p.pid, signal.SIGTERM)
+        said, _ = p.communicate()
+    assert p.returncode == 143, said
+    assert "SIGTERM ended the session: nothing released" in said
+    assert list((tmp_path / "out").iterdir()) == []
+    (hold,) = (tmp_path / "keep" / "held").iterdir()
+    assert list(hold.iterdir()) == [] and (tmp_path / "keep" / RUN / "start.json").is_file()
+
+
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path, monkeypatch):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+    records its cgroup in the witness (stalls.json), and no public file of the run holds it: published, the leak guard
+    holds the reply as a piece of the witness, and an accepted session exited 4. The reply goes to KEEP/RUN alone
+    (0600), so the session exits on the gate's verdict."""
+    assert _session(tmp_path, monkeypatch) == 0
+    out, kept = tmp_path / "out", tmp_path / "keep" / RUN
+    reply = kept / "start.json"
+    assert json.loads(reply.read_bytes())["unit"] == f"vy-certifier@{RUN}.service"
+    assert reply.stat().st_mode & 0o777 == 0o600 and not (out / "start.json").exists()
+    assert json.loads((out / "leak-guard.json").read_text())["found"] == []
+    published, q = tmp_path / "published", tmp_path / "q"
+    published.mkdir()
+    shutil.copyfile(reply, published / "start.json")
+    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
+                          str(kept / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
+                         capture_output=True, text=True)
+    assert got.returncode == 3, got.stdout + got.stderr
+    assert [d["path"] for d in json.loads((tmp_path / "report.json").read_text())["found"]] == ["start.json"]
+    doc = json.loads((q / "leak-guard.json").read_text())
+    (piece,) = [p for f in doc["found"] for p in f["pieces_found"]]
+    assert (piece["witness"], piece["keypath"]) == (f"{RUN}/witness/stalls.json", ["unit"])
 
 
 def test_a_keep_inside_out_is_refused_before_anything_is_sent(tmp_path, monkeypatch):
@@ -159,6 +246,155 @@ def test_public_is_the_bundle_less_witness():
     assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/cells.jsonl"]
 
 
+def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
+    """A serve dir as serve-openai writes it: serve.json (vLLM's own seed nested in it, as served), requests.jsonl and
+    advice_trace.jsonl with request values, the users map and windows.jsonl."""
+    d.mkdir()
+    (d / "serve.json").write_text(json.dumps({"address": ["127.0.0.1", SS.PORT], "protocol": "ids", "id_payload": 503,
+                                              "admit": "release-order", "scheme": "rows-sha512", "sealed": "windows/w<k>/",
+                                              "retain_exclude": "hidden_m1", "default_seed": 7,
+                                              "engine": {"engine_kwargs": {"seed": 0, "max_model_len": 512}}}))
+    (d / "requests.jsonl").write_text("".join(json.dumps({"engine_id": f"e{j}", "user": f"user-{j}", "prompt_ids": p,
+                                                          "streamed_ids": [1, 2]}) + "\n" for j, p in enumerate(ps)))
+    (d / SS.USERS).write_text("".join(json.dumps({"engine_id": f"e{j}", "user": f"user-{j}"}) + "\n"
+                                      for j in range(len(ps))))
+    (d / "advice_trace.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
+        {"kind": "header", "config": {"max_num_seqs": 4}},
+        *({"kind": "arrive", "request": f"e{j}", "before_step": 0, "prompt_len": len(p), "sampling": {"seed": 900 + j}}
+          for j, p in enumerate(ps)),
+        {"kind": "step", "step": 0, "T": 8, "rows": [["e0", 0, 8]], "emitted": {"e0": [1]}}]))
+    (d / "windows.jsonl").write_text(json.dumps({"window": 0, "requests": ["e0", "e1"], "served_rows": {"count": 1}}) + "\n")
+    (d / "seals.jsonl").write_text("{}\n")
+    return d
+
+
+def _certified(d: Path, ps: list[list[int]]) -> Path:
+    """io's file: the warden run's deployment.json and its certified I/O, each prompt answered with [1, 2]."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / SS.CERTIFIED).write_text(json.dumps({
+        "deployment": {"run_id": RUN, "origin_unix": 0.0, "windows": 4, "params": {"window": 10, "bucket_ms": 10000}},
+        "io": {"accepted": True, "requests": len(ps), "tokens": 2 * len(ps), "violations": [],
+               "records": [{"user": f"user-{j}", "prompt": p, "max_tokens": 4, "output": [1, 2]}
+                           for j, p in enumerate(ps)]}}))
+    return d / SS.CERTIFIED
+
+
+def _stub_step(monkeypatch, report: dict | None = None) -> dict:
+    """chain_record.served_endpoint, stubbed: what it was given in ``seen``, and an accepted report (or ``report``)."""
+    import chain_record as CR
+    seen = {}
+
+    def step(dep, io, ep, eos):
+        seen.update(dep=dep, ep=ep, eos=eos, requests=[json.loads(x) for x in (ep / "requests.jsonl").read_text()
+                                                       .splitlines()])
+        return report or {"warden_run": dep["run_id"], "endpoint": str(ep), "io": {k: v for k, v in io.items()
+                                                                                   if k != "records"},
+                          "chain": {"bits": {"bound": True, "rebuilt": True,
+                                             "commit_windows": [{"bound": True, "rebuilt": True}]}}}
+    monkeypatch.setattr(CR, "served_endpoint", step)
+    monkeypatch.setenv("PYTHONPATH", "")  # endpoint sets it; this restores it after the test
+    return seen
+
+
+def test_io_writes_the_kept_runs_certified_io_private_in_keep(tmp_path, monkeypatch, capsys):
+    ps = SS.prompts(2, 4, 256, b"seed")
+    doc = json.loads(_certified(tmp_path / "c", ps).read_text())
+    monkeypatch.setattr(SS, "certified_io", lambda fetch: (doc["deployment"], doc["io"]))
+    keep = tmp_path / "keep"
+    assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 2 and "no kept fetch" in capsys.readouterr().err
+    (keep / RUN).mkdir(parents=True)
+    (keep / RUN / "fetch.tar.gz").write_bytes(b"")
+    assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 0
+    dest = keep / RUN / SS.CERTIFIED
+    assert json.loads(dest.read_text()) == doc and dest.stat().st_mode & 0o777 == 0o600
+    assert not any(n in capsys.readouterr().out.encode() for n in SS.needles(ps))
+    doc["io"]["accepted"] = False
+    assert SS.main(["io", "--run", RUN, "--keep", str(keep)]) == 2 and "doesn't read whole" in capsys.readouterr().err
+
+
+def test_endpoint_runs_the_step_on_the_served_nodes_records_and_publishes_only_its_report_and_public_records(
+        tmp_path, monkeypatch, capsys):
+    import chain_record as CR
+    seen = _stub_step(monkeypatch)
+    ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
+    src, run = _serve_dir(tmp_path / "serve", ps), tmp_path / "run"
+    out = run / "out"
+    listing = sorted(p.name for p in src.iterdir())
+    sent = _certified(run / "inputs", ps)
+    assert SS.main(["endpoint", "--from", str(src), "--io", str(sent), "--out", str(out)]) == 0
+    keep = tmp_path / "serve.endpoint"
+    assert not sent.exists() and (keep / SS.CERTIFIED).stat().st_mode & 0o777 == 0o600
+    assert keep.stat().st_mode & 0o777 == 0o700 and (keep / "records" / "requests.jsonl").stat().st_mode & 0o777 == 0o600
+    assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
+    rep = json.loads((out / "report.json").read_text())
+    assert (rep["verdict"], rep["at"], rep["warden_run"]) == ("accepted", CR.SERVED_NODE, RUN)
+    assert seen["ep"] == keep / "records" and seen["eos"] == [128001] and seen["dep"]["run_id"] == RUN
+    assert [(r["engine_id"], r["user"], r["prompt_ids"], r["streamed_ids"]) for r in seen["requests"]] == [
+        ("e0", "user-0", ps[0], [1, 2]), ("e1", "user-1", ps[1], [1, 2])]
+    assert sorted(p.name for p in src.iterdir()) == listing
+    published = b"".join(p.read_bytes() for p in out.iterdir()) + capsys.readouterr().out.encode()
+    assert not any(n in published for n in [*SS.needles(ps), b'"prompt_len"', b'"sampling"', b'"emitted"'])
+    stdin = tmp_path / "stdin.json"
+    stdin.write_bytes(_certified(tmp_path / "kept", ps).read_bytes())
+    shutil.rmtree(out)
+    with stdin.open() as f:
+        monkeypatch.setattr(sys, "stdin", f)
+        assert SS.main(["endpoint", "--from", str(src), "--io", "-", "--out", str(out)]) == 0
+    assert json.loads((out / "report.json").read_text())["verdict"] == "accepted"
+
+
+def test_endpoint_publishes_nothing_that_carries_a_planted_prompt_length_or_seed(tmp_path, monkeypatch, capsys):
+    """A request's values never reach the endpoint's art: a prompt length, a seed or a trace's record planted in a file
+    it would publish, or in the step's report, and nothing is written."""
+    seen = _stub_step(monkeypatch)
+    ps = SS.prompts(2, SS.PROMPT_IDS, SS.VOCAB, b"seed")
+    src, run = _serve_dir(tmp_path / "serve", ps), tmp_path / "run"
+    out = run / "out"
+    io = _certified(tmp_path / "kept", ps)
+    argv = ["endpoint", "--from", str(src), "--io", str(io), "--out", str(out)]
+    windows = (src / "windows.jsonl").read_text()
+    for plant, why in (
+            ({"kind": "arrive", "request": "e0", "before_step": 3, "prompt_len": 256, "sampling": {"seed": 1234}},
+             "windows.jsonl: a request's prompt ids or a request-valued field"),
+            ({"window": 1, "prompt_len": 256}, "windows.jsonl: a request's prompt ids or a request-valued field"),
+            ({"window": 1, "seed": 1234}, "windows.jsonl: a record with seed"),
+            ({"kind": "step", "step": 0, "T": 8}, "windows.jsonl: a scheduler trace's step record"),
+            ({"window": 1, "rows": [["e0", 0, 8]]}, "windows.jsonl: a record with rows"),
+            ({"window": 1, "ids": ps[1]}, "windows.jsonl: a request's prompt ids")):
+        (src / "windows.jsonl").write_text(windows + json.dumps(plant) + "\n")
+        assert SS.main(argv) == 2, plant
+        err = capsys.readouterr().err
+        assert why in err and "nothing written" in err and not out.exists(), (plant, err)
+    (src / "windows.jsonl").write_text(windows)
+    for plant, why in (({"prompt_len": 256}, "a request's prompt ids or a request-valued field"),
+                       ({"seed": 1234}, "a record with seed")):
+        rep = {"warden_run": RUN, "io": {"accepted": True}, "chain": {"bits": {"bound": True, "rebuilt": True}}}
+        _stub_step(monkeypatch, rep | plant if "seed" in plant else rep | {"chain": {"bits": rep["chain"]["bits"] | plant}})
+        assert SS.main(argv) == 2 and f"report.json: {why}" in capsys.readouterr().err and not out.exists()
+    _stub_step(monkeypatch)
+    assert SS.main(argv) == 0 and seen is not None
+    shutil.rmtree(out)
+
+    serve = json.loads((src / "serve.json").read_text())
+    for k, v, why in (("retain_exclude", None, "--retain-exclude hidden_m1 (serve.json: None)"),
+                      ("sealed", None, "--seal (serve.json: None)"),
+                      ("address", ["127.0.0.1", 18783], "--port 18782 (serve.json: 18783)"),
+                      ("admit", "arrival", "--admit release-order (serve.json: 'arrival')")):
+        (src / "serve.json").write_text(json.dumps(serve | {k: v}))
+        assert SS.main(argv) == 2 and why in capsys.readouterr().err and not out.exists()
+    (src / "serve.json").write_text(json.dumps(serve))
+    assert SS.main([*argv[:-1], str(SS.TREE / "endpoint-out")]) == 2 and "is in the tree" in capsys.readouterr().err
+    assert not (SS.TREE / "endpoint-out").exists()
+    for keep, what in ((out / "keep", "is inside --out,"), (run / "keep", "is inside --out's directory, the run dir")):
+        sent = _certified(run / "inputs", ps)
+        assert SS.main([*argv[:3], "--io", str(sent), "--out", str(out), "--keep", str(keep)]) == 2
+        assert what in capsys.readouterr().err and not sent.exists() and not out.exists() and not keep.exists()
+    for f in ("advice_trace.jsonl", "requests.jsonl"):
+        (src / f).rename(tmp_path / f)
+        assert SS.main(argv) == 2 and f"no {f}" in capsys.readouterr().err
+        (tmp_path / f).rename(src / f)
+
+
 def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_leak_guard(tmp_path, monkeypatch):
     here = tmp_path / "here"
     here.mkdir()
@@ -167,7 +403,8 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     keep = tmp_path / "keep"
     (keep / RUN / "endpoint").mkdir(parents=True)
-    (keep / RUN / "endpoint" / "requests.jsonl").write_text("")
+    for f in ("requests.jsonl", "advice_trace.jsonl"):
+        (keep / RUN / "endpoint" / f).write_text("")
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "CR_N2_DRAW=4"]
     assert SS.main(argv) == 2
@@ -183,48 +420,37 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     assert "CR_SCAN_ARGS=--draw 8" in (tmp_path / "seen").read_text().splitlines()
 
 
-def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_map(tmp_path, monkeypatch, capsys):
-    here, art, keep = tmp_path / "here", tmp_path / "art" / "serve", tmp_path / "keep"
-    for d in (here, art, keep / RUN, tmp_path / "bin"):
+def test_chain_reads_the_endpoints_art_as_given_and_needs_no_eos_ids_for_it(tmp_path, monkeypatch):
+    here, keep = tmp_path / "here", tmp_path / "keep"
+    for d in (here, keep / RUN):
         d.mkdir(parents=True)
-    (here / "chain_record.sh").write_text('env | grep "^CR_ENDPOINT=" > "$SEEN"\n')
+    (here / "chain_record.sh").write_text('env | grep "^CR_E" | sort > "$SEEN"\n')
     (here / "leak_guard.py").write_text("")
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
-    for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
-        (art / f).write_text("{}\n")
-    users = [json.dumps({"engine_id": f"e{j}", "user": f"user-{j}"}) + "\n" for j in range(3)]
-    (art / SS.USERS).write_text("".join(users))
-    (tmp_path / "bin" / "research").write_text(f'#!/bin/sh\n[ "$*" = "data fetch art:ep --to $5" ] && cp -a {art.parent}/. "$5/"\n')
-    (tmp_path / "bin" / "research").chmod(0o755)
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
-    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
-    io = {"accepted": True, "violations": [], "records": [
-        {"user": "user-0", "prompt": [5, 6], "max_tokens": 4, "output": [9, 128001]},
-        {"user": "user-1", "prompt": [7], "max_tokens": 4, "output": [1, 2]},
-        {"user": "user-2", "prompt": [8], "max_tokens": 4, "output": [1, 2, 3, 4]}]}
-    monkeypatch.setattr(SS, "certified_io", lambda fetch: io)
-    argv = ["chain", "--run", RUN, "--keep", str(keep), "--endpoint", "art:ep", "--eos-ids", "128001"]
-    assert SS.main(argv) == 0
-    dest = keep / RUN / "endpoint-rebuilt"
-    assert (tmp_path / "seen").read_text().strip() == f"CR_ENDPOINT={dest}" and dest.stat().st_mode & 0o777 == 0o700
-    got = [json.loads(x) for x in (dest / "serve" / "requests.jsonl").read_text().splitlines()]
+    assert SS.main(["chain", "--run", RUN, "--keep", str(keep), "--endpoint", "art:ep"]) == 0
+    assert (tmp_path / "seen").read_text().splitlines() == ["CR_ENDPOINT=art:ep"]
+
+
+def test_the_endpoints_requests_jsonl_is_rebuilt_from_its_users_map_and_the_certified_io(tmp_path, capsys):
+    ps = [[5, 6], [7], [8]]
+    src = _serve_dir(tmp_path / "serve", ps)
+    io = [{"user": "user-0", "prompt": [5, 6], "max_tokens": 4, "output": [9, 128001]},
+          {"user": "user-1", "prompt": [7], "max_tokens": 4, "output": [1, 2]},
+          {"user": "user-2", "prompt": [8], "max_tokens": 4, "output": [1, 2, 3, 4]}]
+    dest = SS.rebuild(src, tmp_path / "keep" / "records", io, [128001])
+    assert dest.stat().st_mode & 0o777 == 0o700 and sorted(p.name for p in dest.iterdir()) == sorted(SS.SERVED)
+    got = [json.loads(x) for x in (dest / "requests.jsonl").read_text().splitlines()]
     assert [(r["engine_id"], r["user"], r["prompt_ids"], r["streamed_ids"], r["finish"]) for r in got] == [
         ("e0", "user-0", [5, 6], [9, 128001], {"reason": "stop", "stop_reason": None}),
         ("e1", "user-1", [7], [1, 2], {"reason": "stop", "stop_reason": None}),
         ("e2", "user-2", [8], [1, 2, 3, 4], {"reason": "length", "stop_reason": None})]
-    assert not (art / "requests.jsonl").exists()
+    users = (src / SS.USERS).read_text()
     for bad in ({"engine_id": "e3", "user": None}, {"engine_id": "e3", "user": "user-1"}):
-        (art / SS.USERS).write_text("".join(users) + json.dumps(bad) + "\n")
-        assert SS.main(argv) == 2
-        assert f"engine request e3's user {bad['user']!r} is no certified request left" in capsys.readouterr().err
-    io["accepted"] = False
-    assert SS.main(argv) == 2 and "doesn't read whole off its cells" in capsys.readouterr().err
-    (art / SS.USERS).unlink()
-    assert SS.main([*argv[:-4], "--endpoint", str(art), "--eos-ids", "128001"]) == 2
-    assert f"no {SS.USERS} beside an advice_trace.jsonl" in capsys.readouterr().err
-    assert SS.main([*argv[:-4], "--endpoint", "art:other", "--eos-ids", "128001"]) == 2
-    assert "only when launched with --store-read" in capsys.readouterr().err
+        (src / SS.USERS).write_text(users + json.dumps(bad) + "\n")
+        with pytest.raises(SS.Refused, match=f"engine request e3's user {bad['user']!r} is no certified request left"):
+            SS.rebuild(src, tmp_path / "keep" / "records", io, [128001])
 
 
 def _gate_chain(tmp_path, monkeypatch, peer):

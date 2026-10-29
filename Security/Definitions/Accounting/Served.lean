@@ -3,15 +3,15 @@ import Definitions.Accounting.Gates.Declared
 import Definitions.Pouw.Game.Deadline
 
 /-!
-# The served window's layout, its rounds, and the coin each served value is committed before (`Accounting.Served`)
+# The served window's shape, its rounds, and the coin each served value is committed before (`Accounting.Served`)
 
 A served int8 window (SERVE-H1's static form, `benchmarks/pouw/served_h1/serve.py`) is a fixed function of public
-parameters (`Layout`): `steps` engine steps, `rows` slot rows a linear call, `tileRows × tileCols` units, and the
+parameters (`Shape`): `steps` engine steps, `rows` slot rows a linear call, `tileRows × tileCols` units, and the
 model's linears in call order, each its `(K, N)`. Call `(s, w)` is step `s`'s call of linear `w`; its units are its
 `rows/tileRows × N_w/tileCols` tiles at positions `base s w + u`, `base s w = s·U + off w`, `U` the units of one step
-(`Layout.perStep`). Every one of the window's `steps·U` units exists whatever the requests are (`Layout.population`).
+(`Shape.perStep`). Every one of the window's `steps·U` units exists whatever the requests are (`Shape.population`).
 The unit is the proof unit: SERVE-H1 receipts 32 × 32 units, which C-Flock can't prove at `K` = 4096 (about 5 G ANDs),
-while W2 proves 4 × 8 ones; the layout takes the size as a parameter, and the receipts must be per proof unit.
+while W2 proves 4 × 8 ones; the shape takes the size as a parameter, and the receipts must be per proof unit.
 
 Three forms have one live round a step (`window.live_challenger`, `sampled_proofs.challenger.LiveRecord`) and one has a
 live round a call; they differ in the served output and in what a receipt unit reads of it (`Form`):
@@ -114,7 +114,7 @@ always-proved units are not in the per-call Program `Properties.Served.ServedUni
 circuit is one. They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check below.
 
 `Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
-rounds the layout's, each value's commit coin `commitCoin` of its class (a receipt's any coin after its round's, by
+rounds the shape's, each value's commit coin `commitCoin` of its class (a receipt's any coin after its round's, by
 the draw), and the IR facts that put each class's value at the cut `commitCoin` names (a weight registered, an A row or
 a `y` row a run input read only by its own call, a record a run input read only by its own call and unit, a public
 input committed before every coin that reads it, a receipt reading its round's coin and read only by its own unit, a
@@ -154,7 +154,7 @@ statement is over the declared circuit; these are the checks that make its `comm
   circuit gives them; each drawn unit's receipt opened under it;
 * `check`: each drawn unit's check words `1` in its accepted proof, a row of known content (`PouwH1TileZy_v1`'s `ok`,
   the one word `1` under the public `ok_salt`), committed with the unit's receipts;
-* `pub`: the unit's position `base s w + u`, computed by the verifier from the layout, and its round's roots, from the
+* `pub`: the unit's position `base s w + u`, computed by the verifier from the shape, and its round's roots, from the
   recorded round log, each recorded before the coin of every round whose units read it, never read from the prover's
   record (`PouwH1TileZy_v1`'s `pub` row, whose salt is public, so the verifier computes it); the unit's salt
   `window.round_key(commitment, coin_r, r, root_r)`'s stream, derived by the verifier from the challenger's opening of
@@ -207,7 +207,7 @@ open Accounting.Compose
 /-- **A served window's public shape**: its engine `steps`, the slot `rows` of every linear call, a unit's
 `tileRows` slot rows by `tileCols` weight rows, and the model's `linears` in call order within a step, each its
 `(K, N)`. -/
-structure Layout where
+structure Shape where
   steps : ℕ
   rows : ℕ
   tileRows : ℕ
@@ -215,9 +215,9 @@ structure Layout where
   linears : List (ℕ × ℕ)
   deriving DecidableEq, Repr
 
-namespace Layout
+namespace Shape
 
-variable (L : Layout)
+variable (L : Shape)
 
 /-- The linear calls of one step. -/
 def calls : ℕ := L.linears.length
@@ -249,7 +249,7 @@ def stepOf (c : ℕ) : ℕ := c / L.calls
 /-- Call site `c`'s linear. -/
 def linearOf (c : ℕ) : ℕ := c % L.calls
 
-/-- **A layout is well formed**: a step, a linear, a unit's rows dividing the slot rows and its columns every
+/-- **A shape is well formed**: a step, a linear, a unit's rows dividing the slot rows and its columns every
 linear's `N`, as the H1 tile's lanes need (`4 ∣ tileRows`, `8 ∣ tileCols`), and a `K` of at least one 32-byte
 segment. -/
 def Wf : Prop :=
@@ -257,7 +257,7 @@ def Wf : Prop :=
     L.tileRows ∣ L.rows ∧
     ∀ w, w < L.calls → 0 < L.nOf w ∧ L.tileCols ∣ L.nOf w ∧ 32 ∣ L.kOf w ∧ 0 < L.kOf w
 
-end Layout
+end Shape
 
 /-- One decoder layer of Llama-3.1-8B's linears in call order: `qkv` (`K` 4096, `N` 4096 + 2·1024), `o`, `gate_up`
 (`N` 2·14336) and `down`. -/
@@ -265,7 +265,7 @@ def llamaLayer : List (ℕ × ℕ) := [(4096, 6144), (4096, 4096), (4096, 28672)
 
 /-- **The served Llama-3.1-8B window**: 18 steps, 64 slot rows a call, 32 × 32
 units, and 32 decoder layers of `llamaLayer`, 128 calls a step; `U` is 86,016 and the population 1,548,288. -/
-def llama31_8b : Layout where
+def llama31_8b : Shape where
   steps := 18
   rows := 64
   tileRows := 32
@@ -284,13 +284,13 @@ inductive Form
   | perCall
   deriving DecidableEq, Repr
 
-/-- Form `F`'s rounds on layout `L`: one a call in `perCall`, one a step in the others. -/
-def Form.rounds (L : Layout) : Form → ℕ
+/-- Form `F`'s rounds on shape `L`: one a call in `perCall`, one a step in the others. -/
+def Form.rounds (L : Shape) : Form → ℕ
   | .perCall => L.steps * L.calls
   | _ => L.steps
 
 /-- Call site `c`'s round in form `F`: the call's own in `perCall`, its step's in the others. -/
-def Form.roundOf (L : Layout) : Form → ℕ → ℕ
+def Form.roundOf (L : Shape) : Form → ℕ → ℕ
   | .perCall, c => c
   | _, c => L.stepOf c
 
@@ -306,7 +306,7 @@ def Form.outLag : Form → ℕ
   or a request entry its round admits: a run input under its round's root. Certified serving releases a window's
   requests after its salt frame, so a request entry can't be committed before the salt;
 * `pub`: a public input of a unit's Program that no request or product brings, which the verifier derives (the unit's
-  position, from the layout; its round's roots, from the round log): a run input committed before the coin of every
+  position, from the shape; its round's roots, from the round log): a run input committed before the coin of every
   round whose gates read it (`Tie.pub`), never a word Compose credits (`isWord`), and no product's operand or scale,
   since `ProductOf` and `DequantOf` take `act` and `registered` words only. An H1 unit's `position` and `roots` ports
   are of it. Its salt is not: the salt is its round's `coin`, drawn after the root it is keyed by;
@@ -406,7 +406,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   `LayerCommitted` (an input has no second case), so `perCall`'s `z` and `y`, committed the round after,
   are words the unit computes;
 * `committed`: a gate that is no input is `inner` exactly when the IR doesn't mark it a committed output
-  (`Gates.Gate.commit`), so no opened value is declared inner and committed at its cut by fiat;
+  (`Gates.IntGate.commit`), so no opened value is declared inner and committed at its cut by fiat;
 * `noised`: a `receipt` gate, and in `perCall` an `outZ` or `outY` gate, reads its round's coin (`coinMark` past its
   round). This is reachability: the coin input is in the gate's cone, not that the gate's value depends on the coin. It
   is what Compose's cut reads (`Declared.cutOf`), so it is what the commit order needs; that a receipt's value is the
@@ -420,10 +420,10 @@ def Form.ServedLink (fused : Prop) : Form → Prop
 * `readers`: only gates of a receipt's or a check word's own unit read it, so it is in no other unit's late cone, and
   committing it after later coins leaves no reader in another unit (the module docstring; Compose's
   `LayerCommitted`, second case).
-The `commit`, `receipt` and `inner` fields are how the declared circuit is built from the layout; the others are facts
+The `commit`, `receipt` and `inner` fields are how the declared circuit is built from the shape; the others are facts
 of each call's Program, which no code checks yet (an extractor building `Cd` from the compiled Programs is to); the
 commit coins are the code's only if the verifier checks the run's round log (the module docstring's list). -/
-structure Tie {ι : Type} (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop where
+structure Tie {ι : Type} (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop where
   calls : Cd.calls = L.steps * L.calls
   rounds : Cd.rounds = F.rounds L
   round : ∀ c, c < Cd.calls → Cd.round c = F.roundOf L c
@@ -463,13 +463,13 @@ an A row's or a `y` row's, its round, its first reader's; a `zTree` `z` word's, 
 `perCall`'s `z` or `y` word's, the round after its own, which its coin read reaches; an inner value's, its cut. A
 receipt is a computed value only its own unit reads, committed by the draw (the second case). -/
 def TieCommits : Prop :=
-  ∀ (ι : Type) (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls), Tie L F Cd cls → LayerCommitted Cd
+  ∀ (ι : Type) (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls), Tie L F Cd cls → LayerCommitted Cd
 
 /-- **The tie's credited tiles are in live rounds**: under any scheme, every unit of a tied circuit with a credited word
-is in a round of the window (its first gate's call is a call of the layout), and every such round is live, so the tied
+is in a round of the window (its first gate's call is a call of the shape), and every such round is live, so the tied
 circuit meets `Declared.Live`. -/
 def TieLive : Prop :=
-  ∀ (ι K : Type) (Sc : Scheme K) (L : Layout) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls),
+  ∀ (ι K : Type) (Sc : Scheme K) (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls),
     Tie L F Cd cls → Cd.Live Sc
 
 /-- **Gate `i` is in gate `j`'s cone** along reads: `j` is `i`, or reads a gate whose cone holds `i`. This is
@@ -505,7 +505,7 @@ with an escape (`ok = (z = Σ) ∨ e`), holds on an input with any record, and f
 rows' words: an operand declared `[0, 0]` would leave only `a = 0` typed. `Nodup` keeps the `K`
 products distinct: an A word read `K` times would give `a·Σ_k b_k`, one product's work credited as `K`. Which row and
 column `as` and `bs` are is the call's Program's (`Properties.Served.ServedUnits`). -/
-def ProductOf {ι : Type} (L : Layout) (Cd : Declared ι) (cls : ℕ → Cls) (z : ℕ) (as bs : List ℕ) : Prop :=
+def ProductOf {ι : Type} (L : Shape) (Cd : Declared ι) (cls : ℕ → Cls) (z : ℕ) (as bs : List ℕ) : Prop :=
   as.length = L.kOf (L.linearOf (Cd.call z)) ∧ bs.length = as.length ∧ as.Nodup ∧ bs.Nodup ∧
     (∀ a ∈ as, a < Cd.dag.length ∧ cls a = .act ∧ Cd.call a = Cd.call z ∧ S8 Cd a) ∧
     (∀ b ∈ bs, b < Cd.dag.length ∧ cls b = .registered ∧ S8 Cd b) ∧
@@ -565,7 +565,7 @@ The credited work is the receipts' noised GEMM on the served operands, not neces
 the served bytes: a prover may serve from a plain GEMM beside the noised one, which no check can tell from a `z` peeled
 from the noised accumulators, and this asks neither. `dq` is the Program's public dequant,
 `RN_bf16(RN32(RN32(RN32(z)·s_a)·s_w))` in today's code (`int8_ops.scaled_mm` at 14e4c23a). -/
-def ValueChecked {ι : Type} (L : Layout) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
+def ValueChecked {ι : Type} (L : Shape) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
   ∃ (ops : ℕ → List ℕ × List ℕ) (src : ℕ → ℕ × ℕ × ℕ),
     (∀ z, z < Cd.dag.length → cls z = .outZ → ProductOf L Cd cls z (ops z).1 (ops z).2) ∧
     (∀ z z', z < Cd.dag.length → z' < Cd.dag.length → cls z = .outZ → cls z' = .outZ →
@@ -587,7 +587,7 @@ def ValueChecked {ι : Type} (L : Layout) (dq : List ℤ → ℤ) (Cd : Declared
 drawn unit's served product value-checked at the Program's public dequant `dq` (`ValueChecked`). It is necessary, not
 sufficient: no credit statement reads it yet, and it is of the declared circuit, not of the prover's kernel. No gate
 checks it yet (SERVE-GATE's has no such check). -/
-def CreditTie {ι : Type} (L : Layout) (F : Form) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
+def CreditTie {ι : Type} (L : Shape) (F : Form) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
   Tie L F Cd cls ∧ ValueChecked L dq Cd cls
 
 /-- **The served Llama-3.1-8B window's shape**: 128 linear calls a step, 86,016 units a step, 1,548,288 a window,
@@ -596,7 +596,7 @@ def Llama31Shape : Prop :=
   llama31_8b.calls = 128 ∧ llama31_8b.perStep = 86016 ∧ llama31_8b.population = 1548288 ∧
     Form.rounds llama31_8b .perCall = 2304 ∧ llama31_8b.Wf
 
-/-- **An epoch of `W` served windows of one salt is tied**: each window's declared circuit is layout `L`'s in form `F`
+/-- **An epoch of `W` served windows of one salt is tied**: each window's declared circuit is shape `L`'s in form `F`
 (`Tie`, which fixes its live rounds at `F.rounds L`), and each window's timed run
 starts at the salt's release `release` (`Pouw.TimedRun.ts`; the service's `salted_at`, `sampled_proofs.service`), so
 every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epoch's windows (`SaltWindows`,
@@ -615,7 +615,7 @@ after the salt frame, and its A rows from them) is inside the interval. A window
 that spending outside its interval (`Properties.Served.spentIn_split`). For an actual circuit's run
 (`Accounting.Actual.timedRun`, whose `ts` is `CM_A`'s `tₛ`), `salted` says every window of the salt is costed in `CM_A`
 at the one `tₛ`. -/
-structure EpochTie {ι Q R S : Type} (L : Layout) (F : Form) (W : ℕ) (Cd : ℕ → Declared ι) (cls : ℕ → ℕ → Cls)
+structure EpochTie {ι Q R S : Type} (L : Shape) (F : Form) (W : ℕ) (Cd : ℕ → Declared ι) (cls : ℕ → ℕ → Cls)
     (release : ℝ) (run : ℕ → Pouw.TimedRun Q R S) : Prop where
   tie : ∀ w, w < W → Tie L F (Cd w) (cls w)
   salted : ∀ w, w < W → (run w).ts = release

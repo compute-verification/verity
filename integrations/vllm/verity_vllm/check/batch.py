@@ -25,7 +25,7 @@ from typing import Any, Callable, Hashable, Iterable, Sequence
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.intervals import Intervals, full, isect, norm
 from verity.ml.circuits.liveness import Liveness
-from verity.ml.circuits.types import Record, Tuple, Type, field_starts, field_types
+from verity.ml.circuits.types import RecordType, Tuple, Type, field_starts, field_types
 
 
 class _Mark:
@@ -64,12 +64,12 @@ def _held(label: Any, t: Type, base: int = 0, out: dict | None = None) -> dict[A
     if label is SHARED or label is BATCH:
         out.setdefault(label, []).append((base, base + t.leaves))
     elif isinstance(label, Fields):
-        if not isinstance(t, (Tuple, Record)) or len(field_types(t)) != len(label.labels):
+        if not isinstance(t, (Tuple, RecordType)) or len(field_types(t)) != len(label.labels):
             raise ValueError(f"{len(label.labels)} field labels for {t!r}")
         for start, ft, lab in zip(field_starts(t), field_types(t), label.labels):
             _held(lab, ft, base + start, out)
     elif isinstance(label, Rows):
-        if isinstance(t, (Tuple, Record)):
+        if isinstance(t, (Tuple, RecordType)):
             for start, ft in zip(field_starts(t), field_types(t)):
                 _held(label, ft, base + start, out)
             return out
@@ -226,7 +226,7 @@ class Template:
 
 
 @dataclass(frozen=True)
-class Verdict:
+class TemplateInvariance:
     """A template's verdicts: (a)'s crossings and (b)'s splits, each None where it isn't checked."""
 
     template: Template
@@ -250,18 +250,18 @@ class Verdict:
                 "splits": None if self.splits is None else [str(s) for s in self.splits], "shapes": self.shapes, "why": t.why}
 
 
-def check(templates: Iterable[Template], *, liveness: Liveness | None = None) -> list[Verdict]:
+def check(templates: Iterable[Template], *, liveness: Liveness | None = None) -> list[TemplateInvariance]:
     """Each template's verdicts."""
     lv = liveness or Liveness(transitive=True)
     out = []
     for t in templates:
         crossings = None if t.fn is None else tuple(separable(t.fn, t.params, t.ret, liveness=lv))
         splits = None if t.bind_at is None else tuple(invariant(t.bind_at, t.shapes))
-        out.append(Verdict(t, crossings, splits, len(t.shapes)))
+        out.append(TemplateInvariance(t, crossings, splits, len(t.shapes)))
     return out
 
 
-def report(verdicts: Sequence[Verdict]) -> str:
+def report(verdicts: Sequence[TemplateInvariance]) -> str:
     """The verdicts as a Markdown table: each template, (a) and (b) with their first witness, and whether each is the one declared."""
     def cell(got: bool | None, witness: tuple | None) -> str:
         if got is None:

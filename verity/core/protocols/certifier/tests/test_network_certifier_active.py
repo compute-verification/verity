@@ -25,7 +25,7 @@ from verity.core.protocols.certifier.active import (
     Bucketer,
     Events,
     Proxy,
-    RemoteCertifier,
+    CertifierClient,
     Revealed,
     Shaper,
     VirtualClock,
@@ -33,7 +33,7 @@ from verity.core.protocols.certifier.active import (
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status, Certifier, occupancy, row_count
+from verity.core.protocols.certifier.grid import GridParams, Reason, BlockGrid, Status, Certifier, occupancy, row_count
 from verity.core.protocols.certifier.pacer import Report
 from verity.core.protocols.certifier.schedule import (
     ClockSync,
@@ -44,7 +44,7 @@ from verity.core.protocols.certifier.schedule import (
     run_shaper,
 )
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 
 def test_frames_round_trip_and_padding_is_zero():
@@ -970,7 +970,7 @@ def test_a_pacers_report_faults_the_open_window_or_the_record_held_for_a_closed_
     assert proxy.shaper.certifier._fault is None
     proxy._report(Report(1, 0.001, 0.001, None, True))
     assert proxy.shaper.certifier._fault is Reason.MONITOR_UNAVAILABLE
-    record = Record("responses", 1, ((None,) * EGRESS.allocation,) * T, Status())
+    record = BlockGrid("responses", 1, ((None,) * EGRESS.allocation,) * T, Status())
     held = {1: record, 2: dataclasses.replace(record, window=2, status=Status(Reason.OVERFLOW)),
             3: dataclasses.replace(record, window=3)}
     proxy._held |= held
@@ -1243,16 +1243,16 @@ def test_a_requests_frames_and_signed_records_are_its_token_counts_whatever_its_
     assert [changed.streams[k + 1].anchor for k in range(len(others))] == ends
 
 
-def registration(window: int, provenance: dict | None = None) -> Registration:
-    """A stand-in for the proof service's registration of PoUW window `window` (`Stream.register`'s): a record whose
+def registration(window: int, provenance: dict | None = None) -> WindowCommitmentRecord:
+    """A stand-in for the proof system's registration of PoUW window `window` (`Stream.register`'s): a record whose
     provenance names the window, with its receipt and digest."""
     record = {"window": {"kind": "served", "window": window} if provenance is None else provenance}
-    return Registration(record, R.receipt(record, "test", received=str(window)), R.digest(record), window)
+    return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(window)), R.digest(record), window)
 
 
 def salted_run(seed: int, **salting):
-    """The honest run with the salt on, each salt drawn from `random.Random(seed)`. Returns the proxy, the wire, the
-    salts drawn by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
+    """The honest run with the salt on, each salt sampled from `random.Random(seed)`. Returns the proxy, the wire, the
+    salts sampled by PoUW window, the server, and at each tick, for each of PoUW windows 0 … WINDOWS − 1, whether `reveal`
     gave its salt on its registration (True) or refused (None), so each window's True is the one tick it is revealed."""
     rng, drawn, revealable = random.Random(seed), {}, []
 
@@ -1360,10 +1360,10 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
 
 
 def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
-    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof service returned for p.
+    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof system returned for p.
     It refuses none, another window's, a receipt or digest that isn't the record's, a receipt of another format, a
-    provenance the reader (`registered`) doesn't read as p, and anything that isn't a `Registration`; a window whose
-    last ingress record is unpublished; and one whose salt a proxy back from maintenance never drew. A reader the
+    provenance the reader (`registered`) doesn't read as p, and anything that isn't a `WindowCommitmentRecord`; a window
+    whose last ingress record is unpublished; and one whose salt a proxy back from maintenance never drew. A reader the
     protocol gives reads its own provenance."""
     drawn: list[int] = []
 
@@ -1416,7 +1416,7 @@ def prover_signer(seed: bytes = b"prover"):
 
 def test_the_weights_are_recorded_only_before_the_salt_and_given_on_reveals_conditions():
     """`commit_weights(p, root, signature)` records PoUW window p's 64-byte weights' root once, while p's first ingress
-    tick, the salt's draw, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
+    tick, the salt's sample, is still ahead, and only the registered prover's: the signature verifies under `prover_key`
     over `weights_message`, which binds the ingress link, p, the root and the prover's context. It refuses a root after
     that tick, a second root, a root of another length or type, a window the proxy doesn't serve, a proxy without the
     salt or without a prover key, a signature by anyone else, and one over another window, root or context; a proxy back
@@ -1573,14 +1573,14 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
             p.bucketer.tick()
         return p
 
-    def asks(w: int, reg: Registration, what: bytes = active.SALT_KIND, link: str = "requests", by=sign,
+    def asks(w: int, reg: WindowCommitmentRecord, what: bytes = active.SALT_KIND, link: str = "requests", by=sign,
              key_id: bytes = key.key_id, run_id: bytes = RUN) -> bytes:
         return by(active.reveal_request_message(key_id, run_id, link, w, reg.digest, what))
 
     p, reg = proxy(challenger_key=challenger_key, signer=certifier), registration(0)
     assert p.run_id == RUN
     record = {"window": {"kind": "served", "window": 1}, "made": "up"}
-    made_up = Registration(record, R.receipt(record, "anyone"), R.digest(record), 1)
+    made_up = WindowCommitmentRecord(record, R.receipt(record, "anyone"), R.digest(record), 1)
     for w, r, request in ((0, reg, None), (0, reg, b""), (0, reg, asks(0, reg, by=forge)), (0, reg, asks(1, reg)),
                           (0, reg, asks(0, registration(1))), (0, reg, asks(0, reg, active.WEIGHTS_KIND)),
                           (0, reg, asks(0, reg, link="responses")), (0, reg, asks(0, reg, run_id=OTHER_RUN)),
@@ -1651,7 +1651,7 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
 
 def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_once(tmp_path):
     """The endpoint (`serve_reveals`) beside a salted proxy's run, on its loop, over real localhost sockets on the
-    injected clock, with the challenger's `RemoteCertifier` in a thread: at each PoUW window's t_d the client gets the
+    injected clock, with the challenger's `CertifierClient` in a thread: at each PoUW window's t_d the client gets the
     window's salt and the weights' root the prover recorded, each verified under the certifier's key, as plain bytes;
     one tick before, the certifier refuses (unpublished) and the client raises its reason. A second reveal of the
     window is refused, the once rule over the network; a request by anyone but the registered challenger is refused
@@ -1676,7 +1676,7 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
     got: dict[int, list] = defaultdict(list)
     endpoint: dict = {}
 
-    async def ask(client: RemoteCertifier, call: str, w: int) -> tuple[str, bytes | str]:
+    async def ask(client: CertifierClient, call: str, w: int) -> tuple[str, bytes | str]:
         try:
             return "gave", await asyncio.to_thread(getattr(client, call), w, registration(w))
         except RuntimeError as e:
@@ -1695,10 +1695,10 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
             endpoint["server"] = await active.serve_reveals(proxy, "127.0.0.1", 0)
             at = endpoint["at"] = endpoint["server"].sockets[0].getsockname()[:2]
             key, run = certifier.public_key(), proxy.run_id
-            endpoint["challenger"] = RemoteCertifier(*at, key, challenger, "requests", run)
-            endpoint["forger"] = RemoteCertifier(*at, key, forger, "requests", run)
-            endpoint["misled"] = RemoteCertifier(*at, lms_key(b"someone else"), challenger, "requests", run)
-            endpoint["stale"] = RemoteCertifier(*at, key, challenger, "requests", OTHER_RUN)
+            endpoint["challenger"] = CertifierClient(*at, key, challenger, "requests", run)
+            endpoint["forger"] = CertifierClient(*at, key, forger, "requests", run)
+            endpoint["misled"] = CertifierClient(*at, lms_key(b"someone else"), challenger, "requests", run)
+            endpoint["stale"] = CertifierClient(*at, key, challenger, "requests", OTHER_RUN)
             endpoint["raw"] = [await raw(line) for line in (b"not json\n", b'{"window": 0, "kind": "salt"}\n', b"[1]\n",
                                                              b"x" * (active.REVEAL_LINE_BYTES + 1))]
         for w in range(WINDOWS):
@@ -1746,7 +1746,7 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
     holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (their p's collide): a request the challenger
     signed for one run is refused by the other and spends nothing there, and each answer names its own run and
     verifies for it and not for the other, so a consumer keying on (key id, run id, p) never takes one for the other.
-    A `RemoteCertifier` refuses another run's answer that an endpoint replays whole, or relabels with its run, and
+    A `CertifierClient` refuses another run's answer that an endpoint replays whole, or relabels with its run, and
     takes the same answer for its own run."""
     (tmp_path / "challenger").mkdir()
     certifier = signers.signer(tmp_path)
@@ -1794,7 +1794,7 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
         at, out = server.sockets[0].getsockname()[:2], []
         for run in client_runs:
             try:
-                out.append(await asyncio.to_thread(RemoteCertifier(*at, key, challenger, "requests", run).reveal, 0,
+                out.append(await asyncio.to_thread(CertifierClient(*at, key, challenger, "requests", run).reveal, 0,
                                                    reg))
             except RuntimeError as e:
                 out.append(str(e))
@@ -1808,12 +1808,12 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
     assert asyncio.run(replaying(dataclasses.replace(answers[RUN], run_id=OTHER_RUN), (OTHER_RUN,))) == [
         "the answer for window 0's salt isn't signed by the certifier's key"]
     with pytest.raises(ValueError, match="run id is 32 bytes"):
-        RemoteCertifier("127.0.0.1", 9, key, challenger, "requests", RUN[1:])
+        CertifierClient("127.0.0.1", 9, key, challenger, "requests", RUN[1:])
 
 
 def test_a_proxy_and_its_client_name_one_certifier_run_which_its_answers_bind(tmp_path):
     """`certifier_run`, (key id, run id, link), is one identity on both sides: a proxy's (its signer's key id, `run_id`
-    and the ingress link the reveal messages bind, not the egress one) equals a `RemoteCertifier` client's of it, and
+    and the ingress link the reveal messages bind, not the egress one) equals a `CertifierClient` client's of it, and
     a `Revealed` answer's key id and run id, with the link it verifies for, are it. A proxy without a signer has
     none."""
     (tmp_path / "challenger").mkdir()
@@ -1825,7 +1825,7 @@ def test_a_proxy_and_its_client_name_one_certifier_run_which_its_answers_bind(tm
               challenger_key=challenger.public_key(), signer=certifier)
     for _ in range(2 * INGRESS.buckets):
         p.bucketer.tick()
-    client = RemoteCertifier("127.0.0.1", 9, key, challenger, "in-7", p.run_id)
+    client = CertifierClient("127.0.0.1", 9, key, challenger, "in-7", p.run_id)
     assert p.certifier_run == client.certifier_run == (key.key_id, p.run_id, "in-7")
     assert client.key_id == key.key_id
     key_id, run_id, link = client.certifier_run

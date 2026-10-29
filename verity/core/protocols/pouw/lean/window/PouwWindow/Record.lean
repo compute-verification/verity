@@ -5,8 +5,8 @@ import Lean.Data.Json
 /-!
 # A call's record (`window.py`, `record_digest` and `record_problem`)
 
-The entry binds its call's record by the SHA-512 of its canonical JSON (`canonical_json`: keys sorted, compact,
-`ensure_ascii`, so every character outside space … `~` is a `\uXXXX` escape, above U+FFFF a surrogate pair), and
+The entry binds its call's record by the SHA-512 of its canonical JSON (`canonical_json`: keys sorted, compact, every
+string ASCII without DEL and a record holding any other refused, a control character escaped as `json.dumps` does), and
 `recordProblem` holds the record's `shape` [m, k, n], `tile0` and `keep` to the entry. A record is any JSON value, so
 `recordProblem` reads it as Python does: an integer where Python computes is an integer or a boolean (Python's `True` is 1),
 and the reasons print values as Python's `str` does (`pyStr`).
@@ -36,20 +36,25 @@ def pyQuote (s : String) : String := Id.run do
 /-- How deep `pyCanon` and `pyRepr` nest: Python's own recursion limit (1,000 frames) stops `json.dumps` well before. -/
 def pyDepth : Nat := 10000
 
+/-- A string as `canonical_json` writes it: one of ASCII without DEL (every character below U+007F), any other refused. -/
+private def pyString (s : String) : Except String String :=
+  if s.any (fun c : Char => c.toNat ≥ 0x7f) then throw "canonical JSON: a string is not ASCII without DEL"
+  else pure (pyQuote s)
+
 private def pyCanonAux : Nat → Json → Except String String
   | 0, _ => throw "canonical JSON: nested too deep"
   | _ + 1, .null => pure "null"
   | _ + 1, .bool b => pure (if b then "true" else "false")
   | _ + 1, .num n => if n.exponent == 0 then pure (toString n.mantissa) else throw "canonical JSON: a non-integer number"
-  | _ + 1, .str s => pure (pyQuote s)
+  | _ + 1, .str s => pyString s
   | d + 1, .arr a => do pure ("[" ++ ",".intercalate (← a.toList.mapM (pyCanonAux d)) ++ "]")
   | d + 1, .obj kvs => do
     let items := kvs.toArray.qsort (fun a b => a.1 < b.1)
-    let parts ← items.toList.mapM fun (k, v) => do pure (pyQuote k ++ ":" ++ (← pyCanonAux d v))
+    let parts ← items.toList.mapM fun (k, v) => do pure ((← pyString k) ++ ":" ++ (← pyCanonAux d v))
     pure ("{" ++ ",".intercalate parts ++ "}")
 
-/-- `canonical_json` (`json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True)`), refusing a non-integer
-number, which Python would write as a float. -/
+/-- `canonical_json` (`json.dumps(sort_keys=True, separators=(",", ":"))`, its strings, keys included, ASCII without
+DEL), refusing any other string and a non-integer number, which Python would write as a float. -/
 def pyCanon (j : Json) : Except String String := pyCanonAux pyDepth j
 
 /-- `record_digest`: the SHA-512 of the record's canonical JSON. -/

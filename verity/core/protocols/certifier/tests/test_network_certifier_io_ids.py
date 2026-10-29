@@ -154,7 +154,7 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
     seed = hashlib.sha512(b"commit").digest()
     rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
     salts = [IT.fake_salt(b"commit", s) for s in range(count)]
-    root = ADV.register(rows, 32 * P, seed, salts).root
+    root = ADV.commit(rows, 32 * P, seed, salts).root
     assert root == insts[0].port_root
     dom = IT.domain(seed, count)
     ports = I.port_reads([i.map for i in insts], root, dom.domain_id, count, P)
@@ -188,7 +188,7 @@ def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registratio
     tokens[2][5] ^= 1
     rows = I.commit_rows(_steps(ACROSS), tokens, P)
     salts, levels, dom_id = I.commit(rows)
-    registered = ADV.register(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
+    registered = ADV.commit(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
     forged = _link(ACROSS)
     assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
     assert [I.unit_reference(SHAPE, i) for i in forged] == [1] * BUCKETS
@@ -363,7 +363,7 @@ def _chain_ands(CB: int, D2: int) -> int:
 
 def _chains(rng, CB: int, D2: int, count: int) -> list[list[list[int]]]:
     """Runs of 2^D2 members (class, kind, value): the even ones valid chains (sorted classes, each class but the sink one
-    value and a slot first), the odd ones a valid chain with one member's class, kind or value redrawn."""
+    value and a slot first), the odd ones a valid chain with one member's class, kind or value resampled."""
     n, sink = 1 << D2, (1 << CB) - 1
     out = []
     for c in range(count):
@@ -410,7 +410,7 @@ def test_the_batched_chain_is_the_flat_one():
                     reason="the flat trace of 1.2M ANDs, a few GB and minutes: VERITY_CERTIFIER_HEAVY=1")
 def test_the_batched_chain_is_the_flat_one_at_the_served_sort():
     """`IoTieIdsChain{13, 14}`, IoTieRequestIds{4096, 16, 1, 512, 6}'s, against its flat trace on random runs, valid and
-    with a member redrawn: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""
+    with a member resampled: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""
     rng = random.Random(14)
     chains = _chains(rng, 13, 14, 8)
     want = [_chain_reference(ms, (1 << 13) - 1) for ms in chains]
@@ -457,8 +457,7 @@ def test_the_unit_is_its_reference():
     args = [I.arguments(sh, i, r, s) for i, r, s in cases]
     out = evaluate_bits(fn, *[_bits([a[k] for a in args]) for k in range(len(args[0]))])
     assert [int(b) for b in np.asarray(out).reshape(-1)] == want + [0, 0]
-    memo = {}
-    a = lambda f: HC.ands(f, memo)  # noqa: E731
+    a = HC.ands
     rq = sh.request
     parts = (rq.N * (a(bind(Q.IoTieRequestFrame, B=sh.B)) + a(bind(Q.IoTieRequestStep)) + a(bind(I.IoTieIdsSlots, B=B)))
              + rq.L * a(bind(Q.IoTieRequestEnd))

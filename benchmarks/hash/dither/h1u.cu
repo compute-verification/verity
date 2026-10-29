@@ -2803,7 +2803,7 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
 
-// Option A's prover side (partials.py): drawn leaves' lane partials after the draw. L units on gathered operands, unit u
+// Option A's prover side (partials.py): drawn leaves' lane partials after the sample. L units on gathered operands, unit u
 // A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
 // seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
 // leaves' receipts; lr: L x 32 x kh_words(K) u32, each leaf's record: lane l's 2 (KS + m) words at l kh_words(K), lanes
@@ -3571,8 +3571,8 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
 }
 
 // H1U_JSWZ = G (h1umjc; 0 is the launch's order): H1U_SWZ's order for its units, G row tiles at a time column tile by
-// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles (unitsbench --j10r at
-// T = M = 2048, step_multi_j10rc: G 0 256.8, 8 240.6, 16 236.0, 32 233.1, 64 237.3 ms)
+// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles.  32: the fastest G of
+// unitsbench --j10r's sweep (0, 8, 16, 32, 64) at T = M = 2048, step_multi_j10rc
 #ifndef H1U_JSWZ
 #define H1U_JSWZ 32
 #endif

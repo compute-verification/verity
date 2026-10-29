@@ -42,6 +42,10 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 
 /-- **The public plan's sites** (`sitesShH`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S _ _ _ := (tableShH dj y₀ S).twinA
+  B S _ _ _ := (tableShH dj y₀ S).twinB
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht) hc
+  pin S _ _ _ := (tableShH dj y₀ S).pin (zkTyped ht) hc
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc hrf
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
@@ -49,9 +53,9 @@ noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y
 
 theorem sitesShHI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHI dj y₀ ht hc hrf).acc S R u h).tags ((sitesShHI dj y₀ ht hc hrf).acc S R u h).cf
-        ((sitesShHI dj y₀ ht hc hrf).acc S R u h).tables = .ok c :=
-  fun _ _ _ _ => (parse_untyped (zkTyped ht) hc).1
+      ((sitesShHI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => ((sitesShHI dj y₀ ht hc hrf).acc S R u h).c_eq (HmOut.parse_isTmpl hc)
+    (parse_untyped (zkTyped ht) hc).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
@@ -94,10 +98,12 @@ variable (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wir
 `InstKeysRow` from the parse at the reference setup's statement. -/
 noncomputable abbrev rsShHI : Binding.HmRowsX (layShHI dj y₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
   instRowsH (sitesShHI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (sitesShHI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowH (zkTyped ht) hc dj y₀.x hU hpr hw)
 
 theorem rsShHI_computes : (rsShHI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesShHI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHI_bcSite dj y₀ ht hc hrf hpub)
     (instKeysRowH (zkTyped ht) hc dj y₀.x hU hpr hw)
 
@@ -185,6 +191,14 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
 
 /-- **The public plan's sites at `J` tables** (`sitesShHJ`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
+  A S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinA
+  B S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
+  sat S R u _ := twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.sat (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _))
+  pin S R u _ := pin_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.pin (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _))
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _) hrf)
     (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
@@ -195,9 +209,10 @@ noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ d
 
 theorem sitesShHJI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).tags ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).cf
-        ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).tables = .ok c :=
-  fun S _ _ _ => (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
+      ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).c_eq
+    (HmOut.parse_isTmpl (tableShHJ_parse dj y₀ ht hc S (partOf I (dj S) u.val)))
+    (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
@@ -252,10 +267,12 @@ theorem instKeysRowHJ : InstKeysRow c (portRowW c) :=
 `sitesShHJI_bcSite` and `InstKeysRow` from `instKeysRowHJ`. -/
 noncomputable abbrev rsShHJI : Binding.HmRowsX (layShHJI dj y₀ ht hc hrf (pub := pub) (Reg := Reg)) :=
   instRowsH (sitesShHJI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (sitesShHJI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowHJ y₀ ht hc hU hpr hw)
 
 theorem rsShHJI_computes : (rsShHJI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesShHJI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
+    (pinFit_of_rowsS (zkTyped ht) hc hrf.1)
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHJI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowHJ y₀ ht hc hU hpr hw)
 
 /-- **Each drawn unit's place in its hidden-output `--zk` table at `J` tables, at `instProg`**: `instPlaceH`'s place

@@ -1,5 +1,5 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
-bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
+bound, `Achievability`'s rates at zero statement cost, the frontier under Flock's statement-batched cost, the choice
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, and the sensitivity queries."""
 
@@ -15,13 +15,13 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective, ReplayDomain,
                                                            TemplateCost, _hit, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier, ln_bound, ln_upper, max_harm,
                                                            max_harm_check, needs_benchmark,
                                                            overlaps, perturb, replay_cost, row_ands, sensitivity,
                                                            template_cost, touched, weigh, work_law)
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
 
@@ -147,7 +147,7 @@ def test_work_law_draws_the_plan_sizes(achievability, batched):
 
 @pytest.fixture(scope="module")
 def batched():
-    """C-Flock's shape at small scale: G, many cheap proof blocks behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
+    """Flock's shape at small scale: G, many cheap proof blocks behind a per-statement cost (a0 = 2, a1 = 0.016 per staged
     proof block, at most 4096 proof blocks a statement); N, proof blocks costing 10 per unit of work and no statement cost; M, 64 heavy proof blocks
     that fit one statement."""
     cands = [Candidate("gemm", "G", 20000, 100, 16, cap=4096),
@@ -179,7 +179,7 @@ def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
 
 
 def _uniform_cost(cands, costs, objective, target) -> float:
-    """The cheapest sampling design drawing one fraction q of every subcircuit (each at its cheapest statement size) that certifies
+    """The cheapest sampling design sampling one fraction q of every subcircuit (each at its cheapest statement size) that certifies
     `target`, by bisection on q."""
     def sizes(q: float) -> dict[str, int]:
         return {c.template: min(c.units, max(1, ceil(q * c.units))) for c in cands}
@@ -327,19 +327,19 @@ def test_without_influence_the_form_unit_looks_free():
 
 
 def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
-    """Committing the form costs 4 per row whatever the draw, so the switch moves to k = 8R."""
+    """Committing the form costs 4 per row whatever the sample, so the switch moves to k = 8R."""
     plans = frontier(_noised(commit_bits=400), _noised_costs(commit_per_bit=0.01), Objective(2.0 ** -20), grid=61)
     rec, form = _crossing(plans)
     assert rec <= 8 * R <= form
     assert {p.cost["commit"] for p in plans} == {0.0, 4.0 * R}
 
 
-SERVE = (Commitment("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
-         Commitment("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
-         Commitment("commit", "y", 500.0),
-         Commitment("commit", "kv", 400.0, chain=4.0),
-         Commitment("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
-         Commitment("remote", "receipts", 0.0, cost=7.0))
+SERVE = (TensorCommit("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
+         TensorCommit("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
+         TensorCommit("commit", "y", 500.0),
+         TensorCommit("commit", "kv", 400.0, chain=4.0),
+         TensorCommit("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
+         TensorCommit("remote", "receipts", 0.0, cost=7.0))
 
 
 def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(batched):
@@ -361,7 +361,7 @@ def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(ba
     assert for_budget(moved, fixed * 0.999, candidates=cands, costs=served, objective=objective) is None
     assert perturb(served, "commit", 2.0).serve_cost() == pytest.approx(2 * fixed)
     with pytest.raises(ValueError, match="non-negative"):
-        Commitment("commit", "x", -1.0)
+        TensorCommit("commit", "x", -1.0)
 
 
 def test_overlaps_count_each_scale_and_price_committing_once():
@@ -381,7 +381,7 @@ def test_overlaps_count_each_scale_and_price_committing_once():
 
 def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
     """512 served units of work 1 and 16 PoUW tiles of 32, a tile's statement three times a proof block's.  At equal weights the
-    density draws every tile, but core's bound (a draw without replacement) certifies the target with 15: the tiles'
+    density draws every tile, but core's bound (a sample without replacement) certifies the target with 15: the tiles'
     weight halves and the plan is cheaper, certified by the same stratified bound and registered by its sizes."""
     cands = [Candidate("lin", "S", 512, 1, 16, kind="served"), Candidate("pouw", "P", 16, 32, 1, kind="pouw-tile")]
     costs = CostModel({"S": TemplateCost(1.0, 0.0, 0.0), "P": TemplateCost(3.0, 0.0, 0.0)})
@@ -396,7 +396,7 @@ def test_weighing_block_kinds_pays_where_core_counts_a_small_kind_exactly():
 
 
 def test_under_the_density_bound_kinds_keep_equal_weights(batched):
-    """The density bound charges the strata's largest harm per proof block of risk, so a draw in proportion to harm is already
+    """The density bound charges the strata's largest harm per proof block of risk, so a sample in proportion to harm is already
     the cheapest: no weight moves."""
     cands, costs, objective, _ = batched
     for target in (1e6, 5e4):
@@ -428,8 +428,8 @@ def test_miss_holds_its_digits_on_huge_populations():
 
 
 def test_shared_statements_hold_only_the_drawn_units():
-    """Under `shared` a draw of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
-    sparse draw of a huge population touches one statement a drawn proof block."""
+    """Under `shared` a sample of k pays ceil(k / cap) statements and stages k proof blocks however large n is; cut in order, a
+    sparse draw of a huge population touches one statement a sampled proof block."""
     c = Candidate("x", "A", 10 ** 12, 1, 16, ands=1000, cap=64)
     costs = CostModel(per_and=1e-3, statement_fixed=5.0, statement_per_and=1e-2, staged_per_and=1e-4)
     cost, size, parts = template_cost(c, replace(costs, shared=True), 130)

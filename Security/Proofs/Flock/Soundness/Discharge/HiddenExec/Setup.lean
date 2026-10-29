@@ -6,10 +6,10 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 
 `setupOne_hidden`, `setupOne_public`: `setupOne` is `setupHidden` under hidden outputs and `setupH` otherwise.
 
-The rest are what this area reads of `Stmt.setupHidden`, all from [wave2-hidden]'s `Hidden.setupHidden_spec`
+The rest are what this area reads of `Stmt.setupHidden`, all from `Discharge/Hidden`'s `Hidden.setupHidden_spec`
 (`Discharge/Hidden/`). `setupHidden_tags`, `setupHidden_drawn`, `setupHidden_parseC` and `setupHidden_n` are projections
 of `Spec` (`tagsEq`, `pub`, `parse`, and `n`, `blocksReal`, `nbl`); `setupHidden_hm96`, `setupHidden_wf` and
-`parse_untyped` are [wave2-hidden]'s (`Hidden/Facts.lean`).
+`parse_untyped` are `Discharge/Hidden`'s (`Hidden/Facts.lean`).
 -/
 
 set_option Elab.async false
@@ -38,7 +38,7 @@ theorem setupHidden_tags (h : Stmt.setupHidden tags cf pf coins tables draw part
     st.tags = tags :=
   (Hidden.setupHidden_spec h).tagsEq
 
-/-- `Spec.merkle` at `Spec.parse`'s leaf scheme, which is the tags' ([wave2-hidden]'s `Hidden.setupHidden_hm96`). -/
+/-- `Spec.merkle` at `Spec.parse`'s leaf scheme, which is the tags' (`Discharge/Hidden`'s `Hidden.setupHidden_hm96`). -/
 theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     st.merkle = MerkleScheme.hm96Sha512 :=
@@ -50,7 +50,7 @@ theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
     st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" :=
   Hidden.setupHidden_plain hl h
 
-/-- `StmtWF` and `RegionsWF` ([wave2-hidden]'s `Hidden.setupHidden_wf`). -/
+/-- `StmtWF` and `RegionsWF` (`Discharge/Hidden`'s `Hidden.setupHidden_wf`). -/
 theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     StmtWF st ∧ RegionsWF st :=
   Hidden.setupHidden_wf h
@@ -62,10 +62,16 @@ theorem setupHidden_drawn {d : Json}
   obtain ⟨pop, hl, -, hd⟩ := (Hidden.setupHidden_spec h).pub
   exact ⟨pop, hl, hd d rfl⟩
 
-/-- `Spec.parse`: the statement's circuit is the one `HmOut.parse` accepts. -/
-theorem setupHidden_parseC (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+/-- `Spec.parseF`: at flat tags, the statement's circuit is the one `HmOut.parse` accepts. -/
+theorem setupHidden_parseC (hi : tags.isTmpl = false)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     HmOut.parse tags cf tables = .ok st.c :=
-  (Hidden.setupHidden_spec h).parse
+  (Hidden.setupHidden_spec h).parseF hi
+
+/-- **The statement's circuit is the file's**, when `HmOut.parse` accepts the file. -/
+theorem setupHidden_c_of_parse {c : Circuit} (hc : HmOut.parse tags cf tables = .ok c)
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : st.c = c :=
+  Except.ok.inj ((setupHidden_parseC (HmOut.parse_isTmpl hc) h).symm.trans hc)
 
 /-- `Spec.n`, `Spec.blocksReal`, `Spec.nbl`: `n` is the (drawn) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`,
 as setupH's (`Integrate.setupH_n`). -/
@@ -74,7 +80,7 @@ theorem setupHidden_n (h : Stmt.setupHidden tags cf pf coins tables draw partiti
   have s := Hidden.setupHidden_spec h
   exact ⟨s.n, by rw [s.nbl, s.blocksReal]⟩
 
-/-- An untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows` ([wave2-hidden]'s
+/-- An untyped `HmOut.parse` is `HmRow.parse`'s circuit, then `HmOut.checkRows` (`Discharge/Hidden`'s
 `Hidden.parse_untyped`). -/
 theorem parse_untyped {c : Circuit} (ht : tags.typed = false) (h : HmOut.parse tags cf tables = .ok c) :
     HmRow.parse tags cf tables = .ok c ∧ HmOut.checkRows c = .ok () :=

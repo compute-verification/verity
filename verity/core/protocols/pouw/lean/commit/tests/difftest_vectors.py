@@ -3,7 +3,7 @@
     python tests/difftest_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/difftest/cases.jsonl`, one case a line, `{"kind", "in", "python"}`. The outcome is the checkout's
-`verity.core.protocols.pouw` (the draws: its clear audit's, ``benchmarks/pouw/clear``): `{"ok": v}`, `{"reason": text}` for
+`verity.core.protocols.pouw` (the samples: its clear audit's, ``benchmarks/pouw/clear``): `{"ok": v}`, `{"reason": text}` for
 a coin `coin_reason` refuses, `{"error": type}` when it raises. The Lean is PoUW's verifier of record (`pouw.verifier`): the Lean audit runs `PouwCommit/DifftestMain.lean` on the
 file (`runs` in `lean-audit.json`, which pins its SHA-256), which fails on any case whose Python outcome is not the
 Lean's, and `tests/test_pouw_commit_lean_difftest.py` checks that this script still writes it, that its cases reach every
@@ -15,7 +15,7 @@ random row and tile-digest trees under `sha256`, `sha512` and `hm96-sha512` (row
 size, missing or short salt keys); openings of those trees, honest and tampered (value, path, position, root, count, schema,
 path and value lengths); epoch coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
 refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
-them), epochs and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a draw
+them), epochs and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a sample
 with no coin commitment; the audit, draw and replay keys and `draw_after`; and the clear audit's work-weighted draws
 (``benchmarks/pouw/clear``: `Sampled.select`'s and `clear_work.draw`'s), each run as written with only its tickets given
 (`tickets` patched), over ticket lists with zeros, totals past 64 bits, none, or all zero.
@@ -48,7 +48,7 @@ def generate(seed: int = 0) -> list[dict]:
     from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                        VerificationLimits, verify_opening)
 
-    # the clear audit's draws are a reference tool's (benchmarks/pouw/clear, not a package) in the checkout `audit` is from
+    # the clear audit's samples are a reference tool's (benchmarks/pouw/clear, not a package) in the checkout `audit` is from
     sys.path.insert(0, str(Path(audit.__file__).resolve().parents[4] / "benchmarks" / "pouw" / "clear"))
     import clear_audit as CA
     import clear_work as CW
@@ -115,11 +115,13 @@ def generate(seed: int = 0) -> list[dict]:
         h = rng.choice(["sha256", "sha512", "hm96-sha512", "hm96-sha512"])
         digests = rng.random() < 0.4
         b, o, rows, key, nn = binding(), owner(), rows_for(h, digests), salt_key(), nonce()
-        res = _outcome(lambda: audit.commit_rows(b, o, rows, h, key, nn, digests).commitment.root.hex())
+        public = rng.random() < 0.8
+        res = _outcome(lambda: audit.commit_rows(b, o, rows, h, key, nn, digests, public).commitment.root.hex())
         add("commit_rows", {"binding": b.hex(), "owner": o, "rows": [r.hex() for r in rows], "hash": h,
-                            "salt_key": None if key is None else key.hex(), "nonce": nn, "digests": digests}, res)
+                            "salt_key": None if key is None else key.hex(), "nonce": nn, "digests": digests,
+                            "public": public}, res)
         if "ok" in res and rows:
-            trees.append((b, o, h, digests, audit.commit_rows(b, o, rows, h, key, nn, digests), audit.ROW_SCHEMA))
+            trees.append((b, o, h, digests, audit.commit_rows(b, o, rows, h, key, nn, digests, public), audit.ROW_SCHEMA))
 
     for _ in range(COUNTS["transcript"]):
         h = rng.choice(["sha256", "sha512", "hm96-sha512", "hm96-sha512"])

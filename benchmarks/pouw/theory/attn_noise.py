@@ -18,12 +18,11 @@ Parts:
 - G. Per unit (one output coordinate), the noise bits a cheat must match per unit of work it saves (h, GRIND),
   from how units share an operand row's noise: matching one side's noise leaves a unit's words
   affine in the other side's coins, which have no floor (`crossRankLe_dClean`'s case). Then the SHA-512 compressions
-  a drawn unit spends deriving its noise in its proof on the deployed NS 1 patch layout (4 rows × 128
+  a sampled proof block spends deriving its noise in its proof on the deployed NS 1 patch layout (4 rows × 128
   columns a compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous, and GRIND's
   bound a seed at prefill and at decode.
 
-Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
-benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
+Run from the repository root: `uv run python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
 `benchmarks/pouw/tests/test_theory_attn_noise.py` runs it in the pouw suite.
 """
 from __future__ import annotations
@@ -35,9 +34,11 @@ from pathlib import Path
 
 import numpy as np
 
+from verity.core.protocols.pouw.credit import DELTA
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from checked_strip import W_RE, Block, cross_ranks  # noqa: E402
+from checked_strip import W_RE, CellGrid, cross_ranks  # noqa: E402
 from exact_kit.checks import Checks  # noqa: E402
 from narrow_u import NarrowBlock, planes  # noqa: E402
 
@@ -46,11 +47,11 @@ INSTANCES = ("zero", "P = 0", "V = 0", "one-hot P", "uniform P", "random")
 SHA_BITS = 512
 #: The NS 1 patch: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
 PATCH_ROWS, PATCH_COLS = 4, 128
-#: A drawn unit's seed: 2 compressions (SHA-512 of the window coin and the two roots).
+#: A sampled proof block's seed: 2 compressions (SHA-512 of the window coin and the two roots).
 SEED = 2
 
 
-def operands(B: Block, kind, rng):
+def operands(B: CellGrid, kind, rng):
     """(P, V) of one block at instance `kind`; P in Lean coordinates, a probability row as P_prob − 64."""
     P = rng.integers(-63, 63, (B.n, B.k))
     V = rng.integers(-128, 127, (B.k, B.n2))
@@ -71,7 +72,7 @@ def operands(B: Block, kind, rng):
     raise ValueError(kind)
 
 
-def ranks(B: Block, rng):
+def ranks(B: CellGrid, rng):
     return {kind: cross_ranks(B, *operands(B, kind, rng), mod=1) for kind in INSTANCES}
 
 
@@ -89,7 +90,11 @@ def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
             "P·V, V column (b)": L, "P·V, P row (U)": u_bits_pv / d}
 
 
-def grind_eps(L, delta_log2=40, t_log2=128, d=128):
+#: The per-window δ's bits: δ = 2^-DELTA_LOG2 (PoUW's `credit.DELTA`).
+DELTA_LOG2 = DELTA.denominator.bit_length() - 1
+
+
+def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
     """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""
@@ -101,7 +106,7 @@ def grind_eps(L, delta_log2=40, t_log2=128, d=128):
 
 
 def unit_compressions(k, d=128):
-    """SHA-512 compressions a drawn unit spends on its noise: (deployed patch layout, contiguous layout). QKᵀ's unit
+    """SHA-512 compressions a sampled proof block spends on its noise: (deployed patch layout, contiguous layout). QKᵀ's unit
     reads Q's row (c in one patch, U from its tag-11 digest) and K's row (one patch); P·V's reads P's row's U (one
     digest a row pair) and V's column of b over k keys, which the patch layout over Vᵀ serves 128 keys a compression."""
     qk = (SEED + 1 + 1 + 1, SEED + math.ceil((d + 64 * 5 + d) / SHA_BITS))
@@ -116,7 +121,7 @@ def main():
 
     # ------------------------------------------------------------ B
     k, L = 64, 32
-    pv_T, pv_TO = Block("dither", 1, k, 1, 32, L), Block("checked1", 1, k, 1, 32, L)
+    pv_T, pv_TO = CellGrid("dither", 1, k, 1, 32, L), CellGrid("checked1", 1, k, 1, 32, L)
     got_T, got_TO = ranks(pv_T, rng), ranks(pv_TO, rng)
     out["P·V adopted, T"] = {x: list(v[:2]) for x, v in got_T.items()}
     out["P·V adopted, T and O"] = {x: list(v[:2]) for x, v in got_TO.items()}
@@ -134,22 +139,22 @@ def main():
                      all(v[:2] == (kk, kk + rr) and v[2] == 0 for v in got.values()), str(out[f"QKᵀ cohalf k={kk}"]))
 
     # ------------------------------------------------------------ C
-    one = Block("checked1", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
+    one = CellGrid("checked1", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
     got = ranks(one, rng)
-    bare = Block("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
+    bare = CellGrid("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
     zw = bare.words(np.full((1, k), 64, np.int64), np.zeros((k, 1), np.int64), rng.integers(0, 2, (64, bare.nbits)))
     out["one-sided"] = {x: list(v[:2]) for x, v in got.items()}
     checks.check("C1 one-sided noise (U's weights 0, so U = −64, and b on V only): cross rank 0 at every instance, and "
                  "at P̃ = 0, V = 0 every T word is 0 at every coin point (B3's collapse)",
                  all(v[:2] == (0, 0) for v in got.values()) and not np.any(zw), str(out["one-sided"]))
-    row = Block("checked1", 1, k, 1, 1, L)
+    row = CellGrid("checked1", 1, k, 1, 1, L)
     got = ranks(row, rng)
     out["row dither"] = {x: list(v[:2]) for x, v in got.items()}
     checks.check(f"C2 row dither (U of period 1 a row): cross rank k/L = {k // L}, one a word, at every instance "
                  f"(B3's rank-1 cross terms)", all(v[0] == k // L for v in got.values()), str(out["row dither"]))
     if checks.mutations:
-        for name, B in (("one-sided noise on adopted P·V", Block("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))),
-                        ("row dither on adopted P·V", Block("dither", 1, k, 1, 1, L, w=W_RE))):
+        for name, B in (("one-sided noise on adopted P·V", CellGrid("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))),
+                        ("row dither on adopted P·V", CellGrid("dither", 1, k, 1, 1, L, w=W_RE))):
             got = ranks(B, rng)
             with checks.mutant(name):
                 checks.check(f"M B1's check on {name}", all(v[0] == k for v in got.values()), str(got))

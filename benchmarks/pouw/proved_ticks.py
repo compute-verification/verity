@@ -1,5 +1,5 @@
 """`proved_ticks`: PoUW's proved block-ticks for a window's declared work, the figure network accounting's joint ledger
-credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placement.public(plan, ticks=...)`, where
+credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placed.public(plan, ticks=...)`, where
 its tests place PoUW's compiled Program on a block).
 
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120
@@ -15,16 +15,16 @@ reads W off a block where the datacenter places a Program `SCHEME` or its one st
   `eps_budget.floor_skip` counts them.
 - B_♭, the floor program ♭'s bound a unit in SMSP-cycles on the sheet's machine: `eps_budget.prices`' ♭ (the tensor
   route at the operand floor φ_del and the fold, no filler) with ε_skip's skippable work in it, B_♭ = B/(1 − ε_skip),
-  ε_skip `eps_budget.design_skip` at the sheet's vector, as Lean's ♭ (`Accounting.TS.Headline.Sm120.flat`, #2482) is.
+  ε_skip `eps_budget.design_skip` at the sheet's vector, as Lean's ♭ (`Accounting.TS.Headline.Sm120.flat`) is.
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
 - 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`Accounting.TS.Model.credit`), and a GPU's
   4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the sheet's (`FMAX_MHZ`).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
-  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (#2924's A5b on #2791, not on
-  main yet: receipt luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π* puts 197/3761 on DS_smem so
-  that a fold on the bulk engine (RT4-SHEET-1) costs at least φ*, which lowers N_w(w* + φ*) to 16.1095 against B_♭.
+  is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (with A5b: receipt
+  luck ½ named, operand luck ¾, p = 7/8, fold skippers charged): its π* puts 197/3761 on DS_smem so
+  that a fold on the bulk engine costs at least φ*, which lowers N_w(w* + φ*) to 16.1095 against B_♭.
   main's machine model reads 0.585% at p = ¾ (`machine-model headline`), with no bulk route; the measured reading,
   0.591% on VF3s-16, is at measured rates, not the sheet's.
 
@@ -44,11 +44,11 @@ What it rests on:
 - A5b (`Accounting.Assumptions.TS.SheetSmem`): a bulk or TMA instruction holds the shared-memory bytes it moves in the
   banks at A5's rate, a reading no vendor document states;
 - ε's source above, on the full-checking layer: ε_sample and the Fiat–Shamir premium are separate lines;
-- the node's work, in its G GPUs' ticks: the headline is per node (ASK-65 = A), the work of its GPUs, host CPU and
+- the node's work, in its G GPUs' ticks: the headline is per node (= A), the work of its GPUs, host CPU and
   peer GPUs together, priced on the GPUs' sheet (A1–A7 price none of its other devices: its CPUs, its DPU). Read as
-  the G GPUs' own time, it needs LOC's host deduction (decision 37) and every billable GPU on the node credited each
-  window (the machine model's README, "The headline is per node"; RT-SCOPE, #2681);
-- per block only under attribution's grade: PoUW credits the prover system (decision 111), so the ledger puts this on
+  the G GPUs' own time, it needs LOC's host deduction and every billable GPU on the node credited each
+  window (the machine model's README, "The headline is per node");
+- per block only under attribution's grade: PoUW credits the prover system, so the ledger puts this on
   the block only as far as `BlockAccount.local_at_least` places it there, graded by its anchor (`Credit.grade`), and
   the rest on the datacenter.
 """
@@ -68,7 +68,7 @@ from verity_machine_model.model import device
 
 SMSPS = 4                          # SMSPs an SM
 #: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
-#: `Accounting.TS.Headline.Sm120.ds120.fmax`, #2482)
+#: `Accounting.TS.Headline.Sm120.ds120.fmax`)
 FMAX_MHZ = {"sm_120": 2430}
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000

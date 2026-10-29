@@ -4,7 +4,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 BF16_NAN_SOFTWARE = 0x7FC0   # c10::BFloat16::round_to_nearest_even, torch CPU: the software canonical NaN
-BF16_NAN_HARDWARE = 0x7FFF   # SASS F2FP.BF16.F32.PACK_AB / cvt.rn.bf16.f32: measured on A100 and RTX 4090 (L6)
+BF16_NAN_HARDWARE = 0x7FFF   # SASS F2FP.BF16.F32.PACK_AB / cvt.rn.bf16.f32: measured on A100 and RTX 4090
 E4M3_NAN = 0x7F              # OCP E4M3 (float8_e4m3fn): NaN 0x7F / 0xFF, max finite 0x7E = 448, no infinities
 
 __all__ = ["BF16_NAN_HARDWARE", "BF16_NAN_SOFTWARE", "E2M1_UP", "E4M3_NAN", "bf16_is_nan", "bf16_to_f32_word",

@@ -1,8 +1,7 @@
-# VF3i-strict-r8: Round 8's strict VF3i: every byte-converting or byte-mixing read at 32 MACs a word. Its LDSM/STSM rows were invalid (round 9); VF3i-strict is the same vector on corrected rows.
+# VF3i-strict-r8: The first strict VF3i: every byte-converting or byte-mixing read at 32 MACs a word. Its LDSM/STSM rows were invalid; VF3i-strict is the same vector on corrected rows.
 name = "VF3i-strict-r8"
 epoch = "VF3i-strict-r8"
-summary = "Round 8's strict VF3i: every byte-converting or byte-mixing read at 32 MACs a word. Its LDSM/STSM rows were invalid (round 9); VF3i-strict is the same vector on corrected rows."
-note = "note:20261016T1538Z-draft-rs-vf3i-textures-uniform"
+summary = "The first strict VF3i: every byte-converting or byte-mixing read at 32 MACs a word. Its LDSM/STSM rows were invalid; VF3i-strict is the same vector on corrected rows."
 superseded_by = "VF3i-strict"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
@@ -38,9 +37,8 @@ credits = [
     ["STSM8T_X4", 4096], ["UTMA", 128], ["UTMA8", 256], ["UTMA512", 4096], ["G4_16", 512], ["G4_32", 1024],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.074
-tau_600w = 0.0579
 uf_low = 1.0938
 margin = 1.935
 

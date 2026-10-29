@@ -1,8 +1,8 @@
 """PoUW's clear audit: the protocol's lifecycle run in the clear, the same for every `PoUWScheme` (``PROTOCOL.md``,
 "Lifecycle").  It is a reference tool, not a verifier: every protocol is zero-knowledge, PoUW's served path is the served-ZK
-window, and its verifier of record is the Lean (`verity/core/protocols/pouw/lean/check`, `pouw.verifier`).  Benchmarks
+window, and its verifier is the Lean (`verity/core/protocols/pouw/lean/check`, `pouw.verifier`).  Benchmarks
 replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
-end-to-end vectors through it, and the Lean's draws (`PouwCommit.Draws`) are difftested against `Sampled.select` and
+end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are difftested against `Sampled.select` and
 `draw_coin`.  This directory is not a package: callers put it on ``sys.path``.
 
 0.-2. **Coins, weights and the salt** are core's (`verity.core.protocols.pouw.audit`: `weights_root`, `Epoch.start`).
@@ -12,13 +12,13 @@ end-to-end vectors through it, and the Lean's draws (`PouwCommit.Draws`) are dif
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order (core's `tile_refs`).
 5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
-   source is the epoch's draw coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
+   source is the epoch's sampling coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
    Pearl's mining rule, not one of the audit's laws, and stays unwired: the tiles whose digest, read little-endian, is at
    most ``target·|rows|·|cols|·k``.  The prover opens each selected tile's strips and leaf; the verifier recomputes the
    tile through the scheme.
 6. **Profile.**  When every selected tile passes, `WorkProfile` states what that establishes.
 
-The protocol owns every outer coin (the salt and the draw), and both are the challenger's live coins.  A scheme's noise is
+The protocol owns every outer coin (the salt and the sample), and both are the challenger's live coins.  A scheme's noise is
 its own derivation from the salt and the prover's roots, Fiat-Shamir inside the scheme.  The row and tile trees are core's
 (`audit.commit_rows`, `rows_domain`, `transcript_domain`), framed SHA-256 unless the scheme names another frame hash in
 ``commitment_hash`` (`commitment_hash`), and an opening's value under ``"hm96-sha512"`` carries its salt, which
@@ -53,7 +53,7 @@ def commitment_hash(scheme: PoUWScheme) -> str:
 
 
 def draw_coin(epoch: Epoch, challenger: Challenger, after: bytes) -> tuple[bytes | None, str | None]:
-    """The epoch's draw coin, asked of the challenger once the verifier recorded `after`, and checked against the
+    """The epoch's sampling coin, asked of the challenger once the verifier recorded `after`, and checked against the
     epoch's coin commitment: (coin, None), or (None, why it is refused)."""
     if epoch.coins is None:
         return None, "the epoch has no coin commitment for its draw coin to open against"
@@ -99,12 +99,15 @@ class Prover:
 
     def __init__(self, scheme: PoUWScheme, weights: Mapping[int, Sequence[bytes]],
                  kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel, salt_key: bytes | None = None):
-        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default)."""
+        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default).  A scheme of a plain format (h0, or
+        no ``commitment_hash``) has trees that are not hiding, which this reference tool replays as `audit.commit_rows`'
+        ``public`` trees; a served commitment is never one."""
         self.scheme, self.kernel = scheme, kernel
         self.weights = {w: list(rows) for w, rows in weights.items()}
         self.hash = commitment_hash(scheme)
         self.salt_key = (salt_key or os.urandom(32)) if self.hash == HM96 else None
-        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w)
+        self.plain = plain = self.hash != HM96
+        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w, public=plain)
                              for w, rows in self.weights.items()}
         self._act_trees: list[MerkleTree] = []
         self._refs: list[TileRef] = []
@@ -125,7 +128,8 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index)
+            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index,
+                               public=self.plain)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
             tiles = scheme.tiles(u.shape)
@@ -285,7 +289,7 @@ class Verifier:
     def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
         """Draw, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
-        for the epoch's draw coin after the transcript is recorded; on one without, the draw's bare source bytes."""
+        for the epoch's sampling coin after the transcript is recorded; on one without, the sample's bare source bytes."""
         if len(transcript.activation_roots) != len(self.epoch.workload.matmuls):
             return Audit(False, (), (), None)
         if self.epoch.coins is not None or not isinstance(source, bytes):

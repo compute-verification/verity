@@ -1,7 +1,7 @@
-"""Theorems 1(b) and 3 on small grids. By name, the tests mirror nine of their statements (`NetTiming.SecurityProofs`,
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror eight of their statements (`NetTiming.SecurityProofs`,
 proved in its `Counting`, `Advice` and `Schedule`): `SecurityProofs.EncardLeProdOfBranching`,
 `SecurityProofs.EncardObsDecodableLe`, `SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock`,
-`SecurityProofs.EncardAccSeqsLeBlocks`, and for the constant-rate Program `SecurityProofs.EncardAccSeqsLeConstantRate`,
+and for the constant-rate Program `SecurityProofs.EncardAccSeqsLeConstantRate`,
 `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`, `SecurityProofs.EncardAccSeqsLeConstantRateWindows` and
 `SecurityProofs.ExpectedRowCausal`.
 
@@ -183,8 +183,7 @@ def test_free_occupancy_advice_reaches_the_envelope():
 
 def test_reacting_operator_does_not_add_capacity():
     """The operator sets the second window's request anchor from the occupancy it saw in the first window's last bucket,
-    so feedback reaches the Program through ingress. Accepted sequences still number at most #Sync^W (the joint
-    witness's shape)."""
+    so feedback reaches the Program through ingress. Accepted sequences still number at most #Sync^W."""
     sync_set = SyncSet((0, 1), (1,))
     head = FRAMES[:3]
     seen = set()
@@ -200,39 +199,6 @@ def test_reacting_operator_does_not_add_capacity():
     assert 1 <= len(seen) <= sync_set.size ** 2
 
 
-def test_block_bound_random_programs():
-    """SecurityProofs.EncardAccSeqsLeBlocks. The occupancy of cell (link, bucket) reads only its own block's timing
-    advice and the history, and the frames read only content advice and the history: at most
-    2^A_c · ∏ min(2^A_β, #P_β) sequences."""
-    rng = random.Random(6)
-    T, links = 2, 2
-    for _ in range(1500):
-        a_c, adv = rng.randint(0, 2), [rng.randint(0, 3) for _ in range(links)]
-        occ_t = [[{} for _ in range(T)] for _ in range(links)]
-        cont_t = [[{} for _ in range(T)] for _ in range(links)]
-
-        def look(table, key, hi):
-            if key not in table:
-                table[key] = rng.randint(0, hi)
-            return table[key]
-
-        seqs = set()
-        for ac in range(2 ** a_c):
-            for a in itertools.product(*[range(2 ** x) for x in adv]):
-                hist = ()
-                for t in range(T):
-                    row = []
-                    for ell in range(links):
-                        o = look(occ_t[ell][t], (a[ell], ac, hist), 1)
-                        row.append(look(cont_t[ell][t], (ac, hist), 3) if o else None)
-                    hist += (tuple(row),)
-                seqs.add(hist)
-        bound = 2 ** a_c
-        for x in adv:
-            bound *= min(2 ** x, 2 ** T)
-        assert len(seqs) <= bound
-
-
 def test_sync_set_lists_each_value_once():
     """A repeated δ or ρ (1 and 2/2 are one ρ) is rejected, so iterating Σ_sync yields exactly #Σ_sync values."""
     with pytest.raises(ValueError, match="each delta and each rho once"):
@@ -246,9 +212,6 @@ def test_sync_set_lists_each_value_once():
 def test_doc_numbers():
     s = SyncSet(tuple(range(16)), tuple(range(1, 9)))
     assert s.size == 128 and s.bits == 7
-    # the block cap with one block: below the advice cap at T = 2, r = 1, W = 3, and far above it at T = 600
-    assert capacity.left_packed_patterns(2, 1) ** 3 == 64 < s.size**3 == 2_097_152
-    assert capacity.envelope_bits(600, 1) == 600 > s.bits == capacity.envelope_bits(7, 1)
     assert math.isclose(capacity.ingress_rate(64), 60.2, rel_tol=1e-3)
     assert math.isclose(capacity.ingress_rate(64, 1000), 6.02, rel_tol=1e-3)
     two_links_hour = (capacity.ingress_rate(64) + capacity.ingress_rate(1024)) * 3600

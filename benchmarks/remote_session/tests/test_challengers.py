@@ -40,7 +40,7 @@ import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
@@ -154,7 +154,7 @@ def session(store, gate: challengers.ChallengerGate):
     """An honest session over `store` whose coins come from `gate`'s session for window 0: the session and verdicts."""
     p = params()
     client = gate.open(store.registration.digest, 0, p.windows, 8)
-    c = coins.Coins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
+    c = coins.SessionCoins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
     return s, finish(s, prover, passes, clock)
 
@@ -209,7 +209,7 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
                        f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
                        "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
                        "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
-                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
+                       "on main's first-parent line (with its pin command) and rerun the window there"),
         "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
                     '{"refused": "usage"}')}[case]
 
@@ -277,7 +277,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
     The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
     family. The honest session's
     challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
-    openings as its draws arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
+    openings as its samples arrive (`defer_openings=False`), so the dropper, refused at its first window, left openings
     coins unreleased and is not, and the period's close lists the two so."""
     if kind == "gate":
         host.period()
@@ -540,15 +540,15 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "window on a host whose gate seals its pins log in each open")
     elif sealed != PINS:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
-               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-               "window there")
+               "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+               "rerun the window there")
     elif main is None:
         why = NO_MAIN
     else:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+               "commit on main's first-parent line (with its pin command) and rerun the window there")
     assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
@@ -669,8 +669,9 @@ def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] 
     key = certifier_key()
     issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
     T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
-    records = [issuer.certify(Record(link, 0, fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
-                                     COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
+    records = [issuer.certify(BlockGrid(link, 0,
+                                        fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
+                                        COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
                               cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
     public = lms.public_key(key)
     (d / "boundary.json").write_text(json.dumps({
@@ -824,7 +825,7 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     forms', exactly; a refused form records none), beside its five parts (verifier.json's `delta`,
     `ledger.delta_parts`), which must sum to it as the ledger adds them: forms that record two δ, or parts that don't
     sum to it, give no line. The hiding part, n·2^-191, is below the float δ's precision, so the exact parts exceed
-    the recorded total by it. A ledger that didn't charge the draw's rejection has Σ_t k_t/2^64 added at the session's
+    the recorded total by it. A ledger that didn't charge the sample's rejection has Σ_t k_t/2^64 added at the session's
     `samples`, so it reads as one that did, a window that opened all its receipts included. Every error names the
     windows' PRF advantages (claim prf/sha-512) with no value, in no total. The line at each T, and over every T,
     fails with at most the sum over its credited sessions, and a T that credits none has error 0."""
@@ -894,7 +895,7 @@ GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943, 48),
 def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     """On gate runs 8 and 9's records, written before verifier.json carried δ's parts or the slack (`slack_log2`), a
     session's error is the memory line's δ its ledger recorded, bit for bit, plus the coin commitment's hiding and the
-    draw's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
+    sample's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
     which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its

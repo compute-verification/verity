@@ -1,4 +1,4 @@
-"""A live H1 window's salt from the auditor's challenger (CMP-90): the salt-only session `core_check.window_salt` reads.
+"""A live H1 window's salt from the auditor's challenger: the salt-only session `core_check.window_salt` reads.
 
 `issue(gate, rec, k, main, dest)` reserves a session for the salt coin alone (`window.SALT_FAMILIES`, scheme
 `window.LIVE_SCHEME`) on `gate`, opens it on the epoch's root R = `salt.anchored_epoch_root(W, X, k)` (W and X the
@@ -14,9 +14,10 @@ its H1 tiles under the salt, then its registration with those same entries. The 
 coin follows it, so activations committed after the salt name another X, whose R no session was opened on.
 
 `gate` is `a5_coins.Local` (a development session on this machine, under a key made there: tests and demos) or
-`a5_coins.Gate` (vy-challenger-1 through infra's gate); `local(root, main)` makes the first. `main` is the verifier's own
-copy of main's first-parent history (``git rev-list --first-parent origin/main``, newest first). `anchors(weights,
-activations)` is the ``rec`` of a window whose weights are registered values (the torch loop's pinned ``w`` and ``sw``).
+`a5_coins.GateClient` (vy-challenger-1 through infra's gate); `local(root, main)` makes the first. `main` is the
+verifier's own copy of main's first-parent history (``git rev-list --first-parent origin/main``, newest first).
+`anchors(weights, activations)` is the ``rec`` of a window whose weights are registered values (the torch loop's pinned
+``w`` and ``sw``).
 """
 from __future__ import annotations
 
@@ -38,7 +39,7 @@ TREE = Path(__file__).resolve().parents[3]
 
 
 def a5_coins():
-    """`benchmarks/one_stage/a5_coins.py`, whose `Local` and `Gate` open a session on a gate."""
+    """`benchmarks/one_stage/a5_coins.py`, whose `Local` and `GateClient` open a session on a gate."""
     if "a5_coins" not in sys.modules:
         spec = importlib.util.spec_from_file_location("a5_coins", TREE / "benchmarks" / "one_stage" / "a5_coins.py")
         module = sys.modules["a5_coins"] = importlib.util.module_from_spec(spec)

@@ -270,7 +270,7 @@ import Proofs.Flock.Claims.ZK.RepCutFw
 * `CoinOpen`: the Lean coin check (`flock-firewall coins`, `Flock.Firewall.Coins`), whose verdict `coin_tree::Checked`
   takes, is that coin layer's at SHA-512: one opening (`CoinOpen.treeChk_sha`, `CoinOpen.check_isOk`), and a session's
   openings when its requests follow the committed schedule (`CoinOpen.coinLayer_verdict`), so it refuses the openings
-  ZKS10's `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`). The release
+  `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`). The release
   reads it (`LeanRelease.opens`), and at that coin layer it is the session's check (`LeanRelease.checkIs_coinLayer`).
 * `Tape`: `TapeOK` makes the tape onto the leaves' salts (`RefSession.eP_surjective`), so a session has fewer tables than
   tapes at every statement (`RefSession.J_lt_card_of_tapeOK`), and none with statements of every table count meets it
@@ -983,8 +983,8 @@ import Proofs.Flock.Claims.ZK.RepCutFw
   `ε₀ + Σ_{j < n} eB j` and `(c + n)·g`: `n·g` after a prefix that rewinds nothing. Both hold at one statement
   (`zkmalAt_seqU`, `zkmalAt_iter`), so the tapes and the number of sessions may be chosen per statement: on the
   spec's statement-indexed tapes (`ZKmalRx`), `m x` sessions in turn (`zkmalRx_iter`).
-* `Layout`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
-  tape per slot) is `zkmalAt_iterG`'s nested run (`Layout.iterProver_flat`), so **`zkmalAt_layout`** charges it
+* `RunParts`: a run in parts, a first part then sessions back to back, on a flat tape (the first part's and one session
+  tape per slot) is `zkmalAt_iterG`'s nested run (`RunParts.iterProver_flat`), so **`zkmalAt_layout`** charges it
   `ε₀ + Σ_{j < m} eB j` and `(c + m)·g`, each session's zero knowledge needed only at the histories that start it.
 * `Cut`: a run cut at a round (`cutT`), and the run of a prover stopped there is its own run cut (`interact_stopAt`).
 * `Stop`: a run in parts with a public stop, a test of the verifier-visible history read through the first part:

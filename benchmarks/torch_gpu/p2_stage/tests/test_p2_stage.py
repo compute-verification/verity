@@ -196,6 +196,14 @@ def test_flat_views_any_dtype():
         S.flat(torch.zeros(4, 4).t())
 
 
+def test_timed_runs_the_warmup_then_before_ahead_of_each_timed_run():
+    calls: list[str] = []
+    ts = S.timed(lambda: calls.append("fn"), 2, torch.device("cpu"), lambda: calls.append("before"), warmup=1)
+    assert calls == ["fn", "before", "fn", "before", "fn"] and len(ts) == 2
+    calls.clear()
+    assert len(S.timed(lambda: calls.append("fn"), 3, torch.device("cpu"))) == 3 and calls == ["fn"] * 3
+
+
 def deployment_vector():
     v = next(v for v in VECTORS["vectors"] if v["id"] == "p2-v4/w16448/0")
     prefix = L.R.expand_prefix(bytes.fromhex(v["setup_salt"]), L.SPEC, bytes.fromhex(v["model_commitment"]))
@@ -203,23 +211,20 @@ def deployment_vector():
     return prefix, j, bytes.fromhex(v["c"]), bytes.fromhex(v["m"])
 
 
-def test_decode_block_is_the_spec_vector():
+def test_check_blocks_holds_the_spec_vector():
     prefix, j, c, m = deployment_vector()
     assert m[:L.LEAD] == bytes(L.LEAD)
-    assert L.decode_block(L.SPEC, prefix, j, c) == m[L.LEAD:]
-    assert L.check_blocks(L.SPEC, prefix, j, c, m[L.LEAD:]) == []
+    assert L.check_blocks(L.PARAMS, prefix, j, c, m[L.LEAD:]) == []
 
 
-def test_decode_block_refuses_what_the_store_refuses():
+def test_check_blocks_refuses_what_the_store_refuses():
     prefix, j, c, m = deployment_vector()
-    with pytest.raises(ValueError, match="not below p"):
-        L.decode_block(L.SPEC, prefix, j, S.P_BYTES)
-    with pytest.raises(ValueError, match="bytes, not"):
-        L.decode_block(L.SPEC, prefix, j, c[1:])
-    bad = L.check_blocks(L.SPEC, prefix, j + 1, c, m[L.LEAD:])
+    [(at, why)] = L.check_blocks(L.PARAMS, prefix, j, S.P_BYTES, m[L.LEAD:])
+    assert at == j and "not below p" in why
+    bad = L.check_blocks(L.PARAMS, prefix, j + 1, c, m[L.LEAD:])
     assert len(bad) == 1 and bad[0][0] == j + 1
     flipped = bytes([c[0], c[1] ^ 1]) + c[2:]
-    assert len(L.check_blocks(L.SPEC, prefix, j, flipped, m[L.LEAD:])) == 1
+    assert len(L.check_blocks(L.PARAMS, prefix, j, flipped, m[L.LEAD:])) == 1
 
 
 def test_twin_is_the_definition():
@@ -331,7 +336,7 @@ def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
     rows = kern.encode(torch.cat([torch.zeros(len(blocks), L.LEAD, dtype=torch.uint8),
                                   torch.from_numpy(w).view(-1, L.PAYLOAD)], dim=1), blocks.start)
     buf = torch.full((lay.staging_bytes(1),), 0xA5, dtype=torch.uint8)
-    S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf)
+    S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), 1, buf)
     at = 0
     for t in lay.layer(1):
         assert not buf[at:t.staging_offset].any()
@@ -344,10 +349,10 @@ def test_decode_layer_zeroes_the_gaps_and_refuses_padding(monkeypatch):
     bad = rows.clone()
     bad[o.first_block + o.blocks - 1 - blocks.start] = kern.encode(m, o.first_block + o.blocks - 1)[0]
     with pytest.raises(S.StoreError) as e:
-        S.decode_layer(S.Store(lay, bad, blocks.start, "unused"), 1, buf)
+        S.decode_layer(S.EncodedRows(lay, bad, blocks.start, "unused"), 1, buf)
     assert e.value.flags == S.PADDING
     with pytest.raises(ValueError):
-        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), 1, buf[:-1])
+        S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), 1, buf[:-1])
 
 
 def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path, monkeypatch):
@@ -443,7 +448,7 @@ def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypa
         assert bytes(rows.numpy()) == L.segment_rows(root, lay.spec, blocks.start, len(blocks)) \
             == c_star[blocks.start:blocks.stop].tobytes()
         buf = torch.full((lay.staging_bytes(i),), 0xA5, dtype=torch.uint8)
-        S.decode_layer(S.Store(lay, rows, blocks.start, "unused"), i, buf)
+        S.decode_layer(S.EncodedRows(lay, rows, blocks.start, "unused"), i, buf)
         assert hashlib.sha512(buf.numpy().tobytes()).hexdigest() == sha
     s = (lay.blocks(0).stop - 1) // bps
     L.segment_path(root, s, "c").write_bytes(bytes(bps * L.ROW))

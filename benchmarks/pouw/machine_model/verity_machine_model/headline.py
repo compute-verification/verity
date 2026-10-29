@@ -1,17 +1,17 @@
 """The per-family headline (`machine-model headline`): each GPU family's design of record (data/headline.toml) at each
-reading, operands free and credit ♭ (decision 89), with every number computed from the design files and the vectors.
+reading, operands free and credit ♭, with every number computed from the design files and the vectors.
 
-A reading is a vector per family and a q*: `sheet`, the data sheet's vectors at q* = ½, and `measured`, decision 89's
+A reading is a vector per family and a q*: `sheet`, the data sheet's vectors at q* = ½, and `measured`,
 q* = 1.22 (the 1.22-slot issue floor, Theorem C, unproved in Lean) on the measured vectors, the -ri ones where they
-exist (decision 98). ε is relative to the declared capacity, the reading's Π (decision 100), and per node (ASK-65 = A,
-data/headline.toml's `scope`): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at
+exist. ε is relative to the declared capacity, the reading's Π, and per node
+(data/headline.toml's `scope`): an accepted window's node, its GPUs, host CPU and peer GPUs together, performed at
 least 1 − ε of the credited work, and a per-GPU reading is the attribution layer's (README, "The headline is per
 node"). A row is ε_skip at that vector (the design's `[skip.served]` there, which must be recorded: ♭ moves with Π),
 ε_mand, ε_machine and ε_luck, their sum (the core ε, Corollary D3's with ε_sched = ε_clock = 0 under ♭) and γ. Beside
 them are the conditions it is stated under:
 
 - the floor it needs: the ½-slot floor where ε_machine is at its floor by q* = ½, else the 1.22-slot issue floor;
-- each filler's credit, the theorem its check meets (decision 99), and the family's p = 1 sibling's ε where it has one;
+- each filler's credit, the theorem its check meets, and the family's p = 1 sibling's ε where it has one;
 - the reading's and the family's stated conditions, from data/headline.toml;
 - A2u, the reading's `a2u`, wherever Π charges a uniform instruction on an issue row: no data sheet gives a uniform
   rate, so there the uniform route is priced by A2u alone (without it the sheet rows' ε is unbounded).

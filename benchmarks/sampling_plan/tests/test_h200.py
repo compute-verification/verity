@@ -1,6 +1,6 @@
-"""The H200 plan (`h200.py`): the block's units are circuits' partition, every sampling block is a uniform draw its tables
+"""The H200 plan (`h200.py`): the block's units are circuits' partition, every execution phase is a uniform draw its tables
 divide within the statement cap, its K0 is IntegrityPeriodLog's, commitments are priced beside the proving and not in
-it, both alternative cuts are priced, the frontier is monotone and a sampling block of `window_blocks` blocks proves within its
+it, both alternative cuts are priced, the frontier is monotone and an execution phase of `window_blocks` blocks proves within its
 GPU time."""
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from math import ceil, log
 import pytest
 
 import h200 as H
-import transformer as X
 
 M = H.Shape()
 
@@ -33,8 +32,9 @@ def test_the_units_are_circuits_partition():
 
 def test_windows_draw_k_split_evenly_under_the_cap(plan):
     k = ceil(log(len(plan["windows"]) / H.DELTAS[0]) / H.SHARE)
+    caps = {t.id: t.cap for t in H.templates(M)}
     for w in plan["windows"]:
-        cap = X._cap(w["proved_ands"])
+        cap = caps[w["template"]]
         assert w["k"] >= min(k, w["units"]) and w["k"] % w["tables"] == 0 and w["k"] // w["tables"] <= cap
         assert w["tables"] == ceil(min(k, w["units"]) / cap)
 

@@ -234,6 +234,37 @@ def test_a_silent_coordinator_rings_top(relay):
     assert relay.rung(rec) == "top" and relay.rung({**rec, "owner": None}) == "proofs"
 
 
+def test_a_workers_no_step_names_it_a_worker_of_its_lane_and_still_rings_top(relay):
+    """A worker's no_step that reads "@LANE's coordinator" sends whoever archives it looking for a coordinator a handover
+    left behind."""
+    top = relay.slack.tag(relay.slack.entry(relay.REG, "top"))
+    w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]
+    base = {"kind": "no_step", "run": "", "handle": "proofs", "lane": "proofs", "since": "2026-10-27T20:50:00Z", "hours": 6,
+            "owner": "top"}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {**base, "agent": w, "name": "ZKS10", "role": "worker"},
+        {**base, "agent": co, "name": "verity: proofs", "run": "run-r", "role": "coordinator"}]) + "\n"
+    relay.once()
+    assert relay.posts[0].startswith(f"{top} *Agent watch:* worker ZKS10 (<https://cursor.com/agents/{w}|{w}>) of lane proofs "
+                                     "has shown nothing"), relay.posts[0]
+    assert "coordinator" not in relay.posts[0]
+    assert relay.posts[1].startswith(f"{top} *Agent watch:* @proofs's coordinator"), relay.posts[1]
+    assert [relay.rung(json.loads(x)) for x in relay.log_text["text"].splitlines()] == ["top", "top"]
+
+
+def test_an_archived_silent_worker_rings_its_lane_not_top(relay):
+    proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
+    w = "bc-22222222-2222-2222-2222-222222222222"
+    rec = {"kind": "archived", "agent": w, "name": "ZKS10", "run": "", "handle": "proofs", "lane": "proofs",
+           "since": "2026-10-27T20:50:00Z", "hours": 6, "role": "worker"}
+    relay.log_text["text"] = json.dumps(rec) + "\n"
+    relay.once()
+    assert relay.posts[0].startswith(f"{proofs} *Agent watch:* worker ZKS10 (<https://cursor.com/agents/{w}|{w}>) of lane "
+                                     "proofs showed nothing"), relay.posts[0]
+    assert "the watch archived it: relaunch it from its last note, or drop it" in relay.posts[0]
+    assert relay.rung(rec) == "proofs"
+
+
 def test_a_silent_agent_and_an_ended_run_lead_with_the_records_handle_and_ring_it(relay):
     proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
     w, co = "bc-22222222-2222-2222-2222-222222222222", PROOFS_INBOX["holder"]

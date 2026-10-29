@@ -1,8 +1,9 @@
 """Network certificates: the network certifier's signed record of each link-window, on SHA-512 (record v2).
 
 The network certifier is the auditor-trusted device on a node's uplink that shapes each link into the grid
-(`grid.Certifier`). Once per link-window it signs one **network certificate**: a signature over a hiding digest of the
-window's record, salted by the certifier. The record head and the salt are witness: they enter proofs and never reach
+(`grid.Certifier`). Once per link-window whose record is complete it signs one **network certificate**: a signature
+over a hiding digest of the window's record, salted by the certifier. A link-window whose record isn't complete gets
+none (`Issuer`), so it fails closed. The record head and the salt are witness: they enter proofs and never reach
 the auditor in the clear, so the record's own hashes are unsalted, and what the certificate signs is the salted digest.
 
 **The record (v2).** The record is still exactly the grid and one status (W5), encoded with padding elided:
@@ -45,7 +46,7 @@ with its length as a u64be:
     message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [signed digest] ),
               tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
-`session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger draws for the session and
+`session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger samples for the session and
 issues to the certifier; the audit takes it from its parameters, as it takes the key, so the record head and the
 certificate's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
 (`verity/network-certificate/v4`, `verity/network-records/v3`).
@@ -88,7 +89,7 @@ from typing import Protocol
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
+from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, BlockGrid, Status, row_left_packed
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
 RECORD_TAG = "verity-network-certifier/record/v2"
@@ -434,7 +435,7 @@ class Certificate:
 
 @dataclass(frozen=True, slots=True)
 class CertifiedRecord:
-    """What the certifier hands over per link-window: the record head, the salt it drew for it (`salt_c`, witness like
+    """What the certifier hands over per link-window: the record head, the salt it sampled for it (`salt_c`, witness like
     the head) and the certificate, which signs the head's digest salted by it (`certificate_digest`)."""
 
     head: RecordHead
@@ -477,7 +478,7 @@ class CertifiedRecord:
 @dataclass(frozen=True, slots=True)
 class CertifiedClock:
     """What the certifier hands over per egress link-window beside its record: the sync its shaper ran the window under
-    and the salt it drew for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one public
+    and the salt it sampled for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one public
     part, which signs the sync's clock digest salted by it (`clock_commitment`)."""
 
     sync: ClockSync
@@ -525,7 +526,10 @@ class Issuer:
     in certifier session `session`. Before its first signature it starts the session on its signer, which refuses a
     session its state has already started. A refusal, of the start or of a leaf, leaves the link-window without a
     certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next link-window, and
-    refused again. Each record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
+    refused again. **It certifies only a complete record**: a record whose status isn't complete is refused the same
+    way, before the session's start or a leaf, so a link-window that isn't covered has no certificate and fails closed
+    (`no-verdict`), and a certificate that verifies under the key is of a complete record unless it is a forgery. Each
+    record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
     randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its signed
     clock certificates have taken, none of which it takes again."""
 
@@ -536,14 +540,20 @@ class Issuer:
     coins: Callable[[int], bytes] = field(default=secrets.token_bytes, repr=False)
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
 
-    def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
+    def certify(self, record: BlockGrid, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
         head = record_head(record.link, direction, record.window, record.grid, record.status, params, parameters,
                            deadline=deadline)
-        certificate = self.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+        digest = certificate_digest(salt, head.digest())
+        if not record.status.complete:
+            # formed as `sign` forms it, so what `sign` raises on (a session id not 32 bytes) raises here too
+            certificate_message(self.signer.key_id, self.session, record.link, direction, record.window, digest)
+            self.refused.append((record.link, direction, record.window))
+            return None
+        certificate = self.sign(record.link, direction, record.window, digest)
         return None if certificate is None else CertifiedRecord(head, salt, certificate)
 
     def salted_clock(self, link: str, window: int, sync: ClockSync) -> CertifiedClock | None:

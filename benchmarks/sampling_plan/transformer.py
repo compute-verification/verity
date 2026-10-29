@@ -1,4 +1,4 @@
-"""The sampling plan for the end-to-end demo's transformer under C-Flock: the demo's decoder block, small (the CPU
+"""The sampling plan for the end-to-end demo's transformer under Flock: the demo's decoder block, small (the CPU
 reference) or scaled onto one RTX PRO 6000 (the Phase 2 model), every operation a proof block.
 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
@@ -25,7 +25,7 @@ and its units, from the finest up:
 
 The harm is faulty ANDs: each unit is credited its ANDs (a recomputed statistic once, in the op it belongs to), so a
 plan's certificate means the same whatever the cut, where a count of faulty proof blocks falls as the cut coarsens; the
-faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is C-Flock's, fitted from its zero-knowledge
+faulty proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
 CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
@@ -43,31 +43,35 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass, replace
-from math import ceil, log, log2
+from fractions import Fraction
+from math import ceil, log
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, observations  # noqa: E402
+from inputs import I, KEY, cap, observations  # noqa: E402
 
+from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
-                                                           frontier, row_ands)
+                                                           frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
-DELTAS = (1e-2, 1e-6)
+#: core's reporting deltas (`wipe_monitoring`), as floats
+DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
 #: the server-time block, assumed: the Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute ceiling sets; no
 #: wipe has been timed, and the census has no block length
 BLOCK_S = 1200
 #: the datacenter, assumed: the census has no datacenter size
 SERVERS = 10_000
-PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
+#: core's monitoring periods (`wipe_monitoring`), seconds by name
+PERIODS = dict(wipe_monitoring.PERIODS)
 #: the target, a share of the block's ANDs certified at most wrong: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size
@@ -157,16 +161,11 @@ def requests_per_block(sequences: int, step_s: float, positions: int, block_s: f
     return round(block_s / step_s * sequences / positions)
 
 
-def _cap(ands: int) -> int:
-    """A statement's units under m = k_log + nbl <= 35 (`int8_llama.cap`)."""
-    return min(1 << max(0, 35 - (ceil(log2(max(ands, 2))) + 1)), 1 << 20)
-
-
 def _counted(s: Shape, memo: dict[str, Shape]) -> Shape:
-    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows."""
+    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows (`cap`)."""
     if s.id in memo:
         return memo[s.id]
-    out = replace(s, work=s.work or s.ands, cap=_cap(s.ands + sum(row_ands(r) for r in s.rows)),
+    out = replace(s, work=s.work or s.ands, cap=cap(s.ands, s.rows),
                   parts=tuple((_counted(c, memo), k) for c, k in s.parts),
                   ways=tuple((label, tuple((_counted(c, memo), k) for c, k in ps)) for label, ps in s.ways))
     memo[s.id] = out
@@ -184,7 +183,7 @@ def _group(name: str, child: Shape, count: int, rows: tuple[int, ...]) -> Shape:
                  parts=((child, count),))
 
 
-class Dag:
+class DefinitionGraph:
     """The block's Definition DAG: `ops` maps each op to its root shape and its instances a block, and `ids` each real
     Definition's shape id to its descriptor id (the circuit record's subcircuit id); a stub has none."""
 
@@ -347,7 +346,7 @@ class Serving:
     step_s: float | None = None
 
 
-def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
+def serve(m: Model, s: Serving) -> tuple[TensorCommit, ...]:
     """Every serve-time commitment of the block beside the units' own outputs (which `Candidate.commit_bits` carries):
     the requests' bytes in, the in-flight requests' KV cache at the close (the carried state; also the QKV units'
     outputs, so a copy `overlaps` would price), PoUW's CP-W receipts under h1 (2 (K/32 + m) u32 a 32 x 32 tile, the
@@ -362,11 +361,11 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
             ("carry", "KV cache of the in-flight requests at the close", m.inflight * m.context * m.kv_bytes),
             ("pouw:h1", "CP-W receipts", m.requests * (m.positions * per_token + m.generate * head)),
             ("bandwidth", "receipts over the audited store", s.audit_passes * s.audit_store / 4096 * 64)]
-    return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
+    return tuple(TensorCommit(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
 def costs(m: Model, s: Serving) -> CostModel:
-    """C-Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
+    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
     `request` replay domain."""
     obs = observations()
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
@@ -376,7 +375,7 @@ def costs(m: Model, s: Serving) -> CostModel:
                    replay={"request": ReplayDomain(m.requests, s.replay)})
 
 
-def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
+def candidates(dag: DefinitionGraph, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
     """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
@@ -390,7 +389,7 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
 def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut_grid: int = 21):
     """The block's DAG, its cost model, objective and candidates, and the frontier of expected cost against certified
     faulty proof blocks (screened by `density_bound`)."""
-    dag = Dag(m)
+    dag = DefinitionGraph(m)
     objective = Objective(delta)
     cm = costs(m, s)
     cands, alts = candidates(dag, cm, objective, cut_grid)
@@ -425,7 +424,7 @@ def recertify(plan: Plan, cands: list[Candidate], delta: float, *, exact_count: 
 
 
 def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, ands: bool = False) -> float:
-    """Faulty proof blocks (or their ANDs) over `blocks` blocks, each drawn by the plan's law on its own live coins and all
+    """Faulty proof blocks (or their ANDs) over `blocks` blocks, each sampled by the plan's law on its own live coins and all
     accepted, except with probability `delta`: a set of x_{b,s} faulty proof blocks escapes with at most
     prod exp(-k_s x_{b,s} / n_s), never once x_{b,s} > n_s - k_s, so the total is the knapsack `density_bound` over
     `blocks` copies of each stratum, which the period's length doesn't move (each stratum's rate k_s / n_s is a
@@ -437,8 +436,9 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
     """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
-    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
-    return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
+    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws, ln(1/delta) the planner's `ln_upper`."""
+    return float(ln_upper(delta) / min(Fraction(plan.sizes[c.template], c.units) for c in cands
+                                       if c.template in plan.sizes))
 
 
 def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int = SERVERS) -> list[dict]:
@@ -455,13 +455,13 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
     return rows
 
 
-def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
     * `windows`, the form `IntegrityPeriod` reads: one window a subcircuit, its units under `subset:k_s` in
       members of its statement size (the loop's `--law` and `--cap`), and at each delta its `K0`, `IntegrityPeriodLog`'s
-      ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no draw misses), so
+      ln(1/delta_w)/q at delta_w = delta over the block's windows and q = k/n (or n - k + 1, which no sample misses), so
       outside delta every window has fewer than its K0 units wrong;
     * `record`, the block as one window: every subcircuit under the `work:1` law whose work table's floors are the plan's
       k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every subcircuit, so it carries
@@ -469,7 +469,7 @@ def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
 
     The planner's strata are its ops' subcircuits, so two ops cut to one Definition (attention's QK and PV matmuls both to
     `F2fpBf16_v1`, say) are two of its strata and one of the record's: merged, at the higher of their rates, which only
-    raises each one's draw. A merged subcircuit's units are credited one work, as the work law needs."""
+    raises each one's sample. A merged subcircuit's units are credited one work, as the work law needs."""
     groups: dict[str, list[Candidate]] = {}
     for c in cands:
         if c.template in plan.sizes:
@@ -495,7 +495,7 @@ def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
             "statement_units": statement, "stubs": sorted(t for t, _ in templates if t.startswith("stub:"))}
 
 
-def summary(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def summary(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     rows = [{"template": dag.template_id(c), "op": c.op, "units": c.units, "k": plan.sizes[c.template],
              "statement": plan.statement_size[c.template], "work": c.work,
              "ands": c.ands + sum(row_ands(r) for r in c.rows)} for c in cands if c.template in plan.sizes]

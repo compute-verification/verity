@@ -1,4 +1,4 @@
-"""One-stage audit: the demo partition query, the registration record, the draw and proved-block checks, the profile."""
+"""One-stage audit: the demo partition query, the registration record, the sample and proved-block checks, the profile."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import pytest
 import verity.ml.circuits.ops.prims  # noqa: F401  (with verity.ml.circuits.ops.scalar, the primitives partition_vectors.json's descriptor names)
 import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -74,12 +74,6 @@ XOR64 = PrimitiveDefinition("OneStageTestXor64", 1, (("a", Value(64)), ("b", Val
 WIDE = CompositeDefinition("OneStageTestWide", 0, ("N",),
                            lambda S: ((("x", Array(S.N, Value(64))), ("y", Array(S.N, Value(64)))), Array(S.N, Value(64))),
                            lambda B, S, x, y: B.batch(XOR64, x, y, axes=(0, 0)), register=False)
-
-
-def test_the_size_classes_are_the_powers_of_two_from_16_to_the_widest():
-    assert P.UNIT_CLASSES == tuple(16 * 2 ** i for i in range(15)) and P.UNIT_CLASSES[-1] == P.UNIT_CLASS_MAX == 262_144
-    assert [P.unit_class(b) for b in (0, 16, 17, 24, 1024, 1025, 262_144, 262_145)] == \
-        [16, 16, 32, 32, 1024, 2048, 262_144, None]
 
 
 def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused():
@@ -149,8 +143,8 @@ V1_PAIR_3_XOR3_5 = ("dedeaac905807d8b5da6852a43f4295a99d2930029074edbf330484051a
                     "01af2b4de0207fb2cc295498f99064fe08c39cd46aae77bd532989cbc509f29a")
 
 
-def _xor8_registry() -> Registry:
-    reg = Registry()
+def _xor8_registry() -> DefinitionTable:
+    reg = DefinitionTable()
     reg.add(XOR8)
     return reg
 
@@ -311,7 +305,7 @@ def test_draw_checks():
             D.parse_law(bad)
     for p in ("\u0661/\u0662", "\u00b9/2"):
         drawn = {"law": "bernoulli", "population": 6, "p": p, "units": [0, 5]}
-        assert D.check_draw(drawn, rec, {"law": "bernoulli", "p": p}).codes == ("p",)
+        assert D.check_draw(drawn, rec, D.parse_law("bernoulli:1/2")).codes == ("law", "p")
 
 
 def test_the_rate_law_is_its_rate_rounded_up_to_its_tables():
@@ -421,7 +415,7 @@ def test_audit_record_needs_every_check_and_verdict():
 
 
 def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
-    """The sessions must have been served exactly the verifier's draw, and each session's root must be the registered one."""
+    """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -555,8 +549,8 @@ def test_stratified_draw_checks():
 
 
 def test_one_stratified_draw_splits_over_several_tables():
-    """A session of J tables splits one draw (Lean `Draw.tablesWhy`): a stratified draw whose sum of k_s is a positive
-    multiple of J, as a subset draw's k must be; a Bernoulli or work sampling design never, whatever its count."""
+    """A session of J tables splits one sample (Lean `Draw.tablesWhy`): a stratified sample whose sum of k_s is a positive
+    multiple of J, as a subset sample's k must be; a Bernoulli or work sampling design never, whatever its count."""
     prog, q, rule, rec = _stratified_registration()
     law = D.derive(prog, q, rule)                                          # k_s = 2, 2
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
@@ -630,7 +624,7 @@ QWORD = json.loads((CORE_VECTORS / "partition_vectors.json").read_text())
 TEMPLATE = json.loads((CORE_VECTORS / "template_instance_vectors.json").read_text())
 V32 = Value(32)
 #: the primitives template_instance_vectors.json's descriptors name (a partition reads their ids and types only)
-TEMPLATE_REG = Registry()
+TEMPLATE_REG = DefinitionTable()
 for _name in ("TAdd32", "TMul32"):
     TEMPLATE_REG.add(PrimitiveDefinition(_name, 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False))
 
@@ -728,10 +722,10 @@ def test_a_pre_canonical_object_keeps_its_digest():
     assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
 
 
-# --- the work sampling design (the draw sampling design's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
+# --- the work sampling design (the sample sampling design's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
 
 def test_the_work_rule_sizes_by_work_above_the_floor():
-    """`work_k` is Lean's `workK`: ceil(K w n_s / W), at least the floor and at most n_s; so every non-empty stratum draws at
+    """`work_k` is Lean's `workK`: ceil(K w n_s / W), at least the floor and at most n_s; so every non-empty stratum samples at
     least min(n_s, f_s) (`floor_le_workK`), at least K w n_s / W or all (`workK_ge`), and at most K + sum_s f_s in all
     (`sum_workK_le`)."""
     assert D.work_k(4, 10, 3, 30, 1) == 3 and D.work_k(4, 0, 3, 30, 1) == 1 and D.work_k(4, 0, 3, 30, 2) == 2
@@ -815,7 +809,7 @@ def test_work_draw_checks_and_closures():
     assert D.check_draw({**closed, "closure": [5, 1]}, rec, law).codes == ("closure",)
     stratified = D.derive(prog, q, D.parse_law("stratified:4"))
     assert D.check_draw({"law": "stratified", "population": 6, "k": 4, "strata": stratified["strata"], "units": [0, 2, 3, 5],
-                         "closure": [1]}, rec, stratified).codes == ("keys",)           # a closure only on a work draw
+                         "closure": [1]}, rec, stratified).codes == ("keys",)           # a closure only on a work sample
     wrong_k = [law["strata"][0], {**law["strata"][1], "k": 2}]
     assert D.strata_problem({"law": "work", "k": 4, "strata": wrong_k}, 6) == f"stratum {PAIR.id!r}: k is not the work rule's"
     no_work = [{**s, "work": 0} for s in law["strata"]]

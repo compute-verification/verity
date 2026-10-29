@@ -53,10 +53,10 @@ def test_each_familys_row_is_pinned(reading):
 
 
 def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
-    """Decision 89's reading needs the 1.22-slot issue floor where ε_machine is above its floor at q* = ½, and states it
-    as unproved in Lean; a filler's credit is the theorem its check meets (decision 99), so the H200's ffill, which no
-    check reads, is credited at p = 1, and the B200's fold is the one PouwWarpCheck reads (RT-LOGIC-12). The H200's
-    sheet row holds only with A3 per clock at its figures' 1830 MHz, not per second at f_max (MM-SHEETS)."""
+    """The measured reading needs the 1.22-slot issue floor where ε_machine is above its floor at q* = ½, and states it
+    as unproved in Lean; a filler's credit is the theorem its check meets, so the H200's ffill, which no
+    check reads, is credited at p = 1, and the B200's fold is the one PouwWarpCheck reads. The H200's
+    sheet row holds only with A3 per clock at its figures' 1830 MHz, not per second at f_max."""
     t = H.spec()
     m = {x.family: x for x in H.rows("measured")}
     assert m["sm_120"].conditions[0] == t["floor"]["issue"] and "Theorem C, unproved in Lean" in t["floor"]["issue"]
@@ -64,7 +64,8 @@ def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     h = m["sm_90"]
     assert h.design == "dither-2s-licpw-redux-p1-l32" and h.p1 is None
     assert h.fillers == ("0.0703125 FFMA+IMAD a word uncredited, p = 1 (decision 99)",)
-    assert any("RT-LOGIC-12" in c for c in h.conditions) and any("RT-LOGIC-12" in c for c in m["sm_100"].conditions)
+    assert any("PouwWarpCheck" in c for c in h.conditions)
+    assert any("PouwLiAbsorb_v2" in c for c in m["sm_100"].conditions)
     s = {x.family: x for x in H.rows("sheet")}
     assert all(x.floor == "half" for x in s.values())
     assert any(c.startswith("A3 per SM clock") and "1830 MHz" in c and "f_max (1980 MHz" in c
@@ -101,7 +102,7 @@ def test_cli(capsys):
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
     assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.593% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
-    assert f"- {H.spec()['scope']}" in out and "per node (ASK-65 = A)" in H.spec()["scope"]
+    assert f"- {H.spec()['scope']}" in out and "ε is per node:" in H.spec()["scope"]
     assert main(["headline", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["terms"] == H.TERMS and list(d["readings"]) == list(H.READINGS)
@@ -131,7 +132,7 @@ def test_a_p1_sibling_is_its_design_with_every_filler_at_p_1():
 
 
 def test_sm120s_measured_row_names_how_it_differs_from_its_lean_statement():
-    """The row reads VF3r-16 at the reading's 1.22 while `Sm120MeasuredHeadline` reads VF3s-16 at 9/8 (RT3-LOGIC-4)."""
+    """The row reads VF3r-16 at the reading's 1.22 while `Sm120MeasuredHeadline` reads VF3s-16 at 9/8."""
     x = next(x for x in H.rows("measured") if x.family == "sm_120")
     assert x.vector == "VF3r-16" and x.q == 1.22
     assert any("Sm120MeasuredHeadline reads VF3s-16 at q = q_T = 9/8" in c for c in x.conditions)

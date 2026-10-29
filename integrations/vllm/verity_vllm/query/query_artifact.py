@@ -17,7 +17,7 @@ Documents:
     query document   {"schema": "verity-ir/query/v1", "query_id", "program_digest", "binding_id", "query": <AST JSON>,
                       "provenance": {...}?}
     use document     {"schema": "verity-ir/query-use/v1", "binding_id", "use": {"kind": "vu-partition", "w_max": 32},
-                      "verdict": VuVerdict.to_json(), "evaluator": {"version": EVALUATOR_VERSION, "utc": "...Z"}}
+                      "verdict": BlockVerdict.to_json(), "evaluator": {"version": EVALUATOR_VERSION, "utc": "...Z"}}
 
 Both live beside `program.json` in a run directory and are indexed by `experiment.json`; nothing here changes
 `program_digest` or the Program descriptor.  G8 (`verity_vllm/check/gates.py`, integration owner) reads the use document:
@@ -30,8 +30,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from verity.ml.circuits.codec import canonical_json, program_digest  # re-exported identity; never wrapped or altered
+from verity.ml.circuits.query_codec import SCHEMA as QUERY_SCHEMA
 
-QUERY_SCHEMA = "verity-ir/query/v1"
 USE_SCHEMA = "verity-ir/query-use/v1"
 USE_KIND_VU_PARTITION = "vu-partition"
 EVALUATOR_VERSION = "verity-ir/partition/0.1"

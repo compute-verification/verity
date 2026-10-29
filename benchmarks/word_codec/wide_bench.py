@@ -1,6 +1,6 @@
 """The wide word codecs' benchmark on one GPU: `wide.cu`'s libraries (`--lib NAME=PATH`, one per field and squaring
 form) gated against `wide.py`, then timed. Writes `wide.json`, `points.json` (the frontier's points, `frontier.py`'s
-schema) and `bench.log` under `--out`, and in a `research run` its `result.json`.
+schema) and `bench.log` under `--out`, and, with `RESEARCH_RUN_DIR` set, its `result.json`.
 
 Nothing is timed before its gate passed, in this order:
 - `layouts`: the store built on the device from FP8 weights equals `wide.store_bytes(wide.fragment_payloads(…))`;
@@ -59,6 +59,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import bench as B  # noqa: E402
+import cuda_lib  # noqa: E402
 import wide as W  # noqa: E402
 import wide_sketch as WS  # noqa: E402
 
@@ -85,31 +86,33 @@ def use_model(name: str) -> None:
     B.SHAPES.update(shapes)
 
 
+_v, _i, _q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
+WW = {   # wide.cu's functions (`cuda_lib.load`)
+    "ww_constants": [_v],
+    "ww_set_key": [_v, _i, _v, _v, _v, _v],
+    "ww_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "ww_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "ww_chain": [_i, _i, _i, _q, _v, _i, _v],
+    "ww_read": [_v, _q, _v, _i, _v],
+    "ww_spin": [ctypes.c_longlong, _v],
+    "ww_gemm": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _v, _v, _i, _v],
+    "ww_gemm_occupancy": [_i, _i, _i, _i],
+    "ww_workspace_bytes": ([_q], ctypes.c_size_t),
+    "ww_workspace_tags": ([_v, _q], _v),
+    "ww_commit": [_v, _q, _v, _v, _v],
+    "ww_gemm_sketch": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _v, _v, _q, _v, _v, _i, _v],
+    "ww_sketch_tags": [_v, _q, _q, _v, _v, _v],
+    "ww_sketch_commit": [_v, _q, _v, _v, _v],
+    "ww_sketch_leaves": [_v, _q, _v, _q, _q, _v, _v],
+    "ww_sketch_fold": [_v, _q, _q, _q, _v],
+    "ww_sketch_tree": [_v, _q, _i, _v, _v],
+}
+
+
 class WLib:
     def __init__(self, name: str, path: str) -> None:
-        v, i, q, s = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_size_t
-        self.name, self.path, self.so = name, path, ctypes.CDLL(path)
+        self.name, self.path, self.so = name, path, cuda_lib.load(path, WW)
         so = self.so
-        so.ww_constants.argtypes = [v]
-        so.ww_set_key.argtypes = [v, i, v, v, v, v]
-        so.ww_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.ww_encode.argtypes = [v, v, q, q, i, i, v]
-        so.ww_chain.argtypes = [i, i, i, q, v, i, v]
-        so.ww_read.argtypes = [v, q, v, i, v]
-        so.ww_spin.argtypes = [ctypes.c_longlong, v]
-        so.ww_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v, v, i, v]
-        so.ww_gemm_occupancy.argtypes = [i, i, i, i]
-        so.ww_workspace_bytes.argtypes = [q]
-        so.ww_workspace_bytes.restype = s
-        so.ww_workspace_tags.argtypes = [v, q]
-        so.ww_workspace_tags.restype = v
-        so.ww_commit.argtypes = [v, q, v, v, v]
-        so.ww_gemm_sketch.argtypes = [i, v, v, v, i, i, i, q, i, v, v, q, v, v, i, v]
-        so.ww_sketch_tags.argtypes = [v, q, q, v, v, v]
-        so.ww_sketch_commit.argtypes = [v, q, v, v, v]
-        so.ww_sketch_leaves.argtypes = [v, q, v, q, q, v, v]
-        so.ww_sketch_fold.argtypes = [v, q, q, q, v]
-        so.ww_sketch_tree.argtypes = [v, q, i, v, v]
         cs = (ctypes.c_int * 21)()
         so.ww_constants(cs)
         (self.bits, self.limbs, self.payload, self.lane_words, lanes, tiles, self.gemm_warps, self.kmax, self.sqr,

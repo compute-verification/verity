@@ -1,4 +1,4 @@
-"""HC-SCHED's arm-side runner (benchmarks/pouw/filler/psched_score.py) on synthetic out dirs: the locked `score.py report`
+"""psched's arm-side runner (benchmarks/pouw/filler/psched_score.py) on synthetic out dirs: the locked `score.py report`
 scores pscore's rows (the phase filler's work counted in FILL chunks) unchanged, the runner's two added gates (the phase
 filler's DRAM share against the same counter's control, and its receipts and tile counts) void the SCORE when they fail,
 and the arm (psched_arm.py) places a phase filler only beside a split, as a pure function of the point."""
@@ -150,7 +150,7 @@ def test_arm_places_a_phase_filler_only_beside_a_split():
         if q is not None:
             assert p.place == "split" and q.S % 8 == 0 and q.S > 8 and q.tiles >= 1 and q.NC in (1, 2, 4)
     assert A.placed(arm, "prefill", 8192, 0) == A.NONE and arm.phase("prefill", 8192, 0) is None
-    assert arm.phase("decode", 1, 2048) is None and A.placed(arm, "decode", 1, 2048) == A.Placement("split", 108)
+    assert arm.phase("decode", 1, 2048) is None and A.placed(arm, "decode", 1, 2048) == A.Colocation("split", 108)
     assert S.honesty(arm, {}, S.points())["ok"]
 
 
@@ -159,7 +159,7 @@ def test_co_arm_runs_its_prefill_shape_and_needs_an_sgate_for_it(tmp_path, cls, 
     spec = f"benchmarks/pouw/filler/psched_arm.py:{cls}"
     arm = A.load(spec)
     assert not A.check_arm(arm)
-    assert A.placed(arm, "prefill", 8192, 0) == A.Placement("co")
+    assert A.placed(arm, "prefill", 8192, 0) == A.Colocation("co")
     co = P.filler_of(arm, "prefill", 8192, 0)
     assert co != arm.filler and co.chunk_log2 < arm.filler.chunk_log2
     assert all(P.filler_of(arm, ph, b, l) == arm.filler for ph, b, l in S.points() if P.phase_of(arm, ph, b, l))

@@ -43,8 +43,8 @@ def gI : Inner Bool Unit where
 
 /-- The outer statement: a circuit with no gates and no outputs, so every witness is in its relation. -/
 def gs₀ : Flock.Stmt :=
-  ⟨0, 0, ⟨0, [], []⟩, fun _ => [], fun _ => [], [],
-    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩⟩
+  ⟨0, 0, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
+    ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩⟩
 
 /-- The outer verifier: one round, accepting at its coin `false`. -/
 def gVO : Verifier Bool := ⟨fun _ => 1, fun _ _ cs => .ret (if cs.getD 0 true = false then .acc else .rej)⟩
@@ -84,7 +84,7 @@ def gVerdict (h : Msg) (as : List Msg) (cs : List Bool) : Out :=
 def gV : Verifier Bool := ⟨fun _ => 2, fun _ as cs => .query [] fun h => .ret (gVerdict h as cs)⟩
 
 /-- The recursion's statement: the empty inner statement, no circuit commitment. -/
-def gStmt : Stmt := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, []⟩
+def gStmt : CompiledStatement := ⟨[], none, none, ⟨0, 0, 0, 0, false, none, none, false⟩, []⟩
 
 /-- The compiled verifier's deployment: one outer session, its view the run's second round. -/
 noncomputable def gD (H : Msg → Msg) : Deploy Bool where
@@ -286,7 +286,7 @@ theorem firstWait_const_some {R W Op : Type} (H : Msg → Msg) (run : R → Trac
   rw [(RP.eval_bind H run _ _).1, ha]
   simp [hc, RP.eval]
 
-theorem gRelS (w : Flock.Wit) : Flock.RelS gs₀ w := fun _ _ => rfl
+theorem gRelS (w : Flock.Wit) : Flock.RelS gs₀ w := fun _ _ o => o.elim0
 
 theorem gDO_E_some (H : Msg → Msg) (decode : List (ℕ × ℕ) → List Unit)
     (hdec : Flock.ListWithin gDO.len gDO.enc gDO.θ decode) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)

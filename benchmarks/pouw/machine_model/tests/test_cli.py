@@ -8,7 +8,7 @@ import pytest
 
 from verity_machine_model.adopt import adopt
 from verity_machine_model.cli import main
-from verity_machine_model.model import DATA, census, model, vector
+from verity_machine_model.model import DATA, census, device, devices, model, vector
 from verity_machine_model.resolve import resolve
 
 RUN = "r20261016-000000-0000"
@@ -17,7 +17,7 @@ RUN = "r20261016-000000-0000"
 def test_solve_prints_the_numbers_and_the_check(capsys):
     assert main(["solve", "VF3j-16"]) == 0
     out = capsys.readouterr().out
-    assert "τ 0.0610   τ at 600 W 0.0477   U/F_low 1.1563   margin 2.000" in out
+    assert "τ 0.0610   U/F_low 1.1563   margin 2.000" in out
     assert "(reproduced)" in out and "1306 attacks in 13 families at X ≥ 1.0: pass" in out
     assert "superseded by VF3k-16" in out
     assert "(π₃₂): every root-writing kind at ≥ 32 MACs a word: 84 kinds, holds (not split out at VF3j-8: ATOME32P)" in out
@@ -40,7 +40,7 @@ def test_solve_defaults_to_the_current_vector(capsys):
     assert main(["solve", "VF3r-16", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert round(d["tau"], 4) == 0.0556 and d["failures"] == [] and d["unreproduced"] == []
-    assert (round(d["tau_600w"], 4), round(d["uf_low"], 4), d["margin"]) == (0.0435, 1.1563, 2.0)
+    assert (round(d["uf_low"], 4), d["margin"]) == (1.1563, 2.0)
     assert d["floors"] == {"pi32": {"kinds": 85, "below": [], "absent": []},
                            "loads16": {"kinds": 15, "below": [], "absent": []},
                            "copy16": {"kinds": 83, "below": ["UNI64 1.00 a word < 16"], "absent": []}}
@@ -106,10 +106,10 @@ def test_a_refit_closes_the_old_line(tmp_path):
     shutil.copytree(DATA, data)
     first = data / "census" / "VF.csv"
     c = first.read_text()
-    old_line = "FFMA,F,3.885,,,,VF,,note:20261015T0608Z-draft-census-sm120\n"
+    old_line = "FFMA,F,3.885,,,,VF,,@census-sm120\n"
     assert c.count(old_line) == 1
     last = model(data).epochs[-1]
-    first.write_text(c.replace(old_line, old_line.replace(",,note:", f",{last},note:")))
+    first.write_text(c.replace(old_line, old_line.replace(",,@", f",{last},@")))
     _census(data, "TEST", f"FFMA,F,3.9,,,,TEST,,{RUN}")
     cur, _ = _epoch(data)
     new, old = resolve("TEST", data), resolve(cur, data)
@@ -147,7 +147,7 @@ def test_adopt_keeps_the_faster_line(tmp_path, capsys):
     assert "ROW_ATOMS32" in after["IMAD"] and "ROW_ATOMS32" not in before["IMAD"]
     assert [x.split(",")[:2] for x in (data / "census" / "TEST.csv").read_text().splitlines()[1:]] == [
         ["FFMA", "F"], ["IMAD", "ROW_ATOMS32"]]
-    assert f"FFMA,F,3.885,,,,VF,{last},note:" in (data / "census" / "VF.csv").read_text()
+    assert f"FFMA,F,3.885,,,,VF,{last},@census-sm120" in (data / "census" / "VF.csv").read_text()
     runs = {r: x for r, x in (line.split(",")[:3:2] for line in (data / "rows.csv").read_text().splitlines()[1:])}
     assert runs["F"].endswith(RUN) and runs["ROW_ATOMS32"].endswith(RUN) and RUN not in runs["issue"]
     with pytest.raises(SystemExit, match="already has a line from TEST"):
@@ -167,3 +167,14 @@ def test_adopt_refuses(tmp_path):
     (tmp_path / "d.csv").write_text(f"kind,row,rate,noise,cycles,u,since,until,runs\nFFMA,F,3.9,,,,VF,,{RUN}\n")
     with pytest.raises(SystemExit, match="a measured line has no epochs"):
         adopt(tmp_path / "d.csv", last, data)
+
+
+def test_solve_and_attacks_say_a_device_has_no_price_vector():
+    """README "Devices": a device directory that no vector is solved on leaves out the price LP, so `solve` and
+    `attacks` say so and exit instead of failing inside it."""
+    unpriced = [d for d in devices() if not model(device(d)).adopted]
+    assert unpriced
+    for d in unpriced:
+        for cmd in ("solve", "attacks"):
+            with pytest.raises(SystemExit, match=f"^{d}: no price vector is solved on this device"):
+                main(["--device", d, cmd])

@@ -38,14 +38,15 @@ def fileLeaves (blocks : Nat) (leafBytes : ByteArray) : Array ByteArray :=
   (Array.range blocks).map fun i => leafBytes.extract (Merkle.DIGEST * i) (Merkle.DIGEST * (i + 1))
 
 /-- The audit's `k`: the document's, else the certificate's at the store, else `audit.CHALLENGES`. -/
-def challengesOf (s : Certificate.Store) (doc : Json) (k : Nat) : Prop :=
+def challengesOf (s : P2.Params) (doc : Json) (k : Nat) : Prop :=
   match doc.getObjVal? "k" with
   | .ok j => j.getNat? = .ok k
   | .error _ => k = ((Certificate.p2 s.w s.c0 s.blocksPerSegment).map (·.k)).getD TimedAudit.CHALLENGES
 
 /-- Round `j`'s challenged index in an audit keyed by `source`. -/
-def challenged (s : Certificate.Store) (salt root source : ByteArray) (j : Nat) : Nat :=
-  (Challenge.index (Randomness.derive source TimedAudit.CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)])
+def challenged (s : P2.Params) (salt root source : ByteArray) (j : Nat) : Nat :=
+  (Challenge.index
+    (FlockSoundness.Randomness.derive source TimedAudit.CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)])
     s.blocks j).getD s.blocks
 
 /-- The inner nodes' inputs of `Merkle.mth leaves lo n`: what SHA-512 hashes for the tree beyond the leaves. -/
@@ -72,7 +73,7 @@ def TimedAuditAccepted (ready : Json) (leafBytes : ByteArray) (doc : Json) : Pro
 
 /-- What an accepted record establishes, for the store `C`. -/
 def TimedAuditAnswers (ready : Json) (leafBytes : ByteArray) (doc : Json) (C : Array (Array ByteArray)) : Prop :=
-  ∃ (s : Certificate.Store) (salt root : ByteArray) (delta rtt k : Nat) (strict : Bool) (records : Array Json),
+  ∃ (s : P2.Params) (salt root : ByteArray) (delta rtt k : Nat) (strict : Bool) (records : Array Json),
     TimedAudit.store ready = .ok (s, salt) ∧ leafBytes.size = s.blocks * Merkle.DIGEST ∧
     HexAt doc "root" root ∧ NatAt doc "deadline_ns" delta ∧ NatAt doc "rtt_allowance_ns" rtt ∧
     NatAt doc "limit_ns" (delta + rtt) ∧ doc.getObjVal? "strict" = .ok (.bool strict) ∧ challengesOf s doc k ∧

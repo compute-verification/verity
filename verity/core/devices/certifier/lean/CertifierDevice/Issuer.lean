@@ -1,5 +1,6 @@
 import CertifierDevice.Driver
 import Lms.Sign
+import NetworkCheck.Check
 
 /-!
 # The issuer: one network certificate per closed link-window
@@ -8,7 +9,7 @@ The executable form of `certificate.py`'s `Issuer`, `Certificate` and `Certified
 under the grid's `parameters_digest`) and digest, that digest hidden under `salt_c`, 64 bytes of the certifier's own
 coins drawn for the record (`certificateDigest`), the message that binds the hidden digest to the key, the certifier
 session and the link-window (`certificateMessage`), and its LMS signature at a reserved leaf (`Lms.signAt`). The
-encodings are `NetworkCheck`'s and the signature `Lms`'s.
+encodings are `NetworkCheck`'s, the certificate `NetworkCheck.Check.Certificate` and the signature `Lms`'s.
 
 Which leaf signs, and which session ids the key has started, is the signer's state (`lms.LeafState.reserve` and
 `start`), which stays with the host: `Issuer.certify` is pure given the salt and the reservation's result, and
@@ -16,7 +17,9 @@ Which leaf signs, and which session ids the key has started, is the signer's sta
 state, starting the issuer's session there (`Core.World.start`) before its first reservation, as `certificate.Issuer`
 does. As in `Issuer.certify`, the salt, the head, its digests and the message come first, so a record with no encoding
 is refused before a session is started or a leaf is spent, and a start or a reservation the host refuses leaves the
-link-window without a certificate (fail-closed) and is listed in `refused`.
+link-window without a certificate (fail-closed) and is listed in `refused`. The issuer certifies only a complete
+record: one whose status isn't complete is listed in `refused` after its head and message, before the session's start
+or a leaf, so a link-window that isn't covered has no certificate.
 
 **The clock certificate** (`ClockCertificate`, `Issuer.clock`, `clockWith`): beside each egress window's record, the
 sync the certifier's shaper ran the window under, hidden as a record digest is and signed as
@@ -40,15 +43,7 @@ the other only on a SHA-512 collision.
 namespace CertifierDevice
 
 open NetworkCheck (Direction RecordHead)
-
-/-- `certificate.Certificate`. -/
-structure Certificate where
-  keyId : ByteArray
-  link : String
-  direction : Direction
-  window : Nat
-  digest : ByteArray
-  signature : ByteArray
+open NetworkCheck.Check (Certificate)
 
 /-- `certificate.CertifiedRecord`: the record head, the salt the certifier drew for it (`salt_c`) and the certificate,
 which signs the head's digest hidden under that salt. -/
@@ -106,7 +101,7 @@ namespace Issuer
 
 /-- What `Issuer.certify` computes before it signs: the record's head, the digest the certificate signs (the head's
 digest under `salt`, refused unless it is 64 bytes) and the certificate message. -/
-def prepare (i : Issuer) (salt : ByteArray) (record : Record) (direction : Direction) (params : Params)
+def prepare (i : Issuer) (salt : ByteArray) (record : BlockGrid) (direction : Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool) : Except String (RecordHead × ByteArray × ByteArray) := do
   if salt.size ≠ NetworkCheck.saltBytes then
     throw s!"the certifier's coins gave {salt.size} bytes for a {NetworkCheck.saltBytes}-byte salt"
@@ -118,7 +113,7 @@ def prepare (i : Issuer) (salt : ByteArray) (record : Record) (direction : Direc
 
 /-- The prepared record signed at the reserved leaf, or listed in `refused` when the host refused the reservation (or the
 session's start before it). -/
-def finish (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : Record) (direction : Direction)
+def finish (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : BlockGrid) (direction : Direction)
     (prepared : RecordHead × ByteArray × ByteArray) : Except String (Issuer × Option CertifiedRecord) := do
   let (head, digest, message) := prepared
   match leaf with
@@ -129,11 +124,15 @@ def finish (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : 
 
 /-- **`Issuer.certify`**, the record's salt and its signer's reservation given (a refused start of the session is a
 refused reservation): refused (an error) where the salt is not 64 bytes or the record has no head, as Python raises
-`ValueError`. -/
-def certify (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : Record) (direction : Direction)
+`ValueError`; a record whose status isn't complete is listed in `refused` and signed nothing, whatever the
+reservation: the issuer certifies only a complete record. -/
+def certify (i : Issuer) (salt : ByteArray) (leaf : Except String Nat) (record : BlockGrid) (direction : Direction)
     (params : Params) (parameters : ByteArray) (deadline : Bool := true) :
     Except String (Issuer × Option CertifiedRecord) := do
-  i.finish salt leaf record direction (← i.prepare salt record direction params parameters deadline)
+  let prepared ← i.prepare salt record direction params parameters deadline
+  if (Status.reason? record.status).isSome then
+    pure ({ i with refused := i.refused.push (record.link, direction, record.window) }, none)
+  else i.finish salt leaf record direction prepared
 
 /-- What `Issuer.clock` signs: the sync's clock digest under `salt` (`clockCommitment`) and the certificate message over
 it for the egress link-window; refused (an error) where the salt is not 64 bytes or is one of `clockSalts`, those the
@@ -173,10 +172,12 @@ end Issuer
 
 /-- `Issuer.certify` against the world: the salt from its coins, the head and the message, then the session's start
 unless it has started, then the reservation from its signer state, then the signature. -/
-def certifyWith (w : Core.World Out) (i : Issuer) (record : Record) (direction : Direction) (params : Params)
+def certifyWith (w : Core.World Out) (i : Issuer) (record : BlockGrid) (direction : Direction) (params : Params)
     (parameters : ByteArray) (deadline : Bool := true) : IO (Issuer × Option CertifiedRecord) := do
   let salt ← w.coins NetworkCheck.saltBytes
   let prepared ← IO.ofExcept (i.prepare salt record direction params parameters deadline)
+  if (Status.reason? record.status).isSome then
+    return ({ i with refused := i.refused.push (record.link, direction, record.window) }, none)
   let started ← if i.started then pure (.ok ()) else w.start i.session
   let leaf ← match started with
     | .ok () => w.reserve
