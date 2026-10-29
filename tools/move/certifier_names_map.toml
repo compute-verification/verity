@@ -1,27 +1,10 @@
-# The network certifier's names off the held concepts (`tests/test_lean_vocabulary.py`), and its client's name: what
-# `tools/move/rename.py --map tools/move/certifier_names_map.toml` renames. Each [[words_in]] holds one declaration's words for the files that read it,
-# renamed as whole words, so the concept's other declarations keep their names. `rename.py --moves` prints the lock
-# records' renames, from [words].
+# The network certifier's Python names off the held concepts (`tests/test_lean_vocabulary.py`), and its client's name:
+# what `tools/move/rename.py --map tools/move/certifier_names_map.toml` renames. Each [[words_in]] holds one declaration's
+# words for the files that read it, renamed as whole words, so the concept's other declarations keep their names.
 
 [words]
-# the spec's egress prediction, as the code Lean names it (`NetworkCertifier.EgressPrediction`)
-"NetTiming.Program" = "NetTiming.EgressPrediction"
 # the challenger's client of the network certifier (`active.py`)
 "RemoteCertifier" = "CertifierClient"
-
-[[words_in]]
-files = ["Security/Definitions/NetworkCertifier/*", "Security/Proofs/NetworkCertifier/*"]
-[words_in.words]
-"structure Program" = "structure EgressPrediction"
-"Program L S" = "EgressPrediction L S"
-"Program 1 2" = "EgressPrediction 1 2"
-"a `Program` whose" = "an `EgressPrediction` whose"
-"`Program`" = "`EgressPrediction`"
-
-[[words_in]]
-files = ["verity/core/protocols/certifier/lean/NetworkCertifier/Run.lean"]
-[words_in.words]
-"`NetworkCertifier` but `EgressPrediction` (the reference's `Program`), written as there." = "`NetworkCertifier`, written as there."
 
 # io_request: an id request's first cell, and a link's ingress served through the network certifier
 [[words_in]]
