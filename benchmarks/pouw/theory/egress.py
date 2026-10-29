@@ -187,6 +187,8 @@ def price_design(design: dict, inp: dict, einp: dict, ll: dict) -> dict:
                         for cap in caps}}
         if space_key:
             row["t2"] = t2_at(inp, einp, ll, space_key, byts, entries, words)
+        if key in einp["nkernel_t2"]:
+            row["t2_nkernel_scaled"] = [v * words for v in einp["nkernel_t2"][key]]
         pts[key] = row
     return {"id": design["id"], "title": design["title"], "points": pts}
 
@@ -407,7 +409,8 @@ def table(res: dict) -> str:
                   f"{t2['census_100g']['t2_arrival'][0]:.2f}-{t2['census_100g']['t2_arrival'][1]:.2f}; stream "
                   f"{t2['stream_bytes_per_s'] / 1e9:.2f} GB/s ({t2['gpu_400g']['port_share']:.2%} of 400G, "
                   f"{t2['census_100g']['port_share']:.2%} of 100G), certifier {t2['certifier_cores'][0]:.2f}-"
-                  f"{t2['certifier_cores'][1]:.2f} Genoa cores, patch {t2['patch_ms']:.3f} ms")
+                  f"{t2['certifier_cores'][1]:.2f} Genoa cores, patch {t2['patch_ms']:.3f} ms; N-KERNEL's ssn_1l "
+                  f"x words {p['t2_nkernel_scaled'][0]:.1f} beside / {p['t2_nkernel_scaled'][1]:.1f} serial")
         lines.append(s)
     lines.append("Lower bound (any layout): coin bits a token >= 100 W_mac cap; n_max <= 0.01 MACs / (W_mac cap)")
     for cap, ps in res["lower_bound"].items():
