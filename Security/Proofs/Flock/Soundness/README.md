@@ -78,7 +78,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
-unit used. The audit bound defines a faulty proof block through extracted values, so it pays the table's knowledge error and a
+unit used. The audit bound defines an incorrect proof block through extracted values, so it pays the table's knowledge error and a
 link term per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
@@ -255,7 +255,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     copies rewrite that row, or the pin's row is empty or lands inside another range.
 - **What a correct unit computes** is its certificate's, not a hypothesis: the
   end-to-end theorems are about the circuit of the statement's rows (`Prog.circuit`), and when a unit's rows are
-  `GateRows.rows G L` and `G` computes `D`, a unit that is not faulty computes `D` (`IsRowsUnit.computes_of_cert`,
+  `GateRows.rows G L` and `G` computes `D`, a unit that is correct computes `D` (`IsRowsUnit.computes_of_cert`,
   `Certificate.lean`). A template's rows are tested against its primitives on samples; a checked layout's rows are proved
   to compute its type (`Types.Dag.layout_sound`, `assumption-notes/template-rows.md`).
 - **The rows the verifier derives, read as `Rows`** (`Compose.lean`; verified-lowering phase 1, item 1d).
@@ -478,9 +478,9 @@ The weights are committed once and every later proof opens that root. The analys
   2^-128 holds while `N·t ≤ 2^110.7`. This counts proofs as statements about committed values. **Decision:** state security
   per table, or as a lifetime budget.
 - **Partial integrity counts audits, and needs knowledge soundness** (the lifetime-soundness desk study, §2–§5).
-  - In a sampled audit only the first faulty sampled proof block matters. So an audit costs one table's hash term plus one
+  - In a sampled audit only the first incorrect sampled proof block matters. So an audit costs one table's hash term plus one
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
-  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a proof block is faulty only relative
+  - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a proof block is incorrect only relative
     to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
   - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved
     for the non-ZK session, 2^-70.2), and it dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4`
