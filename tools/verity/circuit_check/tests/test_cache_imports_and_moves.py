@@ -1,4 +1,5 @@
-"""Adversarial probes of `circuit_check.cache`: edits that change a target's verdict while its entry is still reused.
+"""Adversarial probes of `circuit_check.cache` through imports, moves and kernel registrations: edits that change a target's
+verdict while its entry is still reused.
 
 Each end-to-end test runs the synthetic tree of `test_cache`: a cold run, the edit, a run under a fresh cache (the verdict as
 it is now), and a run under the first cache.  A test fails where the cached run reuses the stale entry.  The fresh caches sit
