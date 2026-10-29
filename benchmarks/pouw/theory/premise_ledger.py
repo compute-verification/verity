@@ -548,9 +548,16 @@ def rank3_routes() -> dict:
     w1_byte = cb * wc
     max_bytes = 0.0099 / (w1_byte * (1 - lb))
     credit = {c: 4 / c * w1_byte for c in (32, 48, 60, 64, 128, 256)}
+    # every design commits its outputs (one 4 B word a dot product, K MACs): hashing them alone, and the δ ShaSpeed
+    # then needs with nothing else in T1
+    outputs = {}
+    for point, (shapes, _, _) in POINTS.items():
+        w = sum(n * k for n, k in shapes.values())
+        h = sum(n * 4 * w1_byte for n, k in shapes.values()) / w
+        outputs[point] = {"hash_share": h, "delta_star": ALLOW / h, "instr_compression": ALLOW / h * SHA_INSTRUCTIONS}
     return {"rank3_sha_lb_share": lb, "w1_byte_floor": w1_byte, "max_bytes_mac_rank3": max_bytes,
             "min_macs_per_4B_word_rank3": 4 / max_bytes, "hash_of_stock_at_credit": credit,
-            "state_lemma_share_hypothetical": (80 * 4 + 64 * 2 + SHA_OUT_REGS) / 3_632}
+            "outputs_only": outputs, "state_lemma_share_hypothetical": (80 * 4 + 64 * 2 + SHA_OUT_REGS) / 3_632}
 
 
 def g1_advice() -> dict:
@@ -631,6 +638,9 @@ def checks(rep: dict) -> list[dict]:
     r3 = rep["rank3"]
     ok("rank ≤ 3 needs ≥ 1,000× fewer bytes than k32", r3["max_bytes_mac_rank3"] * 1000 < 4 / 32,
        f"{r3['max_bytes_mac_rank3']:.2e} B a MAC")
+    ok("hashing the outputs alone exceeds the allowance at every point, so no design is rank ≤ 3 overall with hashing "
+       "in T1", all(v["hash_share"] * (1 - r3["rank3_sha_lb_share"]) > ALLOW for v in r3["outputs_only"].values()),
+       str({p: round(v["hash_share"], 3) for p, v in r3["outputs_only"].items()}))
     cb = rep["coin_branch"]
     ok("ssn_1l collapses on identical rows at T 8,192", cb["llama_T8192"]["chosen_identical_ssn_1l"] > 0.5,
        f"{cb['llama_T8192']['chosen_identical_ssn_1l']:.3f}")
@@ -767,6 +777,9 @@ def table(rep: dict) -> str:
     r3 = rep["rank3"]
     lines.append(f"# rank ≤ 3 overall: SHA-512 bound {r3['rank3_sha_lb_share']:.2%}; bytes a MAC ≤ "
                  f"{r3['max_bytes_mac_rank3']:.2e} (one 4 B word a {r3['min_macs_per_4B_word_rank3']:,.0f} MACs)")
+    lines.append("# outputs only (one 4 B word a dot product): " + "; ".join(
+        f"{p} hashing {v['hash_share']:.1%} of stock, δ* {v['delta_star']:.2e} ({v['instr_compression']:.1f} "
+        "instructions a compression)" for p, v in r3["outputs_only"].items()))
     en = rep["energy"]
     lines.append(f"# energy (excluded): r {en['r']:.2f}; forming {en['forming_w1']:.3%} → {en['forming_energy']:.3%}; "
                  f"δ* {en['delta_w1']:.2e} → {en['delta_energy']:.2e}")
