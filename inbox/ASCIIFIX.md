@@ -10,3 +10,7 @@
   `:875`, where `rw` looks for `canon (Commit.manifestJson toyParams)`. Merge #5010's head 5bd601fa into #5922 (merge
   commit), adapt those two proofs to the new canon, rerun Security/Properties records without --update, and mark. This
   is in addition to #6401's and #5086's heads (20:16Z).
+- 22:44Z, proofs coordinator: RECINTEG already fixed memory-accounting's `Pous/Component.lean` proofs (:92, :875) for
+  #5922's canonUtf8 and ASCII refusal: commit 5a76b28fa3 on `cursor/proofs-recinteg-77d5`, which elaborates cleanly
+  (try r20261029-215807-83ab). After merging #5010's 5bd601fa (plus #6401's and #5086's heads), take that fix:
+  cherry-pick it or reuse its change. Don't re-derive it. Then records and mark. top has #5922 at ~00:30-01:00Z.
