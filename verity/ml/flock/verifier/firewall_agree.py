@@ -253,7 +253,7 @@ def run_case(name, reqs, proxy, fresh, schedule=SCHEDULE, rand=None, challenger=
 
 
 def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | None]:
-    """A recorded inner session through today's firewall again, with its own coins and salts and its requests in the prover's
+    """A recorded inner session through the current firewall again, with its own coins and salts and its requests in the prover's
     order; and why the replay differs from the record, if it does."""
     rec = json.loads((d / "session" / "session.json").read_text())
     pub = json.loads((d / "public.json").read_text())
