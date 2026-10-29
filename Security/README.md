@@ -138,8 +138,10 @@ A block can **import** information, spending its k fresh bits, or **reconstruct*
 bound has three ingredients, each with its own premises: **information** (which jointly selected values are expensive
 to reconstruct), **structure** (how much counted computation the held values support) and **counting** (from a
 per-block cap to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
-`Nci.Capability` (vocabulary), `Nci.Assumptions` (premises) and `Nci.Guarantees` (the repertoire). Improving the
-structure never strengthens an information premise; a stronger premise is a new hypothesis, named as one.
+`Nci.Capability` (vocabulary), `Nci.Assumptions` (premises) and `Nci.Guarantees` (the repertoire), one module per role;
+`Security/Definitions/Nci/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
+test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
+named as one.
 
 **Reconstruction, proved** (`Verity.Guarantees.BlockDescription`, Lemma 1). In a registration R with B inference blocks
 of at most c gates and k fresh bits each, if a fixed evaluator of a_blk bits extracts y_I from block I within t steps,
@@ -157,7 +159,11 @@ $$ \textbf{description hardness:}\quad \mathrm{LDL}_{t,R}(x_U) \;\ge\; \sum_{i \
 (`Nci.Assumptions.DescriptionHard`). It covers every selection a block can make, charges an item once however often it
 is reused, and is time-bounded: replaying training counts only within t. With Lemma 1 it gives the **held budget**
 (`Nci.Guarantees.HeldBudget`): every block holds a selection priced at most h = k' + λ, whether it loads, decompresses
-or computes it. Its meaning is its family's:
+or computes it. A second measure makes a different claim: **min-entropy hardness**
+(`Nci.Assumptions.MinEntropyHard`) says the values are unpredictable under the run's randomness, not slow to compute;
+it gives the budget h = k + λ with no decoder or time budget (`Nci.Guarantees.StatHeldBudget`), is tested by retraining
+with fresh randomness, and fails when training is a deterministic function of registered information. Either measure's
+meaning is its family's:
 
 | Family | Premise | Fails where |
 |---|---|---|
@@ -201,11 +207,13 @@ and under separate budgets min{r·h_w·h_x/(β_w·β_x), a_out·h_x/β_x}. These
 kinds of training. The rectangle U × V overcounts pairs that never meet in a product; a finer count of the incidence
 graph is a structural improvement.
 
-**Dependency** (`Nci.Capability.UseRegions`, `Nci.Capability.Upstream`): each use j (one token's input to one layer at
-one step) has an upstream region A_j holding no registered gate, and required gates G_j ⊆ A_j, at least g of them. The
-**upstream certificate**, checkable on a named circuit, says every required gate reaches, inside A_j, a gate each counted
-product of j reads. **Overlap weights** ω_j ≥ 0 (`Nci.Capability.OverlapWeights`) sum to at most 1 over the regions
-holding any one gate: disjoint regions take 1 each, overlapping ones less. Then:
+**Dependency** (`Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`): a **consumer** is something a block
+finishes, such as a use j (one token's input to one layer at one step, `Consumers.ofUses`) or an output accumulating many
+products (a weight's gradient over tokens, `Consumers.ofOutputs`). It has an upstream region A_j holding no registered
+gate, and required gates G_j ⊆ A_j, at least g of them. The **upstream certificate**, checkable on a named circuit, says
+every required gate reaches, inside A_j, a gate the consumer's finishing gates read. **Overlap weights** ω_j ≥ 0
+(`Nci.Capability.Consumers.OverlapWeights`) sum to at most 1 over the regions holding any one gate: disjoint regions take
+1 each, overlapping ones less. Then:
 
 - **import or recompute** (`Nci.Guarantees.ImportOrRecompute`): each served use either spends an imported gate of its
   region or contains G_j, so the served weight is at most k plus the weight of the recomputed uses;
@@ -336,23 +344,23 @@ None of these is assumed silently; each would restate the conclusion:
 | Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Registration`; the site, B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
-| Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Written, not yet named assumptions in the lock; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
-| Structure | `Nci.Capability.Incidence`, `Nci.Capability.Upstream`, `Nci.Capability.OverlapWeights`, `Nci.Capability.UseRegions` | Defined; the certificate not yet checked on a named training circuit |
-| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.IncidenceCap`, `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` | Stated (`Nci.Guarantees.LocalBoundsStated`), not yet proved |
+| Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
+| Structure | `Nci.Capability.Incidence`, `Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`, `Nci.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
+| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.StatHeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.IncidenceCap`, `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` | Proved (`Proofs/Nci/Capability/`), over premises not yet tested |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
-| Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Overhead.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
+| Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved; the policy is not yet a subprotocol of either, and neither checks one registration |
 | The utilization policy | not yet in Lean | Not a policy yet |
-| Protocol soundness | `Accounting.Overhead.restricted`; `Verity.Soundness` not yet in Lean | Open |
+| Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.Soundness` not yet in Lean | Open |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
 | The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.Complies` | Proved; k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
-| The floor | `Nci.Guarantees.CapabilityFloor` | Stated (`Nci.Guarantees.CapabilityFloorStated`), not yet proved |
-| Slowdown | `Accounting.Overhead.overhead`, `Accounting.Overhead.threshold`, `Accounting.Overhead.cost` | Defined, with cost in server-time, not fleet-time; no theorem reads it |
+| The floor | `Nci.Guarantees.CapabilityFloor` | Proved, under coverage |
+| Slowdown | `Accounting.Slowdown.slowdown`, `Accounting.Slowdown.threshold`, `Accounting.Slowdown.cost` | Defined, with cost in server-time, not fleet-time; no theorem reads it |
 | The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
 ## Three trees
@@ -360,8 +368,8 @@ None of these is assumed silently; each would restate the conclusion:
 - `Definitions/` (package `security`, with `Models.lean`): the spec, the part a reader reads. Each area (`Core`, `Pouw`,
   `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its named assumptions (`Assumptions`) and its
   guarantee statements (`Guarantees`), each a `def G : Prop`.
-- `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each component
-  runs, one `Properties.<Protocol>` module per component.
+- `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
+  runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
   guarantee, and the lemmas behind them.
 
@@ -369,7 +377,7 @@ What may import what (`tests/test_lean_packages.py`): `security` requires only M
 `security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
 ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
 import (the spec imports only itself and Mathlib), and its `trees` forbid a statement from reading, or a definitions or
-properties module from importing, anything in `Proofs/`. C-Flock is the exception until its spec is extracted: its
+properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
 guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
 
 ## The lock
@@ -425,19 +433,19 @@ commitment binds them (`Properties.Composition`, proved), and only when all thre
 (`Core.Composition.same`). Onsite adds PoUS, PoUB, network certification and memory wipes.
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
-  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs component is one-stage v2, which runs
+  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol is one-stage v2, which runs
   `flock-verify --zk` on the sessions' files it is handed as blobs rather than taking their verdicts as evidence.
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
-  draws each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
+  flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
   `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
-- **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
+- **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
-  different protocol from the remote composite, and a component of onsite only.
+  different protocol from the remote composite, and a subprotocol of onsite only.
 
 ## Building and checking
 

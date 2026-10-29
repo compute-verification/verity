@@ -1,4 +1,4 @@
-"""Figures of the overhead: what `analysis` finds, drawn. Matplotlib is imported only when a figure is drawn.
+"""Figures of the overhead: what `analysis` finds, drawn. Matplotlib is imported only when a figure is sampled.
 
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):

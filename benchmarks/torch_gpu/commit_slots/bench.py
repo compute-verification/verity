@@ -39,7 +39,7 @@ def _ms(a: Any, b: Any) -> float:
     return a.elapsed_time(b)
 
 
-def data(layout: S.Layout, slots: int) -> list[torch.Tensor]:
+def data(layout: S.CommitShape, slots: int) -> list[torch.Tensor]:
     return [torch.empty((slots, n), dtype=torch.uint8, device="cuda").random_() for n in layout.groups[0].sources]
 
 
@@ -61,7 +61,7 @@ def step(plan: G.Plan, bufs: list[torch.Tensor], slots: int, layers: int) -> dic
     return {"s": _ms(start, marks[-1][1]) / 1e3, "split_s": split}
 
 
-def alone(layout: S.Layout, slots: int, reps: int, rest_s: list[float], step_slots: int, per_group: int = 1) -> dict[str, Any]:
+def alone(layout: S.CommitShape, slots: int, reps: int, rest_s: list[float], step_slots: int, per_group: int = 1) -> dict[str, Any]:
     layers = len(layout.groups)
     layout = G.regroup(layout, per_group)
     plan = G.Plan(CTX, layout)
@@ -80,7 +80,7 @@ def alone(layout: S.Layout, slots: int, reps: int, rest_s: list[float], step_slo
             "share_of_step": {str(t): best["s"] / (t * slots / step_slots + best["s"]) for t in rest_s}}
 
 
-def beside(layout: S.Layout, slots: int, reps: int) -> dict[str, Any]:
+def beside(layout: S.CommitShape, slots: int, reps: int) -> dict[str, Any]:
     """A layer's GEMMs alone, its commit alone, and both at once (GEMMs on the current stream, the commit on the side)."""
     plan = G.Plan(CTX, layout)
     bufs = data(layout, slots)
