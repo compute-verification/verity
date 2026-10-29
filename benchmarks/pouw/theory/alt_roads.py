@@ -62,7 +62,7 @@ def r0_barrier(inp: dict) -> dict:
     """Any design that forces work by counting committed words, with every committed byte hashed on the GPU."""
     w1, s = inp["w1"], inp["sha512"]
     rows = []
-    for credit, why in ((32, "H32 alone (rank 1)"), (64, "every class semantic, BamFloor's ceiling (rank 3)")):
+    for credit, why in ((32, "H32 alone (rank 1)"), (64, "N-DENSE's target: a word every 64 fully credited at rank <= 3")):
         b_min = 4.0 * (1.0 - 0.01) / credit
         p_allowed = 0.01 / b_min
         # A compression tree of 3-source 32-bit writes consumes at most two fresh words a write: 16 units a word.
@@ -89,7 +89,10 @@ def r0_barrier(inp: dict) -> dict:
             precision.append({"design": name, "price": pname, "units_per_byte": p,
                               "relative_precision_needed": 0.01 / (b * p),
                               "absolute_slack_units_per_byte": 0.01 / b})
-    return {"rows": rows, "credited_hash_precision": precision}
+    # BamFloor credits 64 - 1024/L for a word every L MACs; the 1% budget needs 64 - 1024/L >= 0.99 L.
+    disc = 64.0 ** 2 - 4 * 0.99 * 1024.0
+    bam_window = [(64.0 - math.sqrt(disc)) / (2 * 0.99), (64.0 + math.sqrt(disc)) / (2 * 0.99)]
+    return {"rows": rows, "credited_hash_precision": precision, "bamfloor_interval_within_1pct": bam_window}
 
 
 def r1_egress(inp: dict, ll: dict) -> dict:
@@ -130,9 +133,25 @@ def r1_egress(inp: dict, ll: dict) -> dict:
     sha_rate = inp["h200"]["sms"] * inp["h200"]["fmax_hz"] * 128.0 / inp["sha512"]["sm_clk_per_compression"]
     certifier = {"h200_sha512_bytes_per_s": sha_rate,
                  "certifier_h200s_per_prover_gpu_at_400g": inp["links"]["per_gpu_400g_bytes_per_s"] / sha_rate}
+    # T2 <= x exactly when stock's useful MAC rate is at most x * link / bytes a MAC: a share of the tensor peak.
+    links = {"census_100g": inp["links"]["census_reference_bytes_per_s"],
+             "gpu_400g": inp["links"]["per_gpu_400g_bytes_per_s"],
+             "nvlink_900g": inp["links"]["nvlink_domain_bytes_per_s"][0],
+             "nvlink_1800g": inp["links"]["nvlink_domain_bytes_per_s"][1]}
+    criterion = {name: {f"t2_le_{x}": x * rate / b / peak(inp) for x in (10, 100)} for name, rate in links.items()}
+    stock_share = {key: ll["macs_per_token"] * p["m"] / p["t_stock_s"] / peak(inp) for key, p in inp["points"].items()}
+    p8 = inp["points"]["t8192"]
+    t8192_nvlink = {name: b * ll["macs_per_token"] * p8["m"] / rate / p8["t_stock_s"]
+                    for name, rate in links.items() if name.startswith("nvlink")}
+    rtt = {f"{r * 1e6:g}us": {key: 64 * r / p["t_stock_s"] for key, p in inp["points"].items()}
+           for r in (2e-6, 10e-6, 1e-3)}
     return {
         "max_rows_t2_le_100": max_rows,
         "certifier_hashing": certifier,
+        "criterion_max_stock_tensor_share": criterion,
+        "stock_useful_tensor_share": stock_share,
+        "t2_t8192_nvlink_domain_sensitivity": t8192_nvlink,
+        "t2_added_by_coin_round_trips_64_calls": rtt,
         "design": "ssn_1l + certifier commit (every k32 word and every operand value leaves the GPU; the certifier commits under hiding leaves)",
         "t1_matmul_credited_coins": inp["ssn_1l"]["t1_credited_coins"],
         "t1_matmul_uncredited_coins": inp["ssn_1l"]["t1_uncredited_coins"],
@@ -219,6 +238,21 @@ def r4_capacity_reading(inp: dict, ll: dict) -> dict:
     }
 
 
+def certifier_capacity(inp: dict, ll: dict, r1: dict) -> list[dict]:
+    """R4's reading of R1: the egress-bound step leaves the tensor pipe idle too."""
+    alpha = inp["ssn_1l"]["alpha"]
+    rows = []
+    for p in r1["points"]:
+        if p["point"] == "t8192":
+            continue
+        point = inp["points"][p["point"]]
+        macs = ll["macs_per_token"] * point["m"]
+        t2 = p["gpu_400g"]["t2_overlapped"]
+        excess = ((t2 - 1.0) * point["t_stock_s"] * peak(inp) - (alpha - 1.0) * macs) / macs
+        rows.append({"point": p["point"], "t2": t2, "excess_idle_stock_macs_per_stock_mac": excess})
+    return rows
+
+
 def r6_algebraic(inp: dict) -> dict:
     b = words_bytes_per_mac(inp["ssn_1l"]["alpha"])
     rows = []
@@ -283,6 +317,13 @@ def checks(inp: dict, ll: dict, res: dict) -> list[tuple[str, bool, str]]:
         ("R1: certifier commit passes T2 at 64 tokens on a 400 Gb/s port and fails at T 8,192",
          next(p for p in res["R1"]["points"] if p["point"] == "t64")["gpu_400g"]["passes_t2"]
          and not next(p for p in res["R1"]["points"] if p["point"] == "t8192")["gpu_400g"]["passes_t2"], ""),
+        ("R1: the stock-share criterion agrees with every T2 row on both links",
+         all((res["R1"]["stock_useful_tensor_share"][p["point"]]
+              <= res["R1"]["criterion_max_stock_tensor_share"][ln]["t2_le_100"]) == p[ln]["passes_t2"]
+             for p in res["R1"]["points"] for ln in ("census_100g", "gpu_400g")), ""),
+        ("R0: BamFloor's 1% interval holds L = 32 and not L = 64",
+         res["R0"]["bamfloor_interval_within_1pct"][0] <= 32 <= res["R0"]["bamfloor_interval_within_1pct"][1] < 64,
+         ", ".join(f"{x:.2f}" for x in res["R0"]["bamfloor_interval_within_1pct"])),
         ("R2: recomputing a word beats the census RTT",
          res["R2"]["rtt_over_recompute"] > 1, f"{res['R2']['rtt_over_recompute']:.0f}x"),
         ("R4: every SSN schedule leaves more than 1% of stock idle on the tensor pipe",
@@ -301,6 +342,8 @@ def table(res: dict) -> str:
                      f"cheapest on-GPU commitment is {r['cheapest_on_gpu_commitment_units_per_byte']:.0f} ({r['factor_over_allowed']:.0f}x); "
                      f"SHA-512 at its floor {r['sha512_floor_factor']:,.0f}x, hashing {r['hashing_share_of_stock_at_sha_floor']:.0f}-"
                      f"{r['hashing_share_of_stock_at_bar']:.0f}x stock")
+    lo, hi = r0["bamfloor_interval_within_1pct"]
+    lines.append(f"    BamFloor's 64 - 1024/L meets the 1% budget only for L in [{lo:.1f}, {hi:.1f}]")
     for r in r0["credited_hash_precision"]:
         if r["price"] == "bar_units_per_byte":
             lines.append(f"    credited at the bar, {r['design']}: SHA-512's price must hold to {r['relative_precision_needed']:.2e} "
@@ -318,6 +361,18 @@ def table(res: dict) -> str:
     lines.append(f"    rows that fit T2 <= 100 (stock step interpolated, an estimate): 100 Gb/s {fits['census_100g']}, "
                  f"400 Gb/s {fits['gpu_400g']}; the certifier hashes 400 Gb/s with "
                  f"{r1['certifier_hashing']['certifier_h200s_per_prover_gpu_at_400g']:.3f} H200s of SHA-512 a prover GPU")
+    crit = r1["criterion_max_stock_tensor_share"]
+    lines.append("    fits when stock's useful tensor share is at most (T2 <= 100 / <= 10): "
+                 + "; ".join(f"{k} {v['t2_le_100']:.2%} / {v['t2_le_10']:.3%}" for k, v in crit.items()))
+    lines.append("    stock's useful tensor share: " + ", ".join(f"{k} {v:.3%}" for k, v in r1["stock_useful_tensor_share"].items()))
+    lines.append("    T 8,192 over an NVLink domain spanning machines (what-if, not an HGX H200): "
+                 + ", ".join(f"{k} T2 {v:.1f}" for k, v in r1["t2_t8192_nvlink_domain_sensitivity"].items()))
+    lines.append("    T2 added by 64 serial coin round trips a step: "
+                 + "; ".join(f"{r}: " + ", ".join(f"{k} +{v:.2f}" for k, v in d.items())
+                             for r, d in r1["t2_added_by_coin_round_trips_64_calls"].items()))
+    for r in res["R4"]["certifier_rows"]:
+        lines.append(f"    capacity reading of certifier commit at {r['point']} (400 Gb/s): T2 {r['t2']:.1f}, excess idle "
+                     f"{r['excess_idle_stock_macs_per_stock_mac']:.1f} stock a stock MAC")
     r2 = res["R2"]
     lines.append(f"R2  stored words: {r2['words_bytes_per_step_t8192']:.3e} B a step at T 8,192 ({r2['step_over_hbm']:.1f}x HBM); "
                  f"one word recomputes in {r2['recompute_one_word_s'] * 1e6:.2f} us: census RTT {r2['rtt_over_recompute']:,.0f}x, "
@@ -357,6 +412,7 @@ def main() -> int:
     ll = llama(inp)
     res = {"R0": r0_barrier(inp), "R1": r1_egress(inp, ll), "R2": r2_memory(inp, ll),
            "R3": r3_capacity_occupancy(inp, ll), "R4": r4_capacity_reading(inp, ll), "R6": r6_algebraic(inp)}
+    res["R4"]["certifier_rows"] = certifier_capacity(inp, ll, res["R1"])
     res["periods"] = per_period(inp, ll, res["R4"])
     cks = checks(inp, ll, res)
     res["checks"] = [{"name": n, "ok": ok, "value": v} for n, ok, v in cks]

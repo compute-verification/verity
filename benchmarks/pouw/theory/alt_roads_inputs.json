@@ -54,7 +54,8 @@
   "links": {
     "census_reference_bytes_per_s": 12.5e9,
     "per_gpu_400g_bytes_per_s": 50e9,
-    "source": "benchmarks/census/networks.json dc-1ms-100gbps (reference); 400 Gb/s a GPU is an HGX H200's compute-fabric NIC (sensitivity, not a census entry)"
+    "nvlink_domain_bytes_per_s": [900e9, 1800e9],
+    "source": "benchmarks/census/networks.json dc-1ms-100gbps (reference); 400 Gb/s a GPU is an HGX H200's compute-fabric NIC (sensitivity, not a census entry); NVLink 4 (900 GB/s a Hopper GPU) and NVLink 5 (1.8 TB/s a Blackwell GPU) are a what-if for an NVLink domain that spans machines, which an HGX H200 doesn't have"
   },
   "accounting": {
     "and_per_int8_mac": 129.9375,
