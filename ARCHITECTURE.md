@@ -48,7 +48,7 @@ integrations/vllm, examples/, benchmarks/ (with the census)
 ---------------------------------------------------------------------------
 verity/core/: the verifiers, trusted
   protocols: profile, sampled_proofs, pouw, pous, certifier; claims
-  Lean, the verifiers, Flock's in service/flock
+  Lean, the verifiers, Flock's in proof_system/flock
 Security/: the definitions, models and proofs of the guarantees (the inference-only policy's among them)
 ---------------------------------------------------------------------------
 verity/ml/: Python and CUDA: the provers, and Python that mirrors the Lean
