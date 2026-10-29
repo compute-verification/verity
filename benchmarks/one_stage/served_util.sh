@@ -36,7 +36,7 @@
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
 # children, and records it and its subprocesses at PYSPY_HZ, 20, without pausing them (blocking samples at 250 Hz doubled a
 # 26 ms step), as a Chrome trace in the scratch, which `pyspy_steps.py`
-# cuts to the full steps into pyspy_steps.json), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
+# cuts to the full steps into pyspy_steps.json; PYSPY_UNDER, a frame, adds its call tree to PYSPY_DEPTH, 5), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
 # rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/PROMPT_IDS, 2·T/PROMPT_IDS for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
@@ -106,7 +106,8 @@ if [ "${1:-}" != leased ]; then
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
-      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$STEP_TOKENS" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
+      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$STEP_TOKENS" --out "$OUT/pyspy_steps.json" \
+      ${PYSPY_UNDER:+--under "$PYSPY_UNDER"} --depth "${PYSPY_DEPTH:-5}" > "$OUT/pyspy_steps.txt" 2>&1
     say "PYSPY ANALYSIS rc=$?"; cat "$OUT/pyspy_steps.txt"
   fi
   if [ -d "$D/windows" ]; then
