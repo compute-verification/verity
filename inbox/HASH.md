@@ -216,3 +216,22 @@ LIT becomes SI-RED, a general attack harness. BRW goes first. COUNTER keeps R80X
 - Lower h makes the useful-work reading robust too: about 0.06% at R80X and about 1% at h ≈ 1. That is a second reason for HASH beside T2.
 - The card should carry "premise precision needed = T1/h" for every design.
 - Which reading the lead's claim uses is Daniel's (asked 22:15Z). R14's ruling (3,530.92) stands meanwhile; under the capacity reading both figures lie inside the margin.
+
+## 22:25Z: Daniel chose capacity, and what that does to HASH (coordinator)
+
+Daniel approved A: the gap is stated over capacity, (1 + h)·stock.
+
+**The consequence.** On stock hardware no standard premise credits the MACs: SI-THEORY, and N-SALT's zero-data bound. A cheater serving zero-data requests pays for the matmul almost nothing; only the hashing or fold is forced. So the share of capacity a design can account for is
+
+  a ≤ h_forced / (1 + h),
+
+where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% needs h ≥ 99; 95% needs h ≥ 19; 90% needs h ≥ 9.
+- The lead's 127.5 gives 99.2%. This is why every design last night was nearly all hashing: the 99% target plus no MAC credit forces it.
+- On stock hardware at 99%, h can fall at most from 127.5 to about 108.6 (N-SHALB's DistinctWrites floor), a 1.17× cut.
+- **Every sub-99 design on stock hardware lowers a.** R80X (h ≈ 18) gives about 94.7%, the tensor fold with the lever about 77%, and EGRESS's k = 4 thin fold (h 2.45) about 71%.
+- **Cutting h at 99% needs MAC credit:**
+  - (i) a premise about the matmul itself (the SAK family; ALT's D-OUT, which rests on SAK-UF over public weights);
+  - (ii) silicon: SI-THEORY's SHA-512 round in the MMA unit, or closure.
+- The 99% target is the question to Daniel (card, 22:25Z).
+- Until he answers, every HASH and SILICON result is reported with a (capacity accounted) beside h. The card computes a = cheapest prover's cost / honest cost.
+- EGRESS's k = 4 thin fold (note 20261029T2210Z-report-hash-assume) is recorded, not re-targeted.
