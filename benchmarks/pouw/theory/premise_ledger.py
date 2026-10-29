@@ -22,7 +22,9 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   hashing, coin and pre-noise terms at rank 3, and the network term outside T1).
 - **hiding**: each leaf's salt side (the PRF, M_key·y and c), honest-only, at SW-HASH's measured share of a leaf's hash
   time (SW-PRICE's card), for the committed words' leaves and A's pre-noise leaves (one activation row a leaf on the
-  card; a call's A packed into big leaves under the big-rows option, at the smallest leaf size that passes).
+  card; a call's A packed into big leaves under the big-rows option, at the smallest leaf size that passes). L1 + (a),
+  the lead's hiding module, checks the PRF and c in the proof and counts the mask whole, so with ShaWrites it closes
+  the term without mask-optimal.
 - **coin branch**: the adversary may branch on coin bits, and a branch writes no register, so W1 prices it at 0.
   `DistinctWritesMH100On` then charges each path only the words distinct on that path's salts. For each row-step it
   computes the noise class once and skips every row-step whose n words equal an earlier one at this salt. Within a zero
@@ -280,10 +282,33 @@ LEDGER = [
      "— (arithmetic: 1 of 2,050 compressions at 256 KiB rows)", "N-COMPOSE",
      "repeated rows' hashing: a call's identical rows, and a row replayed from an earlier call"),
     ("mask-optimal", "No program computes M_key·y with less work than the best honest program (same memory)", "4a",
-     "stated", "4a", "a 384 MiB table over 16-bit chunks gives 96 lookups a leaf; as worded likely false", "N-HIDE / N-SALT",
-     "hiding's M·y with the PRF forced"),
+     "stated; false at the served count (N-HIDE: an unrolled build computes the same mask in 5,711 registers against "
+     "the served 7,518), and the lead's hiding module (L1 + (a)) no longer reads it", "F",
+     "a 384 MiB table over 16-bit chunks gives 96 lookups a leaf; the unrolled build", "N-HIDE / N-SALT",
+     "none now: hiding's M·y with the PRF forced, before L1 + (a) counted the mask whole"),
     ("forced-PRF", "The proof checks the salt PRF against a committed seed, so the PRF is committed work", "0",
-     "design", "0", "—", "N-HIDE / N-SALT", "hiding's PRF part (then credited under ShaWrites)"),
+     "design (L1 + (a)'s check (a))", "0", "—", "N-HIDE / N-SALT", "hiding's PRF part (then credited under ShaWrites)"),
+    ("hiding-L1a", "N-HIDE's hiding module L1 + (a): A's call-domain leaves, the PRF and c checked in the drawn unit's "
+     "proof, and the mask counted whole at the served program, so hiding needs no optimality premise; it rests on "
+     "two owner rulings, N-HIDE's R1 (the layout; not this ledger's route R1) and R3 (the salt derivation), and on "
+     "prf/sha-512 for hiding itself (zero knowledge's, not T1's)", "3", "design (N-HIDE final); the rulings pending "
+     "the commitments owner", "5", "— (protocol structure: two rulings)", "N-HIDE / the commitments owner",
+     "hiding, with forced-PRF and ShaWrites (the PRF and c credited, the mask whole); without ShaWrites L1's "
+     "unforced hiding stays (N-HIDE: 0.0829% / 0.1661% at 64 rows)"),
+    ("pad-leaf-ruled", "A public digest that isn't an hm96 leaf (N-SALT's keyed leaf, pad or keyed digest) is a "
+     "commitment, hiding at prf/sha-512", "3", "open (a ruling)", "5", "— (a ruling on the commitments design rule)",
+     "the coordinator, for the commitments owner and Daniel (N-SALT)",
+     "hiding with no hashing premise (N-SALT: honest-only hiding work 0 at every layout, estimate); an alternative to "
+     "L1 + (a) at its rank, so not an option of the minimal sets, whose prover sets take ShaWrites for hashing anyway"),
+    ("repeat-mask", "N-HIDE's remedy (b): A's 1 KiB piece is committed as V ⊕ Z, Z's word t be64(h1[0] ⊕ t) from "
+     "the leaf's first chaining value, so a repeated row's blocks differ within and across leaves and share no "
+     "schedule; a prover can't choose V = c ⊕ Z because the window's record order fixes A before salt_w", "4a",
+     "design (N-HIDE final); the record order as R's condition (N-COMPOSE) and the steer (N-RED) open", "5",
+     "a steer of A_j's bytes after salt_w; two leaves' first words within 112 of each other (7·2⁻⁶⁴ a pair)",
+     "N-HIDE / N-COMPOSE / N-RED",
+     "repeated A rows' hashing (pre-noise) as prefix-binding does, at no extra compression (≈ 0.0023× / 0.0045× "
+     "stock honest-only); N-HIDE's open ≈ 0.080× / 0.160× until then; not an option of the minimal sets, where "
+     "prefix-binding closes the same terms at a lower rank"),
     ("hiding-ruled", "Hiding work is credited by ruling (a choice of target, not a premise)", "R", "pending Daniel",
      "R", "—", "Daniel", "hiding"),
     ("big-rows", "hm96 leaves of R ≥ R* bytes, so honest-only hiding ≤ the allowance left", "0", "design", "0",
@@ -422,7 +447,8 @@ ALIASES = {"forced-PRF": ("salt-forced",), "CopyGrain": ("CopyGrain(w₀) at w�
            "HostsCounted": ("HostsWithinRow (cores a card, all-core clock)",),
            "host-rate": ("HostsWithinRow (SHA-512's rate a core)",),
            "streamed-coins": ("certifier-coins",), "OutsourceWithinEgress": ("outsource-egress",),
-           "ShaWrites": ("ShaSpeed + hash-compose",), "ShaLB": ("ShaLB(3,534)",)}
+           "ShaWrites": ("ShaSpeed + hash-compose",), "ShaLB": ("ShaLB(3,534)",), "hiding-L1a": ("L1 + (a)",),
+           "repeat-mask": ("remedy (b)",)}
 
 
 def ledger() -> list[dict]:
@@ -1345,7 +1371,7 @@ OPTIONS = {
     "atomic-call (pre-noise)": (("atomic-call",), ()),
     "prefix-binding": (("prefix-binding", "ShaWrites"), ("hashing_repeat", "pre_noise_repeat")),
     "hiding: ruled": (("hiding-ruled",), ("hiding",)),
-    "hiding: forced PRF + mask-optimal": (("forced-PRF", "mask-optimal", "ShaWrites"), ("hiding",)),
+    "hiding: L1 + (a)": (("hiding-L1a", "forced-PRF", "ShaWrites"), ("hiding",)),
     "hiding: big rows": (("big-rows",), ("hiding",)),
     "inputs-natural": (("inputs-natural",), ("coin_branch_requests_rows", "coin_branch_requests_tiles",
                                              "coin_branch_requests_words", "coin_branch_zero_rows",
