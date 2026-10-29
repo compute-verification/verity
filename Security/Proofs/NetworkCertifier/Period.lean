@@ -14,7 +14,7 @@ it sends, so the client's view reads back from them under its schedule, one its 
 (`tap_cells_read`): the views, and the secrets
 they decode to, number at most `#Ss` times the size of the product of those sets (`encard_periodGood_le`). The record
 holds the fail cells and the padding too, so the count needs no separate charge for them: the bound's
-`∏_c (cap_c + 1)`, the fail choices in `EncardWardenViewsLe`, is room here. `periodLeak` adds the per-window bound at
+`∏_c (cap_c + 1)`, one fail choice per connection, is room here. `periodLeak` adds the per-window bound at
 the network certifier's rows (`sampledLeak_tap`).
 -/
 

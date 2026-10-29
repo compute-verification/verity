@@ -45,7 +45,7 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
-#: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
+#: The PoUB session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
 REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
 #: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
 VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
@@ -527,7 +527,7 @@ class RowConfig:
 
     @property
     def row(self) -> str | None:
-        """The row id the requests were drawn for (``sweep.row_id``); a variant file (``olmoe-1b-7b-padded__…``) keeps its base row's."""
+        """The row id the requests were sampled for (``sweep.row_id``); a variant file (``olmoe-1b-7b-padded__…``) keeps its base row's."""
         sw = self.workload.get("sweep")
         return sw.get("row_id") if isinstance(sw, Mapping) else None
 
@@ -651,7 +651,7 @@ class CommitConfig:
                                   help="config run: 1 = the Commit also runs the uninstrumented control arm (one pair), the baseline of "
                                        "the record's extraction slowdown")
     replay_draw: str = option("--replay-draw", env="REPLAY_DRAW", default="uniform", choices=("uniform", "family"),
-                              help="config run: the k units drawn uniformly from every unit (k/k equal bounds the wrong fraction) or "
+                              help="config run: the k units sampled uniformly from every unit (k/k equal bounds the wrong fraction) or "
                                    "stratified by family (each family at least once, the rest split evenly)")
     commit_gpu_util: str | None = option("--commit-gpu-util", env="COMMIT_GPU_UTIL", default=None,
                                          help="TP: gpu_memory_utilization of the Commit engine (default --gpu-util)")
@@ -687,7 +687,7 @@ class CommitConfig:
                                            "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
-                                         help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
+                                         help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
                                               "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
