@@ -124,6 +124,8 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/remote_bandwidth/opening.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
     "verity/core/protocols/remote_bandwidth/tests/test_redteam_impl.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
     "benchmarks/rho/rho/envelopes.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
+    "benchmarks/one_stage/a7.sh": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
+    "tools/research/src/research/queue.py": "queued PRs on next rewrite its lines; the PoUB prose rename follows them",
 }
 
 
