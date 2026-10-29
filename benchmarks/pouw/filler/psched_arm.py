@@ -73,7 +73,7 @@ class PhaseSched:
     def placement(self, phase, b, l):
         if phase == "prefill":
             return A.NONE
-        return A.Placement("split", self._row(b, l)[0])
+        return A.Colocation("split", self._row(b, l)[0])
 
     def phase(self, phase, b, l):
         return None if phase == "prefill" else self._row(b, l)[1]
@@ -108,7 +108,7 @@ class PhaseSchedCo(PhaseSched):
         return A.point_lookup(TABLE_V2, b, l)
 
     def placement(self, phase, b, l):
-        return A.Placement("co") if phase == "prefill" else super().placement(phase, b, l)
+        return A.Colocation("co") if phase == "prefill" else super().placement(phase, b, l)
 
     def filler_at(self, phase, b, l):
         return CO_PREFILL if phase == "prefill" else self.filler
