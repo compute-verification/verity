@@ -33,6 +33,8 @@ files = [
     "Security/Proofs/Pouw/PeriodJ10R/Honest.lean",
     "Security/Proofs/Pouw/PeriodJ10R.lean",
     "Security/Proofs/Pouw/PeriodJ10R/Nontrivial.lean",
+    "Security/Proofs/Pouw/PeriodJ10RStrata.lean",
+    "Security/Proofs/Pouw/PeriodJ10RStrata/Honest.lean",
     "Security/Proofs/Pouw/Period.lean",
     "Security/Proofs/Pouw/ServedValues/Honest.lean",
     "Security/Proofs/Pouw/ServedValues.lean",
@@ -42,7 +44,10 @@ files = [
     "Security/Properties/Accounting/Served.lean",
     "Security/Properties/Pouw/PeriodJ10R.lean",
     "Security/Properties/Pouw/Period.lean",
+    "Security/Properties/Pouw/PeriodJ10RStrata.lean",
+    "Security/Properties/Pouw/ServedFreed.lean",
     "Security/Properties/Pouw/ServedValues.lean",
+    "Security/Properties/Pouw/ServedWork.lean",
 ]
 [words_in.words]
 "Declared" = "RegisteredCircuit"
