@@ -136,8 +136,11 @@ def _batched(order: list[int], tasks: list[tuple]) -> list[int | tuple[int, ...]
 
 
 def _gates(task: tuple) -> int:
-    """The gate count of a task's one Definition when its body is built already, else 0: how long its check takes goes with it,
-    so the largest start first and the last to end is no large one started late."""
+    """The gate count of a task's one Definition (its binding's record's, ``gates``, for one made where it is checked) when its
+    body is built already, else 0: how long its check takes goes with it, so the largest start first and the last to end is no
+    large one started late."""
+    if (g := _info(task).get("gates")) is not None:
+        return int(g)
     roots = _info(task).get("roots") or []
     fn = roots[0] if len(roots) == 1 else None
     if fn is None or TG.is_by_calls(fn) or getattr(fn, "_body", 1) is None:
@@ -227,10 +230,21 @@ def _tasks(specs: list[str], opts: CK.Options, everything: bool, as_call: bool |
     return tasks
 
 
+def _made(plan: UN.Plan, fid: str, want: str, info: dict) -> Any:
+    """A target `_planned` left to the process that checks it: made there (`units.make`), so the bodies its check reads are
+    built under its own recording, and held to the descriptor its binding's build gave (`units.Stale`, its check's error)."""
+    fn = UN.make(plan, fid)
+    info["roots"] = [fn]
+    if CC.descriptor(fn) != want:
+        raise UN.Stale(f"{fid}: its descriptor is not the one its binding's build gave")
+    return fn
+
+
 def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple], list[dict], dict[int, tuple[dict, str]]]:
-    """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused: a target that
-    misses is made from a binding that reaches it (`units._materialize`), and `units.Stale` when its descriptor is not its
-    record's."""
+    """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused.  A target that
+    misses through a binding whose record counted is made here from a binding that reaches it (`units._materialize`), and
+    `units.Stale` when its descriptor is not its record's; through one built apart, a primitive is made here when its id makes
+    it (`units.built_here`), and anything else in the process that checks it (`_made`)."""
     d = plan.derived
     memo = lambda: {}  # noqa: E731
     pins = CC.recorded_pins(CK.load_pins())
@@ -241,17 +255,25 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path) -> tuple[list[tuple],
         node = d.nodes[fid]
         call = node["f"] in plan.calls
         k = target_key("definition", fid, opts, call, desc=node["d"])
-        fn = None
+        fn, later = None, False
         if (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
+        elif d.via[fid].apart and (node["k"] != "P" or (fn := UN.built_here(plan, fid)) is None):
+            later = True
         else:
-            fn = UN._materialize(plan.entries, plan.objects, fid, via=d.via.get(fid))
+            if fn is None:
+                fn = UN._materialize(plan.entries, plan.objects, fid, via=d.via.get(fid))
             if CC.descriptor(fn) != node["d"]:
                 raise UN.Stale(f"{fid}: its descriptor is not the one its binding's record holds")
         units = d.units.get(fid, set())
         TG.BINDINGS.setdefault(fid, set()).update(units)
-        tasks.append(("definition", fid, lambda fn=fn, call=call: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=call),
-                      {"as_call": call, "units": sorted(units), "roots": [fn] if fn is not None else []}))
+        info = {"as_call": call, "units": sorted(units), "roots": [fn] if fn is not None else [], "gates": node["g"]}
+        if later:
+            check = lambda fid=fid, want=node["d"], call=call, info=info: CK.check_definition(  # noqa: E731
+                _made(plan, fid, want, info), opts, memo=memo(), pins=pins, as_call=call)
+        else:
+            check = lambda fn=fn, call=call: CK.check_definition(fn, opts, memo=memo(), pins=pins, as_call=call)  # noqa: E731
+        tasks.append(("definition", fid, check, info))
         keys.append(k)
     for label, sub, sts in TG.templates():
         k = target_key("template", label, opts, None)
@@ -592,7 +614,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     The task list (each target and its key) is a cache entry too, under the catalog's own key: while everything its build
     could depend on is unchanged (`cache.task_list_reads`), a run whose every target is reused as it was recorded builds no
     Definition. Any other run builds the list; with ``units``, from the catalog bindings' records (`circuit_check.units`),
-    building only the bindings whose record misses, and a full build stores them."""
+    building only the bindings whose record misses, and a full build stores them.  With ``units``, ``fork`` and more than one
+    job, the bindings are built so even with no record to reuse: each in a process of its own, up to ``jobs`` at once within
+    `budget_gb` (`units.plan`'s ``apart``), this process building no body, and each target they reach made in the process
+    that checks it (`_planned`); a run that built every binding so stores the task list too."""
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
     listed = None
@@ -608,10 +633,11 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                 rep["cache"] = {"hits": len(got), "stored": 0, "untraced": [], "errors": [], "changed": [], "task_list": hit[1]}
                 return rep
     units = units and listed is not None and (fork or not isolated)
+    apart = (jobs, budget_gb(mem_gb), heavy()) if units and isolated and fork and jobs > 1 else None
     plan, planned, why = None, None, None
     if units:
         try:
-            plan = UN.plan(cache, REPO, log)
+            plan = UN.plan(cache, REPO, log, apart)
             planned = _planned(plan, opts, cache) if plan is not None else None
         except UN.Stale as e:
             why = str(e)
@@ -619,7 +645,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             TG.BINDINGS.clear()
     if planned is not None:
         tasks, keys, hits = planned
-        listed = None                                     # its reads are every binding's: a full build stores it
+        if plan.listed is None:
+            listed = None                                 # its reads are every binding's: a full build stores it
     else:
         tasks, keys, hits = _tasks(specs, opts, everything, as_call), None, None
     zygote = None
@@ -635,7 +662,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         if keys is None and tracing:
             keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ()))) for t in tasks]
         rep = _checked_all(tasks, specs, opts, everything, as_call, log, jobs, cache, mem_gb, progress, isolated, tracing,
-                           listed, zygote, mem_file, keys, hits)
+                           listed, zygote, mem_file, keys, hits, plan if planned is not None else None)
     finally:
         for z in zygote or ():
             z.close()
@@ -650,13 +677,20 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
 def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everything: bool, as_call: bool | None, log, jobs: int,
                  cache: Path | None, mem_gb: int | None, progress: Path | None, isolated: bool, tracing: bool,
                  listed: dict | None, zygote: list[Zygote] | None, mem_file: Path | None = None, keys: list[dict] | None = None,
-                 hits: dict[int, tuple[dict, str]] | None = None) -> dict:
-    """`run`'s report over the task list it built (with ``keys`` and ``hits``, the keys and the entries reused already)."""
+                 hits: dict[int, tuple[dict, str]] | None = None, plan: UN.Plan | None = None) -> dict:
+    """`run`'s report over the task list it built (with ``keys`` and ``hits``, the keys and the entries reused already; with
+    ``plan``, from the bindings' records, each binding built apart: the task list's reads are each one's share and this
+    process's, stored only while it sees every share as the process that read it did, `units.seen_alike`)."""
     out: list[dict | None] = [None] * len(tasks)
     keys = keys if keys is not None else []
     if listed is not None and not CC.untraced():
-        reads = CC.task_list_reads([*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))])
-        CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
+        roots = [*TG.REACHED.values(), *(r for t in tasks for r in _info(t).get("roots", ()))]
+        if plan is not None:
+            roots += [*(fn for e in plan.entries for fn in e.roots), *plan.objects.values()]
+        reads = CC.task_list_reads(roots)
+        if plan is None or (plan.listed is not None and UN.seen_alike(REPO, plan.entries)):
+            reads = reads if plan is None else UN.merged([reads, plan.listed])
+            CC.store(cache, listed, REPO, reads, {"targets": [list(t[:2]) for t in tasks], "keys": keys}, CC.seen(REPO, reads))
     stats = {"hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}
 
     def done(i: int, r: dict, got: dict | None = None, untraced: list[str] | None = None, worker: dict | None = None) -> None:
