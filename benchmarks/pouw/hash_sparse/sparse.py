@@ -26,7 +26,9 @@ Checks (exact integer arithmetic, small shapes, seeded):
                  honest 2
   mulfold        N <- (N ^ D_t) k_t, k_t a live odd u32: each step a permutation; the word-grain adversary matches at
                  the honest 3 writes a step; sparse and skip adversaries miss; no row-plus-column form over Z or
-                 GF(2); a bit-sliced multiply by k_t costs tens of LOP3s a step
+                 GF(2); a bit-sliced multiply by k_t costs several LOP3s a step
+  row_sharing    zero data: rows of a tile with equal row-coin prefixes share the fold state; the state-steps an
+                 adversary saves, for a 1-bit and an 8-bit row coin, and the T1 that leaves without a grain premise
   lop3_fanin     over all 256 LOP3 functions and every input triple from the registers at hand (the state, two words,
                  the 16 bitwise functions of two keys): none computes two keyed steps, and none fuses a word's last
                  add into its fold.
@@ -456,6 +458,25 @@ def mulfold(rng, m=32, n=24, tile=8, s_steps=16, r=4):
             "bitslice_mul": bitslice_mul(rng)}
 
 
+def row_sharing(rng, tile=64, writes=3):
+    """Zero data: rows of a coin tile whose row-coin prefixes agree have equal words, so equal fold states; an adversary
+    computes each distinct prefix's state once. Expected state-steps saved a (tile, column): sum over t of tile minus
+    the expected distinct prefixes of t coins of `bits` bits, checked against a seeded draw; as a share of the fold
+    and as T1 (a fold of `writes` writes a step over 28 data MACs) without a grain premise."""
+    out = {}
+    for bits in (1, 8):
+        for k in (2048, 8192):
+            s_steps = lead_steps(k)
+            exp = sum(tile + 2.0 ** (bits * t) * math.expm1(tile * math.log1p(-2.0 ** (-bits * t)))
+                      for t in range(1, s_steps + 1) if bits * t <= 200)
+            draw = rng.integers(0, 1 << bits, (tile, s_steps))
+            seen = sum(tile - len({tuple(r[:t]) for r in draw}) for t in range(1, s_steps + 1))
+            share = exp / (tile * s_steps)
+            out[f"b{bits} K{k}"] = {"saved_state_steps_expected": exp, "saved_state_steps_drawn": seen,
+                                    "share_of_fold": share, "t1_percent_without_grain": 100 * share * writes * H32 / 28}
+    return out
+
+
 def lop3_fanin(rng, cases=64):
     """For each input triple from the registers at hand, a LOP3 exists computing `target` iff the target's bit is
     constant on every minterm class of the triple's bits. Registers: N, D1, D2 and the 16 bitwise functions of K1, K2
@@ -616,6 +637,7 @@ def main():
         "folds": folds(rng),
         "bitslice_xor": bitslice_xor(rng),
         "mulfold": mulfold(rng),
+        "row_sharing": row_sharing(rng),
         "lop3_fanin": lop3_fanin(rng),
         "pricing": pricing(),
     }
