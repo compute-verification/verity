@@ -352,10 +352,11 @@ def test_case_of_reads_the_pace_the_pace_k_driver_wrote(server, tmp_path) -> Non
 
 
 def before_the_move(v: dict) -> dict:
-    """`v` as a session of v0 recorded before MEM-152's move holds it: its registration's digest under v0's registration
+    """`v` as a session of v0 recorded before the PoUB move holds it: its registration's digest under v0's registration
     tag then, and its accepted sessions' records naming v0's id then (`poub.retired`)."""
     v = copy.deepcopy(v)
-    d = R.digest_under(R.registration_of(v["registration"]), retired.REGISTRATION_DOMAIN)
+    kind, d = R.digest_under(R.registration_of(v["registration"]), retired.REGISTRATION_DOMAIN)
+    assert kind == "output", d
     v["registration"]["digest"] = d
     for session in v["sessions"]:
         session["registration"] = d
@@ -367,7 +368,8 @@ def before_the_move(v: dict) -> dict:
 def test_the_digest_under_todays_tag_is_the_registrations() -> None:
     reg = M.Run().store.registration
     v = verifier_json(run("honest"))
-    assert R.digest_under(R.registration_of(v["registration"]), audit.REGISTRATION_DOMAIN) == reg.digest.hex()
+    got = R.digest_under(R.registration_of(v["registration"]), audit.REGISTRATION_DOMAIN)
+    assert got == ("output", reg.digest.hex())
 
 
 @pytest.mark.parametrize("name", ["honest", "few"])

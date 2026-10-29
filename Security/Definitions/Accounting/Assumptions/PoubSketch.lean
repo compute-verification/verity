@@ -29,8 +29,8 @@ open Accounting.Poub.Sketch
 
 variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
-/-- `random-oracle` (the random-oracle ruling: PoUW only, each use a named premise; its use for the
-memory sketch is not yet ruled on). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
+/-- `random-oracle` (PoUW's only, each use a named premise; its use for the memory sketch is not yet
+accepted). **The keys SHA-512 gives at the session's candidate seeds are within `ε` of
 uniform**: at every prover coin `b` and registered store `D`, no event `E` of the keys (each candidate seed's signs and
 receipt hash) is more than `ε` likelier at `A.keys b D x`, over SHA-512's outputs `x`, than at uniform keys, so the
 keys' law is within statistical distance `ε` of uniform:

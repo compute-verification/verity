@@ -1,6 +1,5 @@
-# The PoUB move (`python3 tools/move/rename.py --map tools/move/poub_map.toml`): Daniel's ruling of 28 Oct 2026, 12:46 and
-# 12:51 PM PDT (MEM-152): the subprotocol over a node's registered store is PoUB and only PoUB, in its paths, modules, Lean
-# names, ids and domain tags. Not PoUB: the bandwidth audit over PoUS's store (`verity/core/protocols/bandwidth/`), the
+# The PoUB move (`python3 tools/move/rename.py --map tools/move/poub_map.toml`): the subprotocol over a node's registered
+# store is PoUB and only PoUB, in its paths, modules, Lean names, ids and domain tags. Not PoUB: the bandwidth audit over PoUS's store (`verity/core/protocols/bandwidth/`), the
 # remote composite protocol (`Core.Remote`, `verity/core/protocols/remote/`), the inference-only policy's remote regime
 # (`Nci.*Remote*`, `DampenerRemote*`), `RemoteChallenger` and `RemoteCertifier`. v0's retired tags stay only in the one
 # frozen table the replay of recorded sessions reads (`poub.retired`). The rules for [words] are `rename_map.toml`'s.

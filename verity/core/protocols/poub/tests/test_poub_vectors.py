@@ -14,7 +14,7 @@ import poub_vectors as rv
 from verity.core.protocols.poub import audit, codec, coins, receipts
 
 # `benchmarks/codec_tensor/sketch_receipt.py` (cursor/ra-device-reader-0f7a at 5b8decfc5, #1916; re-pinned under the
-# verity/poub/ tags in MEM-152's move), numpy, run on these
+# verity/poub/ tags in the PoUB move), numpy, run on these
 # inputs: seed k is SHA512(SKETCH_PINS ‖ u8 k), "counter" n bytes of SHA512(SKETCH_PINS ‖ label ‖ u32be c) for
 # c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s, a receipt
 # that binds z; each unbound case (seed, block, j, σ_j, y), of the block alone, with σ_j its `sketches` of the block
