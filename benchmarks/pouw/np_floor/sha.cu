@@ -36,9 +36,12 @@ static const uint64_t KH[80] = {
     0xd186b8c721c0c207ull, 0xeada7dd6cde0eb1eull, 0xf57d4f7fee6ed178ull, 0x06f067aa72176fbaull, 0x0a637dc5a2c898a6ull,
     0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,
     0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull};
-static const uint64_t IV[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull,
+__host__ __device__ inline uint64_t ivw(int i) {
+  const uint64_t v[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull,
                                0xa54ff53a5f1d36f1ull, 0x510e527fade682d1ull, 0x9b05688c2b3e6c1full,
                                0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
+  return v[i];
+}
 
 __host__ __device__ inline uint64_t rotr(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
 
@@ -67,7 +70,7 @@ __host__ __device__ inline void compress(uint64_t s[8], const uint64_t m[16]) {
 }
 
 __host__ __device__ inline void chain(uint64_t s[8], uint64_t seed, int blocks) {
-  for (int i = 0; i < 8; i++) s[i] = IV[i] ^ seed;
+  for (int i = 0; i < 8; i++) s[i] = ivw(i) ^ seed;
   for (int r = 0; r < blocks; r++) {
     uint64_t m[16];
 #pragma unroll
@@ -79,7 +82,7 @@ __host__ __device__ inline void chain(uint64_t s[8], uint64_t seed, int blocks) 
 __global__ void sha_chain(uint64_t* out, int blocks) {
   uint64_t s[8];
   const uint64_t tid = blockIdx.x * (uint64_t)blockDim.x + threadIdx.x;
-  for (int i = 0; i < 8; i++) s[i] = IV[i] ^ tid;
+  for (int i = 0; i < 8; i++) s[i] = ivw(i) ^ tid;
 #pragma unroll 1
   for (int r = 0; r < blocks; r++) {
     uint64_t m[16];
@@ -95,7 +98,7 @@ __global__ void sha_chain(uint64_t* out, int blocks) {
 int main() {
   // FIPS 180-4 "abc": ddaf35a193617aba...
   uint64_t s[8], m[16] = {0x6162638000000000ull, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 24};
-  memcpy(s, IV, sizeof s);
+  for (int i = 0; i < 8; i++) s[i] = ivw(i);
   compress<false>(s, m);
   const int abc_ok = s[0] == 0xddaf35a193617abaull && s[7] == 0xa54ca49f;
   const int abc_ok2 = s[0] == 0xddaf35a193617abaull;
