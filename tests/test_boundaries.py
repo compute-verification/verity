@@ -83,7 +83,7 @@ ALLOWED = {
     # deployment layer (`wipe_parties`), their messages the wire's. The
     # memory challenger reports its sessions under its party's per-period root (`core.attest`).
     "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
-                            "ml.crypto", "ml.randomness", "core.protocols.record"},
+                            "ml.crypto", "ml.randomness"},
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
@@ -103,6 +103,8 @@ ALLOWED = {
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
 }
+# PoUS reads its ledger's lines in the record form (`record.is_entry`).
+ALLOWED["core.protocols.pous"] |= {"core.protocols.record"}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
