@@ -3,7 +3,6 @@ import Proofs.Flock.Soundness.Discharge.Composed.Base
 import Proofs.Flock.Soundness.Discharge.Composed.Coined
 import Proofs.Flock.Soundness.Discharge.Composed.Headline
 import Proofs.Flock.Soundness.Discharge.Composed.Coins
-import Proofs.Flock.Soundness.Discharge.Composed.Geometry
 import Proofs.Flock.Soundness.Discharge.Composed.Pads
 import Proofs.Flock.Soundness.Discharge.Composed.Inner
 import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds

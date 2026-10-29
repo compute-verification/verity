@@ -1,5 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Finders
 import Proofs.Flock.Claims.Recursion.Hybrid
+import Proofs.Flock.Claims.Recursion.Cost
+import Proofs.Flock.Claims.Recursion.Transport
 
 /-!
 # The recursion: KS
