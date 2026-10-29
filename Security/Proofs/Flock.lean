@@ -9,7 +9,6 @@ import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Flock.EndToEnd.Blocks
 import Proofs.Flock.EndToEnd.Carry
-import Proofs.Flock.EndToEnd.Joint
 import Proofs.Flock.EndToEnd.Joint.MT.Bound
 import Proofs.Flock.EndToEnd.Served
 import Proofs.Flock.EndToEndRegistered
@@ -20,7 +19,6 @@ import Proofs.Flock.Masked
 import Proofs.Flock.SessionLoop
 import Proofs.Flock.Recursive
 import Proofs.Flock.C3
-import Proofs.Flock.Claims.Complete
 import Proofs.Flock.Claims.Complete.ZkTables
 import Proofs.Flock.VBridge
 import Proofs.Flock.Sampled
@@ -31,5 +29,8 @@ import Proofs.Flock.Bridge.Transports
 import Proofs.Flock.Bridge.TransportsRefs
 import Proofs.Flock.SamplingBoundary
 import Proofs.Flock.SamplingScope
+import Proofs.Flock.Claims.Complete.Zk
+import Proofs.Flock.EndToEnd.Joint.Bound
+import Proofs.Flock.Soundness.Audit.StratifiedProj
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
