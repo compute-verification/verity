@@ -579,7 +579,7 @@ source = "CORE.md §2a: hashing is credited, no program computes SHA-512 faster 
 rank = "4bU"
 status = "assumed"
 owner = "N-SAKU"
-source = "NIGHT.md §1 default 1: symmetric algorithmic knowledge on literally uniform operands, 4b's mildest form, its own row. N-SAKU interim 1 (note compute-research/20261029T0733Z-report-np-saku; Security/Proofs/Pouw/SakU.lean, gap_of_sakUSum, axioms run r20261029-072920-3a9d): under SAK-U alone every design's certified gap is at least stock, about 100% at every T and density, so no module takes it; what's left of SAKMatmul once SAK-U is granted is DataCantHelp, rank 4b"
+source = "N-SAKU final (note compute-research/20261029T0850Z-report-np-saku; saku.py and Security/Proofs/Pouw/SakU.lean on cursor/compute-research-np-saku-ea97 at fe2d15a40c): it credits no T1 term. An exact design (X = A·P + E·Q, Y = R·B + T·F at width W >= K + rank Q + rank T) embeds a uniform instance at most min(rank Q, rank T) wide in its zero-data words, whose spans are orthogonal (Q·T = 0), so SAK-U alone leaves W - min(rank Q, rank T) >= K + max(rank Q, rank T), at least stock, uncertified (paper proof for linear embeddings; saku.py width_bound and ortho, checked). Composed with a per-word floor u(L) on the words outside the embedding, at least K(1 - u(L)/L) stays uncertified: half of stock at L 64 with W1's 32, a quarter with BamFloor's 48; at L 32 W1 credits everything SAK-U could. A served design's data lanes (K) are never uniform, so the same holds; padded and de-noise-after designs: SakU.lean (honest_pays_both, denoise_cost). NIGHT.md §1 default 1: symmetric algorithmic knowledge on literally uniform operands, 4b's mildest form, its own row. N-SAKU interim 1 (note compute-research/20261029T0733Z-report-np-saku; Security/Proofs/Pouw/SakU.lean, gap_of_sakUSum, axioms run r20261029-072920-3a9d): under SAK-U alone every design's certified gap is at least stock, about 100% at every T and density, so no module takes it; what's left of SAKMatmul once SAK-U is granted is DataCantHelp, rank 4b"
 
 [premise.ssn-hw-distinct]
 rank = 0
@@ -1514,3 +1514,27 @@ origin = "N-NOISE"
 note = "compute-research/20261029T0825Z-report-np-noise"
 modules = { N = "nn-rawS-sv4-aorb", D = "epilogue", F = "s8", density = "k32", operands = "w", rows = "r256k", hiding = "open", final = "none", forming = "none", derivation = "none" }
 source = "noise_space.py at cursor/compute-research-np-noise-9f9a; its gap 0.00106% / 0.00052% at T 512 64 tokens / T 8,192 (N-NOISE) is not checked here while the card refuses it"
+
+# N-SAKU final's cards (np_saku_cards.toml on cursor/compute-research-np-saku-ea97 at fe2d15a40c, its sak-u premise merged
+# into SAK-U above): the best sparse-commitment exact design under M0.
+
+[card.np-saku-ncp3-k64-pl-m0-c1]
+title = "ncp3 with a committed word every 64 stacked lanes, under M0 with candidate 1: the final word free, so the skip costs one L-wide segment, L/K"
+origin = "N-SAKU"
+note = "compute-research/20261029T0850Z-report-np-saku"
+modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k64-pl", operands = "xy", rows = "r256k", hiding = "mask", final = "none", forming = "none", derivation = "none" }
+source = "benchmarks/pouw/theory/saku.py ncp3_sparse on cursor/compute-research-np-saku-ea97; the skip is SakU.lean's skip_words (premise-free), and N-CARD's final_word at PureLanes' word_units = L prices the same L/K; t1 adds route U's lane fix, 24/m (SW-SMELL S9), as the card does"
+claims.t8192 = { gap = 0.02764682, t1 = 0.03057651, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m8192 L64 C1, T1 credited coins" }
+claims.t512r512 = { gap = 0.04229526, t1 = 0.08917026, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m512 L64 C1" }
+claims.t512 = { gap = 0.15167026, t1 = 0.52667026, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m64 L64 C1" }
+claims.v4like = { gap = 0.01102121, t1 = 0.01395089, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, v4 dense m8192 L64 C1" }
+
+[card.np-saku-ncp3-k64-pl-m0-c1-mix]
+title = "the same with per-linear route U or U' (int7-mix): the lane fix min(24/m, 32/n)"
+origin = "N-SAKU"
+note = "compute-research/20261029T0850Z-report-np-saku"
+modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k64-pl", operands = "xy", rows = "r256k", hiding = "mask", final = "none", forming = "none", derivation = "none" }
+source = "as np-saku-ncp3-k64-pl-m0-c1, t1 at saku.py's T1_mix; route U' takes premise route-u2"
+claims.t8192 = { gap = 0.02764682, t1 = 0.03003772, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m8192 L64 C1" }
+claims.t512 = { gap = 0.15167026, t1 = 0.15921336, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m64 L64 C1" }
+claims.v4like = { gap = 0.01102121, t1 = 0.01395089, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, v4 dense m8192 L64 C1" }
