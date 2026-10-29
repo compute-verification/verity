@@ -10,7 +10,7 @@ body      the message's bytes, never base64
 
 The frame is `sampled_proofs.remote`'s, with a body. A message type is a tag and a version, and its `Schema` states its
 head's fields, its body's bounds and its kind: one of the four public kinds (`structure`, `output`, `coins`,
-`commitment`) or `private`, which never enters a record. `Registry.decode` parses every frame as adversarial and refuses
+`commitment`) or `private`, which never enters a record. `MessageTypes.decode` parses every frame as adversarial and refuses
 by name (`Refused.name`, one of `REFUSALS`): a frame that isn't one (`malformed`), a head or body past its bound
 (`oversized`), a type the registry doesn't hold (`unknown-type`), a version it doesn't (`unknown-version`), and fields
 other than the schema's (`schema`). `Phase` refuses a message that isn't one the party expects next (`out-of-phase`).
@@ -231,7 +231,7 @@ def split(data: bytes, max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> tup
     return data[HEADER.size:HEADER.size + nh], data[HEADER.size + nh:]
 
 
-class Registry:
+class MessageTypes:
     """The message types one end of a channel accepts, by type and version."""
 
     def __init__(self, schemas: Iterable[Schema] = (), max_head: int = MAX_HEAD) -> None:
@@ -243,13 +243,13 @@ class Registry:
         self.max_head = max_head
         self.max_body = max((s.body.max for s in self.schemas.values()), default=0)
 
-    def __or__(self, other: Registry) -> Registry:
-        return Registry([*self.schemas.values(), *other.schemas.values()], max(self.max_head, other.max_head))
+    def __or__(self, other: MessageTypes) -> MessageTypes:
+        return MessageTypes([*self.schemas.values(), *other.schemas.values()], max(self.max_head, other.max_head))
 
-    def only(self, types: Iterable[str]) -> Registry:
+    def only(self, types: Iterable[str]) -> MessageTypes:
         """The schemas of `types`, every version."""
         keep = set(types)
-        return Registry([s for (t, _), s in self.schemas.items() if t in keep], self.max_head)
+        return MessageTypes([s for (t, _), s in self.schemas.items() if t in keep], self.max_head)
 
     @property
     def types(self) -> frozenset[str]:
@@ -360,5 +360,5 @@ def names(values: Sequence[str]) -> tuple[str, ...]:
 
 
 __all__ = ["HEADER", "KINDS", "MAX_HEAD", "NAME", "PUBLIC", "REFUSALS", "WIRE_VERSION", "Body", "Bool", "FrameReader",
-           "Hex", "Int", "Json", "List", "Message", "Phase", "Refused", "Registry", "Schema", "Str", "canonical", "frame",
+           "Hex", "Int", "Json", "List", "Message", "Phase", "Refused", "MessageTypes", "Schema", "Str", "canonical", "frame",
            "frames", "names", "parse", "split"]
