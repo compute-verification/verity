@@ -8,7 +8,9 @@
   materialized or folded into e′ and a′, whichever writes fewer, and e₈₀ and a₈₀ folded into the feed-forward. COUNTS_JSON
   (shalb_sass.sh's counts.json) gives the compiled counts beside it.
 - **hm96's leaf** (verity/ml/commitments/hm96/PROTOCOL.md), compression by compression and form by form.
-- **The bound ladder**: what each rank's premise proves about any program's registers written a compression.
+- **The bound ladder**: what each rank's premise proves about any program's registers written a compression, and the
+  check its fan-in rungs read: every output register of the compression depends on every input register (a witness
+  pair each, from a stdlib SHA-512 held to hashlib).
 - **The bitsliced count**, the alternative representation every per-function argument has to cover.
 - **T1**: the hashing W1 a useful MAC at SSN's (`ssn_1l`, α 1.044, every k32) and NCP's volumes, the δ T1 allows, the
   term each rung of the ladder leaves, the frontier (bytes a MAC each rung allows), and the pooled figures for a week, a
@@ -130,30 +132,117 @@ def hm96_leaf(row_bytes: int) -> list[dict]:
     return rows
 
 
+M64 = (1 << 64) - 1
+
+
+def _primes(n: int) -> list[int]:
+    ps: list[int] = []
+    c = 2
+    while len(ps) < n:
+        if all(c % p for p in ps):
+            ps.append(c)
+        c += 1
+    return ps
+
+
+def _icbrt(n: int) -> int:
+    x = 1 << -(-n.bit_length() // 3)
+    while (y := (2 * x + n // (x * x)) // 3) < x:
+        x = y
+    while x ** 3 > n:
+        x -= 1
+    return x
+
+
+SHA_K = [_icbrt(p << 192) & M64 for p in _primes(80)]
+SHA_IV = [math.isqrt(p << 128) & M64 for p in _primes(8)]
+
+
+def _rotr(x: int, n: int) -> int:
+    return (x >> n | x << (64 - n)) & M64
+
+
+def sha512_compress(cv: list[int], block: list[int]) -> list[int]:
+    """SHA-512's compression (FIPS 180-4), its constants computed from the primes."""
+    w = list(block)
+    for t in range(16, ROUNDS):
+        s0 = _rotr(w[t - 15], 1) ^ _rotr(w[t - 15], 8) ^ w[t - 15] >> 7
+        s1 = _rotr(w[t - 2], 19) ^ _rotr(w[t - 2], 61) ^ w[t - 2] >> 6
+        w.append((s1 + w[t - 7] + s0 + w[t - 16]) & M64)
+    a, b, c, d, e, f, g, h = cv
+    for t in range(ROUNDS):
+        t1 = (h + (_rotr(e, 14) ^ _rotr(e, 18) ^ _rotr(e, 41)) + (e & f ^ ~e & g) + SHA_K[t] + w[t]) & M64
+        t2 = ((_rotr(a, 28) ^ _rotr(a, 34) ^ _rotr(a, 39)) + (a & b ^ a & c ^ b & c)) & M64
+        h, g, f, e, d, c, b, a = g, f, e, (d + t1) & M64, c, b, a, (t1 + t2) & M64
+    return [(x + y) & M64 for x, y in zip(cv, (a, b, c, d, e, f, g, h))]
+
+
+def sha512(msg: bytes) -> bytes:
+    data = msg + b"\x80" + bytes(-(len(msg) + 17) % BLOCK) + (8 * len(msg)).to_bytes(16, "big")
+    cv = list(SHA_IV)
+    for i in range(0, len(data), BLOCK):
+        cv = sha512_compress(cv, [int.from_bytes(data[j:j + 8], "big") for j in range(i, i + BLOCK, 8)])
+    return b"".join(x.to_bytes(8, "big") for x in cv)
+
+
+def dependence(seed: int = 1, max_trials: int = 8) -> dict:
+    """Checks that each of the compression's 16 output registers depends on each of its 48 input registers (8 chaining
+    words and 16 block words, lo and hi): for every pair, an input differing in that register alone whose output
+    differs in that output register. A witness proves the dependence; `sha512` is first held to hashlib."""
+    import hashlib
+    import random
+    for n in (0, 3, 111, 112, 127, 128, 200, 1000):
+        msg = bytes((i * 151 + 7) % 256 for i in range(n))
+        assert sha512(msg) == hashlib.sha512(msg).digest(), n
+    rng = random.Random(seed)
+    halves = lambda ws: [x >> 32 * s & 0xFFFFFFFF for x in ws for s in (0, 1)]
+    need = {(o, i) for o in range(16) for i in range(48)}
+    trials = 0
+    while need and trials < max_trials:
+        trials += 1
+        words = [rng.getrandbits(64) for _ in range(24)]
+        base = halves(sha512_compress(words[:8], words[8:]))
+        for i in range(48):
+            flipped = list(words)
+            flipped[i // 2] ^= 1 << (32 * (i % 2) + rng.randrange(32))
+            out = halves(sha512_compress(flipped[:8], flipped[8:]))
+            need -= {(o, i) for o in range(16) if out[o] != base[o]}
+    return {"pairs": 16 * 48, "witnessed": 16 * 48 - len(need), "trials": trials, "missing": sorted(need)}
+
+
 def ladder(honest: int) -> list[dict]:
     """Each rung: the premise, its rank, and the registers any program writes a compression under it."""
-    inputs = 2 * (16 + 8)
-    outputs = 16
-    fan_in_regs = math.ceil((inputs - 1) / 2) + outputs - 1
-    fan_in_preds = math.ceil((inputs - 1) / 4) + outputs - 1
+    inputs, outputs = 2 * (16 + 8), 16
+    fan_in = lambda d: math.ceil((inputs - 1) / (d - 1)) + outputs - 1
     materialized = 2 * (2 * ROUNDS + SCHEDULE) + outputs - 4
+    dataflow = ("a dataflow refinement of MH100w (rank 3): each value written is a function of the values its "
+                "instruction reads, and a predicate write is priced as a register write (under today's W1 it is free, "
+                "and free predicate chains fold any number of registers into one value read, so every L1 falls to L0). "
+                "Every output register depends on all 48 input registers (checked, rank 2), so the first output "
+                "written has a cone of ⌈47/(d − 1)⌉ writes and the other 15 outputs lie outside it")
     rungs = [
-        ("L0", "1", "H32 and DistinctWrites (MH100w): the 16 output registers are distinct non-free writes", outputs),
-        ("L1a", "2",
-         "L0, and every integer-lane instruction reads at most 3 registers and 2 predicates, and a predicate write is "
-         "priced as a register write (the predicate channel; else L1a falls to L0): one output depends on all 48 input "
-         "registers, so its cone holds ⌈47/4⌉ writes", fan_in_preds),
-        ("L1b", "2", "as L1a with predicates carrying nothing (in-degree 3): ⌈47/2⌉ writes in one output's cone",
-         fan_in_regs),
-        ("L2", "3",
-         "model faithfulness: every program holds each a_t, e_t (t = 1..80), each W_t (t = 16..79) and each output word "
-         "in registers (a_80 and e_80 folded into H0 and H4)", materialized),
-        ("L3", "2 per function, 4a composed",
+        ("L0", "1",
+         "H32 and DistinctWrites (MH100w): the 16 output registers are distinct, priced writes. MH100w attains it: "
+         "an int instruction writes any function, so 16 of them write the digest, and nothing stated in MH100w gives "
+         "more", outputs),
+        ("L1-isa", "3", f"{dataflow}; sm_90's whole ISA, d = 32 (REDUX, VOTE and MATCH read a value from every lane)",
+         fan_in(32)),
+        ("L1-5", "3", f"{dataflow}; instructions reading at most 3 registers and 2 predicates, d = 5 (the integer "
+         "lane without warp-wide instructions or tensor cores)", fan_in(5)),
+        ("L1-3", "3", f"{dataflow}; at most 3 values read, d = 3", fan_in(3)),
+        ("L2", "4a",
+         "materialization: every program holds each a_t, e_t (t = 1..80), each W_t (t = 16..79) and each output word "
+         "in registers (a_80 and e_80 folded into H0 and H4). A claim about every algorithm, a weak form of L3",
+         materialized),
+        ("L3", "4a (per function checked)",
          "every Σ/σ half at its minimal 4, every Ch/Maj half 1, every add at its fan-in minimum, and no two of them "
          "share work: the honest count", honest),
     ]
     return [{"rung": r, "rank": k, "premise": p, "registers": n, "share_of_honest": n / honest,
              "residual": 1 - n / honest} for r, k, p, n in rungs]
+
+
+BEST_RANK3 = "L0"
 
 
 def main() -> None:
@@ -193,8 +282,13 @@ def main() -> None:
     for r in leaf:
         print(f"- {r['what']}: {r['n']} × {r['registers']}")
 
+    dep = dependence()
+    out["dependence"] = dep
+    print(f"## Dependence (checked): {dep['witnessed']} of {dep['pairs']} (output, input) register pairs witnessed in "
+          f"{dep['trials']} trial(s); sha512 matches hashlib")
     lad = ladder(honest)
     out["ladder"] = lad
+    rung = {r["rung"]: r for r in lad}
     print("## The ladder: registers any program writes a compression")
     for r in lad:
         print(f"- {r['rung']} (rank {r['rank']}): {r['registers']} ({r['share_of_honest']:.2%} of {honest}; "
@@ -224,17 +318,18 @@ def main() -> None:
 
     print("## Frontier: residual reached → bytes a MAC T1 allows")
     frontier = []
-    for r in [lad[0]["residual"], lad[1]["residual"], lad[3]["residual"], 0.1, 0.01, 1e-3, 1e-4,
-              t1[0]["delta"], t1[1]["delta"]]:
+    for r in [rung[n]["residual"] for n in ("L0", "L1-isa", "L1-5", "L2")] + [0.1, 0.01, 1e-3, 1e-4,
+                                                                             t1[0]["delta"], t1[1]["delta"]]:
         bpm = 0.01 / (r * w1_byte)
         frontier.append({"residual": r, "bytes_per_mac": bpm})
-        print(f"- residual {r:.3g}: {bpm:.3g} B/MAC")
+        print(f"- residual {r:.4g}: {bpm:.3g} B/MAC")
     out["frontier"] = frontier
 
-    print("## Per monitoring period: the unproved hashing (rung L1a's residual) against T1's 1% of stock")
+    print(f"## Per monitoring period: the unproved hashing (rung {BEST_RANK3}'s residual, the best at rank ≤ 3 under "
+          "today's W1) against T1's 1% of stock")
     pooled = []
     for vol_row in t1:
-        hw, res = vol_row["hash_w1_per_mac"], lad[1]["residual"]
+        hw, res = vol_row["hash_w1_per_mac"], rung[BEST_RANK3]["residual"]
         for scope, rate in (("one H200", H200_MACS_PER_S), ("datacenter (100,000 H200)", H200_MACS_PER_S * DC_GPUS)):
             for p, s in {"window (600 s)": WINDOW_S, **PERIODS}.items():
                 macs = rate * s
