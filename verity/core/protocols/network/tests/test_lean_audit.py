@@ -514,11 +514,13 @@ def _openings():
 
 
 def _signed(lean, openings, session=SESSION, link="n2"):
-    """The Lean's signed syncs and refusals of `openings`, which must agree with `advised.SignedClocks`'s."""
+    """The Lean's signed syncs and refusals of `openings`, which must be `advised.SignedClocks`'s: its syncs and each
+    opening's refusal code."""
     key = _openings()[0]
     syncs, refused = lean_audit.signed_clocks(key, session, link, openings, server=lean)
+    ref = advised.SignedClocks(key, session, tuple(openings))
     assert lean_audit.DISAGREEMENT not in refused
-    assert syncs == advised.SignedClocks(key, session, tuple(openings)).syncs(link)
+    assert syncs == ref.syncs(link) and tuple(refused) == ref.codes
     return syncs, refused
 
 
@@ -546,7 +548,8 @@ def test_the_signed_syncs_are_the_references(lean):
 
 def test_on_generated_openings_the_lean_is_the_reference(lean):
     """On openings drawn from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
-    are `advised.SignedClocks`', and so are how many openings and link-windows they refuse, every refusal among them."""
+    are `advised.SignedClocks`', and so are each opening's refusal and the link-windows with two signed syncs, every
+    refusal among them."""
     _, honest, bad, beside = _openings()
     pool = [*honest, *bad.values(), *beside.values()]
     found = set()
@@ -567,7 +570,8 @@ def test_a_clock_disagreement_gives_no_window_a_sync(lean, monkeypatch):
 
     class SigningAll:
         def __init__(self, key, session, openings):
-            self.refused, self.openings = (), openings
+            self.refused, self.split, self.openings = (), (), openings
+            self.codes = (None,) * len(openings)
 
         def syncs(self, link):
             return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
@@ -583,6 +587,27 @@ def test_a_clock_disagreement_gives_no_window_a_sync(lean, monkeypatch):
     monkeypatch.setattr(lean_audit, "SignedClocks", boom)
     with pytest.raises(RuntimeError, match="the reference raised where the Lean check answered"):
         lean_audit.signed_clocks(key, SESSION, "n2", honest, server=lean)
+
+
+def test_clock_refusals_are_compared_by_opening_and_link_window(lean, monkeypatch):
+    """The Lean and the reference agree on which openings are refused and why, and on which link-windows have two
+    signed syncs, not only on how many: a reference refusing another opening, giving another reason, or splitting
+    another link-window, every count kept, is a `disagreement`."""
+    key, honest, bad, beside = _openings()
+    openings = [bad["forged"], *honest[1:], beside["second"]]
+    assert _signed(lean, openings) == ((), ["signature", None, None, None, None])
+    real = advised.SignedClocks
+    assert real(key, SESSION, tuple(openings)).split == (("n2", 1),)
+    for change in ({"codes": ("key", None, None, None, None)}, {"codes": (None, "signature", None, None, None)},
+                   {"split": (("n2", 2),)}, {"split": (("m", 1),)}):
+        def changed(key, session, openings, change=change):
+            ref = real(key, session, openings)
+            for k, v in change.items():
+                object.__setattr__(ref, k, v)
+            return ref
+
+        monkeypatch.setattr(lean_audit, "SignedClocks", changed)
+        assert lean_audit.signed_clocks(key, SESSION, "n2", openings, server=lean) == ((), ["disagreement"] * 5), change
 
 
 def test_clock_openings_outside_the_domain_are_refused(lean):
