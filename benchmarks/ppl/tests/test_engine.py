@@ -352,6 +352,76 @@ def test_blc_coin_lanes_are_a_tile_column_term(coin_a):
         served(False, rows=96)
 
 
+def test_bal13_is_the_balanced_digits():
+    z = torch.arange(-14280, 14281)
+    d = steps.bal13(z)
+    assert d.abs().max() <= 6 and torch.equal((d * 13.0 ** torch.arange(4)).sum(1), z.double())
+
+
+def test_the_rot_lead_serves_its_lean_words_less_the_fold():
+    """`tag_blc4a_rot` against `Pouw.Lead.word` written out lane by lane over the call padded to whole MMA tiles (70
+    rows to 80, 13 columns to 16): step 0 holds 21 data lanes, the row tag against G, a1 against C and the three coin
+    lanes; each later step 28 data lanes, the coin lanes and the tag lane 1 + b_t. Coin tiles are 64 rows, so the last
+    is partial and holds the padding rows, with zero data and coins of their own. Each real row's word less A'
+    (127, 1, 1) on even rows and (1, 127, 1) on odd ones against its tile's column sums of coins is what `served` serves,
+    the product plus the noise; and so is that row's entry of the words written out, whatever the padding holds. At
+    k 78 step 0's 21 data lanes take a step more than 24 would; the largest real word `served` commits is the layout's."""
+    g = torch.Generator().manual_seed(5)
+    m, k, n, mp, npad = 70, 78, 13, 80, 16
+    s = 1 + (k - 21 + 27) // 28
+    assert s == 4 == 2 + -(-(k - 24) // 28)
+    x = torch.randint(-127, 128, (m, k), generator=g).float()
+    w = torch.randint(-127, 128, (n, k), generator=g).float()
+    run = types.SimpleNamespace(seed=2, li=1, window=0, rotations={}, gates=matmul.G.Gates(),
+                                arm=types.SimpleNamespace(name="t"), checking=False, cache={})
+    mm = matmul.MM("linear", "mlp.down_proj", run, x, w).integer(x, w)
+    got = steps.served_linear(mm, lambda _m: x.long() @ w.long().T, rule="tag_blc4a_rot")
+    assert run.gates.log["coin_fold"]["checked"] == 1 and run.gates.log["coin_fold"]["failed"] == 0
+    assert run.gates.log["accumulator"]["failed"] == 0
+
+    def bal(z):
+        return [((z + 14280) // 13 ** q) % 13 - 6 for q in range(4)]
+
+    draw = matmul.MM("linear", "mlp.down_proj", run, x, w)
+    b = torch.cat([draw.coins((m, s - 1)).double(), torch.randint(0, 2, (mp - m, s - 1), generator=g).double()])
+    a1 = torch.cat([draw.coins((m, 4)).double(), torch.randint(0, 2, (mp - m, 4), generator=g).double()])
+    gw = draw.coins((4, npad), 7).double() - 3
+    coins = [2 * draw.coins((s, 3, npad), 128, dtype=torch.int16).double() - 127 for _ in range(2)]
+    tag = torch.tensor([bal((i // 2 + 1) * (-1) ** i) for i in range(mp)], dtype=torch.float64)
+    code = torch.tensor([bal(j + 1) for j in range(npad)], dtype=torch.float64).T
+    rot = torch.tensor([[127.0 if lane == i % 2 else 1.0 for lane in range(3)] for i in range(mp)], dtype=torch.float64)
+    lanes = [32 * t + (29 if t == 0 else 28) for t in range(s)]
+    xp, wp = torch.zeros(mp, k, dtype=torch.float64), torch.zeros(npad, k, dtype=torch.float64)
+    xp[:m], wp[:n] = x, w
+    xa, wa = torch.zeros(mp, 32 * s, dtype=torch.float64), torch.zeros(npad, 32 * s, dtype=torch.float64)
+    xa[:, :21], wa[:, :21] = xp[:, :21], wp[:, :21]
+    xa[:, 21:25], wa[:, 21:25] = tag, gw.T
+    xa[:, 25:29], wa[:, 25:29] = a1, code.T
+    for t in range(1, s):
+        lo = 21 + 28 * (t - 1)
+        d = min(28, k - lo)
+        xa[:, 32 * t:32 * t + d], wa[:, 32 * t:32 * t + d] = xp[:, lo:lo + d], wp[:, lo:lo + d]
+        xa[:, 32 * t + 31], wa[:, 32 * t + 31] = 1 + b[:, t - 1], 1
+    for c0 in lanes:
+        xa[:, c0:c0 + 3] = rot
+    bias = torch.floor((code.sum(0) + 3 * (s - 1) + 1) / 2)
+    served, words = torch.empty(mp, npad, dtype=torch.float64), torch.empty(mp, npad, dtype=torch.float64)
+    for tile in range(2):
+        for t, c0 in enumerate(lanes):
+            wa[:, c0:c0 + 3] = coins[tile][t].T
+        r = slice(64 * tile, min(64 * (tile + 1), mp))
+        words[r] = xa[r] @ wa.T - bias
+        served[r] = words[r] - rot[r] @ coins[tile].sum(0)
+    noise = tag[:m] @ gw[:, :n] + a1[:m] @ code[:, :n] + (1 + b[:m]).sum(1, keepdim=True) - bias[:n]
+    assert torch.equal(got, (x.long() @ w.long().T).double() + noise)
+    assert torch.equal(served[:m, :n], got)
+    assert run.gates.log["coin_fold"]["max"] == float(words[:m, :n].abs().max())
+    again = matmul.MM("linear", "mlp.down_proj", run, x, w).integer(x, w)
+    tiles = list(steps.rot_tiles(again, (x.long() @ w.long().T).double(), None))
+    assert [t[0] for t in tiles] == [slice(0, 64), slice(64, 70)]
+    assert torch.equal(torch.cat([t[2] for t in tiles]), words[:m, :n])
+
+
 def test_round_significand():
     s = torch.rand(1000, generator=torch.Generator().manual_seed(0)) * 1e-2 + 1e-6
     assert torch.equal(steps.round_significand(s, 24), s)
@@ -479,23 +549,25 @@ def test_served_noise_stays_in_the_product(llama, ids):
 
 def test_a_denoised_lead_serves_stock(llama, ids):
     """De-noised, the lead serves stock bit for bit; under the magic epilogue it serves vLLM's epilogue bit for bit at
-    22-bit scales, with blc4a's coin lanes (either weighting) too, and the tallies count each arm's own outputs."""
+    22-bit scales, with blc4a's coin lanes (either weighting) too, and the tallies count each arm's own outputs. The rot
+    lead, its coins drawn, folds them out on every call."""
     xu = ("ssn-1l-tag-magic-s22-v1", "ssn-1l-tag-blc4a-xu-v1", "ssn-1l-tag-blc4a-w127-xu-v1")
     arms = ["int8-channel127-v1", "ssn-1l-tag-dn-v1", "int8-vllm-v1", "int8-vllm-s22-v1", "ssn-1l-tag-magic-v1", *xu,
-            "aorb-sv4-v1", "ssn-1l-tag-v1", "ssn-1l-tag-blc4a-v1"]
+            "aorb-sv4-v1", "ssn-1l-tag-v1", "ssn-1l-tag-blc4a-v1", "tag-blc4a-t64-rot-v1"]
     r = evaluate(llama, ids[:4], arms)
     g = r["gates"]
     assert passed({"gates": {n: v for n, v in g.items() if n not in matmul.G.TALLIES}}), g
     nll = {k.split("/")[0]: v for k, v in r["nll"].items()}
     assert np.array_equal(nll["ssn-1l-tag-dn-v1"], nll["int8-channel127-v1"])
     assert all(np.array_equal(nll[a], nll["int8-vllm-s22-v1"]) for a in xu)
-    for noisy in ("ssn-1l-tag-v1", "aorb-sv4-v1", "ssn-1l-tag-blc4a-v1"):
+    for noisy in ("ssn-1l-tag-v1", "aorb-sv4-v1", "ssn-1l-tag-blc4a-v1", "tag-blc4a-t64-rot-v1"):
         assert not np.array_equal(nll[noisy], nll["int8-channel127-v1"]), noisy
     assert not np.array_equal(nll["ssn-1l-tag-blc4a-v1"], nll["ssn-1l-tag-v1"])
     by = g["epilogue_differs"]["by"]
     assert set(by) == {"ssn-1l-tag-magic-v1", *xu} and all(by[a][1] == 0 for a in xu)
     assert by["ssn-1l-tag-magic-v1"][0] == by["ssn-1l-tag-magic-s22-v1"][0] > 0
     assert g["epilogue"]["checked"] > 0 and g["epilogue"]["failed"] == 0
+    assert g["coin_fold"]["checked"] > 0 and g["coin_fold"]["failed"] == 0 and g["coin_fold"]["max"] < matmul.G.S32
 
 
 def test_seeds(llama, ids, calib):

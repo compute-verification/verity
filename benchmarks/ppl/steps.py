@@ -1095,7 +1095,7 @@ def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0
 
 #: the noise rules `served` adds to the integer product and serves
 SERVED_RULES = ("ssn_a", "ssn_1l", "ssn_1l5", "ssn_1l_hw", "ssn_1l_tag", "ssn_1l_tag_pd", "aorb_sv4", "ssn_pd", "ssn2",
-                "raw_byte")
+                "raw_byte", "tag_blc4a_rot")
 #: data entries in a k32 step (the other 4 are noise); `ssn_1l`'s later steps hold 31 and one noise lane
 SSN_DATA = 28
 SSN_1L_DATA = 31
@@ -1107,6 +1107,11 @@ TAG_LANES = 4
 TAG_G = 3
 #: `ssn_1l_tag`'s coin lanes (`coin_lanes` of a later step's 31 non-row lanes): the rows a tile's coins are shared by
 BLC_TILE = {1: 128, 3: 64}
+#: `tag_blc4a_rot`, the lead as the Lean states it (`Pouw.Lead.word`): step 0 holds 21 data lanes, the row tag, a1
+#: and the three coin lanes, each later step 28 data lanes, the three coin lanes and the tag lane; 64-row coin tiles of
+#: odd coins on +-127; the words committed over rows padded to 16 and columns padded to 8
+ROT_DATA0, ROT_DATA, ROT_TILE, ROT_COIN = 21, 28, 64, 127
+PAD_ROWS, PAD_COLS = 16, 8
 #: the fused linear each projection is served in: one call, so one draw of row coins for all its columns
 FUSED = {"self_attn.q_proj": "self_attn.qkv", "self_attn.k_proj": "self_attn.qkv", "self_attn.v_proj": "self_attn.qkv",
          "mlp.gate_proj": "mlp.gate_up", "mlp.up_proj": "mlp.gate_up"}
@@ -1148,6 +1153,23 @@ def row_tags(m: int) -> torch.Tensor:
     if tags is None:
         raise ValueError(f"ssn_1l_tag: {m} rows outrun the 4-digit balanced base-13 tag")
     return tags.T.contiguous()
+
+
+def bal13(z: torch.Tensor) -> torch.Tensor:
+    """`Pouw.Lead.bal13`, len(z) x 4: digit q of z in balanced base 13, the plain digits of z + 14,280 less 6 (z's own
+    digits for |z| <= 14,280; past that they wrap mod 13^4, as the Lean's do)."""
+    return (((z.to(torch.int64)[:, None] + 14280) // 13 ** torch.arange(4)) % 13 - 6).double()
+
+
+def rot_tags(m: int) -> torch.Tensor:
+    """`Pouw.Lead.rowTag`, m x 4: row i's tag, the balanced base-13 digits of (floor(i / 2) + 1) (-1)^i."""
+    i = torch.arange(m)
+    return bal13(torch.where(i % 2 == 0, i // 2 + 1, -(i // 2 + 1)))
+
+
+def rot_weights(m: int) -> torch.Tensor:
+    """`Pouw.Lead.rotWeight`, m x 3: the coin lanes' A', (127, 1, 1) on even rows and (1, 127, 1) on odd ones."""
+    return torch.where(torch.arange(3)[None, :] == torch.arange(m)[:, None] % 2, 127.0, 1.0).double()
 
 
 def tag_matrix(key: torch.Tensor, n: int, offset: int = 0) -> torch.Tensor:
@@ -1239,6 +1261,72 @@ def _check_served(p):
                          "1..7, so a coin fits a B' byte")
     if not 1 <= p["coin_a"] <= 127 or (p["coin_a"] != 1 and p["coin_lanes"] != 3):
         raise ValueError("served.coin_a is the middle of three coin lanes' A' (1..127), so it needs coin_lanes 3")
+    if p["rule"] == "tag_blc4a_rot" and p["denoise"]:
+        raise ValueError("served.tag_blc4a_rot is served noisy, its coin lanes folded")
+
+
+def _wrap32(x: torch.Tensor) -> torch.Tensor:
+    """x in 32-bit two's complement (int64 in, int64 out)."""
+    return (x + 2 ** 31) % 2 ** 32 - 2 ** 31
+
+
+def rot_steps(k: int) -> int:
+    """`Pouw.Lead.stepsFor`: k32 steps for inner dimension k, 21 data lanes at step 0 and 28 after:
+    1 + ceil((k - 21) / 28)."""
+    return 1 + -(-(k - ROT_DATA0) // ROT_DATA)
+
+
+def rot_tiles(mm, acc: torch.Tensor, stream: str | None):
+    """`tag_blc4a_rot`'s committed words (`Pouw.Lead.word` at the last step), a 64-row coin tile at a time, every coin
+    drawn: yields (rows, noisy, words, fold), noisy the product (`acc`) plus the noise and fold the coin lanes' sum the
+    epilogue removes. Over S = `rot_steps(k)` k32 steps, row i and column j commit the product, plus T(i) G[:, j] +
+    a1[i] C[:, j] + sum_{t >= 1} (1 + b_t[i]) less beta_j = floor((sum C[:, j] + 3 (S - 1) + 1) / 2), plus the coin
+    lanes sum_t sum_l A'[i, l] s_t[tile, l, j]: T the row tags (`rot_tags`), C[:, j] the balanced base-13 digits of j + 1 over
+    the fused call's columns (`bal13`), G uniform on [-3, 3] (4 x columns), a1 bits (rows x 4), b bits (rows x (S - 1)),
+    A' `rot_weights`, and s odd and uniform on +-127 a (step, tile, lane, column), drawn over the columns padded to 8.
+    The row coins (b, a1) are one draw per fused call, the column coins (G, s) the projection's own. A tile's coins
+    enter the words as the operands carry them, its rows' A' lanes against every step's s lanes; the fold is each row's
+    A' against the tile's column sums of s. Rows past the last whole tile form a partial one. Padding rows (zero data,
+    their own tag and coins) enter no other row's word, so they aren't formed."""
+    (m, k), n = mm.x.shape, acc.shape[1]
+    dev = acc.device
+    s = rot_steps(k)
+    off = fused_offset(mm.name, k, n)
+    cols = -(-n // PAD_COLS) * PAD_COLS
+    code = mm.shared(("rot_code", n, off, str(dev)),
+                     lambda: bal13(torch.arange(off + 1, off + n + 1)).T.contiguous().to(dev))
+    tags = mm.shared(("rot_tags", m, str(dev)), lambda: rot_tags(m).to(dev))
+    wts = mm.shared(("rot_weights", m, str(dev)), lambda: rot_weights(m).to(dev))
+    lanes = (1 + mm.coins((m, s - 1), 2, name=stream).double()).sum(1, keepdim=True)
+    a1 = mm.coins((m, 4), 2, name=stream).double()
+    g = mm.coins((4, cols), 2 * TAG_G + 1).double()[:, :n] - TAG_G
+    bias = torch.floor((code.sum(0) + 3 * (s - 1) + 1) / 2)
+    for i in range(0, m, ROT_TILE):
+        r = slice(i, min(i + ROT_TILE, m))
+        noisy = acc[r] + tags[r] @ g + a1[r] @ code + lanes[r] - bias
+        coin = 2 * mm.coins((s, 3, cols), ROT_COIN + 1, dtype=torch.int16)[..., :n].double() - ROT_COIN
+        yield r, noisy, noisy + wts[r].repeat(1, s) @ coin.reshape(3 * s, n), wts[r] @ coin.sum(0)
+
+
+def rot_lead(mm, acc: torch.Tensor, stream: str | None) -> torch.Tensor:
+    """`tag_blc4a_rot` served: each tile's words (`rot_tiles`) less its fold, in 32-bit two's complement as IADD3 does.
+    Gates: `accumulator` on the bound k |x| |w| + |noise| + 129 * 127 S of every prefix word and on the largest final
+    word, which `coin_fold` keeps as its `max`; `coin_fold`, that every served entry is the product plus the noise,
+    bit for bit."""
+    top = word_top = 0.0
+    exact = True
+    for r, noisy, word, fold in rot_tiles(mm, acc, stream):
+        top = max(top, G.absmax(noisy - acc[r]))
+        word_top = max(word_top, G.absmax(word))
+        served = _wrap32(_wrap32(word.long()) - _wrap32(fold.long()))
+        exact = exact and torch.equal(served, noisy.long())
+        acc[r] = served.double()
+    bound = (mm.x.shape[1] * G.absmax(mm.x.float()) * G.absmax(mm.weight().float()) + top
+             + (2 + ROT_COIN) * ROT_COIN * rot_steps(mm.x.shape[1]))
+    mm.gate("accumulator", bound <= G.S32 and word_top <= G.S32, bound)
+    mm.gate("coin_fold", exact)
+    mm.run.gates.peak("coin_fold", word_top)
+    return acc
 
 
 @linear_step("served", phase="integer", seeded=True, check=_check_served, source="SW-NOISE")
@@ -1266,7 +1354,8 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     n x (S - 1), less rint(sum C_i / 2 + 2 (S - 1)) a row, each projection's column coins its own and G one draw
     per fused call; `ssn_pd` is `ssn_1l` with its later steps' row bits
     folded out at the conversion (the same coins drawn, a1 C less rint(sum C / 2) served), and `ssn_1l_tag_pd`
-    `ssn_1l_tag`'s the same way (a1 C + T(i) G less rint(sum C / 2)); `ssn2` adds a b - S, a and b
+    `ssn_1l_tag`'s the same way (a1 C + T(i) G less rint(sum C / 2)); `tag_blc4a_rot` is the lead as the Lean states
+    it, its coins drawn (`rot_lead`); `ssn2` adds a b - S, a and b
     bits (m x S x 4 and
     S x 4 x n); `raw_byte` adds sum_s r_s to every column of a row, r uniform on {-128, ..., 127}^(m x S), uncentred.
     `fused`: the row coins are one draw per fused call (`FUSED`), shared by q, k and v and by gate and up, as served;
@@ -1275,6 +1364,8 @@ def served_linear(mm, nxt, *, rule: str, bits: int = 1, fused: bool = False, nz:
     (m, k), n = mm.x.shape, acc.shape[1]
     s = -(-k // SSN_DATA)
     stream = FUSED.get(mm.name) if fused else None
+    if rule == "tag_blc4a_rot":
+        return rot_lead(mm, acc, stream)
     aorb = rule == "aorb_sv4"
     if aorb and aorb_side_b(m, fused_columns(mm, n, fused), 1 + -(-(k - SSN_TAG_DATA) // SSN_1L_DATA)):
         return aorb_side_b_noise(mm, acc, stream, denoise)

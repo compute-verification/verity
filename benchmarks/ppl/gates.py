@@ -13,7 +13,7 @@ import torch
 
 S32 = 2 ** 31 - 1
 NAMES = ("int8_range", "grid_range", "accumulator", "product_exact", "peel", "emulation", "lut", "hf_reference",
-         "windows", "tokens", "epilogue", "epilogue_differs", "epilogue_fallback", "epilogue_wide")
+         "windows", "tokens", "epilogue", "epilogue_differs", "epilogue_fallback", "epilogue_wide", "coin_fold")
 #: the magic epilogue's served bf16 outputs that differ from its reference epilogue's, its rows the Cauchy-Schwarz
 #: bound routes to the fallback conversion, and its products P outside the magic range [-2^22, 2^22)
 TALLIES = ("epilogue_differs", "epilogue_fallback", "epilogue_wide")
@@ -39,6 +39,11 @@ class Gates:
                 g["first_failure"] = {"where": where, "detail": detail}
         return hits
 
+    def peak(self, name: str, value: float) -> None:
+        """Keep the largest `value` seen beside `name`'s counts (a gate's measured margin)."""
+        g = self.log[name]
+        g["max"] = max(g.get("max", 0.0), float(value))
+
     def skip(self, name: str, why: str) -> None:
         self.log[name]["skipped"] = why
 
@@ -55,6 +60,8 @@ class Gates:
                 mine["first_failure"] = g["first_failure"]
             if "skipped" in g:
                 mine.setdefault("skipped", g["skipped"])
+            if "max" in g:
+                mine["max"] = max(mine.get("max", 0.0), g["max"])
             for by, (of, hits) in g.get("by", {}).items():
                 c = mine.setdefault("by", {}).setdefault(by, [0, 0])
                 c[0], c[1] = c[0] + of, c[1] + hits

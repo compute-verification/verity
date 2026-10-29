@@ -82,7 +82,7 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
                  "ssn-a-b1-v1", "ssn-a-b4-v1", "ssn-1l-b1-v1", "ssn-1l-b4-v1", "ssn2-b1-v1", "raw-byte-served-v1",
                  "ssn-1l-b1-fused-v1", "ssn-1l5-lin-b1-v1", "ssn-1l5-b1-v1", "dither-int8-v1",
                  "ssn-1l-hw-v1", "ssn-1l-tag-v1", "ssn-1l-tag-nz-v1", "ssn-pd-v1", "ssn-1l-tag-dn-v1", "aorb-sv4-v1",
-                 "ssn-1l-tag-blc4a-v1", "ssn-1l-tag-pd-v1"):
+                 "ssn-1l-tag-blc4a-v1", "ssn-1l-tag-pd-v1", "tag-blc4a-t64-rot-v1"):
         want[name] = ("linears", stock, True)
     want["int8-vllm-v1"] = want["int8-vllm-s22-v1"] = ("linears", stock, False)
     want["ssn-1l-tag-magic-v1"] = ("linears", "int8-vllm-v1", True)
@@ -327,6 +327,8 @@ def test_defaults_are_filled_and_typed():
      "fits a B' byte"),
     ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "ssn_1l_tag"\ncoin_lanes = 1\ncoin_a = 127',
      "needs coin_lanes 3"),
+    ('[[linear]]\nstep = "int8"\n[[linear]]\nstep = "served"\nrule = "tag_blc4a_rot"\ndenoise = true',
+     "served noisy"),
 ])
 def test_rejections_name_the_problem(text, message):
     with pytest.raises(ValueError, match=message.replace("[", r"\[").replace("]", r"\]")):

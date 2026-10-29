@@ -1,0 +1,10 @@
+description = "the lead as the Lean states it (tag-blc4a-t64-rot, Pouw.Lead.word), served noisy with its coin lanes folded: stock int8, then the integer product plus T(i) G + a1 C + sum_t (1 + b_t) less floor((sum C + 3 (S - 1) + 1) / 2) per column, S = 1 + ceil((k - 21) / 28) (step 0: 21 data lanes, the tag, a1 and three coin lanes; later steps 28, three coin lanes and the tag lane), C the balanced base-13 digits of j + 1 over the fused call's columns, G uniform on [-3, 3]; the coin lanes A' = (127, 1, 1) on even rows and (1, 127, 1) on odd ones against odd coins on +-127 a (step, 64-row tile, lane, column), every coin drawn, committed in the words and removed by the fold in 32-bit two's complement; row coins one draw per fused call; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+
+[[linear]]
+step = "served"
+rule = "tag_blc4a_rot"
+fused = true
