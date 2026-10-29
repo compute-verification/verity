@@ -1,9 +1,9 @@
 import Definitions.Pouw.Dimension.Defs
 
 /-!
-# `MH100`'s price table and the hypothesis `H32` (draft semantics)
+# `MH100`'s price table and the hypothesis `H32`
 
-**Draft semantics, pending review**.
+**Draft semantics, pending review**, for `H32` and `FragLanes` only (the review below).
 
 `MH100` (`Pouw.Dimension.H100`) is the H100 (`sm_90`) analogue of `M4090`. Its prices are a parameter `Prices100`, in
 units of one dense int8 MAC at the datasheet's 4,096 MACs per SM per clock, so that a measurement can replace any
@@ -40,6 +40,30 @@ quarter, of the `wgmma` rate per MAC.
 * **`FragLanes S p q W`** (named hypothesis): every multiplicand register in `W` depends on at most `q`
   lanes. It restricts the adversary's cheap tensor-core instructions for the k8 lemma, and it is not needed where
   `H32` holds. Its witness is `FragLanesSat`.
+
+## Review against the H200's measurements
+
+Each definition below was checked against what was measured on one H200 SXM (`sm_90a`), in `Prices100`'s unit, as
+`Pouw.Dimension.H100W`'s review lists the measurements. The H200's table is `h100Floor` entry for entry.
+
+* **`Shape100`, with its `k`, `elems` and `regPrice`**: **matches** at `nominalMac`. Each shape's `k` and `elems` are
+  PTX's. Dense `wgmma` m64n256 costs 32.003 a register for s8, e4m3, e5m2, f16, bf16 and tf32 with FP32 accumulate,
+  and 64.005 with FP16 accumulate (e4m3, e5m2 and f16). The model doesn't price `N`, which is **stricter**: at `N` 32,
+  16 and 8 the H200 charges 48.0, 80.0 and 144 a register (288 with FP16 accumulate).
+* **`Prices100`**: **matches** the classes that `Op100.price` charges. Every writer of a 32-bit word that was measured
+  is in one of them, at or above its entry.
+* **`h100Nominal`**: the data sheet's, as stated. Its assertion that `sm_90` runs the legacy shapes at no more than
+  half the `wgmma` rate a MAC **holds** on the H200, with no slack.
+  - m16n8k8 f16 and bf16 and m16n8k4 tf32 cost 32.014 a register, and m16n8k16 s8 and m16n8k128 b1 32.010.
+  - m8n8k4 with f16 inputs isn't a tensor instruction on `sm_90a`: ptxas lowers it to a scalar routine, priced as
+    its instructions. f64 m8n8k4 is DMMA, at 128.
+* **`Floor` and `FloorTc`**: **match**. Each says of a table what its docstring says, over every class `Op100.price`
+  charges. The H200 meets `FloorTc 32 32`, which is `H32`, so it needs no `c` below 32.
+* **`H32`**: **matches** for every form that was priced. None of 963 `sm_90` SASS forms costs under 32 a register
+  alone (the least is DMUL at 32.00), and each class's cheapest writer is within 1% above 32. 26 forms are unpriced:
+  21 `LDGMC`, 4 `LDL` and `LEPC`. So its marker stays until they are priced.
+* **`FragLanes`**: it restricts the adversary's multiplicands, which no measurement can check, so its marker stays.
+  The H200 doesn't need it, since no tensor-core form there costs under 32 a register.
 -/
 
 namespace Pouw.Dimension.H100
@@ -47,7 +71,8 @@ namespace Pouw.Dimension.H100
 /-- A `wgmma` shape of the H100 (`sm_90`) at its least `k`, by operand type and accumulator. The instruction's `N` (8
 to 256) sets how many accumulator registers it writes. The model does not price `N`: every `N` costs `regPrice` per
 register. On hardware that is the price at `N ≥ 64` only. Round 7 measured m64n8k32 E4M3 → F32 at 144 per register,
-and sparse n8 at 160. The lower bounds are unaffected, since a real price is at least the model's. But
+and sparse n8 at 160. The H200 charges 144 too. The lower bounds are unaffected, since a real price is at least the
+model's. But
 the pins that exhibit programs at the nominal price (`MH100Attains`, `HonestSplitK100`, `DistinctWritesAttained`) hold
 on hardware only at `N ≥ 64`. -/
 inductive Shape100 where
@@ -100,7 +125,7 @@ structure Prices100 where
 /-- The price of a `wgmma` shape per 32-bit accumulator register written. -/
 def Shape100.regPrice (pr : Prices100) (s : Shape100) : ℕ := s.k * s.elems * pr.mac s
 
-/-- **Hypothesis `Floor c pr`** (named; draft semantics): every register writer of `MH100` costs at least `c` per
+/-- **Hypothesis `Floor c pr`** (named): every register writer of `MH100` costs at least `c` per
 32-bit register written. -/
 def Floor (c : ℕ) (pr : Prices100) : Prop :=
   (∀ s : Shape100, c ≤ s.regPrice pr) ∧ c ≤ pr.tc ∧ c ≤ pr.ffma ∧ c ≤ pr.int32 ∧ c ≤ pr.fp64 ∧ c ≤ pr.other
@@ -109,10 +134,11 @@ def Floor (c : ℕ) (pr : Prices100) : Prop :=
 register written.
 
 It is a floor per instruction class, not per register in time. Round 8 found
-no single writer below 32 loop-free (`h32LoopFree`, `h32Floor`). But writers on separate pipes co-issue, and mixes go
+no single writer below 32 loop-free (`h32LoopFree`, `h32Floor`). On the H200, none of 963 `sm_90` SASS forms costs
+under 32 alone, and 26 are unpriced (the module's review). But writers on separate pipes co-issue, and mixes go
 below 32 per register: as low as 21.45 loop-free (1:1 DADD + FADD with an immediate in place of one source each), and
-21.33 at full dispatch (the FP64 pipe's bound). So a bound on `cost100` under `H32` bounds additive-W1 work, not
-time. A time bound needs a maximum over resources. -/
+21.33 at full dispatch (the FP64 pipe's bound). On the H200, 2:1:1 DADD + IMAD + FADD writes one every 21.54. So a
+bound on `cost100` under `H32` bounds additive-W1 work, not time. A time bound needs a maximum over resources. -/
 def H32 (pr : Prices100) : Prop := Floor 32 pr
 
 /-- The datasheet's per-MAC prices (§0): FP8 and int8 1, FP16 and BF16 2, TF32 4. -/
@@ -132,7 +158,7 @@ def h100Nominal : Prices100 where
   fp64 := 32
   other := 32
 
-/-- **Hypothesis `FloorTc a c pr`** (named; draft semantics): every register writer of `MH100` costs at least `a` per
+/-- **Hypothesis `FloorTc a c pr`** (named): every register writer of `MH100` costs at least `a` per
 32-bit register written, except the tensor-core instructions outside the `wgmma` shapes (legacy `mma.sync` among
 them), which cost at least `c`. `Floor c pr` is `FloorTc c c pr`, so `H32 pr` is `FloorTc 32 32 pr`.
 
@@ -140,7 +166,7 @@ On the H100 SXM, Round 7 measured legacy m16n8k8 f16 → f32 `mma.sync` at 34.0 
 instruction below 32 (`tc = 32`, from b1 `wgmma`). So the measured table is plain `H32` (`h32Measured`), not
 `FloorTc 32 c` with `c` below 32. The 31.2–31.8 for legacy k8 was measured on the H800 PCIe,
 power-limited at 350 W. `FloorTc 32 c` with `c` below 32 describes such a part, or the hypothetical `h100Legacy`
-(`tc = 31`). -/
+(`tc = 31`). The H200 is not one: its legacy m16n8k8 f16 → f32 costs 32.014, and it meets plain `H32`. -/
 def FloorTc (a c : ℕ) (pr : Prices100) : Prop :=
   (∀ s : Shape100, a ≤ s.regPrice pr) ∧ c ≤ pr.tc ∧ a ≤ pr.ffma ∧ a ≤ pr.int32 ∧ a ≤ pr.fp64 ∧ a ≤ pr.other
 
