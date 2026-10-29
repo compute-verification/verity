@@ -4,6 +4,7 @@ import Proofs.Pouw.Lead.PStar.ExpansionProofs
 import Proofs.Pouw.Lead.PStar.Lanes
 import Proofs.Pouw.Lead.PStar.Marginal
 import Proofs.Pouw.Lead.PStar.MassFloorProofs
+import Proofs.Pouw.Lead.PStar.Stream
 import Proofs.Pouw.Lead.PStar.Table
 import Proofs.Pouw.Lead.PStar.Tile
 import Proofs.Pouw.Lead.PStar.Walks
@@ -25,6 +26,10 @@ Its proofs are in `Lead/PStar/`, its new declarations in `Pouw.SecurityProofs.Le
 * `Marginal`: a part of the draw caps the whole: a value that moves with one part of the draw only through a term
   hits a fixed value on at most the share that term does.
 * `MassFloorProofs`: point masses at most `p` force a variance of at least `(1/p² − 1)/12`, with its mean over steps.
+* `Stream`: an MMA tile against the certifier's coin stream: at any step the tile's words are a streamed tile on at
+  most a `2^−105` share of the call's coins, whatever the data and the stream's arrangement. The stream holds each of
+  the tile's 24 lanes once at most, so at least 5 of its columns compare an even and an odd row with words that don't
+  move with the lanes.
 * `Table`: the statement's pieces. `pStar_eq`: a value of a step's lanes and tag bit, `127 s₀ + s₁ + s₂ + 1 + b`, is
   taken by at most 130 of the `2 · 128³` draws and one by exactly 130, `Lanes`' bound on an even row; `table_le`, the
   pre-coin tables' and coin stream's term, is still a stub.
