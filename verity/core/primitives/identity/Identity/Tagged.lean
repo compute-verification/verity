@@ -10,8 +10,9 @@ identity_digest_sha512(tag, manifest) = tagged_sha512(tag, canonical_json_bytes(
 ~~~
 
 `tag` is UTF-8 and nonempty, and the lengths fit their fields; Python refuses anything else (`TypeError`, `OverflowError`),
-and so does `taggedState`. The manifest's canonical bytes are `Flock.canon`'s, which writes what `canonical_json_bytes`
-writes on every value both accept (`Flock.canon` refuses a non-integer number, as Python refuses a float). `taggedState` is
+and so does `taggedState`. The manifest's bytes are `Flock.canonUtf8`'s, which writes what `canonical_json_bytes` writes
+on every value both accept (it refuses a non-integer number, as Python refuses a float): canonical JSON's form with
+strings in UTF-8, where canonical JSON (`Flock.canon`) escapes every character past printable ASCII. `taggedState` is
 the hash after the header, which a long payload of known length is streamed into.
 -/
 
@@ -37,7 +38,7 @@ def taggedSha512 (tag : String) (payload : ByteArray) : Flock.V ByteArray := do
   return ((← taggedState tag payload.size).update payload).finalize
 
 def identityDigestSha512 (tag : String) (manifest : Json) : Flock.V ByteArray := do
-  taggedSha512 tag (← Flock.canon manifest).toUTF8
+  taggedSha512 tag (← Flock.canonUtf8 manifest).toUTF8
 
 #guard (taggedSha512 "" .empty).toOption.isNone
 -- Python's `tagged_sha512("t", b"x")` and `identity_digest_sha512("verity/x", {"b": [1, "é"], "a": None})`
