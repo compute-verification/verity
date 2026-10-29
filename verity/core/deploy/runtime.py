@@ -49,9 +49,9 @@ from verity.core.wire.handshake import NONCE_BYTES, Handshake, Key, Verify
 
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
-from .manifest import SOURCES, Manifest, Placement, place, site_of
+from .manifest import SOURCES, Manifest, PlaceResult, place, site_of
 from .party import Action, Finish, Identity, Party, Received, Record, Send, Timer
-from .transcript import Entry, Transcript, record
+from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")
 RUNTIME = Registry([Schema("Closed", 1, "structure", {"how": Str(1024)}),
@@ -100,7 +100,7 @@ class Host:
     `clock` reads the party's clock source, for the stamp on a frame from a peer; None for a party with no clock, and in
     a replay, which feeds the stamps its transcript kept."""
 
-    def __init__(self, name: str, party: Party, identity: Identity, params: Mapping[str, Any], transcript: Transcript,
+    def __init__(self, name: str, party: Party, identity: Identity, params: Mapping[str, Any], transcript: PartyLog,
                  endpoints: Mapping[str, Endpoint], transmit: Callable[[Endpoint, bytes], None] = lambda ep, f: None,
                  on_finish: Callable[[Host], None] = lambda h: None, clock: Callable[[], int] | None = None) -> None:
         self.name, self.party, self.identity, self.params = name, party, identity, dict(params)
@@ -255,9 +255,9 @@ class RunResult:
     mode: str
     status: str
     outcomes: dict[str, dict[str, Any]]
-    transcripts: dict[str, Transcript]
+    transcripts: dict[str, PartyLog]
     divergence: str | None = None
-    placement: Placement | None = None
+    placement: PlaceResult | None = None
     run: int | None = None
     incomplete: list[int] = field(default_factory=list)
     ended: dict[str, dict[str, str]] = field(default_factory=dict)
@@ -449,7 +449,7 @@ def _describe(e: Entry) -> str:
     return what + (f" on {e.channel}" if e.channel else "")
 
 
-def replay(protocol: ProtocolDef, name: str, party: Party, recorded: Transcript, identity: Identity) -> RunResult:
+def replay(protocol: ProtocolDef, name: str, party: Party, recorded: PartyLog, identity: Identity) -> RunResult:
     """`party` re-run as `name` from its own transcript `recorded`: each input fed to it in order, a frame with the stamp
     recorded just before it, each entry it makes held to the recorded one. It stops by name (`divergence`) at the first
     that differs; the handshakes are not replayed."""
@@ -459,7 +459,7 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: Transcript,
     start = parse(old[0].data)
     if start.get("party") != name:
         raise Refused("divergence", f"the transcript is {start.get('party')}'s, not {name}'s")
-    new = Transcript(name)
+    new = PartyLog(name)
     host = Host(name, party, identity, start["params"], new, _endpoints(protocol.manifest, name, {}, None))
     host.start()
     j, why = 0, None
@@ -552,7 +552,7 @@ class _Runs:
 def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state_dir: str | os.PathLike | None, *,
         protocols: Mapping[str, ProtocolDef], keys: Mapping[str, Key] | None = None, verify: Verify | None = None,
         seed: bytes | None = None, clock_step_ns: int = 0, sources: Mapping[str, Mapping[str, Any]] | None = None,
-        playback: Mapping[str, Transcript] | None = None, processes: Mapping[str, Mapping[str, Any]] | None = None,
+        playback: Mapping[str, PartyLog] | None = None, processes: Mapping[str, Mapping[str, Any]] | None = None,
         adversaries: Mapping[tuple[str, str], Mapping[str, Any]] | None = None, dial_to: Mapping[str, str] | None = None,
         capabilities: Mapping[str, Mapping[str, Any]] | None = None, authenticate: bool = True,
         replay_dir: str | os.PathLike | None = None) -> RunResult:
@@ -582,7 +582,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
         src = Path(replay_dir) if replay_dir is not None else None
         if src is None:
             raise ValueError("a replay reads its transcripts from replay_dir")
-        results = [replay(protocol, p, protocol.parties[p](), Transcript.read(src / f"{p}.transcript", p), identity(p))
+        results = [replay(protocol, p, protocol.parties[p](), PartyLog.read(src / f"{p}.transcript", p), identity(p))
                    for p in here]
         outcomes = {k: v for r in results for k, v in r.outcomes.items()}
         why = next((r.divergence for r in results if r.divergence), None)
@@ -651,7 +651,7 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
             peer_key = entries.get(b, {}).get("key")
             handshakes[b] = Handshake(party=a, peer=b, protocol=pid, version=m.version, configuration=conf, nonce=nonce,
                                       key=keys[a], verify=verify, peer_key=None if peer_key is None else bytes.fromhex(peer_key))
-        t = Transcript(a, None if tdir is None else tdir / f"{a}.transcript")
+        t = PartyLog(a, None if tdir is None else tdir / f"{a}.transcript")
         rt.hosts[a] = Host(a, protocol.parties[a](), identity(a), config.get("params", {}), t,
                            _endpoints(m, a, pipes[a], handshakes), rt.transmit, rt.finished, clock)
     from .process import spawn  # here, since process imports this module
