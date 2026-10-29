@@ -39,14 +39,20 @@ GEMM = {64: {"plain_us": 570.8, "a_side": 1.893, "noised": -0.001, "wide": 0.996
         512: {"plain_us": 1194.3, "a_side": 2.059, "noised": 0.012, "wide": 1.169, "w_side": 2.739},
         8192: {"plain_us": 12494.2, "a_side": 2.424, "noised": 0.043, "wide": 1.536, "w_side": 0.265}}
 
-# the stock steps (GD-HASH, note:compute-research/20261028T2230Z-report-gd-hash-reframe)
+# the stock steps (GD-HASH, note:compute-research/20261028T2230Z-report-gd-hash-reframe); a T 512 step of 512 real rows
+# is GD-HASH's 64-row step with its GEMMs at m 512 instead of m 64 (GEMM's plain rows) and its other kernels held
+_K512 = 0.96 + (GEMM[512]["plain_us"] - GEMM[64]["plain_us"]) * 1e-3
 ENGINES = {
-    8192: {"sync": (37.77, 8.73, "measured: HASH-56's step, r20261028-023029-1f82; its served gap 8.73 ms"),
-           "async": (37.77 - 8.73 + 2.29, 2.29, "estimate: HASH-56's step with p1a-levers' async gap, 2.29 ms")},
-    512: {"sync": (0.96 + 2.46, 2.46, "estimate: p1a-levers' T 8,192 parts scaled (kernels 0.96 ms, gap 2.46 ms)"),
-          "async": (0.96 + 0.71, 0.71, "estimate: the same with the async gap, 0.71 ms")},
+    "T 8,192": {"sync": (37.77, 8.73, "measured: HASH-56's step, r20261028-023029-1f82; its served gap 8.73 ms"),
+                "async": (37.77 - 8.73 + 2.29, 2.29, "estimate: HASH-56's step with p1a-levers' async gap, 2.29 ms")},
+    "T 512, 64 real rows": {
+        "sync": (0.96 + 2.46, 2.46, "estimate: p1a-levers' T 8,192 parts scaled (kernels 0.96 ms, gap 2.46 ms)"),
+        "async": (0.96 + 0.71, 0.71, "estimate: the same with the async gap, 0.71 ms")},
+    "T 512, 512 real rows": {
+        "sync": (_K512 + 2.46, 2.46, "estimate: the 64-row step's kernels with the GEMMs at m 512, gap 2.46 ms"),
+        "async": (_K512 + 0.71, 0.71, "estimate: the same with the async gap, 0.71 ms")},
 }
-POINTS = {"T 8,192": (8192, 8192, 8192), "T 512, 64 real rows": (512, 64, 64), "T 512, 512 rows": (512, 512, 512)}
+POINTS = {"T 8,192": (8192, 8192), "T 512, 64 real rows": (64, 64), "T 512, 512 real rows": (512, 512)}   # (real rows, m)
 
 
 def words_bytes(n: int, k: int, d: int) -> int:
@@ -90,7 +96,7 @@ def main() -> None:
     for d, head in ((32, False), (32, True), (16, False)):
         t = per_token(d, head)
         rule = t["bytes"] / t["macs"] * ROWS[16384]["h_x"] * U_RULE
-        for pname, (T, real, m) in POINTS.items():
+        for pname, (real, m) in POINTS.items():
             B, g = t["bytes"] * real, GEMM[min(GEMM, key=lambda x: abs(x - m))]
             gemm_ms = g["plain_us"] * (g["a_side"] + g["noised"] + g["wide"] + g["w_side"]) * 1e-3
             excl, _ = hash_ms(B, 16384, 0.0)
@@ -98,7 +104,7 @@ def main() -> None:
             row = {"bytes_token": t["bytes"], "GB_forward": B / 1e9, "rows_16k": B / 16384, "exclusive_ms": excl,
                    "hbm_write_ms_unfused": B / HBM * 1e3, "gemm_extra_ms": gemm_ms, "plain_gemm_ms": plain_ms,
                    "tH_tS_matmuls": None if head else (plain_ms + gemm_ms + excl) / plain_ms, "engines": {}}
-            for e, (stock, gap, src) in ENGINES[T].items():
+            for e, (stock, gap, src) in ENGINES[pname].items():
                 _, gapfirst = hash_ms(B, 16384, gap)
                 row["engines"][e] = {"stock_ms": stock, "hash_ms_gap_first": gapfirst, "src": src,
                                      "tH_tS": (stock + gapfirst + gemm_ms) / stock,
