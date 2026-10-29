@@ -8,7 +8,8 @@
 //
 //   ldgmc --list                  the forms, one a line: kernel, the SASS form it must lower to, registers a lane
 //   ldgmc [--reps R] [--iters N]  times every form; one line a form, then a verdict line
-// Exit: 0 every form timed and checked, 1 a check failed, 3 the node has no multicast object (LDGMC can't run).
+// Exit: 0 every form timed and checked, 1 a check failed or a block shared its SM, 3 the node has no multicast object
+// (LDGMC can't run).
 #include <cuda.h>
 #include <cuda_runtime.h>
 
@@ -278,10 +279,12 @@ int main(int argc, char** argv) {
   std::vector<Rec> hr(sms);
   std::vector<unsigned> hs((size_t)sms * TPB);
   bool all_ok = true;
-  printf("form sass regs_a_lane cycles_median words_a_sm_clock price_a_ldgmc_register price_a_loop_register checked\n");
+  printf("form sass regs_a_lane cycles_median words_a_sm_clock price_a_ldgmc_register price_a_loop_register checked "
+         "distinct_sms\n");
   for (const Form& f : FORMS) {
     std::vector<double> cyc;
     bool ok = true;
+    int distinct = sms;
     for (int r = 0; r < reps + 1; r++) {
       cudaMemset(sink, 0xA5, (size_t)sms * TPB * sizeof(unsigned));
       f.k<<<sms, TPB>>>((const unsigned char*)mcp, rec, sink, iters);
@@ -299,6 +302,10 @@ int main(int argc, char** argv) {
             break;
           }
       if (r == 0) continue;  // the first pass warms the switch's path and the code
+      std::vector<int> ids(sms);
+      for (int b = 0; b < sms; b++) ids[b] = hr[b].smid;
+      std::sort(ids.begin(), ids.end());
+      distinct = std::min(distinct, (int)(std::unique(ids.begin(), ids.end()) - ids.begin()));
       std::vector<long long> c(sms);
       for (int b = 0; b < sms; b++) c[b] = hr[b].cyc;
       std::nth_element(c.begin(), c.begin() + sms / 2, c.end());
@@ -308,10 +315,12 @@ int main(int argc, char** argv) {
     const double med = cyc[cyc.size() / 2];
     const double words = (double)TPB * U * f.nreg * iters / med;
     const double loop_regs = (double)TPB * U * (f.nreg + f.nreg / 2 + 1) * iters / med;
-    printf("%s %s %d %.0f %.5f %.2f %.2f %s\n", f.name, f.sass, f.nreg, med, words, 4096.0 / words, 4096.0 / loop_regs,
-           ok ? "ok" : "MISMATCH");
-    all_ok = all_ok && ok;
+    // a block that shared its SM ran at part of the SM's rate, which would overstate the price
+    printf("%s %s %d %.0f %.5f %.2f %.2f %s %d\n", f.name, f.sass, f.nreg, med, words, 4096.0 / words,
+           4096.0 / loop_regs, ok ? "ok" : "MISMATCH", distinct);
+    all_ok = all_ok && ok && distinct == sms;
   }
-  printf("verdict: %s\n", all_ok ? "every form timed, and every returned word is the stored one" : "a check failed");
+  printf("verdict: %s\n", all_ok ? "every form timed one block an SM, and every returned word is the stored one"
+                                 : "a check failed, or a block shared its SM");
   return all_ok ? 0 : 1;
 }
