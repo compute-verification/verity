@@ -362,6 +362,28 @@ def wide_draws(seeds: range = range(200, 210), m: int = 256, n: int = 64) -> dic
     return out
 
 
+def tile_sizes(seed: int = 7, m: int = 256, n: int = 256) -> dict:
+    """Whole repeats against the skipped MMA's width (A2r, Llama, narrow tag): m16n8, 16 × 64, and 16 × 256, a warp's
+    share of the lead's wgmma at BN 256 (N-FLOOR final 2: 2,048–4,096 words a warp)."""
+    global TILE_N
+    shape, out = SHAPES["llama"], {}
+    stock = sum(nn * kk for nn, kk in shape.values())
+    try:
+        for cfg in ("blc4a-t64-e7", "blc4a-t64-e7-w127"):
+            for tn in (8, 64, 256):
+                TILE_N = tn
+                rng, per_k = np.random.default_rng(seed), {}
+                for kk in sorted({kk for _, kk in shape.values()}):
+                    tg = lead_instance(cfg, kk, m, n, rng, "a2r")["tile_grain"]
+                    per_k[kk] = {"whole_repeats": tg["whole_repeats"], "tiles": tg["tiles"],
+                                 "share": _whole_share(tg, kk)}
+                out[f"{cfg}/16x{tn}"] = {"per_k": per_k, "W/whole": sum(nn * kk * per_k[kk]["share"]
+                                                                        for nn, kk in shape.values()) / stock}
+    finally:
+        TILE_N = 8
+    return out
+
+
 def weighted_lane_same_xrow(wd: dict) -> bool:
     a, b = wd["blc4a-t64-e7+wide/a2r/v4_dense"]["per_seed"], wd["blc4a-t64-e7-w127+wide/a2r/v4_dense"]["per_seed"]
     return all(a[s]["P/xrow"] == b[s]["P/xrow"] for s in a)
@@ -761,7 +783,17 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json", default=None)
     ap.add_argument("--wide-draws", action="store_true", help="only the wide tag's cross-row across seeds")
+    ap.add_argument("--tile-sizes", action="store_true", help="only whole repeats against the skipped MMA's width")
     args = ap.parse_args()
+    if args.tile_sizes:
+        ts = tile_sizes()
+        for key, v in ts.items():
+            print(f"{key:28s} W/whole={100 * v['W/whole']:.3f}%  " + "  ".join(
+                f"k{kk}: {t['whole_repeats']} of {t['tiles']}" for kk, t in v["per_k"].items()))
+        if args.json:
+            with open(args.json, "w") as f:
+                json.dump({"tile_sizes": ts}, f, indent=1)
+        return
     if args.wide_draws:
         wd = wide_draws()
         same = weighted_lane_same_xrow(wd)
