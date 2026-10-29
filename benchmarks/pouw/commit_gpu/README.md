@@ -19,7 +19,7 @@ Files:
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
 
 ~~~text
-research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
+research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
   [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash benchmarks/pouw/commit_gpu/gpu.sh
 ~~~
 
@@ -126,7 +126,7 @@ the commitment's stream at the device's highest priority.
   issue slots from the GEMM instead (GEMMs 1.8x slower at e2e).
 - **The CPU tail** (the top 3-5 levels on the host, which needs the root anyway) saves 5-15 us.
 
-## Leaf size (RS-DEF owns it)
+## Leaf size
 
 A leaf's fixed cost is ~11 compressions (salt 3, c 2, hm96 leaf 2, frame leaf 2, its share of the nodes ~2) besides its row
 (L/128 blocks of int8 values). Small leaves pay the fixed cost per 32 values: 2^20 leaves a call, 3.06x the GEMM on the
@@ -143,7 +143,7 @@ Reached for leaves of 2 KiB and more as time added to the stage: committed on a 
 reads the same operand, the commitment is done before the GEMM and the GEMM ends 0.07-0.09x later. Not reached alone (0.53x,
 the serial chain of ~42 compressions times a lone warp's ~5 us), and not at the e2e slice's 32 values a leaf: its data phase
 is 8.4 M compressions, 1.18 ms at the card's integer issue ceiling (2.8x the GEMM), so no kernel gets it under that, and the
-graph is within 8% of it. What would still move it: bigger leaves (RS-DEF's call), a tree with fewer serial levels (a wider
+graph is within 8% of it. What would still move it: bigger leaves (a format change), a tree with fewer serial levels (a wider
 node, which is a format change), committing several operands of a stage in one pass (the latency floor is per launch, not
 per operand), and the salt phase timed into idle GPU time.
 
@@ -255,7 +255,7 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   binary while their `Consts` agree (one Ks, key and row size).
 
 `COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
-to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in stage_ovl's schedule (its cg arms), dumps
+to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). A consumer that runs it can dump
 chunk 0's commitments, and `reference.py verify` checks them.
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between
@@ -267,7 +267,7 @@ at R = 64 holds pairs of adjacent leaves: one level), or a 4-ary tree (a format 
 
 ### For the e2e slice (E2E)
 
-The slice's operand leaf (commit.py in benchmarks/e2e_slice on branch cursor/e2e-slice-ea24) is now one 32-value row segment as
+The slice's operand leaf is now one 32-value row segment as
 a 256-bit `row/v2` row at position i (k/32) + j: commit_gpu's `rows` mode with 256-bit rows at a 32-byte stride (bit for
 bit: the cases of 1025 and 100003 such rows; 1.198 ms for o_proj's 2^20 leaves, the Results table's 32 B row). The `e2e`
 mode here is the slice's earlier bf16 form. Its SHAKE-256 salts go in as given salts (192 bytes a leaf, `salts<false>`),
