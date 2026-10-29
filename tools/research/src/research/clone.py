@@ -33,6 +33,9 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.lean-imports.driver": "python3 tools/verity/lean/merge.py --lean %O %A %B %P",
                  "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
                  "merge.lakefile-lists.driver": "python3 tools/verity/lean/merge.py --lakefile %O %A %B %P",
+                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
+                                         "(tools/verity/lean/merge.py)",
+                 "merge.lean-caps.driver": "python3 tools/verity/lean/merge.py --caps %O %A %B %P",
                  "merge.fixture-map.name": "fixtures/artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
                  "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
