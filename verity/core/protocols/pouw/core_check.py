@@ -88,7 +88,7 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.profile import Work, WorkStratum
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
-from verity.core.protocols.pouw.protocol import U64, tagged
+from verity.core.protocols.pouw.protocol import U64, fold_roots, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -1045,7 +1045,7 @@ def weights_root(scheme: str, roots: dict[int, bytes]) -> bytes:
     """`audit.weights_root`, an epoch's weights' root, under a coin commitment's scheme (`COIN_VERSIONS`); a live H1
     window's open root binds `weights.weights_root` instead (`salt`)."""
     n, tag = COIN_VERSIONS[scheme]
-    return tagged(tag, *(p for w in sorted(roots) for p in (w, roots[w])))[:n]
+    return fold_roots(tag, roots)[:n]
 
 
 def _manifest(raw: bytes) -> dict:
