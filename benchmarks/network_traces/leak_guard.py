@@ -252,27 +252,25 @@ _WS = re.compile(r"[ \t\n\r]*")
 
 def value_span(b: bytes, key: str) -> tuple[int, int] | None:
     """The byte offsets [start, end) of the value at `key` (an object's keys joined by ``/``) in the JSON document `b`,
-    or None when it has no value there."""
+    or None when it has no value there. A document that isn't JSON along the path raises ValueError, which ends the
+    guard, so chain_record.sh and certifier_piece withhold the record whole."""
     s, dec = b.decode("latin-1"), json.JSONDecoder()
     at = _WS.match(s).end()
-    try:
-        for k in key.split("/"):
-            if s[at:at + 1] != "{":
-                return None
-            at = _WS.match(s, at + 1).end()
-            while s[at:at + 1] == '"':
-                name, at = dec.raw_decode(s, at)
-                at = _WS.match(s, _WS.match(s, at).end() + 1).end()
-                if name == k:
-                    break
-                at = _WS.match(s, dec.raw_decode(s, at)[1]).end()
-                if s[at:at + 1] == ",":
-                    at = _WS.match(s, at + 1).end()
-            else:
-                return None
-        return at, dec.raw_decode(s, at)[1]
-    except ValueError:
-        return None
+    for k in key.split("/"):
+        if s[at:at + 1] != "{":
+            return None
+        at = _WS.match(s, at + 1).end()
+        while s[at:at + 1] == '"':
+            name, at = dec.raw_decode(s, at)
+            at = _WS.match(s, _WS.match(s, at).end() + 1).end()
+            if name == k:
+                break
+            at = _WS.match(s, dec.raw_decode(s, at)[1]).end()
+            if s[at:at + 1] == ",":
+                at = _WS.match(s, at + 1).end()
+        else:
+            return None
+    return at, dec.raw_decode(s, at)[1]
 
 
 def _is_archive(head: bytes) -> bool:

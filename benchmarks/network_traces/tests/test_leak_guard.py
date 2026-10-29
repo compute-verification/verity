@@ -231,7 +231,8 @@ def test_a_keyed_entry_excuses_only_the_pieces_inside_its_values(tmp_path):
 
 def test_value_span_is_the_bytes_of_the_value_at_a_key_path():
     """`value_span` finds a nested key's value by its byte offsets, past a non-ASCII string, in compact and indented
-    JSON alike, and None for a key path the document doesn't have or a document that isn't an object there."""
+    JSON alike, None for a key path the document doesn't have or a document that isn't an object there, and raises
+    where the value on the path isn't JSON, so the guard fails closed."""
     doc = {"a": {"b": [1, 2], "c": "\u00e9t\u00e9"}, "d": {"b": 3}}
     for indent in (None, 1, 2):
         b = json.dumps(doc, indent=indent, ensure_ascii=False).encode()
@@ -241,6 +242,8 @@ def test_value_span_is_the_bytes_of_the_value_at_a_key_path():
         assert b[s:e] == b"3"
         assert LG.value_span(b, "a/x") is None and LG.value_span(b, "a/b/c") is None
     assert LG.value_span(b"[1]", "a") is None and LG.value_span(b"{not json", "a") is None
+    with pytest.raises(ValueError):
+        LG.value_span(b'{"a": {"b": nope}}', "a/b")
 
 
 def test_the_guard_refuses_a_quarantine_the_record_would_take(tmp_path):
