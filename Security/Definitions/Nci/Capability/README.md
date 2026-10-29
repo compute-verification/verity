@@ -33,6 +33,7 @@ enter the security argument is `Security/README.md`, part 2.
 information premise + a short view   →  budget h          (what a block holds)
 budget + a structure                 →  per-block cap q   (what it can do with it)
 cap + counting                       →  |C| ≥ c·Ω/q        (a circuit floor)
+cap + a decomposition of one run     →  Ω ≤ Γ·N            (the floor pointwise, with a remainder)
 floor + coverage                     →  success below the floor has probability ≤ η
 floor + the protocol's accounting    →  a fleet-time floor, and the slowdown
 ```
@@ -136,6 +137,10 @@ candidate sufficient condition, not part of the repertoire.
 | Weighted products | budget, served weight | Ω_I ≤ h_w·served | `Nci.Guarantees.WeightedProductCap` | proved |
 | Counting | a per-block cap | \|C\| ≥ c·Ω/q | `Verity.Guarantees.Counting` | proved |
 | Coverage floor | coverage | Pr[success below the floor] ≤ η | `Nci.Guarantees.CapabilityFloor` | proved |
+| Whole cap | the weighted-product, import and recompute bounds, on proof blocks | q_whole = r·h·((k + k_F) + c/g) | `Nci.Guarantees.WholeCapLocal` | proved |
+| Pointwise count | a decomposition: q_whole, q_split, ν_out, f | N = c·B + U, Ω ≤ Γ·N | `Nci.Guarantees.DecompositionCount`, `Nci.Guarantees.PointwiseCount`, `Nci.Guarantees.GammaBelow` | proved |
+| Pointwise threshold | Ω ≥ Ω_* | N ≥ L = Ω_*/Γ | `Nci.Guarantees.PointwiseThreshold` | proved |
+| Pointwise event | δ, η | Pr[accept ∧ success ∧ N < min(L, N_max)] ≤ δ + η | `Nci.Guarantees.PointwiseEvent` | proved |
 
 `HeldBudget` takes an evaluator of at most a_blk bits per held selection. With one evaluator for every selection, the
 empty selection would force the decoder to output nothing on every block's program, and the premises could hold only
@@ -149,7 +154,11 @@ information premises, none degenerately. `MinEntropyHard` holds at Λ = 0 for th
 decoder compresses: it describes `11`, the value of gates 2 and 3 in an honest run, in one bit, and every other two-bit
 string in three. Against it `DescriptionHard` holds at Λ = 1, `SourceHard` at δ = 1 and `Recovers` at amb = 1, and each
 witness also proves its parameter spent: at 0 the premise fails. Coverage holds at η = 1/2 and fails at η = 0: the
-covered structure is two gates, and a one-gate guess lacks it and reaches the target on half the coins.
+covered structure is two gates, and a one-gate guess lacks it and reaches the target on half the coins. The pointwise
+statements' witnesses are at `Nci.Capability.PointwiseToy`, on the same circuit
+(`Guarantees/Capability/PointwiseWitnesses.lean`): three occurrences on the two operation gates, one computed whole in
+the one region, one split there and one in the remainder, so every cap is tight; Theorem C's δ and η are each spent on
+half the coins.
 
 ## Standard assemblies
 

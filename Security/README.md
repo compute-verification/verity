@@ -350,6 +350,19 @@ s ≤ f limits what this bound can certify, to at most 1/(α·(ζ̄/ζ_ref)·s);
 nothing about the actual slowdown. Without part 2, q/c could reach ζ̄ and
 the bound falls to Ω_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps the registered circuit's credited work from being training.
 
+**Pointwise, in Lean** (`Definitions.Nci.Guarantees.Capability.Pointwise`, proved): the remote bound one execution at a
+time, in its actual circuit's N operation gates. A decomposition splits them into B disjoint qualifying regions of
+exactly c gates and a remainder of U, so N = c·B + U (`Nci.Guarantees.DecompositionCount`), and represents each counted
+occurrence at one gate of its own. If every region computes whole at most q_whole and splits at most q_split,
+q = q_whole + q_split, the remainder represents at most ν_out a gate (ζ̄'s place) and U ≤ f·N, then Ω ≤ Γ·N with
+Γ = q/c + f·max(ν_out − q/c, 0) (`Nci.Guarantees.PointwiseCount`), which is (q/c)(1 − f) + ν_out·f when q/c ≤ ν_out
+(`Nci.Guarantees.GammaBelow`); an execution carrying Ω_* has N ≥ L = Ω_*/Γ (`Nci.Guarantees.PointwiseThreshold`); and
+over any game, Pr[accept ∧ success ∧ N < min(L, N_max)] ≤ δ + η, with δ bounding an accepted execution that has no such
+decomposition and η a successful one below N_max that carries less than Ω_* (`Nci.Guarantees.PointwiseEvent`). For
+regions that are proof blocks of a (c, k + k_F)-partition, the local bounds give q_whole = r·h·((k + k_F) + c/g)
+(`Nci.Guarantees.WholeCapLocal`), h being `HeldBudget`'s (k + k_F) + ⌈log₂ B_max⌉ + a_ext + λ. The split cap, the
+ceiling, the utilization and δ are each a hypothesis, and k_F and a_ext parameters that nothing bounds yet.
+
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
 most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S of the weighted count,
 declared and residual together. When k_S is large enough for a server block to hold a token's whole path, the cap is
@@ -395,6 +408,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
 | The floor | `Nci.Guarantees.CapabilityFloor` | Proved, under coverage |
+| The pointwise slowdown | `Nci.Guarantees.DecompositionCount`, `Nci.Guarantees.PointwiseCount`, `Nci.Guarantees.GammaBelow`, `Nci.Guarantees.PointwiseThreshold`, `Nci.Guarantees.PointwiseEvent`, `Nci.Guarantees.WholeCapLocal` | Proved; q_split, ν_out, f and δ are hypotheses, k_F and a_ext unbounded parameters |
 | Slowdown | `Accounting.Slowdown.slowdown`, `Accounting.Slowdown.threshold`, `Accounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
 | The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
