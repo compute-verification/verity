@@ -220,6 +220,17 @@ def _ulen(x: int) -> int:
 ROW_SEG_TAG, ROW_SEG_SEGMENT_TAG, ROW_SEG_BYTES = b"verity/sha512-row-seg/v1\0", b"verity/sha512-row-seg/v1/segment\0", 1024
 
 
+def rowseg_segment(j: int, s: int, m: int, bound: bool = True, value: int = DATA) -> list[tuple[int, int | None]]:
+    """Segment j of s, m bytes, as (level, byte) pairs: S(j, s, m) and, when `bound`, salt_w, f and j (the call's 48
+    bytes) and the row (8 bytes, per item), zero padded to a block; then the segment (DATA, or zeros for `value`
+    CONST). sha512_rowseg.cuh computes a full one."""
+    msg = [(CONST, x) for x in ROW_SEG_SEGMENT_TAG + j.to_bytes(8, "big") + s.to_bytes(8, "big")
+           + (8 * m).to_bytes(8, "big")]
+    msg += [(CALL, None)] * 48 + [(ITEM, None)] * 8 if bound else []
+    msg += [(CONST, 0)] * (BLOCK - len(msg))
+    return msg + ([(DATA, None)] * m if value == DATA else [(CONST, 0)] * m)
+
+
 def rowseg_row(row_bytes: int, bound: bool = True, value: int = DATA) -> dict:
     """One `sha512/row-seg/v1` row (`verity.ml.commitments.rowleaf`): each 1 KiB segment hashed from its own 128-byte
     prefix block S(j, s, m), then the outer hash over Q(n_bits) and the segments' digests. `bound`: (salt_w, f, j, row)
@@ -231,11 +242,7 @@ def rowseg_row(row_bytes: int, bound: bool = True, value: int = DATA) -> dict:
     by, comp, per_item, repeat, seg_level = {CALL: 0, ITEM: 0, DATA: 0}, 0, 0, 0, CONST
     for j in range(s):
         m = min(ROW_SEG_BYTES, row_bytes - ROW_SEG_BYTES * j)
-        msg = [(CONST, x) for x in ROW_SEG_SEGMENT_TAG + j.to_bytes(8, "big") + s.to_bytes(8, "big")
-               + (8 * m).to_bytes(8, "big")]
-        msg += [(CALL, None)] * 48 + [(ITEM, None)] * 8 if bound else []
-        msg += [(CONST, 0)] * (BLOCK - len(msg))
-        msg += [(DATA, None)] * m if value == DATA else [(CONST, 0)] * m
+        msg = rowseg_segment(j, s, m, bound, value)
         c = message_cost(_blocks(msg))
         for lv in by:
             by[lv] += c["by_level"][lv]
@@ -608,6 +615,12 @@ def main() -> None:
     out["l1_rows"] = []
     print(f"## L1 with sha512/row-seg/v1 rows (N-HIDE's layout: a frame-v3 leaf over each row's row-seg digest), "
           f"{args.l1_row_leaves} rows a call")
+    seg = message_cost(_blocks(rowseg_segment(0, 1024, ROW_SEG_BYTES)))
+    seg_item = seg["by_level"][ITEM] + seg["by_level"][DATA]
+    out["rowseg_segment"] = {**seg, "per_item_registers": seg_item}
+    print(f"- one bound 1 KiB segment: {seg_item:,} registers an item over {seg['compressions']} compressions "
+          f"({seg_item / seg['compressions']:.1f} a compression), {seg['by_level'][CALL]} once a call "
+          f"(sha512_rowseg.cuh's segment_from and seg_pre)")
     for k in (int(x) for x in args.l1_row_bytes.split(",")):
         for bound in (True, False):
             r = l1_call(args.l1_row_leaves, row_bytes=k, bound=bound)
