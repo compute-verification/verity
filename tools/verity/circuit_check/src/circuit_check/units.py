@@ -52,6 +52,11 @@ first one registered of that word, so a check forked from here finds the one a f
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
 where this process stores them, as a full build's are (a full build digests none of its reads where it builds them either).
+
+A run from the records, forked or not, has no process that imported every module a full build has imported before its
+checks, and `sidecars.owner` reads those: a Definition a factory makes is owned by the module that binds it at its top level,
+which only another binding's body may import, and the block check (`checks.UNIT_OWNERS`) and a by-calls root's callees go by
+that owner.  So each Definition's owner is handed down as a full build has it (`owners`, `sidecars.HANDED`).
 """
 from __future__ import annotations
 
