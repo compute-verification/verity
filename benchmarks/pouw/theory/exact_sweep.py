@@ -24,21 +24,27 @@ more: per salt, a row-step whose n words equal an earlier row-step's is copied (
 merges chosen zero rows' steps and chosen identical rows' prefixes, so rc_magic, rc_ffma, ssn_xr and ssn_x collapse as
 ssn_1l does. `rc_hw` hardens it: a 28-bit row code against the column code in step 1, odd step coins, and step S
 trading the code for a row offset of about 2¹⁸ values, so chosen rows lose only final words whose offsets collide
-(`hw_final_bound`). Two limits remain for every exact design:
+(`hw_final_bound`). Chosen weights see more again: a step lane against a public column weight (1, or ssn_1l_hw's
+signs) is cancelled by one weight lane equal to −weight in each step's block and an activation lane of 1, so a step
+with a_t = 1 adds nothing and repeats the row's previous row-step (about half of them; `cancel`). `rc_hg` weights the
+step lanes by G ∈ {1, 2}ⁿ drawn from coins once the weights are registered and cancels the walk w_i·G_j in step S, so
+no committed data can cancel a step; ssn_1l_hg does the same for the served lead. Two limits remain for every exact
+design:
 
 - a final word with no row noise (A·Bᵀ, or A·Bᵀ + c_j) is the same on chosen identical rows, so it is lost: (m−1)/(m·S);
 - a final word with row noise needs the magic, whose range a per-row bound must certify: free after an RMSNorm (from
   stock's own row scale), K/4 IDP4A a row elsewhere (8/n), and on chosen out-of-range rows the fallback write (32/K)
   on every row, unless the weight matrix is statically safe (127·max_j ‖B_j‖₁ < 2²²).
 
-`rc_hw_mix` takes rc_hw where the bound is free and rc_hw_ffma elsewhere. Served noise has neither limit.
+`rc_hw_mix` (`rc_hg_mix`) takes rc_hw (rc_hg) where the bound is free and rc_hw_ffma (rc_hg_ffma) elsewhere. Served
+noise has neither limit.
 
 Data models: M0 (free set: constants, salt-independent functions, raw coin words), M1u (the call's own words on a grid
 uniform in A: the final-word lemma, under PeriodInventory and the atomic call) and M1s (M1 on a grid that keeps the
 served data's zero blocks and identical rows, priced on noise_data.py's measurement). `--data` reads exact_data.py's
 output (final-word repeats, the magic range's fallback rows and static safety, the scale fold's exactness),
-`--noise-data` noise_data.py's. Every row carries `gap` (served data) and `gap_chosen` (the worst of prover-chosen
-identical, zero and out-of-range rows).
+`--noise-data` noise_data.py's. Every row carries `gap` (served data), `gap_chosen` (the worst of prover-chosen
+identical, zero and out-of-range rows, the weights public) and `gap_chosen_weights` (chosen weights too).
 Output: JSON (`--json`) and a text table (`--table`); exit 0 iff every check passes.
 """
 
@@ -95,19 +101,28 @@ def s_xr(k: int) -> int:
 
 HW_KAPPA = (1, 121, 121, 121)
 HW_EXTRA_MAX = 24
+HW_FIXED = 9
+#: rc_hg's two more step-S lanes: the walk w_i = Σ a_t as d0 + 63·d1 against −G_j and −63·G_j
+HG_FIXED = HW_FIXED + 2
+HG_BASE = 63
 
 
-def hw_steps(k: int) -> int:
+def hw_steps(k: int, fixed: int = HW_FIXED) -> int:
     """rc_hw's k32 steps: step 1 holds 27 data, the code a1 (4 lanes) and c_j's constant lane; steps 2..S hold 31
-    data and a_t, less 5 + e in step S (the code's cancellation, a1₂'s lane and e lanes of a1₃)."""
+    data and a_t, less 5 + e in step S (the code's cancellation, a1₂'s lane and e lanes of a1₃); rc_hg (`HG_FIXED`)
+    has two more lanes there."""
     s = 2
-    while 31 * s - 9 < k:
+    while 31 * s - fixed < k:
         s += 1
     return s
 
 
-def hw_extra(k: int) -> int:
-    return min(HW_EXTRA_MAX, 31 * hw_steps(k) - 9 - k)
+def hg_steps(k: int) -> int:
+    return hw_steps(k, HG_FIXED)
+
+
+def hw_extra(k: int, fixed: int = HW_FIXED) -> int:
+    return min(HW_EXTRA_MAX - (fixed - HW_FIXED), 31 * hw_steps(k, fixed) - fixed - k)
 
 
 def hw_weights_e(e: int) -> tuple:
@@ -116,14 +131,15 @@ def hw_weights_e(e: int) -> tuple:
     return (HW_KAPPA[0], HW_KAPPA[1] + 7, HW_KAPPA[2] + 127 * e, HW_KAPPA[3])
 
 
-def hw_weights(k: int) -> tuple:
-    return hw_weights_e(hw_extra(k))
+def hw_weights(k: int, fixed: int = HW_FIXED) -> tuple:
+    return hw_weights_e(hw_extra(k, fixed))
 
 
-def hw_offset_q(k: int) -> float:
-    """1 / Σ p² of rc_hw's final row offset r_i = a1·W + Σ_{t≥2} a_t (a1 uniform on [0, 127]⁴, a_t = 1 + 2·b_t): the
-    effective number of values a pair of chosen-equal rows' final words must miss."""
-    s, w = hw_steps(k), hw_weights(k)
+def hw_offset_q(k: int, fixed: int = HW_FIXED) -> float:
+    """1 / Σ p² of the final row offset (a1 uniform on [0, 127]⁴, a_t = 1 + 2·b_t): rc_hw's r_i = a1·W + Σ_{t≥2} a_t,
+    rc_hg's a1·W (its walk cancels in step S). The effective number of values a pair of chosen-equal rows' final words
+    must miss."""
+    s, w = hw_steps(k, fixed), hw_weights(k, fixed)
     size = 127 * sum(w) + 2 * s + 1
     nfft = 1 << (size - 1).bit_length()
     spec = np.ones(nfft // 2 + 1, dtype=complex)
@@ -132,9 +148,18 @@ def hw_offset_q(k: int) -> float:
         lane[:127 * wl + 1:wl] = 1 / 128
         spec *= np.fft.rfft(lane)
     walk = np.zeros(nfft)
-    walk[:2 * (s - 1) + 1:2] = [math.comb(s - 1, i) / 2 ** (s - 1) for i in range(s)]
+    if fixed == HW_FIXED:
+        walk[:2 * (s - 1) + 1:2] = [math.comb(s - 1, i) / 2 ** (s - 1) for i in range(s)]
+    else:
+        walk[0] = 1.0
     p = np.clip(np.fft.irfft(spec * np.fft.rfft(walk), nfft)[:size], 0, None)
     return float(1 / (p ** 2).sum() * p.sum() ** 2)
+
+
+def hg_g(n: int, seed: int = 2026) -> np.ndarray:
+    """rc_hg's step-lane column weights G ∈ {1, 2}ⁿ, drawn from coins once the weights are registered (here a fixed
+    generator the data never reads)."""
+    return 1 + np.random.default_rng(seed).integers(0, 2, n)
 
 
 def row_words(bits: int) -> int:
@@ -358,6 +383,30 @@ def designs() -> list[Design]:
                lambda m, n, k: 4 * hw_steps(k) / (n * k) + 4 / (m * k), _final_dup("final_col_dup_share", hw_steps),
                False, "0 (exact while |A·Bᵀ| < 2^24)", f"{premises_m0}; {coins}; rc-hw-distinct (open)",
                "final word A·Bᵀ + c_j: lost on equal outputs of a column, and on chosen identical rows"),
+        Design("rc_hg", "rc_hw with its step lanes against G_j ∈ {1, 2}, drawn from coins once the weights are "
+               "registered, and the walk w_i = Σ a_t cancelled in step S (d0 + 63·d1 against −G_j and −63·G_j): "
+               "chosen weights can't cancel a step's noise; r_i = a1·W and c_j removed by the magic IADD3 and FFMA",
+               lambda k: H32 * hg_steps(k) / k,
+               lambda m, n, k: H32 * (row_bit_writes(hg_steps(k)) + 1 + math.ceil((3 + hw_extra(k, HG_FIXED)) / 4)
+                                      + popc_writes(hg_steps(k)) + 3) / (n * k),
+               lambda m, n, k: 2 * H32 / (m * k), lambda m, n, k: H32 * hg_steps(k) / (n * k),
+               lambda m, n, k: H32 / (m * k), lambda m, n, k: H32 * 6 / (n * k) + H32 / (m * k), False,
+               lambda m, n, k: 32 * row_words(27 + hg_steps(k)) * m + 32 * row_words(n),
+               lambda m, n, k: 4 * hg_steps(k) / (n * k) + 4 / (m * k), _no_dup, True,
+               "0 (exact while |A·Bᵀ| < 2^22)", f"{premises_m0}; {coins}; rc-hg-distinct (open); G drawn after the "
+               "weights' registration", "chosen weights cancel nothing; chosen identical or zero rows lose only final "
+               "words with equal offsets; chosen out-of-range rows force the fallback write"),
+        Design("rc_hg_ffma", "rc_hg's code, odd coins and G, step S cancelling the code against C_j and the walk "
+               "against G_j; only c_j is folded, in the FFMA: no range limit below 2^24 and no row check",
+               lambda k: H32 * hw_steps(k) / k,
+               lambda m, n, k: H32 * (row_bit_writes(hw_steps(k)) + 1 + popc_writes(hw_steps(k)) + 3) / (n * k),
+               lambda m, n, k: 2 * H32 / (m * k), lambda m, n, k: H32 * hw_steps(k) / (n * k),
+               lambda m, n, k: H32 / (m * k), lambda m, n, k: H32 / (m * k), False,
+               lambda m, n, k: 32 * row_words(27 + hw_steps(k)) * m + 32 * row_words(n),
+               lambda m, n, k: 4 * hw_steps(k) / (n * k) + 4 / (m * k), _final_dup("final_col_dup_share", hw_steps),
+               False, "0 (exact while |A·Bᵀ| < 2^24)", f"{premises_m0}; {coins}; rc-hg-distinct (open); G drawn "
+               "after the weights' registration",
+               "final word A·Bᵀ + c_j: lost on equal outputs of a column, and on chosen identical rows"),
         Design("ssn_1l_hw", "the served lead hardened against the coin branch (premise_ledger.py's ssn_1l_hw): "
                "a1 ∈ [0,15]⁴ against the code, a_t = 1 + 2b_t "
                "against public column signs; noise served", lambda k: H32 * s1(k) / k,
@@ -366,7 +415,14 @@ def designs() -> list[Design]:
                lambda m, n, k: 32 * w1(k) * m, lambda m, n, k: 4 * s1(k) / (n * k), _no_dup, False,
                "served noise std 41–43 units; ≤ ~+0.2% (bracketed by a measured run, estimate)",
                f"{premises_m0}; {coins}; ssn-hw-distinct (open)", "reference: the served lead hardened against the "
-               "coin branch", exact=False),
+               "coin branch; chosen weights cancel its steps through the public signs", exact=False),
+        Design("ssn_1l_hg", "ssn_1l_hw with its step signs drawn from coins once the weights are registered", lambda k: H32 * s1(k) / k,
+               lambda m, n, k: H32 * ns.ssn_1l_forming_writes(s1(k)) / (n * k), _z,
+               lambda m, n, k: H32 * s1(k) / (n * k), _z, _z, False,
+               lambda m, n, k: 32 * w1(k) * m, lambda m, n, k: 4 * s1(k) / (n * k), _no_dup, False,
+               "as ssn_1l_hw", f"{premises_m0}; {coins}; ssn-hw-distinct (open); signs drawn after the weights' "
+               "registration", "reference: the served lead hardened against the coin branch and chosen weights",
+               exact=False),
         Design("rc_hybrid", "rc_magic on rows whose Cauchy–Schwarz bound is below 2^22, rc_ffma on the rest",
                lambda k: H32 * s_rcf(k) / k,
                lambda m, n, k: H32 * (row_bit_writes(s_rcf(k)) + 1 + lanes_writes(s_rcf(k))) / (n * k),
@@ -379,7 +435,12 @@ def designs() -> list[Design]:
     return [_hybrid(d) if d.dup == "hybrid" else d for d in out] + [
         Design("rc_hw_mix", "rc_hw on linears fed by an RMSNorm (a free per-row range bound), rc_hw_ffma on the rest",
                *([lambda *a: float("nan")] * 3), *([_z] * 3), False, _z, _z, _no_dup, True, "0 (exact)",
-               f"{premises_m0}; {coins}; rc-hw-distinct (open)", "the exact lead: each linear takes the cheaper path")]
+               f"{premises_m0}; {coins}; rc-hw-distinct (open)", "each linear takes the cheaper path; chosen weights "
+               "cancel its steps"),
+        Design("rc_hg_mix", "rc_hg on linears fed by an RMSNorm, rc_hg_ffma on the rest",
+               *([lambda *a: float("nan")] * 3), *([_z] * 3), False, _z, _z, _no_dup, True, "0 (exact)",
+               f"{premises_m0}; {coins}; rc-hg-distinct (open); G drawn after the weights' registration",
+               "the exact lead: each linear takes the cheaper path")]
 
 
 def _per2_words(k: int) -> int:
@@ -390,8 +451,10 @@ def _per2_words(k: int) -> int:
 BRANCH = {
     "ssn_1l": ("ssn_1l", ns.steps1l), "ssn_1l_mov": ("ssn_1l", ns.steps1l), "ssn_pd": ("ssn_1l", ns.steps1l),
     "ssn_xd": ("ssn_1l", ns.steps1l), "ssn_xr": ("ssn_xr", s_xr), "ssn_x": ("ssn_x", s_x),
-    "ssn_1l_hw": ("ssn_1l_hw", ns.steps1l), "rc_magic": ("rc_magic", s_rc), "rc_ffma": ("rc_ffma", s_rcf),
+    "ssn_1l_hw": ("ssn_1l_hw", ns.steps1l), "ssn_1l_hg": ("ssn_1l_hg", ns.steps1l), "rc_magic": ("rc_magic", s_rc),
+    "rc_ffma": ("rc_ffma", s_rcf),
     "rc_hybrid": ("rc_hybrid", s_rcf), "rc_hw": ("rc_hw", hw_steps), "rc_hw_ffma": ("rc_hw_ffma", hw_steps),
+    "rc_hg": ("rc_hg", hg_steps), "rc_hg_ffma": ("rc_hg_ffma", hw_steps),
     "ncp3": ("dense", lambda k: 3 * k // 32), "os2": ("dense", lambda k: 2 * k // 32), "per2": ("dense", _per2_words),
     "lowrank1": ("dense", _per2_words), "pair": ("none", lambda k: 2 * k // 32), "plain": ("plain", lambda k: k // 32),
 }
@@ -399,8 +462,9 @@ BRANCH = {
 #: magic's per-row range check is free; elsewhere it needs ‖q_i‖ (K/4 IDP4A a row)
 POST_NORM = {"qkv", "gate_up"}
 #: per linear, the path a mixed design takes
-MIX = {"rc_hw_mix": lambda lin: "rc_hw" if lin in POST_NORM else "rc_hw_ffma"}
-MAGIC_DESIGNS = {"rc_magic", "rc_hybrid", "rc_hw", "ssn_pd", "ssn_xd", "ssn_xr"}
+MIX = {"rc_hw_mix": lambda lin: "rc_hw" if lin in POST_NORM else "rc_hw_ffma",
+       "rc_hg_mix": lambda lin: "rc_hg" if lin in POST_NORM else "rc_hg_ffma"}
+MAGIC_DESIGNS = {"rc_magic", "rc_hybrid", "rc_hw", "rc_hg", "ssn_pd", "ssn_xd", "ssn_xr"}
 
 
 def _hybrid(d: Design) -> Design:
@@ -424,9 +488,12 @@ def gap_terms(d: Design, m: int, n: int, k: int, model: str, c1: bool, lin: str 
          "range_check": check, "coin_branch_natural": a * cb["natural"]}
     t["gap"] = sum(v for key, v in t.items() if key != "alpha")
     t["coin_branch_chosen"] = a * cb["chosen"]
+    t["coin_branch_weights"] = a * cb["weights"]
     t["range_chosen"] = chosen_range
     data_terms = t["dup"] + t["coin_branch_natural"] + t["fallback"]
     t["gap_chosen"] = t["gap"] - data_terms + max(data_terms, t["coin_branch_chosen"], t["range_chosen"])
+    t["gap_chosen_weights"] = t["gap"] - data_terms + max(data_terms, t["coin_branch_chosen"], t["range_chosen"],
+                                                          t["coin_branch_weights"])
     t["coins"] = d.coin_bits(m, n, k) / 8 * ns.COIN_PRICED_BYTE / (m * n * k)
     t["gap_coins_uncredited"] = t["gap"] + t["coins"]
     t["forced_share_of_forming"] = (cx + cy) / max(1e-30, d.form_x(m, n, k) + d.form_y(m, n, k))
@@ -452,8 +519,10 @@ def range_terms(d: Design, m: int, n: int, k: int, lin: str) -> tuple[float, flo
 
 
 def coin_branch(name: str, m: int, k: int, model: str) -> dict:
-    """The coin-branch share (before α) at a call of m rows: the worse of all-identical and all-zero chosen rows, and
-    the served data's zero and identical rows (none under M1u's uniform grid)."""
+    """The coin-branch share (before α) at a call of m rows: the worse of all-identical and all-zero chosen rows
+    (`chosen`, the requests chosen and the weights public), chosen weights cancelling the step lanes' public weights
+    (`weights`: a row's own steps merge, so at most 512 rows measure it), and the served data's zero and identical rows
+    (none under M1u's uniform grid)."""
     bm, sf = BRANCH.get(name, ("none", lambda k: 1))
     s = sf(k)
     models = ("rc_magic", "rc_ffma") if bm == "rc_hybrid" else (bm,)
@@ -462,11 +531,12 @@ def coin_branch(name: str, m: int, k: int, model: str) -> dict:
     def f(case: str, rows: int) -> float:
         return max(branch_collapse(mo, case, rows, s, k, salts=salts) for mo in models)
     chosen = max(f("identical", m), f("zero", m))
+    weights = f("cancel", min(m, 512))
     if model == "M1u":
-        return {"chosen": chosen, "natural": 0.0}
+        return {"chosen": chosen, "weights": weights, "natural": 0.0}
     zr, idr = noise_share("zero_row_share", m), noise_share("identical_row_share", m)
     natural = float("nan") if zr is None or idr is None else zr * f("zero", max(1, round(zr * m))) + idr * f("pair", 2)
-    return {"chosen": chosen, "natural": natural}
+    return {"chosen": chosen, "weights": weights, "natural": natural}
 
 
 _BY_NAME: dict = {}
@@ -775,31 +845,38 @@ def sim_rc(name: str, case: str, salts: int = 24, m: int = 4, n: int = 6, seed: 
     return out
 
 
-def sim_hw(case: str, salts: int = 24, m: int = 4, n: int = 6, seed: int = 1, s: int = 4, e: int = 2) -> dict:
-    """rc_hw on S steps with e offset lanes: its committed words on the salt grid (raw coin words free) and the magic
-    epilogue's output against A·Bᵀ."""
+def sim_hw(case: str, salts: int = 24, m: int = 4, n: int = 6, seed: int = 1, s: int = 4, e: int = 2,
+           variant: str = "hw") -> dict:
+    """rc_hw (or rc_hg, `variant="hg"`: step lanes against G_j, the walk cancelled in step S) on S steps with e offset
+    lanes: its committed words on the salt grid (raw coin words free) and the magic epilogue's output against A·Bᵀ."""
     rng = np.random.default_rng(seed)
-    k = 27 + 31 * (s - 2) + 26 - e
+    hg = variant == "hg"
+    k = 27 + 31 * (s - 2) + 26 - e - (HG_FIXED - HW_FIXED if hg else 0)
     a, b = ns._data(case, m, n, 160, rng)
     a, b = a[:, :k], b[:k]
     code = ns.ssn_a_w0(n, ns.DATA_PER_STEP)[0]
     kappa = np.array(HW_KAPPA)[:, None]
+    g = (hg_g(n) if hg else np.ones(n, dtype=np.int64))[None, :]
     xs, ys, raw, rs, cs = [], [], [], [], []
     for _ in range(salts):
         hr = rng.integers(0, 2 ** 32, (m,), dtype=np.int64)
         hc = rng.integers(0, 2 ** 32, (1,), dtype=np.int64)
         a1 = np.stack([(hr >> (8 * q)) & 0x7F for q in range(4)], axis=1)
         at = np.stack([np.zeros(m, dtype=np.int64)] + [1 + 2 * ((hr >> (8 * t + 7)) & 1) for t in range(s - 1)], axis=1)
+        walk = at.sum(1)[:, None]
         cbit = np.array([(hc[0] >> j) & 1 for j in range(n)])
         xl, yl, lo = [], [], 0
         for t in range(s):
             if t == 0:
                 lx, ly = [a1, np.ones((m, 1), dtype=np.int64)], [code, cbit[None, :]]
             elif t < s - 1:
-                lx, ly = [at[:, t:t + 1]], [np.ones((1, n), dtype=np.int64)]
+                lx, ly = [at[:, t:t + 1]], [g]
             else:
                 lx = [at[:, t:t + 1], a1, a1[:, 1:2]] + [a1[:, 2:3]] * e
-                ly = [np.ones((1, n), dtype=np.int64), kappa - code, np.full((1, n), 7)] + [np.full((1, n), 127)] * e
+                ly = [g, kappa - code, np.full((1, n), 7)] + [np.full((1, n), 127)] * e
+                if hg:
+                    lx += [walk % HG_BASE, walk // HG_BASE]
+                    ly += [-g, -HG_BASE * g]
             lx, ly = np.concatenate(lx, axis=1), np.concatenate(ly, axis=0)
             assert np.abs(lx).max() <= 127 and np.abs(ly).max() <= 127
             d = 32 - lx.shape[1]
@@ -811,7 +888,7 @@ def sim_hw(case: str, salts: int = 24, m: int = 4, n: int = 6, seed: int = 1, s:
         ys.append(np.concatenate(yl, axis=0))
         raw.append(np.concatenate([hr, hc]))
         w = np.array(hw_weights_e(e))
-        rs.append(a1 @ w + at.sum(1))
+        rs.append(a1 @ w + (0 if hg else at.sum(1)))
         cs.append(cbit)
     words = ns._words(np.stack(xs), np.stack(ys))
     out = ns._distinct([words], [np.stack(raw)])
@@ -841,7 +918,8 @@ def sim_plain_m1(case: str, grids: int = 24, m: int = 4, n: int = 6, seed: int =
 
 BRANCH_N = 16
 BRANCH_N_FULL = 2048
-BRANCH_CASES = ("identical", "zero", "pair", "random")
+BRANCH_CASES = ("identical", "zero", "pair", "random", "cancel")
+_SIGNS_SEED = 12345
 _KEY = np.random.default_rng(99).integers(1, 2 ** 62, (BRANCH_N, 2), dtype=np.int64)
 _CODE: dict = {}
 _COLLAPSE: dict = {}
@@ -867,12 +945,22 @@ def branch_noise(model: str, m: int, s: int, n: int, k: int, rng: np.random.Gene
         elif model == "ssn_x":
             nz[:, -1] = 0
         return nz
-    if model == "ssn_1l_hw":
+    if model in ("ssn_1l_hw", "ssn_1l_hg"):
         a1 = rng.integers(0, 16, (m, 4))
         at = 1 + 2 * rng.integers(0, 2, (m, s))
         at[:, 0] = 0
-        signs = np.random.default_rng(12345).choice(np.array([-1, 1]), size=(s, n))
+        seed = _SIGNS_SEED if model == "ssn_1l_hw" else _SIGNS_SEED + 1
+        signs = np.random.default_rng(seed).choice(np.array([-1, 1]), size=(s, n))
         return (a1 @ code)[:, None, :] + (at[:, :, None] * signs[None]).cumsum(1)
+    if model.startswith("rc_hg"):
+        a1 = rng.integers(0, 128, (m, 4))
+        at = 1 + 2 * rng.integers(0, 2, (m, s))
+        at[:, 0] = 0
+        c = rng.integers(0, 2, n)
+        g = np.ones(n, dtype=np.int64) if model == "rc_hg_public" else hg_g(n)
+        nz = (a1 @ code)[:, None, :] + at.cumsum(1)[:, :, None] * g + c
+        nz[:, -1] = c if model == "rc_hg_ffma" else (a1 @ np.array(hw_weights(k, HG_FIXED)))[:, None] + c
+        return nz
     if model in ("rc_magic", "rc_ffma"):
         c = rng.integers(0, 2, n)
         nz = np.broadcast_to(rng.integers(0, 2, (m, s)).cumsum(1)[:, :, None] + c, (m, s, n)).copy()
@@ -896,9 +984,27 @@ def branch_noise(model: str, m: int, s: int, n: int, k: int, rng: np.random.Gene
     raise ValueError(model)
 
 
-def _data_dots(case: str, m: int, s: int, n: int, rng: np.random.Generator, sd: float = 300.0) -> np.ndarray:
+def step_weights(model: str, s: int, n: int) -> np.ndarray:
+    """The column weights of a design's step lanes as chosen weights can copy them (S × n): public signs for
+    ssn_1l_hw, 1 for the rest. ssn_1l_hg's signs and rc_hg's G are drawn after the weights are registered, so the data
+    copies the public guess (ssn_1l_hw's signs, 1) and misses."""
+    if model in ("ssn_1l_hw", "ssn_1l_hg"):
+        return np.random.default_rng(_SIGNS_SEED).choice(np.array([-1, 1]), size=(s, n))
+    return np.ones((s, n), dtype=np.int64)
+
+
+def _data_dots(case: str, m: int, s: int, n: int, rng: np.random.Generator, sd: float = 300.0,
+               public: np.ndarray | None = None) -> np.ndarray:
+    """Data partial sums D_{≤t} (m × S × n). `cancel`: distinct rows whose every later step's dot is −1 times the
+    step lanes' public weight (chosen weights: one lane of B equal to −weight in each step's block, A's lane 1), so a
+    step with a_t = 1 adds nothing."""
     if case == "zero":
         return np.zeros((m, s, n), dtype=np.int64)
+    if case == "cancel":
+        d = np.zeros((m, s, n), dtype=np.int64)
+        d[:, 0] = np.rint(rng.normal(0, sd, (m, n))).astype(np.int64)
+        d[:, 1:] = -public[None, 1:]
+        return d.cumsum(axis=1)
     if case == "identical":
         d = np.broadcast_to(np.rint(rng.normal(0, sd, (1, s, n))).astype(np.int64), (m, s, n))
     elif case == "pair":
@@ -923,7 +1029,7 @@ def branch_collapse(model: str, case: str, m: int, s: int, k: int, n: int = BRAN
     key = (model, case, m, s, k, n, salts, seed)
     if key in _COLLAPSE:
         return _COLLAPSE[key]
-    if model == "none" or case == "random" and model in ("dense", "plain"):
+    if model == "none" or case in ("random", "cancel") and model in ("dense", "plain"):
         v = 0.0
     elif model == "plain":
         v = {"zero": 1 - 1 / (m * s), "identical": 1 - 1 / m, "pair": (m // 2) / m}[case]
@@ -931,7 +1037,7 @@ def branch_collapse(model: str, case: str, m: int, s: int, k: int, n: int = BRAN
         v = {"zero": (m - 1) / (m * s), "identical": (m - 1) / (m * s), "pair": (m // 2) / (m * s)}[case]
     else:
         rng = np.random.default_rng(seed)
-        d = _data_dots(case, m, s, n, rng)
+        d = _data_dots(case, m, s, n, rng, public=step_weights(model, s, n))
         shares = []
         for _ in range(salts):
             words = (d + branch_noise("dense" if model == "dense_sim" else model, m, s, n, k, rng)).reshape(m * s, n)
@@ -941,10 +1047,11 @@ def branch_collapse(model: str, case: str, m: int, s: int, k: int, n: int = BRAN
     return v
 
 
-def hw_final_bound(m: int, k: int) -> float:
-    """rc_hw on m chosen-equal rows: the expected share of row-steps lost to final words with equal offsets, at most
-    C(m, 2) / Q of the m·S row-steps (Q = hw_offset_q); its other row-steps differ through the 28-bit code."""
-    return (m - 1) / (2 * hw_offset_q(k) * hw_steps(k))
+def hw_final_bound(m: int, k: int, fixed: int = HW_FIXED) -> float:
+    """rc_hw (rc_hg: `HG_FIXED`) on m chosen-equal rows: the expected share of row-steps lost to final words with equal
+    offsets, at most C(m, 2) / Q of the m·S row-steps (Q = hw_offset_q); its other row-steps differ through the 28-bit
+    code."""
+    return (m - 1) / (2 * hw_offset_q(k, fixed) * hw_steps(k, fixed))
 
 
 def check() -> list[dict]:
@@ -1026,6 +1133,25 @@ def check() -> list[dict]:
     ok("mutations caught: even step coins (zero rows' steps merge), no row offset (final words merge), 4-bit code "
        "(identical rows merge at 8,192 rows)", mut["even"] > 0.1 and mut["nooffset"] > 10 * hw_final_bound(512, 2048)
        and mut["nibble_8192"] > 3 * big["identical"], mut)
+    hg = {c: sim_hw(c, variant="hg") for c in ns.CASES}
+    ok("rc_hg: the magic epilogue's output is A·Bᵀ and every word is distinct and non-free on every data case",
+       all(v["exact_after_epilogue"] and v["bad_share"] == 0 for v in hg.values()),
+       {c: (v["exact_after_epilogue"], v["bad_share"]) for c, v in hg.items()})
+    ok("rc_hg keeps ssn_1l's steps at K 2,048, 7,168 and 8,192, and its walk digits fit int8 (d1 ≤ 3(S−1)/63)",
+       all(hg_steps(k) == ns.steps1l(k) and 3 * (hg_steps(k) - 1) // HG_BASE <= LANE_MAX and hw_extra(k, HG_FIXED) >= 0
+           for k in (2048, 7168, 8192)), {k: (hg_steps(k), hw_extra(k, HG_FIXED)) for k in (2048, 7168, 8192)})
+    cw = {mo: branch_collapse(mo, "cancel", 512, 67, 2048)
+          for mo in ("ssn_1l", "ssn_1l_hw", "rc_magic", "rc_hw", "rc_hw_ffma", "rc_hg", "rc_hg_ffma", "ssn_1l_hg",
+                     "rc_hg_public")}
+    ok("chosen weights cancelling the public step weights: ssn_1l, ssn_1l_hw, rc_magic, rc_hw and rc_hw_ffma lose ≥ 40% "
+       "of row-steps; rc_hg, rc_hg_ffma and ssn_1l_hg (weights drawn after registration) lose none; a public G "
+       "(mutation) loses ≥ 40%", all(cw[mo] >= 0.4 for mo in ("ssn_1l", "ssn_1l_hw", "rc_magic", "rc_hw", "rc_hw_ffma",
+                                                             "rc_hg_public"))
+       and all(cw[mo] == 0 for mo in ("rc_hg", "rc_hg_ffma", "ssn_1l_hg")), cw)
+    hgb = {c: branch_collapse("rc_hg", c, 512, 67, 2048) for c in ("identical", "zero", "random")}
+    ok("coin branch: rc_hg loses on chosen rows at most 2× its final-word bound + 10⁻⁴, and nothing on random rows",
+       max(hgb["identical"], hgb["zero"]) <= 2 * hw_final_bound(512, 2048, HG_FIXED) + 1e-4 and hgb["random"] == 0,
+       {**hgb, "bound": hw_final_bound(512, 2048, HG_FIXED)})
     ok("rc steps: K 2,048 and 8,192 take as many steps as ssn_1l (67, 265)",
        (s_rc(2048), s_rc(8192)) == (ns.steps1l(2048), ns.steps1l(8192)), (s_rc(2048), s_rc(8192)))
     ok("in-GEMM cancellation lanes fit the last step's spare lanes at Llama's and V4's K",
@@ -1067,7 +1193,7 @@ def best(rep: dict) -> dict:
     exact = {x["name"] for x in rep["designs"] if x["exact"]}
     out = {}
     for point in POINTS:
-        for basis in ("gap", "gap_coins_uncredited", "gap_chosen"):
+        for basis in ("gap", "gap_coins_uncredited", "gap_chosen", "gap_chosen_weights"):
             for shape in ("llama", "v4dense"):
                 for model in MODELS:
                     cands = sorted((r[f"{shape}_{point}"][basis], r["design"], r["c1"]) for r in rep["rows"]
@@ -1081,7 +1207,7 @@ def best(rep: dict) -> dict:
 def table(rep: dict) -> str:
     hdr = ("design", "model", "C1", "L T512(64)", "L T512(512)", "L T8192", "V4d T512(64)", "V4d T8192",
            "L T512(64) +coins", "L T8192 +coins", "V4d T8192 +coins", "L T512(512) chosen", "L T8192 chosen",
-           "V4d T8192 chosen", "alpha L", "T2 8192", "T2 512(64)")
+           "V4d T8192 chosen", "L T8192 chosen+W", "alpha L", "T2 8192", "T2 512(64)")
     lines = [" | ".join(hdr)]
     for r in rep["rows"]:
         def f(key: str, basis: str = "gap") -> str:
@@ -1092,6 +1218,7 @@ def table(rep: dict) -> str:
                                  f("llama_T512_64tok", "gap_coins_uncredited"), f("llama_T8192", "gap_coins_uncredited"),
                                  f("v4dense_T8192", "gap_coins_uncredited"), f("llama_T512_512tok", "gap_chosen"),
                                  f("llama_T8192", "gap_chosen"), f("v4dense_T8192", "gap_chosen"),
+                                 f("llama_T8192", "gap_chosen_weights"),
                                  f"{r['llama_T8192']['alpha']:.4f}", f"{r['t2_T8192']:.1f}x",
                                  f"{r['t2_T512_64tok']:.1f}x"]))
     lines.append("")
@@ -1113,10 +1240,11 @@ def main(argv: list[str] | None = None) -> int:
         load_noise(args.noise_data)
     rep = report()
     rep["best"] = best(rep)
-    for name in ("rc_magic", "rc_ffma", "rc_hybrid", "rc_hw", "rc_hw_mix", "ssn_1l", "ssn_1l_hw", "per2"):
+    for name in ("rc_magic", "rc_ffma", "rc_hybrid", "rc_hw", "rc_hw_mix", "rc_hg", "rc_hg_mix", "ssn_1l",
+                 "ssn_1l_hw", "ssn_1l_hg", "per2"):
         for model in ("M0", "M1u"):
             r = next(r for r in rep["rows"] if r["design"] == name and r["model"] == model and not r["c1"])
-            for basis in ("gap", "gap_coins_uncredited", "gap_chosen"):
+            for basis in ("gap", "gap_coins_uncredited", "gap_chosen", "gap_chosen_weights"):
                 g = r["llama_T8192"][basis]
                 if not math.isnan(g):
                     rep[f"periods_{name}_{model}_noC1_llama_T8192_{basis}"] = ns.periods(g, r["llama_T8192"]["alpha"])
