@@ -12483,7 +12483,7 @@
    ]
   },
   "Properties.Pouw.PeriodJ10R": {
-   "digest": "30113b3f51dd7c4becdc6e49bbd9f9c7dc7d68a6f2f44838118607a0009b2d72",
+   "digest": "3b84dd157bb8af128389fdb1fee77ab4a9abc7e1e2814f798dd4905e5e0484dd",
    "definitions": {
     "Properties.Pouw.PeriodJ10R.Answered": "ad07d7dcb3b5ba1b02c1e159a9fa1fbc49fa3c68721667dba455072e3f7cfc7f",
     "Properties.Pouw.PeriodJ10R.Answered.draw": "34232c1aa04dce901132afc7c85bd9db84df44b652b39520da011c3cdcaf91c9",
@@ -12528,16 +12528,6 @@
     "Properties.Pouw.PeriodJ10R.PreDraw.salt": "aa8a586d5932484d080b63e079f7e35fa4d6bd483f89c2857fcba6d2c60f596f",
     "Properties.Pouw.PeriodJ10R.PreDraw.served": "fcad7cc776f89b4387de67d5b518e347b68fec5076cf0ae699aa2751385d6d6a",
     "Properties.Pouw.PeriodJ10R.PreDraw.window": "e3514ce2f5c0c0f58b9ddbb4e7542017b939a8b5977a471d00bff2c394b9a18e",
-    "Properties.Pouw.PeriodJ10R.Registered": "b2862b796d5694372d416ca3f9ab533cf523099015a4302b3f56b92f28e78258",
-    "Properties.Pouw.PeriodJ10R.Registered.calls": "9e1f95e0fae80228a6996947222c627e64fd019341d850f82a5d5f3915d168e8",
-    "Properties.Pouw.PeriodJ10R.Registered.commit": "5131dff1942df113d15bd53e24e04572f19816f7f5bd30c6642f3d0003c6fb43",
-    "Properties.Pouw.PeriodJ10R.Registered.descriptor": "5844f7d16d77efdc143711ebd0b4abf609c88b5e77b940d8211f2726d7d15841",
-    "Properties.Pouw.PeriodJ10R.Registered.entries": "9e47d3a45b0ab67a3647a8487dfebe9e51a89b2ec0532e107c760e898f0be787",
-    "Properties.Pouw.PeriodJ10R.Registered.k": "60e3d4c2e3035a7fb1e22f70c4e47dae87b5aa4195e20c4c40c15437025d2892",
-    "Properties.Pouw.PeriodJ10R.Registered.rows": "a2ed98fd6f9015a25c9dbf456d401154022174a139830dc3a845597f5037a6e7",
-    "Properties.Pouw.PeriodJ10R.Registered.salt": "c2944266ace04669c73c57ed884f54a76f36b693eee99516a048499e0a7cd1ca",
-    "Properties.Pouw.PeriodJ10R.Registered.served": "d4b57fc0e562ea5f8b01e858f1ebf841a0df9ee096a88adac720595350e92ee0",
-    "Properties.Pouw.PeriodJ10R.Registered.window": "995dad9087b27439b3ae86a058109ba900d7a9e82e393f7f3a6dff02052bcd94",
     "Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw": "23a8f8237659d197b7e3f6e1d8705e75f826487400abb3a198dace96f5d237db",
     "Properties.Pouw.PeriodJ10R.SharedNoiseLucks": "bdfa6b9c47185a890bd4fc9e170182414e4de3e0d88a36e2a3f98404dca74be1",
     "Properties.Pouw.PeriodJ10R.TileDrawIsCoin": "51b4c0376a85ddbc95a2cefe047bcc0787aef1c639909b9a622d6216aa0fa865",
@@ -12565,7 +12555,7 @@
    ]
   },
   "Properties.Pouw.PeriodJ10RStrata": {
-   "digest": "1faea3e343035451fb9b47b2ad7aca2ac42a66db41de4123dfdfae19f1d1b5fa",
+   "digest": "30add37af5e446c4f1517b648cf8f87fb4f8f422fd455a7319cbcd5b20b870f1",
    "definitions": {
     "Properties.Pouw.PeriodJ10RStrata.BlockDraw": "8c51d87a44f26cbacd92f87b041c9f78598f3db7ddd2a2faba318647f99e076c",
     "Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata": "f1cd337a976e247f25a828cdce01cb6f7f96bce66da6ab844dbbd62e03dea897",
@@ -12573,7 +12563,7 @@
     "Properties.Pouw.PeriodJ10RStrata.StrataCoin": "3b72d8959db0aa1c61278a35b72916d9816258e5e421d654717d40ba985d6b37",
     "Properties.Pouw.PeriodJ10RStrata.StrataDrawIsCoin": "b6039c004f6202b9861b2b79fee2fa88f87b94fe22d929eeeb05bde7cc17cc3b",
     "Properties.Pouw.PeriodJ10RStrata.atStratum": "830f7e19021da2a837bedbba12df6354b7ecb47b65cfc9a77d72876ae5c77f5c",
-    "Properties.Pouw.PeriodJ10RStrata.creditAt": "cd18afe088ab117e28401e6a08383ed0cb18a5a3551d10a282d995b0212820e7",
+    "Properties.Pouw.PeriodJ10RStrata.creditAt": "a506fed0e8a34dee11a52dd14cd10cd0cde3e4fbd6fd6cf036c1760a6898f8fc",
     "Properties.Pouw.PeriodJ10RStrata.layerAt": "e03bebb34cdbb32b5a74d034a3ae65a88ec2ac61bc99ab382e5ef5f00668f7fd",
     "Properties.Pouw.PeriodJ10RStrata.pathsAt": "93af8a0ff9e42bc9689e4b52f8c86420b30379acc1dfbbab9db9bf0a31c13d79",
     "Properties.Pouw.PeriodJ10RStrata.pathsCongr": "e0341d2e2a2151a4b4005e491e56b32e9e3a3cab3ba7a43078ce44d901e1b6d9",
