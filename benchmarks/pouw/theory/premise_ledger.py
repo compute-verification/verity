@@ -10,8 +10,8 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
 
 - **hashing**: SHA-512 of every committed byte, (row blocks + 12) compressions an hm96 leaf, at a compression's W1
   floor (3,632 registers written at 32) or its measured price alone. Under ShaSpeed and hash-compose the honest and the
-  adversary pay the same and the term is 0, to within δ. Without them the best rank ≤ 3 lower bound is the
-  compression's 16 output registers (H32 with DistinctWrites), so the term is h·(1 − 16·32/W1).
+  adversary pay the same and the term is 0, to within δ. Without them the best rank ≤ 3 lower bound is 460 registers
+  a compression (materialization, rank 3; `SHA_LB_REGS`), so the term is h·(1 − 460·32/W1).
 - **pre-noise hashing**: A's commitment before its noise, A's bytes a useful MAC (1/n), at the same price. The atomic
   call puts it inside the call; ShaSpeed prices it.
 - **hiding**: each leaf's salt side (the PRF, M_key·y and c), honest-only, at SW-HASH's measured share of a leaf's hash
@@ -59,6 +59,10 @@ H32 = 32
 W1_COMPRESSION = {"floor": 116_224, "alone": 232_888}       # SW-HASH: 3,632 registers at 32; measured alone
 SHA_INSTRUCTIONS = 3_646
 SHA_OUT_REGS = 16                                           # a compression's 512-bit output, 32-bit registers
+#: lower bounds on a compression's registers by rank (output registers; with predicates; materialization) and the best
+#: honest count (sm_90a SASS of a minimal kernel), against the committer's 3,632
+SHA_LB_REGS = {"1": 16, "2": 27, "3": 460}
+SHA_REGS_BEST = 3_534
 ANDS_COMPRESSION = 58_120
 ANDS_MAC = 2079 / 16
 NCP_BYTES_MAC = 3 * 4 / 32
@@ -206,14 +210,16 @@ LEDGER = [
     ("RegFileBW", "About 256 operand reads an SM-clock", "3", "stated", "3", "operand-read probes", "CORE-TIME",
      "none in T1 (time only)"),
     ("ShaSpeed", "No program computes SHA-512 cheaper than the best implementation, to within δ", "4a", "locked", "4a",
-     "a faster SHA-512 kernel or a cheaper W1 program", "lock",
+     "a faster SHA-512 kernel or a cheaper W1 program; its sharp form: a compression in under 3,534·(1 − δ) registers "
+     "on sm_90a", "lock",
      "hashing, credited coins, pre-noise hashing, forced PRF"),
     ("hash-compose", "A program hashing N bytes and writing M committed noise-dependent words costs ≥ N(1 − δ)·price "
      "+ 32·M: hashing shares no work with the words", "4a", "stated", "4a",
      "a SHA-512 whose written words double as targets", "N-COMPOSE", "every credited byte, with ShaSpeed"),
-    ("SHA-LB", "A rank-2 lower bound on SHA-512's W1 cost tight to δ* (a fraction of an instruction a compression)",
-     "2", "open", "5", "CPU-checked count in Sm90Sem", "N-SHALB",
-     "would replace ShaSpeed; the best rank ≤ 3 bound today is 16 output registers, 0.44%"),
+    ("SHA-LB", "A rank-2 lower bound on SHA-512's W1 cost tight to δ* (a fraction of a register a compression)",
+     "2", "open", "5", "CPU-checked count in Sm90Sem; the ladder today is 16 (rank 1), 27 (rank 2) and 460 (rank 3) "
+     "registers against 3,534", "N-SHALB",
+     "would replace ShaSpeed; at today's ladder none (rank 3 leaves 87% of hashing)"),
     ("mask-optimal", "No program computes M_key·y with less work than the best honest program (same memory)", "4a",
      "stated", "4a", "a 384 MiB table over 16-bit chunks gives 96 lookups a leaf; as worded likely false", "N-HIDE",
      "hiding's M·y with the PRF forced"),
@@ -309,7 +315,7 @@ def hash_terms(design, shapes: dict, m: int, c1: bool, row: str = CARD_ROW) -> d
         out[f"h_{p}"] = h
         out[f"words_{p}"] = words_c * wc
         out[f"pre_{p}"] = pre_c * wc
-        out[f"rank3_residual_{p}"] = h * (1 - SHA_OUT_REGS * H32 / wc)
+        out[f"rank3_residual_{p}"] = h * (1 - SHA_LB_REGS["3"] * H32 / wc)
     out["h_ands"] = (words_c + pre_c) * ANDS_COMPRESSION / ANDS_MAC
     return out
 
@@ -862,7 +868,8 @@ def design_terms(label: str, point: str, data: dict, cb: dict) -> dict:
         crafted = CRAFTED_M1[name] * weighted_alpha(d, shapes)
     return {"forming": t["forming_x"] + t["forming_y"], "denoise": t["denoise"], "final_word": t["final_word"],
             "dup": t["dup"], "coins": t["coins"],
-            "hashing": h["words_floor"] * (1 - SHA_OUT_REGS * H32 / W1_COMPRESSION["floor"]), "pre_noise": h["pre_floor"],
+            "hashing": h["words_floor"] * (1 - SHA_LB_REGS["3"] * H32 / W1_COMPRESSION["floor"]),
+            "pre_noise": h["pre_floor"],
             "hiding": hid["unforced_floor"], "coin_branch_natural": natural, "coin_branch_requests_rows": req_rows,
             "coin_branch_requests_words": req_words, "coin_branch_zero_rows": zero_rows,
             "coin_branch_zero_words": zero_words, "coin_branch_crafted": crafted,
@@ -925,6 +932,10 @@ def shaspeed_precision(data: dict, cb: dict) -> dict:
             e[f"h_{p}"] = h
             e[f"delta_{p}"] = budget / h
             e[f"instr_compression_{p}"] = budget / h * SHA_INSTRUCTIONS
+        # under the ruling the honest program hashes at the best count, so ShaSpeed's δ is relative to that
+        e["delta_ruled"] = budget / (e["h_floor"] * SHA_REGS_BEST * H32 / W1_COMPRESSION["floor"])
+        e["regs_compression_ruled"] = e["delta_ruled"] * SHA_REGS_BEST
+        e["ruling_waives"] = e["h_floor"] * (1 - SHA_REGS_BEST * H32 / W1_COMPRESSION["floor"])
         out[point] = e
     return out
 
@@ -932,7 +943,7 @@ def shaspeed_precision(data: dict, cb: dict) -> dict:
 def rank3_routes() -> dict:
     """What rank ≤ 3 overall would take for a word-commit design: hashing in T1 with only rank ≤ 3 bounds on SHA-512."""
     wc = W1_COMPRESSION["floor"]
-    lb = SHA_OUT_REGS * H32 / wc
+    lb = SHA_LB_REGS["3"] * H32 / wc
     cb = comps_byte(ROWS[CARD_ROW])
     w1_byte = cb * wc
     max_bytes = 0.0099 / (w1_byte * (1 - lb))
@@ -944,7 +955,8 @@ def rank3_routes() -> dict:
         w = sum(n * k for n, k in shapes.values())
         h = sum(n * 4 * w1_byte for n, k in shapes.values()) / w
         outputs[point] = {"hash_share": h, "delta_star": ALLOW / h, "instr_compression": ALLOW / h * SHA_INSTRUCTIONS}
-    return {"rank3_sha_lb_share": lb, "w1_byte_floor": w1_byte, "max_bytes_mac_rank3": max_bytes,
+    return {"rank3_sha_lb_share": lb, "sha_lb_ladder": {r: v / SHA_REGS_BEST for r, v in SHA_LB_REGS.items()},
+            "w1_byte_floor": w1_byte, "max_bytes_mac_rank3": max_bytes,
             "min_macs_per_4B_word_rank3": 4 / max_bytes, "hash_of_stock_at_credit": credit,
             "outputs_only": outputs, "state_lemma_share_hypothetical": (80 * 4 + 64 * 2 + SHA_OUT_REGS) / 3_632}
 
@@ -1040,6 +1052,10 @@ def checks(rep: dict) -> list[dict]:
     ok("ShaSpeed δ* at the lead is below 1e-4 (floor)", sp["delta_floor"] < 1e-4, f"{sp['delta_floor']:.2e}")
     ok("ShaSpeed slack under one instruction a compression", sp["instr_compression_floor"] < 1,
        f"{sp['instr_compression_floor']:.3f}")
+    ok("under the ruling (honest at the best count) ShaSpeed's slack is still under half a register a compression, and "
+       "the ruling waives more than the allowance", sp["regs_compression_ruled"] < 0.5 and sp["ruling_waives"] > ALLOW,
+       f"{sp['regs_compression_ruled']:.3f} registers; waives {sp['ruling_waives']:.2f}x stock")
+    ok("N-SHALB's rank-3 rung leaves over 80% of hashing", 1 - SHA_LB_REGS["3"] / SHA_REGS_BEST > 0.8)
     r3 = rep["rank3"]
     ok("rank ≤ 3 needs ≥ 1,000× fewer bytes than k32", r3["max_bytes_mac_rank3"] * 1000 < 4 / 32,
        f"{r3['max_bytes_mac_rank3']:.2e} B a MAC")
@@ -1215,7 +1231,9 @@ def table(rep: dict) -> str:
     for p, e in rep["shaspeed"].items():
         lines.append(f"{p}: h {e['h_floor']:.1f} / {e['h_alone']:.1f} W1 a MAC; δ* {e['delta_floor']:.2e} / "
                      f"{e['delta_alone']:.2e}; {e['instr_compression_floor']:.3f} / {e['instr_compression_alone']:.3f} "
-                     "instructions a compression")
+                     f"instructions a compression; ruled (honest at {SHA_REGS_BEST:,} registers) δ* "
+                     f"{e['delta_ruled']:.2e} = {e['regs_compression_ruled']:.3f} registers a compression, waiving "
+                     f"{e['ruling_waives']:.2f}× stock")
     lines.append("\n# coin branch (share of stock)")
     for p, e in rep["coin_branch"].items():
         lines.append(f"{p}: " + ", ".join(f"{k} {v:.4%}" for k, v in e.items() if isinstance(v, float) and k != "alpha"
