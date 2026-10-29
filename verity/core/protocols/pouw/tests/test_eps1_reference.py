@@ -1,4 +1,4 @@
-"""The EPS1 sm_120 H1 + fx1 design on words (`circuit.eps1_reference`, decision 102): a non-registered reference, so the
+"""The EPS1 sm_120 H1 + fx1 design on words (`circuit.eps1_reference`): a non-registered reference, so the
 served scheme (`circuit.h1tile`) can be tested against it (`test_h1tile_matches_eps1`).  These pin the reference's own
 surface: it is not in `circuit.SCHEMES`, its arm is the s8 family, its work table is the served MACs a dot and its closure
 is empty.  Pure Python, fast (no Boolean lowering): the arm's and the spot check's lowerings are circuit-check's."""

@@ -39,6 +39,8 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from verity.ml.circuits import ports as _ports
+from verity.ml.commitments import domains
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .protocol import U64, DomainError
 
@@ -46,30 +48,30 @@ if TYPE_CHECKING:
     from verity.core.protocols.sampled_proofs.service import Registration
 
 #: the certifier's salt, and the salt PoUW applies: SHA-512 digests
-SALT_BYTES = 64
+SALT_BYTES = DIGEST_BYTES["sha512"]
 #: `pouw_salt`'s domain tag, which keeps its input apart from `window_salt`'s
-SALT_TAG = b"verity/pouw-salt/v1"
+SALT_TAG = domains.POUW_PERIOD_SALT.encode()
 #: `pouw_record`'s domain tag
-RECORD_TAG = b"verity/pouw-record/v1"
+RECORD_TAG = domains.POUW_RECORD.encode()
 #: `prover_id`'s domain tag
-PROVER_TAG = b"verity/pouw-prover/v1"
+PROVER_TAG = domains.POUW_PROVER.encode()
 #: a weights' root, a SHA-512 `tagged`: an H1 window's `weights.weights_root` (`window_open_root`), an epoch's
 #: `audit.weights_root` (`pouw_record`)
-WEIGHTS_ROOT_BYTES = 64
+WEIGHTS_ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: a certified window's stream, the SHA-512 digest that names it, and its prover, the 64-byte id it is registered under
-STREAM_BYTES = 64
-PROVER_BYTES = 64
+STREAM_BYTES = DIGEST_BYTES["sha512"]
+PROVER_BYTES = DIGEST_BYTES["sha512"]
 WINDOW_SEGMENT = "pouw-window"
 #: `window_open_root`'s domain tag
-WINDOW_OPEN_TAG = b"verity/pouw-window-open/v1"
+WINDOW_OPEN_TAG = domains.POUW_PERIOD_OPEN.encode()
 #: `epoch_open_root`'s domain tag
-EPOCH_OPEN_TAG = b"verity/pouw-epoch-open/v1"
+EPOCH_OPEN_TAG = domains.POUW_EPOCH_OPEN.encode()
 #: `anchored_epoch_root`'s domain tag: `EPOCH_OPEN_TAG`'s, its version bumped for the anchors' root in its preimage
-ANCHORED_EPOCH_TAG = b"verity/pouw-epoch-open/v2"
+ANCHORED_EPOCH_TAG = domains.POUW_ANCHORED_EPOCH_OPEN.encode()
 #: an H1 window's anchors' root X (`core_check.values_root` of its committed activations)
-ANCHORS_ROOT_BYTES = 64
+ANCHORS_ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: a live window's round-0 request table's root, a frame-v3-sha512 root
-REQUESTS_ROOT_BYTES = 64
+REQUESTS_ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: a challenger session's id, as the auditor's gate assigns it when it reserves the session (``s20261020T114752Z-9e52``)
 SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 _NAT = re.compile(r"0|[1-9][0-9]*")

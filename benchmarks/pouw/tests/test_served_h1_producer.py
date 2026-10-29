@@ -492,8 +492,8 @@ def test_each_calls_j10r_receipt_table_is_h1tile_j10r_reference_through_served()
 def _cubin():
     path = os.environ.get(CUBIN)
     if not path or not torch.cuda.is_available():
-        pytest.skip(f"no GPU, or {CUBIN} names no noise.cu cubin (nvcc -cubin -gencode arch=compute_120a,code=sm_120a "
-                    "-I benchmarks/codec_tensor): its run is a recorded run on vy-nebius-2 (producer_gpu.sh)")
+        pytest.skip(f"no GPU, or {CUBIN} names no noise.cu cubin (nvcc -cubin -gencode arch=compute_120a,code=sm_120a): "
+                    "its run is a recorded run on vy-nebius-2 (producer_gpu.sh)")
     return PR.RC.Cubin(path)
 
 

@@ -38,9 +38,11 @@
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
+  "Proofs.Properties.Pous.MemoryChallenger.Attest",
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
+  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins",
@@ -59,7 +61,10 @@
   "Proofs.Properties.Pouw.LiveSalt.Coin",
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
-  "Proofs.Properties.Composition"
+  "Proofs.Properties.Composition",
+  "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

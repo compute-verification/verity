@@ -190,7 +190,7 @@ reference-model and off-policy forwards give 0.47). Expert-specialized fine-tuni
 forwards alone: 0.58 at 32k. A lower \(\kappa\) is
 the defender's conservative side: it lowers the thread bound and raises \(\nu\) and \(\mu\) (`tiers.py`). A cheater's
 own lower-\(\kappa\) recipe (longer contexts, more heads) buys gates that aren't the reference recipe's work: what they
-are worth enters through `m`. A faulty proof block is worth at most the counted multiplications a block can hold, and a
+are worth enters through `m`. An incorrect proof block is worth at most the counted multiplications a block can hold, and a
 cheater can declare blocks of weight matmuls, so `tiers.py` takes such a block's own \(\kappa_{\text{block}} = 1\)
 (each multiply-add's multiplication counted) rather than the recipe's average. The cheating share \(\chi\) grows as
 \(\sqrt{\kappa_{\text{block}}}\): 1.27x what 0.60 gives, and 1.77x at 2, a block of multiplications alone whose
@@ -356,7 +356,7 @@ in a checkpoint's slack bits, about 2×10¹¹ tokens for a 1T-parameter model re
 training on smuggled data stays bounded, not closed.
 
 **The proof gap.** The thread guarantees say nothing about a developer whose data is in θ, since their premise
-`BaselineRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
+`ThetaRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
 at most the bits of data the budgets allow.
 
 ## Not yet here

@@ -10,8 +10,8 @@
 Families and their tiles (M x N, K = 32): ``mma`` mma.sync m16n8k32 (16 x 8, both cards), ``wg`` wgmma m64n8k32 (64 x 8,
 sm_90a), ``wg64``, ``wg128`` and ``wg256`` wgmma m64nNk32 at the N an s8 GEMM's warpgroup tile issues (64 x N, sm_90a), ``tc``
 tcgen05.mma kind::i8 (128 x 32, sm_100a). Eight forms each (s8/u8 x s8/u8, saturating or not) run over the
-same tiles, each reading the operand bytes in its own formats. The cases are sm_120's IMMA probe's (run
-r20261015-084000-06d8, which pinned `integer.BLACKWELL_SM120_S8_M16N8K32`) at the family's tile shape:
+same tiles, each reading the operand bytes in its own formats. The cases are sm_120's IMMA probe's (the probe that
+pinned `integer.BLACKWELL_SM120_S8_M16N8K32`) at the family's tile shape:
 
 - sweeps: ``random_zero_acc``, ``random_random_acc`` (C uniform over all 2^32 words), ``edge_acc`` (C within 2^17 or 2^21
   of an s32 end, so sums leave the range);

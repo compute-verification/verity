@@ -1,4 +1,0 @@
-order = 80
-tool = "Stage coins and the deferred edit (retired by decision 72)"
-files = "`stage_cost/stage.cu`, `prep.py`, `report.py`, `run.sh`"
-includes = "`filler/dcap.cu`, `served_zk/hm96_rows.cu`"

@@ -2,10 +2,10 @@
 (``pearl-c-mxfp4-v0``) stays here as a contrast line, outside the claimed domain: same forming and
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
-The design is GPU 5's lane's.  It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
+It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
 inside one atom per element, one noisy cast forms the operand, Pearl's tickets are drawn on C̃, the BF16 clean-up U is
-checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which the
-theory lane has stated and nobody has proved.
+checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which is
+stated and not proved.
 
 **Per row x** of either operand (k BF16 words, the model's activation and weight dtype):
 
@@ -49,7 +49,7 @@ off) is `clean`: the same α and block rule on α·x, no noise.
 **Why the chain's exactness matters.**  On the domain the chain is exact, so rounding does not tie a word to its order,
 as Pearl-C's H100 argument had it.  The design rests instead on every code and every block scale depending on the salt.
 
-**The domain and the debit** are the theory lane's (TT_OUT-FP4, ``tt-out/fp4-sm120``, proposed).  Admission is per row,
+**The domain and the debit** are TT_OUT-FP4's (``tt-out/fp4-sm120``, proposed).  Admission is per row,
 salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β and a_E's E4M3 byte v in 0x08–0x7E, a normal UE4M3 with bit 7 clear and not
 NaN; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted and
 its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only when
@@ -114,6 +114,7 @@ from fractions import Fraction
 from functools import lru_cache
 
 from verity.errors import InvalidArtifact
+from verity.ml.commitments import domains
 from verity.ml.circuits.silicon import fp32
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 
@@ -137,7 +138,8 @@ ALIGN_K = 128
 PEEL_K = 2 * R
 TILE = C.TILE
 ROLE_EA, ROLE_FA, ROLE_EB, ROLE_FB = 0, 1, 2, 3
-LABELS = {"seed-A": b"pearl-c4/v1/seed-A", "seed-B": b"pearl-c4/v1/seed-B", "line": b"pearl-c4/v2/line"}
+LABELS = {"seed-A": domains.PEARL_C4_SEED_A.encode(), "seed-B": domains.PEARL_C4_SEED_B.encode(),
+          "line": domains.PEARL_C4_LINE.encode()}
 #: SHA-512(ℓ ‖ \0 zero-padded to one 128-byte block ‖ x): `pearl_c.s512`'s construction under Pearl-C4's labels, the
 #: block a precomputed first compression.  The seeds keep its first 32 bytes; a line block keeps all 64 (four lines)
 LABEL_BLOCKS = {r: (label + b"\0").ljust(128, b"\0") for r, label in LABELS.items()}
@@ -405,13 +407,13 @@ def clean(fmt: Fmt, x: Sequence[int]) -> tuple[list[int], list[int], int]:
 # ---- the chain and the clean-up --------------------------------------------------------------------------------
 
 def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
-    """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (the
-    assessor's run of all 256 bytes, ``r20260930-093120-b2f2``); UE8M0 bytes as written.  Every replayed step reads
+    """Scale bytes as sm_120's block-scaled step reads them: a UE4M3 byte from its low 7 bits, bit 7 ignored (on the card,
+    over all 256 bytes); UE8M0 bytes as written.  Every replayed step reads
     scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one.  It is the decode the Lean
     `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows.  Four of them are NaN
     accumulators whose scale bytes set bit 7: valid scales under this decode, which the pinned model
-    (`verity.ml.circuits.silicon.models._scale_dyadic`) now shares after GPU 4 replayed all 17 bit-7 vectors on the card
-    (r20260930-161935-83a8), and outside the model through the accumulator (the card writes 0x7FFFFFFF)."""
+    (`verity.ml.circuits.silicon.models._scale_dyadic`) shares, as all 17 bit-7 vectors replay on the card,
+    and outside the model through the accumulator (the card writes 0x7FFFFFFF)."""
     return [s & 0x7F for s in scales] if fmt is NVFP4 else list(scales)
 
 
@@ -1111,8 +1113,8 @@ class PearlC4:
             raise ValueError(f"hashing {hashing!r}: one of {', '.join(HASHINGS)}")
         self.fmt, self.hashing = FORMATS[fmt], hashing
         self.commitment_hash = C.TREE_HASH[hashing]
-        #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending the
-        #: assessor's rating of its bounds)
+        #: F1′'s evaluation: the rule's own, or a verifier's that charges at least it (staged: `f1_fast`, pending a
+        #: rating of its bounds)
         self.f1 = row_f1 if f1 is None else f1
         self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
@@ -1133,10 +1135,8 @@ class PearlC4:
             hypotheses=(
                 "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
-                "F2 (theory §6.2–6.3; the assessor's FP4 conditions, ratings.md 15:18Z), as the theory lane states it, proposed and "
-                "not proved: no sm_120 W1 program outputs correct C̃ and U words of the units whose replayed debit is under "
-                "the cap for less than their credit less the debit (research store "
-                "internal/pouw/rtx-pro/theory-pearl-c4-domain.md §2)",
+                "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
+                "of the units whose replayed debit is under the cap for less than their credit less the debit",
                 f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
                 "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090",
                 "the E2M1, UE4M3 and UE8M0 casts are as modelled (from the PTX ISA, not captured)",

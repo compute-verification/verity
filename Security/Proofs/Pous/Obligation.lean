@@ -194,12 +194,12 @@ set_option exponentiation.threshold 20000
 /-- **PoUS's per-window obligation guarantee** (`Pous.Period.ObligationHeld`): `PeriodHeld` at the snapshot, at every
 value of the other tags' keys, averaged over them. -/
 theorem obligationHeld : ObligationHeld := by
-  intro hH D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P round S hdev hS o
+  intro hH D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P τ round S hdev hinst hS o
   exact Pous.Mutable.SecurityProofs.pr_snap_le_real tag htag
     (fun e x => P.Accepts (o.1, (o.2, e), x) ∧ ¬ P.Break (o.1, (o.2, e), x) ∧
       (r.held (o.1, (o.2, e), x) : ℝ) < S * (r.win .capacity).len) _
     (add_nonneg δ_nonneg ENNReal.toReal_nonneg)
-    fun e => periodHeld hH D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P round S
-      hdev hS (o.1, (o.2, e))
+    fun e => periodHeld hH D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P τ round S
+      hdev hinst hS (o.1, (o.2, e))
 
 end Pous.Period.SecurityProofs

@@ -1,4 +1,4 @@
-"""HIGHUTIL's period on the CPU: the pick draw, ε, the operand openings, and whole periods at small shapes through v31.py's
+"""The highutil period on the CPU: the pick draw, ε, the operand openings, and whole periods at small shapes through v31.py's
 no-fold reference (`period.RefDriver`) with an in-process coin source: an honest period is accepted, and a skipping
 prover's, a tampered root's and a swapped operand's are refused."""
 from __future__ import annotations

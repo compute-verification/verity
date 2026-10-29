@@ -38,8 +38,8 @@ split's reference.
 **The row** (`Pc8RowACap`) is `Pc8RowA`, node for node, plus ``sd``: per block of 32 elements, the count of elements whose
 support's two ends agree (`words.PouwBlackwellE4m3SaltDead`, `PouwHopperE4m3SaltDead`: the codes e4m3(atom(f32(α·x),
 [c_β]^32, [±0x43]^32)) are equal or both zeros), on the forming's own accumulator f32(α·x) and the row's flat code
-c_β = e4m3(f32(β·44)).  On a one-group step (sm_120's and the H100's atoms) that count is P3's `saltDeadP` count: #1013's
-(E) `saltDeadP_iff_ends` and (C) `saltDeadP_card_ends`, with no hypothesis on α, x or β.  Nothing here reads the code's
+c_β = e4m3(f32(β·44)).  On a one-group step (sm_120's and the H100's atoms) that count is P3's `saltDeadP` count:
+`Security/Proofs/Pouw/PearlC/Cap/SaltDead.lean`'s (E) `saltDeadP_iff_ends` and (C) `saltDeadP_card_ends`, with no hypothesis on α, x or β.  Nothing here reads the code's
 order in the signed count, which is monotone only for β >= 0 and antitone for β <= 0.
 
 **The word** (`Pc8CapWord`) is `pearl_c_debit.word_flags` and rev1's `laterZeroPromos` on the chain the tile already
@@ -254,7 +254,7 @@ ADVICE = ("cert",)
 
 #: each core atom's window of masked words (`words.WINDOW`: G = 4)
 WINDOWS = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3Window, "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3Window}
-#: each core atom's salt-dead bit (`words.ends_agree`); both atoms are one-group steps, where #1013's (E) holds
+#: each core atom's salt-dead bit (`words.ends_agree`); both atoms are one-group steps, where `SaltDead`'s (E) holds
 SALT_DEAD = {"blackwell_sm120_e4m3_m16n8k32": W.PouwBlackwellE4m3SaltDead,
              "hopper_e4m3_wgmma_k32": W.PouwHopperE4m3SaltDead}
 #: the flat E line's entry, 44 at Pearl's norm 256 (`SaltDead.flatLine`), as an FP32 word: c_β = e4m3(f32(β·44))
@@ -282,7 +282,7 @@ def _row_a_cap_body(B, S_, x, line, fa, fb):
 Pc8RowACapDef = CompositeDefinition(
     "Pc8RowACap", 1, ("K", "DEV"), _row_a_cap_sig, _row_a_cap_body,
     doc="`Pc8RowA`'s outputs, and per block of 32 elements the count of salt-dead elements: those whose support's two ends "
-        "agree on the forming's accumulator f32(α·x) and the row's flat code e4m3(f32(β·44)) (#1013's `EndsAgree`).",
+        "agree on the forming's accumulator f32(α·x) and the row's flat code e4m3(f32(β·44)) (`SaltDead`'s `EndsAgree`).",
     conformance="protocol-defined")
 
 

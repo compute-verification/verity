@@ -86,7 +86,7 @@ def file_in(rng: random.Random) -> dict:
         names.append(rng.choice(("a0", "p1", LL.PARTIALS)))
     return {"registration": registration, "produced": produced, "r": r, "c": c, "k": rng.choice((64, 448, 4096)),
             "lane": rng.choice((None, None, None, 0, n - 1, rng.randrange(n), rng.randrange(n), n)),
-            "known": {nm: _known(rng, nm) for nm in names}, "complete": rng.random() < 0.8,
+            "known": {nm: _known(rng, nm) for nm in names},
             "place": None if place is None else {v: list(tb) for v, tb in place.items()}}
 
 
@@ -98,7 +98,7 @@ def registered_file(x: dict) -> dict:
         reads = LL.reads(x["r"], x["c"], kind, ln)
         ent, roots = LL.verifier_entries(x["registration"], x["produced"], LL.lanes(x["r"], x["c"]), 2 * LL.words(x["k"]))
         place = {v: (t, b) for v, (t, b) in (x.get("place") or {}).items()}
-        return LL.registered_file(reads, ent, roots, {v: G.SCHEMA_V2 for v in ent}, x["known"], x["complete"], place)
+        return LL.registered_file(reads, ent, roots, {v: G.SCHEMA_V2 for v in ent}, x["known"], place)
     except (ValueError, KeyError) as e:
         raise D.Reject(str(e)) from e
 
@@ -128,7 +128,7 @@ def _served(seed: int, ln: int | None, place: dict[str, tuple[str, int]] | None 
     registration, produced = records(rng, LL.lanes(32, 32), whole=True, place=place)
     known = (LL.PUB, LL.ADMIT, LL.OK) if ln is not None else (LL.OK,)
     x = {"registration": registration, "produced": produced, "r": 32, "c": 32, "k": 448, "lane": ln,
-         "known": {nm: _known(rng, nm) for nm in known}, "complete": True,
+         "known": {nm: _known(rng, nm) for nm in known},
          "place": None if place is None else {v: list(tb) for v, tb in place.items()}}
     return x, registered_file(x)
 

@@ -29,13 +29,14 @@ from dataclasses import dataclass
 
 from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                            VerificationLimits, verify_opening)
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.core.protocols.sampled_proofs.challenger import coin_claim
 
 from .protocol import DomainError, tagged
 
-SCHEME = "verity/pouw/epoch-coins/v1"
-COIN_TAG = b"verity/pouw/epoch-coin/v1\0"
+SCHEME = domains.POUW_EPOCH_COINS
+COIN_TAG = domains.POUW_EPOCH_COIN.encode() + b"\0"
 LABELS = ("salt", "draw")
 COIN_BYTES = 32
 HM96 = hm96.SHA512
@@ -61,7 +62,7 @@ class CoinCommitment:
     def __post_init__(self) -> None:
         if type(self.epoch) is not int or self.epoch < 0:
             raise DomainError("an epoch is a nonnegative integer")
-        if type(self.root) is not bytes or len(self.root) != 64:
+        if type(self.root) is not bytes or len(self.root) != DIGEST_BYTES["sha512"]:
             raise DomainError("a coin commitment's root is 64 bytes")
 
     def to_json(self) -> dict:

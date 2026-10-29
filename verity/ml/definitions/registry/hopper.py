@@ -1,7 +1,7 @@
 """Hopper (sm_90) bindings of the B1 typed serving program, profile `b1-hopper`.
 
 On an H100 the eager batch-invariant profile executes two functions that differ bit-for-bit from the Ampere/Ada
-ones TA1's B1 composites are bound to (REPORT §2, W4d):
+ones `b1.py`'s B1 composites are bound to:
 
 * the batch-invariant Triton GEMM compiles `tl.dot` to `wgmma.mma_async.sync.aligned.m64n128k16.f32.bf16.bf16`
   (SASS `HGMMA.64x128x16.F32.BF16`) instead of `mma.sync.m16n8k16`: one accumulator coordinate takes all 16
@@ -15,7 +15,7 @@ ones TA1's B1 composites are bound to (REPORT §2, W4d):
   contracted by nvcc into one FFMA, `p = exp2(s * scale_log2 - m * scale_log2)`, `O = O * scale` then the P·V
   `wgmma` chain), and the epilogue `inv = (sum == 0 || sum != sum) ? 0 : 1 / sum` (FA2: `? 1`) — `Fa3InvSum`.
 
-**Same structure, different bindings.**  Every composite below is TA1's definition *instantiated in a Hopper
+**Same structure, different bindings.**  Every composite below is `b1.py`'s definition *instantiated in a Hopper
 binding environment*: the same `signature` and `body` code objects (`_reinstantiate` re-creates the functions
 over a copy of `b1`'s module globals in which the bound names resolve to the Hopper functions), registered under
 new ids because a registered id denotes one function.  Nothing in `b1.py` changes.  The names that are rebound:
@@ -28,8 +28,8 @@ new ids because a registered id denotes one function.  Nothing in `b1.py` change
     LayerPre / LayerPost / Final / Serve -> *Hopper   (re-instantiated only because their bodies name their callees)
 
 Everything else (RMSNorm, RoPE, BiasAdd, SiluMul, Embedding, TokenSelect, the constants, every scalar primitive)
-is TA1's registered function, unchanged.  `hopper-profile.md` records where this is a static-config matter (the
-bound names should be function-valued statics; kBlockN should be a static) and where it is not.
+is `b1.py`'s registered function, unchanged.  The rebound names are a static-config matter: they should be
+function-valued statics and kBlockN a static, which is how `SERVE_HOPPER` below binds them.
 """
 
 from __future__ import annotations
@@ -112,11 +112,11 @@ def _reinstantiate(fn, env: dict = ENV):
     return new
 
 
-PORTED: dict[str, CompositeDefinition] = {}  # TA1 name -> Hopper-bound definition
+PORTED: dict[str, CompositeDefinition] = {}  # b1 name -> Hopper-bound definition
 
 
 def _port(defn: CompositeDefinition, name: str, doc: str, conformance: str = "exact-model-tested") -> CompositeDefinition:
-    """TA1's `defn` — the same statics, signature code and body code — instantiated in `ENV`, registered as `name@1`."""
+    """`b1.py`'s `defn` — the same statics, signature code and body code — instantiated in `ENV`, registered as `name@1`."""
     d = CompositeDefinition(name, 1, defn.statics, _reinstantiate(defn.signature), _reinstantiate(defn.body),
                             doc=f"{defn.doc.strip()}\n\n[b1-hopper] {doc}", conformance=conformance)
     d.ported_from = defn  # type: ignore[attr-defined]
@@ -144,12 +144,12 @@ AttentionFA3 = _port(b1.Attention, "AttentionFA3",
                      "GQA over AttentionHeadFA3.  Conformance: every attention leaf of the H100 correspondence exact (39 leaves, T = 1..527, "
                      "request 917b9faa, layers 0/1/13/27: results/CONF-b1-hopper-*/correspondence.json) and AttentionHeadFA3 equal word for word "
                      "to the FA3 CPU model (verity.ml.definitions.numerics.fa3_model; tests/poc/test_fa3_model.py).")
-LayerPreHopper = _port(b1.LayerPre, "LayerPreHopper", "GemmHopper for the QKV projection; otherwise TA1's functions.")
-LayerPostHopper = _port(b1.LayerPost, "LayerPostHopper", "GemmHopper for o_proj, gate_up, down; otherwise TA1's functions.")
-FinalHopper = _port(b1.Final, "FinalHopper", "GemmHopper for the LM head; TA1's RMSNormFusedCuda and TokenSelect.",
+LayerPreHopper = _port(b1.LayerPre, "LayerPreHopper", "GemmHopper for the QKV projection; otherwise b1's functions.")
+LayerPostHopper = _port(b1.LayerPost, "LayerPostHopper", "GemmHopper for o_proj, gate_up, down; otherwise b1's functions.")
+FinalHopper = _port(b1.Final, "FinalHopper", "GemmHopper for the LM head; b1's RMSNormFusedCuda and TokenSelect.",
                     conformance="model-untested")
 ENV["_forward_positions"] = _reinstantiate(b1._forward_positions)
-ServeHopper = _port(b1.Serve, "ServeHopper", "TA1's Serve over the Hopper-bound layer functions.", conformance="model-untested")
+ServeHopper = _port(b1.Serve, "ServeHopper", "b1's Serve over the Hopper-bound layer functions.", conformance="model-untested")
 
 HOPPER_COMPOSITES = [DotBf16Hopper, GemmCoordinateHopper, GemmHopper, AttnBlockFA3, AttentionHeadFA3, AttentionFA3,
                      LayerPreHopper, LayerPostHopper, FinalHopper, ServeHopper]
@@ -163,7 +163,7 @@ from verity.ml.definitions.registry import fa2_check_inf  # noqa: E402, F401
 # and FA2's softcapped chain under it (`AttentionSoftcap_v2`)
 from verity.ml.definitions.registry import fa2_softcap  # noqa: E402, F401
 
-# --- CF1 (composition.md §2): the Hopper eager profile as a binding record of b1's factored `Serve_v2` -----------
+# --- the Hopper eager profile as a binding record of b1's factored `Serve_v2` -----------
 # The environment substitution above (`_BoundPrims._over`, `ENV["BN"]`) written as the statics it always was: the same
 # three selections, now in the program's identity instead of the Python module namespace.
 GEMM_HOPPER: dict = {"DOT": HopperBF16WgmmaDot16}
@@ -172,10 +172,10 @@ ATTENTION_FA3: dict = {"BN": KBLOCK_N_FA3, "DOT": HopperBF16WgmmaDot16, "INV": F
 
 def SERVE_HOPPER(C: dict, LP: int, STEPS: int):
     """The Hopper eager program: `Serve_v2` under `GEMM_HOPPER` / `ATTENTION_FA3` / `b1.norm_bundle(C)` — the norm record
-    is TA1's (the H100 runs the same Triton and CUDA RMSNorm kernels: hopper-profile.md §1)."""
+    is b1's (the H100 runs the same Triton and CUDA RMSNorm kernels)."""
     return b1.serve_v2(C, LP, STEPS, gemm=GEMM_HOPPER, attention=ATTENTION_FA3)
 
-#: TA1 call name -> Hopper call name, for capture mappings written against TA1's names (`correspondence.py`).
+#: b1 call name -> Hopper call name, for capture mappings written against b1's names (`correspondence.py`).
 CALL_NAMES: dict[str, str] = {k: v.name for k, v in PORTED.items()}
 #: The full binding table by name (composites and primitives), for `structural_diff`.
 NAME_MAP: dict[str, str] = {**CALL_NAMES, **{k: v.name for k, v in _BoundPrims._over.items()}}
@@ -194,8 +194,8 @@ def set_conformance(status: dict[str, str]) -> None:
 
 
 def bindings() -> dict:
-    """`FunctionDefinition name -> registered id@version` for every definition TA1's B1 program uses, with the
-    conformance status and whether the binding is TA1's or the Hopper one."""
+    """`FunctionDefinition name -> registered id@version` for every definition `b1.py`'s B1 program uses, with the
+    conformance status and whether the binding is b1's (`"ta1"`) or the Hopper one."""
     out: dict[str, dict] = {}
     for d in b1.ALL_COMPOSITES:
         h = PORTED.get(d.name, d)
@@ -230,7 +230,7 @@ def _static_repr(v, names: dict[str, str]):
 def structural_diff(a: SpecializedDefinition, b: SpecializedDefinition, names: dict[str, str] | None = None,
                     stop: frozenset[str] = frozenset(), _seen: set | None = None) -> list[dict]:
     """Node-for-node comparison of two specialised bodies: forms, argument references, output types, batch axes and
-    counts, annotations, and callee identity with `names` applied to `a`'s side (TA1 name -> port name).  Recurses
+    counts, annotations, and callee identity with `names` applied to `a`'s side (b1 name -> port name).  Recurses
     into callee pairs (each pair once) except into definitions named in `stop`.  Returns the differences."""
     names = names or {}
     seen = _seen if _seen is not None else set()

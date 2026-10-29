@@ -1,4 +1,4 @@
-// sm_89 (L40S) census probes on probe.cuh (EPS1 ADA, note:20261017T0605Z-draft-eps1-ada): every scalar pipe's rate
+// sm_89 (L40S) census probes on probe.cuh: every scalar pipe's rate
 // alone, the shared-memory loads, IMMA beside every scalar class, and the honest step (8 IMMA then the duo fold of
 // their words) at m16n8k32 and m16n8k16. stmatrix (lm.cu's STSM) is sm_90+, so the shared-memory probes are LDS, STS
 // and LDSM only. frontier.cu's mixes don't unroll on sm_89, so this file carries its own. The uniform datapath is

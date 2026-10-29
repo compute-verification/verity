@@ -3,14 +3,17 @@
 The vLLM demo is the runnable form of the **remote protocol** (`verity/remote/v0`, in `verity/core/protocols/remote/`):
 what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
-The remote protocol composes two subprotocols over one commitment and accepts only when both accept:
+The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed sampling block, the
   prover proves each sampled block with C-Flock `--zk` behind the Lean firewall, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
   serves PoUW's H1, each sampling block's coins come from a session of its own on the challenger's gate, and PoUW's
-  piece checks them against that session, the gate's ledger and its pins.
+  piece checks them against that session, the gate's ledger and its pins;
+- **the inference-only policy** (`verity/core/protocols/network/nci/`): the declared circuit divides into inference
+  blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
+  declared division yet.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form

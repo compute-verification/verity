@@ -70,8 +70,9 @@ theorem acceptsZKR_ok {I : Flock.Witness.Inputs} {own : Array Flock.Registered.P
   unfold Flock.Witness.acceptsZKRAt at h
   obtain ⟨⟨spec, sts⟩, h1, h⟩ := bind_ok h
   obtain ⟨_, h2, h⟩ := bind_ok h
+  obtain ⟨_, h2', h⟩ := bind_ok h
   obtain ⟨_, h3, h4⟩ := bind_ok h
-  exact ⟨spec, sts, (setupOf_eq I r).symm.trans h1, h2, h3, h4⟩
+  exact ⟨spec, sts, (setupOf_eq I r).symm.trans h1, h2, h2', h3, h4⟩
 
 /-- **The witness's V* check is `AcceptsZKV`**: the verdict, then `RecVStar.checkStmt` on each statement the session
 sets up, at the inner shape `i`, as V*'s statement `j` under the bindings `f` and the shared rows `rows`. -/

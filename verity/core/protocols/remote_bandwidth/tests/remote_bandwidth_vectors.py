@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's pinned vectors (`vectors.json`): `python remote_bandwidth_vectors.py` rewrites them, and
+"""PoUB's pinned vectors (`vectors.json`): `python remote_bandwidth_vectors.py` rewrites them, and
 `test_remote_bandwidth_vectors.py` holds the code to them.
 
 Payload blocks are generated, not stored: payload `j` is 64 pieces of 64 bytes, piece u the first 64 bytes of
