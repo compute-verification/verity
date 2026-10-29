@@ -539,13 +539,13 @@ source = "SW-SEM interim: NCP's noise isn't fresh (blocks 2 and 3 reuse E1 throu
 rank = 0
 status = "scratch"
 owner = "SW-LEAN"
-source = "SW-LEAN final §5 (SwLean.lean at 3726b081f0 on cursor/compute-research-sw-lean-fa5d, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2, axioms clean in run r20261029-063252-4ff0; scratch, in no lock): ssnTargetG / ssn_chargedG at every data case with no input premise, for any layout reading each weighed lane from its own bit of the row's coin words (ssn1lBit_charged: S + 3 bits a row; ssnABit_charged: 4S); the cost is at least 32·m·n·S a call for n <= 28,559 (ssnCode_inj, the card's n_max). The served extraction must be stated as an injective (word, bit) map: SW-NOISE's literal masks reach bits {q, q+8, q+16, q+24} and 24..31 only. Not covered: grinding (ssn-success-set) and C1's formed registers. Before it, SW-NOISE final §4 (note compute-research/20261029T0551Z-report-sw-noise): a served sparse noise's words D_t(i,j) - beta_j + (the coin bits' public coefficients) are affine in the coin bits, pairwise distinct and non-free as functions of them whatever A and B (rows: a nonzero code coefficient on the row's own bits; columns: step 1's injective code; steps: each step's own bit), and the formed registers (C1) meet formed_charged's three conditions; the int8 case of DistinctLiveH1T (open, not refuted); checked on six degenerate data cases by run r20261029-054725-38d8, with a mutation. It rests on DistinctOn's set semantics: in Theorem D's span model every affine word after the first is free (SW-NOISE's smell)"
+source = "SW-LEAN final §5 (SwLean.lean at 3726b081f0 on cursor/compute-research-sw-lean-fa5d, art:70d0373aa78e8ae12570e6b7b8be77e2e643bea30c425d288966368a7018fad2, axioms clean in run r20261029-063252-4ff0; scratch, in no lock): ssnTargetG / ssn_chargedG at every data case with no input premise, for any layout reading each weighed lane from its own bit of the row's coin words (ssn1lBit_charged: S + 3 bits a row; ssnABit_charged: 4S); the cost is at least 32·m·n·S a call for n <= 28,559 (ssnCode_inj, the card's n_max). The served extraction must be stated as an injective (word, bit) map: SW-NOISE's literal masks reach bits {q, q+8, q+16, q+24} and 24..31 only. Not covered: grinding (adaptive-pointwise) and C1's formed registers. Before it, SW-NOISE final §4 (note compute-research/20261029T0551Z-report-sw-noise): a served sparse noise's words D_t(i,j) - beta_j + (the coin bits' public coefficients) are affine in the coin bits, pairwise distinct and non-free as functions of them whatever A and B (rows: a nonzero code coefficient on the row's own bits; columns: step 1's injective code; steps: each step's own bit), and the formed registers (C1) meet formed_charged's three conditions; the int8 case of DistinctLiveH1T (open, not refuted); checked on six degenerate data cases by run r20261029-054725-38d8, with a mutation. It rests on DistinctOn's set semantics: in Theorem D's span model every affine word after the first is free (SW-NOISE's smell)"
 
-[premise.ssn-success-set]
-rank = 0
+[premise.adaptive-pointwise]
+rank = 5
 status = "open"
-owner = "SW-LEAN"
-source = "SW-NOISE final §4: fixing g noise bits succeeds with probability 2^-g a try and merges at most g·n words (a step's word with the one before, where that step's data dot is 0 or -1), so the loss is at most the share of zero or -1 k32 data dots (0.036-0.149% on WikiText, run r20261029-052919-f1b2) unless the prover chooses its inputs; DistinctWrites charges words distinct on the success set S, which distinctness over every salt doesn't give. Argued, not proved; b4 (4 bits a lane) is the fallback at a T3 risk"
+owner = "N-LEAN"
+source = "N-LEAN interim 1 §1-6 (note compute-research/20261029T0836Z-report-np-lean; Security/Proofs/Pouw/Dimension/Scratch/{Grind,SsnGrind}.lean on cursor/compute-research-np-lean-39e5 at 88e8ffd44b, 22 theorems on propext/Classical.choice/Quot.sound, art:3d82527d40f72fbe37ff5d03fad105d0940e490b518ec8d4f2179ff419bab73f; in no lock, on MH100w's draft semantics): the success-set framing is retired for every design whose coins the prover holds while computing (every ssn_* code). A coin-branching prover reaches a leaf of measure 2^-d running one straight-line program, so ssnRows_charged (cost >= 32·(m·n·S - d·n·S - m·C) on a coin set of measure >= 2^-d, proved) is the per-branch statement and allows about n words saved a bit read; lost_le proves the success-set bound in general, and ssn1l_zero_row / zeroSet_measure prove SW-NOISE §4's 'g fixed bits lose at most g·n words' false (a zero row with its 4 step-1 bits fixed keeps at most 25·S of its n·S words). What replaces it, for N-LEAN's interim 2: a pointwise statement for any adaptive program (copies create no values at coins g; copies free only at an aligned grain, finer copies priced a write a word), with fix2's tile lemma. Open at rank 5 until it lands (N-LEAN's ask). Was ssn-success-set (SW-NOISE final §4, argued)"
 
 [premise.lane-semantics]
 rank = 3
@@ -716,7 +716,7 @@ source = "X = [A+E1 | A+E2 | -(A+E3)], Y = [B+F1; B+F2; B+F3]: the noise cancels
 title = "ssn-1l, served sparse noise: step 1 holds 28 entries and 4 coin bits against the column's public base-13 code, each later k32 step 31 entries and 1 bit against a weight lane of 1"
 fields = { c = 4, S = "1 + ceil(max(0, K - (32 - c))/31)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S + 4*m*(c - 4)", noise_y = "0", derive_extra = "4*m*rot + 4*m*(c - 4)", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1, branch_rows = "rep_sum(m, c, S)" }
 coins = { coins = ["4*m*ceil(bits/32)"] }
-premises = ["ssn-distinct", "ssn-success-set"]
+premises = ["ssn-distinct", "adaptive-pointwise"]
 t3 = { s8 = "ssn-1l-b1-v1" }
 variant = "ssn-1l-b1-v1"
 branch_source = "N-RED interim 1 A1 and N-PREM interim 1 §2: on identical rows step t's vector is fixed by (a1, the prefix sum of the step bits), 2^c x t classes, so rep_sum counts the expected repeats exactly (an estimate of the attack's saving: zero rows and prefix rows save more, 96-104% of stock in N-PREM's simulation)"
@@ -756,7 +756,7 @@ source = "SW-NOISE final §4 Domain and §10.5 (ssn_code5.py at 7d7de85b2b on cu
 title = "ssn-1l-hw, ssn-1l hardened: a1 in {0..15}^4 by the nibble mask on coin word 0 against the column code, each later step's lane 1 + 2b_t against public column signs"
 fields = { c = 4, S = "1 + ceil(max(0, K - (32 - c))/31)", bits = "S - 1 + 16", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*rot", dup = 0, noise_max = 15, n_max = 28559, s8_ok = 1, branch_rows = "rep_bits(m, 16, S)" }
 coins = { coins = ["4*m*ceil(bits/32)"] }
-premises = ["ssn-hw-distinct", "ssn-success-set"]
+premises = ["ssn-hw-distinct", "adaptive-pointwise"]
 t3 = { s8 = "ssn-1l-hw-v1" }
 variant = "ssn-1l-hw-v1"
 branch_source = "N-PREM interim 1 §2: two identical rows coincide at step t only if their 16 code bits and every step bit to t match, so step t has 2^(15 + t) uniform classes and rep_bits counts the expected repeats exactly (N-PREM's simulation, one draw: 0 / 0.014% / 0.148% at T 512, 512 rows and T 8,192; zero rows the same or less, a_t odd)"
@@ -770,7 +770,7 @@ source = "N-PREM: served, as ssn-1l; the extra width at the plain GEMM's time a 
 title = "ssn-1l-tag, ssn-1l with row tags: step 1 holds 24 data lanes, 4 lanes of the row index's balanced base-13 digits against coin-drawn G and 4 coin bits against the column code; later lanes 1 + a_t"
 fields = { c = 4, tag = 4, S = "1 + ceil(max(0, K - (32 - c - tag))/31)", bits = "S - 1 + c", rot = "S - 1 - max(0, floor((S - (26 - c))/32))", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*rot", dup = 0, noise_max = 3, n_max = 28559, s8_ok = 1, branch_rows = "0" }
 coins = { coins = ["4*m*ceil(bits/32)"] }
-premises = ["ssn-tag-distinct", "g-private", "copy-floor", "ssn-success-set"]
+premises = ["ssn-tag-distinct", "g-private", "copy-floor", "adaptive-pointwise"]
 t3 = { s8 = "ssn-1l-tag-v1" }
 variant = "ssn-1l-tag-v1"
 branch_source = "N-RED interim 1 §3, checked: every row vector distinct on identical rows, prefix rows and zero tails (4-word tiles repeat 0.07%), so the branch skips nothing"
@@ -784,7 +784,7 @@ source = "N-RED: served, the tags kept in the output; the extra width at the pla
 title = "ssn-a, served sparse noise: each k32 step 28 entries and a register a = (h >> q) & 0x01010101 a row against public W0"
 fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*S", dup = 0, noise_max = 1, n_max = 28559, s8_ok = 1, branch_rows = "rep_lanes(m, 4, S)" }
 coins = { coins = ["m*S/2"] }
-premises = ["ssn-distinct", "ssn-success-set"]
+premises = ["ssn-distinct", "adaptive-pointwise"]
 t3 = { s8 = "ssn-a-b1-v1" }
 variant = "ssn-a-b1-v1"
 source = "SW-NOISE final §2-3 (run r20261029-054725-38d8, art:d90a3d9d0ed503b9190dabc34367dd25ad30f3b247e2cfd0b855122c8a09fafc), the runner-up: a SHF and a LOP3 a row a step; candidate 1 forces the LOP3's output, the SHF stays gap; 4 coin bits a row a step"
@@ -803,7 +803,7 @@ source = "N-CARD's composition (estimate): ssn-a's 4S lanes again, negated, in c
 title = "ssn2, served sparse noise on both sides: each k32 step 28 entries, 4 bits a row and 4 bits a column"
 fields = { S = "ceil(K/28)", noise_x = "4*m*S", noise_y = "4*n*S", derive_extra = "4*m*S + 4*n*S", dup = 0, noise_max = 1, n_max = 1e30, s8_ok = 1, branch_rows = "rep_lanes(m, 4, S)" }
 coins = { coins = ["(m + n)*S/2"] }
-premises = ["ssn2-distinct", "ssn-success-set"]
+premises = ["ssn2-distinct", "adaptive-pointwise"]
 t3 = { s8 = "ssn2-b1-v1" }
 source = "SW-NOISE final (noise_sweep.py ssn2): (h >> q) & 0x01010101 on both operands, a SHF and a LOP3 a register a step on each side; served"
 
@@ -1094,6 +1094,13 @@ status = "refuted"
 targets = ["ssn-1l-tag"]
 source = "N-RED interim 1 A5: a salt-free table of every (a1, c_t) vector under M0 with device memory, 3.33% / 0.42% / 0.03% of stock at m 64 / 512 / 8,192; closed by the atomic call (every design's base) or a per-call G"
 
+[attack.fix2-quadrant]
+status = "open"
+targets = ["ssn-1l", "ssn-1l5", "ssn-1l-hw", "ssn-1l-tag", "ssn-a", "ssn2", "N.nn-prmt-sv4", "N.nn-prmt-sv4-aorb",
+           "N.nn-rot1-sv4-tag-aorb", "N.nn-rgap1-sv4-tag-aorb", "N.nn-rot2-sv28-aorb", "N.nn-rawS-sv4-aorb"]
+priced = "unpriced (estimate: the share p of a chosen step's words whose increment is the likeliest value, a quarter for fix2)"
+source = "N-LEAN interim 1 §2b (estimate, unchecked; N-RED to check, N-NOISE to price): chosen data with a step dot of -1 in every column (A[i, k_t] = -1, B[j, k_t] = 1, fixed before w_t) makes fix2's step increment -1 + (1 + b_t[i])·w_t[j] zero wherever b_t[i] = 0 and w_t[j] = +1, a quarter of the step's entries, with no row vector repeating (4-word tiles repeat about 3.1%). The prover groups B's columns by w_t once a window and the rows by b_t each call (TMA row moves, A1's premise) and skips that quadrant's MMA, about 2 coordinates a row-step against n/4 words. Its general form holds for any per-step increment that is a function of row coins and window-fixed column weights, so every 1-bit and 4-bit SSN variant (fix, fix2, hw); N-NOISE's sv4 and sv28 codes are such increments (N-CARD's reading, unchecked by either lane)"
+
 # N-COVER interim 1's whole served step (note compute-research/20261029T0745Z-report-np-cover; step_cover.py on
 # cursor/compute-research-np-cover-5f9b, run r20261029-073342-47ea, art:f00fddacf69da4869d35b6a4e019684fea9a3919aac28035df6da24d5da22676;
 # estimates): T1 over the whole step, the linears under ssn_1l and every other component by plan, and the share of
@@ -1367,7 +1374,7 @@ source = "N-NOISE: only the sv4 code part is served (std 2.82 units at K 8,192);
 title = "prmt: PRMT's sign replicate places each step's lane (0 or -1) from one of four sign bits of a shifted coin word version, one shift every four steps; step-1 code the shortest vectors of Z^4"
 fields = { S = "1 + ceil(max(0, K - 28)/31)", nn_ver = "ceil((S - 1)/4)", nn_lw = "ceil(nn_ver/8)", nn_w = "max(nn_lw, ceil((S + 3)/32))", noise_x = "4*m*S", noise_y = "0", derive_extra = "4*m*(nn_ver - nn_lw)", dup = 0, noise_max = 1, n_max = 1e9, s8_ok = 1, branch_rows = "rep_sum(m, 4, S)" }
 coins = { coins = ["4*m*nn_w"] }
-premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+premises = ["ssn-distinct", "adaptive-pointwise", "noise-space-distinct"]
 t3 = { s8 = "nn-b1-sv4" }
 source = "N-NOISE: noise_space.py A/prmt/sv4/served/s8/noc1/M0: S PRMTs and the code's LOP3 a row (noise_x), a shift a version past each word's first (derive_extra); coin words as ssn-1l's. A1 and A2 open (chosen inputs save 52-100% of stock)"
 
@@ -1379,7 +1386,7 @@ source = "served"
 title = "prmt on the side with fewer owners per linear (B when m > n)"
 fields = { S = "1 + ceil(max(0, K - 28)/31)", nn_b = "1*(m > n)", nn_ver = "ceil((S - 1)/4)", nn_lw = "ceil(nn_ver/8)", nn_w = "max(nn_lw, ceil((S + 3)/32))", noise_x = "(1 - nn_b)*4*m*S", noise_y = "nn_b*4*n*S", derive_extra = "4*((1 - nn_b)*m + nn_b*n)*(nn_ver - nn_lw)", dup = 0, noise_max = 1, n_max = 1e9, s8_ok = 1, branch_rows = "(1 - nn_b)*rep_sum(m, 4, S) + nn_b*rep_sum(n, 4, S)*m/n" }
 coins = { coins = ["4*((1 - nn_b)*m + nn_b*n)*nn_w"] }
-premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+premises = ["ssn-distinct", "adaptive-pointwise", "noise-space-distinct"]
 t3 = { s8 = "nn-b1-sv4" }
 source = "N-NOISE: noise_space.py AorB/prmt/sv4/served/s8/noc1/M0 (side B needs B's registers formed in the mainloop each call, kernel assumption b-forming). A1 and A2 open; side B's A1 is identical weight columns (N-RED's A3)"
 
@@ -1391,7 +1398,7 @@ source = "served"
 title = "ssn-1l's rotate + LOP3 lanes with tags and nz on the side with fewer owners; no layout assumption"
 fields = { S = "1 + ceil(max(0, K - 24)/31)", nn_b = "1*(m > n)", nn_lw = "ceil((S - 1)/32)", nn_w = "max(nn_lw, ceil((S + 3)/32))", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m*S + nn_b*4*m", noise_y = "nn_b*4*n*S", derive_extra = "4*nn_o*(S - 1 - nn_lw) + nn_b*4*m", dup = 0, noise_max = 3, n_max = 28560, s8_ok = 1, branch_rows = "0" }
 coins = { coins = ["4*nn_o*nn_w + nn_b*4*m"] }
-premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct", "ssn-tag-distinct", "g-private", "copy-floor"]
+premises = ["ssn-distinct", "adaptive-pointwise", "noise-space-distinct", "ssn-tag-distinct", "g-private", "copy-floor"]
 t3 = { s8 = "nn-tag-std17" }
 source = "N-NOISE: noise_space.py AorB/rot1/sv4/served/s8/noc1/M0+tag+nz: S LOP3s and S - 1 - W rotates an owner; side B adds G's register in A (a forced LOP3 and one more write a row, a coin word a row). A1 and A2 closed (a1_chosen 0), by the tags as ssn-1l-tag's"
 
@@ -1403,7 +1410,7 @@ source = "served"
 title = "rotating-gap LOP3 lanes (four steps a coin word version) with tags and nz on the side with fewer owners"
 fields = { S = "1 + ceil(max(0, K - 24)/31)", nn_b = "1*(m > n)", nn_ver = "ceil((S - 1)/4)", nn_lw = "ceil(nn_ver/8)", nn_w = "max(nn_lw, ceil((S + 3)/32))", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m*S + nn_b*4*m", noise_y = "nn_b*4*n*S", derive_extra = "4*nn_o*(nn_ver - nn_lw) + nn_b*4*m", dup = 0, noise_max = 3, n_max = 28560, s8_ok = 1, branch_rows = "0" }
 coins = { coins = ["4*nn_o*nn_w + nn_b*4*m"] }
-premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct", "gap-layout", "ssn-tag-distinct", "g-private", "copy-floor"]
+premises = ["ssn-distinct", "adaptive-pointwise", "noise-space-distinct", "gap-layout", "ssn-tag-distinct", "g-private", "copy-floor"]
 t3 = { s8 = "nn-tag-std17" }
 source = "N-NOISE: noise_space.py AorB/rgap1/sv4/served/s8/noc1/M0+tag+nz. A1 and A2 closed (a1_chosen 0), by the tags as ssn-1l-tag's"
 
@@ -1415,7 +1422,7 @@ source = "served"
 title = "a 28-lane step-1 code (the shortest vectors of Z^28) whose 2^28 states close A1 without tags; two bits a byte before each rotate, lanes 1 + 2x and 1 + 4x"
 fields = { S = "1 + ceil(max(0, K - 4)/31)", nn_b = "1*(m > n)", nn_ver = "ceil((S - 1)/2)", nn_lw = "ceil(nn_ver/16)", nn_w = "max(nn_lw, ceil((S + 27)/32))", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m*(S + 6)", noise_y = "nn_b*4*n*(S + 6)", derive_extra = "4*nn_o*(nn_ver - nn_lw + 6)", dup = 0, noise_max = 5, n_max = 1e9, s8_ok = 1, branch_rows = "(1 - nn_b)*rep_bits(m, 28, S) + nn_b*rep_bits(n, 28, S)*m/n" }
 coins = { coins = ["4*nn_o*nn_w"] }
-premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+premises = ["ssn-distinct", "adaptive-pointwise", "noise-space-distinct"]
 t3 = { s8 = "nn-tag-std17" }
 source = "N-NOISE: noise_space.py AorB/rot2/sv28/served/s8/noc1/M0+nz: the code's 7 registers (7 LOP3s forced, 6 shifts) and S - 1 lane LOP3s plus a rotate every two steps past each word's first. A1 and A2 closed on whole owner vectors; the coin branch priced as 28 + t - 1 uniform bits at step t (rep_bits), 3.4x under N-NOISE's a1_chosen (9.8e-7 at T 8,192), both under 1e-6 of stock"
 
@@ -1427,7 +1434,7 @@ source = "served"
 title = "the step's whole lane register is one raw coin word for the call (four bytes, each reused every fourth step), the sv4 code served; its row-common sum folded into the epilogue"
 fields = { S = "1 + ceil(max(0, K - 28)/28)", nn_b = "1*(m > n)", nn_o = "(1 - nn_b)*m + nn_b*n", noise_x = "(1 - nn_b)*4*m", noise_y = "nn_b*4*n", derive_extra = "0", dup = 0, noise_max = 8448, n_max = 1e9, s8_ok = 1 }
 coins = { coins = ["8*nn_o"] }
-premises = ["ssn-distinct", "ssn-success-set", "noise-space-distinct"]
+premises = ["ssn-distinct", "adaptive-pointwise", "noise-space-distinct"]
 t3 = { s8 = "nn-rawS-epi" }
 source = "N-NOISE: noise_space.py AorB/rawS/sv4/epi_row/s8/noc1/M0: the code's LOP3 an owner, no other forming (the raw word is the register); two coin words an owner. A2 open: a zero byte repeats a step, chosen zero tails save 1-8% of stock. Its coin branch (a1_chosen 1.0% / 1.8% / 7.8% at 64 / 512 / 8,192 rows) has no closed form in the card's occupancy functions, so the card refuses it until one prices it"
 

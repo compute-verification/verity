@@ -1513,9 +1513,10 @@ def main() -> int:
                         and 0.20 < e["terms"]["row_repeat"] < 0.22 and e0["t1_pass"],
                         f"row repeat {e['terms']['row_repeat']:.3f}x, T1 {e['t1']:.1%}")
         pool = {k: v for k, v in designs.items() if v["choice"]["noise"] in ("ssn-1l-tag", "ssn-1l-hw")}
-        c = mutated(lambda c: c["attack"].__setitem__("x", {"targets": ["ssn-tag-distinct"], "status": "open", "source": "test"}))
+        clean = mutated(lambda c: c.__setitem__("attack", {}))
+        c = mutated(lambda c: c.__setitem__("attack", {"x": {"targets": ["ssn-tag-distinct"], "status": "open", "source": "test"}}))
         rows_c, _ = ranking(c, pool, "t8192")
-        rows_0, _ = ranking(card, pool, "t8192")
+        rows_0, _ = ranking(clean, pool, "t8192")
         checks.mutation("an open attack on ssn-tag-distinct keeps the ssn-1l-tag designs, first without it, from ranking first",
                         rows_c and rows_0[0]["choice"]["noise"] == "ssn-1l-tag" and rows_c[0]["choice"]["noise"] != "ssn-1l-tag"
                         and any(r["attacks"] for r in rows_c), rows_c[0]["design"] if rows_c else "none")
