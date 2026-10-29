@@ -8,7 +8,7 @@ The inputs are logs that start from each composite's first entry, the lifecycle 
 entries (`verity/core/site/tests/test_site.py`'s `ENTRIES`, copied here: every refusal and an accepted entry). Each entry
 is changed at random a few times (a field of a location, link or sheet, an element dropped, repeated or added, the
 head it follows), and checked against auditors whose sheets and tolerances vary. They also come as malformed JSON: a
-node replaced or deleted, or a key added. Every string is ASCII, the domain of canonical JSON (`verity.core.wire`).
+node replaced or deleted, or a key added.
 """
 
 from __future__ import annotations
