@@ -214,6 +214,22 @@ theorem tiedReach_subset_span (T : List TiedAudit) (F : Finset ℕ) : tiedReach 
   · rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (not_lt.1 hu), Option.getD_none] at hxu
     exact absurd hxu (Finset.notMem_empty x)
 
+/-- An index past `tiedReaches T` reaches nothing, so `F` reaches what its indices into it reach. -/
+theorem tiedReach_inter_range (T : List TiedAudit) (F : Finset ℕ) :
+    tiedReach T (F ∩ range (tiedReaches T).length) = tiedReach T F := by
+  ext x
+  unfold tiedReach
+  constructor
+  · intro hx
+    obtain ⟨u, hu, hxu⟩ := Finset.mem_biUnion.1 hx
+    exact Finset.mem_biUnion.2 ⟨u, (Finset.mem_inter.1 hu).1, hxu⟩
+  · intro hx
+    obtain ⟨u, hu, hxu⟩ := Finset.mem_biUnion.1 hx
+    by_cases hl : u < (tiedReaches T).length
+    · exact Finset.mem_biUnion.2 ⟨u, Finset.mem_inter.2 ⟨hu, Finset.mem_range.2 hl⟩, hxu⟩
+    · rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (not_lt.1 hl), Option.getD_none] at hxu
+      exact absurd hxu (Finset.notMem_empty x)
+
 theorem tiedReach_nil (F : Finset ℕ) : tiedReach [] F = ∅ := by
   ext x
   simp [tiedReach, tiedReaches]
@@ -312,8 +328,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (sched : Z → WardenSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
-    (W Wt : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i))
-    (hWtn : ∀ z i, Wt z i ⊆ range ((tiedReaches (T i)).length)) (Fmax Ft : ℕ) :
+    (W Wt : Z → Fin m → Finset ℕ) (hWn : ∀ z i, W z i ⊆ range (n i)) (Fmax Ft : ℕ) :
     {z | z ∈ Zs ∧ PooledGood lay k reg Dj sw Pw ρ op T Fmax Ft (W z) (Wt z) (run tap (sched z, srv z)).2}.encard ≤
       Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax * 2 ^ (b * Fmax) *
         (∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card * Dj ^ k (sw i))) *
@@ -340,15 +355,18 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
   have hgood : ∀ z ∈ G, (run tap (sched z, srv z)).2 ∈ Y := by
     rintro z ⟨-, hlt, hle, hleak⟩
     obtain ⟨g, hg⟩ := exists_famOf_eq n Fmax (W z) (hWn z) hlt.le
-    obtain ⟨gt, hgt⟩ := exists_famOf_eq (fun i => (tiedReaches (T i)).length) Ft (Wt z) (hWtn z) hle.le
+    have hle' : ∑ i, (Wt z i ∩ range (tiedReaches (T i)).length).card < Ft :=
+      (sum_le_sum fun i _ => Finset.card_le_card Finset.inter_subset_left).trans_lt hle
+    obtain ⟨gt, hgt⟩ := exists_famOf_eq (fun i => (tiedReaches (T i)).length) Ft
+      (fun i => Wt z i ∩ range (tiedReaches (T i)).length) (fun i => Finset.inter_subset_right) hle'.le
     refine Set.mem_biUnion (x := g) ?_ ?_
     · simp only [s, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq, hg]
       exact hlt
     refine Set.mem_biUnion (x := gt) ?_ ?_
     · simp only [st, Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_ofPred_eq, hgt]
-      exact hle
+      exact hle'
     · intro i _
-      simp only [Set.mem_ofPred_eq, hg, hgt]
+      simp only [Set.mem_ofPred_eq, hg, hgt, tiedReach_inter_range]
       exact hleak i
   have hY12 : Y ⊆ Y2 := by
     intro y hy
@@ -475,10 +493,10 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
 relations, and `encard_pooledGood_le` at each draw of the coins. -/
 theorem horizonLeak : Guarantees.PooledLeakAccepted := by
   intro L K S lay k reg Dj m sw Pw ρ op T n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
-    schedOf srvOf hs dec hdz acc hacc W hW hWn Wt hWtn e e' he q hq0 hq1 hesc Ft et hpool hleak δ hδ Fmax hF
+    schedOf srvOf hs dec hdz acc hacc W hW hWn Wt e e' he q hq0 hq1 hesc Ft et hpool hleak δ hδ Fmax hF
   refine ⟨fun z hz => ?_, fun ω => encard_pooledGood_le lay k reg Dj sw Pw ρ op T n b hb arr f tap run htrust cap Ss
     hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω) (fun z hz => hdz z hz ω)
-    (fun z => W z ω) (fun z => Wt z ω) (fun z i => hWn z ω i) (fun z i => hWtn z ω i) Fmax Ft⟩
+    (fun z => W z ω) (fun z => Wt z ω) (fun z i => hWn z ω i) Fmax Ft⟩
   classical
   have hmiss := pr_adaptive_add_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m (acc z)
     (fun i ω => (W z ω i).card) e (fun i ω ω' h => hacc z i ω ω' h)
@@ -552,7 +570,7 @@ theorem horizonLeak_untied {L K S : ℕ} (lay : AuditStatement → BoundaryGates
     intro Wf o
     simp [PooledGood, tiedReach_nil]
   obtain ⟨h1, h2⟩ := horizonLeak lay k reg Dj sw Pw ρ op (fun _ => []) n b hb arr f tap run htrust cap Ss hcap hfit
-    Zs schedOf srvOf hs dec hdz acc hacc W hW hWn (fun _ _ _ => ∅) (fun _ _ _ => Finset.empty_subset _) e e' he
+    Zs schedOf srvOf hs dec hdz acc hacc W hW hWn (fun _ _ _ => ∅) e e' he
     q hq0 hq1 hesc 1 0 (fun z _ => (Pr_mono fun ω h => by simp at h).trans_eq Pr_false)
     (fun z hz i => by simpa [tiedReach_nil] using hleak z hz i)
     δ hδ Fmax hF

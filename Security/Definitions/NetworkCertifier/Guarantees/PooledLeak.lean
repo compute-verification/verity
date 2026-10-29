@@ -68,7 +68,7 @@ the windows' observations; and a covert sender in the server whose secrets `z �
 client's cells at the period's coins. For each secret, `acc z i ω x` is window `i`'s audits accepting at its coins `x`
 after the earlier windows' coins `ω`, `W z ω i ⊆ range (n i)` is the incorrect proof blocks of the witness computed from
 window `i`'s registration (both read only the windows before `i`), and `Wt z ω i` its tied audits' incorrect proof
-blocks (indices into `tiedReaches (T i)`). Given
+blocks (indices into `tiedReaches (T i)`; one past them reaches nothing). Given
 
 * `hesc`, the conditional escape: `Pr_x[acc z i ω x] ≤ (1 - q)^|W z ω i| + e i`, `q` the sampling design's per-window
   detection probability (`Flock.Guarantees.SampledKSLive` at the history, not yet discharged);
@@ -107,7 +107,6 @@ def PooledLeakAccepted : Prop :=
     (hW : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i)
     (hWn : ∀ z ω i, W z ω i ⊆ range (n i))
     (Wt : Z → (Fin m → Ω) → Fin m → Finset ℕ)
-    (hWtn : ∀ z ω i, Wt z ω i ⊆ range (tiedReaches (T i)).length)
     (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i)
     (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
     (hesc : ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i)
