@@ -1,8 +1,8 @@
 """`certifier_case`: certifier/v0's case of a run and its compute audits, held to the period check's Python mirror
 (`period_case`, which ``network-period`` is held to):
 
-* a compute audit the integrity check accepted is re-decided at δ (one-stage's bound on wrong units), and its refusal
-  kept as it is; an audit record missing, refused or for another registration is an error;
+* a compute audit the integrity check accepted is re-decided at δ (one-stage's bound on incorrect proof blocks), and
+  its refusal kept as it is; an audit record missing, refused or for another registration is an error;
 * `case_of`'s case of signed link-windows and the period's audit is the clock form's: the mirror runs one-stage v2 on
   each link-window's proof (undecided with no session's proof), refuses a link-window v2 refuses, a case naming another
   first window and an audit registered over another Program, and once v2 accepts the proofs accepts with K and eps at
