@@ -1,4 +1,4 @@
-import Proofs.Accounting.TS.Session.Period.Guarantees
+import Properties.Accounting.JointBridge.ServiceSoundOfSessions
 import Proofs.Accounting.TS.SessionSound
 import Proofs.Accounting.FillerLuck
 import Proofs.Pouw.Period.Honest
@@ -6,26 +6,24 @@ import Proofs.Pouw.Period.Honest
 /-!
 # PoUW's proof system soundness from its proof layer (the proof)
 
-`Accounting.SecurityProofs.TS.CheckProofSystemSound` is a union bound over a window's sessions: where the check accepts
-a window and some drawn unit `u` fails its relation, the session `sessOf x w u` that proves `u` is accepted and its
-statement fails at its opening, so the event lies in the union of the window's `n_π` unsound sessions, each at most
-`δ`. `WindowSessions.serviceSound_of_sessions` composes it with `Accounting.SecurityProofs.TS.SessionSoundAt`: a
-window's sessions that are C-Flock sessions meeting that guarantee's named premises give `ServiceSound` at
-`n_π · (δ_s + δ)`.
+`Accounting.SecurityProofs.Bridge.CheckProofSystemSound` is a union bound over a window's sessions: where the check
+accepts a window and some drawn unit `u` fails its relation, the session `sessOf x w u` that proves `u` is accepted and
+its statement fails at its opening, so the event lies in the union of the window's `n_π` unsound sessions, each at most
+`δ`. `serviceSound_of_sessions` composes it with `Accounting.SecurityProofs.TS.SessionSoundAt`: a window's sessions
+that are C-Flock sessions meeting that guarantee's named premises give `ServiceSound` at `n_π · (δ_s + δ)`.
 
-The witnesses state that some period of the deployed check meets the premise and that some period breaks the
-conclusion at `0`; their statements name no instance, so they read only the definitions and the check. Each proof
-takes H1's honest live-salt period (`Properties.Pouw.Period.SecurityProofs.HonestH1`), one window and one session:
-there the check accepts every window on every path and its layer is sound at `0`, and with relations that every
-opening fails `ServiceSound` fails at `0`, since the check accepts and draws a unit on every path.
+The witnesses' statements name no instance. Each proof takes H1's honest live-salt period
+(`Properties.Pouw.Period.SecurityProofs.HonestH1`), one window and one session: there the check accepts every window on
+every path and its layer is sound at `0`, and with relations that every opening fails `ServiceSound` fails at `0`,
+since the check accepts and draws a unit on every path.
 
 This module imports `Proofs.Accounting.TS.SessionSound`, whose imports make `X` a token, so `Proofs/Accounting.lean`
 imports it and no theorem here binds `X`.
 -/
 
-namespace Accounting.TS.WindowSessions
+namespace Accounting.SecurityProofs.Bridge
 
-open Pouw.RelativeSecurity
+open Pouw.RelativeSecurity Properties.Accounting.JointBridge Properties.Accounting.JointBridge.Sessions
 
 /-- **A window's drawn-unit failures are a union of its unsound sessions**: the window is accepted and some drawn unit
 fails its relation with probability at most `n_π · δ` when each session of the layer is unsound with probability at
@@ -46,21 +44,16 @@ theorem prob_drawn_le {Ω U V : Type} [Fintype Ω] {n nπ : ℕ} (acc : Paths Ω
     _ ≤ ∑ _i : Fin nπ, δ := Finset.sum_le_sum fun i _ => h w i
     _ = nπ * δ := by simp
 
-end Accounting.TS.WindowSessions
-
-open Pouw.RelativeSecurity Accounting.TS.WindowSessions in
 /-- **PoUW's proof system is sound against its check, from its sessions' soundness**
-(`Accounting.Guarantees.TS.CheckProofSystemSound`): `prob_drawn_le` at the check's layer, whose verdict is the check's
-acceptance and whose drawn units are the units it publishes. -/
-theorem Accounting.SecurityProofs.TS.CheckProofSystemSound : Accounting.Guarantees.TS.CheckProofSystemSound := by
+(`Properties.Accounting.JointBridge.CheckProofSystemSound`): `prob_drawn_le` at the check's layer, whose verdict is the
+check's acceptance and whose drawn units are the units it publishes. -/
+theorem CheckProofSystemSound : Properties.Accounting.JointBridge.CheckProofSystemSound := by
   intro C Ξ V _ _ m Np n nπ p ws opened rel sessOf δ h w
   refine (prob_mono fun x hx => ?_).trans (prob_drawn_le _ _ Fin.val opened rel sessOf h w)
   obtain ⟨pub, prof, hc, u, hu, hr⟩ := hx
   exact ⟨⟨pub, prof, hc⟩, u, ⟨pub, prof, hc, hu⟩, hr⟩
 
-namespace Accounting.TS.WindowSessions
-
-open Pouw.RelativeSecurity Flock.SoundAtBridge
+open Flock.SoundAtBridge
 open scoped ENNReal
 
 /-- **`ServiceSound` from a window's C-Flock sessions**: when the check layer's proofs are C-Flock sessions `sess` that
@@ -81,35 +74,24 @@ theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np 
     (hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkLayer p ws opened rel sessOf) sess out rows δs)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     Properties.Pouw.Period.ServiceSound p ws opened rel (nπ * (δs + δ)) :=
-  Accounting.SecurityProofs.TS.CheckProofSystemSound p ws opened rel sessOf (δs + δ)
+  Accounting.SecurityProofs.Bridge.CheckProofSystemSound p ws opened rel sessOf (δs + δ)
     (Accounting.SecurityProofs.TS.SessionSoundAt (checkLayer p ws opened rel sessOf) sess out rows δs δ hCR hAcc hLaw
       hChk hLink hδ hδ0)
 
-end Accounting.TS.WindowSessions
+open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs.HonestH1
 
-namespace Accounting.SecurityProofs.TS
-
-open Pouw.RelativeSecurity Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs.HonestH1
-open Accounting.TS.WindowSessions
-
-/-- **`CheckProofSystemSound`'s premise holds where the deployed check accepts**: there is a period of one window, at
-H1's population of 144 units and one session a window, on which PoUW's deployed check accepts the window on every path
-and its layer, under relations every opening meets, is sound at `0`. The instance is H1's honest live-salt period. -/
-theorem CheckProofSystemSound_honest :
-    ∃ (m : ℕ) (p : PouwCheck.Params) (ws : Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
-      (∀ x w, Accepts p (ws.reg x w) (ws.ev x w)) ∧
-        Accounting.Assumptions.TS.ProofSoundAt
-          (checkLayer p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => True) (fun _ _ _ => (0 : Fin 1))) 0 :=
+/-- **The honest witness of `CheckProofSystemSound`** (`CheckProofSystemSoundHonest`): at H1's honest live-salt period
+of one window, one session a window, the deployed check accepts the window on every path, and its layer is sound at
+`0`. -/
+theorem CheckProofSystemSound_honest : CheckProofSystemSoundHonest :=
   ⟨circuit.rounds, prm, windows 1, fun x w => accepted_all 1 x w,
     fun _ _ => le_of_eq
       (Accounting.SecurityProofs.ComposePeriod.Honest.prob_none fun _ h => h.2 fun _ _ _ => trivial)⟩
 
-/-- **`CheckProofSystemSound`'s conclusion can fail at `0`**: there is a period of one window, at H1's population of
-144 units, on which PoUW's deployed check accepts and publishes a drawn unit on every path, so with relations every
-opening fails `ServiceSound` fails at `0`. The instance is H1's honest live-salt period. -/
-theorem CheckProofSystemSound_nontrivial :
-    ∃ (m : ℕ) (p : PouwCheck.Params) (ws : Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
-      ¬ ServiceSound p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => False) 0 := by
+/-- **The nontrivial witness of `CheckProofSystemSound`** (`CheckProofSystemSoundNontrivial`): at H1's honest period of
+one window the deployed check accepts and publishes a drawn unit on every path, so with relations that every opening
+fails `ServiceSound` fails at `0`. -/
+theorem CheckProofSystemSound_nontrivial : CheckProofSystemSoundNontrivial := by
   refine ⟨circuit.rounds, prm, windows 1, fun h => ?_⟩
   have : Nonempty (Paths Ω1 1) := ⟨((Paths.const true _, (Equiv.refl _, ())), ())⟩
   refine absurd (h 0) (not_le.2 (lt_of_lt_of_le one_pos
@@ -120,4 +102,4 @@ theorem CheckProofSystemSound_nontrivial :
   exact ⟨pub, prof, hc, Accounting.Compose.drawOf hK24 (Accounting.TS.coinAt x 0).2 ⟨0, by decide⟩,
     (hd _).2 ⟨⟨0, by decide⟩, rfl⟩, fun h => h⟩
 
-end Accounting.SecurityProofs.TS
+end Accounting.SecurityProofs.Bridge
