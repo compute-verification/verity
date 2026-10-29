@@ -723,16 +723,19 @@ def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_certifier_w63s_a
 
 def test_w63k4s_rounds_read_as_w63s(tmp_path):
     """w63k4's run admits as w63's (request 5 in request 1's slot past its egress) and answers each request its
-    response, and each round's host read is the round's: block and honest accepted, every honest output 1 and its
-    chains wired; chain refused at unit A's o1, tampered at its re-signed row, and unread's one unit output 0."""
+    response, and each round's host read is the round's: block (a member a lane) and honest accepted, every honest
+    output 1 and its chains wired; chain refused at unit A's o1, tampered at its re-signed row, and unread's one unit
+    output 0."""
     s = sz.W63K4
     h = sz.host(tmp_path, setup=s)
     at, T, A = h.at, s.params.window, s.A
     assert at.admitted == {1: 0, 2: 2, 3: 2, 4: 12, 5: 28} and [x.q for x in at.chain.scan[29].slots] == [5, 2, 3, 4]
     assert at.outputs == {q: r for q, r in enumerate(s.responses, 1)}
     rounds = {k: {m.name: m for m in ms} for k, ms in h.rounds.items()}
-    (blk,) = rounds["block"].values()
-    assert (blk.n, blk.refused, blk.outputs) == (sz.entries_of(s.cls, 1, T), None, None) and blk.n == 8
+    blk, nb = rounds["block"], T // s.cls.EVERY
+    assert [(m.name, m.n, m.refused, m.outputs) for m in blk.values()] == [
+        (f"block-c{j}", nb, None, None) for j in range(s.cls.NR)]
+    assert sum(m.n for m in blk.values()) == sz.entries_of(s.cls, 1, T) == 8
     honest = rounds["honest"]
     assert [(m.name, m.base, m.n) for m in honest.values()] == [("first", 0, 1), ("ingress-0", 1, T - 2),
                                                                 ("last", T - 1, 1), ("egress-0", T, T)]
