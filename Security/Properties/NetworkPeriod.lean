@@ -1,5 +1,6 @@
 import NetworkCheck.Period
 import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The network period check's bound: what its `K` counts in each form (`NetworkCheck.Period`)
@@ -9,6 +10,11 @@ On acceptance, `NetworkCheck.Period.check` publishes `K`, the sum of a ceiling o
 `rowsTerms`'s in the rows form. A sum of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` of
 the count, not equal to it; `ClockKBoundsCount` and `RowsKBoundsCount` say the count at the check's numbers is at most
 `2 ^ K`. `Proofs.Properties.NetworkPeriod` proves both.
+
+In the rows form the entry bits the tied audits' incorrect proof blocks can set are charged once a period, as the
+capacity term `κ_t`: `RowsKBoundsCount` multiplies the windows' factors by `NetTiming.Guarantees.PooledLeakAccepted`'s
+tied factor at the check's pool (`tiedFactor`), and `TiedFMeets` says the `F_t` the check computes meets the pooled
+bound's premise `ln (1/δ_t) ≤ q_t · F_t`.
 
 The count is the statement's, factor by factor, over the network certifier's `m` connections and the period's `n`
 windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #faultySets · 2^β · Dj^k))`. A reader of `K` (the
@@ -55,20 +61,34 @@ def ClockKBoundsCount : Prop :=
         2 ^ ((w i).wrong * (a i).bits) * jitter ^ (a i).steps)) ≤
       2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
 
+/-- `PooledLeakAccepted`'s tied factor at the check's pool (`Pool`): `min((N_t + 1)^F_t · 2^(R · F_t), 2^span)`, or
+`2^span` with none, `span` the link-windows' entry bits their tied audits' incorrect proof blocks can set. -/
+def tiedFactor (pool : Option Pool) (span : ℕ) : ℕ := match pool with
+  | some p => min ((p.blocks + 1) ^ p.f * 2 ^ (p.reach * p.f)) (2 ^ span)
+  | none => 2 ^ span
+
+/-- **The check's `F_t` meets the tied audits' pooled bound's premise.** At every `δ = num / den` and detection
+probability `q = k / n` the check computes `F_t` at (`tiedF`), `ln (1/δ) ≤ q · F_t`, so the pooled bound's escape
+`(1 - q)^F_t` is at most `δ` (sampled proofs' `PooledIncorrectBlocksLe` at `F_t`). -/
+def TiedFMeets : Prop :=
+  ∀ (δ : Core.Ratio) (k n F : ℕ), tiedF δ k n = some F →
+    Real.log (1 / ((δ.num : ℝ) / δ.den)) ≤ (k : ℝ) / n * F
+
 /-- **The rows form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
 connections, the facts `w` of `n` link-windows' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
-slot entry bits their tied audits' wrong units can set `faulty` (`faultyEntries`), under one scan's terms `scan`, the
-jitter bound `jitter` and the charged audits' facts `charged`: `#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)`
-(`schedules` and `cells`), and window `i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#faultySets` at
-`atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` times `2 ^ faulty i` and `Dj^k` at `jitter ^ scan.steps`, their
-product is at most `2 ^ K`. -/
+slot entry bits their tied audits' incorrect proof blocks can set `faulty` (`faultyEntries`), under one scan's terms
+`scan`, the jitter bound `jitter`, the charged audits' facts `charged` and the tied audits' pool `pool` (`tiedPool`):
+`#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)` (`schedules` and `cells`), window `i`'s `2^#(free inputs)` at
+`2 ^ (scan.free + tied i)`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` and `Dj^k` at
+`jitter ^ scan.steps`, and once a period `PooledLeakAccepted`'s tied factor at the pool and `Σ_i faulty i`
+(`tiedFactor`), their product is at most `2 ^ K`. -/
 def RowsKBoundsCount : Prop :=
   ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
-    (tied faulty : Fin n → ℕ) (charged : Array Facts),
+    (tied faulty : Fin n → ℕ) (charged : Array Facts) (pool : Option Pool),
     (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
-        2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
+        2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps)) * tiedFactor pool (∑ i, faulty i) ≤
       2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
-        charged).K
+        charged pool).K
 
 /-- Audit `i`'s answer drew what `K` doesn't charge of audit `a`: one-stage accepted its window record with a profile
 of one level, drawn `subset:k` or stratified, whose `Σ k` is the level's size (`factsOf`'s `drawn` and `units`), or

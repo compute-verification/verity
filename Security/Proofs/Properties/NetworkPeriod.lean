@@ -1,12 +1,16 @@
 import Properties.NetworkPeriod
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
 
 Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_clog2`), and `K`'s sums over the
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
-`2 ^ K` is the product of the factors' bounds.
+`2 ^ K` is the product of the factors' bounds. The rows form's tied factor is at most `2 ^ κ_t` (`tiedFactor_le`).
+
+`TiedFMeets`: `F_t` is a ceiling of `⌈log2 δ.den⌉ · 0.6931471808 / q`, `ln 2 < 0.6931471808` (`Real.log_two_lt_d9`) and
+`ln (1/δ) ≤ ln δ.den ≤ ⌈log2 δ.den⌉ · ln 2`.
 
 `RowsTiedDrawn`, `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every
 finding is none (`firstFinding_none`), a tied audit's among them, and each link-window's `wiredCheck` and
@@ -38,13 +42,13 @@ theorem capsTerm_ofFn {m : ℕ} (caps : Fin m → ℕ) : capsTerm (Array.ofFn ca
   exact foldl_ofFn _
 
 theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
-    (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
-    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows charged).K =
+    (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) (pool : Option Pool) :
+    (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows charged
+      pool).K =
       (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) +
-        ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
-  simp only [Public.K, rowsTerms, capsTerm_ofFn, Array.map_ofFn]
-  rw [foldl_ofFn]
-  rfl
+        ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits + Pool.capacity pool (∑ i, faulty i) := by
+  simp only [Public.K, rowsTerms, capsTerm_ofFn, Array.map_ofFn, foldl_ofFn]
+  try rfl
 
 theorem caps_le {m : ℕ} (caps : Fin m → ℕ) : ∏ j, (caps j + 1) ≤ 2 ^ ∑ j, clog2 (caps j + 1) := by
   rw [← Finset.prod_pow_eq_pow_sum]
@@ -58,9 +62,9 @@ theorem clockK_ofFn (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → �
     (w : Fin n → Facts) :
     (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K =
       clog2 (syncs ^ windows) + (∑ j, clog2 (caps j + 1)) + ∑ i, (AuditTerms.of (a i) (w i) jitter).bits := by
-  simp only [Public.K, terms, capsTerm_ofFn, zip_ofFn, Array.map_ofFn]
+  simp only [Public.K, terms, capsTerm_ofFn, zip_ofFn, Array.map_ofFn, add_zero]
   rw [foldl_ofFn]
-  rfl
+  try rfl
 
 theorem clockKBoundsCount : ClockKBoundsCount := by
   intro jitter syncs windows m n caps a w
@@ -71,15 +75,98 @@ theorem clockKBoundsCount : ClockKBoundsCount := by
   simp only [AuditTerms.bits, AuditTerms.of, add_zero, pow_add]
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
+/-- The tied factor is at most `2 ^ κ_t`: `(N_t + 1)^F_t ≤ 2^(⌈log2 (N_t + 1)⌉ · F_t)`, and the min of the powers is
+the power of the min. -/
+theorem tiedFactor_le (pool : Option Pool) (span : ℕ) : tiedFactor pool span ≤ 2 ^ Pool.capacity pool span := by
+  cases pool with
+  | none => exact le_rfl
+  | some p =>
+    have h1 : (p.blocks + 1) ^ p.f ≤ 2 ^ (clog2 (p.blocks + 1) * p.f) := by
+      rw [pow_mul]
+      exact Nat.pow_le_pow_left (le_two_pow_clog2 _) _
+    have hX : (p.blocks + 1) ^ p.f * 2 ^ (p.reach * p.f) ≤ 2 ^ p.bits := by
+      calc (p.blocks + 1) ^ p.f * 2 ^ (p.reach * p.f) ≤ 2 ^ (clog2 (p.blocks + 1) * p.f) * 2 ^ (p.reach * p.f) :=
+            Nat.mul_le_mul h1 le_rfl
+        _ = 2 ^ p.bits := by
+            rw [← pow_add]
+            congr 1
+            unfold Pool.bits
+            ring
+    show min ((p.blocks + 1) ^ p.f * 2 ^ (p.reach * p.f)) (2 ^ span) ≤ 2 ^ min p.bits span
+    rcases le_total p.bits span with h | h
+    · rw [min_eq_left h]
+      exact (min_le_left _ _).trans hX
+    · rw [min_eq_right h]
+      exact min_le_right _ _
+
+theorem le_mul_ceil_div (a b : ℕ) (hb : 0 < b) : a ≤ b * ((a + b - 1) / b) := by
+  have hdm := Nat.div_add_mod (a + b - 1) b
+  have hlt := Nat.mod_lt (a + b - 1) hb
+  generalize b * ((a + b - 1) / b) = t at hdm ⊢
+  generalize (a + b - 1) % b = r at hdm hlt
+  omega
+
+theorem tiedFMeets : TiedFMeets := by
+  intro δ k n F h
+  by_cases hc : δ.num = 0 ∨ k = 0 ∨ n = 0
+  · rw [tiedF, if_pos hc] at h
+    cases h
+  rw [tiedF, if_neg hc] at h
+  have hX := Option.some.inj h
+  simp only [not_or] at hc
+  obtain ⟨hnum, hk, hn⟩ := hc
+  have hFb := le_mul_ceil_div (clog2 δ.den * 6931471808 * n) (10 ^ 10 * k)
+    (Nat.mul_pos (by norm_num) (Nat.pos_of_ne_zero hk))
+  rw [hX] at hFb
+  have hFr : (clog2 δ.den : ℝ) * 6931471808 * n ≤ 10 ^ 10 * k * F := by exact_mod_cast hFb
+  have hnr : (0 : ℝ) < n := by exact_mod_cast Nat.pos_of_ne_zero hn
+  have hlog : Real.log (1 / ((δ.num : ℝ) / δ.den)) ≤ clog2 δ.den * Real.log 2 := by
+    rcases Nat.eq_zero_or_pos δ.den with h0 | h0
+    · simp only [h0, Nat.cast_zero, div_zero, Real.log_zero]
+      exact mul_nonneg (Nat.cast_nonneg _) (Real.log_nonneg (by norm_num))
+    · have hd : (0 : ℝ) < δ.den := by exact_mod_cast h0
+      have hnu : (1 : ℝ) ≤ δ.num := by exact_mod_cast Nat.one_le_iff_ne_zero.mpr hnum
+      have h3 : (δ.den : ℝ) ≤ 2 ^ clog2 δ.den := by exact_mod_cast le_two_pow_clog2 δ.den
+      calc Real.log (1 / ((δ.num : ℝ) / δ.den)) = Real.log (δ.den / δ.num) := by rw [one_div, inv_div]
+        _ ≤ Real.log ((2 : ℝ) ^ clog2 δ.den) :=
+            Real.log_le_log (div_pos hd (by linarith)) ((div_le_self hd.le hnu).trans h3)
+        _ = clog2 δ.den * Real.log 2 := Real.log_pow _ _
+  have h2 : Real.log 2 < 6931471808 / 10000000000 := lt_of_lt_of_eq Real.log_two_lt_d9 (by norm_num)
+  have hL : (0 : ℝ) ≤ clog2 δ.den := Nat.cast_nonneg _
+  calc Real.log (1 / ((δ.num : ℝ) / δ.den)) ≤ clog2 δ.den * Real.log 2 := hlog
+    _ ≤ clog2 δ.den * (6931471808 / 10000000000) := mul_le_mul_of_nonneg_left h2.le hL
+    _ ≤ (k : ℝ) / n * F := by
+        rw [div_mul_eq_mul_div, le_div_iff₀ hnr]
+        linarith
+
+/-- **`TiedFMeets`'s honest witness**: at the demo's tied sample, 169 of w63k4's 7,000,000 proof blocks, and
+`δ_t = 10^-6`, the check computes an `F_t`. -/
+theorem tiedFMeets_honest : ∃ F, tiedF ⟨1, 10 ^ 6⟩ 169 7000000 = some F := by
+  refine ⟨_, ?_⟩
+  unfold tiedF
+  exact if_neg (by decide)
+
+/-- **`TiedFMeets`'s nontrivial witness**: its conclusion fails at `δ = 10^-6`, a sample of its one proof block
+(`q = 1`) and `F = 0`, what a computation of `F_t` that accepts everything may return. -/
+theorem tiedFMeets_nontrivial : ¬ Real.log (1 / ((1 : ℝ) / 10 ^ 6)) ≤ (1 : ℝ) / 1 * 0 := by
+  intro hle
+  have h : (0 : ℝ) < Real.log (1 / ((1 : ℝ) / 10 ^ 6)) := Real.log_pos (by norm_num)
+  linarith
+
 theorem rowsKBoundsCount : RowsKBoundsCount := by
-  intro facts scan jitter windows m n caps w tied faulty charged
-  rw [K_ofFn, pow_add, pow_add, mul_assoc]
-  refine Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) ?_)
-  rw [← Finset.prod_pow_eq_pow_sum]
-  refine Finset.prod_le_prod fun i _ => ?_
-  simp only [AuditTerms.bits, Scan.terms, pow_add]
-  exact Nat.mul_le_mul
-    (Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)) le_rfl
+  intro facts scan jitter windows m n caps w tied faulty charged pool
+  have hw : ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
+      2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps) ≤
+      2 ^ ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
+    rw [← Finset.prod_pow_eq_pow_sum]
+    refine Finset.prod_le_prod fun i _ => ?_
+    simp only [AuditTerms.bits, Scan.terms, pow_add]
+    exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
+  rw [K_ofFn]
+  calc _ ≤ 2 ^ (∑ j, clog2 (caps j + 1)) * (2 ^ (∑ j, clog2 (caps j + 1)) *
+        2 ^ ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits) * 2 ^ Pool.capacity pool (∑ i, faulty i) :=
+        Nat.mul_le_mul (Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) hw)) (tiedFactor_le pool _)
+    _ = _ := by rw [pow_add, pow_add, pow_add]; ring
 
 /-! ## A tied audit draws its slot entries and scan slots whole -/
 

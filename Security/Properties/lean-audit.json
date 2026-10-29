@@ -571,9 +571,9 @@
    "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization and the H200's price (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
   },
   "Properties.NetworkPeriod": {
-   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
+   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin", "Mathlib.Analysis.SpecialFunctions.Log.Basic"],
    "except": [],
-   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
+   "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, and the F_t it computes against the pooled bound's premise in Mathlib's real logarithm (`TiedFMeets`), never a proof"
   },
   "Properties.NetworkScan": {
    "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
@@ -2106,6 +2106,21 @@
    ],
    "assumptions": [],
    "type_hash": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd"
+  },
+  "Properties.NetworkPeriod.tiedFMeets": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.tiedFMeets : Properties.NetworkPeriod.TiedFMeets"],
+   "assumptions": []
+  },
+  "Properties.NetworkPeriod.tiedFMeets_honest": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": []
+  },
+  "Properties.NetworkPeriod.tiedFMeets_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [],
+   "assumptions": []
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -4051,6 +4066,10 @@
    "Properties.NetworkPeriod.rowsKBoundsCount": {
     "function": "NetworkCheck.Period.rowsTerms",
     "outcome": "none"
+   },
+   "Properties.NetworkPeriod.tiedFMeets": {
+    "function": "NetworkCheck.Period.tiedF",
+    "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
     "function": "NciCheck.Desc.evaluate",
@@ -16987,6 +17006,10 @@
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  },
+  "Properties.NetworkPeriod.tiedFMeets": {
+   "honest": ["Properties.NetworkPeriod.tiedFMeets_honest"],
+   "nontrivial": "Properties.NetworkPeriod.tiedFMeets_nontrivial"
   }
  },
  "unwitnessed": {
