@@ -12,7 +12,8 @@ already queued on `next` rewrites (``PENDING``), until that PR lands and the ren
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, the subprotocols go by their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
-record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
+record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too. A retired command
+(`verity example`) keeps no path or key, so it is found in code spans and fences as well.
 """
 from __future__ import annotations
 
@@ -56,6 +57,7 @@ DOC_TERMS = {
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "verity example": "verity demo",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -65,6 +67,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|\bcommit{_SPACE}periods?\b")
+_DOC_COMMAND = re.compile(r"\bverity[ \t]+(?:bench\|)?example\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
@@ -218,7 +221,7 @@ def doc_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, st
         prose = _CODE.sub(lambda m: re.sub(r"[^\n]", " ", m[0]), text)
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
-        for m in _DOC_TERM.finditer(prose):
+        for m in sorted([*_DOC_TERM.finditer(prose), *_DOC_COMMAND.finditer(text)], key=lambda m: m.start()):
             n = text.count("\n", 0, m.start()) + 1
             quoted = text[m.start() - 1:m.start()] in ('"', "“") and text[m.end():m.end() + 1] in ('"', "”")
             if quoted or (f == GLOSSARY and lines[n - 1].startswith("|")):
@@ -279,16 +282,19 @@ def test_the_doc_scan_reads_each_form():
         "a.md": "A wrong unit, two Isolation-Units and a replay\nunit; the IU and IUs; a KV block.\n"
                 "The legs ran; each leg's verdict; a three-leg gate. Not legacy, alleged or IUD.\n",
         "b.md": 'The `legs/pous.py` file and `wipe_period.leg(dir)`; ``a `leg` key``; "leg" is retired.\n'
-                "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
+                "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n"
+                "`verity example h200`, `verity bench|example NAME`; `verity demo h200`, the verity examples.\n"
+                "```sh\nverity example vllm\n```\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
-        GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
+        GLOSSARY: '| "leg"; a physical block; `verity example` | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
-        ("b.md", 8, "thread block")]
+        ("b.md", 8, "thread block"), ("b.md", 9, "verity example"), ("b.md", 9, "verity bench|example"),
+        ("b.md", 11, "verity example")]
 
 
 def test_the_doc_scan_reads_the_protocol_terms():
