@@ -11,8 +11,8 @@ LMS forgery, as this does) and the program's `expectedRow` being the reference's
 evidence declares are each in Σ_sync (the check's `advice` test, through `acceptsLinkWindows`), so with the content
 advice they are advice of the reference's constant-rate Program of one execution block of the `W` windows, whose
 frames are sent at the program's hand ticks under them (`programFrames`); the device's egress records are the
-program's grids, whose rows, read back as bits, are `expectedRow`'s (`bytesGrid_slot`); and its records of every
-link-window are complete.
+program's grids, whose rows, read back as bits, are `expectedRow`'s (`bytesGrid_slot`); and its records of each of
+the `W` windows are complete.
 
 `EncardAcceptedObservationsLe` follows: accepted runs' observation sequences are among Theorem 3's `AccSeqs` of that
 Program, so they number at most `#Ac · |Σ_sync|^W · D^(W·T)` (`NetTiming.encard_accSeqs_le_constantRate`), unless some

@@ -6,9 +6,9 @@ import Proofs.NetworkCertifier.Ingress
 
 `docs/network-transparency/timing-channel.md` states its bounds per link-window. The guarantees count steps; these read
 a horizon of whole blocks and factor each bound per block: the shipped schedule's `2^k · D^(g·T)` per execution block,
-from any execution block's start and whatever the run showed before it, and the ingress bound's `(r ℓ + 1)^T` per
-link-window (`encard_ingress_obsDecodable_le` and its content version at `n = m·T`). Each takes its parent's
-hypotheses at that horizon and no other.
+from any execution block's start and whatever the run showed before it, and the ingress bound's `(r ℓ + 1)^T` per `T`
+buckets (`encard_ingress_obsDecodable_le` and its content version at `n = m·T`). Each takes its parent's hypotheses at
+that horizon and no other.
 
 The egress count from block `e₀` codes a sequence continuing a fixed prefix by the advice of blocks `e₀` to `e₀ + m − 1`
 and the jitter classes after the prefix. That code fixes the sequence: before block `e₀` it is the prefix, and after it
