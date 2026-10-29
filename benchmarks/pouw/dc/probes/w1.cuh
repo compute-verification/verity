@@ -26,6 +26,8 @@ enum : int {
   // the census's unprobed writers: shift-and-add (LEA), a 64-bit add (IADD3 and its carry-in IADD3.X), shuffles at a
   // lane index and up; an indexed branch on 2 bits of the trip's coin word to one of 4 arms of 16 ops (BRX)
   W_LEA, W_IADD64, W_SHFLI, W_SHFLU, W_BRX4,
+  // the same on 3 and 4 bits to one of 8 and 16 arms of 16 ops, each arm's LOP3 table and IMAD multiplier its own
+  W_BRX8, W_BRX16,
   // FRND.F64 after a DADD on its chain (rounding an integral value again would fold)
   W_FRND64,
 };
@@ -160,7 +162,8 @@ struct WLane {
                    : "r"(pm), "r"(r[t]), "r"(0x9E3779B9u));
     if constexpr (X == W_SEL)
       asm volatile("{\n.reg .pred p;\nsetp.ne.u32 p,%1,0;\nselp.b32 %0,%2,%0,p;\n}" : "+r"(r[s]) : "r"(pm), "r"(r[t]));
-    if constexpr (X == W_UBRA || X == W_DBRA || X == W_UBRA16 || X == W_DBRA16 || X == W_BRX4) {
+    if constexpr (X == W_UBRA || X == W_DBRA || X == W_UBRA16 || X == W_DBRA16 || X == W_BRX4 || X == W_BRX8 ||
+                  X == W_BRX16) {
 #define W1_M4 "mad.lo.u32 %0,%0,%6,%7;\nmad.lo.u32 %1,%1,%6,%7;\nmad.lo.u32 %2,%2,%6,%7;\nmad.lo.u32 %3,%3,%6,%7;\n"
 #define W1_L4 \
   "lop3.b32 %0,%0,%6,%7,0x96;\nlop3.b32 %1,%1,%6,%7,0x96;\nlop3.b32 %2,%2,%6,%7,0x96;\nlop3.b32 %3,%3,%6,%7,0x96;\n"
@@ -186,6 +189,32 @@ struct WLane {
                      "W1D:\nlop3.b32 %0,%0,%7,%6,0x69;\nlop3.b32 %1,%1,%7,%6,0x69;\nlop3.b32 %2,%2,%7,%6,0x69;\n"
                      "lop3.b32 %3,%3,%7,%6,0x69;\n" W1_L4 W1_L4 W1_L4 "W1Z:\n}" W1_OUT
                      : "r"(cw), "r"(2u * (uint32_t)(i & 15)), "r"(r[t]), "r"(0x9E3779B9u));
+#define W1_LX(L) \
+  "lop3.b32 %0,%0,%6,%7," L ";\nlop3.b32 %1,%1,%6,%7," L ";\nlop3.b32 %2,%2,%6,%7," L ";\nlop3.b32 %3,%3,%6,%7," L ";\n"
+#define W1_MX(M) "mad.lo.u32 %0,%0," M ",%6;\nmad.lo.u32 %1,%1," M ",%6;\nmad.lo.u32 %2,%2," M ",%6;\nmad.lo.u32 %3,%3," M ",%6;\n"
+#define W1_ARM(N, L, M) "W1" N ":\n" W1_LX(L) W1_MX(M) W1_LX(L) W1_MX(M)
+#define W1_A8                                                                                                         \
+  W1_ARM("0", "0x96", "0x9E3779B1") "bra.uni W1Z;\n" W1_ARM("1", "0x69", "0x85EBCA6B") "bra.uni W1Z;\n"               \
+  W1_ARM("2", "0xe8", "0xC2B2AE35") "bra.uni W1Z;\n" W1_ARM("3", "0x17", "0x27D4EB2F") "bra.uni W1Z;\n"               \
+  W1_ARM("4", "0xca", "0x165667B1") "bra.uni W1Z;\n" W1_ARM("5", "0x35", "0xD3A2646D") "bra.uni W1Z;\n"               \
+  W1_ARM("6", "0x1e", "0xFD7046C5") "bra.uni W1Z;\n" W1_ARM("7", "0xe1", "0xB55A4F09")
+      if constexpr (X == W_BRX8)
+        asm volatile("{\n.reg .u32 k;\nshr.b32 k,%4,%5;\nand.b32 k,k,7;\n"
+                     "W1X: .branchtargets W10,W11,W12,W13,W14,W15,W16,W17;\nbrx.idx.uni k,W1X;\n" W1_A8 "W1Z:\n}" W1_OUT
+                     : "r"(cw), "r"(3u * (uint32_t)(i & 7)), "r"(r[t]), "r"(0x9E3779B9u));
+      if constexpr (X == W_BRX16)
+        asm volatile("{\n.reg .u32 k;\nshr.b32 k,%4,%5;\nand.b32 k,k,15;\n"
+                     "W1X: .branchtargets W10,W11,W12,W13,W14,W15,W16,W17,W18,W19,W1a,W1b,W1c,W1d,W1e,W1f;\n"
+                     "brx.idx.uni k,W1X;\n" W1_A8 "bra.uni W1Z;\n"
+                     W1_ARM("8", "0x2d", "0x7FEB352D") "bra.uni W1Z;\n" W1_ARM("9", "0xd2", "0x846CA68B") "bra.uni W1Z;\n"
+                     W1_ARM("a", "0x4b", "0x9E485565") "bra.uni W1Z;\n" W1_ARM("b", "0xb4", "0xEF1D6B47") "bra.uni W1Z;\n"
+                     W1_ARM("c", "0x78", "0x2C1B3C6D") "bra.uni W1Z;\n" W1_ARM("d", "0x87", "0x297A2D39") "bra.uni W1Z;\n"
+                     W1_ARM("e", "0x5a", "0xA136AAAD") "bra.uni W1Z;\n" W1_ARM("f", "0xa5", "0x9E3779BB") "W1Z:\n}" W1_OUT
+                     : "r"(cw), "r"(4u * (uint32_t)(i & 3)), "r"(r[t]), "r"(0x9E3779B9u));
+#undef W1_A8
+#undef W1_ARM
+#undef W1_MX
+#undef W1_LX
 #undef W1_OUT
 #undef W1_ARMS
 #undef W1_L4

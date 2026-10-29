@@ -25,6 +25,8 @@
 //                 decision's; a decision's time is the loop's over its 16 (64) decisions
 //   b_brx4        brx.idx.uni on 2 bits of the trip's coin word to one of 4 arms of 16 ops (BRX, its target table
 //                 from LDC): a decision reads 2 coin bits; priced as b_ubra16, from the loop's time over its 16 decisions
+//   b_brx8, b_brx16  the same on 3 and 4 bits to one of 8 and 16 arms, 8 and 4 decisions a trip, so every b_brx loop
+//                 holds 1024 arm ops (the same instruction footprint) and a decision reads k coin bits
 //   y_lea, y_iadd64, y_shfli, y_shflu  shl+add (ptxas: LEA and IMAD), add.u64 (IADD3 and IMAD.X), shfl.sync .idx at
 //                 a lane index from a register and .up by 1
 //   y_frnd64      FRND.F64 after a DADD on its chain; l_ld128g, ld.v4 through a generic pointer (LD.E.128, its 64-bit
@@ -125,6 +127,8 @@ OP_KERNEL(b_dbra, TPB) { b_run<64, W_DBRA>(a); }
 OP_KERNEL(b_ubra16, TPB) { b_run<16, W_UBRA16>(a); }
 OP_KERNEL(b_dbra16, TPB) { b_run<16, W_DBRA16>(a); }
 OP_KERNEL(b_brx4, TPB) { b_run<16, W_BRX4>(a); }
+OP_KERNEL(b_brx8, TPB) { b_run<8, W_BRX8>(a); }
+OP_KERNEL(b_brx16, TPB) { b_run<4, W_BRX16>(a); }
 
 // ---- loads ----------------------------------------------------------------------------------------------------------
 constexpr int ROWS = 64;
@@ -487,6 +491,8 @@ static const OpProbe PROBES[] = {
     P(b_ubra16, "IMAD=257,LOP3.LUT=273,BRA=33", "c=mix w=IMAD:1,LOP3.LUT:1"),
     P(b_dbra16, "IMAD=256,LOP3.LUT=272,BSSY=16,BSYNC=16,BRA=33", "c=mix w=IMAD:1,LOP3.LUT:1"),
     P(b_brx4, "IMAD=513,LOP3.LUT=528,BRX=16,BRA=49,LDC=16,IMAD.SHL.U32=16,SHF.R.S32.HI=16", "c=mix w=IMAD:1,LOP3.LUT:1"),
+    P(b_brx8, "IMAD=513,LOP3.LUT=520,BRX=8,BRA=57,LDC=8,IMAD.SHL.U32=8,SHF.R.S32.HI=8", "c=mix w=IMAD:1,LOP3.LUT:1"),
+    P(b_brx16, "IMAD=513,LOP3.LUT=516,BRX=4,BRA=61,LDC=4,IMAD.SHL.U32=4,SHF.R.S32.HI=4", "c=mix w=IMAD:1,LOP3.LUT:1"),
     P(y_lea, "LEA=112,IMAD=144", "c=int32 w=LEA:1,IMAD:1"),
     P(y_iadd64, "IADD3=256,IMAD.X=256", "c=int32 w=IADD3:1,IMAD.X:1"),
     P(y_shfli, "SHFL.IDX=256", "c=other w=SHFL.IDX:1"),
