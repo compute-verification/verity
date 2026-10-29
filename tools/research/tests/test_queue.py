@@ -3242,21 +3242,21 @@ def test_a_lane_line_names_its_handle_without_a_trailing_period():
 
 
 #: a lock as `check.py --update` writes one: F, G and H listed, F frozen, G's two inline premises and H's one, G and H reading M
-LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "type_hash": "g"}, "H": {"type_hash": "h"}},
+PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "type_hash": "g"}, "H": {"type_hash": "h"}},
         "shape": {"frozen": {"F": "frozen: a game's bound"},
                   "inline": {"G": {"p1": "a membership", "p2": "a bound"}, "H": {"q": "a bound"}}},
         "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}, "guarantees": ["G", "H"]}}}
 
 
 def _lock_text(edit: Callable[[dict], object] = lambda d: None) -> str:
-    """`LOCK` as a lock's text, after ``edit`` changed it in place."""
-    doc = json.loads(json.dumps(LOCK))
+    """`PREMISE_LOCK` as a lock's text, after ``edit`` changed it in place."""
+    doc = json.loads(json.dumps(PREMISE_LOCK))
     edit(doc)
     return json.dumps(doc, indent=1, sort_keys=True) + "\n"
 
 
 def _lock_files() -> dict[str, str]:
-    """The record merge driver, named for every lock, and `LOCK`."""
+    """The record merge driver, named for every lock, and `PREMISE_LOCK`."""
     lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
     return {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
             ".gitattributes": "lean-audit.json merge=lean-audit\n", "pkg/lean-audit.json": _lock_text()}
