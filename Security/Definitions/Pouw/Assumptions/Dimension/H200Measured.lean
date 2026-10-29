@@ -12,9 +12,11 @@ rounded down to a natural number, so it is a measurement, not a floor. Every cla
 `h100Floor` (`h200MeasuredFloor`), and `h32H200Measured` proves `H32 h200Measured` by `decide`, with no slack
 (`Pouw.Dimension.H200MeasuredProofs`).
 
-**What the H100's tables left unmeasured.** The immediate forms (IADD a+K, HADD2 a+K), m8n8k4 and sparse `mma.sp`
-were measured, and none is below 32. On `sm_90a`, CUDA 13.0 has no tensor-pipe m8n8k4 with `f16` inputs: it calls a
-scalar routine whose instructions each price in their own class. f64 m8n8k4 is DMMA.
+**What the H100's tables left unmeasured.** These were measured, and none is below 32: the immediate forms (IADD
+a+K, HADD2 a+K), m8n8k4, sparse `mma.sp`, the carry writers (`add.cc` and `addc` chains), the uniform datapath (one
+word a warp instruction), lookups served by the L2 alone, shared and global atomics and reductions, and DADD or DFMA
+beside `wgmma`. On `sm_90a`, CUDA 13.0 has no tensor-pipe m8n8k4 with `f16` inputs: it calls a scalar routine whose
+instructions each price in their own class. f64 m8n8k4 is DMMA.
 
 **Work, not time.** As on the H100, writers on separate pipes co-issue below 32 per register (`H32`'s docstring), and
 so does `wgmma` at its full rate beside IMAD and FFMA lanes. A bound on `cost100` at these prices bounds additive-W1
@@ -28,10 +30,11 @@ namespace Pouw.Dimension.H100
 * `mac`: `nominalMac`. Dense `wgmma` at `N ≥ 64` runs at the data-sheet rate for every `Shape100` shape, 32 per
   register, and 64 with FP16 accumulate (32 per f16 word).
 * `tc = 32`: b1 `wgmma` and legacy `mma.sync` m16n8k8 f16 or bf16 → f32, m16n8k4 tf32, m16n8k16 s8 and m16n8k128 b1.
-* `ffma = 32`: FADD with an immediate, at dispatch.
+* `ffma = 32`: FADD and FMUL with an immediate, at dispatch.
 * `int32 = 32`: IMAD beside LOP3, and IADD with an immediate, at dispatch.
 * `fp64 = 32`: DADD and DMUL, the FP64 pipe's bound.
-* `other = 32`: half2 HADD2 beside PRMT, and two-source HADD2, HMUL2 and HFMA2, which ptxas splits across two pipes. -/
+* `other = 32`: half2 HADD2 beside PRMT, and two-source HADD2 and HMUL2 and HFMA2 with an immediate (bf16x2 alike),
+  which ptxas splits across two pipes. -/
 def h200Measured : Prices100 where
   mac := nominalMac
   tc := 32
