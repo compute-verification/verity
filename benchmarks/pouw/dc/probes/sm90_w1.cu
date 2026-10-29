@@ -27,6 +27,8 @@
 //                 from LDC): a decision reads 2 coin bits; priced as b_ubra16, from the loop's time over its 16 decisions
 //   y_lea, y_iadd64, y_shfli, y_shflu  shl+add (ptxas: LEA and IMAD), add.u64 (IADD3 and IMAD.X), shfl.sync .idx at
 //                 a lane index from a register and .up by 1
+//   y_frnd64      FRND.F64 after a DADD on its chain; l_ld128g, ld.v4 through a generic pointer (LD.E.128, its 64-bit
+//                 address adds IADD3 and IADD3.X); l_atomg64, atom.global.add.u64 with its return (ATOMG.E.ADD.64)
 #include "../../opcode_probe/probe.cuh"
 #include "w1.cuh"
 
@@ -90,6 +92,7 @@ Y(lea, W_LEA)
 Y(iadd64, W_IADD64)
 Y(shfli, W_SHFLI)
 Y(shflu, W_SHFLU)
+Y(frnd64, W_FRND64)
 #undef Y
 #undef Y64
 
@@ -379,6 +382,50 @@ OP_KERNEL(m_lds128b_g16, TPB) { bmix_body<16>(a); }
 OP_KERNEL(m_lds128b_g32, TPB) { bmix_body<32>(a); }
 OP_KERNEL(m_dadd2_imad_fadd, TPB) { w_run<512, W_DADD, W_IMAD, W_DADD, W_FADD>(a); }
 
+// a generic 128-bit load: ld.v4 through a generic pointer into g (LD.E.128), each lane its own 16 B of a 512-B row; the
+// words folded by LOP3 as above
+DC_DEV void ldg_generic_body(const OpArgs& a) {
+  const unsigned lane = threadIdx.x & 31, w = threadIdx.x >> 5;
+  const unsigned char* gb = a.g + (size_t)blockIdx.x * (TPB / 32) * U * 512 + (size_t)w * U * 512 + lane * 16;
+  unsigned acc[U];
+#pragma unroll
+  for (int u = 0; u < U; u++) acc[u] = threadIdx.x * 0x9E3779B9u + u;
+  OP_BEGIN
+  OP_LOOP(it) {
+    const unsigned d = ((unsigned)it & 1u) << 4;
+#pragma unroll
+    for (int u = 0; u < U; u++) {
+      unsigned p, q, r, s;
+      asm volatile("ld.v4.u32 {%0,%1,%2,%3}, [%4];" : "=r"(p), "=r"(q), "=r"(r), "=r"(s) : "l"(gb + ((u * 512u) ^ (d << 5))) : "memory");
+      acc[u] ^= p ^ q ^ r ^ s;
+    }
+  }
+  OP_END
+  unsigned t = 0;
+#pragma unroll
+  for (int u = 0; u < U; u++) t ^= acc[u];
+  OP_SINK(t)
+}
+OP_KERNEL(l_ld128g, TPB) { ldg_generic_body(a); }
+// atom.global.add.u64 with its return (ATOMG.E.ADD.64: 2 registers a lane), a distinct 8 B a thread and chain, each
+// SM its own 64 KB
+OP_KERNEL(l_atomg64, TPB) {
+  unsigned long long* gq = (unsigned long long*)a.g + (size_t)blockIdx.x * U * TPB;
+  unsigned long long x[U];
+#pragma unroll
+  for (int u = 0; u < U; u++) x[u] = threadIdx.x * 2654435761ull + u + a.mode;
+  OP_BEGIN
+  OP_LOOP(it) {
+#pragma unroll
+    for (int u = 0; u < U; u++)
+      asm volatile("atom.global.add.u64 %0, [%1], %0;" : "+l"(x[u]) : "l"(gq + u * TPB + threadIdx.x) : "memory");
+  }
+  OP_END
+  unsigned long long s = threadIdx.x;
+#pragma unroll
+  for (int u = 0; u < U; u++) s ^= x[u];
+  OP_SINK(s ^ (s >> 32))
+}
 OP_KERNEL(l_lds128b, TPB) { bcast_body<4, 0>(a); }
 OP_KERNEL(l_lds64b, TPB) { bcast_body<2, 0>(a); }
 OP_KERNEL(l_ldg128b, TPB) { bcast_body<4, 1>(a); }
@@ -444,6 +491,9 @@ static const OpProbe PROBES[] = {
     P(y_iadd64, "IADD3=256,IMAD.X=256", "c=int32 w=IADD3:1,IMAD.X:1"),
     P(y_shfli, "SHFL.IDX=256", "c=other w=SHFL.IDX:1"),
     P(y_shflu, "SHFL.UP=256", "c=other w=SHFL.UP:1"),
+    P(y_frnd64, "DADD=256,FRND.F64=256", "c=fp64 w=DADD:2,FRND.F64:2"),
+    P(l_ld128g, "LD.E.128=8,LOP3.LUT=16,IADD3=8,IADD3.X=8", "c=other w=LD.E.128:4,LOP3.LUT:1,IADD3:1,IADD3.X:1"),
+    P(l_atomg64, "ATOMG.E.ADD.64.STRONG.GPU=8,IMAD.MOV.U32=2", "c=other w=ATOMG.E.ADD.64.STRONG.GPU:2,IMAD.MOV.U32:1"),
     PS(l_ldsm1, "LDSM.16.M88=8", "LDSM.16.M88*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88:1"),
     PS(l_ldsm2, "LDSM.16.M88.2=8", "LDSM.16.M88.2*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88.2:2"),
     PS(l_ldsm4, "LDSM.16.M88.4=8", "LDSM.16.M88.4*8", ldsm_off, ROWS * 128, "c=other w=LDSM.16.M88.4:4"),

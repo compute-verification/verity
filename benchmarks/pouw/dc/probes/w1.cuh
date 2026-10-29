@@ -26,6 +26,8 @@ enum : int {
   // the census's unprobed writers: shift-and-add (LEA), a 64-bit add (IADD3 and its carry-in IADD3.X), shuffles at a
   // lane index and up; an indexed branch on 2 bits of the trip's coin word to one of 4 arms of 16 ops (BRX)
   W_LEA, W_IADD64, W_SHFLI, W_SHFLU, W_BRX4,
+  // FRND.F64 after a DADD on its chain (rounding an integral value again would fold)
+  W_FRND64,
 };
 
 struct WLane {
@@ -193,6 +195,8 @@ struct WLane {
     if constexpr (X == W_IADD64) asm volatile("add.u64 %0,%0,%1;" : "+l"(q[s]) : "l"(q[t]));
     if constexpr (X == W_SHFLI) asm volatile("shfl.sync.idx.b32 %0,%0,%1,0x1f,0xffffffff;" : "+r"(r[s]) : "r"(r[t]));
     if constexpr (X == W_SHFLU) asm volatile("shfl.sync.up.b32 %0,%0,1,0,0xffffffff;" : "+r"(r[s]));
+    if constexpr (X == W_FRND64)
+      asm volatile("{\nadd.rn.f64 %0,%0,0d3FE8000000000000;\ncvt.rni.f64.f64 %0,%0;\n}" : "+d"(d[s]));
   }
   DC_DEV uint32_t fold() const {
     uint32_t x = pm;
