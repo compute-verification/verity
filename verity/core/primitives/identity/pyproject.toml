@@ -15,7 +15,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: `lake` builds this package and, through its path requires, the difftest harness's Lean and these files of
-# C-Flock's verifier (`Flock.Hash`, `Flock.Canon` and what they import, and the package's configuration).
+# Flock's verifier (`Flock.Hash`, `Flock.Canon` and what they import, and the package's configuration).
 inputs = ["verity/core/difftest/lean", "verity/core/service/flock/lakefile.toml",
           "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
           "verity/core/service/flock/Flock/Field.lean", "verity/core/service/flock/Flock/Bytes.lean",
