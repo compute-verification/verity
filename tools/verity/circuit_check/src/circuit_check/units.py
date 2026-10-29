@@ -46,8 +46,8 @@ body.  A target that misses through such a binding is made where it is checked (
 the checks of that binding's targets, each under a recording its check then holds (`cli._prepare`), so the bodies they share
 are built once, as a full build builds them; the target is held to the descriptor its binding's build gave.  A primitive its
 id makes, which has no body, is made here (`built_here`), and so is each Boolean Definition a binding's build registered
-(`made_words`): C-Flock lowers a word primitive by the first one registered of that word, so a check forked from here finds
-the one a full build's would.  A binding whose process dies fails the run, as it
+(`made_words`, or its module imported): C-Flock lowers a word primitive by the first one registered of that word, so a check
+forked from here finds the one a full build's would.  A binding whose process dies fails the run, as it
 would kill a build in one process.  When every binding was built apart, the task list's entry is stored as a full build stores
 it, its reads every binding's share and this process's own; it and each record are digested where this process stores them,
 as a full build's are (a full build digests none of its reads where it builds them either).
@@ -92,7 +92,7 @@ class Entry:
     reads: dict[str, list[str]] | None = None
     listed: dict[str, list[str]] | None = None
     seconds: float | None = None
-    words: list[list[str]] | None = None
+    words: list[list[str | None]] | None = None
 
     @property
     def root_ids(self) -> list[str]:
@@ -456,28 +456,35 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
     words = made_words(out)
     if log:
         log(f"circuit-check: catalog from records: {sum(e.reused for e in entries)} of {len(entries)} bindings reused, "
-            f"{sum(e.apart for e in entries)} built apart, {len(objects)} Definitions built here, {words} of them Boolean "
-            "Definitions another process's build registered")
+            f"{sum(e.apart for e in entries)} built apart, {len(objects)} Definitions built here and {words} Boolean "
+            "Definitions another process's build registered made or imported here")
     return out
 
 
 def made_words(plan: Plan) -> int:
-    """Made here (`make`): each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this
-    process didn't build it (``words``: built apart, or its record's) and that this process doesn't hold.  C-Flock lowers a
+    """Made here: each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this process
+    didn't build it (``words``: built apart, or its record's) and that this process doesn't hold, from the record that reaches
+    it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  C-Flock lowers a
     word primitive by the build of the first registered Boolean Definition of that word (`verity_flock.ir_lower`'s
-    ``_boolean_build``), so each check forked from here finds the build a full build's would.  `Stale` for one that no record
-    reaches; the count made."""
+    ``_boolean_build``), so each check forked from here finds the build a full build's would.  `Stale` for one neither
+    registers; the count made."""
+    import importlib
+
     from verity.ml.circuits.defs import REGISTRY
 
     n = 0
     for e in plan.entries:
-        for fid, _word in e.words or ():
+        for fid, _word, *where in e.words or ():
             if fid in REGISTRY:
                 continue
             node = fid if fid in plan.derived.via else next((i for i, x in plan.derived.nodes.items() if x["f"] == fid), None)
-            if node is None:
-                raise Stale(f"{fid}: {e.name}'s build registers it as a word's Boolean Definition, and no record reaches it")
-            make(plan, node)
+            if node is not None:
+                make(plan, node)
+            elif where and where[0]:
+                importlib.import_module(where[0])
+            if node is None and fid not in REGISTRY:
+                raise Stale(f"{fid}: {e.name}'s build registers it as a word's Boolean Definition, and neither a record nor the "
+                            f"module that holds it ({where[0] if where else None}) does")
             n += 1
     return n
 
@@ -562,17 +569,26 @@ def _reach_one(e: Entry, described: bool = False, pinned: frozenset[str] | None 
     return nodes
 
 
-def _words(before: set[str]) -> list[list[str]]:
-    """``[id, word id]`` of each Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.trace` registers
-    one) registered since the registry held ``before``, in the order it was registered."""
+def _words(before: set[str]) -> list[list[str | None]]:
+    """``[id, word id, module]`` of each Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.trace`
+    registers one) registered since the registry held ``before``, in the order it was registered; ``module`` the first imported
+    that holds it by a name (one that registers it as it is imported), else None."""
     from verity.ml.circuits.defs import REGISTRY
 
-    out = []
+    new = []
     for fid, d in REGISTRY.defs.items():
         w = getattr(getattr(d, "word", None), "id", None)
         if fid not in before and isinstance(w, str) and callable(getattr(d, "build", None)):
-            out.append([fid, w])
-    return out
+            new.append((fid, w, d))
+    held: dict[int, str] = {}
+    for name, m in list(sys.modules.items()) if new else ():
+        try:
+            names = object.__getattribute__(m, "__dict__")    # not a lazy module's own lookup, which would load it
+        except AttributeError:
+            continue
+        for v in list(names.values()):
+            held.setdefault(id(v), name)
+    return [[fid, w, held.get(id(d))] for fid, w, d in new]
 
 
 def _child(e: Entry, out: Path, described: bool = False, side: list[str] | None = None, untraced: int = 0,

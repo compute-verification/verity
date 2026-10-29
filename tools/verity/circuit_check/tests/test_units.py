@@ -400,8 +400,9 @@ def test_bindings_built_apart_give_a_full_builds_targets_keys_and_records(tmp_pa
 
 
 #: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
-#: the NVFP4 dot), and a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
-#: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers)
+#: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
+#: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean
+#: Definition `WORDMOD` registers as it is imported (as `ops.boolean`'s pieces are), which only SynVTop's body imports
 WORDS = """
 from verity.ml.circuits import bind, composite, primitive
 from verity.ml.circuits.evaluation import ScalarReference
@@ -417,6 +418,11 @@ def SynW(a, b):
     return (a - b) & 0xFFFF
 
 
+@primitive("SynV", 1, [("a", V), ("b", V)], V)
+def SynV(a, b):
+    return a ^ b
+
+
 @composite("SynWTop", 1, [], lambda S: ((("a", V), ("b", V)), V))
 def SynWTop(B, S, a, b):
     if not BITS:
@@ -426,6 +432,26 @@ def SynWTop(B, S, a, b):
         SynWBits.word, SynWBits.build = SynW, lambda C, *x: list(x)
         BITS.append(SynWBits)
     return B.call(bind(BITS[0]), a, b)
+
+
+@composite("SynVTop", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynVTop(B, S, a, b):
+    from syn import wordmod  # noqa: F401
+    return B.call(SynAdd, a, b)
+"""
+WORDMOD = """
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+from syn.words import SynV
+
+
+@composite("SynVBits", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynVBits(B, S, a, b):
+    return B.call(SynAdd, a, b)
+
+
+SynVBits.word, SynVBits.build = SynV, lambda C, *x: list(x)
 """
 WORDS_BINDINGS = """def scale2():
     from syn import words
@@ -445,6 +471,11 @@ def wtop():
 def wprim():
     from syn import words
     return [words.SynW]
+
+
+def vtop():
+    from syn import words
+    return [bind(words.SynVTop), words.SynV]
 
 
 """
@@ -483,32 +514,35 @@ KBIG_BINDING = """def kbig():
 def test_bindings_built_apart_check_the_reference_and_find_the_boolean_definitions_a_full_build_does(tmp_path):
     """Built apart, a reference two bindings bind at two statics is checked at the statics of the one `targets.reachable`
     keeps, not the first binding's (its descriptor holds them: `cache.descriptor`), and a word primitive's check finds the
-    Boolean Definition of its word that only another binding's body build registers (`units.made_words`): the values and keys
-    a full build gives.  The records hold those Boolean Definitions, so a run from them finds them too."""
+    Boolean Definition of its word that only another binding's body build registers, or its import of a module no record
+    reaches (`units.made_words`): the values and keys a full build gives, from the bindings built apart (no `units.Stale`).
+    The records hold those Boolean Definitions, so a run from them finds them too."""
     from test_cache import _set_pin
 
     trees = []
     for name in ("t", "here"):
         root = _tree(tmp_path / name)
         (root / "syn/words.py").write_text(WORDS.lstrip("\n"))
+        (root / "syn/wordmod.py").write_text(WORDMOD.lstrip("\n"))
         _edit(root, "syn/catalog.py", "BINDINGS = [", WORDS_BINDINGS + "BINDINGS = [")
         _bindings(root, '(("_scale2_roots",), scale2)', '(("_scale3_roots",), scale3)', '(("_wtop_roots",), wtop)',
-                  '(("_wprim_roots",), wprim)')
+                  '(("_wprim_roots",), wprim)', '(("_vtop_roots",), vtop)')
         _edit(root, "syn/check.py", "def check_definition(", WORDED + "def check_definition(")
         _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "[evaluate(fn, 3, 0x0105), worded(fn.id)]")
         _edit(root, "syn/check.py", '"gates": fn.gates', '"gates": getattr(fn, "gates", 1)')
         trees.append(root)
     root, here = trees
     whole = _run(here, FORKED.replace(", jobs=2, isolate=True, fork=True)", ")"))
-    assert whole["values"]["syn.scale"] == [3 * 3 + 0x0105, False] and whole["values"]["SynW_v1"][1], whole["values"]
+    values = whole["values"]
+    assert values["syn.scale"] == [[3 * 3 + 0x0105], False] and values["SynW_v1"][1] and values["SynV_v1"][1], values
     first = _run(root, FORKED)
-    assert first["stats"]["units"]["reused"] == 0, first["stats"]["units"]
-    assert first["values"] == whole["values"] and first["keys"] == whole["keys"]
+    assert first["stats"]["units"]["reused"] == 0 and "stale" not in first["stats"]["units"], first["stats"]["units"]
+    assert first["values"] == values and first["keys"] == whole["keys"]
     _edit(root, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")    # no binding reads it: the task list misses
     _set_pin(root, "SynW_v1", {"and": 1})
     out = _run(root, FORKED)
-    assert out["stats"]["units"]["rebuilt"] == [] and out["values"] == whole["values"], out["stats"]["units"]
-    assert "SynW_v1" not in out["hits"], out["hits"]
+    assert out["stats"]["units"]["rebuilt"] == [] and "stale" not in out["stats"]["units"], out["stats"]["units"]
+    assert out["values"] == values and "SynW_v1" not in out["hits"], out["hits"]
 
 
 @pytest.mark.slow
