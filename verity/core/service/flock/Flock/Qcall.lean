@@ -239,7 +239,7 @@ def Gates.wOut (G : Gates) (lo hi : Nat) : Nat :=
 def Gates.anyComputing (G : Gates) (lo hi : Nat) : Bool := G.pre[hi]! > G.pre[lo]!
 
 /-- A unit: the local interval `[lo, hi)` and its path from the Call's activation, `[k]` a body node, `[k, m]` member `m`. -/
-structure Unit where
+structure ProofBlock where
   lo : Nat
   hi : Nat
   path : Array (Array Nat)
@@ -255,7 +255,7 @@ inductive Piece where
 /-- Step 4 (`call_units`), from a piece down, depth first in layout order: a piece without computing gates is no unit, one with
 at most X bits out is one unit, any other piece's children are the pieces. Pieces nest at most `fuel` deep. -/
 def cutIn (fuel : Nat) (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Array (Array Nat)) (how : Piece)
-    (acc : Array Unit) : V (Array Unit) := do
+    (acc : Array ProofBlock) : V (Array ProofBlock) := do
   let n + 1 := fuel | throw "pieces nest deeper than this verifier follows"
   if !G.anyComputing lo hi then return acc
   else if G.wOut lo hi ≤ X then return acc.push ⟨lo, hi, path⟩
@@ -284,14 +284,14 @@ def cutIn (fuel : Nat) (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Ar
       return acc
     | .gate => return acc
 
-def cut (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Array (Array Nat)) (how : Piece) (acc : Array Unit) :
-    V (Array Unit) :=
+def cut (P : Prog) (G : Gates) (X : Nat) (lo hi : Nat) (path : Array (Array Nat)) (how : Piece) (acc : Array ProofBlock) :
+    V (Array ProofBlock) :=
   cutIn Steps.FUEL P G X lo hi path how acc
 
 /-- One Definition's cut: its gates, units and the unit of every computing gate (compact order). -/
 structure DefCut where
   gates : Gates
-  units : Array Unit
+  units : Array ProofBlock
   owner : Array Nat
   deriving Inhabited
 
