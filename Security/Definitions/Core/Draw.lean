@@ -11,6 +11,7 @@ Every area reads these, and defines none of its own:
   largest escape over sets of at least `K` units, the sampling term of a count curve `δ(K) = miss K + ε`; and
   `incl L u`, the probability that `u` is drawn;
 * `Draw s N`: `s` indices into `N` units, each uniform and independent of the others (`Draw.law`, its law);
+* `Draw.Subset N k`: `k` of `N` units, without replacement, each `k`-subset one coin (the `subset:K` sampling design);
 * `Coins Pub s N`: a window's coins, public randomness `Pub` and an index draw.
 
 The probabilities are the uniform ones over one coin (`Game.prCoin`).
@@ -55,6 +56,10 @@ def Draw.law (s N : ℕ) [NeZero N] : Law (Fin N) where
   Ω := Draw s N
   nonempty := ⟨fun _ => ⟨0, Nat.pos_of_ne_zero (NeZero.ne N)⟩⟩
   draw ω := Finset.univ.image ω
+
+/-- **A subset draw**: `k` of `N` units, without replacement, each `k`-subset one coin (the `subset:K` sampling
+design). -/
+abbrev Draw.Subset (N k : ℕ) : Type := {s : Finset (Fin N) // s.card = k}
 
 /-- **A window's coins**: the public randomness `Pub` the window's checks read, and an index draw of `s` from `N`. -/
 abbrev Coins (Pub : Type) (s N : ℕ) : Type := Pub × Draw s N

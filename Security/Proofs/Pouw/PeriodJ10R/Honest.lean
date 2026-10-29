@@ -147,7 +147,7 @@ def stages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
 abbrev WCoin (N : ℕ) (B : Type) : Type := Paths Bool (circuit N).rounds × (Equiv.Perm (Fin N) × B)
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period (Ω : Type) (N : ℕ) : (n : ℕ) → Period Bool Ω (Fin N) (circuit N).rounds n
+def period (Ω : Type) (N : ℕ) : (n : ℕ) → WindowPlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (stages N) fun _ => period Ω N n
 

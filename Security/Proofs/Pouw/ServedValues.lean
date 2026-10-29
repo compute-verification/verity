@@ -53,7 +53,7 @@ theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np
   rwa [div_le_iff₀ (Nat.cast_pos.mpr (Nat.pos_of_ne_zero h))] at hle
 
 theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditLive Sc Cd Wp ws x := by
   unfold creditLive
   refine Finset.sum_nonneg fun w _ => ?_
@@ -61,7 +61,7 @@ theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {
   exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
 
 theorem creditedSize_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditedSize Sc Cd Wp ws sz x := by
   unfold creditedSize
   refine Finset.sum_nonneg fun w _ => ?_
@@ -79,7 +79,7 @@ theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n 
 /-- **The size the right blocks miss is at most `σ` times the words they miss**, when every right block is live in a
 credited window. -/
 theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) (good : Fin n → Fin Np → Prop)
     (hgood : ∀ w t, good w t → ws.AcceptedUpTo x w ∧ Wp.liveAt x w t = true) :
     creditedSize Sc Cd Wp ws sz x - rightSize Sc Cd sz good ≤
@@ -141,7 +141,7 @@ theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (x : Paths (Coin C Ξ Cd.rounds σ sT) n) (w : Fin n) (t : Fin (tileCount σ sT))
     (hg : (tileLayer Cd hr σ k hk sT unitOf ws opened rel right).Good
       (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened rel right)) x w t) :
