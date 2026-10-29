@@ -17,12 +17,11 @@ no second card). Each number is an entry `{ value, unit, mark, source }`:
 | Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 
-Every card of a kind has the same sections. A GPU card's are `sm`, `clock` (`tensor` the tensor's, `sm` every other
-resource's, `memory` device memory's), `store`, `rate` (each resource's units a SM-clock), `memory` (device memory's bus,
-transfers and bandwidth), `weight` (the tensor units a MAC of each format uses) and `model` (`Accel.Card`'s `exact` and
-code space). A host card's are `cpu` (sockets and cores), `clock`, `rate` (AMX MACs and the host's op peak), `memory`
-(DRAM's channels, speed, bandwidth, measured read and write ceiling) and `store` (its caches and allowances, and `chip`,
-the host's on-chip bytes in S_chip).
+Every card of a kind has the same sections. A GPU card's are `sm`, `clock`, `store`, `rate` (each resource's units a
+SM-clock), `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor units a MAC of each
+format uses) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (sockets and cores), `clock`,
+`rate` (AMX MACs and the host's op peak), `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling)
+and `store` (its caches and allowances, and `chip`, the host's on-chip bytes in S_chip).
 
 ~~~python
 from verity.hardware import load, skus
@@ -34,10 +33,10 @@ load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
 
 `rate(card, resource="tensor", *, fmt=None, mhz=None) -> Fraction` is the one calculator of a GPU card's peak rates:
-Lean's `card.ρ`, the SMs times the resource's rate times its clock (`clock.tensor` for the tensor, `clock.sm` for the
-rest, or the clock `mhz` names), in MACs of operand format `fmt` when given, and device memory's `memory.bandwidth` in
-words. A benchmark that quotes a peak calls it rather than multiplying the card's numbers itself, and
-`tests/test_lean.py` holds it to each Lean table.
+Lean's `card.ρ`, the SMs times the resource's rate times its clock (for the tensor `clock.tensor` where the card has one
+and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` names), in MACs of operand format `fmt` when
+given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
+the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
 
 **Changing a number:** change the card file, then its Lean table to match. `tests/test_lean.py` evaluates each Lean
 `card` arm as an exact rational and fails on any number that differs, and on a store, resource or format of

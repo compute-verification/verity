@@ -17,7 +17,7 @@ skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 card = load("h200-sxm-141gb")
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
-rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
+rate(card)                         # Fraction(1070530560000000): s8 MACs a second, 132 SMs x 4096 x clock.sm 1980 MHz
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
 ~~~
 """
@@ -64,9 +64,10 @@ def number(entry: dict) -> Fraction:
 
 def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: float | None = None) -> Fraction:
     """Lean's ``card.ρ resource``: the units a second of ``resource`` on the whole GPU, ``sm.count × rate.<resource> ×``
-    its clock in Hz (``clock.tensor`` for the tensor and ``clock.sm`` for the rest, unless ``mhz`` names the clock), and
-    for device memory (``dram``) ``memory.bandwidth`` in 32-bit words. With ``fmt``, the tensor rate in MACs of that
-    operand format (tensor units over ``weight.<fmt>``). ``tests/test_lean.py`` holds it to every Lean table's arms."""
+    its clock in Hz (for the tensor ``clock.tensor`` where the card has one and ``clock.sm`` where it doesn't, for the
+    rest ``clock.sm``, unless ``mhz`` names the clock), and for device memory (``dram``) ``memory.bandwidth`` in 32-bit
+    words. With ``fmt``, the tensor rate in MACs of that operand format (tensor units over ``weight.<fmt>``).
+    ``tests/test_lean.py`` holds it to every Lean table's arms."""
     if card["kind"] != "gpu":
         raise ValueError(f"{card['sku']} is a {card['kind']} card; rate is a GPU's")
     if resource == "dram":
@@ -77,7 +78,9 @@ def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: f
         raise KeyError(f"{card['sku']} has no rate.{resource}: its rates are {sorted(card['rate'])} and dram")
     if fmt is not None and (resource != "tensor" or fmt not in card["weight"]):
         raise KeyError(f"{fmt!r} weighs tensor MACs only, and {card['sku']}'s formats are {sorted(card['weight'])}")
-    clock = number(card["clock"]["tensor" if resource == "tensor" else "sm"]) if mhz is None else Fraction(str(mhz))
+    clocks = card["clock"]
+    tick = clocks["tensor"] if resource == "tensor" and "tensor" in clocks else clocks["sm"]
+    clock = number(tick) if mhz is None else Fraction(str(mhz))
     units = number(card["sm"]["count"]) * number(card["rate"][resource]) * clock * 10 ** 6
     return units if fmt is None else units / number(card["weight"][fmt])
 
