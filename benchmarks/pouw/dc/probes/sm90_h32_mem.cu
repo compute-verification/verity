@@ -7,11 +7,13 @@
 //                     folds its other 3 words, 2 LOP3 a load, so ptxas keeps all 4)
 //   d_ldg64           global through L1: each block's table in its own 16 KB of a.g, 8-B cells holding the next's address
 //                     (ld.global.ca: LDG.E.64.STRONG.SM)
+//   d_ldcg64          global through L2 alone: each block's table in its own 128 KB, all 132 within the L2
+//                     (ld.global.cg: LDG.E.64.STRONG.GPU)
 //   a_atoms, a_atomg  atom.add with its return, each lane its own word (shared: conflict-free), uncontended
 //   a_redg            red.global.add, each lane its own word, on every SM (the L2's atomic path bounds it)
 #include "../../opcode_probe/probe.cuh"
 
-constexpr int TPB = 1024, U = 8, ROWS = 64, WARPS = TPB / 32;
+constexpr int TPB = 1024, U = 8, ROWS = 64, L2ROWS = 512, WARPS = TPB / 32;
 
 // A chain's row at a slot, warp and iteration: the kernels' own addresses, which the gate's bank check reads.
 __host__ __device__ inline int mem_row(int slot, int warp, int it) { return (slot + warp * U + it) % ROWS; }
@@ -69,17 +71,22 @@ OP_KERNEL(d_lds128, TPB) {
   OP_SINK(y)
 }
 
-OP_KERNEL(d_ldg64, TPB) {
-  unsigned long long* t = reinterpret_cast<unsigned long long*>(a.g) + (size_t)blockIdx.x * ROWS * 32;
+// a block's table of R rows, each cell holding the next row's cell in its lane; L2: ld.global.cg, which skips L1
+template <int R, bool L2>
+__device__ __forceinline__ void ldg_body(const OpArgs& a) {
+  unsigned long long* t = reinterpret_cast<unsigned long long*>(a.g) + (size_t)blockIdx.x * R * 32;
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
-  for (int i = threadIdx.x; i < ROWS * 32; i += TPB) t[i] = (unsigned long long)(t + mem_row(1, 0, i >> 5) * 32 + (i & 31));
+  for (int i = threadIdx.x; i < R * 32; i += TPB) t[i] = (unsigned long long)(t + ((i >> 5) + 1) % R * 32 + (i & 31));
   unsigned long long x[U];
 #pragma unroll
-  for (int u = 0; u < U; u++) x[u] = (unsigned long long)(t + mem_row(u, w, 0) * 32 + lane);
+  for (int u = 0; u < U; u++) x[u] = (unsigned long long)(t + (u + w * U) % R * 32 + lane);
   OP_BEGIN
   OP_LOOP(it) {
 #pragma unroll
-    for (int u = 0; u < U; u++) asm volatile("ld.global.ca.u64 %0, [%0];" : "+l"(x[u]));
+    for (int u = 0; u < U; u++) {
+      if constexpr (L2) asm volatile("ld.global.cg.u64 %0, [%0];" : "+l"(x[u]));
+      else asm volatile("ld.global.ca.u64 %0, [%0];" : "+l"(x[u]));
+    }
   }
   OP_END
   unsigned long long s = threadIdx.x;
@@ -87,6 +94,8 @@ OP_KERNEL(d_ldg64, TPB) {
   for (int u = 0; u < U; u++) s ^= x[u];
   OP_SINK(s ^ (s >> 32))
 }
+OP_KERNEL(d_ldg64, TPB) { ldg_body<ROWS, false>(a); }
+OP_KERNEL(d_ldcg64, TPB) { ldg_body<L2ROWS, true>(a); }
 
 OP_KERNEL(a_atoms, TPB) {
   extern __shared__ __align__(128) unsigned sb[];
@@ -141,6 +150,8 @@ static const OpProbe PROBES[] = {
      .smem = lds128_off, .dyn_smem = ROWS * 512, .iters = 512, .note = "c=other w=LDS.128:4"},
     {.name = "d_ldg64", .kernel = (const void*)d_ldg64, .tpb = TPB, .expect = "LDG.E.64.STRONG.SM=8", .iters = 512,
      .note = "c=other w=LDG.E.64.STRONG.SM:2"},
+    {.name = "d_ldcg64", .kernel = (const void*)d_ldcg64, .tpb = TPB, .expect = "LDG.E.64.STRONG.GPU=8", .iters = 256,
+     .note = "c=other w=LDG.E.64.STRONG.GPU:2"},
     {.name = "a_atoms", .kernel = (const void*)a_atoms, .tpb = TPB, .expect = "ATOMS.ADD=8", .smem_ops = "ATOMS.ADD*8",
      .smem = atoms_off, .dyn_smem = U * TPB * 4, .iters = 256, .note = "c=other w=ATOMS.ADD:2"},
     {.name = "a_atomg", .kernel = (const void*)a_atomg, .tpb = TPB, .expect = "ATOMG.E.ADD.STRONG.GPU=8", .iters = 128,
