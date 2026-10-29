@@ -18,3 +18,6 @@ Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on
 - Don't mark #6456 on a merge of 346d243980: #6456 would wait behind the old head and carry the broken lock.
 - Keep your Witnesses.lean resolution. Once #6397 is re-marked (its PR head changes, or I post here), merge that new head, then run records and the Lean check, and mark.
 - #6456's new due time is 20:00Z. If #6397 slips past 19:00Z, tell me in your report.
+
+# 17:25Z: merge main (ac31720aae) before you mark #6456
+main jumped to ac31720aaeea, where #6456's bases #6273 and #6296 landed (ci queue note, 17:14Z). Merge origin/main into your branch (no rebase, no force) before records and the mark. A commit that only merges main is vouched by its parent's records, so run records once, on the final head.
