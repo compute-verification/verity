@@ -6,15 +6,6 @@ import os
 from pathlib import Path
 
 
-def flock_trace() -> Path | None:
-    """``FLOCK_TRACE``, a build of ``flock-trace``; else the ``flock-trace`` beside ``FLOCK_CIRCUIT``'s ``flock-circuit``."""
-    if os.environ.get("FLOCK_TRACE"):
-        return Path(os.environ["FLOCK_TRACE"])
-    if os.environ.get("FLOCK_CIRCUIT"):
-        return Path(os.environ["FLOCK_CIRCUIT"]).with_name("flock-trace")
-    return None
-
-
 def recursive_data() -> str:
     """``VERITY_VSTAR_RECURSIVE_DATA``: a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean), which the
     whole-session recursive tests read and skip without; else empty."""
@@ -24,3 +15,12 @@ def recursive_data() -> str:
 def lean_jobs() -> int:
     """``LEAN_JOBS``: how many flock-verify processes a whole-session recursive test runs at once (default 4)."""
     return int(os.environ.get("LEAN_JOBS") or 4)
+
+
+def flock_trace() -> Path | None:
+    """``FLOCK_TRACE``, a build of ``flock-trace``; else the ``flock-trace`` beside ``FLOCK_CIRCUIT``'s ``flock-circuit``."""
+    if os.environ.get("FLOCK_TRACE"):
+        return Path(os.environ["FLOCK_TRACE"])
+    if os.environ.get("FLOCK_CIRCUIT"):
+        return Path(os.environ["FLOCK_CIRCUIT"]).with_name("flock-trace")
+    return None
