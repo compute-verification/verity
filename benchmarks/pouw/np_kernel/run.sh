@@ -4,7 +4,8 @@
 # Measurement only. cwd: the source tree's root.
 #   MS (64 512 8192: Llama-3.2-1B's T 512 at 64 and 512 rows, and T 8,192), REPS (5), BUDGET_GB (16: the exported words a
 #   hash chunk holds), ROWS (0 65536 16384: the hash pass's row bytes, 0 for row-seg), CUDA_HOME (/usr/local/cuda-13.0),
-#   LEASE_MIN (25), CHECK (1; 0 skips the exact check)
+#   LEASE_MIN (25), CHECK (1; 0 skips the exact check), CAPS (0: beside's caps on a row hash launch's blocks, each a pass
+#   over MS; time_m<M>_cap<C>.jsonl)
 set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
@@ -53,10 +54,13 @@ if [ "${CHECK:-1}" = 1 ]; then
   "$BUILD_DIR/ssn" check > "$OUT/check.jsonl" 2> "$OUT/check.err"
   worst=$?; say "check rc $worst"; cat "$OUT/check.jsonl"
 fi
-for m in ${MS:-64 512 8192}; do
-  # shellcheck disable=SC2086
-  "$BUILD_DIR/ssn" time "${REPS:-5}" "$m" "${BUDGET_GB:-16}" ${ROWS:-0 65536 16384} > "$OUT/time_m$m.jsonl" 2> "$OUT/time_m$m.err"
-  rc=$?; say "time M $m rc $rc ($(wc -l < "$OUT/time_m$m.jsonl") lines)"
-  [ "$rc" = 0 ] || { worst=$rc; tail -5 "$OUT/time_m$m.err"; }
+for cap in ${CAPS:-0}; do
+  for m in ${MS:-64 512 8192}; do
+    f=time_m$m; [ "$cap" = 0 ] || f=time_m${m}_cap$cap
+    # shellcheck disable=SC2086
+    HASH_CAP=$cap "$BUILD_DIR/ssn" time "${REPS:-5}" "$m" "${BUDGET_GB:-16}" ${ROWS:-0 65536 16384} > "$OUT/$f.jsonl" 2> "$OUT/$f.err"
+    rc=$?; say "time M $m cap $cap rc $rc ($(wc -l < "$OUT/$f.jsonl") lines)"
+    [ "$rc" = 0 ] || { worst=$rc; tail -5 "$OUT/$f.err"; }
+  done
 done
 exit "$worst"

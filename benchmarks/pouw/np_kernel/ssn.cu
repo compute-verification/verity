@@ -373,11 +373,11 @@ struct Hasher {
     sz_segments<<<(unsigned)((total + 255) / 256), 256, 8 * 32 * 33 * 4, st>>>(a);
     CK(cudaGetLastError());
   }
-  void run(const uint4* W, long long blocks, int block_bytes, cudaStream_t st) {
+  void run(const uint4* W, long long blocks, int block_bytes, cudaStream_t st, u64 cap = 0) {
     if (rb) {
       const u64 n = ((u64)blocks * block_bytes + rb - 1) / rb;
       const int rc = verity_rows_leaves_sf_launch(params.data(), (const uint8_t*)W, rb, n, nullptr, tn, 0, n, n, leaves, nullptr,
-                                                  nullptr, scratch, 0, st);
+                                                  nullptr, scratch, cap, st);
       if (rc) {
         fprintf(stderr, "ERR verity_rows_leaves_sf_launch %d\n", rc);
         exit(2);
@@ -562,6 +562,9 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
   std::vector<Hasher> hsv(nbuf * rbs.size());
   for (size_t h = 0; h < hsv.size(); h++) hsv[h].init(max_chunk_words * 4, rbs[h / nbuf]);
   int hi = 0;  // the hasher in use: hsv[nbuf hi + b] for buffer b
+  // beside's cap on a row hash launch's blocks (HASH_CAP; 0 none): the committer's max_blocks, which leaves SM slots to the
+  // GEMM stream's export
+  const u64 hash_cap = getenv("HASH_CAP") ? strtoull(getenv("HASH_CAP"), nullptr, 10) : 0;
   auto hname = [&](int h) { return h < 0 ? std::string("none") : rbs[h] ? "rows" + std::to_string(rbs[h]) : std::string("rowseg"); };
   int* dout;
   CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
@@ -644,7 +647,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
           gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1);
           CK(cudaEventRecord(full[b], s1));
           CK(cudaStreamWaitEvent(s2[b], full[b]));
-          hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b]);
+          hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b], hash_cap);
           CK(cudaEventRecord(done[b], s2[b]));
         }
       }
@@ -654,7 +657,8 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     line("fwd_serial", nullptr, T.ms(reps, fwd_serial, s1), fwd_macs, fwd_words, 0);
     line("fwd_beside", nullptr, T.ms(reps, fwd_beside, s1), fwd_macs, fwd_words, 0);
   }
-  printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d}\n", f0, sm_mhz(dclk), nbuf);
+  printf("{\"what\": \"clock\", \"mhz_start\": %.1f, \"mhz_end\": %.1f, \"beside_buffers\": %d, \"hash_cap\": %llu}\n", f0,
+         sm_mhz(dclk), nbuf, (unsigned long long)hash_cap);
   return 0;
 }
 

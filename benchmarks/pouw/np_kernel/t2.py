@@ -2,7 +2,7 @@
 
     python3 t2.py OUT [--stock M:SYNC_MS[:ASYNC_MS][:GEMM_MS] ...] [--json FILE]
 
-OUT is a run's out/ (time_m<M>.jsonl). Each --stock gives, at M rows, the stock step's time (synchronous, and asynchronous
+OUT is a run's out/ (time_m<M>[_cap<C>].jsonl). Each --stock gives, at M rows, the stock step's time (synchronous, and asynchronous
 if known) and the stock GEMMs' time a forward, all in ms. T2 is the step with ssn_1l's linears over the stock step, two ways:
   own   (stock + forward - forward's plain GEMM on the same kernel) / stock: ssn_1l's extra over this kernel's own plain GEMM
   swap  (stock - stock GEMM + forward) / stock: this forward in place of the stock GEMMs
@@ -20,12 +20,12 @@ from pathlib import Path
 LINEARS = ("qkv", "o", "gate_up", "down")
 
 
-def load(out: Path) -> dict[int, list[dict]]:
+def load(out: Path) -> dict[str, list[dict]]:
     runs = {}
-    for f in sorted(out.glob("time_m*.jsonl")):
+    for f in sorted(out.glob("time_m*.jsonl"), key=lambda f: (int(f.stem.split("_")[1][1:]), f.stem)):
         rows = [json.loads(x) for x in f.read_text().splitlines() if x.startswith("{")]
         if rows:
-            runs[rows[0]["M"]] = rows
+            runs[f.stem] = rows
     return runs
 
 
@@ -87,9 +87,11 @@ def main() -> None:
         parts = s.split(":")
         v = [float(x) if x else None for x in parts[1:]] + [None] * 3
         stocks[int(parts[0])] = {"sync": v[0], "async": v[1], "gemm": v[2]}
-    res = [summarize(rows, stocks.get(m)) for m, rows in sorted(load(a.out).items())]
+    res = []
+    for name, rows in load(a.out).items():
+        res.append(summarize(rows, stocks.get(rows[0]["M"])) | {"file": name})
     for r in res:
-        print(f"## M {r['M']} (SM clock {r['mhz']:.0f} MHz)")
+        print(f"## {r['file']}: M {r['M']} (SM clock {r['mhz']:.0f} MHz)")
         print("| linear | S | BN | plain ms | ssn ms | α time / layout | export ms | export units a word | coins µs | "
               "forming µs | coins+forming µs | hash ms, units a byte, GB/s by scheme |")
         print("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|")
