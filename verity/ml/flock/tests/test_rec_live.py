@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import struct
+from pathlib import Path
 
 import pytest
 from verity_flock import coin_tree as CT
@@ -374,8 +376,14 @@ def test_the_prover_hello_names_the_challengers_tree_and_live_coins_refuse_one()
 
 
 def test_the_inner_coin_tree_holds_every_stream_a_schedule_opens():
+    """`INNER_COIN_SPEC` is the Lean verifier's `RecVStar.innerCoinSpec`, the tree it sets the inner statement up on."""
     assert RL.INNER_COIN_SPEC.streams == (CT.SESSION, "circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0")
     assert (RL.INNER_COIN_SPEC.rounds_log, RL.INNER_COIN_SPEC.block) == (9, 512)
+    src = (Path(__file__).resolve().parents[4] / "verity/core/service/flock/Flock/RecVStar.lean").read_text()
+    m = re.search(r"def innerCoinSpec : CoinTree\.Spec :=\s*⟨#\[([^\]]*)\], (\d+), (\d+)⟩", src)
+    assert m, "RecVStar.innerCoinSpec is not ⟨#[streams], rounds_log, block⟩"
+    assert (tuple(re.findall(r'"([^"]*)"', m[1])), int(m[2]), int(m[3])) == (
+        RL.INNER_COIN_SPEC.streams, RL.INNER_COIN_SPEC.rounds_log, RL.INNER_COIN_SPEC.block)
 
 
 def test_coins_follow_the_link_exchange():

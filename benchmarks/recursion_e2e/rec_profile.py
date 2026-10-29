@@ -25,7 +25,8 @@ ORDER = ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lea
 #: what each part of the recursive run is, recorded in the result's ``inputs``
 STATEMENTS = {
     "inner": "N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under Q_template_instance (rec_reprice.py), "
-             "verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy",
+             "verity/flock-circuit+plain-leaves, M0 (no --zk), on the challenger's coin tree (FC_COINS=tree), through "
+             "rec_live's proxy",
     "vstar": "V*'s statements over the inner's last proxied run: each Ligerito level's RecOpen and RecCap, the algebra's "
              "InnerRepCheck parts (rec_vstage)",
     "outer": "each V* statement with --zk on loopback, every unit drawn, one at a time, in each of MODES",

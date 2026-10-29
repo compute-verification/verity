@@ -915,14 +915,14 @@ def test_candidate_3s_session_needs_the_inner_transcript_and_rs_registration(tmp
     draw = _write(tmp_path / "draw.json", {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     files = ["--rec-inner-circuit", str(STAGE / "circuit.txt"), "--rec-inner-public", str(STAGE / "pub-64.bin"),
              "--rec-inner-partition", str(STAGE / "partition.json"), "--rec-inner-statement",
-             "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw", str(draw),
+             "verity/flock-circuit+plain-leaves", "--rec-inner-draw", str(draw),
              "--rec-inner-session", str(PLAIN / "session"),
              *(["--rec-inner-transcript", str(PLAIN / "public.json")] if transcript else [])]
     inner = ["--rec-inner", str(_write(tmp_path / "rec-inner.json", AT_STAGE)), *files]
     if cmd == "statement":
         args = ["statement", "--statement", "verity/flock-circuit+plain-leaves", "--circuit",
                 str(STAGE / "circuit.txt"), "--public", str(STAGE / "pub-64.bin"), "--partition",
-                str(STAGE / "partition.json"), "--coins", "os"]
+                str(STAGE / "partition.json")]
     else:
         args = ["verify", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"), "--session",
                 str(tmp_path / "s")]

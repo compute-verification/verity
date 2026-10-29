@@ -107,9 +107,9 @@ for s in ${STEPS//,/ }; do
       fw=$L/lean-$LSHA/flock-firewall; [[ ,$M, != *,firewall,* ]] || [ ! -x $fw ] || sha256sum $fw >> "$O/params.txt" ;;
     icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
     vstage) for i in $(reps vstage); do step vstage $i "FORGE=${FORGE//,/ }" || { rc=1; break; }; done ;;
-    lean) for i in $(reps lean); do step lean $i INNER_LEAN=1 JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
+    lean) for i in $(reps lean); do step lean $i JOBS=${LEAN_JOBS:-4} NEG_INNER= || rc=1; done ;;
     # the lean step once more with rep 0's coins flipped (85's NEG_INNER): Lean must refuse each flipped coin
-    negative) [ -z "$NEG" ] || step negative 1 STEP=lean INNER_LEAN=0 JOBS=${LEAN_JOBS:-4} "NEG_INNER=$NEG" || rc=1 ;;
+    negative) [ -z "$NEG" ] || step negative 1 STEP=lean JOBS=${LEAN_JOBS:-4} "NEG_INNER=$NEG" || rc=1 ;;
     # the forgeries the ZK server stops before release, made on the honest releases after proving and put to Lean with the
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)

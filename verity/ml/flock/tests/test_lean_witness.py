@@ -423,7 +423,7 @@ def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built,
                        str(names.index(_unit(g, part))), "--rec-bindings", str(d / f"bindings-{part}.json"), "--rec-rows",
                        str(d / "rows.json"), "--rec-inner-circuit", str(st / "circuit.txt"), "--rec-inner-public",
                        str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"),
-                       "--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os",
+                       "--rec-inner-statement", "verity/flock-circuit+plain-leaves",
                        "--rec-inner-draw", str(d / "draw.json"), "--rec-inner-session",
                        str(g / "inner" / "s1" / "session"), "--rec-inner-transcript", str(transcript), "--session",
                        str(g / "v-sess" / part)])

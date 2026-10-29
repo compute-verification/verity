@@ -40,8 +40,9 @@ inputs = [
     # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.ml.randomness against
     # its pinned vectors
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
-    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
-    "verity/core/service/flock/Flock/Zk.lean",
+    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
+    # tree to RecVStar's
+    "verity/core/service/flock/Flock/Zk.lean", "verity/core/service/flock/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
     "verity/core/service/flock/Flock/Test/RecCap.lean",

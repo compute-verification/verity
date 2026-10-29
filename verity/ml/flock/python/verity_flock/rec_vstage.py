@@ -6,7 +6,7 @@ With each level, that level's committed tops are staged too, every node held at 
 ``root_B`` under ``cap/``, a later level ``l``'s both reps' tops under ``cap/L<l>/``, `stage_cap`).
 
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
-    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
+    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json tree > fold.json    (tests/lean/InnerFold.lean)
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE] [--part-jobs N]
 

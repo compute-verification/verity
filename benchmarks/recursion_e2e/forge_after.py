@@ -220,7 +220,7 @@ def main() -> int:
     (n,) = [p.name[4:-4] for p in (dd / "stage").glob("pub-*.bin")]
     inner_flags = ["--rec-inner-circuit", str(dd / "stage/circuit.txt"), "--rec-inner-public", str(dd / f"stage/pub-{n}.bin"),
                    "--rec-inner-partition", str(dd / "stage/partition.json"), "--rec-inner-statement",
-                   "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw",
+                   "verity/flock-circuit+plain-leaves", "--rec-inner-draw",
                    str(dd / "stage/draw.json"), "--rec-inner-session", str(inner / "session"), "--rec-inner-transcript",
                    str(inner / "public.json")]
     sess = {s: dd / "v-sess" / s for s in sorted({CASES[k][0] for k in kinds})}
