@@ -769,10 +769,9 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
     ranks = {m: (tag_rank(m, lead), exact_rank([balanced_digits((i // 2 + 1) * (-1) ** i, 13, 4) for i in range(m)]))
              for m in (1, 12, 13, 64, 168, 169, 512, 2196, 2197, 8192, 28560)}
     try:
-        tag_rank(28561, lead)
-        over = False
-    except ValueError:
-        over = True
+        over = f"rank {tag_rank(28561, lead)}"
+    except ValueError as err:
+        over = str(err)
     packed = d["blc4a-t64-e7-packed"]["points"]["decode1"]
     lay0 = json.loads(json.dumps(lay))
     lay0["lane_add"]["fill_row_coin_bits"] = 0
@@ -818,7 +817,7 @@ def checks(inp: dict, einp: dict, ll: dict, res: dict) -> list[tuple[str, bool, 
          f"{rows8['caps']['32']['stated']['floor']:.4f} / {rows8['caps']['32']['stated']['bar']:.4f}"),
         ("The row tags' rank by exact elimination equals the digit count tag_rank reads (1 digit to 12 rows, 2 to 168, "
          "3 to 2,196, 4 to 28,560) and T stops being injective in four digits past 28,560 rows",
-         all(a == b for a, b in ranks.values()) and over, ", ".join(f"{m} {a}/{b}" for m, (a, b) in ranks.items())),
+         all(a == b for a, b in ranks.values()) and over == "28561 rows: T isn't injective in 4 digits", ", ".join(f"{m} {a}/{b}" for m, (a, b) in ranks.items())),
         ("blc1's coin bits at gate-up, 8,192 rows, 128-row tiles, 2 bits: the formula equals a tile-by-tile count",
          abs(blc["bits"] - brute) < 1e-6, f"{blc['bits']:,.1f}"),
         ("Mutation: interim 2's blc1a-t128-e7 and blc4a-t64-e7 on the lead before its tag, step 1 without lane coins: "

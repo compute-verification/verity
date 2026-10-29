@@ -205,12 +205,16 @@ def r1_shapes(inp: dict, ll: dict) -> dict:
         experts[ln] = {"max_tokens_t2_le_100": max((m for m in range(1, 65537) if rows_per_expert(m) <= cap), default=0),
                        "rows_per_expert_allowed": cap}
     per_row = b * ll["macs_per_token"] + ll["a_bytes_per_token"]
-    extra = lambda m: ((alpha - 1.0) * stock_step_s(inp, m, "t_gemm_s") + inp["ssn_1l"]["coin_latency_s"]
-                       + export_s(inp, b * ll["macs_per_token"] * m))
+    def extra(m):
+        return ((alpha - 1.0) * stock_step_s(inp, m, "t_gemm_s") + inp["ssn_1l"]["coin_latency_s"]
+                + export_s(inp, b * ll["macs_per_token"] * m))
+
     llama = {}
     for ln, rate in links.items():
-        t2 = lambda m: max(max(stock_step_s(inp, m, e) + extra(m), per_row * m / rate) / stock_step_s(inp, m, e)
-                           for e in ENGINES)
+        def t2(m):
+            return max(max(stock_step_s(inp, m, e) + extra(m), per_row * m / rate) / stock_step_s(inp, m, e)
+                       for e in ENGINES)
+
         fit = max((m for m in range(1, 8193) if t2(m) <= 100.0), default=0)
         fast = min(stock_step_s(inp, fit, e) for e in ENGINES)
         llama[ln] = {"t2_judged_512_rows": t2(512), "t2_judged_256_rows": t2(256),
@@ -285,8 +289,12 @@ def egress_outsourcing(inp: dict, ll: dict) -> dict:
     that forwards a call's coins and gets back the root has the call's MACs done) and W_mac with the block's hashing."""
     cfg, e, s = inp["llama_3_2_1b"], inp["egress"], inp["sha512"]
     alpha, c = inp["ssn_1l"]["alpha"], e["code_lanes"]
-    steps = lambda k: 1 + math.ceil(max(0, k - (32 - c)) / 31)
-    row_bits = lambda k: 32 * math.ceil((steps(k) + e["coin_bits_over_steps"]) / 32)
+    def steps(k):
+        return 1 + math.ceil(max(0, k - (32 - c)) / 31)
+
+    def row_bits(k):
+        return 32 * math.ceil((steps(k) + e["coin_bits_over_steps"]) / 32)
+
     coin_bits = cfg["layers"] * sum(row_bits(k) for k, _ in cfg["linears"])
     per_call = {f"k{k}_n{n}": k * n / row_bits(k) for k, n in cfg["linears"]}
     n_max = max(per_call.values())
@@ -438,7 +446,9 @@ def per_period_bounds(inp: dict, res: dict) -> dict:
     r1 = {p["point"]: p for p in res["R1"]["points"]}
     hw = inp["ssn_1l_hw"]
     r4 = next(r for r in res["R4"]["rows"] if r["point"] == "t8192" and r["schedule"] == "overlapped")
-    t2 = lambda key: r1[key]["gpu_400g"]["t2_judged"]
+    def t2(key):
+        return r1[key]["gpu_400g"]["t2_judged"]
+
     r1b_t2 = inp["space_t2"]["designs"]["ssn-1l-tag/served/s8/k32/w/r256k/cert/min"]["t8192"]["judged"]
     bounds = [
         ("R1 + ssn_1l_hw, T1 closed (forming and coin branch)", "T 512, 64 rows", t2("t64"), hw["t1_closed"]["t64"]),
