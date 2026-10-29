@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# The bandwidth audit's piece of `served_verdicts.sh`, run in the tree's root as `bash -c CMD _ SERVE_DIR WINDOW DIR`:
+# A bandwidth session over a store on the node's disk, run in the tree's root as `served_verdicts.sh` runs a piece,
+# `bash -c CMD _ SERVE_DIR WINDOW DIR`. The composed run's bandwidth piece is `served_bandwidth.py collect` instead, which
+# reads the session the PoUS piece runs over the store it holds (`benchmarks/pous/served_piece.py`); this one is
 #
 #   BANDWIDTH_CMD='bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 #
@@ -38,7 +40,7 @@ REG=${BW_REGISTRATION:-$P2/bandwidth-mem69-v2.json}
 PARTY_MIN=${BW_PARTY_MIN:-40}
 PARTY=${BW_PARTY:-ssh -i $HOME/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 research@10.96.0.36 bw_party --minutes $PARTY_MIN}
 PARTY_HOST=${BW_PARTY_HOST:-10.96.0.36}
-WINDOWS=${BW_WINDOWS:-2} PASSES=${BW_PASSES:-1} SAMPLES=${BW_SAMPLES:-1024} WINDOW_S=${BW_WINDOW_S:-1}
+WINDOWS=${BW_WINDOWS:-6} PASSES=${BW_PASSES:-4} SAMPLES=${BW_SAMPLES:-1024} WINDOW_S=${BW_WINDOW_S:-20}
 DEADLINE_S=${BW_DEADLINE_S:-1} DEVICE=${BW_DEVICE:-cuda} LEASE_MIN=${BW_LEASE_MIN:-40}
 R=${BW_R_BYTES_PER_S:-4800000000000}
 S=$O/scratch
