@@ -1395,7 +1395,13 @@ SSN_1L_HARD = SSN_1L + "+tag+nzh+ws"
 #: a coin byte a step against wide window weights, replayed negated in the second half, with N-RED's owner tags (the
 #: code-only first and last steps otherwise repeat across owners)
 MIRROR = "A/byte1/b13s4/mirror/s8/noc1/M0+tag+wv"
-REFERENCES = {"ssn_1l": SSN_1L, "ssn_1l_tag": SSN_1L_TAG, "ssn_1l_hard": SSN_1L_HARD, "mirror": MIRROR}
+#: N-PREM's ssn_1l_hw as the grammar holds it: odd later lanes {1, 3} against signs; its code is b13s4's 4 bits (hw
+#: reads nibbles, 16 bits) and its signs are window draws (hw's are public), neither of which the bound reading sees
+SSN_1L_HW = SSN_1L + "+nz+ws"
+REFERENCES = {"ssn_1l": SSN_1L, "ssn_1l_tag": SSN_1L_TAG, "ssn_1l_hw": SSN_1L_HW, "ssn_1l_hard": SSN_1L_HARD,
+              "mirror": MIRROR}
+#: how many designs each densest-coins list keeps
+DENSE = 30
 #: (C1, premises, chosen-reading T1 within T1_BAR)
 CLASSES = {"noc1, no premise": (False, False, False), "noc1, premises": (False, True, False),
            "c1, no premise": (True, False, False), "c1, premises": (True, True, False),
@@ -1486,6 +1492,24 @@ def _mapper(jobs: int):
         yield lambda f, xs: pool.map(f, xs, chunksize=max(1, len(xs) // (8 * jobs)))
 
 
+def _density(r: dict) -> float:
+    return r["llama_T8192"]["coin_bits_per_mac"]
+
+
+def densest(rows: list[dict], pmap) -> dict:
+    """The designs reading the most coin bits per MAC at llama_T8192: over all, over those within T3_SAFE, and over
+    those within T3_SAFE that stay closed once tile-checked."""
+    safe = sorted((r for r in rows if r["llama_T8192"]["t3_ratio"] <= T3_SAFE), key=_density, reverse=True)
+    closed, i = [], 0
+    while len(closed) < DENSE and i < len(safe):
+        batch = [r for r in safe[i:i + 4 * DENSE] if _closed(r)]
+        tile_check(batch, pmap)
+        closed += [r for r in batch if _closed(r)]
+        i += 4 * DENSE
+    return {"all": [r["name"] for r in sorted(rows, key=_density, reverse=True)[:DENSE]],
+            "t3_safe": [r["name"] for r in safe[:DENSE]], "closed": [r["name"] for r in closed[:DENSE]]}
+
+
 def run(jobs: int = 1) -> dict:
     pts = enumerate_points()
     with _mapper(jobs) as pmap:
@@ -1517,6 +1541,7 @@ def run(jobs: int = 1) -> dict:
         by_name = {r["name"]: r for r in rows}
         refs = {key: by_name[nm] for key, nm in REFERENCES.items()}
         beats = {key: _beating(rows, ref, pmap) for key, ref in refs.items()}
+        dense = densest(rows, pmap)
     reasons: dict = {}
     for v in invalid.values():
         reasons[v] = reasons.get(v, 0) + 1
@@ -1529,7 +1554,7 @@ def run(jobs: int = 1) -> dict:
             "invalid_reasons": reasons, "shares_source": SHARES_SOURCE, **refs, "frontier": front,
             "class_frontiers": {c: [r["name"] for r in v] for c, v in classes.items()},
             **{f"dominate_{key}": [r["name"] for r in v] for key, v in beats.items()},
-            "rows": rows,
+            "densest": dense, "rows": rows,
             "checks": {"|".join(map(str, k)): v for k, v in checks.items()}, "lower_bounds": lower_bounds(),
             "objectives": [list(o) for o in OBJECTIVES], "tile": {"words": TILE, "positions": TILE_POSITIONS}}
 
@@ -1564,7 +1589,7 @@ def table(rep: dict, limit: int = 40) -> str:
         rows = [by_name[nm] for nm in names]
         heads: dict = {}
         for a, b in OBJECTIVES:
-            if b is not None:
+            if b is not None and rows:
                 best = min(rows, key=lambda r: (r[a][b], _obj(r)))
                 heads.setdefault(best["name"], []).append(f"{a.replace('llama_', '')}:{b}")
         lines += [f"## {cls}, std/qerr <= {T3_SAFE}: {len(rows)} on its frontier; the best for each objective",
@@ -1576,6 +1601,9 @@ def table(rep: dict, limit: int = 40) -> str:
         lines += [f"## s8 designs that dominate {nm} on every objective, tile-checked ({len(beat)}; first {limit})",
                   HEADER]
         lines += [_row(by_name[b]) for b in sorted(beat, key=lambda b: _obj(by_name[b]))[:limit]]
+        lines.append("")
+    for key, names in rep["densest"].items():
+        lines += [f"## the most coin bits per MAC at llama_T8192, {key}", HEADER] + [_row(by_name[nm]) for nm in names]
         lines.append("")
     lines += ["## references", HEADER] + [_row(rep[key]) for key in REFERENCES]
     lines += ["", "cancel floor at T3_SAFE: " + json.dumps(rep["lower_bounds"]["cancel_floor_at_t3_safe"]),
