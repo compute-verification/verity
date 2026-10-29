@@ -108,6 +108,7 @@ EXPORT_WORD = {"fold": 189, "stg": 848}             # extra units a word out of 
 COIN_CALL_US = 9.3                                  # a call's coin expansion at its latency floor
 CALLS = 4 * N.LAYERS
 UNIT_OUT_BYTES = 262_144 // 8                       # a proof block's outputs at the largest public size class
+WORDS_CHUNKS = (16384, 65536, 262144)               # the words' chunk sizes whose openings are priced
 LEVELS_A_LAUNCH = 10                                # native_rows' rows_levels_kernel folds up to ten levels a launch
 BUDGET = 0.01
 TARGET = 0.001
@@ -206,7 +207,8 @@ def opening_ands(layout: str, b: dict, rows: int, R: int, mode: str) -> dict:
     inner digest and c; the verifier computes its leaf), (a) computes k_w = SHA-512(ks ‖ salt_w) (two compressions) and
     the others the window's midstate S (one). Under L1 a call's A rows are one instance and a forward's words another;
     under L1's live round a round's A rows are one instance and its words sit in the next round's, each path climbing to
-    the round's 65 subtrees; under L2 both sit in the forward's (or the window's) one tree."""
+    the round's 65 subtrees; under L2 both sit in the forward's (or the window's) one tree. The words' leaves are taken as
+    the unit's outputs; `chunk_opening` adds what a larger words chunk costs."""
     gadget = {"unforced": 2 * S.ANDS_COMPRESSION, "forced (a)": 2 * S.ANDS_COMPRESSION + 3 * S.ANDS_FROM_8,
               "pad": S.ANDS_COMPRESSION, "keyed digest": S.ANDS_COMPRESSION, "keyed leaf": 0}[mode]
     once = {"unforced": 0, "forced (a)": 5 * S.ANDS_COMPRESSION}.get(mode, 4 * S.ANDS_COMPRESSION)
@@ -228,6 +230,15 @@ def opening_ands(layout: str, b: dict, rows: int, R: int, mode: str) -> dict:
     words, a = words + up, a + up
     return {"words path depth": words, "A path depth": a,
             "paths and gadget": 2 * (words + a) * S.ANDS_COMPRESSION + gadget + once}
+
+
+def chunk_opening(b: dict, rows: int, chunk: int) -> dict:
+    """A drawn unit's words opening at `chunk`-byte words chunks, against `opening_ands`' unit-sized leaves: a unit-aligned
+    chunk above the unit's outputs is hashed whole in-circuit, and the words path starts at the chunk."""
+    fwd_words = rows * N.LAYERS * sum(c["words_row"] for c in b["calls"].values())
+    extra = max(0, S.blocks(chunk) - S.blocks(UNIT_OUT_BYTES))
+    return {"words path depth": math.ceil(math.log2(max(2, fwd_words / max(chunk, UNIT_OUT_BYTES)))),
+            "compressions beyond the unit's outputs": extra, "ANDs beyond the unit's outputs": extra * S.ANDS_COMPRESSION}
 
 
 def frame_leaf(n: int) -> int:
@@ -401,6 +412,7 @@ def main() -> None:
                             f: {p: real * n * price[f][p] / TARGET for p in ("floor", "alone")}
                             for f in ("forced (a)", "forced (a), unrolled mask") if f in price}
                     pt["opening_ands"][key] = {f: opening_ands(layout, b, real, R, f) for f in OPENINGS}
+            pt["words_chunk_opening"] = {c: chunk_opening(b, real, c) for c in WORDS_CHUNKS}
             need = {p: b["words_bpm"] * v / TARGET for p, v in price["unforced"].items()}
             need_a = {p: b["words_bpm"] * v / TARGET for p, v in price["forced (a)"].items()}
             pt["flat rows for words at the target"] = {
@@ -515,6 +527,9 @@ def main() -> None:
                 o = pt["opening_ands"][key]
                 print(f"    opening ANDs {key:<15} " + "; ".join(
                     f"{mode} " + ", ".join(f"{k} {v:,.0f}" for k, v in o[mode].items()) for mode in OPENINGS))
+            print("    words chunks, beyond the unit's outputs: " + "; ".join(
+                f"{c // 1024} KiB path depth {d_}, {n_:,} compressions ({a_:,} ANDs)"
+                for c, (d_, n_, a_) in ((c, tuple(v.values())) for c, v in pt["words_chunk_opening"].items())))
             t = pt["t2"]
             for eng, e in t["engines"].items():
                 cells = "; ".join(f"{rn} {x['serial']:.1f}/{x['fused']:.1f}/{x['overlap']:.1f}" for rn, x in e.items()
