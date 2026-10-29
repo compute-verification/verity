@@ -135,6 +135,19 @@ def _batched(order: list[int], tasks: list[tuple]) -> list[int | tuple[int, ...]
     return [tuple(x) if isinstance(x, list) else x for x in out]
 
 
+def _gates(task: tuple) -> int:
+    """The gate count of a task's one Definition when its body is built already, else 0: how long its check takes goes with it,
+    so the largest start first and the last to end is no large one started late."""
+    roots = _info(task).get("roots") or []
+    fn = roots[0] if len(roots) == 1 else None
+    if fn is None or TG.is_by_calls(fn) or getattr(fn, "_body", 1) is None:
+        return 0
+    try:
+        return int(fn.gates)
+    except Exception:  # noqa: BLE001  (its check raises it again, by name)
+        return 0
+
+
 def target_key(kind: str, label: str, opts: CK.Options, as_call: bool | None, roots: tuple = (), desc: str | None = None) -> dict:
     """A target's key: its request, and for a Definition the digest of what it reaches as descriptors (`cache.descriptor`), or
     ``desc``, that digest as its binding's record holds it (`circuit_check.units`)."""
@@ -688,7 +701,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         init = (specs, opts, everything, as_call, tracing)
         budget = budget_gb(mem_gb)
         peaks = heavy()
-        order = sorted(todo, key=lambda i: -peaks.get(tasks[i][1], 0))
+        order = sorted(todo, key=lambda i: (-peaks.get(tasks[i][1], 0), -_gates(tasks[i])))
         if log:
             for i in order:
                 if peaks.get(tasks[i][1], 0) > budget:
@@ -744,7 +757,9 @@ def update_pins(rep: dict) -> dict:
 #: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here.
 #: Beside them, by binding name, how far the catalog bindings whose builds grow past `units.APART_GB` grew (`units.built_apart`)
 HEAVY = CC.HEAVY
-HEAVY_GB = 16
+#: what an unlisted target is counted at: nearly all grow less than 1.5 GiB, and their copy-on-write copies of the task list
+#: are small too (16 of them beside a 43 GiB task list hold 62-77 GiB together)
+HEAVY_GB = 4
 PEAKS_REPORTED = 50
 
 
