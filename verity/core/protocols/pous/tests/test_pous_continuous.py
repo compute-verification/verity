@@ -76,7 +76,7 @@ def _run(v, clock, replies, wait=None):
 
 @pytest.mark.parametrize("root_only", [False, True])
 def test_honest_stream(world, root_only):
-    """Arrivals far apart, each answered within Δ: accepted, every index the single audit's draw sent at its arrival,
+    """Arrivals far apart, each answered within Δ: accepted, every index the single audit's sample sent at its arrival,
     and the stream is not extended past `n`."""
     blocks, vk = world
     clock, gaps, waited, tree = Clock(), random.Random(5), [], MerkleTree(vk.leaves)

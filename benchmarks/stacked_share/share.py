@@ -36,7 +36,7 @@ The rate is units over the trace's busy time (the union of its steps' spans) and
 
 M_dyn is vLLM's KV pool: kv_blocks blocks of `block` tokens of kv_bytes_per_token bytes on each of an engine's tp GPUs.
 
-The declared-circuit witness (`Witness.lean`'s `bounds_8b`, `bounds_70b`) reads c = caps.total, R_cap over the bytes a second
+The registered-circuit witness (`Witness.lean`'s `bounds_8b`, `bounds_70b`) reads c = caps.total, R_cap over the bytes a second
 the audit certifies, against thresholds set at the thin-lane prices (`WITNESS`). Its carrier term is 128 L P c / E, so it
 holds at the new E as long as c grew no more than E did: `witness` gives each model's c at the peak, the life the witness's
 thresholds allow at it (`witness_life`) and the c its stated life allows at each E (`witness_c`).

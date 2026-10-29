@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``rmsnorm-fused-cuda`` (RMSNormFusedCuda_v2): the IR graph cut at its reduction boundary
+"""Flock lowering of ``rmsnorm-fused-cuda`` (RMSNormFusedCuda_v2): the IR graph cut at its reduction boundary
 (``verity_flock.ir_lower.reduction_cut``) into identical units, one per CUDA warp of the kernel's cub BlockReduce: the warp's
 residual adds, squares and shfl-down tree (its aggregate is a cut word) and the epilogue of its elements, which reads the row
 scalar ``s`` (a cut word). The tail, the sequential sum of the warp aggregates, ``/ N``, ``+ eps`` and ``RsqrtApprox``,

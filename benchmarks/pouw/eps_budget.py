@@ -6,7 +6,7 @@
 (note:20261017T0013Z-report-epsilon-program). Each component of honest work is classified per design as unavoidable (a
 transcript Verify recomputes, a commitment, a draw, noise the cheater must expand, a value a check recomputes from the
 transcript) or skippable (unchecked: the strip of a low-rank noise, a product served plain, the vector work only a
-served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the draw), which makes every strip,
+served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the sample), which makes every strip,
 every served output and everything derived from it free unless a check recomputes it from the transcript.
 
 - MAC-weighted: tensor MACs only, strips at their logical rank (L per output word).
@@ -261,7 +261,7 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
     weights = sum(k * n for _, k, n in s.linears)
     extra = (r["t_dither"] * (act + qkv_el + s.heads * s.d + weights / r["tokens_per_draw"])
              + r["t_xcommit"] * (act + qkv_el) + (r["receipt_commit"] + r["draws"]) * (lin_plain + att_plain))
-    if noise["linears"] == "one-sided":                # U written into the weights once a draw
+    if noise["linears"] == "one-sided":                # U written into the weights once a sample
         extra += r["t_wedit"] * weights / r["tokens_per_draw"]
     out.append(Part("noise, commitments, draws", 0, 0, extra, 0, 0))
     return out
