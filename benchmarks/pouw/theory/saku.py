@@ -105,6 +105,58 @@ def ssn_zero(rng, m=24, n=20, s_steps=8, L=64):
             "served_noise_is_coins_only": bool((served == code_term + run[:, -1][:, None]).all())}
 
 
+def ncp3_stack(a, b, e1, f1, r):
+    """SW-NOISE's ncp3 (noise_sweep.py): X = [A+E1 | A+E1R | -(A+E1(I+R))], Y = [B+F1; B-RF1; B+(I-R)F1], as row-major
+    operands of X @ Y.T."""
+    e3 = e1 + e1 @ r
+    f3 = f1 - r @ f1
+    x = np.concatenate([a + e1, a + e1 @ r, -(a + e3)], 1)
+    y = np.concatenate([b.T + f1, b.T - r @ f1, b.T + f3], 0)
+    return x, y.T
+
+
+def block_perm(rng, k):
+    r = np.zeros((k, k), dtype=np.int64)
+    for i, p in enumerate(rng.permutation(k // 4)):
+        r[4 * i:4 * i + 4, 4 * p:4 * p + 4] = np.eye(4, dtype=np.int64)
+    return r
+
+
+def skip_adversary(x, y, total, L, skip):
+    """Every L-th prefix sum of x @ y.T without computing segment `skip`: forward up to it, backward from the known
+    total after it. Returns the words and the MACs spent."""
+    k = x.shape[1]
+    s = k // L
+    seg = lambda t: x[:, t * L:(t + 1) * L] @ y[:, t * L:(t + 1) * L].T
+    words = [None] * s
+    acc = np.zeros_like(total)
+    for t in range(skip):
+        acc = acc + seg(t)
+        words[t] = acc.copy()
+    words[s - 1] = total.copy()
+    acc = total.copy()
+    for t in range(s - 1, skip, -1):
+        acc = acc - seg(t)
+        words[t - 1] = acc.copy()
+    return np.stack(words), (s - 1) * L * x.shape[0] * y.shape[0]
+
+
+def exact_skip(rng, m=24, n=20, k=128, L=64, zero=True):
+    """The middle-segment adversary on ncp3: the final word is A.B (0 at zero data), so one segment of width L is never
+    computed. Checked against the honest words at zero data and, with A.B as advice, at random data."""
+    a = np.zeros((m, k), dtype=np.int64) if zero else rng.integers(-63, 64, (m, k))
+    b = np.zeros((n, k), dtype=np.int64) if zero else rng.integers(-63, 64, (n, k))
+    e1, f1 = rng.integers(-31, 33, (m, k)), rng.integers(-31, 33, (k, n))
+    x, y = ncp3_stack(a, b, e1, f1, block_perm(rng, k))
+    honest = prefix_words(x, y, L)
+    exact = bool((honest[-1] == a @ b.T).all())
+    s = x.shape[1] // L
+    adv, macs = skip_adversary(x, y, a @ b.T, L, s // 2)
+    return {"m": m, "n": n, "k": k, "L": L, "zero_data": zero, "exact": exact,
+            "words_match": bool((adv == honest).all()), "macs_adv": macs, "macs_honest": s * L * m * n,
+            "saved_share_of_gemm": 1 - macs / (s * L * m * n)}
+
+
 def ortho(rng, m=24, n=20, k=48, draws=6):
     rows_x, rows_y, zero = [], [], True
     for _ in range(draws):
@@ -148,8 +200,10 @@ def main():
     rng = np.random.default_rng(20261029)
     checks = {"ncp_zero": [ncp_zero(rng, L=L) for L in (32, 64, 128)],
               "ssn_zero": [ssn_zero(rng, L=L) for L in (32, 64, 128)],
-              "ortho": ortho(rng)}
+              "ortho": ortho(rng),
+              "exact_skip": [exact_skip(rng, L=L, zero=z) for L in (32, 64, 128) for z in (True, False)]}
     ok = all(r["exact"] and r["zero_data_words_match"] for r in checks["ncp_zero"])
+    ok &= all(r["exact"] and r["words_match"] for r in checks["exact_skip"])
     ok &= all(r["zero_data_words_match"] and r["served_noise_is_coins_only"] for r in checks["ssn_zero"])
     o = checks["ortho"]
     ok &= o["final_zero"] and o["spans_orthogonal"] and o["dims_le_width"]
@@ -169,6 +223,12 @@ def main():
             pricing[f"v4 dense m{t} hash-{hk} coin-sw-noise"] = {"aggregate": r, "rows": [r]}
 
     zero = {f"{d} L{L}": zero_gap(d, L) for d in ("ncp", "ssn") for L in (32, 64, 128, 256, 1024)}
+    llama_macs = sum(k * n for _, k, n in LLAMA)
+    skip = {}
+    for L in (32, 48, 64, 96, 128, 256, 1024):
+        skip[f"llama linears L{L}"] = sum((L - H32) / k * k * n for _, k, n in LLAMA) / llama_macs
+        skip[f"v4 dense L{L}"] = (L - H32) / 7168
+    skip_max_L = {"K 2048": H32 + 0.01 * 2048, "K 7168": H32 + 0.01 * 7168, "K 8192": H32 + 0.01 * 8192}
 
     for name, rs in checks.items():
         print(name, json.dumps(rs))
@@ -178,10 +238,14 @@ def main():
               f"T2(W1) {a['T2_w1']:.2f}x hash {a['hash_share']:.3f} coins {a['coin_share']:.3f}")
     for key, g in zero.items():
         print(f"zero-data gap {key:18s} {100 * g:.1f}% of stock")
+    for key, g in skip.items():
+        print(f"exact design, middle-segment skip {key:20s} {100 * g:.3f}% of stock")
+    for key, v in skip_max_L.items():
+        print(f"exact design: largest L with skip <= 1% at {key}: {v:.1f} lanes")
     print("PASS" if ok else "FAIL", "checks")
     if len(sys.argv) > 1:
-        json.dump({"checks": checks, "pricing": pricing, "zero_data_gap": zero, "pass": ok}, open(sys.argv[1], "w"),
-                  indent=1, default=float)
+        json.dump({"checks": checks, "pricing": pricing, "zero_data_gap": zero, "exact_skip_gap": skip,
+                   "exact_skip_max_L": skip_max_L, "pass": ok}, open(sys.argv[1], "w"), indent=1, default=float)
     sys.exit(0 if ok else 1)
 
 
