@@ -746,25 +746,25 @@ KNOWN: dict[str, str] = {
     "benchmarks/torch_gpu/s8_dec_linear/run.py::Device": "homonym, slices of a device byte buffer: rename (kernels)",
     "benchmarks/vllm_encoded/paged.py::Layout": "homonym, a layer cache's shape in words: rename (memory-accounting)",
     "benchmarks/vllm_encoded/serve.py::Window": "homonym, a profiler window: rename (memory-accounting)",
-    # examples/
-    "examples/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
-    "examples/h200/e2e_h200/window.py::Window":
+    # demos/
+    "demos/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
+    "demos/h200/e2e_h200/window.py::Window":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
-    "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
+    "demos/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
-    "examples/lifecycle/lifecycle.py::Block":
+    "demos/lifecycle/lifecycle.py::Block":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (top)",
-    "examples/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
-    "examples/lifecycle/lifecycle.py::Layout":
+    "demos/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
+    "demos/lifecycle/lifecycle.py::Layout":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a client of it (top)",
-    "examples/lifecycle/lifecycle.py::Link":
+    "demos/lifecycle/lifecycle.py::Link":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a client of its link (top)",
-    "examples/lifecycle/lifecycle.py::Placement":
+    "demos/lifecycle/lifecycle.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (top)",
-    "examples/lifecycle/lifecycle.py::Registration":
+    "demos/lifecycle/lifecycle.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a client of it (top)",
-    "examples/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
-    "examples/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
+    "demos/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
+    "demos/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
     # infra/
     "infra/cluster/src/cluster/ledger.py::Ledger": "homonym, the shared machines' spend ledger: rename (infra)",
     "infra/cluster/src/cluster/model.py::Node": "homonym, a shared machine in the cluster's model: rename (infra)",
