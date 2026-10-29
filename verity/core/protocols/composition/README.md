@@ -75,13 +75,13 @@ difftest or its period hook.
 
 The inference-only policy has no rounds and reads no coins. Its case is the declared circuit, the policy's budgets and
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
-sampled proofs' audit commits to) and the declared division with θ and θ's provenance (evidence). It accepts exactly
+sampled proofs' audit commits to) and the division with θ and θ's provenance (evidence). It accepts exactly
 when the record names the declared circuit (its `program` is the circuit's SHA-512, as sampled proofs' audit asks of its
 own record) and the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. Each product ties
 the policy's record to sampled proofs' (one record, below), so the circuit the policy checked is the one sampled proofs
 audited.
 
-A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
+A stated exception: the policy's v0 publishes the division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Both products compose it for the run of record of 28 Oct only, as an exception to
 everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
 private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
