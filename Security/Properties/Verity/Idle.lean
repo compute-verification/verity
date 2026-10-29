@@ -21,11 +21,13 @@ namespace Verity.Idle
 open Accounting
 open scoped ENNReal
 
+noncomputable section
+
 /-- **The device**: no on-chip state, no memory, no ops, no bandwidth, and one side channel that carries nothing. -/
 def device : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
 
 /-- **The committed blob as v2 reads it**: empty files under the netlist tags. -/
-def fileRead : FileRead := ⟨Flock.netlistV1, .empty, [], .empty⟩
+def fileRead : FileRead := ⟨Flock.Tags.netlistV1, .empty, [], .empty⟩
 
 /-- The step that charges nothing. -/
 def step : Step Unit Unit := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => 0⟩
@@ -125,5 +127,7 @@ noncomputable def unbounded : Vocab device Unit := vocab ⊤ 1
 
 /-- **The deployment whose errors are all `0`**, publishing a work certificate of one gate, which no play computes. -/
 noncomputable def exact : Vocab device Unit := vocab 0 1
+
+end
 
 end Verity.Idle
