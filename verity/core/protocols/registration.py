@@ -22,13 +22,14 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
 fails (`REFUSALS`, in order). A component reads its view of an accepted log (`View`): the site, θ's values
 (`View.value`) and the builder, at the head. Decoding takes exactly what the encoders write and raises `Malformed`
-otherwise; registration is ASCII-only, and a log or parameters holding any other character is `Malformed` as `ascii`
-before any digest is taken.
+otherwise; registration is ASCII-only without DEL, and a log or parameters holding any other character is `Malformed` as
+`ascii` before any digest is taken.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
@@ -285,9 +286,9 @@ def item_of(j: Any) -> dict[str, Any]:
 
 
 def ascii(j: Any, what: str) -> None:
-    """Registration is ASCII-only: `j`'s canonical JSON holds no other character, so its digest is the same however a
-    canonical JSON escapes the rest."""
-    if not canonical(j).isascii():
+    """Registration is ASCII-only without DEL: `j`'s JSON, unescaped, holds no character from 0x7f up, so its digest
+    is the same however a canonical JSON escapes the rest. Checked before `canonical`, which raises on such a string."""
+    if any(ord(c) >= 0x7F for c in json.dumps(j, ensure_ascii=False)):
         raise Malformed(f"ascii: {what} holds a character outside ASCII")
 
 
