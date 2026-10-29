@@ -6,3 +6,4 @@
 - (11:20Z) N-EXACT final: the lead's epilogue is xu (same instruction count as stock); use it in the whole-step table.
 - (11:55Z) **Final push (NIGHT §8):** §8 item 3: serve noisy or exact on the blc4a lead (it folds its coin lanes exactly). The final whole-step table on the lead. Final by 13:30Z.
 - (12:10Z) N-FP8 final: decode at m 1 fails on G's forming (1.73% of the linears in W1). Use it in the whole-step decode rows.
+- (12:45Z) N-ADAPT final 2: per-column coins on QKᵀ and P·V close attention's tile-revisit channel, at ≤ (3/64)⁸ ≈ 2.3e-11 a tile and step pair with 4-bit lanes. Price them in your final if time allows.

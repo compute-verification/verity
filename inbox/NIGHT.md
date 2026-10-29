@@ -309,6 +309,10 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
 1. N-LEAN's "the floor survives only if b ≥ c·M, so pricing branches can't close the adaptive premise", against
    N-ADAPT's "P plus measured floors closes it". Are a coin lane's merges per digit read small enough that both
    hold? Owners: N-LEAN and N-ADAPT.
+   **Resolved (N-ADAPT final 2, 1227Z):** both hold, because they count different things. N-LEAN's floor counts every
+   word; check (b) never credits a kept word. On blc4a a word is kept with probability ≤ 3/1024 and a whole tile with
+   ≤ 3.6e-21 a tile and step. The tile-grain instance (`adaptive_registers_le` with tile registers) is proved: residual 0
+   given (i) at tile grain (checked: 0 excess in 8 cases) and A5.
 2. N-NOISE's lower bound: a served design with independent noise steps loses ≥ 14.3% to A8 at T3-safe variance. Which
    class is the lead in (exact fold, so A5)? Owners: N-NOISE, N-RED and N-EXACT (A5).
 3. Serving noisy or exact. N-COVER: exact serving frees the step's other lanes (+8.4 points of coverage). N-EGRESS and
