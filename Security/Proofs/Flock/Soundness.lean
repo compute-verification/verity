@@ -168,6 +168,7 @@ import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
 import Proofs.Flock.Soundness.Discharge.HiddenExec
 import Proofs.Flock.Soundness.Discharge.Hidden
 import Proofs.Flock.Soundness.Discharge.Pinned
+import Proofs.Flock.Soundness.Discharge.ZkCoins
 import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 import Proofs.Flock.Soundness.Discharge.ZkHidden
 import Proofs.Flock.Soundness.Discharge.Composed
