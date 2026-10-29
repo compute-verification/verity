@@ -28,8 +28,12 @@ from verity.ml.circuits.partition import Hierarchy, Level
 #: (a few units in the last place), so the bound is never below the relaxation's exact optimum
 MARGIN = 2.0 ** -30
 
+#: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
+#: the remote bandwidth audit's pooled bound
+WINDOW_DELTA = Fraction(1, 2 ** 40)
 
-def _neg_log_ratio(a: int, d: int) -> float:
+
+def neg_log_ratio(a: int, d: int) -> float:
     """-ln(a / d) for integers 0 < a <= d, to a few units in the last place: log1p of the correctly rounded 1 - a/d while
     a/d >= 1/2 (no cancellation), the log of the correctly rounded d/a while it fits a float, and the difference of the
     two big-integer logs only beyond that, where -ln(a/d) > 693 and the difference is relatively tiny."""
@@ -206,13 +210,13 @@ class IntegrityProfile:
         return n, k, p.numerator, p.denominator, comb(n, k)
 
     def rho(self, m: int) -> float:
-        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`_neg_log_ratio`): no
+        """Detection risk -ln accept(m), from exact integers to a few units in the last place (`neg_log_ratio`): no
         underflow where `accept` falls below the smallest float, and no cancellation where it is close to 1."""
         n, k, num, den, top = self._odds()
         if not 0 <= m <= n:
             raise ValueError(f"0 <= m <= {n}")
         a = (den - num) * top + num * comb(n - m, k)
-        return inf if a == 0 else _neg_log_ratio(a, den * top)
+        return inf if a == 0 else neg_log_ratio(a, den * top)
 
     def _rhos(self) -> list[float]:
         """rho(0), ..., rho(n), with C(n - m, k) updated exactly from m to m + 1: one pass, the same values as `rho`."""
@@ -220,7 +224,7 @@ class IntegrityProfile:
         whole, c, out = den * top, top, []
         for m in range(n + 1):
             a = (den - num) * top + num * c
-            out.append(inf if a == 0 else _neg_log_ratio(a, whole))
+            out.append(inf if a == 0 else neg_log_ratio(a, whole))
             c = c * (n - m - k) // (n - m) if n - m > k else 0
         return out
 
@@ -418,13 +422,13 @@ class Stratified:
         return prod((s.escape(m) for s, m in zip(self.strata, self._counts(counts))), start=Fraction(1))
 
     def rho(self, counts: Mapping[str, int]) -> float:
-        """-ln escape, from exact integers to a few units in the last place per stratum (`_neg_log_ratio`)."""
+        """-ln escape, from exact integers to a few units in the last place per stratum (`neg_log_ratio`)."""
         out = 0.0
         for s, m in zip(self.strata, self._counts(counts)):
             a = comb(s.size - m, s.k)
             if a == 0:
                 return inf
-            out += _neg_log_ratio(a, comb(s.size, s.k))
+            out += neg_log_ratio(a, comb(s.size, s.k))
         return out
 
     def _worst(self, K: int) -> list[int] | None:
@@ -580,4 +584,5 @@ class Stratified:
 Draw = Bernoulli | Subset | Stratified
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset"]
+__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum",
+           "Subset", "neg_log_ratio"]

@@ -38,12 +38,10 @@
 # P2_ENCODE_BLOCKS=N (the P2 arms) encodes the first N blocks of C on the device (0: all of C, so C is W's encoding; default
 # bench.py's 2048, the rest random canonical blocks); with P2_ENCODE_BLOCKS=0, P2_C_CACHE=1 keeps C under $W/p2-c-cache and
 # reuses it (an untimed run encodes, a timed one of the same setup loads it). P2_ARM picks side-by-side's P2 arm (default p2-v3-gpu).
-# BANDWIDTH_SALT=<gpu> (p2-v3-gpu, p2-v3-mc-gpu; joint runs only, benchmarks/resource_accounting's run.sh JOINT=) sets C up under
-# the bandwidth audit's device-bound salt for that GPU in place of PoUS's own (bench.py --bandwidth-salt).
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
-# GATE_ROLE=<role> runs the run as that party of the proof service (memory-challenger for the auditor's timed audit on a node):
+# GATE_ROLE=<role> runs the run as that party of the proof system (memory-challenger for the auditor's timed audit on a node):
 # before anything is built or timed, bench/placement.py's gate checks where it runs and records placement-gate.json, and a
 # refusal exits 4. GATE_CORES are the role's dedicated CPUs (the quiet slice's 124-127 on an RTX PRO 6000 node), GATE_PEERS its peers' probe
 # records, space-separated ROLE[:NAME]=FILE (a relative FILE is one of the run's inputs, --send), and GATE_ABSENT the peer
@@ -277,8 +275,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
       $([ "$1" != band-gpu ] && [ -n "${P2_ENCODE_BLOCKS:-}" ] && echo --p2-encode-blocks "$P2_ENCODE_BLOCKS") \
       $([ "$1" != band-gpu ] && [ -n "${P2_C_CACHE:-}" ] && echo --p2-c-cache "$W/p2-c-cache") \
       $([ "$1" = p2-v3-mc-gpu ] && [ "${MC_SIGNER:-lms}" = lms ] && echo --mc-lms-key "$W/pous-mc-lms-n64" \
-        --mc-session-log "$W/pous-mc-session-log") \
-      $(case $1 in (p2-v3-gpu|p2-v3-mc-gpu) [ -n "${BANDWIDTH_SALT:-}" ] && echo --bandwidth-salt "$BANDWIDTH_SALT" ;; esac)
+        --mc-session-log "$W/pous-mc-session-log")
   }
   if [ "$IMPL" = side-by-side ]; then
     mkdir -p "$O/bench/band" "$O/bench/p2"

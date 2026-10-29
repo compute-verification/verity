@@ -19,11 +19,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # Test-only: `lake` builds lean/ (in this directory) and, through its path require, these files of C-Flock's verifier
 # (`Flock.Canon` and what it imports, and the package's configuration); the protocol-mode tests build the core protocol
-# interface's example (`core-protocol-example`), which reads the same files and the interface package. The Python
-# `Core.Answer` (`verity.core.protocols.answer`, with the packages it is imported through) is held to that example's
-# outcomes and to the harness's own framing.
+# interface's example (`core-protocol-example`), which reads the same files and the interface package.
 inputs = ["verity/core/protocols/interface", "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
-          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
-          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean",
+          # The Python `Core.Answer` (`verity.core.protocols.answer`, with the packages it is imported through) is held
+          # to that example's outcomes and to the harness's own framing.
           "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/answer.py"]
+          "verity/core/protocols/answer.py",
+          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
+          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean"]

@@ -11,7 +11,8 @@ Files:
   commits rows it produces includes it (see Tile leaves).
 - `commit_gpu.cu`: the command line: `check` (writes every level and every leaf's b || c for `reference.py`), `bench`
   (alone, as a CUDA graph, with the root on the host, and beside the GEMM) and the raw compression rate (`sha`).
-- `sha512.cuh`: the SHA-512 compression (build flags `SHA_ADD`, `SHA_ROT`, `SHA_ROLL`, kept for the measurements below).
+- The SHA-512 compression is `sha::compress` from the GPU's one SHA-512 header, `verity/ml/kernels/sha512.cuh` (build
+  flags `SHA_ADD`, `SHA_ROT`, `SHA_ROLL`, kept for the measurements below, and `SHA_SX`).
 - `reference.py`: the parameter file, every check case's inputs and the reference's levels, b || c and leaves, by the
   repository's own functions; `check` compares a build's output with them.
 - `gpu.sh`: the pod job (builds and reference cases outside the lease; selftest, check, rate, e2e, both leaf-size sweeps,
@@ -60,14 +61,11 @@ leaves). `check` also folds the top six levels on the CPU and requires the GPU's
   R = 128, as row-seg/v1. Ragged M, R not dividing 128 or M, given and derived salts. Each tile case also checks, for 16
   sampled check tiles, that the tile's leaves hold exactly its values.
 
-The first 99 were passed by every build timed below (runs `r20261016-100920-6904`, `r20261016-104229-1de9`,
-`r20261016-104707-c15f`, `r20261016-110413-c5d1`); all 126 by runs `r20261016-113335-fb16` (4b6190574) and
-`r20261016-114854-61b1` (8d8fc285f, with the committer in `commit_gpu.cuh`).
+Every build timed below passes them (the committer in `commit_gpu.cuh`).
 
 ## Results
 
-Run `r20261016-110413-c5d1` (659f2f92b, the default form; `python3 summary.py table OUT` renders this table from its
-outputs) on an RTX PRO 6000 Blackwell Server Edition (188 SMs, 2092 MHz under load), beside cuBLASLt's int8 GEMM 8192 x
+The default form (`python3 summary.py table OUT` renders this table from a run's outputs) on an RTX PRO 6000 Blackwell Server Edition (188 SMs, 2092 MHz under load), beside cuBLASLt's int8 GEMM 8192 x
 4096 x 4096 (0.42-0.43 ms, measured in the same loop). The operand is 32 MiB, and GB/s counts its bytes. "Critical path"
 is the data phase as one CUDA graph, alone, and "x GEMM" is that over the GEMM. "Beside" launches the same graph on a
 second stream right after the GEMMs (as many GEMMs as cover the commitment), both waiting on one start event: "commit done"
@@ -98,9 +96,9 @@ the commitment's stream at the device's highest priority.
   priority beside the GEMM the commitment is done at 0.32-0.38 ms (89-104 GB/s), before the GEMM, which ends 7-9% later than
   alone: the commitment adds 0.07-0.09x of the GEMM to the stage. At default priority its blocks wait behind the GEMM's
   queued CTAs and it is done only at ~0.72 ms (46 GB/s).
-- The straight-line form (`SHA_ROLL=0`) is slower everywhere: run `r20261016-104707-c15f` timed both, e2e 1.541 against
-  1.276 ms and raw 7.08 against 7.13 G compressions/s, and run `r20261016-104229-1de9` put 4 KiB row-seg leaves at 0.270 ms
-  against 0.227. Run `r20261016-104707-c15f`'s rolled numbers agree with the table's within 1%.
+- The straight-line form (`SHA_ROLL=0`) is slower everywhere: timed beside the rolled form, e2e 1.541 against 1.276 ms
+  and raw 7.08 against 7.13 G compressions/s, and 4 KiB row-seg leaves at 0.270 ms against 0.227. The rolled numbers of
+  that run agree with the table's within 1%.
 
 ## What decides the speed
 
@@ -111,7 +109,7 @@ the commitment's stream at the device's highest priority.
   instruction). A small leaf's commitment costs its compression count: e2e's data phase is 8.4 M compressions (8 a leaf
   with its share of the tree), 1.18 ms at 7.13 G/s, and the graph takes 1.276 ms.
 - **The salt phase is half of a small leaf's work.** At 32 values a leaf, splitting it off took the critical path from
-  3.0 ms to 1.54 ms (straight-line form, run `r20261016-104229-1de9`); the GPU still spends the salt phase's ~1.56 ms,
+  3.0 ms to 1.54 ms (straight-line form); the GPU still spends the salt phase's ~1.56 ms,
   earlier.
 - **Big leaves are latency-bound.** A warp alone on its sub-partition takes ~4.6 us a compression (one dependent chain of
   ~3400 integer instructions; nsys: a tree level's kernel, two serial compressions, takes 9.2 us), and the tree's top is 2 x
@@ -150,7 +148,7 @@ graph is within 8% of it. What would still move it: bigger leaves (RS-DEF's call
 node, which is a format change), committing several operands of a stage in one pass (the latency floor is per launch, not
 per operand), and the salt phase timed into idle GPU time.
 
-## Tile leaves (Decision 46)
+## Tile leaves
 
 The spot check opens a 128-row tile of an operand at one 32-step (128 x 32 values). Row leaves make its opening hash whole
 rows; tile leaves make it hash exactly the tile's bytes, with R times fewer leaves than 32-value leaves.
@@ -171,7 +169,7 @@ rows; tile leaves make it hash exactly the tile's bytes, with R times fewer leav
 
 ### The R table
 
-Run `r20261016-113335-fb16` (4b6190574; `python3 summary.py tiles OUT`), o_proj's operand at 2K and 8K prefill chunks
+`python3 summary.py tiles OUT` renders it: o_proj's operand at 2K and 8K prefill chunks
 (M x 4096 int8) beside cuBLASLt's M x 4096 x 4096 int8 GEMM. Every latency starts at the end of a stand-in producer kernel,
 the operand's last write, and ends with the root in device memory. "Latency alone" is the data phase as one CUDA graph,
 alone; "alone x GEMM" is that over one GEMM. "High priority" launches the graph on a stream at the device's highest
@@ -196,7 +194,7 @@ cost to the stage when the root isn't needed before the GEMM ends.
 | 8192 | R=64: 64 x 32 values (2 KiB) | row-seg/v1 | 16384 | 0.238 (141) | 0.57 | 0.086 | 0.420 | 0.377 | 0.463 | +0.10 |
 | 8192 | R=128: 128 x 32 values (4 KiB) | row-seg/v1 | 8192 | 0.231 (145) | 0.55 | 0.063 | 0.420 | 0.360 | 0.461 | +0.10 |
 
-- **What repeats.** Run `r20261016-114854-61b1`'s default build repeats this table's latency alone to within 1 us and its
+- **What repeats.** A second run's default build repeats this table's latency alone to within 1 us and its
   GEMM slowdowns to within 0.02. "Root at" moved by up to 0.065 ms at 8K R = 16 and 32 (0.434 then 0.391, 0.338 then
   0.403) and by up to 0.02 ms elsewhere.
 - **The gather is free.** In the same run, contiguous rows of the same size take 0.258, 0.242, 0.227 and 0.285 ms (512 B to
@@ -217,7 +215,7 @@ cost to the stage when the root isn't needed before the GEMM ends.
   10.3 us a level (0.106 ms at depth 11 to 0.164 at depth 16): two serial compressions on one warp, plus the launch. At
   R <= 64 the tree is half or more of the latency. The root on the host saves at most 8 us.
 
-### For a producer's epilogue (STAGE-COST)
+### For a producer's epilogue (stage_cost)
 
 Include `commit_gpu.cuh`. Before the producer runs: `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)` and
 `salts<true>(nullptr, stream)` (or `salts<false>` with given salts). In the epilogue, for each whole block a CTA holds
@@ -228,7 +226,7 @@ the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path p
 `nodes(stream)`. `check` holds the result to the reference: write `levels.bin` and `bc.bin` as `check()` does and run
 `reference.py check`.
 
-### The small path (beside the GEMMs: STAGE-OVL)
+### The small path (beside the GEMMs: stage_ovl)
 
 `init(..., dom, small = true, slots)` puts a committer on kernels that can share an SM with cuBLASLt's GEMM CTAs: every
 CTA is 128 threads with no shared memory (a CTA's 7 levels pass through global memory between `__syncthreads`) and at
@@ -252,13 +250,13 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   16-byte loads touch 32/g lines. `prefetch`: each leaf's next 128-byte block goes into L1 as its compression starts.
 - `nodes`: a launch a level while a level is wider than 256 nodes, then one CTA for the rest. With `fuse_top`, when the
   levels above the CTAs fit one CTA, the leaf kernel's last CTA (an atomic count) folds them and `nodes` launches
-  nothing. STAGE-COST r2's 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
+  nothing. stage_cost's 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
   bought 1.17x on about 5 levels.
 - The domain id is a `Dom` in `CD[dom]` (`COMMIT_GPU_DOMS` slots), so committers of different leaf counts share one
   binary while their `Consts` agree (one Ks, key and row size).
 
 `COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
-to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in STAGE-OVL's schedule (its cg arms), dumps
+to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in stage_ovl's schedule (its cg arms), dumps
 chunk 0's commitments, and `reference.py verify` checks them.
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between
@@ -285,12 +283,12 @@ check tile is 128 of its rows at one 32-step, B takes the same layout with n for
 with `reference.params(n, 256 R, ks, key, domain_id=domain(label, n).domain_id)` (the slice's own label), then `init`,
 `salts`, `tiles`, `nodes`, and copy the levels (paths) and b || c (openings) back, as `check()` does.
 
-## The leaf format (a recommendation; RS-DEF and proofs own it)
+## The leaf format (a recommendation)
 
 Per leaf the format spends, besides the row's blocks (R/4 + 1 for a row/v2 tile leaf, the last one padding), about 11 fixed
 compressions: the salt y (3) and c (2), h (2), the frame leaf (2), and its share of the nodes (2; serially, 2 a level).
-A format change can remove 3 of them, all on the critical path: h's 2 and one of the nodes'. Run `r20261016-114854-61b1`
-(8d8fc285f, `BUILDS="a0r0l a0r0lmerged a0r0lquad a0r0lmergedquad"`; `python3 summary.py formats OUT`) times both changes
+A format change can remove 3 of them, all on the critical path: h's 2 and one of the nodes'. A run with
+`BUILDS="a0r0l a0r0lmerged a0r0lquad a0r0lmergedquad"` (`python3 summary.py formats OUT`) times both changes
 against the default build in the same run: `merged` skips h's compressions (the frame leaf takes b xor c), `quad` folds a
 4-ary tree of 3-compression nodes, and `mergedquad` does both. They do a changed format's compressions, but no reference
 computes that format, so `check` refuses them and their roots mean nothing.

@@ -30,7 +30,7 @@ import Definitions.Accounting.JointLive
 import Definitions.Accounting.Memory
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical
-import Definitions.Accounting.Overhead
+import Definitions.Accounting.Slowdown
 import Definitions.Accounting.Pouw
 import Definitions.Accounting.PouwWork
 import Definitions.Accounting.RateAudit
@@ -55,6 +55,7 @@ import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
 import Definitions.Accounting.TS.Fixed
 import Definitions.Accounting.Window
+import Definitions.Accounting.Wipe
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
 how PoUW's game, the bandwidth audit's game and a state-bounded capacity game realize its compute, bandwidth and

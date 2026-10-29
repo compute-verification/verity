@@ -13,9 +13,9 @@ server and steps, every leg in one shape, the Lean verdict with the JointHorizon
   ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
-  certificate at δ = 1/100 and 1/10^6 (`DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's from its draw at δ (`profile.Stratified`'s ``count_bound`` of the uniform
-  draw, the bound sampled proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
+  certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
+  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`, the bound sampled
+  proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
   block's is carried but not composed.
 * ``composed``: ``answer``, the Lean ``onsite check`` or ``remote check``'s answer on the block (`PRODUCTS`; protocol,
   verdict, reason, commitment), None when neither ran; ``verdict``, that answer's (`Core.Verdict`: accept, reject or
@@ -24,7 +24,7 @@ server and steps, every leg in one shape, the Lean verdict with the JointHorizon
   say; ``joint_horizon`` is `JOINT_HORIZON`'s error over this block, the accepted legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
+  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs and the answer. `from_period` builds a record from a runner report,
@@ -40,6 +40,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
 from verity.core.protocols.profile import Stratified
 
 FORMAT = "verity/block-record/v2"
@@ -52,8 +53,6 @@ RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandw
 #: the products whose Lean check decides a block (`onsite check`, `remote check`), and `Core.Verdict`'s names
 PRODUCTS = ("verity/onsite/v0", "verity/remote/v0")
 VERDICTS = ("accept", "reject", "undecided")
-DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10**6))
-PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
@@ -61,6 +60,13 @@ JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": Tru
 
 def frac(x: Any) -> Fraction:
     return Fraction(str(x))
+
+
+def integrity_bound(n: int, kd: int, delta: Fraction) -> int:
+    """The most wrong units of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
+    count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term ``C(n − K, kd)/C(n, kd)`` is at least
+    ``δ``."""
+    return Stratified.uniform(n, kd).count_bound(delta)
 
 
 def _draw(answer: Mapping[str, Any]) -> tuple[int, int]:
@@ -100,7 +106,7 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
     out: dict[str, Any] = {}
     for d in DELTAS:
         if leg == "integrity":
-            b = Stratified.uniform(quantity["of"], quantity["drawn"]).count_bound(d)
+            b = integrity_bound(quantity["of"], quantity["drawn"], d)
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
         elif error <= d:
             out[str(d)] = {"holds": True, "value": quantity["value"], "epsilon": None, "by": "run"}

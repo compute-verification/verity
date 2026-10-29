@@ -15,17 +15,19 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: the harness (`verity_difftest`); the switch, `verifier.py`; the Python held to the Lean, `core_check.py`,
-# `credit.py` and `period_check.py`, and what they import (`window.py`, `weights.py`, `coins.py`, `audit.py` and `protocol.py`, the proof service's challenger and
+# `credit.py` and `period_check.py`, and what they import (`window.py`, `weights.py`, `coins.py`, `audit.py` and `protocol.py`, the proof system's challenger and
 # one-stage's registered domains (`one_stage/registered.py` and the `partition.py` it imports), one-stage's proof
 # verification (`one_stage/proofs.py`, its `verifier.py` and what that imports, with the integrity profile and the
-# proof service), and what they import: `verity.ml`'s circuits codec, commitments, crypto and randomness, and `verity.errors`) with the packages
+# proof system), and what they import: `verity.ml`'s circuits codec, commitments, crypto and randomness, and `verity.errors`) with the packages
 # above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean and what it
-# requires (PoUW's commitments, the proof service's Lean with the LMS verifier, core's identity and randomness, C-Flock's
+# requires (PoUW's commitments, the proof system's Lean with the LMS verifier, core's identity and randomness, C-Flock's
 # verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
 # what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.ml.kernels` `tc.py` they reach).
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",
+inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
+          # Core.Answer's Python, which PoUW's and PoUS's verifiers answer through
+          "verity/core/protocols/answer.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",
           "verity/core/protocols/pouw/period_check.py",

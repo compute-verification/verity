@@ -11,9 +11,10 @@ from fractions import Fraction
 
 import pytest
 
-from test_remote_bandwidth import A, N, SCHEDULE, Clock, Entropy, challenger, drive, finish, params, partial, store  # noqa: F401
+from remote_bandwidth_fakes import Clock, Entropy
+from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity.core import claims
-from verity.core.protocols.remote_bandwidth import audit, codec, ledger, receipts, timing
+from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Pace, Session
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
@@ -38,7 +39,7 @@ def paced(store, p: audit.Params, plan=None):
     root's arrival."""
     clock = Clock()
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenges, coin_at, closed_at = {0: s.start()}, {0: DOWN_NS}, None
     passes, arrivals, previous = {}, {}, store.registration.digest
     t = i = ready = step = 0
@@ -103,7 +104,7 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
-    prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None
@@ -215,8 +216,8 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
 
 
 def test_the_coin_commitments_hiding_is_charged(store) -> None:
-    """`ledger.hiding` is `PooledDraw`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries."""
+    """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
+    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledDraw` reads none)."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
@@ -232,18 +233,19 @@ def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part
 
 def test_the_draws_terms_are_charged_by_name(store) -> None:
     """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
-    record's `samples`, the hiding terms, and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
+    record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
     than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the draw cap, and
     q_t = 2·F·C + 2·s·69 for the fork finder that runs the prover twice; the PRF advantages are named with their claim
-    and in no total.  γ's errors carry the three; the line's δ carries the binding term beside its own."""
+    and in no total.  No hiding term: the prover gets the coin commitment only at the session's end.  γ's errors carry
+    the two; the line's δ carries the binding term beside its own."""
     s, prover, passes, clock = drive(store, params(samples=7), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     drawn = [w.profile.drawn["receipt"] for w in r.windows]
     assert len(drawn) > 1 and max(drawn) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
     d = ledger.draw(r, n)
-    assert d.rejection == len(r.windows) * r.samples / 2.0 ** 64 and d.hiding == ledger.hiding(r)
+    assert d.rejection == len(r.windows) * r.samples / 2.0 ** 64 and not hasattr(d, "hiding")
     fc = n.sketch_outside * ledger.compressions(r, n)
     L = (2 ** 64 - 1) * r.codec.max_blocks
     want = len(r.windows) * math.sqrt(L * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5
@@ -254,8 +256,8 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
         len(r.windows) * math.sqrt(r.blocks * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5, rel=1e-12)
     with pytest.raises(ValueError, match="session's bounds"):
         ledger.binding(dataclasses.replace(r, samples=None), n)
-    assert d.total == d.rejection + d.hiding + d.binding
-    assert d.to_json() == {"binding": d.binding, "hiding": d.hiding, "rejection": d.rejection,
+    assert d.total == d.rejection + d.binding
+    assert d.to_json() == {"binding": d.binding, "rejection": d.rejection,
                            "named": {"prf_advantage": {"claim": "prf/sha-512", "term": "Σ_t Adv(prf t)",
                                                        "value": None, "in_total": False}}}
     g = ledger.gamma(r, n, n.spec_bytes_per_s)
@@ -369,6 +371,30 @@ def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
     assert N < W < 2 * N
     fill = N * L + (W - N) * 349
     assert ledger.memory(r, node(chip_blocks=0))[1].lost_blocks == pytest.approx(fill / span, rel=1e-12)
+
+
+def test_the_paced_forms_are_the_lines_stretch_over_the_whole_session_in_floats(store) -> None:
+    """The paced forms are `line`'s stretch held over time with the whole session one stretch, in floats
+    (`line.session_lost`): within rounding of the exact line's stretch 0 at `per` = C once groups follow the closing
+    one, and pinned to the bit as the declared outputs publish them, with no receipt wrong and with some."""
+    n = node(chip_blocks=3, squarings=1.5e11, disk=4.32e9, link=5e10, bursts=(1, 2, 6))
+    pins = {N: (8.168255770738538, 32.39970707097953, 88.1677192237573),
+            7: (13.799709289395285, 50.24511225287638, 106.01312440565415)}
+    for samples, pinned in pins.items():
+        s, prover, passes, clock, _ = paced(store, params(windows=5, samples=samples, window_ns=1, pace=Pace(2, 1000)))
+        assert all(v.accepted for v in finish(s, prover, passes, clock))
+        r = s.record()
+        out = ledger.memory(r, n)
+        assert tuple(x.lost_blocks for x in out) == pinned
+        rates = line.Rates(1.5e11, r.codec.encode_squarings, 4.32e9, 5e10, B, 2 * B, 6 * B)
+        C, last = len(r.windows) - 1, r.windows[-1].arrived_ns[-1]
+        gs = [line.Group(w.released_ns, w.arrived_ns[-1], w.passes, N, 0, w.passes * N, 0) for w in r.windows]
+        gs += [line.Group(last, last, 1, N, 0, N, 0)] * C
+        for f, x in zip(line.FORMS, out[1:]):
+            exact = line.stretches(gs, per=C, blocks=N, block_bytes=B, chip_bytes=n.chip_bytes,
+                                   wrong=audit.pooled(r)[0], charge=line.charges(rates, B)[f])
+            assert [(y.lo, y.hi) for y in exact] == [(0, C)]
+            assert x.lost_blocks == pytest.approx(float(exact[0].time.lost_blocks), rel=1e-12)
 
 
 def test_a_pass_that_leaves_a_block_out_has_no_time_held_line(store) -> None:

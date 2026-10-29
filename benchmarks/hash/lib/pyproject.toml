@@ -5,14 +5,17 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # tests/ imports conformance.py, which imports the references it checks the library against: verity.ml.commitments (hm96,
-# frame-v3-sha512, rowleaf, multiproof), pouw's audit, pearl_c (A's tree, -h3), SPLITK's vectors and their generator
-# (pouw/tests/splitk_rows_vectors.py: h1zy's chunk leaves under sampled_proofs' Registered.commit), and commit_gpu's
-# reference.py (the PRF salts); circuits, crypto and randomness are what those import, and kernels' tc what pouw's
+# frame-v3-sha512, rowleaf, multiproof), pouw's audit (whose credit and grind read the window δ from the integrity
+# profile), pearl_c (A's tree, -h3), SPLITK's vectors and their generator (pouw/tests/splitk_rows_vectors.py: h1zy's
+# chunk leaves under sampled_proofs' Registered.commit), and commit_gpu's reference.py (the PRF salts); circuits, crypto
+# and randomness are what those import, and kernels' tc what pouw's
 # circuit reaches. vclib reads its variables through settings.py, on verity_config.settings.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", 
+inputs = [
+  "verity/core/protocols/record.py",
   "tools/config/verity_config",
-  "verity/__init__.py",
+  # Core.Answer's Python, which PoUW's and PoUS's verifiers answer through
+  "verity/core/protocols/answer.py",
+  "verity/__init__.py", "verity/settings.py",
   "verity/errors.py",
   "verity/ml/__init__.py",
   "verity/ml/commitments",
@@ -26,6 +29,7 @@ inputs = ["verity/core/protocols/answer.py",
   "verity/core/protocols/sampled_proofs/__init__.py",
   "verity/core/protocols/sampled_proofs/challenger.py",
   "verity/core/protocols/__init__.py",
+  "verity/core/protocols/profile.py",
   "verity/core/protocols/pouw",
   "verity/core/protocols/sampled_proofs",
   "benchmarks/pouw/commit_gpu/reference.py",

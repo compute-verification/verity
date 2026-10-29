@@ -15,9 +15,9 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
-   session so the prover re-keys in time); the coin commitment sent first, then
-   σ_0, a boundary message every window, each append answered with its coin (`Verifier.append`), each root fed to
-   `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
+   session so the prover re-keys in time); σ_0, then a boundary message every window, each coin sent as its value and
+   the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
+   fed to `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
    `Verifier.root`), each window closed
    (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
@@ -26,7 +26,8 @@ One connection serves one registration and then `--sessions` sessions over it, e
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as
    diagnostics the node's HBM it shows held by kind (`memory`: the credited share and the residual, at ε, held at
    every pass and held on average), and with `--host-bytes` the same by kind against the node's HBM and host DRAM
-   (`node_line`).
+   (`node_line`); last, once the prover has answered the session's `end` with `ended`, the coin commitment and every
+   released coin's opening (`coins`, `audit.Session.disclose`), which the prover checks each coin it was sent against.
 
 With `--paced K:T_MS:DRAWS:WINDOWS[:F]` each session is paced (`pace_of`, `audit.Pace(K, T, F)`): a coin every K
 passes, each boundary message at `Session.next_boundary_ns`, WINDOWS stretches of as many groups as T_MS holds at the
@@ -74,20 +75,20 @@ openings frames and window checks go to the Lean the same way, so a slow Lean an
 verdict, never a coin, a root's intake, a boundary or a draw. A session is accepted only once every one of its
 Lean answers has come and agreed.
 
-`--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.Transcript`): every
+`--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.DifftestCase`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
 was set, which `replay.py transcript` (verity/core/protocols/remote_bandwidth/lean/tests) replays through both
 verifiers, rejections included. A message the driver couldn't read is in no event: the case ends before it. A run
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
-A session's coins are an epoch of the proof service's one challenger (`coins.Coins`): from a challenger in this process
+A session's coins are an epoch of the proof system's one challenger (`coins.Coins`): from a challenger in this process
 (`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
 machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
-window root (`--challenger gate`, `challengers.Gate`). Each coin is asked for after the root it follows, the Lean takes
-it with the event that released it, and once the session ends what the challenger signed holds the session's coins
-(`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
+window root (`--challenger gate`, `challengers.ChallengerGate`). Each coin is asked for after the root it follows, the
+Lean takes it with the event that released it, and once the session ends what the challenger signed holds the session's
+coins (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
 session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
 openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close,
@@ -604,7 +605,7 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     each window beside it (`record_seen`, on the clock its `windows_seen` read: `clock` record, the verifier's, which
     the record's times must be, or another, `line.CLOCKS`), against its HBM and `host_bytes`, at `rates`
     (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`); with `transcript`, the
-    session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself. Refused unless the
+    session's (`lean_verifier.DifftestCase`'s file), from which the Lean makes the record itself. Refused unless the
     record is of `registration` (`wire.registration_json`'s form), which the inputs name as the Lean reads one, so
     that the line refuses a record not of it too (`line.unregistered`)."""
     mem, record = session["ledger"]["memory"], lean_record(session)
@@ -726,7 +727,7 @@ class Pair:
     events in order with their clock readings, so its answers are the ones it would give were each waited on. An
     event the books reject or refuse is waited on, behind every one before it."""
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.Transcript | None = None) -> None:
+    def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.DifftestCase | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
         self.late: tuple | None = None
@@ -939,7 +940,7 @@ class Verifier:
                  ingress_bytes_per_s: float = 0.0, lean_exe: Path | None = None,
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
-                 challenger: challengers.Local | challengers.Serve | challengers.Gate | None = None,
+                 challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
                  appends: int | None = None, payload_key: bytes | None = None,
                  binding: rstore.Binding | None = None, groups_per_coin: int = 1) -> None:
         coins.openings_coins(1, groups_per_coin)
@@ -1128,11 +1129,10 @@ class Verifier:
         appends = self.appends_of()
         books = self.registry.session(params, reg, None, clock=self._now, not_before_ns=not_before_ns, index=k,
                                       challenger=lambda e: self.challenger.open(reg.digest, e, W, appends, **per))
-        case = None if self.transcript is None else lv.Transcript(
+        case = None if self.transcript is None else lv.DifftestCase(
             self.transcript / f"{reg.digest.hex()[:16]}-session-{k}.json", reg, params, not_before_ns)
         session = Pair(self, books, k, case)
-        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime,
-                        "commitment": session.commitment.to_json(), "pace": K} | one | shared)
+        self.conn.send({"type": "session", "k": k, "windows": W, "lifetime": params.lifetime, "pace": K} | one | shared)
         self.expect("armed")
         while self.clock.now() < not_before_ns:
             item = self.clock.wait(self.inbox, not_before_ns)
@@ -1348,6 +1348,8 @@ class Verifier:
             head, _, _ = self.expect("ended")
             if head["k"] == k:
                 break
+        commitment, opened = session.disclose()
+        self.conn.send({"type": "coins", "k": k, "commitment": commitment.to_json()}, wire.openings_json(opened))
         out = shared | {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "lifetime": params.lifetime,
@@ -1560,7 +1562,7 @@ def main() -> int:
                     help="a built remote-audit-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
-                         "window at 33,273 openings), its path, bytes and sha256 in verifier.json")
+                         f"window at {audit.SAMPLES:,} openings), its path, bytes and sha256 in verifier.json")
     ap.add_argument("--paced", nargs="+", metavar="K:T_MS:DRAWS:WINDOWS[:F]",
                     help="pace each session's passes, one spec a session (`pace_of`; replaces --sessions, --windows, "
                          "--window-ms and --samples): groups of K passes under a live coin each (`audit.Pace`), "

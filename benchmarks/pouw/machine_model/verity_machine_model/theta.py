@@ -33,7 +33,7 @@ value, and the sheet's where no run has one, which the result lists as filled).
   at its card's highest clock, the lowest per-clock reading it can have; ours over it, at most 1, is c_sha's reading.
   `sha_ceiling`: the most a compression of `[sha512_mix]` (the built kernel's SASS) gets from the card's pipes, an LP
   over ALU, IMAD and issue with RT-UNITS' three exact moves to IMAD (a rotation as IMAD.HI + IMAD + IMAD.WIDE, or as
-  SHF + IMAD + IMAD.WIDE; a 2-input 64-bit add as IMAD.WIDE + IMAD), with and without IMAD.HI: the rate a `ShaSpeed`
+  SHF + IMAD + IMAD.WIDE; a 2-input 64-bit add as IMAD.WIDE + IMAD), with and without IMAD.HI: the rate a `SAKSha`
   premise is stated at, since no schedule built from those moves beats it.
 
 `figures` holds each rate's `figure`, the per-second number its document prints at `clock`, to 2 · sheet · SMs · clock.
@@ -70,7 +70,7 @@ REDUCTIONS = {"smem.atom": ADDING[5], "l2.red": ADDING[6], "dsmem.red": ADDING[7
               "nvls.red": ADDING[9]}
 # A 2-input 64-bit add as the kernel was built: its ALU instructions, IMAD instructions and instructions.
 ADD_FORMS = {"IADD3 + IADD3.X": (2, 0, 2), "IADD3 + IMAD.X": (1, 1, 2), "IADD.64": (1, 0, 1)}
-# Every arithmetic or reduction unit RT-UNITS (CMP-139) lists; each θ has a `[[unit]]` for each, with its verdict.
+# Every arithmetic or reduction unit RT-UNITS lists; each θ has a `[[unit]]` for each, with its verdict.
 UNITS = ("tensor", "dp4a", "imad", "alu", "fp32", "fp64", "sfu", "uniform", "texture", "smem.atomics", "l2.atomics",
          "tma.reduce", "dsmem", "nvlink.reduce", "copy", "video", "rt", "clocks", "compression", "host.link", "host.cpu")
 VERDICTS = {

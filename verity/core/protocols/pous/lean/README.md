@@ -32,9 +32,9 @@ Definitions/Pous/Model/Continuous.lean
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
                                     arrivals the memory challenger draws (queued, never dropped) and the memory at each time
 Definitions/Pous/Model/{Digest,SecureErasure}.lean
-                                    the keyed digest of a region (from PR #1010, without its bandwidth
+                                    the keyed digest of a region (without a bandwidth
                                     assumption); the secure-erasure audit: a keyed fill of all volatile memory,
-                                    timed spot reads, and the foreign content the prover keeps (4 Oct model)
+                                    timed spot reads, and the foreign content the prover keeps
 Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMeets}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
                                     `PubMeets`, the requirement with a public encoder; `GradedMeets`, with grace `t`;
@@ -59,13 +59,14 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
                                     blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
-                                    proved in `Proofs/Pous/Obligation.lean`
+                                    and a 320-read window at `2^-20` from `2^19` to `2^27` blocks
+                                    (`ObligationWide320`), proved in `Proofs/Pous/Obligation.lean`
 Definitions/Pous/Guarantees/SecureErasure.lean
                                     two frozen statements, which grade.sh grades against: secure erasure on the
                                     band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
                                     `SecureErasureMeets96GiB`); no named assumption, no bandwidth-separation premise;
                                     in the ideal-permutation model only, not a bound on a band-fill wipe at the
-                                    reference `Π₂` (art:7617c8017e80)
+                                    reference `Π₂`
 Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 42 lemmas, the
                                     completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
                                     `N10Refuted` negates, among them `DigestAU` and `SecureErasureMeets`; it
@@ -148,8 +149,9 @@ graded proof moves into `Security/Proofs/Pous/` as a module, with its theorem ad
 `Security/Proofs/Pous.lean` and listed as a guarantee in `Security/lean-audit.json` (`check.py --update`,
 then review the records' diff).
 
-**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256`, regenerating it from this directory,
-and running the audit (`bash check.sh`):
+**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` or adding a `.lean` file under
+`Definitions/Pous`, regenerating it from this directory (`tools/verity/check/pins.py --regen` runs this command, and
+`--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \

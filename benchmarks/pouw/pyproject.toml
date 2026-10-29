@@ -26,7 +26,7 @@ verity-exact-kit = { workspace = true }
 # in Proofs (`reads_exempt` in the lock). Of `verity`, the difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
-# (sha512_rows' sha512x.cuh). benchmarks/pouw/receipts, filler and
+# (verity/ml/kernels/sha512.cuh). benchmarks/pouw/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
 # so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_dither_a_step_chunks
 # imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
@@ -39,11 +39,12 @@ verity-exact-kit = { workspace = true }
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
-# before and after vllm's layout move (#3854).
+# before and after vllm's layout move.
 inputs_only = true
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+# PoUW's and PoUS's Python verifiers answer through Core.Answer's Python (`answer.py`).
+inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
@@ -113,10 +114,10 @@ inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/error
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "Security/Definitions/Accounting/Headline", "Security/Definitions/Accounting/HeadlineDc",
           "Security/Definitions/Pouw/Guarantees", "Security/Definitions/Accounting/Guarantees/HeadlineDc.lean",
-          "Security/Proofs/Pouw/PearlC/FlockTile/Statement.lean", "Security/lean-audit.json",
+          "Security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "Security/lean-audit.json",
           "Security/Proofs/Accounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "benchmarks/pouw/receipts", "benchmarks/pouw/filler",
-          "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md", "benchmarks/torch_gpu/sha512_rows/sha512x.cuh",
+          "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
@@ -124,7 +125,7 @@ inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/error
           "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
-# one process: 2,100 s beside a loaded check (r20261025-021824-ba9f), too near suites.py's SUITE_TIMEOUT_S
+# one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",

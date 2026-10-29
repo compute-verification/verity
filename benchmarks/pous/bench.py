@@ -336,7 +336,7 @@ class P2V1Gpu:
 
     name = "p2-v1-gpu"
     own_scheme = "p2/v4"
-    experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"
+    experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted"
 
     def conformance_gate(self) -> dict[str, Any]:
         sys.path.insert(0, str(HERE))
@@ -353,7 +353,8 @@ class P2V1Gpu:
 
 class P2V3Gpu(P2V1Gpu):
     """The same kernels under the registered P2's framing (`schemes.p2.P2`, `p2-16448/v4`), audited by `protocol.TimedAudit`
-    (`p2_v1/harness.py`'s `V3`)."""
+    (`p2_v1/harness.py`'s `V3`). Its gate is the spec's vectors too: the reference's keys are the registered scheme's
+    expander, given the spec's prefix, so the two framings differ only in their prefix."""
 
     name = "p2-v3-gpu"
 
@@ -362,28 +363,6 @@ class P2V3Gpu(P2V1Gpu):
         from verity.core.protocols.pous.schemes import p2
 
         return p2.P2().name
-
-    def conformance_gate(self) -> dict[str, Any]:
-        """The spec's vectors (the kernels' map and its SHA-512 streams), and the registered scheme's expander given the
-        spec's prefix: its `sha512_keys` gives every vector's `K` and `t`, so the two framings differ only in their prefix."""
-        sys.path.insert(0, str(HERE))
-        from p2_v1 import reference
-
-        from verity.core.protocols.pous.schemes import p2
-
-        got = reference.conformance()
-        doc = json.loads(reference.VECTORS.read_bytes())
-        for v in doc["vectors"]:
-            w, c0 = int(v["w"]), int(v["c0"])
-            ref = reference.Params(w, c0, w // 8 - 2)
-            params = p2.P2Params(w, c0, 1 << 16)
-            model = bytes.fromhex(v["model_commitment"])
-            prefix = reference.expand_prefix(bytes.fromhex(v["setup_salt"]), ref, model)
-            k, t = p2.sha512_keys(params, prefix, int(v["segment"]), int(v["block"]))
-            n = params.block_bytes
-            got["checks"][f"expander/{v['id']}"] = k.to_bytes(n, "big").hex() == v["K"] and t.to_bytes(n, "big").hex() == v["t"]
-        got["passed"] = all(got["checks"].values())
-        return got
 
     def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
         sys.path.insert(0, str(HERE))
@@ -452,11 +431,6 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--mc-lms-key", default="",
                     help="p2-v3-mc-gpu: sign the memory challenger's sessions with S1's LMS key in this directory (made "
                          "there when absent); without one they are test-signed and the verdict rejects them all")
-    ap.add_argument("--bandwidth-salt", default="",
-                    help="p2-v3-gpu, p2-v3-mc-gpu, joint runs only: set C up under the bandwidth audit's salt for this GPU (as "
-                         "nvidia-smi's -i takes it), bandwidth.audit.draw_salt over W's commitment and the id the challenger "
-                         "reads (audit.read_device), so the bandwidth verifier accepts C as the device's store; without it, "
-                         "PoUS's own salt (protocol.draw_salt)")
     ap.add_argument("--mc-session-log", default="",
                     help="p2-v3-mc-gpu with --mc-lms-key: the memory challenger's used-session log, a file of its own outside "
                          "the key's directory (made with a new key; for a key that exists, a missing log is refused)")

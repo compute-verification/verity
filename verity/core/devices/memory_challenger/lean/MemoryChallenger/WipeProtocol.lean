@@ -23,7 +23,7 @@ On acceptance it publishes the foreign content an accepted wipe may leave and th
 `{"certified", "egress_mib", "eps", "foreign_bits", "k", "memory_bits", "r"}` (`certify`): `memory_bits` is `M`, every
 declared tier in bits, the fill's `n · 512` and `R` past it (`outsideBits`, memory the fill doesn't reach); `k` is the
 session's timed reads, which the memory challenger chose and its commitment names; `r = ratio k`, the largest `r` with
-`(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`k ≤ MAX_READS`, an egress count that isn't saturated)
+`(r − 1)^k · 2^129 ≤ r^k`. When the bound covers the session (`1 ≤ k ≤ MAX_READS`, an egress count that isn't saturated)
 `foreign_bits` is `Pous.Guarantees.StreamedWipeMeetsReads`' threshold `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E`
 (`foreignBits`) with `E` the egress the network certifier counted, in bits, at `eps = 2^-128`. Off it, `foreign_bits`
 is `M` and `eps` 0, the vacuous statement, and the profile names each gap. The bound and what it rests on are
@@ -126,9 +126,11 @@ def ratioOf (p : StreamedWipe.Params) : Nat := if p.k ≤ MAX_READS then ratio p
 def foreignBits (p : StreamedWipe.Params) (r : Nat) : Nat :=
   StreamedWipe.LABEL_BYTES * 8 * ((p.labels + r - 1) / r - 1) + p.labels + Nat.log2 p.k + 130 + outsideBits p
 
-/-- Why the bound doesn't cover an accepted session of `p` with `egressMib` MiB of egress (none when it does). -/
+/-- Why the bound doesn't cover an accepted session of `p` with `egressMib` MiB of egress (none when it does). `k = 0`
+is one: `decodeCommitment` refuses it (`Params.check`), but `ratio 0 = 1` doesn't sample. -/
 def gaps (p : StreamedWipe.Params) (egressMib : Int) : List String :=
-  (if p.k > MAX_READS then [s!"k = {p.k}: the certificate is computed for at most {MAX_READS} reads"] else []) ++
+  (if p.k == 0 then ["k = 0: a session of no timed reads bounds nothing"]
+   else if p.k > MAX_READS then [s!"k = {p.k}: the certificate is computed for at most {MAX_READS} reads"] else []) ++
   (if egressMib < 0 || egressMib ≥ StreamedWipe.EGRESS_MAX_UNITS then
     [s!"the egress count is {egressMib} MiB, outside 0 to {StreamedWipe.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
    else [])
@@ -214,6 +216,15 @@ private def h200 : StreamedWipe.Params := ⟨2203125000, 5231, 1, 1000, #[("gpu-
 #guard gaps { segment with k := MAX_READS + 1 } 0 ==
   [s!"k = {MAX_READS + 1}: the certificate is computed for at most {MAX_READS} reads"]
 #guard (certify { segment with k := MAX_READS + 1 } 0).foreignBits == 2 ^ 28
+
+/-- A commitment of no timed reads. -/
+private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { segment with k := 0 }⟩
+
+#guard gaps unread.params 0 == ["k = 0: a session of no timed reads bounds nothing"]
+#guard (certify unread.params 0).certified == false
+#guard match canon unread.toJson with
+  | .ok s => (decodeCommitment s.toUTF8).toOption.isNone
+  | .error _ => false
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 
 end MemoryChallenger.WipeProtocol

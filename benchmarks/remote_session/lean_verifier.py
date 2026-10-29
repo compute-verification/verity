@@ -251,7 +251,7 @@ def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
             [coins.coin(o) for o in c.opened(coins.APPEND)])
 
 
-class Transcript:
+class DifftestCase:
     """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
     `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
     parameters and `not_before_ns`, then each event in the order the verifiers took it (`event`, as the Lean read it),

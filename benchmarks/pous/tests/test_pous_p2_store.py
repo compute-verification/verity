@@ -157,14 +157,13 @@ def test_spot_vectors():
     assert SPOT["params"] == real.manifest() and salt == SALT
     prefix = expand_prefix(real, salt)
     assert prefix.hex() == SPOT["prefix"]
-    ref = reference.Params(real.w, real.c0, real.payload_bytes, real.blocks_per_segment, real.segments)
     sha = lambda b: hashlib.sha512(b).hexdigest()  # noqa: E731
     spot_c = (S.TOY_DIR / "spot-c.bin").read_bytes()
     assert sha(spot_c) == SPOT["c_sha512"] and len(spot_c) == NB * len(SPOT["vectors"])
     assert [v["id"] for v in SPOT["vectors"]] == ["w-first", "qkv0-last", "down51-first", "head-last", "w-last"]
     for j, v in enumerate(SPOT["vectors"]):
         assert divmod(v["i"], real.blocks_per_segment) == (v["s"], v["v"])
-        k, t, attempt = reference.keys_after(prefix, ref, v["s"], v["v"])
+        k, t, attempt = reference.keys_after(prefix, real, v["s"], v["v"])
         assert (sha(k.to_bytes(NB, "big")), sha(t.to_bytes(NB, "big")), attempt) == (v["K_sha512"], v["t_sha512"], v["t_attempt"])
         m = S.decode_block(real, prefix, v["i"], spot_c[NB * j:NB * (j + 1)])
         assert m == S.spot_payload(v["i"], v["used"], real.payload_bytes) and sha(m) == v["m_sha512"]

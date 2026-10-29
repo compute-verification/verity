@@ -13,8 +13,10 @@ from pathlib import Path
 import pytest
 
 from verity.core.deploy import config as K
+from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG
+from verity.core.wire import Refused
 from verity_cli import run as R
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "config.toml"
@@ -32,7 +34,7 @@ def config(protocols=("sampled-proofs", "certifier"), **machines) -> dict:
 
 
 def refused(cfg) -> str:
-    with pytest.raises(K.Refused) as e:
+    with pytest.raises(Refused) as e:
         K.check(cfg, REG.components, REG.workloads)
     return e.value.name
 
@@ -78,6 +80,7 @@ REFUSALS = {
     "law": lambda c: c["service"].update(law="subset:8"),
     "commit": lambda c: c["program"].update(commit="main"),
     "float": lambda c: c["workload"].update(params={"steps": 2.0}),
+    "ascii": lambda c: c["workload"].update(name="caf\u00e9"),
     "workload": lambda c: c["workload"].update(params={"requests": []}),
     "principal": lambda c: party(c, "challenger").update(principal="developer"),
     "unknown-party": lambda c: c["party"].append({"name": "oracle", "machine": "local", "principal": "anyone"}),
@@ -99,8 +102,22 @@ def test_a_configuration_is_refused_by_name(name):
     assert refused(edit(REFUSALS[name])) == name
 
 
+def test_two_declarations_of_a_party_agree_and_of_a_channel_are_its_union():
+    toy = REG.workloads["toy"]
+    a = K.Component("a", "verity/a/v0", (Role("verifier", "auditor", needs=("audit",)),),
+                    (Channel("workers", "verifier", ("x",), latency_ms=9),))
+    b = K.Component("b", "verity/b/v0", (Role("verifier", "auditor", needs=("product",)),),
+                    (Channel("workers", "verifier", ("y",), latency_ms=3, carries_coins=True, after=("x",)),))
+    parties, channels = K.declared([a, b], toy)
+    assert parties["verifier"].needs == ("audit", "product") and parties["workers"] == Role("workers", "developer")
+    assert channels["workers", "verifier"] == Channel("workers", "verifier", ("x", "y"), 3, True, ("x",))
+    with pytest.raises(ValueError, match="c declares party verifier as developer per one, another declaration as "
+                                         "auditor per one"):
+        K.declared([a, K.Component("c", "verity/c/v0", (Role("verifier", "developer"),))], toy)
+
+
 def test_the_toml_syntax_is_refused_by_name():
-    with pytest.raises(K.Refused) as e:
+    with pytest.raises(Refused) as e:
         K.parse("format = ")
     assert e.value.name == "toml"
 
@@ -122,6 +139,13 @@ def test_the_canonical_form_is_verity_canonical_json():
 
     cfg = K.check(config(), REG.components, REG.workloads)
     assert K.canonical(cfg) == canonical_json(cfg)
+    for v in ({"s": "".join(map(chr, range(0x20, 0x7f))), "c": "\t\n\x00\x1f", "n": [-1, 1 << 63]}, ["x", True, []]):
+        assert K.canonical(v) == canonical_json(v)
+    for v in ({"s": "d\u00e9"}, {"k\u00e9y": 1}, ["x\x7f"], {"s": "\U0001f600"}):
+        with pytest.raises(K.Refused, match="is not ASCII without DEL"):
+            K.canonical(v)
+        with pytest.raises(ValueError, match="is not ASCII without DEL"):
+            canonical_json(v)
 
 
 def test_config_check_and_hash_print_the_hash(capsys):
@@ -141,7 +165,7 @@ def stand_in_product(tmp: Path) -> Path:
     exe.write_text(f"#!{sys.executable}\n" + """import json, sys
 ids = sys.argv[1].split(",")
 if sys.argv[2] == "id":
-    print("verity/onsite/v0" if len(ids) == 5 else "verity/product/v0")
+    print("verity/onsite/v0" if len(ids) == 6 else "verity/product/v0")
     raise SystemExit(0)
 bad = [c["id"] for c in json.loads(open(sys.argv[5]).read())["components"] if bytes.fromhex(c["evidence"]) != b"accept"]
 print(json.dumps({"verdict": "reject" if bad else "accept", "reason": f"refused {bad}" if bad else None}))
@@ -340,7 +364,8 @@ def test_a_state_of_another_configuration_is_refused(tmp_path, capsys):
     assert rc == 2 and "refused state" in capsys.readouterr().err
 
 
-def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys):
+def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(R, "REGISTRY", None)
     path = tmp_path / "config.toml"
     path.write_text(K.render(config()))
     assert R.run_main([str(path), "--state", str(tmp_path / "state")]) == 2
@@ -353,7 +378,7 @@ def test_the_table_holds_what_the_listed_components_need():
     assert REG.components["certifier"].needs <= REG.workloads["toy"].provides
     assert os.path.basename(D.__file__) == "step0.py"
     live = {p for ps in D.PARTIES.values() for p, e in ps.items() if e == D.LIVE} | {
-        p for w, (decl, e) in D.WORKLOADS.items() if e == D.LIVE for p in decl.parties}
+        r.name for w, (decl, e) in D.WORKLOADS.items() if e == D.LIVE for r in decl.parties}
     assert live == set(D.ROLES)
     decided_live = {c for c, ps in D.PARTIES.items() if ps.get("verifier") == D.LIVE}
     assert decided_live - {"sampled-proofs"} == set(D.CHECKS)

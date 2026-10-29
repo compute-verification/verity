@@ -1,8 +1,10 @@
-"""H1's hooks on the served engine (`pouw.install`): the linear layers it records (`layers`), each layer's ``observe``
-(`observer`) and ``apply`` under the credit gate's trace (`traced`), and the model runner's ``execute_model``, which
-hands each step's admissions to the window (`admitting`), all wired at install by `wire`."""
+"""H1's hooks on the served engine (`pouw.install`): the linear layers it records (`layers`) and their weights' roots
+(`weight_roots`), each layer's ``observe`` (`observer`) and ``apply`` under the credit gate's trace (`traced`), and the
+model runner's ``execute_model``, which hands each step's admissions to the window (`admitting`), all wired at install by
+`wire`; and the z/y kernels a committing run's calls compile, compiled ahead (`warm_zy`)."""
 from __future__ import annotations
 
+import weakref
 from typing import Any
 
 from verity_vllm.protocols.pouw import credit_gate as CG
@@ -41,6 +43,36 @@ def layers(model: Any, types: tuple[type, ...]) -> list[Any]:
     if bad:
         raise ValueError(f"pouw:{PH.SCHEME} refused at install: " + "; ".join(bad))
     return out
+
+
+#: the roots `weight_roots` computed, by global index: the weight (a weak reference), its `_tensor_key` and its root
+_ROOTS: dict[int, tuple[Any, tuple, bytes]] = {}
+
+
+def weight_roots(layers: list[Any], lo: int = 0) -> dict[int, bytes]:
+    """`pouw_h1.weight_root` of each layer's int8 weight as it is served, by global index from ``lo``, once a process: the
+    weights are fixed after install, so each window's install reuses a root while the layer's weight is the tensor it was
+    computed from, with the same storage, shape, dtype and version. Anything else (a weight replaced or written in place,
+    or an array that isn't a tensor) is computed again."""
+    out = {}
+    for i, m in enumerate(layers):
+        w, weight = lo + i, m.weight
+        key, hit = _tensor_key(weight), _ROOTS.get(w)
+        if key is not None and hit is not None and hit[0]() is weight and hit[1] == key:
+            out[w] = hit[2]
+            continue
+        out[w] = PH.weight_root(w, PH.numpy_of(weight))
+        if key is not None:
+            _ROOTS[w] = (weakref.ref(weight), key, out[w])
+    return out
+
+
+def _tensor_key(t: Any) -> tuple | None:
+    """What a write to or a move of tensor ``t`` changes (its version counts in-place writes through any view), or None
+    when ``t`` isn't a tensor."""
+    if not (hasattr(t, "data_ptr") and hasattr(t, "_version")):
+        return None
+    return t.data_ptr(), tuple(t.shape), tuple(t.stride()), str(t.dtype), str(t.device), t._version
 
 
 def expert_names(layers: list[Any]) -> dict[int, str]:
@@ -97,8 +129,44 @@ def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int) -
     for w, layer in enumerate(layers):
         hooks.wrap(layer.quant_method, "observe", lambda orig, w=w: observer(run, w, orig))
         hooks.wrap(layer.quant_method, "apply", lambda orig, w=w: traced(run, w, orig))
-        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0:
+        if run.commit and serves_zy(layer):
             hooks.patch(layer.quant_method, "zy_rows", rows)
 
 
-__all__ = ["admitting", "layers", "observer", "traced", "wire"]
+def serves_zy(layer: Any) -> bool:
+    """Whether a committing run's calls on ``layer`` serve z/y records (`wire`): its arm has ``zy_rows`` and its N is whole
+    tile columns."""
+    return hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0
+
+
+def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None) -> int:
+    """Every kernel a committing run's z/y calls of 1..``rows`` rows on ``layers`` (`serves_zy`) would compile, compiled now
+    by one call each on zero activations (``call``, `int8_ops.linear_zy`), so serving compiles none; the calls made, none
+    off CUDA. A weight shape compiles one kernel for each config M picks (``pick``, `int8_fused.pick`) and each of the two
+    facts about M Triton specializes an integer argument on (M = 1, 16 | M): the call's other integers are the shape's
+    and T, the same at every M."""
+    import torch
+
+    if pick is None:
+        if not torch.cuda.is_available():
+            return 0
+        from verity_vllm.engine import int8_fused, int8_ops
+        pick, call = int8_fused.pick, int8_ops.linear_zy
+    shapes: dict[tuple, Any] = {}
+    for layer in layers:
+        if serves_zy(layer):
+            shapes.setdefault((*map(int, layer.weight.shape), str(layer.weight.device)), layer)
+    seen = set()
+    for (n, k, device), layer in shapes.items():
+        for m in range(1, int(rows) + 1):
+            key = (n, k, device, tuple(pick(m, n, k)), m == 1, m % 16 == 0)
+            if key not in seen:
+                seen.add(key)
+                call(torch.zeros((m, k), dtype=torch.bfloat16, device=layer.weight.device), layer.weight,
+                     layer.weight_scale, int(rows))
+    if seen and torch.cuda.is_available():
+        torch.cuda.synchronize()
+    return len(seen)
+
+
+__all__ = ["admitting", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]

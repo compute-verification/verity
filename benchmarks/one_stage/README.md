@@ -61,9 +61,9 @@ negatives.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
-  machine (`A5_ON`) and runs `a5_tp.sh` there in one run.
+  machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
 - `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
-  bi-eager TP1 (one RTX PRO 6000): the workload's Build and Match of record, a config-run Commit that seals
+  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol, in one job on an H200 node
@@ -75,18 +75,26 @@ negatives.
   sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the registration's
   pins. The run needs every one of those counts. The class of record's count follows them as a measurement under its own
-  `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
-  and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
-  `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one, writing its public core answer and, in its
-  private directory under the serve dir, its case; otherwise its answer is `undecided` with the reason `not run`, and its
-  `NOT RUN` line names its issue. A piece that refused to run (`refused.txt`) is `not run` too: only the protocol's
-  answer rejects. Finally the all-protocols window report (`verity/all-protocols-window/v2`), every row a core answer:
-  its verdict is onsite's Lean verdict (`composite.py onsite`) when the pieces' cases make up onsite (its six
-  subprotocols and NCI's registration), else remote's (`composite.py remote`, PoUW and sampled proofs v2), else
-  `undecided` naming what each lacks. composite.py's private output stays in the serve dir; only its public record
-  (verdicts, commitments, params digests) is published, to `out/record/composite`. Then the block record, unless the
-  window or a subprotocol rejects; a subprotocol's rejection fails the run. Each step's verdict line is in
-  `out/verdicts.txt`.
+  `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
+  and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
+  `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit, writing its public core
+  answer and, in its private directory under the serve dir, its case; otherwise its answer is `undecided` with the reason
+  `not run`, and its `NOT RUN` line names the command it lacks and its owner. A piece that refused to run
+  (`refused.txt`) is `not run` too: only the protocol's answer rejects. The script sets each owner's command by default
+  where the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's
+  registered store). The bandwidth audit's session runs inside PoUS's piece, over the store that piece holds
+  (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`).
+  Finally the all-protocols window report (`verity/all-protocols-window/v2`), every row a core answer: its verdict is
+  onsite's Lean verdict (`composite.py onsite`) when the pieces' cases make up onsite (its seven subprotocols, the
+  inference-only policy's among them), else remote's (`composite.py remote`: the inference-only policy, PoUW and sampled
+  proofs v2), else `undecided` naming what each lacks. composite.py's private output stays in the serve dir; only its
+  public record (verdicts, commitments, params digests) is published, to `out/record/composite`. Beside the verdict the
+  report says each subprotocol's answer in one clause (PoUW's development piece: development run, credits nothing); an
+  accept's says when its weights were held and their share of the checkpoint, where its profile says so (PoUS's), and
+  each δ of the block record's at which its quantity is not established. Then the block record, unless the window or a
+  subprotocol rejects; a subprotocol's rejection fails the run, and an answer about another server is carried as
+  elsewhere. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it. Each step's
+  verdict line is in `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -94,7 +102,8 @@ negatives.
 - `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
-  directory of such directories); for onsite, NCI's case is the registration. The composed params, commitment and
+  directory of such directories); the inference-only policy's case (`verity/inference-only/v0`) is one like any
+  other. The composed params, commitment and
   evidence (the composition's formats, `verity/core/protocols/composition/README.md`) and every answer go to
   `--private-out` (0700, files 0600), since a case's evidence and params are witness, and so are an answer's query,
   digests and profile. `--public-out` gets only the verdict lines (each piece's and Lean's id, verdict and refusal's
@@ -175,6 +184,11 @@ negatives.
   (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
+- `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
+  prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
+  Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.
+  `served_util.py` takes Tensor Active's mean over the longest run of full steps, each step from the previous step's end
+  to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

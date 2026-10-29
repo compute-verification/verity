@@ -89,7 +89,7 @@ def key_ok(a: int) -> bool:
 
 
 def int8_ratio(lam: int, bits: int = 30) -> bool:
-    """lam b = b' mod 2^bits for some int8 b != 0 and b' (P2-FF r9's Λ8 membership)."""
+    """lam b = b' mod 2^bits for some int8 b != 0 and b' (the r9 Λ8 membership)."""
     return any(((lam * b + 128) % (1 << bits)) < 256 for b in range(-128, 128) if b)
 
 
@@ -100,12 +100,12 @@ def lambda8_ok(a: int) -> bool:
 
 
 def key_ok_r9(a: int) -> bool:
-    """P2-FF r9's rule (receipt_folds_r9.key_ok_r9): `key_ok` and `lambda8_ok`."""
+    """The r9 rule (receipt_folds_r9.key_ok_r9): `key_ok` and `lambda8_ok`."""
     return key_ok(a) and lambda8_ok(a)
 
 
 def kj19(a: int) -> bool:
-    """P2-FF r11's KJ19: for each j < 19, the signed residue of a mod 2^(31 - j) is at least 2^(19 - j) in size. For odd a,
+    """The r11 KJ19: for each j < 19, the signed residue of a mod 2^(31 - j) is at least 2^(19 - j) in size. For odd a,
     no 12 consecutive bits [19 - j, 30 - j] of a are all equal."""
     for j in range(19):
         mod = 1 << (31 - j)
@@ -118,7 +118,7 @@ def kj19(a: int) -> bool:
 
 
 def key_ok_r11(a: int) -> bool:
-    """P2-FF r11's rule (note:20261016T1549Z-draft-fullfloor-s-r11, 16:06Z): `key_ok_r9` and `kj19`, the premise of its
+    """The r11 rule: `key_ok_r9` and `kj19`, the premise of its
     Theorem 1 (XOR-in-13's one-MMA kernel is exactly the group). No implementation enforces it yet."""
     return key_ok_r9(a) and kj19(a)
 
