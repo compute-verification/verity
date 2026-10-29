@@ -8,8 +8,9 @@ from 17:40Z for hours (a 16-job quick tier and a 32-core Lean check) while 56 ru
 node 2 for its share's live claims and waiters, and each SPILL machine for its pool's `slot.py --status --json`. `choose`
 then takes, in order:
 
-  - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
-    run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
+  - a pool where a slot that fits the job (not trains-only, at least its CPUs, and its memory if the slot has mem=; one
+    without mem= fits any, since slot.py reserves what the run asks there, and neither is a cgroup cap) is free and unblocked
+    for every waiter ahead and this job;
   - else the pool with the shortest wait, as waiters ahead per fitting slot;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
     24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
@@ -29,11 +30,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5 and 6 are any lane's (slot_only.POOLS
-#: on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other pools had 180 runs
-#: waiting; cpu-4's cores are the train slot's, proofs' and soundness's.
+#: (machine, pool) where `--on auto` may spill, in the order `choose` tries them: the `research` pools (slot_only.POOLS) of cpu-1,
+#: 5, 3, 2 and 6 to 8, each any lane's. cpu-2's shares the train slot's and proofs' cores; cpu-6's to cpu-8's share theirs with
+#: the proofs and soundness Lean pools. cpu-4's cores are the train slot's, proofs' and soundness's, and cpu-9's are its ci
+#: pool's too, so neither has one here.
 SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
-         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"))
+         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"),
+         ("vy-nebius-cpu-8", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
