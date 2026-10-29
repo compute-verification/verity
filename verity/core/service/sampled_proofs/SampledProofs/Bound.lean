@@ -87,7 +87,7 @@ def bernoulliBound (population : Nat) (p δ : Ratio) : Nat := Id.run do
 
 /-- The strata a profile's draw reads as (`IntegrityProfile.strata`): its own, a work design's at their `k_s`, or one
 stratum for a uniform k-subset; `none` for a Bernoulli draw. -/
-def strataOf (population : Nat) : Core.Draw → Option (Array Stratum)
+def strataOf (population : Nat) : Core.SamplingDesign → Option (Array Stratum)
   | .subset k => some #[{ name := "unit", size := population, k }]
   | .stratified strata => some strata
   | .work _ strata => some (strata.map (·.toStratum))
@@ -95,7 +95,7 @@ def strataOf (population : Nat) : Core.Draw → Option (Array Stratum)
 
 /-- `IntegrityProfile.bound`: the most wrong units an accepted transcript has at δ, over the strata the draw reads as
 (`countBound`), or for a Bernoulli draw `bernoulliBound`. -/
-def boundOf (population : Nat) (d : Core.Draw) (δ : Ratio) : Nat :=
+def boundOf (population : Nat) (d : Core.SamplingDesign) (δ : Ratio) : Nat :=
   match d with
   | .bernoulli p => bernoulliBound population p δ
   | d => match strataOf population d with
