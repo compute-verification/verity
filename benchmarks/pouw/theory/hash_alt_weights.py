@@ -11,7 +11,7 @@ noise width (1 and 2 bits), `best_tile_credit`: the least of b1 planes with spar
 indices fall in different groups of 4. The gap is 1 - credit, weighted by MACs over all layers; under 1% the premise
 survives this test.
 
-  uv run python benchmarks/pouw/theory/hash_alt_weights.py MODEL.safetensors [--json PATH] [--layers N] [--jobs N]
+  uv run python benchmarks/pouw/theory/hash_alt_weights.py MODEL.safetensors [--json PATH] [--layers N] [--jobs N] [--base BF16]
 """
 from __future__ import annotations
 
@@ -69,13 +69,28 @@ def credits(task: tuple[Path, int, str]) -> list[dict]:
     return [{"layer": layer, "linear": name, "r_bits": r, "macs": B.size, **best_tile_credit(B, r)} for r in (1, 2)]
 
 
+def differing(pin: Path, base: Path, layers: int) -> tuple[int, int]:
+    """(entries of `pin`'s linear weights that differ from `base`'s per-row quantization, entries)."""
+    (hp, rp, bp), (hb, rb, bb) = tensors(pin), tensors(base)
+    names = [f"model.layers.{layer}.{p}.weight" for layer in range(layers) for parts in FUSED.values() for p in parts]
+    diff = entries = 0
+    for n in names:
+        a, b = int8_weight(hp, rp, bp, n), int8_per_channel(bf16(hb, rb, bb, n))
+        diff, entries = diff + int((a != b).sum()), entries + a.size
+    return diff, entries
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("safetensors", type=Path)
     ap.add_argument("--json", type=Path)
     ap.add_argument("--layers", type=int, default=LL["layers"])
     ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--base", type=Path, help="a BF16 checkpoint the int8 pin was made from: count where they differ")
     args = ap.parse_args()
+    if args.base:
+        diff, entries = differing(args.safetensors, args.base, args.layers)
+        print(f"{diff} of {entries} int8 weight entries differ from the base's per-row quantization", flush=True)
     tasks = [(args.safetensors, layer, name) for layer in range(args.layers) for name in FUSED]
     rows, w_sum, gap, free_gap = [], {}, {}, {}
     with multiprocessing.Pool(args.jobs) as pool:
@@ -89,7 +104,7 @@ def main() -> int:
             print(f"layer {pair[0]['layer']:2d} {pair[0]['linear']:8s} " + " ".join(
                 f"r{x['r_bits']} {x['credit']:.4f} ({x['route']}, free {x['free_reorder_credit']:.4f})"
                 for x in pair), flush=True)
-    out = {"layers": args.layers, "rows": rows,
+    out = {"layers": args.layers, "rows": rows, **({"base_differing_entries": diff, "entries": entries} if args.base else {}),
            "gap_mac_weighted": {f"r{r}": gap[r] / w_sum[r] for r in gap},
            "free_reorder_gap_mac_weighted": {f"r{r}": free_gap[r] / w_sum[r] for r in free_gap}}
     for name in FUSED:
