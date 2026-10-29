@@ -98,7 +98,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 
@@ -330,7 +330,7 @@ def _epoch(ts: object) -> float | None:
         t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
     except ValueError:
         return None
-    return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).timestamp()
+    return (t if t.tzinfo else t.replace(tzinfo=UTC)).timestamp()
 
 
 def started_at(run_dir: Path) -> float | None:
