@@ -337,6 +337,12 @@ certifier streams them raw after A_j (R1b). Hiding is L1 + (a), and de-noise is 
    4-bit coins suffice (N-RED §4). Bare P stays in the frontier as the conservative column. N-FLOOR restated
    tile-grain as a work premise at **rank 3** (its shapes are rank 1, its counting rule rank 3) and measured the lead's
    words leaving the tensor pipe in 2,048–4,096-word tiles a warp.
+   **N-RED final 2 (1227Z) sharpens it:** literal P certifies no design. The lead's open hole is rows meeting within a tile
+   (birthday pools, because the coin cancels between a tile's rows): 46.1% under literal P, 16.5% with each steering
+   decision at the 32 floor. N-FLOOR's measured prices close it, and so does the wide tag at the floor, so **the wide tag
+   is a stated requirement of the weighted lead**. Tile grain holds at the lead's own wgmma width (no whole tile repeats at
+   256 rows). At m16n8 tiles it would leave 3.9–4.2%, which needs an `mma.sync` adversary whose cost is unpriced (open).
+   The options for Daniel: literal P (nothing passes), priced decisions, tile grain (rank 3) or measured prices.
 3. model-public (chosen weights): the coin lanes close it, so the lead doesn't need it (default: not taken).
 4. Hiding: `pad-leaf-ruled` (keyed leaf) and L2 (private roots). Default: L1 + (a), no ruling needed.
 5. Does T1 include the network term? Default: reported beside T1; the lead closes it either way.
