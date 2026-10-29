@@ -322,6 +322,12 @@ LEDGER = [
      "prefix-binding closes the same terms at a lower rank"),
     ("hiding-ruled", "Hiding work is credited by ruling (a choice of target, not a premise)", "R", "pending Daniel",
      "R", "—", "Daniel", "hiding"),
+    ("honest-hash-ruled", "The honest program is the best possible honest program: hashing is credited at R, the best "
+     "count, and the committer's excess over R is waived by ruling (a choice of target, not a premise)", "R",
+     "pending Daniel; the δ_ruled figures read it", "R", "—", "Daniel",
+     "the honest committer's excess over R: 0.131× stock at the best committer built (3,517.36 registers a "
+     "compression against R = 3,515.38, N-SHALB final), 5.0–7.7× at the served one; with ShaWrites, the hashing "
+     "part's T1"),
     ("big-rows", "hm96 leaves of R ≥ R* bytes, so honest-only hiding ≤ the allowance left", "0", "design", "0",
      "arithmetic; costs a leaf's opening", "N-HIDE", "hiding, at no premise"),
     ("atomic-call", "Each A·B is atomic: work done before the noise inside the call is charged", "3",
@@ -352,7 +358,8 @@ LEDGER = [
     ("coin-density", "A design's coins carry at most n_max MACs a coin bit with n_max·W_mac·E ≤ 1% of stock (1,305 to "
      "2,540 MACs a bit at a 32-bit-a-token cap)", "2", "met by a lane layout, not the seeded lead: one 4-bit odd coin "
      "a 128-row tile, step and column against a constant A′ lane, certifier-streamed (blc1a-t128-e4) at a 32-bit cap; "
-     "three lanes (blc4a-t64-e7) at 320 bits (N-EGRESS, checked arithmetic)", "2",
+     "the lead (blc4a-t64-e7) at a 32-bit cap only, 0.097% / 0.188% (0.056% / 0.108% with A′ = (1, 127, 1)); at 320 "
+     "bits only blc4a-t64-e7-rot, 0.37% / 0.72%, on an unbuilt per-row-class fold (N-EGRESS final 2)", "2",
      "per-row coins carry about 31·N MACs a bit (138–268% of stock); the layout's forced distinct writes are the "
      "lead's premises plus its lane", "N-EGRESS / N-NOISE",
      "the network term with streamed coins"),
@@ -418,17 +425,18 @@ LEDGER = [
      "false beside the lead's wgmma (a side warp's selection costs it ≤ 0.12 units a lane-entry); not in W1, whose "
      "bare model P prices those forms 0; T1's copy model with copy-floor from NIGHT's 11:30Z addendum, withdrawn at "
      "12:05Z for tile-grain",
-     "1", "probes.sh branch.cu brx.cu br2.cu, then prices.py: refuted if a gated two-way form costs under 71.8 a lane "
-     "(61.8 as selp); beside the lead's kernel, probes.sh lag.cu (refuted there today)",
+     "1", "probes.sh branch.cu brx.cu br2.cu, then prices.py: refuted if a gated two-way form costs under 70.9 a lane "
+     "(N-W1's b_dbra, 1.3% under N-FLOOR's 71.8; 61.8 as selp); beside the lead's kernel, probes.sh lag.cu (refuted there today)",
      "N-ADAPT (statement) / N-FLOOR (measure)",
      "copy-and-patch's decisions in an issue-bound kernel: a tile's mask of matching words is a selection, so "
      "c_a ≥ 1.93 (2.24 on a lane's own bit), where the new lead's tile is under 1% on every reading; bare model P's "
      "c_a is 0"),
     ("tile-grain", "On sm_90 the tensor pipe's work, which binds the lead's kernel, is skipped only a whole MMA at a "
      "time: at least 128 words a warp at the floor's price (m16n8; wgmma m64nN is 128 a warp too), 64 for m8n8 at "
-     "about twice it; a copy or a selection that replaces fewer words saves no time", "1",
-     "measured (N-FLOOR: every sm_90 MMA form timed, gated; a held word saves nothing while another pipe binds); T1's "
-     "default copy model since NIGHT's 12:05Z revision, read through model-W", "1",
+     "about twice it; a copy or a selection that replaces fewer words saves no time", "3",
+     "a work premise (N-FLOOR final 2): its shapes are rank 1, measured (every sm_90 MMA form timed, gated; the "
+     "lead's words leave the tensor pipe in 2,048–4,096-word tiles a warp), its counting rule (a skipped MMA counts "
+     "only whole) rank 3; T1's default copy model since NIGHT's 12:05Z revision, read through model-W", "3",
      "opcode_probe's MMA census on sm_90a: refuted by a form with fewer than 128 output words a warp at under twice "
      "the floor's price a register; probes.sh lag.cu beside the lead's wgmma, then prices.py: refuted if copying a "
      "word instead of computing it (hw_l1, hw_lag1) lets the wgmma keep more than hw_cmp does", "N-FLOOR",
@@ -467,7 +475,8 @@ LEDGER = [
      "which model-public also closes"),
     ("adaptive-dw", "The lifted DistinctWrites bound holds pointwise in the coins for a prover that reads them as "
      "they arrive (the lift needs no premise; a design supplies the pointwise count, here on data a public model "
-     "reaches)", "0", "open", "5",
+     "reaches)", "0", "open; at tile grain proved in scratch, no lock (N-ADAPT final 2: adaptive_registers_le with "
+     "tile registers, residual 0 given distinctness at tile grain and A5)", "5",
      "refuted under chosen weights wherever the later weight is public (one cancelling weight row, 49–52%; the "
      "walk, 89–95% of the words: the crafted term, closed only by model-public); a copy-and-patch prover on fix2 "
      "saves 15–35% at CopyGrain(4) (N-ADAPT)", "N-ADAPT / N-LEAN",
@@ -1191,7 +1200,7 @@ def walk_words_check(variant: str = "ssn_1l_tag", n: int = 64, s: int = 67, salt
 PATCH_CA = 1
 #: P plus N-FLOOR's measured floors, T1's copy model from NIGHT's 11:30Z addendum until 12:05Z: select-floor prices a
 #: coin-dependent selection, here a tile's mask of matching words, at ≥ 71.8 units a lane on a lane's own bit (2.24
-#: writes) and ≥ 61.8 on a warp-uniform bit (1.93); copy-floor prices an on-SM copy at ≥ a write a word, leaving only
+#: writes; N-W1 measures 70.9, 2.22) and ≥ 61.8 on a warp-uniform bit (1.93); copy-floor prices an on-SM copy at ≥ a write a word, leaving only
 #: rows a thread holds. Both hold only where issue slots bind, and fail beside the lead's wgmma (N-FLOOR)
 SELECT_FLOOR_CA = 2.24
 SELECT_FLOOR_UNIFORM_CA = 1.93
