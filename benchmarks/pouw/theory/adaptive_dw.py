@@ -31,7 +31,9 @@ saving is open to a design whose words carry few coin bits each. `ball` is `adap
 tile grain (free copies, free decisions), which the free-copy patch cost must exceed; `rows_sweep` follows it as rows
 grow. `entry_credit` sets a check that credits each entry's distinct values beside what two write models pay: P (a
 word write costs one, moves free) and W (a whole register of consecutive columns costs its lanes). `masked_rows` is a
-cross-row prover under free predicates, which that check doesn't see. `at_scale` runs the walk at Llama's S.
+cross-row prover under free predicates, which that check doesn't see. `class_shared` bounds what a class of outcomes
+(the coins a program's uniform branches pin, `CLASSES`) shares across entries, `Priced.shared`'s residual: the
+(entry, value) pairs another entry takes at every outcome drawn in the class. `at_scale` runs the walk at Llama's S.
 """
 
 from __future__ import annotations
@@ -358,6 +360,49 @@ def row_levels(design: str, a, co: dict, s: int) -> np.ndarray:
     return np.cumsum(inc, axis=1) * tiles + (np.arange(m) // BLC_TILE % tiles)[:, None]
 
 
+#: Coins a class pins, as a layout's warp-uniform view sees them: a warp over one row's columns sees the row coins, a
+#: warp over one column's rows the column coins. `point` is one outcome alone, a class that pins every coin.
+CLASSES = {"point": None, "rows": ("b", "a1"), "columns": ("G", "s"), "all_but_G": ("b", "a1", "s")}
+
+
+def shared_entries(stack: np.ndarray) -> int:
+    """`stack` (k + 1, m, S, n): one class's words at k + 1 of its outcomes. The (entry, value) pairs whose value, as a
+    function on those outcomes, some other entry also takes at some step: an upper bound on what a class containing
+    them shares across entries (`Priced.shared`), since agreement throughout the class implies agreement on them."""
+    k1, m, s, n = stack.shape
+    keys = stack.transpose(1, 3, 2, 0).reshape(m * n * s, k1)
+    entry = np.repeat(np.arange(m * n), s)
+    _, key = np.unique(keys, axis=0, return_inverse=True)
+    pairs = np.unique(np.stack([key.ravel(), entry]), axis=1)
+    entries_a_key = np.bincount(pairs[0])
+    return int((entries_a_key[pairs[0]] >= 2).sum())
+
+
+def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: int = 8) -> dict:
+    """Each class's shared pairs over k outcomes drawn in it (the coins it pins kept, the rest drawn afresh), as a
+    share of the words, beside check (b)'s credit at the first outcome."""
+    rng = np.random.default_rng(seed)
+    pub = public(design, n, s, rng)
+    a, b = data(case, design, m, n, s, pub, rng)
+    co = coins(design, m, n, s, rng)
+    words = honest(design, a, b, pub, co, s)
+    out = {"design": design, "case": case, "m": m, "n": n, "S": s, "k": k, **entry_credit(words)}
+    for name, keep in CLASSES.items():
+        stack = [words]
+        for _ in range(0 if keep is None else k):
+            fresh = coins(design, m, n, s, rng)
+            stack.append(honest(design, a, b, pub, {c: co[c] if c in keep else fresh[c] for c in co}, s))
+        out[f"shared_{name}"] = shared_entries(np.stack(stack)) / words.size
+    return out
+
+
+def class_sweep(seed: int = 31) -> list[dict]:
+    """`blc`'s class residuals: the four cases at the small shape and `same` at a tile and two at both of Llama's S."""
+    shapes = [("blc", case, 48, 64, 67) for case in ("zero", "same", "cancel", "walk")]
+    shapes += [("blc", "same", m, 64, s) for s in STEPS.values() for m in (BLC_TILE, 2 * BLC_TILE)]
+    return [class_shared(*shape, seed=seed + i) for i, shape in enumerate(shapes)]
+
+
 def level_sweep(seed: int = 21, n: int = 64) -> list[dict]:
     """`blc` with identical rows: the same-level masked copies at a whole tile and two, at both of Llama's S."""
     rng = np.random.default_rng(seed)
@@ -456,10 +501,16 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     rows, checks = small()
     res = {"small": rows, "checks": checks, "at_scale": at_scale(), "rows_sweep": rows_sweep(),
-           "level_sweep": level_sweep()}
+           "level_sweep": level_sweep(), "class_sweep": class_sweep()}
     checks += [{"name": f"blc/same m {r['m']} S {r['S']} same-level masks from held step-1 words copy honest words",
                 "ok": r["mask_mismatch"] == 0} for r in res["level_sweep"]]
-    for r in rows + res["rows_sweep"] + res["level_sweep"]:
+    for r in res["class_sweep"]:
+        tag = f"blc/{r['case']} m {r['m']} S {r['S']}"
+        checks += [{"name": f"{tag} a class pinning only {name} coins shares nothing (credit_le_cost_separated)",
+                    "ok": r[f"shared_{name}"] == 0} for name in CLASSES if name != "point"]
+        checks.append({"name": f"{tag} no two groups share a whole register (lanes_le_cost_separated)",
+                       "ok": r["model_w_excess"] == 0})
+    for r in rows + res["rows_sweep"] + res["level_sweep"] + res["class_sweep"]:
         print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in r.items()})
     print(json.dumps(res["at_scale"], indent=1))
     passed = sum(c["ok"] for c in checks)
