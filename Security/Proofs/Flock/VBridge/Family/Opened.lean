@@ -200,7 +200,7 @@ theorem ligeritoRun_cs (h0 : 0 < sch.levels.size)
 /-- **The consistency contexts of a Ligerito run are its levels, in order** (RecAlgebra.lean: `ligeritoRun` pushes
 level 0's at `queryFold 0`, `levelsLoop` level `i + 1`'s at `queryFold (i + 1)` and the last level's after `query`):
 context `i` is level `i`'s, with the level's `q` positions. -/
-theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Flock.RecAlgebra.Coins} {lgr : Array Lin}
+theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Flock.RecAlgebra.CoinSource} {lgr : Array Lin}
     {lg : LgPts} (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok ((lgr, lg), k')) (h0 : 0 < sch.levels.size)
     (hq : ∀ i < sch.levels.size, ∀ c, (Flock.positions (sch.levels[i]!) c).size = (sch.levels[i]!).q) :
     lg.conss.toList.map (fun c => (c.start, c.pos.size)) =

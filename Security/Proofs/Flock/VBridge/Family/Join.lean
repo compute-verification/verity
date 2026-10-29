@@ -213,7 +213,7 @@ whose `foldedPartial` starts from 64 zeros and whose `fold` branch halves `2^k_l
 def FoldsOk (st : Setup) (sh : Shape) : Prop :=
   ∀ (rounds : Array (Array F128)) (extras : Array Claim) lins info,
     rounds.toList.map Array.size = roundSizes sh →
-    residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras = .ok (lins, info) →
+    residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras = .ok (lins, info) →
     ∃ c, st.fold.folded info.lc.fold.alpha info.lc.fold.beta info.lc.fold.lw info.lc.fold.rhoIn info.lc.fold.ts =
       .ok c ∧ c.size = 64
 
@@ -230,9 +230,9 @@ def CoinsAgree (st : Setup) (sh : Shape) (sch : Flock.Schedule) (n : ℕ) : Prop
 theorem residualLins_of_verifierRows {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim}
     {comb v : Array F128} {info : Flock.RecAlgebra.Info Flock.RecAlgebra.Lin} {kappa : Array (Array (Array F128))}
     (h : verifierRows sh rounds extras comb = .ok (v, info, kappa)) :
-    ∃ lins, residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras = .ok (lins, info) := by
+    ∃ lins, residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras = .ok (lins, info) := by
   unfold verifierRows at h
-  cases hl : residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
+  cases hl : residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
   | error e => rw [hl] at h; cases h
   | ok q =>
     obtain ⟨lins, info'⟩ := q
