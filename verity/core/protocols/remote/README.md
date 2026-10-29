@@ -423,30 +423,10 @@ unregistered share, the prices), each labelled with its source in the calculator
 
 ### Promising directions
 
-- **One meaningful instantiation of the local premises.** One instance satisfying them simultaneously: a block-extraction
-  capability at the protocol's decoder budget, a positive information rate, a checked dependency certificate, and
-  parameters giving a nontrivial cap. Today's witnesses only show the premises consistent. A failed instantiation says
-  which premise breaks.
-- **Attack update prices.** Hardness of fresh weights is a computational hypothesis. Attack it on real fine-tunes with
-  reconstruction procedures: decoders that may use the registered model, low-rank fits and short replays within the
-  block's time, on adversarially chosen sets of updated weights. A successful compression is an upper bound on the price
-  and refutes a claimed one; failed attacks don't measure the universal lower bound.
-- **Check the certificate.** The upstream structure is a property to check on a specified training circuit, then to
-  prove for the claimed family of implementations.
-- **The import cost of a use.** The minimal premises charge one fresh bit per imported use, and the cap grows like k². A
-  justified joint input cost of b bits per use improves it to about k²/b: the coefficient, not the growth. A linear cap
-  needs another structural fact, such as fan-out limiting products by the activation coordinates a block can obtain.
-  The question is the justified joint cost of supporting additional uses and which structural bound it enables; a
-  hidden state's literal width is not that cost.
-- **Choose (c, k) per block type.** The caps bind only when a block's own capacity is well above what its fresh bits
-  allow. The execution's boundaries fix what counts: unregistered values crossing a boundary count by the bits they
-  represent, a compressed code as the code with its decoding in gates, and values rebuilt inside in gates. For decoding,
-  whether cached keys and values cost fresh bits or gates is the cheapest admissible placement's question.
-- **Weight the structure.** With per-weight prices and per-use weights fixed, the strongest bound the wiring property
-  gives is a linear program over the weights. Solving it on the training circuit replaces "every value is hard" with
-  "enough priced, structurally supported work".
-- **Test coverage directly.** Compute to the target for compact-state methods (adapters, independent small experts,
-  distillation from served outputs) against full training, at matched targets. The ratio caps the slowdown from above.
+The next steps test or strengthen part 6's premises: one instance meeting the local premises at once, attacks on
+update prices, the certificate checked on a training circuit, a use's import cost, weights by linear programming, and
+coverage tested directly. Each is in `Security/Definitions/Nci/Capability/README.md` ("How to test each premise", "The
+frontier"); how the execution's boundaries fix what a block's c and k count is in `Security/README.md`, part 2.
 
 ## Assumptions, by name
 
