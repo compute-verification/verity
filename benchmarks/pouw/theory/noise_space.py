@@ -41,11 +41,13 @@ distinct from every other word and from every free value as a function on the sa
 (`dup_adaptive`): a prover that reads the coins before it computes also saves each word or row vector equal to another
 at those coins, α · (zero dot share · μ₀ + identical owner share · κ), μ₀ the chance a step's noise increment is zero
 and κ `a1_collapse` at the identical owners' group (noise_data.py's shares). Salt-adaptive, chosen data
-(`dup_chosen`), with accumulators regrouped for free: α · max(κ over all owners identical (N-RED's A1), p), where p
-is `cancel_share`, the mean over steps of the largest point mass of a step's increment: a data dot fixed before the
+(`dup_chosen`), with accumulators regrouped for free: α · max(κ over all owners identical (N-RED's A1), p, r), where
+p is `cancel_share`, the mean over steps of the largest point mass of a step's increment: a data dot fixed before the
 call's coins at minus that value leaves the word unchanged on p of the entries (N-RED's A2 and A2c, N-LEAN's §2b).
 p is the bound over the call's coins alone, which holds however the data reads the window's weights; `p_fixed`, the
-mass with the weights drawn too, is reported beside it. The closed classes also read `tile_saving`: owners identical
+mass with the weights drawn too, is reported beside it. r is `revisit_share` (N-RED's A2r): data fixed before the
+coins walks each entry so that its words revisit values it already holds, and an entry pays only for its distinct
+values; `a2r_equal` reads it with every weight 1. The closed classes also read `tile_saving`: owners identical
 with zero data, the words a prover saves by copying a TILE-word tile equal to another (one address write a tile),
 from any owner and step, or skipping a zero word, by Monte Carlo.
 
@@ -663,6 +665,93 @@ def cancel_share(side: str, inj: str, s: int, code: str, others: int, nz: str = 
     return float(np.mean(fixed)), float(np.mean(bound))
 
 
+REVISIT_ENTRIES = 4096
+
+
+def _repeat_share(inc: np.ndarray) -> float:
+    """The mean over entries (columns) of the share of an entry's words, the running sums of `inc` (steps × entries),
+    that equal an earlier word of the entry."""
+    pos = np.sort(np.cumsum(inc, axis=0), axis=0)
+    return float(1 - (1 + (np.diff(pos, axis=0) != 0).sum(0)).mean() / inc.shape[0])
+
+
+def _walk_share(lane_inc: np.ndarray, lo: np.ndarray, hi: np.ndarray, mu: np.ndarray, plan: list, start: int,
+                s: int) -> float:
+    """The best data strategy's `_repeat_share`. `lane_inc` (lanes × entries) is each coin lane's increment and lo, hi,
+    mu its least, largest and mean value as the data knows them. The strategies: no data, each step's increment
+    centred on its mean, and N-RED's lazy walk, which cancels the increment's least value at odd steps and its largest
+    at even ones."""
+    shape = (s, lane_inc.shape[1])
+    inc, lo_s, hi_s, mu_s = (np.zeros(shape) for _ in range(4))
+    lo, hi, mu = (np.broadcast_to(a, lane_inc.shape) for a in (lo, hi, mu))
+    for t in range(start, s):
+        for c, sg in plan[t - start]:
+            inc[t] += sg * lane_inc[c]
+            lo_s[t] += lo[c] if sg > 0 else -hi[c]
+            hi_s[t] += hi[c] if sg > 0 else -lo[c]
+            mu_s[t] += sg * mu[c]
+    odd = (np.arange(s) % 2 == 0)[:, None]
+    return max(_repeat_share(inc), _repeat_share(inc - np.rint(mu_s)), _repeat_share(inc - np.where(odd, lo_s, hi_s)))
+
+
+@lru_cache(maxsize=None)
+def revisit_share(side: str, inj: str, s: int, count: int, nz: str = "none", weights: str = "ones",
+                  dn: str = "served", entries: int = REVISIT_ENTRIES) -> tuple[float, float]:
+    """N-RED's A2r under model P, by Monte Carlo: data fixed before the call's coins, knowing the window's weights, sets
+    each entry's data increment a step (`_walk_share`'s strategies), and an entry pays only for its distinct words.
+    `count` is `lane_steps`. Returns (drawn, equal), the share of an entry's S words that repeat an earlier word of the
+    entry: with the window's weights drawn, and with every weight 1, the lattice walk that weights the data chooses
+    would allow. Step 1's code and tags are constant within an entry and drop out; dither is not modelled and is
+    charged in full."""
+    if side == "dither":
+        return 1.0, 1.0
+    start = s - count
+    plan = lane_plan(count, dn == "mirror")
+    coined = 1 + max((c for lanes in plan for c, _ in lanes), default=-1)
+    rng = np.random.default_rng(zlib.crc32(repr(("revisit", side, inj, s, count, nz, weights, dn, entries)).encode()))
+    pm = lane_pmfs(inj, coined, nz)
+    lo = np.array([min(v for v, _ in q) for q in pm], dtype=float)[:, None]
+    hi = np.array([max(v for v, _ in q) for q in pm], dtype=float)[:, None]
+    mu = np.array([sum(v * y for v, y in q) for q in pm], dtype=float)[:, None]
+    rows = _lane_draws(inj, coined, entries, nz, rng)
+    if side in ("AB", "A+B"):
+        cols = _lane_draws(inj, coined, entries, nz, rng)
+        if side == "A+B":
+            r = _walk_share(rows + cols, 2 * lo, 2 * hi, 2 * mu, plan, start, s)
+        else:
+            ends = np.stack([lo * lo, lo * hi, hi * hi])
+            r = _walk_share(rows * cols, ends.min(0), ends.max(0), mu * mu, plan, start, s)
+        return r, r
+    out = []
+    for w in (_weight_draws(weights, coined, entries, rng), np.ones((coined, entries), dtype=np.int64)):
+        a, b = lo * w, hi * w
+        out.append(_walk_share(rows * w, np.minimum(a, b), np.maximum(a, b), mu * w, plan, start, s))
+    return out[0], out[1]
+
+
+def entropy_revisits(steps: tuple = (67, 265), bits: tuple = tuple(range(1, 13)), entries: int = REVISIT_ENTRIES) -> list:
+    """The least coin entropy a step that survives A2r: one uniform e-bit coin lane a step on every step, against weight
+    1 or a drawn wide window weight, served or mirrored; each row is A2r's share of an entry's words (`_walk_share`)."""
+    out = []
+    for s in steps:
+        for e in bits:
+            rng = np.random.default_rng(zlib.crc32(repr(("entropy", s, e, entries)).encode()))
+            half = 2 ** (e - 1)
+            row = {"steps": s, "bits": e}
+            for dn in ("served", "mirror"):
+                plan = lane_plan(s, dn == "mirror")
+                coined = 1 + max(c for lanes in plan for c, _ in lanes)
+                lanes = rng.integers(-half, half, (coined, entries)) if e > 1 else rng.integers(0, 2, (coined, entries))
+                lo, hi = (0, 1) if e == 1 else (-half, half - 1)
+                mu = (lo + hi) / 2
+                for wname in ("ones", "wide"):
+                    w = _weight_draws(wname, coined, entries, rng)
+                    a, b = lo * w, hi * w
+                    row[f"{dn}_{wname}"] = _walk_share(lanes * w, np.minimum(a, b), np.maximum(a, b), mu * w, plan, 0, s)
+            out.append(row)
+    return out
+
+
 # ---------------------------------------------------------------- compiled design
 
 @dataclass(frozen=True)
@@ -771,6 +860,8 @@ def _side_terms(side: str, inj: str, code: str, dn: str, c1: bool, m: int, n: in
         var_code = var_code + tag_norm2(own) * 4.0
     mu_step = {"AB": 0.0 if nz != "none" else 0.75, "A+B": cost.mu ** 2}.get(side, cost.mu)
     p_fixed, p_bound = cancel_share(side, inj, s, code, other, nz, weights, dn)
+    adn = "mirror" if dn == "mirror" else "served"
+    r_drawn, r_equal = revisit_share(side, inj, s, lane_steps(inj, s, code, adn), nz, weights, adn)
     denoise, final, extra_lanes = 0.0, 0.0, 0
     lcode = code_lanes(code) if code not in ("initc",) else 4
     if dn == "epi_row":
@@ -810,7 +901,6 @@ def _side_terms(side: str, inj: str, code: str, dn: str, c1: bool, m: int, n: in
     coins = coin_bits / 8 * ns.COIN_PRICED_BYTE / (m * n * k)
     sh = _shares(m)
     history = side in ("AB", "dither") or weights != "ones"
-    adn = "mirror" if dn == "mirror" else "served"
     if tag != "none":
         kappa_chosen = 0.0
     else:
@@ -820,14 +910,14 @@ def _side_terms(side: str, inj: str, code: str, dn: str, c1: bool, m: int, n: in
     dup_nat = sh["zero_dot"] * mu_step + sh["id_rows"] * kappa_nat
     if side == "B":
         dup_nat += sh["id_cols"] * a1_collapse(inj, s, code, max(2, round(sh["id_cols"] * n)), history, adn)
-    dup_chosen = max(kappa_chosen, p_bound)
+    dup_chosen = max(kappa_chosen, p_bound, r_drawn)
     std = float(np.sqrt(var_code + row_var).mean())
     qerr = math.sqrt(k / 12) * ns.WEIGHT_SIGMA_INT8
     return {"alpha": alpha_tot, "s": s, "forming": form + form_other, "forced": forced, "denoise": denoise,
             "final_word": 0.0, "sign_fix": 0.0, "gap": gap, "coins": coins, "dup_adaptive": alpha_tot * dup_nat,
             "dup_chosen": alpha_tot * dup_chosen, "a1_chosen": alpha_tot * kappa_chosen,
             "a2_chosen": alpha_tot * p_bound, "a2_fixed": alpha_tot * p_fixed, "p_bound": p_bound,
-            "p_fixed": p_fixed, "std": std, "row_std": math.sqrt(row_var),
+            "p_fixed": p_fixed, "a2r": alpha_tot * r_drawn, "a2r_equal": alpha_tot * r_equal, "std": std, "row_std": math.sqrt(row_var),
             "code_std": float(np.sqrt(var_code).mean()), "t3_ratio": std / qerr, "mu_step": mu_step,
             "coin_bits_owner": 32 * cost.words, "coin_bits_per_mac": coin_bits / (m * n * k),
             "leverage_words_per_bit": cost.lev_steps * other,
@@ -1556,6 +1646,7 @@ def run(jobs: int = 1) -> dict:
             **{f"dominate_{key}": [r["name"] for r in v] for key, v in beats.items()},
             "densest": dense, "rows": rows,
             "checks": {"|".join(map(str, k)): v for k, v in checks.items()}, "lower_bounds": lower_bounds(),
+            "revisit_entropy": entropy_revisits(),
             "objectives": [list(o) for o in OBJECTIVES], "tile": {"words": TILE, "positions": TILE_POSITIONS}}
 
 
@@ -1568,6 +1659,7 @@ def _row(r: dict) -> str:
                        f"{100 * L64['tile_saving']:.2f}%/{100 * L['tile_saving']:.2f}%" if r.get("tile_checked")
                        else "-",
                        f"{100 * L['p_fixed']:.3f}%/{100 * L['p_bound']:.3f}%",
+                       f"{100 * L['a2r']:.2f}%/{100 * L['a2r_equal']:.2f}%",
                        f"{1 / L['coin_bits_per_mac']:.0f}" if L["coin_bits_per_mac"] else "-",
                        f"{100 * r['v4dense_T8192']['gap']:.4f}%",
                        f"{r['t2_T8192']['t2']:.2f}x", f"{L['std']:.2f} ({L['row_std']:.2f}/{L['code_std']:.2f})",
@@ -1577,7 +1669,7 @@ def _row(r: dict) -> str:
 
 
 HEADER = ("design | T1 64tok | T1 8192 | +coins 64tok | +coins 8192 | adaptive 64tok | chosen 64tok/8192 | "
-          "tile 64tok/8192 | p fixed/bound 8192 | MACs/coin bit 8192 | V4d 8192 | T2 8192 | "
+          "tile 64tok/8192 | p fixed/bound 8192 | A2r drawn/equal 8192 | MACs/coin bit 8192 | V4d 8192 | T2 8192 | "
           "std (row/code) | std/qerr | alpha | writes/step | coin bits/owner | mu_step | leverage/bit | premises | kernel")
 
 
@@ -1606,6 +1698,11 @@ def table(rep: dict, limit: int = 40) -> str:
         lines += [f"## the most coin bits per MAC at llama_T8192, {key}", HEADER] + [_row(by_name[nm]) for nm in names]
         lines.append("")
     lines += ["## references", HEADER] + [_row(rep[key]) for key in REFERENCES]
+    lines += ["", "## A2r's share of an entry's words, one uniform e-bit coin lane a step",
+              "steps | bits | served, weight 1 | served, wide | mirror, weight 1 | mirror, wide"]
+    lines += [f"{r['steps']} | {r['bits']} | " + " | ".join(f"{100 * r[c]:.2f}%" for c in
+                                                         ("served_ones", "served_wide", "mirror_ones", "mirror_wide"))
+              for r in rep["revisit_entropy"]]
     lines += ["", "cancel floor at T3_SAFE: " + json.dumps(rep["lower_bounds"]["cancel_floor_at_t3_safe"]),
               json.dumps(rep["counts"]), json.dumps(rep["invalid_reasons"])]
     return "\n".join(lines)
