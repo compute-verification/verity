@@ -64,8 +64,8 @@ theorem typeDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hash
   sim_walk
 
 theorem layoutDigestWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
-    (l : Layout) : S.R (l.digestWith hs) (l.digestWith hs') := by
-  unfold Layout.digestWith
+    (l : BlockLayout) : S.R (l.digestWith hs) (l.digestWith hs') := by
+  unfold BlockLayout.digestWith
   sim_walk
 
 theorem typedClassOfWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
@@ -78,7 +78,7 @@ theorem typedClassOfWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM :
 
 theorem templateOfWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (name : String) (done : Array DeriveAll.D)
-    (ls : Array Layout) (unit : Nat) (t : CircuitType) (held : Array Typed.Held) :
+    (ls : Array BlockLayout) (unit : Nat) (t : CircuitType) (held : Array Typed.Held) :
     S.R (Typed.templateOfWith hs name done ls unit t held) (Typed.templateOfWith hs' name done ls unit t held) := by
   unfold Typed.templateOfWith
   simp -zeta only [tM.bind, tN.bind]
@@ -259,6 +259,24 @@ theorem hmOutParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : T
   sim_walk [parseWith_sim S tM tN hh, readWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [parseWith_sim S tM tN hh, readWith_sim S tM tN hh])
 
+theorem hmOutParseTmplWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) :
+    S.R (HmOut.parseTmplWith hs tags bytes tables) (HmOut.parseTmplWith hs' tags bytes tables) := by
+  unfold HmOut.parseTmplWith
+  simp -zeta only [tM.bind, tN.bind]
+  sim_walk [parseWith_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [parseWith_sim S tM tN hh])
+
+theorem hmOutParseCommitWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) :
+    S.R (HmOut.parseCommitWith hs tags bytes tables) (HmOut.parseCommitWith hs' tags bytes tables) := by
+  unfold HmOut.parseCommitWith
+  split
+  · exact hmOutParseTmplWith_sim S tM tN hh tags bytes tables
+  · exact hmOutParseWith_sim S tM tN hh tags bytes tables
+
 theorem hmOutCheckPublicWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pub : Public) :
     S.R (HmOut.checkPublicWith hs c pub) (HmOut.checkPublicWith hs' c pub) := by
@@ -298,13 +316,13 @@ theorem setupHiddenWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : 
       (Stmt.setupHiddenWith hs' tags circuitFile publicFile coins tables draw partition program publicInputs) := by
   unfold Stmt.setupHiddenWith
   simp -zeta only [tM.bind, tN.bind]
-  sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
+  sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
     hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
     hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
     qwordFindingWith_sim S tM tN hh]
   iterate 40
     all_goals try (dsimp +zetaDelta -zeta only)
-    all_goals sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
+    all_goals sim_walk [hmOutParseCommitWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
       hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
       hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
       qwordFindingWith_sim S tM tN hh]

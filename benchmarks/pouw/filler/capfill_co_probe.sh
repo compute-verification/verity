@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FILLER (note:20261017T0652Z-draft-filler): the pump on every SM beside the step, co-resident instead of split. The
+# The pump on every SM beside the step, co-resident instead of split. The
 # leader's 2-block pump fills an SM's registers, so at the lowest priority it holds every SM for a whole chunk (2^19
 # MMAs an SM, ~1.7 ms) and the step waits behind it (capfill_fold_probe.sh: 8-28x served time). Here: a 1-block pump
 # (-DPF_CTAS=1 -DPF_MINB=2: half the registers) with DFILL_PAD_KB keeping a second pump block off the SM, so the step's

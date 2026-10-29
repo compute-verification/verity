@@ -1,15 +1,15 @@
 /-
 Item 1e (Project doc `verified-lowering-design.md`): the typed statement `verity/flock-circuit/types`
-(`verity_flock.typed_statement`, #225), whose unit is a circuit type and a layout instead of rows. No statement carries the
+(`verity_flock.typed_statement`), whose unit is a circuit type and a layout instead of rows. No statement carries the
 unit's rows: the verifier derives them and places them as the old statement's `unit` slots. It folds rows only through
-`DeriveAll.deriveChecked` (#247): `deriveAll`'s rows, used once every layout's pass the item-by-item check and the unit's
+`DeriveAll.deriveChecked`: `deriveAll`'s rows, used once every layout's pass the item-by-item check and the unit's
 are in logical order. `flock-rows --part` prints unchecked rows, so nothing here reads them.
 
 `expand` checks META's new keys and returns the file with the derived rows as its `CIRCUIT unit` section, first, where the
 old statement had it. `HmRow.parseTyped` reads that as it reads any statement, and keeps the typed file's own digest and
 class. The keys:
-* `types`: `{digest: content}`, each the digest of its content and checked by `CircuitType.check` (#194);
-* `layouts`: #200's records, each its `sha512`'s record, checked by `Layout.check`;
+* `types`: `{digest: content}`, each the digest of its content and checked by `CircuitType.check`;
+* `layouts`: layout records, each its `sha512`'s record, checked by `Layout.check`;
 * `unit_layout`: the unit's layout, derived (`own` is `derive`);
 * `unit_type`: that layout's type;
 * `policy`: `calls/v1`;
@@ -79,7 +79,7 @@ def hold (types : Array (String × CircuitType)) (tables : List (String × ByteA
       if bytes.size != 4 * 2 ^ lt.indexBits || hexOf (Sha512.hash bytes) != sha then
         throw s!"table {lt.name}: its words are not the table its SHA-512 names"
       let words := (Array.range (bytes.size / 4)).map fun i => rd32 bytes (4 * i)
-      out := out.push ⟨sha, bytes, words, Layout.tableInfo words⟩
+      out := out.push ⟨sha, bytes, words, BlockLayout.tableInfo words⟩
   return out
 
 /-- The layouts' types by digest. -/
@@ -96,7 +96,7 @@ holds, the unit's layout, and `deriveChecked`'s rows on exactly those, with the 
 typed statement carries it (`Circuit.cls`), and every net the verifier folds for it is built from `done` (`netOfD`). -/
 structure Class where
   types : Array (String × CircuitType)
-  ls : Array Layout
+  ls : Array BlockLayout
   held : Array Held
   unit : Nat
   done : Array DeriveAll.D
@@ -117,11 +117,11 @@ def classOf (mj : Json) (tables : List (String × ByteArray)) : V (Class × Circ
     if let .error e := CircuitType.check (typeIn types) t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
   let held ← hold types tables
   let ls ← (← J.arr mj "layouts" ctx).mapM fun r => do
-    let l ← Layout.ofJson r
+    let l ← BlockLayout.ofJson r
     if (← J.str r "sha512" ctx) != (← l.digest) then throw s!"{ctx}: a layout's sha512 is not its record's digest"
     pure l
   let unit ← J.nat mj "unit_layout" ctx
-  if let .error e := Layout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
+  if let .error e := BlockLayout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" ctx) != ut then throw "META: unit_type is not the unit's layout's type"
@@ -147,7 +147,7 @@ def netOfD (d : DeriveAll.D) (name : String) : V Net :=
   Net.ofRows name d.size d.const (grp d.inGroups) (grp d.outGroups) (rowsA d) (rowsB d)
 
 /-- **The net holds the derived rows:** a net built from `d` has `d`'s rows as its A and B, at its slot size, and `d`'s
-size and constant; and #147's checks hold of it: the input rows end before the constant, each is a self row or empty,
+size and constant; and the net's checks hold of it: the input rows end before the constant, each is a self row or empty,
 the constant row is `[const]·[const]`, and the row order passed. -/
 theorem netOfD_ok {d : DeriveAll.D} {name : String} {n : Net} (h : netOfD d name = .ok n) :
     n.unitLog = max 7 (log2ceil d.size) ∧ Sparse.ofRows (rowsA d) (2 ^ n.unitLog) = .ok n.a ∧
@@ -171,7 +171,7 @@ def expandWith (tags : Tags) (lines : Array String) (name : String) (u : DeriveA
   let out := #[lines[0]!, lines[1]!, s!"{tags.blockKeyword} unit {rows.size}"] ++ rows ++ lines.extract 2 lines.size
   ("\n".intercalate out.toList ++ "\n").toUTF8
 
-/-- A template's block as its types derive it (#273's `Instance`), for `HmRow.parse`: the root net (the unit's own region,
+/-- A template's block as its types derive it (the typed statement's `Instance`), for `HmRow.parse`: the root net (the unit's own region,
 its entries at part columns left out, which are Δ's), each placed layout's net by digest, and the block's data in unit
 coordinates. -/
 structure Template where
@@ -190,7 +190,7 @@ structure Template where
 
 /-- A placed layout's net: a derived layout's rows as they are; a generated read's (`table/v2`) with its product rows' B
 side read from the held table, at its `READ` record's columns and value bits (`k`, not the table's). -/
-def placedNet (l : Layout) (d : DeriveAll.D) (nm : String) (held : Array Held) : V Net := do
+def placedNet (l : BlockLayout) (d : DeriveAll.D) (nm : String) (held : Array Held) : V Net := do
   match l.own with
   | .gen sha n _ lo =>
     let r ← match d.reads.toList with
@@ -216,14 +216,14 @@ def crossOf (u : DeriveAll.D) : Array (Nat × Array Nat × Array Nat) :=
     if xa.isEmpty && xb.isEmpty then none else some (r, xa.toArray, xb.toArray)
 
 /-- Placed layout `j`'s entry in the block: its digest, its net, and its range's log size. -/
-def placedEntry (digests : List String) (ls : Array Layout) (done : Array DeriveAll.D) (held : Array Held) (j : Nat) :
+def placedEntry (digests : List String) (ls : Array BlockLayout) (done : Array DeriveAll.D) (held : Array Held) (j : Nat) :
     V (String × Net × Nat) := do
   let d := digests.getD j ""
   let l := ls.getD j default
   pure (d, ← placedNet l (done.getD j default) (d.take 16).toString held, l.rangeLog.getD 0)
 
 /-- A template's block from its derivation. -/
-def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat) (t : CircuitType)
+def templateOf (name : String) (done : Array DeriveAll.D) (ls : Array BlockLayout) (unit : Nat) (t : CircuitType)
     (held : Array Held) : V Template := do
   let u := done.getD unit default
   if u.reads.any (·.prod0 < u.size) then
@@ -260,7 +260,7 @@ theorem mapM_ok {α β : Type} {f : α → V β} : ∀ {xs : List α} {ys : List
     | succ i => simpa using hi i (by simpa using hx) (by simpa using hy')
 
 /-- A placed layout's entry: its digest, its range's log size, and its net, `placedNet` of its own derivation. -/
-theorem placedEntry_ok {digests : List String} {ls : Array Layout} {done : Array DeriveAll.D} {held : Array Held}
+theorem placedEntry_ok {digests : List String} {ls : Array BlockLayout} {done : Array DeriveAll.D} {held : Array Held}
     {j : Nat} {e : String × Net × Nat} (h : placedEntry digests ls done held j = .ok e) :
     e.1 = digests.getD j "" ∧ e.2.2 = (ls.getD j default).rangeLog.getD 0 ∧
       placedNet (ls.getD j default) (done.getD j default) ((digests.getD j "").take 16).toString held = .ok e.2.1 := by
@@ -275,7 +275,7 @@ theorem placedEntry_ok {digests : List String} {ls : Array Layout} {done : Array
 
 /-- **A placed layout's net is its derivation's** (`netOfD`), with no lookup; a generated read's adds the one its `READ`
 record and held table give (the product rows' table-direct side). -/
-theorem placedNet_spec {l : Layout} {d : DeriveAll.D} {nm : String} {held : Array Held} {n : Net}
+theorem placedNet_spec {l : BlockLayout} {d : DeriveAll.D} {nm : String} {held : Array Held} {n : Net}
     (h : placedNet l d nm held = .ok n) :
     ∃ n0, netOfD d nm = .ok n0 ∧ { n with lookup := none } = n0 ∧
       (l.own = .derive → n.lookup = none) ∧
@@ -317,7 +317,7 @@ theorem placedNet_spec {l : Layout} {d : DeriveAll.D} {nm : String} {held : Arra
 /-- **A template, as `templateOf` builds it** (for audit-lean's `TemplateLayout`): its root is `netOfD` of the unit's own
 rows, its cross entries and bound rows are the unit's, its `i`-th placed layout is `placedEntry` of the `i`-th layout the
 unit places, and each part names its layout by position among them (every part's layout is placed). -/
-theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array Layout} {unit : Nat} {ty : CircuitType}
+theorem templateOf_spec {name : String} {done : Array DeriveAll.D} {ls : Array BlockLayout} {unit : Nat} {ty : CircuitType}
     {held : Array Held} {t : Template} (h : templateOf name done ls unit ty held = .ok t) :
     let u := done.getD unit default
     let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
