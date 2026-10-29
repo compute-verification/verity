@@ -5,7 +5,7 @@ stock control, the same endpoint, engine and load with no protocol and no Commit
     python benchmarks/one_stage/served_overhead.py table --composed DIR... --stock DIR... [--served-table FILE] [--allow KEY]
         [--out DIR]
 
-Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py --varied`'s timings file
+Two rulers, each the same code in both arms. The client's is `demos/vllm/serve_load.py --varied`'s timings file
 (``load.timings.json`` beside its record; `served_verdicts.sh` copies the composed run's to ``$OUT/timings/``): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 

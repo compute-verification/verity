@@ -8,7 +8,7 @@ loads them.
     python realw.py --out OUT --weights DIR --gen [--layer 0] [--seed text:verity/cmp92/h200/weights/v1] [--workers N]
     python realw.py --out OUT --weights DIR [--layer 0] [--ms 1,7,64,...] [--kernel wgmma|triton|int_mm] [--configs BEST_JSON]
 
-The generator's module is on the path from examples/h200, after this directory (whose `run` it imports).
+The generator's module is on the path from demos/h200, after this directory (whose `run` it imports).
 """
 from __future__ import annotations
 
