@@ -235,3 +235,9 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - The 99% target is the question to Daniel (card, 22:25Z).
 - Until he answers, every HASH and SILICON result is reported with a (capacity accounted) beside h. The card computes a = cheapest prover's cost / honest cost.
 - EGRESS's k = 4 thin fold (note 20261029T2210Z-report-hash-assume) is recorded, not re-targeted.
+
+**22:30Z, SPARSE (note 20261029T2220Z-report-hash-sparse-window):**
+- The multiply–xor fold (c4) starting at N₀ = 0 fails T1, at 2.59%. Interims 1 and 2's 0.42% is withdrawn.
+- One live word a call (κ) still fails, at 1.51%. Starting at N₀ = a_i ⊕ b_j (live words a row and a column) leaves nothing known below honest; SAT finds no 2-instruction step 1.
+- One-step windows are `unsat` below honest; two steps are `unsat` at random data. Two- and three-step windows at zero and chosen data are still running on cpu-2. Don't relay this as "checked over windows" yet.
+- Under Daniel's capacity reading (22:25Z) the fold accounts at most h/(1 + h), about 61–75%. It is recorded, and the lane stays idle until Daniel settles the fork: a premise about the matmul, the hashing lead, or silicon.
