@@ -312,12 +312,12 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     verifies with the tile's z."""
     from verity.core.protocols.poub import audit
     from verity.core.protocols.poub import receipts as rb
-    from verity_vllm.protocols.poub.registry import RemoteBandwidthReceipt
+    from verity_vllm.protocols.poub.registry import PoubReceipt
     from verity_vllm.protocols.poub.verify import verify_opening
 
     s, recs, tiles = Store(salt_key=bytes(32)), [], audit.NoiseTiles()
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
-    assert isinstance(b.receipt, RemoteBandwidthReceipt)
+    assert isinstance(b.receipt, PoubReceipt)
     r = runner()
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
     b.on_load(r)

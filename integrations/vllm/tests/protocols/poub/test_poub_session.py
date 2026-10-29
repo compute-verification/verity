@@ -83,7 +83,7 @@ class PassClock:
 def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.Verifier]:
     """`verifier.Verifier` over the accepted ``sock`` on ``clock``, torn down however the body ends: the socket shut,
     so a prover waiting on it sees the audit run end (the verifier's reader thread would hold it open), and the Lean
-    verifier's process (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
+    verifier's process (`poub-check-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
     on its stdin."""
     v = None
     try:
@@ -705,7 +705,7 @@ def test_no_verifier_process_is_left():
 def test_a_failing_test_leaves_no_verifier_process(tmp_path):
     """A pytest whose tests fail with the Lean verifier's process live (the verifier's audit run raising on the test's
     thread, its registration raising on `lockstep`'s verifier thread, which hung the suite while the prover waited on
-    the socket, and the run's first step raising) finishes, and leaves no `remote-audit-verifier` child, running or
+    the socket, and the run's first step raising) finishes, and leaves no `poub-check-verifier` child, running or
     unreaped, to the test after them."""
     (tmp_path / "test_failing.py").write_text(FAILING)
     r = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:xdist",

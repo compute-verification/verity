@@ -990,7 +990,7 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   };
   const uint8_t zero[64] = {};
   int o = 0;
-  put(P.seed, o, "verity/remote-bandwidth/seed/v0", 32);
+  put(P.seed, o, "verity/poub/seed/v0", 32);
   put(P.seed, o, challenge, 32);
   P.seed_i = o;
   put(P.seed, o, zero, 4);
@@ -1002,7 +1002,7 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   put(P.derive, o, "verity/randomness/derive/v2", 28);
   P.derive_seed = o + 9;
   frame(P.derive, o, 'b', zero, 64);
-  const char *sign_domain = "verity/remote-bandwidth/sketch-signs/v0";
+  const char *sign_domain = "verity/poub/sketch-signs/v0";
   frame(P.derive, o, 's', sign_domain, (int)strlen(sign_domain));
   uint8_t ctx[128];
   int c = 0;
@@ -1017,7 +1017,7 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   P.derive_len = o;
 
   o = 0;
-  put(P.receipt, o, "verity/remote-bandwidth/sketch-receipt/v0", 42);
+  put(P.receipt, o, "verity/poub/sketch-receipt/v0", 42);
   P.receipt_seed = o + 9;
   frame(P.receipt, o, 'b', zero, 64);
 

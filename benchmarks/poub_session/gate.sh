@@ -5,7 +5,7 @@
 #
 #   probe  read-only requests: the challenger host's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
 #          (PERIOD unused, no period of LANE open), and the verifier host's `status` (pinned at COMMIT, no unit running);
-#          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's poub tree (auditor_line's
+#          the circuit, `verity/poub/v0 verifier tree <tree>` of COMMIT's poub tree (auditor_line's
 #          `descriptor`). COMMIT, and so the verifier host's pin, must be on origin/main's first-parent line, fetched as
 #          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
@@ -56,7 +56,7 @@ circuit() {
   head=$(git rev-parse HEAD) || return 3
   [ "$head" = "${COMMIT:?}" ] || { echo "this clone is $head, not COMMIT $COMMIT" >&2; return 3; }
   tree=$(git rev-parse "$COMMIT:verity/core/protocols/poub") || return 3
-  printf 'verity/remote-bandwidth/v0 verifier tree %s' "$tree" | sha512sum | cut -d' ' -f1
+  printf 'verity/poub/v0 verifier tree %s' "$tree" | sha512sum | cut -d' ' -f1
 }
 
 main_line() {

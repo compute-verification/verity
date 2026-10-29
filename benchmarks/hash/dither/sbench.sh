@@ -171,9 +171,9 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 # BW_PY runs the audit's side (verifier and prover), by default poub_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
   (mkdir -p verity/core/difftest/lean/.lake && cd verity/core/protocols/poub/lean \
-    && flock "$ROOT/verity/core/difftest/lean/.lake/harness-build.lock" lake build remote-audit-verifier) \
+    && flock "$ROOT/verity/core/difftest/lean/.lake/harness-build.lock" lake build poub-check-verifier) \
     > "$OUT/lean-bw-build.log" 2>&1 || { echo "sbench: LEAN_BUILD_FAIL bw"; tail -20 "$OUT/lean-bw-build.log"; exit 13; }
-  export BW_LEAN_EXE=$ROOT/verity/core/protocols/poub/lean/.lake/build/bin/remote-audit-verifier
+  export BW_LEAN_EXE=$ROOT/verity/core/protocols/poub/lean/.lake/build/bin/poub-check-verifier
   export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
   [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
 fi

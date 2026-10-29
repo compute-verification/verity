@@ -1,4 +1,4 @@
-# The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`)
+# The remote bandwidth audit v0 (`verity/poub/v0`)
 
 A verifier with no hardware at the site certifies, window by window, how many reads of a node's registered blocks the
 node made. The node's memory is its GPUs' HBM and its host's DRAM. No prover hardware is trusted: the host, its CPUs
@@ -15,8 +15,8 @@ and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 stor
 pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
 checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
-definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
-`RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
+definition is Lean code, `lean/` (`PoubCheck`: `verifyWindow`, a window's draw and its openings' checks, and
+`PoubCheck.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
 `lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
 record, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
 tiles.
@@ -79,7 +79,7 @@ cap \(s\) over them together. It takes the chance that the two runs' roots diffe
 0, which the deployed protocol doesn't yet ensure (the gap `binding-split`, §8). The windows' PRF advantages are the draw's fourth term: named with their claim
 (`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the hiding and binding terms
 beside its \(2^{-\text{slack}}\) a pass. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
-derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
+derived by `Accounting.Guarantees.Poub.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
 at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
 outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its
 hash, and \((Q + P)^2 \cdot 2^{-257}\) for the keys' distance from uniform (two seeds whose 256-bit sign keys collide
@@ -199,16 +199,16 @@ carry `window_ns`.
    \(x_j\) = `sha512/row/v2`\((\text{payload}_j)\) (`SHA512(P(32768) ‖ payload_j)`), value
    `hm96.SHA512.tree_leaf(key, commit_string(key, x_j, y_j))` with \(y_j\) a fresh 192-byte salt and hm96-sha512's
    pinned key (`receipts.hidden`), in
-   `CommitmentDomain(SHA512("verity/remote-bandwidth/payload/v0\0" ‖ frame(node)), 0, positions 0 … N − 1, "sha512")`.
+   `CommitmentDomain(SHA512("verity/poub/payload/v0\0" ‖ frame(node)), 0, positions 0 … N − 1, "sha512")`.
    `node` is the node's id, 1 to 64 bytes. This is the leaf PoUS's answer circuit proves over a block.
 2. Only after the payload root has arrived does the verifier draw the codec seed from its own secret and a fresh
-   32-byte nonce: `derive(source, "verity/remote-bandwidth/codec/v0", {node, blocks, payload, codec, nonce}).stream("codec",
+   32-byte nonce: `derive(source, "verity/poub/codec/v0", {node, blocks, payload, codec, nonce}).stream("codec",
    32)`, `codec` the name of the codec the registration names. The registration also names its receipt kind, whether
    its receipts bind \(z\), its block layout and sketch-sha512's rows (§4), none of them in this context: the store
    depends on none of them.
 3. The prover encodes every block under that seed with that codec (`codec.py`, below):
    \(E_j = \text{encode}(\text{payload}_j)\).
-4. `Registration.digest = SHA512("verity/remote-bandwidth/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
+4. `Registration.digest = SHA512("verity/poub/registration/v0\0" ‖ frame(node) ‖ u64be N ‖ payload root ‖
    codec seed ‖ frame(codec name) ‖ frame(receipt kind) ‖ u8 bind ‖ frame(block layout) ‖ u32be rows)`, `frame` being
    `verity.ml.randomness.frame` ("s" ‖ u64be length ‖ the name in UTF-8), bind 1 if the receipts bind \(z\), else 0,
    and rows sketch-sha512's \(k_s\) (0 under block-sha512). A record cites this digest, each session's coin commitment
@@ -227,7 +227,7 @@ the store's shape and the key (`expected_root`). A hello is refused before the r
 than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
 verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the store's shape, both roots and
 `bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding's
-decision is also Lean (`lean/RemoteAudit/Store.lean`), and reading the files is Python only (§8).
+decision is also Lean (`lean/PoubCheck/Store.lean`), and reading the files is Python only (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT`. The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -348,13 +348,13 @@ Before a session the challenger draws its coins and commits to them, one epoch o
 (`coins.py`, `sampled_proofs.challenger`), and the prover receives the commitment before the first coin:
 
 ~~~text
-layout      scheme verity/remote-bandwidth/coins/v1, epoch k (the session's index over its registration), families
+layout      scheme verity/poub/coins/v1, epoch k (the session's index over its registration), families
             challenge W, openings W and append A, the appends the session may take (none, and no append family, for
             a session that takes none: a session reserves exactly the coins it will use)
 c           64 bytes a coin from the challenger's generator, committed whole (`challenger.live_leaf`, hm96-sha512 under
             a fresh salt, frame-v3-sha512 over the layout); the audit's coin is its first 32 bytes (`coins.coin`):
             window t's challenge σ_t is challenge coin t, its openings coin openings coin t, append i's c_a append coin i
-R           SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window
+R           SHA512("verity/poub/window/v1\0" ‖ registration digest ‖ u64be k): the session's window
 after       σ_0 after R; σ_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after window
             t's last root; append i's coin after append i's root
 opening     (epoch, label, index, after, coin, salt, path): checked by the prover against the commitment (`coin_reason`)
@@ -381,23 +381,23 @@ trip waits on it. The prover refuses an openings coin as a challenge (`Prover.ru
 (`receipts.py`):
 
 ~~~text
-seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ prev_(t,i)),
+seed_(t,i)  SHA512("verity/poub/seed/v0\0" ‖ σ_t ‖ u32be i ‖ prev_(t,i)),
             root_(t,−1) = root_(t−1,last) in a session, and the registration's digest before its first window
 prev_(t,i)  root_(t,i−1) while no append has been received before root_(t,i); otherwise
-            SHA512("verity/remote-bandwidth/chained/v0\0" ‖ root_(t,i−1) ‖ a_(t,i)) (`audit.chained`)
+            SHA512("verity/poub/chained/v0\0" ‖ root_(t,i−1) ‖ a_(t,i)) (`audit.chained`)
 a_(t,i)     the chain over every append received before root_(t,i), in order: a = 64 zero bytes, then for each append
-            a ← SHA512("verity/remote-bandwidth/appends/v0\0" ‖ a ‖ u64be first ‖ u64be count ‖ its root)
+            a ← SHA512("verity/poub/appends/v0\0" ‖ a ‖ u64be first ‖ u64be count ‖ its root)
             (`audit.append_head`)
 plan_(t,i)  R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, no run starting where
             the one before it ends.  Position p is the p-th block of the runs concatenated; L positions in all.
-            digest SHA512("verity/remote-bandwidth/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
+            digest SHA512("verity/poub/plan/v0\0" ‖ u32be R ‖ (u64be first ‖ u64be count) × R)
 e_(i,j)     E_j, the block alone; under a registration that binds z, E_j ⊕ spread(z_(i,j))
-y_(i,p)     sketch-sha512, the default: SHA512(Z("verity/remote-bandwidth/sketch-receipt/v0\0" ‖ frame(seed_(t,i))) ‖
+y_(i,p)     sketch-sha512, the default: SHA512(Z("verity/poub/sketch-receipt/v0\0" ‖ frame(seed_(t,i))) ‖
             u64be j ‖ σ_(i,j)),  j = plan_(t,i)[p]
-            block-sha512, for comparison: SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
+            block-sha512, for comparison: SHA512(Z("verity/poub/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
             e_(i,j))
 S_(t,i)     sketch-sha512's k_s × 4096 signs, k_s the registration's rows (16 or 64): K = derive(seed_(t,i),
-            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 4096}), row c the first
+            "verity/poub/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 4096}), row c the first
             512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first) 1 → −1 and 0 → +1
 σ_(i,j)     S_(t,i) · e, e the 4096 bytes of e_(i,j) as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32
             little-endian, 64 bytes at 16 rows and 256 at 64
@@ -405,7 +405,7 @@ spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), 
 leaf c      v_c = y_(i,16c) ‖ … ‖ y_(i,16c+15), positions in plan order, the last leaf short; committed as
             hm96-sha512/row/v2: x_c = sha512/row/v2(v_c), value tree_leaf(key, commit_string(key, x_c, salt_c)),
             salt_c a fresh 192-byte salt
-root_(t,i)  frame-v3-sha512, CommitmentDomain(SHA512("verity/remote-bandwidth/receipt-tree/v0\0" ‖ seed_(t,i) ‖ plan
+root_(t,i)  frame-v3-sha512, CommitmentDomain(SHA512("verity/poub/receipt-tree/v0\0" ‖ seed_(t,i) ‖ plan
             digest), 0, positions 0 … ⌈L/16⌉ − 1, "sha512"), schema "hm96-sha512/row/v2"
 ~~~
 
@@ -583,7 +583,7 @@ What each kind rests on:
   enters before the sketch, \(e = E_j \oplus \text{spread}(z)\), as §8's third rule requires, and XOR with a fixed \(z\)
   permutes each sector, so each sector's fiber is the same. But `RateAuditSketch`'s digest is of the tile alone, so that
   form needs it restated over the block and \(z\) together, and it is not part of the stated guarantee. The verifier's
-  registry (`RemoteAudit.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration until
+  registry (`PoubCheck.Registry.register`, and `audit.Registry.register` beside it) refuses such a registration until
   its definition covers it.
 
 **Where sketch-sha512's bound is read** (`timing.sketch_reading`, `timing.sketch_failure`, pinned by
@@ -798,7 +798,7 @@ set): so the challenger's signed log, where
 the openings coin's request names the window's last root, fixes a paced window's end at that root. A window with
 fewer than `min_passes` roots then rejects with `few`. Otherwise the challenger releases the window's openings coin
 \(c_{W+t}\), and the verifier draws \(s\) distinct receipts uniformly from the window's \(U_t\) with it
-(`Session.close`): `derive(c_(W+t), "verity/remote-bandwidth/openings/v0", {registration, window: t}).subset(min(s,
+(`Session.close`): `derive(c_(W+t), "verity/poub/openings/v0", {registration, window: t}).subset(min(s,
 U_t), U_t, "openings")`. Unit \(u\) is (pass, position): pass \(i\) for the first \(i\) whose prefix sum
 \(L_{t,0} + \dots + L_{t,i}\) exceeds \(u\), and the position \(u\) less the passes before it. Windows are drawn in
 order. The coin is released only after every root it draws from is fixed, so the draw is independent of the roots.
@@ -934,12 +934,12 @@ pace naming `in_flight`) window \(t\)'s boundary message is due once \(t\) has i
 \(\max(b_{t-1} + k A, D_{t-1})\), and is refused before any of them arrived; a root of \(t\) after it is out of turn
 (`order`). So every coin leaves after the root before it, which the challenger's signed log shows
 (`coins.released_reason`) and a record naming \(f = 1\) holds (`Record`), and the honest prover waits a round trip on
-each coin. The Lean is `RemoteAudit.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
+each coin. The Lean is `PoubCheck.Flight`, which is the session at \(f = 2\) (`Flight.run_two`).
 
 Each root's arrival on the verifier's clock is in the record (`WindowRecord.arrived_ns`), so the record bounds when
 each group's reads were: after its challenge left at \(s_g = b_{g-1}\), and before
 \(e_g = \max(\text{its last root's arrival}, s_{g+1})\) (the closing window's: its last arrival). The time-held line
-reads that (`ledger.memory`, `Accounting.Guarantees.Remote.HeldOverTime`). A registered block absent from node memory
+reads that (`ledger.memory`, `Accounting.Guarantees.Poub.HeldOverTime`). A registered block absent from node memory
 between two correct reads of it is absent for at most the groups between them, each of whose passes read it wrong, or
 it came back by a rebuild, a disk read or a link. The credited span runs from \(e_0\) (before the first group's reads a
 block may never have been there) to the closing window's challenge \(s_C\), whose reads back it. A block a pass leaves
@@ -996,7 +996,7 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
   takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
   computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
-  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
+  `Accounting.Guarantees.Poub.SketchBoundLine` carries to the line's coins), and the line of record says it is
   conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
   field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
   (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
@@ -1127,7 +1127,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     as before, each pass still starts after the root before it and sends its root once its receipts are made (§5),
     and the verifier sees the same messages, so what it accepts is unchanged.
 - **The schedule check.** Credit after the seed waits on it (`schedule.py`, of record in
-  `lean/RemoteAudit/Schedule.lean`, held by the difftest). Before the session's first coin the prover commits a cap
+  `lean/PoubCheck/Schedule.lean`, held by the difftest). Before the session's first coin the prover commits a cap
   \(a\) on its schedule's bits, with the session's parameters (`Params.schedule_cap`; none, the default, and nothing
   after the seed is credited). After the session it publishes the schedule: when each appended block is written and
   freed, which registered blocks are freed and when, and each pass's step. The verifier refuses a schedule over the
@@ -1136,8 +1136,8 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`Session.scheduled`, a `Scheduled` verdict carrying the cap; `Ledger.steering` is the cap). `ledger` credits
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
-  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, under
-  `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
+  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.PoubCheck.steered_of_checked`, under
+  `Properties.PoubCheck.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
   own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a schedule's length can follow
   the coins. A prover that publishes a 200-bit schedule on most coins and a 300-bit one where it steers takes up to
   \(2^{200} + 2^{300}\) layouts, so only \(a = 301\) holds of it, and its 200-bit sessions credited at 200 would
@@ -1312,14 +1312,14 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   keeps them, and the leaves' salts: 64 bytes a 4 KiB block and 192 a leaf of 16, about 1/60 of what it read in the
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (about 0.06–0.1%). The reference keeps every pass whole.
-- **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
-  each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
+- **Lean.** The statement is `Accounting.Guarantees.PoubSessionRunConservation` (and `PoubWindowRunConservation`,
+  each with a `Relay` form): `Accounting.SecurityProofs.Poub.Conservation` at the per-pass routes proved for
   it. The openings are
   `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
   the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
   one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
   distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
+  size: `Accounting.Guarantees.Poub.PooledDraw` states it on the deployed draw (`Accounting.Poub.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
@@ -1341,10 +1341,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   cut fixes the roots; the deployed prover may compute them from the coin commitment, so that is the gap
   `binding-split` (below).
   `pooled` is computed in exact rationals in the verifier's Lean
-  (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
-  certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
+  (`lean/PoubCheck/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
+  certified rational root, and `Properties.PoubCheck.PooledCovers` proves its W at least the bound `PooledDraw`
   reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
-  record's windows (`Properties.RemoteAudit.LineCoversSession`). What this code supplies is the schedule (each
+  record's windows (`Properties.PoubCheck.LineCoversSession`). What this code supplies is the schedule (each
   window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
   a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
   the profile at δ.
@@ -1368,7 +1368,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`Committed.play`, which gives the prover the commitment from the start) and a statement that the play fixes each
   window's receipts by its cut, which is what closes the gap. The same view may also let `PooledDraw` drop the
   hiding terms, which is for its statement to show.
-- **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
+- **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/PoubCheck/Store.lean`
   and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
   its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
   weights blocks' digests (`expectedRoot`) and `Binding.hold`'s decision (`hold`). Reading the files stays Python only:
@@ -1567,7 +1567,7 @@ Per pass \(i\), after root \(i-1\):
 ~~~text
 seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
 S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
-           "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
+           "verity/poub/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
            K.stream(("row", c), 1028) (verity.ml.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
            the sign of the unit's byte x: 1 → −1, 0 → +1
 ~~~
@@ -1615,7 +1615,7 @@ nothing (`append`).
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
 - Not yet built: the Lean session over a P2 store (the Lean ports here are the registration digest, the partials,
-  the unit receipt and the opening check, `lean/RemoteAudit/P2.lean`), the registry's one live registration a node for
+  the unit receipt and the opening check, `lean/PoubCheck/P2.lean`), the registry's one live registration a node for
   P2, and the zero-knowledge opening unit of a P2 unit (§8).
 
 ## Appendix A. Live coins, and why the protocol doesn't use them

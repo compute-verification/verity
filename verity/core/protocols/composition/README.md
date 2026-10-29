@@ -55,7 +55,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | PoUW (its window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
-| proof of useful bandwidth, PoUB (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../poub/lean`) | `verity/remote-bandwidth/v0` |
+| proof of useful bandwidth, PoUB (its session) | yes | | `PoubCheck.Protocol.protocol` (`poub_check`, `../poub/lean`) | `verity/poub/v0` |
 
 Every subprotocol of both products is ported to its own `Core.Protocol`. The inference-only policy is not a subprotocol of
 either product yet.

@@ -18,5 +18,5 @@ gate (with `gcc`), and `gamma.py`, `wide.py` and `cycle_fit.py`. `sq.sh` needs o
 **Reads and writes:** `sq.sh` and `ifma.sh` write `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's
 CSVs and the build logs into their output directory; `cycle_fit.py` reads `sq.sh`'s outputs. **Backs:** these rates are
 the evidence for `timing.GPU_SQUARINGS_PER_S` and so for the stated ceiling C_sq (`timing.SQUARINGS_PER_S`), the `s` of
-the named assumption `Accounting.Remote.Held.Assumptions.SquaringCeiling`, which `Accounting.Guarantees.Remote.Held`
+the named assumption `Accounting.Poub.Held.Assumptions.SquaringCeiling`, which `Accounting.Guarantees.Poub.Held`
 and `HeldOverTime` take.

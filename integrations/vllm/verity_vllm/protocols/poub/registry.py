@@ -28,7 +28,7 @@ the registration's root before the session's first.  The reference computes ever
 The plan and the tree are the remote bandwidth driver's, imported (`rb`, its `receipts`): a pass's plan is its
 `Plan` (canonical runs of distinct blocks; `plan_digest` is its digest in numpy), its tree `rb.domain`'s
 frame-v3-sha512 over leaves of ``PER_LEAF`` receipts in plan order, each `rb.hidden` as an hm96-sha512/row/v2 leaf
-under its salt, and an opening verifies by `rb.verify_leaf`.  `RemoteBandwidthReceipt` is its receipt.  The seed is
+under its salt, and an opening verifies by `rb.verify_leaf`.  `PoubReceipt` is its receipt.  The seed is
 the chained one (`chain`, under its seed domain).  A leaf's salt is `Store.salt`, a PRF of the store's secret key, so
 no salt is kept.
 """
@@ -159,11 +159,11 @@ class KindReceipt:
 
 
 @dataclass(frozen=True)
-class RemoteBandwidthReceipt:
+class PoubReceipt:
     """The remote bandwidth driver's receipt (`rb.Receipter`): ``SHA512(Z(D ‖ frame(seed)) ‖ u64be j ‖ E_j ⊕
     spread(z))`` of a 4 KiB block, bound to the output ``z`` of the tile before its read."""
 
-    name: str = "verity/remote-bandwidth/receipt/v0"
+    name: str = "verity/poub/receipt/v0"
     receipt_bytes: int = rb.DIGEST_BYTES
     binds: tuple[str, ...] = ("z",)
 

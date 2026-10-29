@@ -210,7 +210,7 @@ class P2Codec:
     segments.  A P2 store's labels are PoUS's 2,056-byte codewords, opened on PoUS's `vk` and never decoded by this
     protocol, and its receipts are of units under `P2_LAYOUT`.  Nothing of the Sloth codec above takes it, and
     `audit.Rebuild` refuses it: μ_rebuild over a P2 store waits on the squaring ceiling at P2's encode
-    (`Accounting.Remote.Held.Assumptions.SquaringCeilingP2`, drafted)."""
+    (`Accounting.Poub.Held.Assumptions.SquaringCeilingP2`, drafted)."""
 
     blocks_per_segment: int
     segments: int

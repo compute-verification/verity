@@ -61,7 +61,7 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   (`acts_encard_le_links`; the `+ 1` is the content's length).
 * `Actual/Sampler.lean`: the deployed uniform sampler on one word (`Accounting.Actual.wordIndex`) accepts
   `2^w − (2^w mod N)` words and gives each index at most `⌊2^w / N⌋` of them (`card_accepted`, `card_fiber_le`), with
-  the probability facts the remote audit's opening draw is proved with.
+  the probability facts PoUB's opening draw is proved with.
 
 The wipe is PoUS's streamed-label wipe (`Pous.StreamedWipe`, its guarantees `Pous.Guarantees.StreamedWipeMeetsFamily`
 and `StreamedWipeMeetsReads`), read through core's `Verity.Wipe.SurvivorBound`.

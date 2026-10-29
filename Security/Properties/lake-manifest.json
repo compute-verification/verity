@@ -80,7 +80,7 @@
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
-   "name": "remote_audit",
+   "name": "poub_check",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../../verity/core/protocols/poub/lean",

@@ -53,7 +53,7 @@ every file the pin names is held to its SHA-512 and the arena the checkpoint lay
 then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
 store's under the key sent, else the hello is refused with the reason before the registry draws anything. The
 Lean verifier decides it: it takes the pin's bytes and the weights blocks' digests at
-startup (`bind_lean`, `RemoteAudit.Store.bind`) and holds the hello to them (`hold_store`, `Store.hold`, its root's
+startup (`bind_lean`, `PoubCheck.Store.bind`) and holds the hello to them (`hold_store`, `Store.hold`, its root's
 subtrees on `--layout-workers` threads), `Binding.hold` beside it as the reference (its root in as many processes),
 the two computing their roots at once on the same cores and the hello decided once both have answered, and a hello on
 which the two differ is refused as `disagreement`. The regions
@@ -61,7 +61,7 @@ are then the binding's, and verifier.json keeps the binding (`binding`: the pin'
 store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.py` credits on. A process takes one
 hello, so its sessions share the one root it held; another process's payload key is fresh, so its root is another.
 
-The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
+The verdicts are the Lean verifier's, the process `poub-check-verifier` (`lean_verifier.py`): it holds
 the registry and every session, and each registration, session, event and window goes to it and to `audit.Session`
 at one reading of the clock (`Pair`). An accepted session's record is the Lean's (`Pair.record`), and its ledger
 reads that record. `audit.Session` keeps the driver's books (its coins, its plans, when the next boundary leaves) and
@@ -664,7 +664,7 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
 
 
 def bind_lean(lean: lv.Lean, b: rstore.Binding) -> dict:
-    """The store binding started in the Lean verifier (`bind`, `RemoteAudit.Store.bind`): the pin from the bytes
+    """The store binding started in the Lean verifier (`bind`, `PoubCheck.Store.bind`): the pin from the bytes
     `b` read of its file, the store's shape, and the weights blocks' digests `b` computed, which the Lean's `hold`
     salts and climbs on `b.workers` threads. Its answer, `{"pin", "weights_blocks"}` or `{"refused": why}`, or
     `{"error": why}`."""
@@ -1557,7 +1557,7 @@ def main() -> int:
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
     ap.add_argument("--lean-exe", type=Path,
-                    help="a built remote-audit-verifier (default: `lake build` it in its package)")
+                    help="a built poub-check-verifier (default: `lake build` it in its package)")
     ap.add_argument("--transcript", type=Path, metavar="DIR",
                     help="write each session's difftest case to DIR (`lean_verifier.Transcript`: about 0.6 GB a "
                          "window at 33,273 openings), its path, bytes and sha256 in verifier.json")

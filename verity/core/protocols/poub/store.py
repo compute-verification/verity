@@ -1,8 +1,8 @@
 """A registered store bound to a pinned model: what a pinned BF16 checkpoint alone fixes, so the verifier recomputes the
 payload root the prover's hello must carry and refuses any other (`Binding`), in the tree whose git hash names the
-verifier a period's circuit commits to (`verity/remote-bandwidth/v0 verifier tree <tree>`,
+verifier a period's circuit commits to (`verity/poub/v0 verifier tree <tree>`,
 `sampled_proofs.challenger.credited_session`). The decision from what the files hold is Lean's
-(`lean/RemoteAudit/Store.lean`), which decides a session's `bound`: the verifier's Lean process takes the pin's bytes
+(`lean/PoubCheck/Store.lean`), which decides a session's `bound`: the verifier's Lean process takes the pin's bytes
 and the weights chunks' digests at startup (`bind`) and decides each hello (`hold`), `Binding` beside it as the
 reference, a disagreement refusing the hello (`benchmarks/poub_session/verifier.py`). This is held to it by
 `lean/tests/test_binding.py`: the pin from its file's bytes (`pin_of`, `model_pin`), `checkpoint_sha512`, `store_salt`,
@@ -107,7 +107,7 @@ def _constant(name: str) -> object:
 
 
 def _loads(text: str):
-    """JSON as `RemoteAudit.Store.loads` reads it: numbers opaque (`_number`), no NaN or Infinity, and no string
+    """JSON as `PoubCheck.Store.loads` reads it: numbers opaque (`_number`), no NaN or Infinity, and no string
     holding a lone surrogate, which `json.loads` keeps and Lean's parser reads as U+FFFD (its encoding raises)."""
     doc = json.loads(text, parse_int=_number, parse_float=_number, parse_constant=_constant)
     json.dumps(doc, ensure_ascii=False, default=lambda _: None).encode()
@@ -139,7 +139,7 @@ def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
     {name, checkpoint, checkpoint_sha512}. A registry line names its model `model`, which is read as `name`; a registry
     itself (`models.jsonl`, a line a registration) is read as its lines of `role`, which must pin one checkpoint; core's
     pin (`verity/core/protocols/pouw/lean/check/models.json`, {ROLE: {checkpoint_sha512, files: {file: SHA-512 hex},
-    ...}}) as its entry of `role`, named `role`, its `files` the checkpoint. `RemoteAudit.Store.pinOf` is its
+    ...}}) as its entry of `role`, named `role`, its `files` the checkpoint. `PoubCheck.Store.pinOf` is its
     definition, refusals word for word (`lean/tests/test_binding.py`)."""
     try:
         text = data.decode("utf-8")
@@ -183,7 +183,7 @@ def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
 
 
 def model_pin(data: bytes, path: str, role: str) -> dict:
-    """`pin_of` for the binding of `--model role`: the pin must be `role`'s (`RemoteAudit.Store.modelPin`)."""
+    """`pin_of` for the binding of `--model role`: the pin must be `role`'s (`PoubCheck.Store.modelPin`)."""
     pin = pin_of(data, path, role)
     if pin["name"] != role:
         raise Refused(f"the pin {path} is {pin['name']}'s, not --model {role}'s")
@@ -465,7 +465,7 @@ class Binding:
     (`model_pin` of its file's bytes, `pin_data`, its name `role`), every pinned file held to it (`check`), the arena
     laid out (`arena`) and its weights chunks' digests computed (`weight_digests`, the file `digests`); at each hello
     (`hold`), the store the hello's size makes of `engines` arenas of `arena_blocks` and the rest host filler, and its
-    payload root under the verifier's key, against the hello's. The Lean's binding (`RemoteAudit.Store.bind`, `hold`)
+    payload root under the verifier's key, against the hello's. The Lean's binding (`PoubCheck.Store.bind`, `hold`)
     takes `pin_data` and `digests`. `record` is what `verifier.json` keeps of it."""
 
     def __init__(self, role: str, directory: Path, pin_path: Path, engines: int, arena_blocks: int, *,

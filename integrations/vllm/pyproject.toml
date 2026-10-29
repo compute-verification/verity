@@ -61,7 +61,7 @@ markers = [
 # test_repo_ruff.py, test_repo_silent_excepts.py and test_repo_lane_text.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_poub_session.py
-# `remote-audit-verifier`.
+# `poub-check-verifier`.
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",

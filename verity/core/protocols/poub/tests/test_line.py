@@ -1,5 +1,5 @@
 """The memory line held over time (`line`) in exact rationals: a stretch's span, L, rebuilds, fill and both readings
-as `RemoteHeld.lean`'s forms charge them, each form's rate and burst from the node's, the worst stretch the first on a
+as `PoubHeld.lean`'s forms charge them, each form's rate and burst from the node's, the worst stretch the first on a
 tie, every refusal, and the JSON form the Lean reads, W the pooled bound of the record's windows."""
 
 from __future__ import annotations

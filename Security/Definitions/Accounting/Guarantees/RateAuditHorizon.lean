@@ -1,4 +1,4 @@
-import Definitions.Accounting.RateAuditRemote
+import Definitions.Accounting.RateAuditPoub
 import Definitions.Accounting.RateAuditHorizon
 
 /-!
@@ -88,7 +88,7 @@ every tier and rebuilt words, plus each pass's on-chip state, free link bits and
 
 is at most `(K / (P·N))^(s·P) + P·(N/2^h + 2^q/2^λ)`.
 
-**The reading.** The route `Sampled` of the remote audit: a window whose `s·P` openings all pass read, rebuilt or held
+**The reading.** The route `Sampled` of PoUB: a window whose `s·P` openings all pass read, rebuilt or held
 the words of more than `K = (1 − d̄)·P·N` correct receipts, except with `(1 − d̄)^(s·P)` plus `RateChainPaidRO`'s error.
 
 Proof: `Accounting.SecurityProofs.RateChainSampledRO`: at most `K` correct receipts is `RateHorizon`'s event, and more

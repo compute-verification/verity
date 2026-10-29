@@ -1,7 +1,7 @@
 """The remote bandwidth session over the node's `Store`, inside the prover's process (the Commit's, or the serve
 driver's): `StoreBackend` is the backend `benchmarks/poub_session`'s `ProverSide` drives, the role `device.Device`
-and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
-`config.CommitConfig.remote_verifier`).
+and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``POUB_VERIFIER``,
+`config.CommitConfig.poub_verifier`).
 
 ~~~text
 hello         the node, N = the store's blocks (`Store.layout`) and the payload root of every block's payload as the
@@ -38,7 +38,7 @@ Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
 `benchmarks/poub_session` is not a package: `session_module` loads its ``prover.py`` (and ``verifier.py``, for a
-local verifier) from the source tree (`config.REMOTE_SESSION`).
+local verifier) from the source tree (`config.POUB_SESSION`).
 """
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def address(value: str) -> tuple[str, int]:
     return host, int(port)
 
 
-def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> ModuleType:
+def session_module(name: str, directory: str | Path = config.POUB_SESSION) -> ModuleType:
     """``benchmarks/poub_session``'s module ``name`` (``prover``, ``verifier``, ``wire``), loaded once from its file,
     as its own scripts import it."""
     if name in sys.modules:
@@ -607,7 +607,7 @@ class Lockstep:
 
 
 class CommitSession:
-    """The Commit's remote bandwidth session (``--remote-verifier HOST:PORT``, `pipeline.commit`), on its engine:
+    """The Commit's remote bandwidth session (``--poub-verifier HOST:PORT``, `pipeline.commit`), on its engine:
 
     ~~~text
     engine_args  before the build: one GPU, synchronous scheduling, no prefix caching (refusing anything else), the KV
@@ -651,7 +651,7 @@ class CommitSession:
         if not 1 <= len(node.encode()) <= audit.NODE_BYTES:
             raise ValueError(f"the session's node id {node!r} is not 1 to {audit.NODE_BYTES} bytes")
         if "," in plan:
-            raise ValueError("a store serves one session: --remote-plan is one mode")
+            raise ValueError("a store serves one session: --poub-plan is one mode")
         if session_module("prover").parse_plan(plan)[0][0] != "serve":
             raise ValueError(f"the Commit's session is serve, not {plan!r}: its store (weights and filler) appends nothing")
         if kv_pages is not None and kv_pages < 1:
@@ -676,7 +676,7 @@ class CommitSession:
         if engine_args.get("enable_prefix_caching"):
             why.append("prefix caching (a prefix hit brings a page back with its KV)")
         if why:
-            raise SystemExit("--remote-verifier refuses " + "; ".join(why))
+            raise SystemExit("--poub-verifier refuses " + "; ".join(why))
         pool = {} if self.kv_pages is None else {"num_gpu_blocks_override": self.kv_pages}
         return {**engine_args, "async_scheduling": False, "enable_prefix_caching": False, **pool}
 
@@ -685,7 +685,7 @@ class CommitSession:
         runs (a target that leaves it unset is specialized for the scheduler vLLM resolves, async, LAG 1)."""
         got = getattr(target, "async_scheduling", None)
         if got is not False:
-            raise SystemExit(f"--remote-verifier: the row's target declares async_scheduling {got!r}, and the session's "
+            raise SystemExit(f"--poub-verifier: the row's target declares async_scheduling {got!r}, and the session's "
                              "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
@@ -712,7 +712,7 @@ class CommitSession:
         if "kv" in {r.kind for r in self.store.layout().regions}:
             why.append("a KV pool registered (served writes stay outside the registration)")
         if why:
-            raise SystemExit("--remote-verifier: the engine is not one the session serves: " + "; ".join(why))
+            raise SystemExit("--poub-verifier: the engine is not one the session serves: " + "; ".join(why))
         if self.filler_gib:
             self.binder.register_filler(int(self.filler_gib * (1 << 30)), runner.device)
         stats = self.binder.stats()

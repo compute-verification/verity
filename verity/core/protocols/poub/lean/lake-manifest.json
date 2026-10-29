@@ -58,6 +58,6 @@
    "dir":
    "../../pous/check/../../../devices/memory_challenger/lean/../../../primitives/lms/lean",
    "configFile": "lakefile.toml"}],
- "name": "remote_audit",
+ "name": "poub_check",
  "lakeDir": ".lake",
  "fixedToolchain": false}

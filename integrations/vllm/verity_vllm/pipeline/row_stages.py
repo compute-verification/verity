@@ -563,8 +563,8 @@ class SingleRow(Row):
             cmd += ["--vu-export-dir", self.vu_export_dir()]
         if ck.serving_rows:
             cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
-        if ck.remote_verifier:
-            cmd += ["--remote-verifier", ck.remote_verifier]
+        if ck.poub_verifier:
+            cmd += ["--poub-verifier", ck.poub_verifier]
         return cmd + R.tap_source_args(taps, self.env)
 
     def vu_export_dir(self) -> str:

@@ -36,7 +36,7 @@ deployed guarantee's (`pr_deployed_of_unpaid_causal`).
 circuit first, reading every step's bits over the side link at odd addresses (`PIChip.walk`, within `C` bits), and then
 runs the device with its carrier reads answered from the circuit's values (`PIChip.answer`). The simulating device
 (`PIDevice.stack`) has the device's state, memory, receipts, tier reads and compute, and side link `L + C`, so
-`RemoteSessionConservationRelay` bounds its session, which is the stacked session's event.
+`PoubSessionConservationRelay` bounds its session, which is the stacked session's event.
 
 `Accounting.SecurityProofs.StackedRequirementSketchDeployed` and `Accounting.SecurityProofs.StackedRequirementRelay`
 bound a declared circuit's held and read bits over at most `k` steps by the store's `k·N·B` when the store and the plans
@@ -1087,7 +1087,7 @@ theorem CarrierBits : Accounting.Guarantees.CarrierBits := by
   have h := c.card_image_le Finset.univ (I + X) fun E _ => add_le_add (hc E).1 (hc E).2
   rwa [Nat.card_coe_set_eq, Set.ncard_eq_toFinset_card', Set.toFinset_range]
 
-/-- **The remote audit at the deployed parameters with a store per pass, with stacking**,
+/-- **PoUB at the deployed parameters with a store per pass, with stacking**,
 `Accounting.Guarantees.StackedSessionConservationSketchDeployed`. -/
 theorem StackedSessionConservationSketchDeployed :
     Accounting.Guarantees.StackedSessionConservationSketchDeployed := by
@@ -1133,7 +1133,7 @@ theorem StackedSessionConservationSketchDeployed :
   rw [show 8 * 12 = 96 from rfl]
   ring
 
-/-- **The remote audit with relaying side sources on a programmed store, with stacking**,
+/-- **PoUB with relaying side sources on a programmed store, with stacking**,
 `Accounting.Guarantees.StackedSessionConservationRelay`. -/
 theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier
@@ -1155,9 +1155,9 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
           P * (S + (L + C - ρ) + Rate.Deployed.rebuildBits b rounds cRoot F + (lam + m * b)) <
         (((A.stack L C K hL).win w ω).correctAll Es (ω w).1).card * b
   have hunif := Rate.DeployedSession.pr_unpaid_le (A.stack L C K hL) tier _ _
-    (Remote.window_relay_le (lam := lam) (m := m) (A.stack L C K hL) tier hrc hW
+    (Poub.window_relay_le (lam := lam) (m := m) (A.stack L C K hL) tier hrc hW
       (fun w η j ι c => Rate.PIDevice.stack_ceiling _ L C (K w η j ι c) (hL w η j ι c) (hF w η j ι c)))
-  have base := Remote.session_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
+  have base := Poub.session_relay_of_unpaid (fun y => appendCoinBlocks enc choose slot y) (A.stack L C K hL) tier
     lam m rounds cRoot F dbar dw hn hP hN hb hdw _ (hu.trans (add_le_add hunif le_rfl))
   refine ((Bandwidth.pr_mono fun y hy => ?_).trans base).trans (le_of_eq ?_)
   · have e := fun w => Rate.DeployedSession.stack_win A L C K hL hside hC tier w y.2
@@ -1167,7 +1167,7 @@ theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionCo
   · simp only [div_eq_mul_inv]
     ring
 
-/-- **The stacked remote audit at the deployed parameters, read against a declared circuit's requirement**,
+/-- **PoUB with stacking at the deployed parameters, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementSketchDeployed`. -/
 theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed := by
   intro n P N ρ S L q G X qtot Rin cρ reads life E es B εnum εden T M ε δ Ω Ca Ch _ _ enc choose slot A V _ W e ℓ mm
@@ -1181,7 +1181,7 @@ theorem StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirem
   simp only [Nat.cast_mul, Nat.cast_ofNat] at h
   exact h
 
-/-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement**,
+/-- **PoUB with stacking with relaying side sources, read against a declared circuit's requirement**,
 `Accounting.Guarantees.StackedRequirementRelay`. -/
 theorem StackedRequirementRelay : Accounting.Guarantees.StackedRequirementRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier

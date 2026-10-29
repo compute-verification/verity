@@ -1,23 +1,23 @@
 import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.Remote
+import Proofs.Accounting.Poub
 
 /-!
-# The deployed session as a run of the remote audit: its routes, and conservation at the same `γ`
+# The deployed session as a run of PoUB: its routes, and conservation at the same `γ`
 
-`Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of the remote audit. Its routes:
+`Accounting.Poub.Run.ofDeployed` reads a deployed session as a run of PoUB. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
   `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's draw (`DeployedSession.pr_draws_horizon_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
   (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_draw_le`) covers.
 
-`Accounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
+`Accounting.SecurityProofs.Poub.Conservation` composes them; the run's payments other than its tier reads are the
 `n·P` passes' `S + (L − ρ) + X` bits, so its `(1 − d̄ − λ)·C` of payments are `(1 − (d̄ + γ))·C` of tier reads, with
 `γ` the deployed game's `Deployed.gammaPass`. The remote model's probability is real (`Pouw.pr`), the game's in `ℝ≥0∞`
 (`Pous.pr`); `pouw_pr_le` carries a bound across.
 -/
 
-namespace Accounting.Remote
+namespace Accounting.Poub
 
 open Accounting.Rate
 open scoped ENNReal
@@ -207,26 +207,26 @@ theorem ofDeployedWindow_paid_route (A : DeployedSession n P N b h ρ S L q r s 
   have e : P * (S + (L - ρ) + X + lam) = P * (L - ρ) + P * S + P * X + P * lam := by ring
   omega
 
-end Accounting.Remote
+end Accounting.Poub
 
 namespace Accounting.SecurityProofs
 
-open Accounting.Rate Accounting.Remote
+open Accounting.Rate Accounting.Poub
 
-/-- **The deployed session meets the remote audit's routes** (`Accounting.Guarantees.RemoteSessionRoutes`). -/
-theorem RemoteSessionRoutes : Accounting.Guarantees.RemoteSessionRoutes := by
+/-- **The deployed session meets PoUB's routes** (`Accounting.Guarantees.PoubSessionRoutes`). -/
+theorem PoubSessionRoutes : Accounting.Guarantees.PoubSessionRoutes := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
   exact ⟨ofDeployed_sampled A tier _ Nd a dbar hn hP hN hb hdbar hab hC,
     ofDeployed_paid_route A tier Nd a hrc ha hab hal hW hF hA⟩
 
-/-- **The deployed session conserves its words as a run of the remote audit, at the same `γ`**
-(`Accounting.Guarantees.RemoteSessionRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteSessionRunConservation : Accounting.Guarantees.RemoteSessionRunConservation := by
+/-- **The deployed session conserves its words as a run of PoUB, at the same `γ`**
+(`Accounting.Guarantees.PoubSessionRunConservation`), from `Accounting.SecurityProofs.Poub.Conservation`. -/
+theorem PoubSessionRunConservation : Accounting.Guarantees.PoubSessionRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
-  obtain ⟨hs, hp⟩ := RemoteSessionRoutes n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN
+  obtain ⟨hs, hp⟩ := PoubSessionRoutes n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN
     hb hrc hdbar ha hab hal hC hW hF hA
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
-  refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
+  refine Poub.holds_mono ?_ (Poub.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
   rintro x - ⟨h1, h2⟩
   refine ⟨h1, ?_⟩
   rw [ofDeployed_paid] at h2
@@ -243,14 +243,14 @@ theorem RemoteSessionRunConservation : Accounting.Guarantees.RemoteSessionRunCon
   rw [hCr] at h2 eΛ k ⊢
   nlinarith [h2, eΛ, k]
 
-/-- **Each window conserves its words as a run of the remote audit, at the same `γ_w`**
-(`Accounting.Guarantees.RemoteWindowRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteWindowRunConservation : Accounting.Guarantees.RemoteWindowRunConservation := by
+/-- **Each window conserves its words as a run of PoUB, at the same `γ_w`**
+(`Accounting.Guarantees.PoubWindowRunConservation`), from `Accounting.SecurityProofs.Poub.Conservation`. -/
+theorem PoubWindowRunConservation : Accounting.Guarantees.PoubWindowRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF hA
   have hs := ofDeployedWindow_sampled A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a dw hP hN hb hdw hab hC
   have hp := ofDeployedWindow_paid_route A w tier Nd a hrc ha hab hal hW hF hA
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
-  refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dw _ _ hC0 hs hp)
+  refine Poub.holds_mono ?_ (Poub.Conservation (Fin τ) _ Nd a _ dw _ _ hC0 hs hp)
   rintro x - ⟨h1, h2⟩
   refine ⟨h1, ?_⟩
   rw [ofDeployedWindow_paid] at h2

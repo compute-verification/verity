@@ -47,14 +47,14 @@ from device import BLOCK, PER_LEAF, Lib, digests, rb, store_salt  # noqa: E402
 from inplace import FUSED_H0, InPlace, Region, level_at  # noqa: E402
 from verity_vllm.protocols.poub.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.protocols.poub.interface import IDENTITY, PageLayout  # noqa: E402
-from verity_vllm.protocols.poub.registry import RemoteBandwidthReceipt, Store  # noqa: E402
+from verity_vllm.protocols.poub.registry import PoubReceipt, Store  # noqa: E402
 
 ROWS = rb.SKETCH_ROWS
 
 
 def register(torch, weights: list, kv: list, pages: int, slots: int):
     """A binder's store over `weights` ((name, tensor)) and the KV layers `kv`: the store and each region's backing."""
-    store, backs, receipt = Store(), [], RemoteBandwidthReceipt()
+    store, backs, receipt = Store(), [], PoubReceipt()
     for name, t in weights:
         b = TorchBacking.of_tensor(t, BLOCK)
         store.register(name, "hbm", "weights", b, block_bytes=BLOCK, codec=IDENTITY, receipt=receipt,

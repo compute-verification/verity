@@ -1,4 +1,4 @@
-import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.PoubCheck.Sort
 import Proofs.Properties.Nci.Desc
 
 /-!
@@ -15,7 +15,7 @@ is the total width of the distinct gates its segments name, wherever no gate is 
   (`Desc.sum_copies`).
 * `sweep_eq`: `sweepStep`'s sweep over items sorted by start splits them into components no gate is in two of.
 * `frameFold_inv`: frames of one start, period and count merge into one with the union of their gates (`Array.qsort`
-  only permutes, `Properties.RemoteAudit.qsort_toList_perm`).
+  only permutes, `Properties.PoubCheck.qsort_toList_perm`).
 * `copiesStep_inv`: a segment of copies gives its copies' intervals or one frame of them, with its gates.
 * `tail_eq` and `novelWidth_sum` put them together, given `GateIvsExact` (`novelWidthExact_of`): `Desc.gateIvs` gives a
   piece list's gates as intervals, with their widths.
@@ -544,7 +544,7 @@ theorem tail_eq (W : ℕ → ℕ) (ivs : Array (ℕ × ℕ × ℕ)) (cls : Array
     (if fin.2.1.isEmpty then fin.1 else fin.1 + widthIn ivs frames fin.2.1) =
       ∑ a ∈ ivGates ivs.toList ∪ FGs cls.toList, W a := by
   intro frames n items fin
-  have hperm := Properties.RemoteAudit.qsort_toList_perm cls lt
+  have hperm := Properties.PoubCheck.qsort_toList_perm cls lt
   obtain ⟨hFr, hFg⟩ := frameFold_inv W (cls.qsort lt).toList #[] (by simp)
     (fun x hx => hF x (hperm.mem_iff.1 hx))
   rw [Array.foldl_toList] at hFr hFg
@@ -974,7 +974,7 @@ def IvsOfExact : Prop :=
 
 theorem mem_qsort_toList {α : Type} {xs : Array α} {lt : α → α → Bool} {a : α} :
     a ∈ (xs.qsort lt).toList ↔ a ∈ xs.toList :=
-  (Properties.RemoteAudit.qsort_toList_perm xs lt).mem_iff
+  (Properties.PoubCheck.qsort_toList_perm xs lt).mem_iff
 
 theorem mem_gateIvs {qs : Array Piece} {z : ℕ × ℕ × ℕ} : z ∈ (gateIvs qs).toList ↔
     ∃ w, (∃ q ∈ qs.toList, q.tgt = .gate w) ∧ ∃ iv ∈ (ivsOf (qs.filter (·.tgt == .gate w))).toList, z = (iv.1, iv.2, w) := by

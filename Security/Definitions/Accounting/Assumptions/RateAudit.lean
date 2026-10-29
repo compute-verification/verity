@@ -8,10 +8,10 @@ What the rate audit with partial completion (`Definitions/Accounting/RateAuditPa
 
 * `WorkHardness b rounds c_root cost`: completing `x` of a word's `b` bits costs at least `x/b` of a word's price
   `rounds · c_root` (claim `rate-codec-work`, `WorkHardness(p, k)` in partial-completion form, at `k = rounds`). The
-  price is a parameter. The remote audit's route `Accounting.Remote.Run.Rebuild` (`rebuilt · c_word ≤ b · rebuildWork`)
+  price is a parameter. PoUB's route `Accounting.Poub.Run.Rebuild` (`rebuilt · c_word ≤ b · rebuildWork`)
   is what it gives a run (`Accounting.Guarantees.RatePartialRebuild`).
 * `RateComputeAdditive`: a joint run's compute account and its bandwidth game share no work (the actual-circuit
-  model's compute additivity, W), the remote audit's `Accounting.Remote.Assumptions.ComputeAdditive` for the device
+  model's compute additivity, W), PoUB's `Accounting.Poub.Assumptions.ComputeAdditive` for the device
   model's joint run.
 -/
 

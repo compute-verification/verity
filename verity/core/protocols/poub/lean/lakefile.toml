@@ -1,12 +1,12 @@
-# The remote bandwidth audit's verifier as executable Lean (`verity/remote-bandwidth/v0`), its definition: a window's
-# receipt checks (`RemoteAudit.verifyWindow`), the session's bookkeeping (`RemoteAudit.Session`) and the verifier's
-# registrations (`RemoteAudit.Registry`), which `audit.py` is held to by the difftest (`remote-audit-difftest`), and the
-# verifier's process the driver runs (`remote-audit-verifier`, `RemoteAudit.Verifier`), the session as a core
-# protocol (`remote-audit-protocol`, `RemoteAudit.Protocol`, onsite's bandwidth component), and a P2 store's receipts
-# and openings (`RemoteAudit.P2`), which `p2.py` is held to by the same difftest. Code: Lean core and the packages
+# PoUB's verifier as executable Lean (`verity/poub/v0`), its definition: a window's
+# receipt checks (`PoubCheck.verifyWindow`), the session's bookkeeping (`PoubCheck.Session`) and the verifier's
+# registrations (`PoubCheck.Registry`), which `audit.py` is held to by the difftest (`poub-check-difftest`), and the
+# verifier's process the driver runs (`poub-check-verifier`, `PoubCheck.Verifier`), the session as a core
+# protocol (`poub-check-protocol`, `PoubCheck.Protocol`, onsite's bandwidth component), and a P2 store's receipts
+# and openings (`PoubCheck.P2`), which `p2.py` is held to by the same difftest. Code: Lean core and the packages
 # below, no Mathlib and nothing of Security.
-name = "remote_audit"
-defaultTargets = ["RemoteAudit", "remote-audit-difftest", "remote-audit-verifier", "remote-audit-protocol"]
+name = "poub_check"
+defaultTargets = ["PoubCheck", "poub-check-difftest", "poub-check-verifier", "poub-check-protocol"]
 
 [leanOptions]
 autoImplicit = false
@@ -24,7 +24,7 @@ path = "../../../primitives/randomness"
 name = "verity_difftest"
 path = "../../../difftest/lean"
 
-# A P2 store's openings are checked on PoUS's vk (`RemoteAudit.P2`), by PoUS's own leaf and path check
+# A P2 store's openings are checked on PoUS's vk (`PoubCheck.P2`), by PoUS's own leaf and path check
 # (`PousCheck.Merkle`).
 [[require]]
 name = "pous_check"
@@ -35,16 +35,16 @@ name = "core_protocol"
 path = "../../interface"
 
 [[lean_lib]]
-name = "RemoteAudit"
+name = "PoubCheck"
 
 [[lean_exe]]
-name = "remote-audit-difftest"
-root = "RemoteAudit.DifftestMain"
+name = "poub-check-difftest"
+root = "PoubCheck.DifftestMain"
 
 [[lean_exe]]
-name = "remote-audit-verifier"
-root = "RemoteAudit.VerifierMain"
+name = "poub-check-verifier"
+root = "PoubCheck.VerifierMain"
 
 [[lean_exe]]
-name = "remote-audit-protocol"
-root = "RemoteAudit.ProtocolMain"
+name = "poub-check-protocol"
+root = "PoubCheck.ProtocolMain"

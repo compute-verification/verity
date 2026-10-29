@@ -95,7 +95,7 @@ declaration 1
                verity/pouw/v1                           accept
                verity/certifier/v0                      accept
                verity/pous/p2/v4/run                    accept
-               verity/remote-bandwidth/v0               accept
+               verity/poub/v0               accept
                composite verity/onsite/v0               accept
 6 accounting
   period       3 declarations: accept

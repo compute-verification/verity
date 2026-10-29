@@ -28,7 +28,7 @@ auditor's gate starts over ssh with its `--device` directory (`benchmarks/live_v
 `prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s `hold`, `run` and `open` until
 the answer, which it returns.
 
-No Lean replays a P2 session yet (`RemoteAudit.P2` checks one opening); the verdict here is the Python session's.
+No Lean replays a P2 session yet (`PoubCheck.P2` checks one opening); the verdict here is the Python session's.
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ from . import period as P
 from .receipts import Plan
 
 MODULE = "verity.core.protocols.poub.p2_party"
-PROTOCOL = "verity/remote-bandwidth/p2/v0"
+PROTOCOL = "verity/poub/p2/v0"
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
 
 

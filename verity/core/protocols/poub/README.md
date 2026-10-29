@@ -5,16 +5,16 @@ of a node's registered store the node made. `PROTOCOL.md` has the semantics, the
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`: Lean is the definition and the
+The verifier's definition is the Lean package `lean/` (`PoubCheck`: Lean is the definition and the
 verifier of record, Python mirrors it, and PoUB switches first). `audit.py` and what it calls here
 (`receipts.py`, `codec.py`, `coins.py`) mirror it and are held to it by `lean/tests/`' difftest: every event's result,
 the session's outcome and its record, the registry (`Registry`: one live registration a node, each session's index
 `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec seed, codec, plans,
 receipts, openings, draws).
 Where the two differ, the Python is what is wrong. The properties of the Lean's verdicts are
-`Security/Properties/RemoteAudit.lean`.
+`Security/Properties/PoubCheck.lean`.
 
-`benchmarks/poub_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
+`benchmarks/poub_session/verifier.py` runs both. The Lean's process `poub-check-verifier` (`PoubCheck.Verifier`)
 is the verifier of record: it decides each registration, event and window, an accepted session's record is the one
 it returns, and the ledger reads that record. `audit.Session` keeps the books beside it as the reference, and a
 registration, event, window verdict or record field on which they differ refuses the session at that window as
@@ -39,7 +39,7 @@ plans event by event.
 
 The store binding (`store.py`) decides whether a registered store is the one a pinned model fixes (`verifier.py
 --model`, and the gate line's `bound` check, `auditor_line.py`). Its decision from what the files hold is Lean's,
-`lean/RemoteAudit/Store.lean`: the verifier's Lean process takes the pin's bytes and the weights blocks' digests at
+`lean/PoubCheck/Store.lean`: the verifier's Lean process takes the pin's bytes and the weights blocks' digests at
 startup (`bind`) and decides each hello (`hold`), its payload root's subtrees of 2^16 leaves on `--layout-workers`
 threads, and `Binding` beside it is the reference: a hello the two decide differently (the regions or reason, or the
 expected root) is refused as `disagreement`, and the gate line credits `bound` only where the Lean held the hello's
@@ -50,14 +50,14 @@ digests (`expectedRoot`, also against `audit.payload_tree`), the hello's decisio
 (`binding`). What stays Python only is reading the files: the pin's bytes, `check` (each pinned file's SHA-512), the
 safetensors headers and config.json, the arena's layout from them (`tensors`, `arena`) and the weights blocks' digests
 (`weight_digests`); the Lean takes those digests as given. It lives in this tree because a period's circuit is this
-tree's git hash (`verity/remote-bandwidth/v0 verifier tree
+tree's git hash (`verity/poub/v0 verifier tree
 <tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
 `bound`. A change to it, like any change here, gives later periods a new circuit.
 
 The memory line held over time is the line of record a gate run publishes (`auditor_line.py`, from `verifier.py`'s
 `recorded_inputs`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and `HeldOverTimeLinks`' conclusions
 read over each stretch of a paced session's groups, from their timings, the store, the on-chip storage, the node's
-rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/RemoteAudit/Line.lean`, its
+rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/PoubCheck/Line.lean`, its
 W from `Pooled.lean`), as the verifier process's `line_record` request, off the Lean verifier's record of the session
 (`lineOfRecordAt`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
 window's draws refused unless `min(s, U_t)`; drawn g > 1 windows a coin, its draws' receipts and draws, each `g`
@@ -67,7 +67,7 @@ group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`Security/Properties/RemoteAudit/Line.lean`'s `LineHeld`.
+`Security/Properties/PoubCheck/Line.lean`'s `LineHeld`.
 
 ## Replay
 
@@ -100,7 +100,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `codec.py`: the store's encoding (kv/v0).
 - `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
   receipts of units of four 2,056-byte blocks that the decode kernel sketches as it decodes (`Sketcher`, its CPU
-  reference), and openings checked on PoUS's `vk`. Its Lean is `lean/RemoteAudit/P2.lean`, held to it by
+  reference), and openings checked on PoUS's `vk`. Its Lean is `lean/PoubCheck/P2.lean`, held to it by
   `lean/tests/test_p2.py`; the Lean session doesn't take a P2 store yet.
 - `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
   control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
@@ -108,17 +108,17 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   store's padding past them, which is PoUS's: MEM-72), drives the session on its own clock and coins, and answers
   the verdict with the credited reads (`q_bytes`). `prove` is the prover's side of the channel.
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
-  (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
+  (`openings_of`), beside `lean/PoubCheck/Wire.lean`'s.
 - `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote and freed, as the audit's appends,
   releases and plan changes, and as the schedule the prover publishes (`schedule`).
 - `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the
   verifier's plan of the published schedule at its step, the schedule is within the cap on its bits the session
   committed before its coins (`audit.Params.schedule_cap`), and that cap is the layout's steering
-  (`audit.Session.scheduled`, `audit.Ledger.steering`). Of record in `lean/RemoteAudit/Schedule.lean`.
+  (`audit.Session.scheduled`, `audit.Ledger.steering`). Of record in `lean/PoubCheck/Schedule.lean`.
 - `store.py`: a registered store bound to a pinned model. It reads and checks the pin (`read_pin`, `pin_of`, `check`),
   lays out the arena of a BF16 checkpoint's weights in vLLM's module order and the store of arenas and host filler
   (`arena`, `Store`), and computes the payload root that store has under the verifier's salt key (`expected_root`).
-  `Binding.hold` decides a hello against it, the reference beside `lean/RemoteAudit/Store.lean`'s `bind` and `hold`,
+  `Binding.hold` decides a hello against it, the reference beside `lean/PoubCheck/Store.lean`'s `bind` and `hold`,
   which decide it in the verifier.
   `benchmarks/poub_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.

@@ -1,7 +1,7 @@
 """The store binding's decision at a hello at a store's size, timed through both verifiers: a synthetic pinned model
 whose arena is `--weights` chunks (random digests) then zeros to `--arena-blocks`, `--engines` arenas of it, then
 `--host` host chunks, under one payload key, `store.Binding` over it as it stands past what it reads of the files, and
-the Lean verifier (`remote-audit-verifier`) bound to it (`verifier.bind_lean`). Each phase is one hello's
+the Lean verifier (`poub-check-verifier`) bound to it (`verifier.bind_lean`). Each phase is one hello's
 decision, timed as a whole, with each verifier's own time (store.py's `recompute_s`, the Lean's `lean_s`) and CPU
 seconds (store.py's processes, the Lean's threads):
 

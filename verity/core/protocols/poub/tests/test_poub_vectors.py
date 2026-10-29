@@ -18,7 +18,7 @@ from verity.core.protocols.poub import audit, codec, coins, receipts
 # c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s, a receipt
 # that binds z; each unbound case (seed, block, j, σ_j, y), of the block alone, with σ_j its `sketches` of the block
 # and y its `receipt_of`.
-SKETCH_PINS = b"verity/remote-bandwidth/sketch-pins/v0\0"
+SKETCH_PINS = b"verity/poub/sketch-pins/v0\0"
 SKETCH_UNBOUND_CASES = [
     (0, "0x80", 0,
      "0028000000d9ffff00d9ffff00d3ffff000a00000000000000f5ffff00230000001700000003000000ffffff00e5ffff00f0ffff0006000000230000000e0000",

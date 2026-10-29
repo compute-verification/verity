@@ -1,6 +1,6 @@
 """The remote bandwidth audit over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
-answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
+answer as `PoubCheck.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
 openings' pooled bound's δ, 2^-40, and S the session's draws).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
@@ -33,7 +33,7 @@ from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_se
 
 from . import codec, pooled
 
-FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
+FORMAT = "verity/poub-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose", "pr": 4413,
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 EXCEPT = "each session's coin PRF advantage and coin commitment hiding (named assumptions) over the period's sessions"
@@ -72,7 +72,7 @@ def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction) -> d
 
 
 def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment: str | None = None) -> dict[str, Any]:
-    """The monitoring-period result of one session's core answer (`RemoteAudit.Protocol`'s) when every one of `machines`
+    """The monitoring-period result of one session's core answer (`PoubCheck.Protocol`'s) when every one of `machines`
     runs such a session every `window_s` seconds."""
     head = {"format": FORMAT, "deployment": {"id": deployment, "machines": machines, "window_s": window_s},
             "deltas": [str(d) for d in DELTAS], "statement": STATEMENT, "except_also": EXCEPT,

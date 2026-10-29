@@ -1,4 +1,4 @@
-import Definitions.Accounting.RateAuditRemote
+import Definitions.Accounting.RateAuditPoub
 
 /-!
 # The causal horizon: rounds whose good sets precede their samples (trusted)

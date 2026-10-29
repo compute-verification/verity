@@ -80,7 +80,7 @@ def main() -> int:
     ap.add_argument("--gib", type=float, default=24.0, help="the store, whole 1 GiB chunks")
     ap.add_argument("--lib", help="session.so (without it the prover's options name its backend: --cpu BLOCKS)")
     ap.add_argument("--kv", help="kv.so (p1024, masked)")
-    ap.add_argument("--lean-exe", type=Path, help="a built remote-audit-verifier (default: the verifier builds it)")
+    ap.add_argument("--lean-exe", type=Path, help="a built poub-check-verifier (default: the verifier builds it)")
     ap.add_argument("--jitter-ms", type=float, default=50.0)
     ap.add_argument("--quantile", default="max", choices=("p50", "p99", "p999", "max"))
     ap.add_argument("--pings", type=int, default=1000)

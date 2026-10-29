@@ -8,7 +8,7 @@
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
+        [--poub-verifier HOST:PORT [--poub-kv-lib SO [--poub-session-lib SO]] [--poub-filler-gib 0]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -86,7 +86,7 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
+``--poub-verifier HOST:PORT`` proves the engine's store (its weights, and ``--poub-filler-gib``) to the remote
 bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_poub`): its
 record is ``poub_session.json``, and a rejected session fails the exit.
 
@@ -231,7 +231,7 @@ class Options:
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
     gate: SH.GateOptions = group(SH.GateOptions)
-    remote: SR.RemoteOptions = group(SR.RemoteOptions)
+    remote: SR.PoubOptions = group(SR.PoubOptions)
     retention: SS.RetentionOptions = group(SS.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
 

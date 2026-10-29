@@ -18,7 +18,7 @@ from verity_vllm.protocols.poub import remote
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving
 
-VERIFIER = ("--remote-verifier", "127.0.0.1:7781")
+VERIFIER = ("--poub-verifier", "127.0.0.1:7781")
 
 
 def parse(*more: str) -> so.Options:
@@ -78,16 +78,16 @@ def serve(tmp_path, rs: SR.ServeSession, requests: int, order: list[str]) -> Ser
 
 
 def test_the_remote_options_parse_into_their_group_and_are_refused_before_the_model_loads():
-    opts = parse(*VERIFIER, "--remote-filler-gib", "1.5")
-    assert (opts.remote.remote_verifier, opts.remote.remote_plan, opts.remote.remote_filler_gib) == ("127.0.0.1:7781", "serve", 1.5)
+    opts = parse(*VERIFIER, "--poub-filler-gib", "1.5")
+    assert (opts.remote.poub_verifier, opts.remote.poub_plan, opts.remote.poub_filler_gib) == ("127.0.0.1:7781", "serve", 1.5)
     assert refusal(opts) is None and SR.session_of(parse(), "/tmp") is None and SR.accepted(None)
-    assert "HOST:PORT" in refusal(parse("--remote-verifier", "nohost"))
-    assert "is serve" in refusal(parse(*VERIFIER, "--remote-plan", "servedrop:1"))
-    assert "kv_lib" in refusal(parse(*VERIFIER, "--remote-session-lib", "session.so"))
+    assert "HOST:PORT" in refusal(parse("--poub-verifier", "nohost"))
+    assert "is serve" in refusal(parse(*VERIFIER, "--poub-plan", "servedrop:1"))
+    assert "kv_lib" in refusal(parse(*VERIFIER, "--poub-session-lib", "session.so"))
     assert "--prefix-caching" in refusal(parse(*VERIFIER, "--prefix-caching"))
-    h1 = parse(*VERIFIER, "--remote-session-lib", "session.so", "--remote-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")
+    h1 = parse(*VERIFIER, "--poub-session-lib", "session.so", "--poub-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")
     assert "host mirror" in SR.refusal(h1)
-    assert SR.refusal(parse(*VERIFIER, "--remote-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")) is None
+    assert SR.refusal(parse(*VERIFIER, "--poub-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")) is None
 
 
 def test_the_engine_is_built_synchronous_on_its_own_kv_pool_with_the_store_binder_installed(tmp_path, monkeypatch):

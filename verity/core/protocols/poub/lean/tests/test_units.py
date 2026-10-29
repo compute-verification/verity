@@ -1,4 +1,4 @@
-"""The Python of the remote audit's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
+"""The Python of the remote audit's verifier held to the Lean's pieces (`poub-check-difftest`, the definition), each on
 drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
@@ -255,7 +255,7 @@ def opening_inputs(draw) -> dict:
     """An opening of a drawn tree over a range domain, as is or with one field changed."""
     binding = expand(draw(st.binary(max_size=8)), draw(st.sampled_from([64, 64, 32])))
     owner, start, count = draw(st.sampled_from([0, -1, -2, 3])), draw(st.integers(0, 40)), draw(st.integers(1, 20))
-    schema = draw(st.sampled_from([receipts.SCHEMA, "verity/remote-bandwidth/coins/v0"]))
+    schema = draw(st.sampled_from([receipts.SCHEMA, "verity/poub/coins/v0"]))
     d = CommitmentDomain(binding, owner, RangeIndexedDomain(start, start + count), hash="sha512")
     values = {start + u: expand(b"%d" % u, draw(st.integers(0, 3)) * 64) for u in range(count)}
     tree = MerkleTree(d, values, lambda _p: schema)

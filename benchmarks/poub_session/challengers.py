@@ -67,7 +67,7 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
 def session_id(registration: bytes, k: int, run: str) -> str:
     """The challenger session of session k over the registration whose digest is `registration`, in the run tagged
     `run` (the key's leaf state refuses a session id it has started before)."""
-    return f"remote-bandwidth-{registration.hex()[:16]}-{k}-{run}"
+    return f"poub-{registration.hex()[:16]}-{k}-{run}"
 
 
 class Local:

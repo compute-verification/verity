@@ -35,7 +35,7 @@ import tagging as TG
 
 NAME = "ro-sketch-blake3/v0"
 SIGN_DOMAIN = "verity/bandwidth/sketch-signs/v0"
-PASS_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
+PASS_DOMAIN = b"verity/poub/seed/v0\0"
 KS = (16, 32, 64)
 STEP = 512
 ROWS = 16

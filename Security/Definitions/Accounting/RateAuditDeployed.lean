@@ -1,5 +1,5 @@
 import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditRemote
+import Definitions.Accounting.RateAuditPoub
 import Definitions.Accounting.RateAuditHorizon
 
 /-!
@@ -12,11 +12,11 @@ pooled draw of `d` openings. It puts together what the pieces state separately:
 * **the chip** (`PIChip`) is `RateAuditInteractive.lean`'s, with sends and side sources that answer what it sent, and
   with `RateAuditPartial.lean`'s partial completion in place of the all-or-nothing rebuild: `complete j x g` obtains
   any `x ≤ b` bits `g (E_j)` of word `j`. A whole rebuild is `complete j b _ id`;
-* **the device** (`PIDevice`) reads a store laid out over memory tiers (`RateAuditRemote.lean`): a read of any tier is a
+* **the device** (`PIDevice`) reads a store laid out over memory tiers (`RateAuditPoub.lean`): a read of any tier is a
   read of device memory, counted per tier by `PIChip.tierBits`. Its on-chip state is at most `S` bits, its side link
   carries at most `L` bits a pass (the certified stream's `ρ` among them), and it makes at most `q` oracle queries a
   pass, in every world;
-* **the window** (`DeployedWindow`) is `RateAuditRemote.lean`'s `GrindChain` of such devices: pass `j`'s root is one
+* **the window** (`DeployedWindow`) is `RateAuditPoub.lean`'s `GrindChain` of such devices: pass `j`'s root is one
   of `G` candidates the earlier passes' coins and the store fix, picked as any function of pass `j`'s whole oracle
   family, and pass `j`'s device may depend on the pick;
 * **the session** (`DeployedSession`) is `RateAuditHorizon.lean`'s `Session` of such windows: window `w`'s prover is

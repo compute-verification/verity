@@ -8,7 +8,7 @@ read as the serving rows read a Program's slices (`serving_rows._operand`: the P
 committed words).  A warm request (a prefix-cache hit) commits slots from its cached prefix on: its Program's first C rows are
 cached positions (the Build's ``prefix_cache.json``), whose pages are the ones its producers (the replay's ``cached_prefixes``)
 wrote.  A request whose slots weren't committed is refused by name: no page is assumed.  A Commit whose run a remote
-session audited (``--remote-verifier``) has written the session's record, ``poub_session.json``, by then, and the map
+session audited (``--poub-verifier``) has written the session's record, ``poub_session.json``, by then, and the map
 follows its deferred residency (`commit.memory_map.Deferral`, `deferral`): each block written where its append's encode landed.
 A TP Commit (``tp-commit --memory-map``) writes one map a rank, in the rank's replay (`pipeline.tp.rank_replay.memory_map`),
 from the rank's Programs, committed slots and caches: MLA's latent cache is whole on every rank.

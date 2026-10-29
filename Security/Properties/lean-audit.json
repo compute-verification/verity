@@ -38,17 +38,17 @@
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Accounting.Requirement",
-  "Properties.RemoteAudit",
-  "Properties.RemoteAudit.Coins",
-  "Properties.RemoteAudit.Shared",
-  "Properties.RemoteAudit.Pooled",
+  "Properties.PoubCheck",
+  "Properties.PoubCheck.Coins",
+  "Properties.PoubCheck.Shared",
+  "Properties.PoubCheck.Pooled",
   "Properties.Accounting.Compose",
   "Properties.Accounting.Served",
   "Properties.Accounting.DeclaredCircuit",
-  "Properties.RemoteAudit.Line",
-  "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Live",
-  "Properties.RemoteAudit.Component",
+  "Properties.PoubCheck.Line",
+  "Properties.PoubCheck.Schedule",
+  "Properties.PoubCheck.Live",
+  "Properties.PoubCheck.Component",
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords"
@@ -103,55 +103,55 @@
    "owner": "@compute-research",
    "digest": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
   },
-  "Accounting.Remote.Draw.Assumptions.Counted": {
+  "Accounting.Poub.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
   },
-  "Accounting.Remote.Draw.Assumptions.Live": {
+  "Accounting.Poub.Draw.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9"
   },
-  "Accounting.Remote.Draw.Assumptions.Refused": {
+  "Accounting.Poub.Draw.Assumptions.Refused": {
    "owner": "@memory-accounting",
    "digest": "d1684ab2095265ddc42a1b96006579547569610dbf78f7dcd917e70c29cdbf5f"
   },
-  "Accounting.Remote.Held.Assumptions.ChipCeiling": {
+  "Accounting.Poub.Held.Assumptions.ChipCeiling": {
    "owner": "@memory-accounting",
    "digest": "e127ae65fbdc438b47177e01b9ac74b58f7ea758327288ae293137cb8b6d8fae"
   },
-  "Accounting.Remote.Held.Assumptions.Covers": {
+  "Accounting.Poub.Held.Assumptions.Covers": {
    "owner": "@memory-accounting",
    "digest": "d438bfd7ed2af2553dfa811e2c17840502eab877926ee4d89aea953fba5cb040"
   },
-  "Accounting.Remote.Held.Assumptions.Disks": {
+  "Accounting.Poub.Held.Assumptions.Disks": {
    "owner": "@memory-accounting",
    "digest": "44674bd7d2f65c33576c0959754230e2c263738482a6424b37ebd0911c8a25ca"
   },
-  "Accounting.Remote.Held.Assumptions.Identity": {
+  "Accounting.Poub.Held.Assumptions.Identity": {
    "owner": "@memory-accounting",
    "digest": "22630221fb29250610dca86a4897d9f39909a8e8ca1c425fcb62e8dcf192a236"
   },
-  "Accounting.Remote.Held.Assumptions.Links": {
+  "Accounting.Poub.Held.Assumptions.Links": {
    "owner": "@memory-accounting",
    "digest": "5eb7c975f82ed1718aea5d790325eb4b28c07b0d1fdbf2d2265375db54787a2a"
   },
-  "Accounting.Remote.Held.Assumptions.NoOutsideCompute": {
+  "Accounting.Poub.Held.Assumptions.NoOutsideCompute": {
    "owner": "@memory-accounting",
    "digest": "00299a3d3e2bb1d72b639c2ab816de31cd74beac5f5ff4436a57510b439cce33"
   },
-  "Accounting.Remote.Held.Assumptions.Paced": {
+  "Accounting.Poub.Held.Assumptions.Paced": {
    "owner": "@memory-accounting",
    "digest": "6e7b12b8bd7f835f54c0380b95c243db645f3cb1a6ae795f3645926f9dd9b62e"
   },
-  "Accounting.Remote.Held.Assumptions.Routed": {
+  "Accounting.Poub.Held.Assumptions.Routed": {
    "owner": "@memory-accounting",
    "digest": "0c27bd1201f655e0bb779bc6b347727d6d0072e9aab93ae409391e18670eca7c"
   },
-  "Accounting.Remote.Held.Assumptions.SketchBoundAt": {
+  "Accounting.Poub.Held.Assumptions.SketchBoundAt": {
    "owner": "@memory-accounting",
    "digest": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020"
   },
-  "Accounting.Remote.Held.Assumptions.SquaringCeiling": {
+  "Accounting.Poub.Held.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "ec84a74dad72a577c60f568cc9665016654feb62fad1857aef5f2f8a4bb9f098"
   },
@@ -239,7 +239,7 @@
    "owner": "@compute-accounting",
    "digest": "7a9c1d1ba0b3a64096b784547d140044584bb90f16a3c91fd3ad8fd86dc63572"
   },
-  "Properties.RemoteAudit.ScheduleLayoutGap": {
+  "Properties.PoubCheck.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
@@ -319,8 +319,8 @@
   "MemoryChallenger",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
-  "Properties.RemoteAudit",
-  "RemoteAudit",
+  "Properties.PoubCheck",
+  "PoubCheck",
   "Properties.Accounting",
   "CircuitRequirement",
   "Definitions.Accounting",
@@ -450,15 +450,15 @@
    "except": [],
    "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   },
-  "Properties.RemoteAudit": {
-   "imports": ["RemoteAudit", "Properties.RemoteAudit"],
+  "Properties.PoubCheck": {
+   "imports": ["PoubCheck", "Properties.PoubCheck"],
    "except": [
-    "Properties.RemoteAudit.Pooled",
-    "Properties.RemoteAudit.Line",
-    "Properties.RemoteAudit.Line.Premises",
-    "Properties.RemoteAudit.Line.Record",
-    "Properties.RemoteAudit.Schedule",
-    "Properties.RemoteAudit.Component"
+    "Properties.PoubCheck.Pooled",
+    "Properties.PoubCheck.Line",
+    "Properties.PoubCheck.Line.Premises",
+    "Properties.PoubCheck.Line.Record",
+    "Properties.PoubCheck.Schedule",
+    "Properties.PoubCheck.Component"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
@@ -500,26 +500,26 @@
    "except": [],
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
-  "Properties.RemoteAudit.Pooled": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+  "Properties.PoubCheck.Pooled": {
+   "imports": ["Definitions.Accounting", "PoubCheck"],
    "except": [],
-   "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) and the W the memory line reads (`RemoteAudit.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Draw`), never a proof"
+   "why": "the pooled bound the verifier computes (`PoubCheck.Pooled`) and the W the memory line reads (`PoubCheck.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Poub.Draw`), never a proof"
   },
-  "Properties.RemoteAudit.Line": {
+  "Properties.PoubCheck.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
-    "Definitions.Accounting.Remote",
+    "Definitions.Accounting.Poub",
     "Definitions.Accounting.Assumptions",
-    "RemoteAudit",
-    "Properties.RemoteAudit.Line"
+    "PoubCheck",
+    "Properties.PoubCheck.Line"
    ],
    "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (PoubCheck) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Poub, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
-  "Properties.RemoteAudit.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+  "Properties.PoubCheck.Schedule": {
+   "imports": ["Definitions.Accounting", "PoubCheck"],
    "except": [],
-   "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+   "why": "the schedule check (`PoubCheck.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -532,9 +532,9 @@
    "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization and the H200's price (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
   },
   "Properties.Accounting.DeclaredCircuit": {
-   "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
+   "imports": ["Definitions.Accounting", "Properties.PoubCheck.Schedule"],
    "except": [],
-   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
+   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.PoubCheck.Schedule`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
@@ -566,10 +566,10 @@
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.RemoteAudit.Component": {
-   "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
+  "Properties.PoubCheck.Component": {
+   "imports": ["PoubCheck", "Properties.PoubCheck.Line"],
    "except": [],
-   "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
+   "why": "the bandwidth component's refinement is stated against its own check (`PoubCheck.Protocol`) and the memory line of record (`Properties.PoubCheck.Line`), whose model vocabulary it reads through that module; never a proof"
   },
   "Properties.Pouw.ServedValues": {
    "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
@@ -579,7 +579,7 @@
  },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): PoUW's check reads its `V`, `canon`, `hexOf` and `Sha512.hash`, the NCI check decodes its Program with C-Flock's decoder, and the network check reads its SHA-512, bytes and canonical JSON",
-  "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
+  "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and PoubCheck's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
@@ -2452,8 +2452,8 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises",
-   "Properties.RemoteAudit.Schedule"
+   "Properties.PoubCheck.Line.Premises",
+   "Properties.PoubCheck.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -3155,52 +3155,52 @@
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "undecided"
    },
-   "Properties.RemoteAudit.acceptChecksOpenings": {
-    "function": "RemoteAudit.verifyWindow",
+   "Properties.PoubCheck.acceptChecksOpenings": {
+    "function": "PoubCheck.verifyWindow",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.acceptOpensDraws": {
-    "function": "RemoteAudit.verifyWindow",
+   "Properties.PoubCheck.acceptOpensDraws": {
+    "function": "PoubCheck.verifyWindow",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.drawIsSubset": {
-    "function": "RemoteAudit.draws",
+   "Properties.PoubCheck.drawIsSubset": {
+    "function": "PoubCheck.draws",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.planReadsDistinct": {
-    "function": "RemoteAudit.Plan.make?",
+   "Properties.PoubCheck.planReadsDistinct": {
+    "function": "PoubCheck.Plan.make?",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.changedReadsDistinct": {
-    "function": "RemoteAudit.Plan.changed",
+   "Properties.PoubCheck.changedReadsDistinct": {
+    "function": "PoubCheck.Plan.changed",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.acceptedMinPasses": {
-    "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.State.outcome"],
+   "Properties.PoubCheck.acceptedMinPasses": {
+    "function": ["PoubCheck.Session.run", "PoubCheck.Session.State.outcome"],
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.passesStepped": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.passesStepped": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.passesReadDistinct": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.passesReadDistinct": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.appendsInOrder": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.appendsInOrder": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.passesChained": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.passesChained": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.releasedStayOut": {
-    "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.step"],
+   "Properties.PoubCheck.releasedStayOut": {
+    "function": ["PoubCheck.Session.run", "PoubCheck.Session.step"],
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.lifetimeCapped": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.lifetimeCapped": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
    "Properties.Requirement.follows": {
@@ -3371,92 +3371,92 @@
     "function": "NetworkCheck.Records.evaluateNoGrid",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.pooledCovers": {
-    "function": "RemoteAudit.Pooled.pooled",
+   "Properties.PoubCheck.pooledCovers": {
+    "function": "PoubCheck.Pooled.pooled",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.pooledCoversSession": {
-    "function": "RemoteAudit.Pooled.pooled",
+   "Properties.PoubCheck.pooledCoversSession": {
+    "function": "PoubCheck.Pooled.pooled",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.lineCoversSession": {
-    "function": "RemoteAudit.Line.line",
+   "Properties.PoubCheck.lineCoversSession": {
+    "function": "PoubCheck.Line.line",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.acceptDrawsOpenable": {
-    "function": "RemoteAudit.verifyWindow",
+   "Properties.PoubCheck.acceptDrawsOpenable": {
+    "function": "PoubCheck.verifyWindow",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.openingsUnreadUntilDrawn": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.openingsUnreadUntilDrawn": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.recordKeptAfterDraw": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.recordKeptAfterDraw": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Line.lineChecked": {
-    "function": "RemoteAudit.Line.line",
+   "Properties.PoubCheck.Line.lineChecked": {
+    "function": "PoubCheck.Line.line",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Line.stretchBound": {
-    "function": "RemoteAudit.Line.line",
+   "Properties.PoubCheck.Line.stretchBound": {
+    "function": "PoubCheck.Line.line",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
-    "function": "RemoteAudit.Shared.run",
+   "Properties.PoubCheck.Line.SecurityProofs.lineHeld": {
+    "function": "PoubCheck.Shared.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
-    "function": "RemoteAudit.Shared.run",
+   "Properties.PoubCheck.Line.SecurityProofs.lineHeldIdentity": {
+    "function": "PoubCheck.Shared.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.chunkedIsWhole": {
-    "function": "RemoteAudit.checkWindowChunked",
+   "Properties.PoubCheck.chunkedIsWhole": {
+    "function": "PoubCheck.checkWindowChunked",
     "outcome": "none"
    },
-   "Properties.RemoteAudit.scheduleChecked": {
-    "function": "RemoteAudit.Schedule.check",
+   "Properties.PoubCheck.scheduleChecked": {
+    "function": "PoubCheck.Schedule.check",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.scheduleFixesLayout": {
-    "function": "RemoteAudit.Schedule.check",
+   "Properties.PoubCheck.scheduleFixesLayout": {
+    "function": "PoubCheck.Schedule.check",
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
     "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.liveIsRun": {
-    "function": "Properties.RemoteAudit.Live.run",
+   "Properties.PoubCheck.liveIsRun": {
+    "function": "Properties.PoubCheck.Live.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.receiptsBelowLimit": {
-    "function": "RemoteAudit.Session.run",
+   "Properties.PoubCheck.receiptsBelowLimit": {
+    "function": "PoubCheck.Session.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
-    "function": ["RemoteAudit.draws", "RemoteAudit.checkWindow"],
+   "Properties.PoubCheck.Shared.acceptDrawsOpenable": {
+    "function": ["PoubCheck.draws", "PoubCheck.checkWindow"],
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.drawIsSubset": {
-    "function": "RemoteAudit.Shared.close",
+   "Properties.PoubCheck.Shared.drawIsSubset": {
+    "function": "PoubCheck.Shared.close",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": {
-    "function": "RemoteAudit.Shared.run",
+   "Properties.PoubCheck.Shared.openingsUnreadUntilDrawn": {
+    "function": "PoubCheck.Shared.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
-    "function": "RemoteAudit.Shared.run",
+   "Properties.PoubCheck.Shared.recordKeptAfterDraw": {
+    "function": "PoubCheck.Shared.run",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.steered_of_checked": {
-    "function": "RemoteAudit.Schedule.check",
+   "Properties.PoubCheck.steered_of_checked": {
+    "function": "PoubCheck.Schedule.check",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
-    "function": "RemoteAudit.Shared.run",
+   "Properties.PoubCheck.Shared.sessionDrawsRecords": {
+    "function": "PoubCheck.Shared.run",
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.oneRoot": {
@@ -3507,8 +3507,8 @@
     "function": "NciCheck.Baseline.evaluate",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": {
-    "function": "RemoteAudit.Shared.run",
+   "Properties.PoubCheck.Shared.acceptedDrawsOpenable": {
+    "function": "PoubCheck.Shared.run",
     "outcome": "accept"
    },
    "Properties.NetworkCertifier.linkWindowAcceptMeans": {
@@ -3555,16 +3555,16 @@
     "function": "Core.Protocol.answer",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Line.lineRegistered": {
-    "function": "RemoteAudit.Line.lineOfRegistered",
+   "Properties.PoubCheck.Line.lineRegistered": {
+    "function": "PoubCheck.Line.lineOfRegistered",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Component.acceptIsVerified": {
-    "function": "RemoteAudit.Protocol.check",
+   "Properties.PoubCheck.Component.acceptIsVerified": {
+    "function": "PoubCheck.Protocol.check",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
-    "function": "RemoteAudit.Protocol.check",
+   "Properties.PoubCheck.Component.SecurityProofs.lineHeldAtComponent": {
+    "function": "PoubCheck.Protocol.check",
     "outcome": "accept"
    }
   },
@@ -3585,7 +3585,7 @@
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) at every price p, per-kind multiply-add count macs, unit count u and unit width b_unit, for a period whose PoUW audit credits H1's checked words (RealizesCreditedWords at m = Compose.minWordMacs Sc Cd macs, u and b_unit), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins, through WorkOfCreditedWords. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's added premises (RT4-LOGIC-6) are Accounting.Assumptions.WordCostsMacs (each right word of a unit not outsourced cost m multiply-adds of priced work, SAK(matmul) at tile scale) and Accounting.Assumptions.HelpWithinCertifier (at most K / b_unit units outsourced), both on the premises list.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.PoubCheck.ScheduleLayoutGap and, as the event's first conjunct, PoubCheck.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.PoubCheck.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at J10-R's tile stratum s_T of the sampling block's stratified draw (N_p = |stratum sigma s_T|, padded with wordless fillers, K_d = k s_T), with PouwCheck.Credit.window as the verdict, H1's lucks 7/8 and 1/2, a = b = 1, wmax = 1 and Lambda = j10rRate (k s_T) rho = 8(1 + K rho)/(rho K) from SplitRateClosed (8 + 8/k s_T at the demo shape's rho = 1); the pin is pinnedAt, the unit's tile at its public-row noise and keys (#2352's pin, one description), from SaltIsLiveCoin; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, decided by lane (Asks for Daniel, Decided by lane, A: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340), each listed under assumptions: TileDrawIsCoin, a code fact once CMP-126's verifier draws the tiles inside the stratified draw (a SHA-512 random oracle, R-ACCEL-3, if the draw's stream is expanded from the live coin); TileServiceSound, a fact to prove (C-Flock's soundness at each drawn unit under live coins); SharedNoiseLucks, a claim, computational (Theorem O's one slot, its form FOLD-LUCK's, CMP-134); RegisteredBeforeDraw, as H1CheckedCreditPeriod's (a deployment gap). SaltIsLiveCoin as H1CheckedCreditPeriod's; UnitFixed to be made provable from the code (ASSUMPTION-AUDIT). TileStratumEscape, the stratum's hypergeometric escape of the tile coordinate, is a lemma to prove with STRATJOINT's per-stratum projection (LEAN-56). Proved from CircuitCreditPeriod at tileRun (Proofs.Pouw.PeriodJ10R).",
    "Properties.Pouw.PeriodJ10R.TileStratumEscape": "unstated: a lemma to prove, not a premise: the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, which STRATJOINT's per-stratum projection of Law.stratified (LEAN-56) gives; no guarantee states it until that projection is exported and stratum moves to Definitions (Core/Draw.lean). Card: https://app.notion.com/p/405399515d9e813fbd6ac073422b3340.",
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as the coins model's .pous guarantee: under PeriodHeld's premises and RingDevice, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check.",

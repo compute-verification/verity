@@ -31,7 +31,7 @@ KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 HOST = "vy-test-challenger"
 LANE = "memory-accounting"
 APPENDS = 8
-CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
+CIRCUIT = hashlib.sha512(b"verity/poub/v0").hexdigest()
 MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "sampled_proofs" / "tests" / "fixtures" /
                     "main-first-parent.txt")
 """Main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: sampled_proofs' fixture."""

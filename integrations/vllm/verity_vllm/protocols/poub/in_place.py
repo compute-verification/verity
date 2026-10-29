@@ -112,8 +112,8 @@ class InPlaceBackend(StoreBackend):
 
         super().__init__(store, engine, randbytes=randbytes, path=path, device=KvDevice(kv_lib, codec))
         session_module("prover")
-        self.dev = session_module("device", config.REMOTE_SESSION)
-        ipm = session_module("inplace", config.REMOTE_SESSION)
+        self.dev = session_module("device", config.POUB_SESSION)
+        ipm = session_module("inplace", config.POUB_SESSION)
         self.torch, self.codec, self.moved = torch, codec, moved
         self.calibration_passes, self.calibration_warm, self.warmup_ms = calibration_passes, calibration_warm, warmup_ms
         self.model, self.paged_lib, self.decoded, self.credited = model, paged_lib, None, None

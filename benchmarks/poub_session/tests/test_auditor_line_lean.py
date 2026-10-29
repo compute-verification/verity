@@ -1,4 +1,4 @@
-"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `remote-audit-verifier`'s
+"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `poub-check-verifier`'s
 `line_record` request off the record, or its `line` of groups and windows given), held exactly to `line.py`'s on the
 same inputs: a disagreement refuses the line, naming both values, whether
 the Lean's answer or line.py's is the one that moved, and on gate runs 5-7's credited sessions the Lean's line gives
