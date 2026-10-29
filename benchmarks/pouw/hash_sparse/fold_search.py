@@ -14,7 +14,11 @@ the word (an MMA, or an IADD3 from the prefixes), a LOP3 and an IMUL. Checks (se
   tables       the multiply by 8-bit and 16-bit lookup tables built once a step and call (free), the xor and the
                index extraction per output; instructions a step, bit for bit.
 
-usage: fold_search.py [OUT.json]
+--wide runs `superopt` again with the forms it leaves out, first and last: PRMT (every immediate selector, and a
+register selector with sign replication), IDP.4A and IDP.2A (each signedness) and IMAD.WIDE's high word (covering
+IMUL.HI with an addend), with sanity targets that only those forms reach.
+
+usage: fold_search.py [OUT.json] [--wide]
 """
 import itertools
 import json
@@ -225,6 +229,160 @@ def search(target, names, regs, table, vals):
     return found
 
 
+B8 = np.arange(4, dtype=np.uint64) * np.uint64(8)
+NIB = np.arange(4, dtype=np.uint64) * np.uint64(4)
+
+
+def bytes4(v):
+    return (v[..., None] >> B8) & np.uint64(0xFF)
+
+
+def sext(x, bits, signed):
+    x = x.astype(np.int64)
+    return np.where(x >= 1 << (bits - 1), x - (1 << bits), x) if signed else x
+
+
+def s32(v):
+    return np.asarray(v).astype(np.uint32).view(np.int32).astype(np.int64)
+
+
+def idp4a(a, b, c, sa, sb):
+    return u((sext(bytes4(a), 8, sa) * sext(bytes4(b), 8, sb)).sum(-1) + c.astype(np.int64))
+
+
+def idp2a(a, b, c, sa, sb, hi):
+    a16 = sext((a[..., None] >> np.array([0, 16], dtype=np.uint64)) & np.uint64(0xFFFF), 16, sa)
+    bb = sext(bytes4(b), 8, sb)[..., 2:4] if hi else sext(bytes4(b), 8, sb)[..., 0:2]
+    return u((a16 * bb).sum(-1) + c.astype(np.int64))
+
+
+def wide_hi(a, b, c, signed):
+    if signed:
+        return u((s32(a) * s32(b) + c.astype(np.int64)) >> 32)
+    return u((a * b + c) >> np.uint64(32))
+
+
+def prmt(a, b, sel):
+    pb = np.concatenate([bytes4(a), bytes4(b)], -1)
+    return sum(pb[..., q] << B8[i] for i, q in enumerate(sel))
+
+
+def prmt_reg(a, b, c):
+    """PRMT with a register selector: byte i is byte (nibble i & 7) of (b:a), or its sign replicated if bit 3 is set."""
+    ba, bb, nib = bytes4(a), bytes4(b), (c[..., None] >> NIB) & np.uint64(15)
+    batch = np.broadcast_shapes(ba.shape[:-1], bb.shape[:-1], nib.shape[:-1])
+    pb = np.concatenate([np.broadcast_to(ba, batch + (4,)), np.broadcast_to(bb, batch + (4,))], -1)
+    nib = np.broadcast_to(nib, batch + (4,))
+    src = np.take_along_axis(pb, (nib & np.uint64(7)).astype(np.int64), -1)
+    rep = np.where((src >> np.uint64(7)) & np.uint64(1), np.uint64(0xFF), np.uint64(0))
+    byte = np.where(nib & np.uint64(8), rep, src)
+    return (byte << B8).sum(-1).astype(np.uint64)
+
+
+def wide_first(names, regs):
+    """One-instruction values of the forms `first_ops` leaves out: PRMT (every immediate selector, and a register
+    selector), IDP.4A, IDP.2A and IMAD.WIDE's high word."""
+    out = []
+    idx = range(len(regs))
+    sels = np.array(list(itertools.product(range(8), repeat=4)))
+    for i in idx:
+        for j in idx:
+            pb = np.concatenate([bytes4(regs[i]), bytes4(regs[j])], -1)
+            allv = (pb[:, sels] << B8).sum(-1).astype(np.uint64).T
+            for sel, v in zip(sels, allv):
+                out.append((np.ascontiguousarray(v), f"PRMT({names[i]},{names[j]},{''.join(map(str, sel[::-1]))})"))
+    for i, j, l in itertools.product(idx, idx, idx):
+        out.append((prmt_reg(regs[i], regs[j], regs[l]), f"PRMT({names[i]},{names[j]},sel {names[l]})"))
+        for sa, sb in itertools.product((False, True), repeat=2):
+            out.append((idp4a(regs[i], regs[j], regs[l], sa, sb), f"IDP.4A.{'SU'[sa]}{'SU'[sb]}({names[i]},{names[j]},{names[l]})"))
+            for hi in (False, True):
+                out.append((idp2a(regs[i], regs[j], regs[l], sa, sb, hi),
+                            f"IDP.2A.{'LH'[hi]}.{'SU'[sa]}{'SU'[sb]}({names[i]},{names[j]},{names[l]})"))
+        for sg in (False, True):
+            out.append((wide_hi(regs[i], regs[j], regs[l], sg), f"IMAD.WIDE{'' if sg else '.U32'}.hi({names[i]},{names[j]},{names[l]})"))
+    return out
+
+
+def wide_last(target, names, regs, table, vals):
+    """Two-instruction programs whose last instruction is one of `wide_first`'s forms, v1 in each operand position:
+    every first-instruction value is filtered on case 0 and the survivors checked on all cases."""
+    found = []
+    t0 = target[0]
+    descs = list(table.values())
+    v0 = vals[:, 0]
+    idx = range(len(regs))
+
+    def check(fn, how):
+        hit = np.nonzero(fn(v0, 0) == t0)[0]
+        for h in hit:
+            if (fn(vals[h], None) == target).all():
+                found.append((how, descs[h]))
+
+    def at(x, case):
+        return x if case is None else x[case]
+
+    for i, j in itertools.product(idx, idx):
+        x, y = regs[i], regs[j]
+        for sa, sb in itertools.product((False, True), repeat=2):
+            check(lambda v, cs: idp4a(v, at(x, cs), at(y, cs), sa, sb), f"IDP.4A(v1,{names[i]},{names[j]})")
+            check(lambda v, cs: idp4a(at(x, cs), at(y, cs), v, sa, sb), f"IDP.4A({names[i]},{names[j]},v1)")
+            for hi in (False, True):
+                check(lambda v, cs: idp2a(v, at(x, cs), at(y, cs), sa, sb, hi), f"IDP.2A(v1,{names[i]},{names[j]})")
+                check(lambda v, cs: idp2a(at(x, cs), v, at(y, cs), sa, sb, hi), f"IDP.2A({names[i]},v1,{names[j]})")
+                check(lambda v, cs: idp2a(at(x, cs), at(y, cs), v, sa, sb, hi), f"IDP.2A({names[i]},{names[j]},v1)")
+        for sg in (False, True):
+            check(lambda v, cs: wide_hi(v, at(x, cs), at(y, cs), sg), f"IMAD.WIDE.hi(v1,{names[i]},{names[j]})")
+            check(lambda v, cs: wide_hi(at(x, cs), at(y, cs), v, sg), f"IMAD.WIDE.hi({names[i]},{names[j]},v1)")
+        check(lambda v, cs: prmt_reg(v, at(x, cs), at(y, cs)), f"PRMT(v1,{names[i]},sel {names[j]})")
+        check(lambda v, cs: prmt_reg(at(x, cs), v, at(y, cs)), f"PRMT({names[i]},v1,sel {names[j]})")
+        check(lambda v, cs: prmt_reg(at(x, cs), at(y, cs), v), f"PRMT({names[i]},{names[j]},sel v1)")
+    tb = bytes4(target)
+    for i in idx:
+        for first in (True, False):
+            def pair_bytes(v):
+                return np.concatenate([bytes4(v), bytes4(regs[i])] if first else [bytes4(regs[i]), bytes4(v)], -1)
+            b0 = np.concatenate([bytes4(v0), np.broadcast_to(bytes4(regs[i][0]), (len(v0), 4))] if first else
+                                [np.broadcast_to(bytes4(regs[i][0]), (len(v0), 4)), bytes4(v0)], -1)
+            ok = np.ones(len(v0), dtype=bool)
+            for byte in range(4):
+                ok &= (b0 == tb[0, byte]).any(-1)
+            for h in np.nonzero(ok)[0]:
+                pb = pair_bytes(vals[h])
+                if all((pb == tb[:, byte:byte + 1]).all(0).any() for byte in range(4)):
+                    found.append((f"PRMT({'v1,' + names[i] if first else names[i] + ',v1'},imm)", descs[h]))
+    return found
+
+
+def superopt_wide(rng):
+    """`superopt` with `wide_first`'s forms added to the first instruction and `wide_last` for the last."""
+    n, r, c, k = cases(rng)
+    names, regs = base_regs(n, r, c, k)
+    d = u(r + c)
+    targets = {
+        "step (N ^ (R + C)) k": u(u(n ^ d) * k),
+        "sanity: IDP.4A(N ^ R, k, C)": idp4a(n ^ r, k, c, False, False),
+        "sanity: IMAD.WIDE.U32.hi(N + C, k, R)": wide_hi(u(n + c), k, r, False),
+        "sanity: PRMT(N ^ C, k, 5140)": prmt(n ^ c, k, (0, 4, 1, 5)),
+        "sanity: IDP.4A(N, k, R) + C": u(idp4a(n, k, r, False, False) + c),
+        "sanity: PRMT(N, k, 7362) ^ R": prmt(n, k, (2, 6, 3, 7)) ^ r,
+        "sanity: PRMT(k, R, sel N)": prmt_reg(k, r, n),
+    }
+    table, vals = first_ops(names, regs)
+    base = len(table)
+    extra = []
+    for v, desc in wide_first(names, regs):
+        key = fp(v)
+        if key not in table:
+            table[key] = desc
+            extra.append(v)
+    vals = np.concatenate([vals, np.stack(extra)])
+    out = {"first_instructions_distinct": len(table), "of_them_wide": len(table) - base, "base": names}
+    for name, t in targets.items():
+        hits = search(t, names, regs, table, vals) + wide_last(t, names, regs, table, vals)
+        out[name] = {"programs_found": len(hits), "examples": [f"{how} <- {d1}" for how, d1 in hits[:4]]}
+    return out
+
+
 def superopt(rng):
     n, r, c, k = cases(rng)
     names, regs = base_regs(n, r, c, k)
@@ -333,11 +491,15 @@ def tables(rng, s_steps=16, m=256):
 
 
 def main():
-    rng = np.random.default_rng(20261029)
-    res = {"superopt": superopt(rng), "bitslice": bitslice(rng), "tables": tables(rng)}
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if "--wide" in sys.argv:
+        res = {"superopt_wide": superopt_wide(np.random.default_rng(20261029))}
+    else:
+        rng = np.random.default_rng(20261029)
+        res = {"superopt": superopt(rng), "bitslice": bitslice(rng), "tables": tables(rng)}
     s = json.dumps(res, indent=1)
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], "w") as f:
+    if args:
+        with open(args[0], "w") as f:
             f.write(s + "\n")
     print(s)
 
