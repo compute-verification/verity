@@ -2,7 +2,7 @@
 
     python3 benchmarks/pouw/shalb/shalb.py [--counts COUNTS_JSON] [--minimal MINIMAL_JSON] [--json OUT]
         [--l1-leaves 1,4,64,512,4096] [--l1-value BYTES] [--l1-row-bytes 2048,...] [--l1-row-leaves N]
-        [--lead-w1 W1] [--honest-extra-per-compression REGISTERS]
+        [--lead-w1 W1] [--a-w1 W1] [--a-row-bytes BYTES] [--honest-extra-per-compression REGISTERS]
 
 - **The structural count.** One compression in the minimal kernel's dataflow (sha512_min.cuh), each 64-bit word tagged
   with a level and constants propagated: Σ/σ 8 registers (6 SHF, 2 LOP3), Ch and Maj 2 (a LOP3 a half), an add of m
@@ -18,7 +18,8 @@
   (each leaf's prefix through the domain id, each level's node midstate, the domain id), the per-item work split into
   data and data-independent, and what an exact repeat of a leaf's value shares: its blocks' schedules, ASICBoost's reuse
   across chaining values. With row-seg rows as the leaves' values (`rowseg_row`: 1 KiB segments, each from its own
-  prefix block, with or without (salt_w, f, j, row) bound into it), the layout ShaWrites at the lead is priced at.
+  prefix block, with or without (salt_w, f, j, row) bound into it), the layout ShaWrites at the lead is priced at; a
+  repeated or constant row's shared schedule is priced on A's pre-noise rows only, since the words depend on the noise.
 - **Honest against DistinctOn** (`distinct_writes`): the minimal kernel's 3,534 registers, simulated, on a random grid:
   pairwise distinct, none constant, none an input half plus a constant, so they witness ShaWrites' R for it.
 - **The bound ladder** (rungs B0–B3): what each rank's premise proves about any program's registers written a compression, and the
@@ -561,6 +562,10 @@ def main() -> None:
                     help="row-seg row sizes; the last, with bound prefixes, is the lead's layout below")
     ap.add_argument("--l1-row-leaves", type=int, default=512)
     ap.add_argument("--lead-w1", type=float, default=233.0, help="the lead's hashing, W1 a useful MAC")
+    ap.add_argument("--a-w1", type=float, default=0.292,
+                    help="A's pre-noise hashing, W1 a useful MAC: the rows chosen requests can repeat or zero (the "
+                         "words depend on the noise)")
+    ap.add_argument("--a-row-bytes", type=int, default=8192, help="A's row size for its repeat and constant shares")
     ap.add_argument("--honest-extra-per-compression", type=float, default=0.0,
                     help="registers a compression an honest build writes beyond R (a measured SASS count less R): "
                          "priced as honest-only work")
@@ -720,9 +725,13 @@ def main() -> None:
     print(f"- with the salt fixed on the grid, the data-independent {di:.2%} is constant there, so free: a T1 term of "
           f"{di * args.lead_w1:.3g}× stock")
     cv_share = l1["constant_value_share"]
+    a_row = l1_call(args.l1_row_leaves, row_bytes=args.a_row_bytes, bound=True)
+    a_share = max(a_row["leaf_repeat_share"], a_row["constant_value_share"])
     print(f"- a row the prover makes constant (or an exact repeat) has a constant (or shared) schedule: the row and its "
-          f"leaf {l1['leaf_constant_value_share']:.2%}, the call {cv_share:.2%}; credited at R, a T1 term of "
-          f"{cv_share * args.lead_w1:.3g}× stock")
+          f"leaf {l1['leaf_constant_value_share']:.2%}, the call {cv_share:.2%} if every row could be fixed. Only A's "
+          f"pre-noise rows can ({args.a_w1:g} W1 a useful MAC, {args.a_row_bytes:,} B rows: a repeat shares "
+          f"{a_row['leaf_repeat_share']:.2%}, a constant row frees {a_row['constant_value_share']:.2%} of the call); "
+          f"every A row repeated, credited at R, is a T1 term of {a_share * args.a_w1:.3g}× stock")
     keyed = compression_levels(CALL, [DATA] * 16)
     print(f"- a compression from a per-window midstate (a keyed first block): {keyed.at(ITEM, DATA)} registers a "
           f"digest and {keyed.at(CALL)} once a window (from the IV: {compression(False, [True] * 16)['registers']})")
@@ -730,7 +739,9 @@ def main() -> None:
     if args.honest_extra_per_compression:
         print(f"- an honest build {args.honest_extra_per_compression:g} registers a compression above R: honest-only "
               f"{honest_only:.3g} of the hashing, {honest_only * args.lead_w1:.3g}× stock")
-    out["sha_writes_l1"].update({"constant_value_share": cv_share, "t1_constant_value": cv_share * args.lead_w1,
+    out["sha_writes_l1"].update({"constant_value_share": cv_share, "a_w1_per_mac": args.a_w1,
+                                 "a_row_bytes": args.a_row_bytes, "a_repeat_share": a_share,
+                                 "t1_repeated_a_rows": a_share * args.a_w1,
                                  "keyed_per_digest": keyed.at(ITEM, DATA), "keyed_once_a_window": keyed.at(CALL),
                                  "honest_only_share": honest_only})
     scopes = [(scope, rate * s, p) for scope, rate in (("one H200", H200_MACS_PER_S),
@@ -744,15 +755,16 @@ def main() -> None:
                "stock_and": macs * AND_PER_MAC, "R": (1 - delta) * regs, "delta_registers": delta * regs,
                "over_credit_and": over * comp * ands, "data_independent_and": di * comp * ands,
                "t1_allowance_w1": 0.01 * macs, "over_credit_w1": over * args.lead_w1 * macs,
-               "data_independent_w1": di * args.lead_w1 * macs, "constant_value_w1": cv_share * args.lead_w1 * macs,
-               "constant_value_and": cv_share * comp * ands, "honest_only_w1": honest_only * args.lead_w1 * macs}
+               "data_independent_w1": di * args.lead_w1 * macs, "repeated_a_rows_w1": a_share * args.a_w1 * macs,
+               "repeated_a_rows_and": a_share * args.a_w1 / args.lead_w1 * comp * ands,
+               "honest_only_w1": honest_only * args.lead_w1 * macs}
         out["sha_writes_l1"]["periods"].append(row)
         print(f"- {scope}, {p}: {comp:.3g} compressions ({row['hash_and']:.3g} AND gates; stock {row['stock_and']:.3g}"
               f"); R = {row['R']:.4g} registers, δ·R = {row['delta_registers']:.3g}; T1 allows "
               f"{row['t1_allowance_w1']:.3g} W1; over-credit at 3,532 {row['over_credit_w1']:.3g} W1 "
               f"({row['over_credit_and']:.3g} AND gates); data-independent {row['data_independent_w1']:.3g} W1 "
-              f"({row['data_independent_and']:.3g} AND gates); constant values {row['constant_value_w1']:.3g} W1 "
-              f"({row['constant_value_and']:.3g} AND gates)"
+              f"({row['data_independent_and']:.3g} AND gates); repeated A rows {row['repeated_a_rows_w1']:.3g} W1 "
+              f"({row['repeated_a_rows_and']:.3g} AND gates)"
               + (f"; honest-only {row['honest_only_w1']:.3g} W1" if args.honest_extra_per_compression else ""))
 
     if args.minimal:
