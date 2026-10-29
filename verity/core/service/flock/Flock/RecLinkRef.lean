@@ -13,8 +13,8 @@ not well formed or, a link, its two digests differ (`okRef`).
 that passes has equal reader and writer digests; `okRef_filler`: a filler that passes names no row but leaf 0's; and
 `okRef_fits`: every field of a row that passes fits its bits, so its position is the one it names. These are the unit's
 outputs' meaning at its reference. The unit's netlist (`VStar.linkUnit`) is held to `rec_link.unit_circuit` by the
-`link_unit` difftest, and `link_ref` to this reference by `link_ref`; that the netlist computes this reference is not
-proved here.
+`link_unit` difftest, and `link_ref` to this reference by `link_ref`. That the netlist computes this reference wherever
+its rows hold, on the bytes of its ports' words, is `Proofs.Flock.VBridge.RecLink` (`laid_linkUnit`, `linkB_words`).
 -/
 
 namespace Flock.RecLinkRef
