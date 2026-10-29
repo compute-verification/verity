@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
-from verity.ml.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
+from verity.ml.windows.interface import K_MAX, proof_block_k_log
 from verity.core.protocols.sampled_proofs.costfit import Observation
 
 
@@ -168,24 +168,12 @@ def tree_chain(leaves: float) -> int:
 
 
 
-def block_k_log(ands: int, rows: Sequence[int]) -> int:
-    """The ``k_log`` of the C-Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each), as
-    C-Flock's composer lays it out (`verity_flock.circuit.compose`'s ranges): the unit's slot, the least power of two above
-    its ANDs and its rows' bits (a row an AND and a column a port bit, as `UnitStager`'s early check counts them), beside an
-    hm96 slot a row (a power of two in all) and the mask, then a sha512x3 slot per `PER_SLOT` compressions before the rows'
-    last SHA-512 blocks. A row's opening is those slots, not ANDs in the unit's slot."""
-    hm = (1 << (len(rows) - 1).bit_length()) << SLOT_LOG
-    slot = 1 << max(7, (ands + 8 * sum(rows)).bit_length())
-    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in rows if b > LAST_BLOCK_BYTES)
-    bits = (-(-(hm + slot + (1 << MASK_LOG)) >> SLOT_LOG) + -(-comps // PER_SLOT)) << SLOT_LOG
-    return max(K_MIN, (bits - 1).bit_length())
-
-
 def cap(ands: int, rows: Sequence[int]) -> int:
-    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a C-Flock block of 2^`block_k_log` under
-    m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
-    proof block, past C-Flock's 2^`K_MAX`."""
-    k = block_k_log(ands, rows)
+    """A statement's proof blocks of ``ands`` ANDs opening ``rows`` (bytes each, the output's row last): one a C-Flock block
+    of 2^k_log, `proof_block_k_log` unpacked (a row's opening is its hm96 and sha512x3 slots, not ANDs in the unit's slot),
+    under m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement);
+    0, not a proof block, past C-Flock's 2^`K_MAX`."""
+    k = proof_block_k_log(rows[:-1], rows[-1:], ands, packed=False)
     return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
 
 

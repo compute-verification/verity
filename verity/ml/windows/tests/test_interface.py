@@ -481,7 +481,7 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
 def test_proof_block_k_log_is_the_composers_arithmetic():
     """`proof_block_k_log` is `circuit.compose`'s ``k_log`` for one proof block a VU: on random rows, split into inputs and
     outputs, and logic of up to 2^26 rows, the k_log `circuit._ranges` gives its sha512x3, hm96, logic and mask ranges at
-    the most VUs compose's packing loop takes, the logic's slot `ir_lower.layout`'s cells (each port group a power of two
+    the most VUs compose's packing loop takes (and at one VU, ``packed=False``), the logic's slot `ir_lower.layout`'s cells (each port group a power of two
     of `ir_lower.WORD`-bit words, the logic between, a constant last). A row has a compression before its last block
     exactly past ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block
     room."""
@@ -490,7 +490,7 @@ def test_proof_block_k_log_is_the_composers_arithmetic():
     def cells(row_bytes: list[int]) -> int:
         return IL.WORD * IL.ceil_pow2(max(1, -(-8 * sum(row_bytes) // IL.WORD))) if row_bytes else 0
 
-    def composed(ins: list[int], outs: list[int], ands: int) -> int:
+    def composed(ins: list[int], outs: list[int], ands: int) -> tuple[int, int]:
         ports = [FC.Port(f"r{j}", b // 2, 8 * b) for j, b in enumerate(ins + outs)]
         n_sha, n_hm, i, o = FC._row_slots(ports)[0], FC._pow2(len(ports)), cells(ins), cells(outs)
         logic = FC._slot_log((-(-(i + ands) // o) * o if o else i + ands) + o + 1)
@@ -502,7 +502,7 @@ def test_proof_block_k_log_is_the_composers_arithmetic():
         G, k1 = 1, fits(1)
         while 2 * G <= 4096 and fits(2 * G) <= max(k1, I.PACK_LOG):
             G *= 2
-        return fits(G)
+        return k1, fits(G)
 
     assert FC.HM_LOG == FC.SHA_LOG and FC._ranges([("mask", FC.MASK_LOG, 1, {})])[1] == I.K_MIN
     assert all((FC.Port("r", b // 2, 8 * b).comps > 0) == (b > I.LAST_BLOCK_BYTES) for b in range(2, 2048, 2))
@@ -513,7 +513,9 @@ def test_proof_block_k_log_is_the_composers_arithmetic():
             if all(b <= I.LAST_BLOCK_BYTES for b in rb):
                 continue
             cut, ands = int(rng.integers(0, n + 1)), int(rng.integers(0, 1 << int(rng.integers(1, 27))))
-            assert I.proof_block_k_log(rb[:cut], rb[cut:], ands) == composed(rb[:cut], rb[cut:], ands), (rb, cut, ands)
+            ins, outs = rb[:cut], rb[cut:]
+            assert (I.proof_block_k_log(ins, outs, ands, packed=False),
+                    I.proof_block_k_log(ins, outs, ands)) == composed(ins, outs, ands), (rb, cut, ands)
     assert I.proof_block_k_log([112] * I.MAX_ROWS) == I.K_MAX < I.proof_block_k_log([112] * (I.MAX_ROWS + 1))
 
 
