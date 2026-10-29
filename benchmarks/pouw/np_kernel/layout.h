@@ -45,16 +45,18 @@ static inline const char* layout_name() {
 }
 SSN_HD inline int coin_words(int s) { return (s + 3 + 31) / 32; }
 
-// C[e, j]: the base-13 digits of c_j minus 6, c_j = j + 1 below 14,280 and j + 2 from there
+// C[e, j]: digit e of j + 1 in balanced base 13 (Lean's colCode, bal13 (j + 1)), the base-13 digits of j + 14,281 minus 6;
+// distinct and nonzero on columns below 28,560
 static inline int code_of(int j, int e) {
-  long long c = j + 1 < 14280 ? j + 1 : j + 2;
+  long long c = (long long)j + 14281;
   for (int r = 0; r < e; r++) c /= 13;
   return (int)(c % 13) - 6;
 }
+// beta_j = floor((sum_e C[e, j] + w (S - 1) + 1) / 2), w 3 under the tag layout and 1 without (Lean's bias)
 static inline int beta_of(int j, int S) {
-  int s = (g_tag ? 3 : 1) * (S - 1);
+  int s = (g_tag ? 3 : 1) * (S - 1) + 1;
   for (int e = 0; e < 4; e++) s += code_of(j, e);
-  return (int)std::nearbyint(s / 2.0);
+  return (int)std::floor(s / 2.0);
 }
 // T(i)[e]: digit e of z_i's balanced base-13 expansion, each in [-6, 6]
 static inline int tag_of(int i, int e) {

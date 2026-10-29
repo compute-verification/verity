@@ -4,14 +4,14 @@
 //   A'  step 1: lanes 0-27 A[i, 0..27], lanes 28-31 a1[i, 0..3] in {0,1}; step t >= 2: lanes 0-30 the next 31 entries of A,
 //       lane 31 a_t[i] in {0,1}; data lanes past K are 0. The data lanes are written by A's producer with the noise lanes 0;
 //       the forming pass (form_k) ORs the noise bits into the noise registers (one 32-bit register a row a step).
-//   B'  step 1: lanes 0-27 B[0..27, j], lanes 28-31 the public code C[0..3, j] (base-13 digits of c_j minus 6, c_j = j + 1
-//       below 14,280 and j + 2 from there); step t >= 2: lanes 0-30 the next 31 rows of B, lane 31 = 1. Formed once at load.
-//   The accumulator starts at -beta_j, beta_j = rint((sum_e C[e, j] + S - 1) / 2) (half to even), so word (i, j, t) is
+//   B'  step 1: lanes 0-27 B[0..27, j], lanes 28-31 the public code C[0..3, j] (the balanced base-13 digits of j + 1, the
+//       base-13 digits of j + 14,281 minus 6); step t >= 2: lanes 0-30 the next 31 rows of B, lane 31 = 1. Formed once at load.
+//   The accumulator starts at -beta_j, beta_j = floor((sum_e C[e, j] + S - 1 + 1) / 2) (half up), so word (i, j, t) is
 //   D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i], and the last is ssn-1l-b1-v1's P'.
 // TAG=1 is ssn-1l-tag: step 1 holds 24 data lanes, lanes 24-27 the row tag T(i) (the balanced base-13 digits of
 //   z_i = (floor(i / 2) + 1)(-1)^i, written by A's producer) against G[0..3, j] in [-3, 3] (drawn per call from the call's
 //   coins by g_k into B' step 1's lanes 24-27), and lanes 28-31 a1 against C; step t >= 2's lane 31 is 1 + a_t[i] against 1;
-//   S = 1 + ceil((K - 24) / 31); beta_j = rint((sum_e C[e, j] + 3 (S - 1)) / 2); word (i, j, t) is
+//   S = 1 + ceil((K - 24) / 31); beta_j = floor((sum_e C[e, j] + 3 (S - 1) + 1) / 2); word (i, j, t) is
 //   D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_e T(i)[e] G[e, j] + sum_{2 <= t' <= t} (1 + a_t'[i]).
 // BLC=1 is blc4a-t64-e7 (N-EGRESS): the tag layout's step 1, and each later step lanes 0-27 data, lanes 28-30 A' = 1 (written
 //   by A's producer) against the call's lane coins s_t[e, tile, j], odd and uniform in [-127, 127], one set a 64-row tile, and
@@ -49,7 +49,8 @@
 // as the served committer's rows or as served_zk's row-seg rows.
 //
 //   ssn check                 every exported word, the final outputs and the formed registers against the host reference
-//                             on small shapes (random, extreme and zero data; columns past the code's skip; S = 1 and a
+//                             on small shapes (random, extreme and zero data; columns past 14,280, where the code's top
+//                             digit wraps; S = 1 and a
 //                             partial last step; random data with every lane coin 127), in the four layouts, then under
 //                             XU=1 on the three tag layouts with each served output against stock's epilogue, then
 //                             blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and with FOLD=1
