@@ -105,7 +105,7 @@ def main() -> None:
                                      "tH_tS_no_gap": (stock + excl + gemm_ms) / stock}
             out["points"].setdefault(f"d {d}{', head too' if head else ''}",
                                      {"bytes_mac": t["bytes"] / t["macs"], "J_rule_T8192": rule})[pname] = row
-    for ctx, decode in ((144, True), (288, True), (2048, False), (8192, False)):
+    for ctx, decode in ((144, True), (288, True), (2048, True), (8192, True), (2048, False), (8192, False)):
         out["coverage"][f"{'decode' if decode else 'prefill'} {ctx}"] = coverage(ctx, decode)
     Path(sys.argv[1]).write_text(json.dumps(out, indent=1))
     for d, p in out["points"].items():
