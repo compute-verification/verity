@@ -11,9 +11,9 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                Program, acceptance (Accepted, AcceptedUpTo) and accepted observation sequences (AccSeqs)
 ../../Definitions/NetworkCertifier/Ingress.lean  trusted: the interaction read inward, a link's frames with the timing erased (rowFrames,
                                linkFrames), and acceptance as it bears on ingress (StatusComplete)
-../../Definitions/NetworkCertifier/Schedule.lean trusted: the Program's logical schedule as `schedule.py` defines it (ClockSync, SyncSet,
-                               LogicalFrame, eligible, handingBuckets, enqueued, expectedRow) and the constant-rate
-                               Program it gives (constantRate)
+../../Definitions/NetworkCertifier/Schedule.lean trusted: the Program's schedule over send ticks (LogicalFrame, handingFrom,
+                               enqueued, expectedRow, one FIFO per execution block) and the constant-rate Program it
+                               gives (constantRate)
 ../../Definitions/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them)
                                and J
 ../../Definitions/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
@@ -167,12 +167,13 @@ charges content bits, as reads, plus timing bits. Taking `log2 #Cs` to be those 
 part of the theorem. It is exact under fixed-length frames (W3): N frames of B bits have `2^(N·B)` contents, so for
 `Cs` all of them, `log2 #Cs` is the `N·B` bits read.
 
-**The shipped schedule** (`NetTiming.Protocol.Schedule`). `constantRate T W ss frames` is `schedule.py`'s Program:
-windows of `T` buckets, `W` of them with advice, one clock-sync value of `ss` (Σ_sync) per window, and the Program's
-frames, anchors and logical indices `frames ins c ℓ`, read from the ingress and the content advice. A frame is eligible
-at `anchor + δ + ⌊λ/ρ⌋`, handed at `h(k) = max(eligible(k), h(k−1))`, and released by `fifoGrid`. Its advice type is
-`Ac × (Fin W → ss.Elem)`, so the sync is its only timing advice by definition, and Theorem 3's clock-sync form holds for
-it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`).
+**The reference schedule** (`NetTiming.Protocol.Schedule`). `constantRate T g E frames` is the Program of one link's
+monitoring period: `E` execution blocks, each of `g·T` buckets, and block `e`'s frames, with their content and send
+ticks, `frames ins e (a e) ℓ`, read from the ingress and `e`'s own advice. A frame is handed at
+`h(k) = max(send(k), h(k−1))` and released by `fifoGrid`, with the FIFO empty at each execution block's first bucket.
+Its advice type is `Fin E → Adv`, the protocol's `Adv` the `|a|`-bit strings, so Theorem 3's `2^(E·k)` form holds for
+it with no dataflow hypothesis (`Guarantees.EncardAccSeqsLeConstantRate`). The check is this Program as one execution
+block of its `W` windows (`CodeAcceptedConstantRate`).
 
 ## The trusted layer (`NetTiming.Assumptions`)
 
@@ -209,23 +210,29 @@ last two by `horizonWrongUnits` and `horizonLeak`). All 25 are under `shape.froz
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible faulty set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and an accepted run reaches the first 18 through
-`AcceptedRunsAreProgramRuns`. Four are the
+`AcceptedRunsAreProgramRuns`. Three are the
 theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
 
-- egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
-  `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerWindow`;
+- egress over a monitoring period, for the reference schedule (`NetTiming.SecurityProofs.Schedule`):
+  `EncardDecodableLeConstantRate`;
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
-The other 21 are the rest of the Capacity table's bounds and the schedule's causality rule:
+The calibration's egress bits per window (`clock_sync.bits_per_window`, held by `test_network_certifier_calibration.py`)
+and the check's bound over its first `m` windows have no Lean statement: the check is the reference Program as one
+execution block of its `W` windows, where the per-block forms give only the `W`-window total,
+`EncardAcceptedObservationsLe`'s.
+
+The other 22 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
   `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
 - **Theorem 3, `k` advice bits per execution block** (`NetTiming.SecurityProofs.Advice`,
   `NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`): `EncardAccSeqsLeAdviceBits` for any
   Program, and for the constant-rate Program `EncardAccSeqsLeConstantRate`, `ExpectedRowCausal`,
-  `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`. Advice of any finite type is
+  `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow` and, through the wire,
+  `EncardDecodableLeConstantRatePerWindow`. Advice of any finite type is
   `EncardAccSeqsLeAdvice` (`Lemmas.lean`), which the check's count (`EncardAcceptedObservationsLe`) reads at its clock
   syncs.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
@@ -352,15 +359,14 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 ## Modelling choices a reader of the statements checks
 
 1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
-   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
-   windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
-   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
-   `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
-   (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
-   not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
-   may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
-   first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
-   `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
+   Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read a monitoring period of whole blocks,
+   each with its parent's hypotheses at that length and no other. The reference schedule's bound is
+   `(2^k · D^(g·T))^m` over the run's first `m` execution blocks of `g·T` buckets, `n = m·(g·T)`
+   (`EncardAccSeqsLeConstantRatePerWindow`, `EncardDecodableLeConstantRatePerWindow`): the factor per block is the
+   bound's, cumulative from the run's first block, so a temporal unit that starts later is bounded only within the
+   run's first blocks. The ingress bound is `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment over the first `m`
+   periods of `T` buckets, `n = m·T` (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version); `Packed`,
+   `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
 3. **Theorem 3 counts all accepted sequences,** not only those a run produces, which makes it stronger and needs no
