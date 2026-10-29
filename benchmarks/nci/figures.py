@@ -787,7 +787,7 @@ def schematic(out: Path) -> dict:
         ("nu", 2.42, 1.45, r"$\nu$", "declared computation",
          [rf"{sci(X.nu(P))} at Kimi K2's K and the structural $d$ = {num(P['d'])}",
           rf"{sci(nu_conj)} at the Dot16 conjecture's $d$ = {num(CONJECTURE['d'])}"], TERM["declared"]),
-        ("chi", 1.0, 1.1, r"$\chi$", "incorrect proof blocks (T5)",
+        ("chi", 1.0, 1.1, r"$\chi$", "faulty proof blocks (T5)",
          [f"{sci(chi[COSTS[0][0]])} today, {sci(chi[COSTS[1][0]])} at 512 draws"], TERM["cheat"]),
     ]
     plugs = [
@@ -833,7 +833,7 @@ def schematic(out: Path) -> dict:
         f"bound, so D = {num(D6)} at T3 for any r̂ above it). NCI plugs the declared "
         f"computation (nu = {num(X.nu(P))} at Kimi K2's K and the structural entry fee d = {num(P['d'])}; "
         f"{num(nu_conj)} at the Dot16 conjecture's d = {num(CONJECTURE['d'])}, conditional), which is now the largest "
-        "term the floor leaves. Incorrect proof blocks at T5 are plugged by terminal detection, which ends "
+        "term the floor leaves. Faulty proof blocks at T5 are plugged by terminal detection, which ends "
         "the identity, and by the cost of proving a draw, which sets how many pass: chi = "
         f"{num(chi[COSTS[0][0]])} at today's sparse draws, {num(chi[COSTS[1][0]])} at 512 draws per statement. "
         "PoUW and NCI are complements: without PoUW r̂ = 1, without NCI nu = 1. Each plug's tag is the tier from "

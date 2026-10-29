@@ -29,12 +29,12 @@ proved.
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
   reads 2 b_p bits, and the developer relays only as many partial sums as buy more declared work than the relay's gates
   would train directly.
-* The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
+* The verdict lag: from its first faulty proof block until the halt (a window plus the verdict delay), a developer can skip
   all declared work, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
-* chi, the cheating share: with sampled proofs at a budget, the incorrect proof blocks the sampling design accepts number
+* chi, the cheating share: with sampled proofs at a budget, the faulty proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
-  (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns incorrect outputs into skipped work. A block that
+  (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns faulty outputs into skipped work. A block that
   injects a chosen output fails its proof whenever it is drawn, so luck doesn't multiply those: ln(1/delta) / q of them
   inject their output bits into the inference block that holds them (the width form needs no bits for where), each bit
   worth at most ``chord``, the steepest secant from K of one inference block's thread bound.
@@ -152,7 +152,7 @@ SPEC = [
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "m", "label": "Recipe multiplier m: frontier progress per counted multiplication of the developer's best recipe under the mechanisms, against the unconstrained recipe (central 1, adversarial 3)", "unit": "x", "min": 0.1, "max": 10, "log": True},
     {"key": "mfu", "label": "Model-FLOP utilization of an unconstrained frontier run (Llama 3 405B: 38-43%)", "unit": "", "min": 0.1, "max": 1, "log": False},
-    {"key": "lag_s", "label": "Verdict lag: from a first incorrect proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
+    {"key": "lag_s", "label": "Verdict lag: from a first faulty proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
@@ -210,7 +210,7 @@ STATUS = [
      "during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
-    ("Cheating share", "The bound on accepted incorrect proof blocks over the deployment is proved "
+    ("Cheating share", "The bound on accepted faulty proof blocks over the deployment is proved "
      "(Population.Exfil.tail_cumPrev, open #2687; the cumulative harm budget over adaptive rounds on a branch, PRF-86). "
      "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
      "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "
