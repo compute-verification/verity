@@ -21,8 +21,9 @@ import Proofs.Pouw.DitherWitness
   answer at no use (`fitAnswers`, which passes `WorkSound`'s devices' reading) by filling each resource the prover
   leaves with its other job; the outsourcing premise at `β = 0` from the per-program one; the certifier's count
   at `K = 0` and `δ = 0`, since the witness machine exchanges nothing. The onsite verdict accepts the honest prover,
-  and the bound is `ε = ε_W < 1` at `κ + δ = 1/2`. At verdicts that accept everything the conclusion is false: a
-  prover that does nothing leaves the period to other work worth 46 against at most `32 + ε C < 46`.
+  and the bound is `ε = ε_W < 1` at `κ + δ = 1/2`. With a work check that accepts everything, every premise but the
+  remote floor still holds, the remote floor fails (a prover that does nothing is accepted and spends `0 < F`), and so
+  does the conclusion: that prover leaves the period to other work worth 46 against at most `32 + ε C < 46`.
 
 **What the witness doesn't show.** The witness machine exchanges no bits, so `β = K = 0` and the certifier's check
 refuses nothing (`twNet`); the onsite statement's `β K` term and the certifier's refusals aren't exercised.
@@ -414,26 +415,49 @@ theorem OnsiteFreed_honest :
   show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0
   simp
 
-/-- **`OnsiteFreed`'s nontrivial witness**: its conclusion at the honest witness's instance
-(`ε = ε_W`, `C = 14`, `κ + δ = 1/2`) is false at verdicts that accept everything. The quiet prover is accepted on
-every oracle and coins and leaves the period to other work worth 46, against at most `32 + ε C < 46` for any honest
-strategy, so the event has probability 1. -/
+/-- **`OnsiteFreed` is false without the remote floor**: at the honest witness's instance with a work check that
+accepts everything (`ε = ε_W`, `C = 14`, `β = K = δ = 0`, `κ = 1/2`), every other premise of `OnsiteFreed` holds, in
+its order: the dual price, `C > 0`, `β = 0`, G1, G2, P1 and P2, the period form of the outsourcing premise and the
+certifier's count. `RemoteWorkFloor` fails: the quiet prover exchanges nothing, the work
+check accepts it on every oracle and coins, and its timed work costs `0 < F`, so that event has probability
+`1 > κ`. The conclusion fails with it: the quiet prover leaves the period to other work worth 46, against at most
+`32 + ε C < 46` for any honest strategy, so its event has probability `1 > κ + δ`. -/
 theorem OnsiteFreed_nontrivial :
-    ¬ FreedSound tw twRound 2 (onsiteVerdict (fun _ _ _ _ => True) (fun _ _ _ _ => True)) twDev twPd 1
-      (fun _ => max 0 (∑ r, twμ r * (1 * twPd.hon r) - twF + 0 * 0) / ∑ r, twμ r * (1 * twPd.hon r))
-      (∑ r, twμ r * (1 * twPd.hon r)) (fun _ => 1 / 2 + 0) := by
-  intro h
+    twPd.DualOpt twμ 1 ∧ 0 < ∑ r, twμ r * (1 * twPd.hon r) ∧ (0 : ℝ) ≤ 0 ∧
+      tw.G1 ∧ tw.G2 ∧ tw.P1 ∧ tw.P2 ∧
+      ¬ RemoteWorkFloor tw twRound 2 (fun _ _ _ _ => True) twμ twF (1 / 2) ∧
+      OutsourceWithinEgressPeriod tw twRound 2 twμ 0 ∧
+      CertifiedImport tw twRound 2 (fun _ _ _ _ => True) twDev 0 0 ∧
+      ¬ FreedSound tw twRound 2 (onsiteVerdict (fun _ _ _ _ => True) (fun _ _ _ _ => True)) twDev twPd 1
+        (fun _ => max 0 (∑ r, twμ r * (1 * twPd.hon r) - twF + 0 * 0) / ∑ r, twμ r * (1 * twPd.hon r))
+        (∑ r, twμ r * (1 * twPd.hon r)) (fun _ => 1 / 2 + 0) := by
   have : Nonempty (twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk)) :=
     (inferInstance : Nonempty (Unit × (Fin 2 → TDraw × Fin 2)))
-  have h1 := h quiet
-  rw [prob_eq_one] at h1
-  · norm_num at h1
-  intro ox
-  refine ⟨⟨trivial, trivial⟩, fill_not_freed (quiet.timedUse ox.1 ox.2) (timedUse_nonneg quiet ox.1 ox.2) ?_ twEps⟩
-  have h0 := quiet_timedUse ox.1 ox.2 0
-  have h1 := quiet_timedUse ox.1 ox.2 1
-  have h2 := quiet_timedUse ox.1 ox.2 2
-  linarith [twF_pos]
+  have hq : ∀ ox : twRound.Orc × (Fin 2 → twRound.Draw × twRound.Chk),
+      2 * quiet.timedUse ox.1 ox.2 0 + quiet.timedUse ox.1 ox.2 1 + quiet.timedUse ox.1 ox.2 2 < twF := fun ox => by
+    have h0 := quiet_timedUse ox.1 ox.2 0
+    have h1 := quiet_timedUse ox.1 ox.2 1
+    have h2 := quiet_timedUse ox.1 ox.2 2
+    linarith [twF_pos]
+  refine ⟨twDual, by rw [twC]; norm_num, le_rfl, tw_G1, tw_G2, trivial, trivial, fun h => ?_,
+    outsourcePeriod_of_perProgram tw twRound 2 twμ 0 le_rfl twOutsource,
+    certifiedImport_of_within fun _ _ _ _ => ?_, fun h => ?_⟩
+  · have h1 := h tw_G1 tw_G2 trivial trivial quiet fun _ _ _ _ => ⟨rfl, rfl, rfl⟩
+    rw [prob_eq_one] at h1
+    · norm_num at h1
+    intro ox
+    refine ⟨trivial, ?_⟩
+    show ∑ r : Fin 3, twμ r * quiet.timedUse ox.1 ox.2 r < twF
+    rw [priced3]
+    exact hq ox
+  · show ∑ _b : Fin 2, ((0 : ℝ) + 0 + 0) ≤ 0
+    simp
+  · have h1 := h quiet
+    rw [prob_eq_one] at h1
+    · norm_num at h1
+    intro ox
+    exact ⟨⟨trivial, trivial⟩,
+      fill_not_freed (quiet.timedUse ox.1 ox.2) (timedUse_nonneg quiet ox.1 ox.2) (hq ox) twEps⟩
 
 end Witnesses
 
