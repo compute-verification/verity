@@ -2,7 +2,7 @@
 # EMU8's job: build and SASS-gate outside the lease; under one gpu-lease the exactness gate (every prefix word of every
 # arm, poisoned, with its no-write control) and then the timed shapes (each gated again on its final words first); the
 # host's recheck of the dumped words after the lease.
-#   research run --on vy-nebius-2 --project verity --cwd source --env GPU_LEASE_WHO=compute-accounting -- \
+#   research run --on vy-nebius-2 --project verity --cwd source --env GPU_LEASE_WHO=LANE -- \
 #     bash benchmarks/pouw/emu8/run.sh [REPS]
 set -uo pipefail
 OUT=${OUT:?run under research run}

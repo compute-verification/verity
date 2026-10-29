@@ -33,6 +33,7 @@ theorem slotFacts_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
   cases hr'
   have hpc := partCircuit_staged hS hx ht hpi hr hc h0
   obtain ⟨tags, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   have hv := FlockSoundness.Discharge.Recursion.checkParsed_v1 (htab 0 h0).2.2
   have hk : p.sts[0].c.kLog ≤ 27 := by
     have hx' := hx
