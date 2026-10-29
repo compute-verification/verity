@@ -76,6 +76,8 @@ def test_every_spec_parses_with_its_scope_and_plain_arm():
         want[name] = ("all", stock, False)
     for name in ("ncp-qk-rot", "ncp-attn-fix", "ncp-linears-attn-fix"):
         want[name] = ("all", stock, True)
+    for name in ("noise-ef1", "noise-ef2", "noise-ef4", "noise-ef32", "noise-x1-none", "ncp-dither", "ncp-dither-both"):
+        want[name] = ("linears", stock, True)
     got = {p.stem: spec.load(str(p)) for p in spec.SPECS.glob("*.toml")}
     assert set(got) == set(want)
     for name, (scope, plain, seeded) in want.items():

@@ -1,0 +1,11 @@
+description = "an inexact de-noise: the linears on ±126 activations and ±127 weights (rounded) with fresh noise uniform on ±1 on the integer activations every call, i.i.d. along k, served uncorrected: E W^T stays in the product; lm_head and attention bf16"
+plain = "int8-channel127-v1"
+
+[[linear]]
+step = "int8"
+act_top = 126
+
+[[linear]]
+step = "noise"
+x_width = 1
+correct = "none"

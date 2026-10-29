@@ -183,8 +183,8 @@ exits 1.
   int8 one it replaces.
 - `product_exact`: on the check window (window 0), every layer, each integer product against a float64 recomputation
   on 32 rows (linears) or 64 (attention).
-- `peel`: on the check window, every layer, KV group and P block (and every linear with `linear.peel`), each peel
-  identity. The served product, peeled, must
+- `peel`: on the check window, every layer, KV group and P block (and every linear with `linear.peel`, or with
+  `linear.noise` correcting every term), each peel identity. The served product, peeled, must
   equal the direct one exactly.
 - `lut`: for the integer softmax, on every call, A within uint32 and m − S within 32 bits (fattn.cu's `umulhi`).
 - `hf_reference`: on the check window's batch, every layer, the engine's bf16 layer output and RoPE tables bit-equal

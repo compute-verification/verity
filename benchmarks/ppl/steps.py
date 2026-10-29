@@ -917,6 +917,56 @@ def peel_linear(mm, nxt, *, alphabet: str = "bit", width: int = 1, top: int = 12
     return acc
 
 
+#: the correction terms `noise` may subtract: E W^T, X F^T and E F^T
+NOISE_TERMS = ("ew", "xf", "ef")
+
+
+def _check_noise(p):
+    if not 0 <= p["x_width"] <= 127 or not 0 <= p["w_width"] <= 127 or not (p["x_width"] or p["w_width"]):
+        raise ValueError("noise: widths in 0..127, at least one side noised")
+    if p["period"] < 0:
+        raise ValueError("noise.period is 0 (i.i.d. along k) or a period L > 0")
+    terms = [] if p["correct"] == "none" else p["correct"].split("+")
+    if p["correct"] != "all" and not set(terms) <= set(NOISE_TERMS):
+        raise ValueError(f"noise.correct is all, none or terms of {NOISE_TERMS} joined by +")
+
+
+@linear_step("noise", phase="integer", seeded=True, check=_check_noise, source="SW-PPL")
+def noise_linear(mm, nxt, *, x_width: int = 0, w_width: int = 0, period: int = 0, correct: str = "all"):
+    """Fresh integer noise on the integer operands, E on the activations and F on the weights, uniform on
+    {-width, ..., width}, drawn every call (`period` L > 0: E_ik = U_{i, k mod L} and F_jk = V_{j, k mod L}, U and V
+    the draws), so the served operands X + E and W + F must stay in int8 (the quantizer's tops leave the room). The
+    product (X + E)(W + F)^T is exact, and the de-noise subtracts the terms `correct` names, each exact: `all` (E W^T,
+    X F^T and E F^T: the product is X W^T again), `none`, or some of `ew`, `xf` and `ef` joined by `+`. What it leaves
+    out stays in the served product: `ew+xf` leaves E F^T, data-free noise of size sqrt(k) width^2 / 3 that only a
+    second full product would remove."""
+    x, w = mm.x, mm.weight().float()
+    (m, k), n = x.shape, w.shape[0]
+
+    def draw(rows, width):
+        if not width:
+            return None
+        u = mm.coins((rows, period or k), 2 * width + 1) - width
+        return u[:, torch.arange(k, device=x.device) % period] if period else u
+
+    from matmul import int_mm
+    e, f = draw(m, x_width), draw(n, w_width)
+    xs, ws = x if e is None else x + e, w if f is None else w + f
+    mm.gate("int8_range", G.int8_ok(xs, ws), "the noised operands")
+    w8, f8 = w.to(torch.int8), None if f is None else f.to(torch.int8)
+    acc = nxt(mm.replace(x=xs, w=ws.clamp(-128, 127).to(torch.int8))).double()
+    terms = set(NOISE_TERMS) if correct == "all" else set() if correct == "none" else set(correct.split("+"))
+    if e is not None and "ew" in terms:
+        acc = acc - int_mm(e, w8).double()
+    if f is not None and "xf" in terms:
+        acc = acc - int_mm(x, f8).double()
+    if e is not None and f is not None and "ef" in terms:
+        acc = acc - int_mm(e, f8).double()
+    if mm.checking and correct == "all":
+        mm.gate("peel", bool(torch.equal(acc, int_mm(x, w8).double())), "noise de-noised whole")
+    return acc
+
+
 @attention_step("grid", phase="quantize", seeded=lambda p: "dither" in (p["q"], p["k"], p["p"], p["v"]),
                 check=lambda p: _check_grid(p, ("q", "k", "p", "v")), source="D4-LOWBIT")
 def grid_attention(mm, nxt, *, grid: str, q: str = "dither", k: str = "dither", p: str = "dither", v: str = "dither",

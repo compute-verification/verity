@@ -147,6 +147,21 @@ def test_linear_variants_pass_their_gates(llama, ids, calib):
         assert abs(ppl(r["nll"][f"{a.name}/s0"]) / bf - 1) < 0.1, a.name
 
 
+def test_noise_corrected_whole_is_the_plain_product(llama, ids):
+    lin = {"step": "int8", "act_top": 95, "weight_top": 95}
+    plain = spec.parse({"linear": [lin]}, "t95")
+    arms = [plain] + [spec.parse({"linear": [lin, {"step": "noise", "x_width": 32, "w_width": 32, "period": p,
+                                                   "correct": c}]}, f"n-{c}-{p}")
+                      for c, p in (("all", 0), ("all", 32), ("ew+xf", 0), ("none", 32))]
+    r = evaluate(llama, ids[:4], arms)
+    assert passed(r), r["gates"]
+    nll = {a.name: r["nll"][f"{a.name}/s0"] for a in arms}
+    assert np.array_equal(nll["n-all-0"], nll["t95"]) and np.array_equal(nll["n-all-32"], nll["t95"])
+    assert ppl(nll["t95"]) < ppl(nll["n-ew+xf-0"]) < ppl(nll["n-none-32"])
+    wide = spec.parse({"linear": [{"step": "int8", "act_top": 127}, {"step": "noise", "x_width": 1}]}, "wide")
+    assert not passed(evaluate(llama, ids[:4], [wide]))
+
+
 def test_seeds(llama, ids, calib):
     r = evaluate(llama, ids[:4], ["int8-linears", "adopted-linears"], seeds=(0, 1), calib=calib)
     assert set(r["nll"]) == {"bf16/s0", "int8-linears/s0", "adopted-linears/s0", "adopted-linears/s1"}
