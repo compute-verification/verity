@@ -13,18 +13,18 @@ title = "ncp3 with a committed word every 64 stacked lanes, under M0 with candid
 origin = "N-SAKU"
 note = "compute-research/20261029T0815Z-report-np-saku"
 modules = { N = "ncp", D = "cancel", F = "int7-U", density = "k64-pl", operands = "xy", rows = "r256k", hiding = "mask", final = "none", forming = "none", derivation = "none" }
-source = "benchmarks/pouw/theory/saku.py ncp3_sparse on cursor/compute-research-np-saku-ea97; the skip is SakU.lean's skip_words (premise-free), and N-CARD's final_word at PureLanes' word_units = L prices the same L/K; route U's lane fix (24/m) is the card's, not saku.py's"
-claims.t8192 = { gap = 0.02764682, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m8192 L64 C1, T1 credited coins" }
-claims.t512r512 = { gap = 0.04229526, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m512 L64 C1" }
-claims.t512 = { gap = 0.15167026, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m64 L64 C1" }
-claims.v4like = { gap = 0.01102121, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, v4 dense m8192 L64 C1" }
+source = "benchmarks/pouw/theory/saku.py ncp3_sparse on cursor/compute-research-np-saku-ea97; the skip is SakU.lean's skip_words (premise-free), and N-CARD's final_word at PureLanes' word_units = L prices the same L/K; t1 adds route U's lane fix, 24/m (SW-SMELL S9), as the card does"
+claims.t8192 = { gap = 0.02764682, t1 = 0.03057651, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m8192 L64 C1, T1 credited coins" }
+claims.t512r512 = { gap = 0.04229526, t1 = 0.08917026, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m512 L64 C1" }
+claims.t512 = { gap = 0.15167026, t1 = 0.52667026, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m64 L64 C1" }
+claims.v4like = { gap = 0.01102121, t1 = 0.01395089, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, v4 dense m8192 L64 C1" }
 
 [card.np-saku-ncp3-k64-pl-m0-c1-mix]
 title = "the same with per-linear route U or U' (int7-mix): the lane fix min(24/m, 32/n)"
 origin = "N-SAKU"
 note = "compute-research/20261029T0815Z-report-np-saku"
 modules = { N = "ncp", D = "cancel", F = "int7-mix", density = "k64-pl", operands = "xy", rows = "r256k", hiding = "mask", final = "none", forming = "none", derivation = "none" }
-source = "as np-saku-ncp3-k64-pl-m0-c1; route U' takes premise route-u2"
-claims.t8192 = { gap = 0.02764682, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m8192 L64 C1" }
-claims.t512 = { gap = 0.15167026, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m64 L64 C1" }
-claims.v4like = { gap = 0.01102121, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, v4 dense m8192 L64 C1" }
+source = "as np-saku-ncp3-k64-pl-m0-c1, t1 at saku.py's T1_mix; route U' takes premise route-u2"
+claims.t8192 = { gap = 0.02764682, t1 = 0.03003772, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m8192 L64 C1" }
+claims.t512 = { gap = 0.15167026, t1 = 0.15921336, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, llama m64 L64 C1" }
+claims.v4like = { gap = 0.01102121, t1 = 0.01395089, terms = ["final_word", "uncommitted_steps", "forming", "noise_derivation", "denoise"], tol = 0.000002, kind = "estimate", source = "saku.py ncp3_sparse, v4 dense m8192 L64 C1" }

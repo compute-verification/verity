@@ -336,13 +336,17 @@ def served_zero_gap(L, q, depth=32, alpha=1.0):
 def ncp3_sparse(L, m, shapes, c1):
     """ncp3 at a committed word every L stacked lanes, M0 (prover-chosen data), MAC-weighted over `shapes`: the skip
     L/K (it replaces SW-NOISE's final word, 32/K at L 32), forming 32/n + 32/m (8/n + 8/m left once C1 forces 24),
-    and the coins, 6 bits an entry of E1 and F1 at SW-NOISE's 2,101 units a byte, when uncredited."""
+    the int7 packing's second writes (SW-SMELL S9: route U's Y registers, 24/m; per linear the cheaper of that and
+    route U''s X registers, 32/n), and the coins, 6 bits an entry of E1 and F1 at SW-NOISE's 2,101 units a byte, when
+    uncredited. T1 takes route U; T1_mix the cheaper route."""
     f = 8.0 if c1 else 32.0
     w = [m * k * n for _, k, n in shapes]
     terms = {"skip": [L / k for _, k, n in shapes], "forming": [f / n + f / m for _, k, n in shapes],
+             "lane_fix_U": [24 / m for _, k, n in shapes], "lane_fix_mix": [min(24 / m, 32 / n) for _, k, n in shapes],
              "coins": [COIN_B["sw-noise"] * 6 / 8 * (1 / n + 1 / m) for _, k, n in shapes]}
     agg = {key: sum(v * wi for v, wi in zip(vals, w)) / sum(w) for key, vals in terms.items()}
-    agg["T1_credited_coins"] = agg["skip"] + agg["forming"]
+    agg["T1_credited_coins"] = agg["skip"] + agg["forming"] + agg["lane_fix_U"]
+    agg["T1_mix"] = agg["skip"] + agg["forming"] + agg["lane_fix_mix"]
     agg["T1_uncredited_coins"] = agg["T1_credited_coins"] + agg["coins"]
     return agg
 
@@ -437,7 +441,8 @@ def main():
         print(f"exact design: largest L with skip <= 1% at {key}: {v:.1f} lanes")
     for key, a in sparse.items():
         print(f"ncp3 M0 {key:24s} T1 {100 * a['T1_credited_coins']:.3f}% (skip {100 * a['skip']:.3f}, forming "
-              f"{100 * a['forming']:.3f}; coins uncredited {100 * a['T1_uncredited_coins']:.2f}%)")
+              f"{100 * a['forming']:.3f}, lane fix {100 * a['lane_fix_U']:.3f}; route mix {100 * a['T1_mix']:.3f}%; "
+              f"coins uncredited {100 * a['T1_uncredited_coins']:.2f}%)")
     for key, v in periods.items():
         for scope, ps in v.items():
             print(f"per period {key:28s} {scope:10s} " + " ".join(f"{p} {g:.2e}" for p, g in ps.items()))
