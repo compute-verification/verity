@@ -149,8 +149,7 @@ def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e
     egress = run_shaper(SERVICE_FRAMES, [0] * len(SERVICE_FRAMES), syncs, Certifier("responses", g))
     lw = service.LinkWindows("responses", g, ss, signer.public_key(), "r-lean-audit-test", SESSION, proof_deadline=60.0,
                              occupancy=(tuple(occupancy(r.grid) for r in egress), None))
-    stream = lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test", coins=lambda n: b"\x07" * n,
-                       clock=lambda: 0.0)
+    stream = lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test", clock=lambda: 0.0)
     ingress, ins = Certifier("responses", g), []
     for _ in range(W):
         for _ in range(g.buckets):
