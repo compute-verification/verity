@@ -343,6 +343,12 @@ def tables(report: dict) -> str:
             cells = ", ".join(f"{lr}: {v if isinstance(v, str) else format(v, '.4f')}"
                               for lr, v in sorted(by_lr.items(), key=lambda kv: float(kv[0])))
             out.append(f"| {size} | {lab} | {cells} |")
+    out += ["", "## Measured throughput of each configuration's best run (training steps only, one GPU)", "",
+            "| size | config | tokens/s | achieved FLOP/s | MFU | seconds/step | peak memory GiB |", "|---|---|---|---|---|---|---|"]
+    for size, labels in sorted(report["throughput"].items()):
+        out += [f"| {size} | {lab} | {fmt(t['tokens_per_second'], ',.0f')} | {fmt(t['achieved_flop_per_second'], '.3g')} | "
+                f"{fmt(t['mfu'], '.3f')} | {fmt(t['seconds_per_step'], '.3f')} | {fmt(t['max_memory_gib'], '.1f')} |"
+                for lab, t in sorted(labels.items()) if "@" not in lab]
     out += ["", "## Envelopes: each configuration's shorter-horizon runs at its main run's learning rate (tokens per parameter)", "",
             "| size | config | horizons |", "|---|---|---|"]
     for size, labs in sorted(report["envelopes"].items()):
