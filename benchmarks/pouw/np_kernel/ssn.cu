@@ -13,6 +13,11 @@
 //   coins by g_k into B' step 1's lanes 24-27), and lanes 28-31 a1 against C; step t >= 2's lane 31 is 1 + a_t[i] against 1;
 //   S = 1 + ceil((K - 24) / 31); beta_j = rint((sum_e C[e, j] + 3 (S - 1)) / 2); word (i, j, t) is
 //   D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_e T(i)[e] G[e, j] + sum_{2 <= t' <= t} (1 + a_t'[i]).
+// BLC=1 is blc4a-t64-e7 (N-EGRESS): the tag layout's step 1, and each later step lanes 0-27 data, lanes 28-30 A' = 1 (written
+//   by A's producer) against the call's lane coins s_t[e, tile, j], odd and uniform in [-127, 127], one set a 64-row tile, and
+//   lane 31 1 + a_t[i] against 1; S = 1 + ceil((K - 24) / 28). The certifier streams a word a (tile, step, column), the three
+//   coins and lane 31's 1, after A_j; the GEMM copies it into B' lanes 28-31 of its stage (ssn_k's cv). Word (i, j, t) adds
+//   sum_{2 <= t' <= t} sum_e s_t'[e, i / 64, j] to the tag layout's.
 // Coins: a row's S + 3 bits are bits 0..S+2 of its H = ceil((S + 3) / 32) coin words (a1[i, e] bit e, a_t[i] bit t + 2);
 // row i's words are coin words i H .. i H + H - 1 of the call's stream, whose 16-word block c is SHA-512(seed || be64 c),
 // seed = SHA-512 of the call's 224-byte seed message (tag, salt, forward, position, root(A_j), root(B_j)). Under TAG=1,
@@ -63,8 +68,11 @@ typedef uint64_t u64;
 constexpr int KB = 32, TA = 64 * KB, STAGES = 4;
 
 static bool g_tag = false;  // TAG=1: the ssn-1l-tag layout
+static bool g_blc = false;  // BLC=1: blc4a-t64-e7 (with the tag layout's step 1 and row lane)
 static int lanes1() { return g_tag ? 24 : 28; }  // step 1's data lanes
-static int steps_of(int k) { return k <= lanes1() ? 1 : 1 + (k - lanes1() + 30) / 31; }
+static int lanesl() { return g_blc ? 28 : 31; }  // a later step's data lanes
+static int steps_of(int k) { return k <= lanes1() ? 1 : 1 + (k - lanes1() + lanesl() - 1) / lanesl(); }
+static const char* layout_name() { return g_blc ? "blc4a_t64_e7" : g_tag ? "ssn_1l_tag" : "ssn_1l"; }
 __host__ __device__ inline int coin_words(int s) { return (s + 3 + 31) / 32; }
 
 struct Clk {
@@ -79,6 +87,12 @@ __device__ __forceinline__ u64 gtime() {
 __device__ __forceinline__ void cp16(void* s, const void* g) {
   asm volatile("cp.async.cg.shared.global [%0], [%1], 16;" ::"r"(smem_u32(s)), "l"(g) : "memory");
 }
+__device__ __forceinline__ void cp8(void* s, const void* g) {
+  asm volatile("cp.async.ca.shared.global [%0], [%1], 8;" ::"r"(smem_u32(s)), "l"(g) : "memory");
+}
+__device__ __forceinline__ void cp4(void* s, const void* g) {
+  asm volatile("cp.async.ca.shared.global [%0], [%1], 4;" ::"r"(smem_u32(s)), "l"(g) : "memory");
+}
 __device__ __forceinline__ void cp_commit() { asm volatile("cp.async.commit_group;" ::: "memory"); }
 template <int N> __device__ __forceinline__ void cp_wait() { asm volatile("cp.async.wait_group %0;" ::"n"(N) : "memory"); }
 
@@ -88,10 +102,12 @@ template <> __device__ __forceinline__ void mma<128>(int (&d)[64], u64 da, u64 d
 
 // One CTA (a warpgroup) a 64 x BN output tile over S steps, STAGES-deep cp.async ring. EXPORT: wait for each step's wgmma
 // and store its 64 x BN words (block (rt, ct, t) of W); otherwise one wgmma group stays in flight (the plain GEMM).
+// cv (blc4a-t64-e7): the lane coins, word ((rt (S - 1) + t - 1) n + j) the bytes of B' lanes 28-31 of column j at step
+// t >= 1 for row tile rt, copied into the stage by one 4-byte cp.async beside B' lanes 0-27 (no register written).
 template <int BN, bool EXPORT>
 __global__ void __launch_bounds__(128) ssn_k(const uint8_t* __restrict__ A, const uint8_t* __restrict__ B,
                                              const int* __restrict__ beta, int S, int n, uint4* __restrict__ W,
-                                             int* __restrict__ out, Clk* clk) {
+                                             int* __restrict__ out, Clk* clk, const u32* __restrict__ cv) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   constexpr int TB = BN * KB, ST = TA + TB;
   extern __shared__ __align__(1024) unsigned char sm[];
@@ -102,8 +118,25 @@ __global__ void __launch_bounds__(128) ssn_k(const uint8_t* __restrict__ A, cons
     if (t < S) {
       unsigned char* st = sm + (t % STAGES) * ST;
       cp16(st + 16 * tid, a0 + (size_t)t * TA + 16 * tid);
+      if (cv && t > 0) {
+        const u32* c0 = cv + ((size_t)rt * (S - 1) + t - 1) * n + ct * BN;
 #pragma unroll
-      for (int j = 0; j < TB / 16 / 128; j++) cp16(st + TA + 16 * (tid + 128 * j), b0 + (size_t)t * TB + 16 * (tid + 128 * j));
+        for (int j = 0; j < TB / 16 / 128; j++) {
+          const int c = tid + 128 * j;  // kmaj_off's 16-byte chunk: column (c >> 4) 8 + (c & 7), K bytes 16 (c >> 3 & 1) on
+          unsigned char* s = st + TA + 16 * c;
+          const uint8_t* g = b0 + (size_t)t * TB + 16 * c;
+          if (c & 8) {
+            cp8(s, g);
+            cp4(s + 8, g + 8);
+            cp4(s + 12, c0 + (c >> 4) * 8 + (c & 7));
+          } else {
+            cp16(s, g);
+          }
+        }
+      } else {
+#pragma unroll
+        for (int j = 0; j < TB / 16 / 128; j++) cp16(st + TA + 16 * (tid + 128 * j), b0 + (size_t)t * TB + 16 * (tid + 128 * j));
+      }
     }
     cp_commit();
   };
@@ -418,8 +451,8 @@ static int tag_of(int i, int e) {
 }
 // data entry of step t (0-based), lane l: its K index, or -1 for a noise, tag or padding lane
 static int kidx(int t, int l, int K) {
-  const int d = lanes1();
-  const int k = t == 0 ? (l < d ? l : -1) : (l < 31 ? d + 31 * (t - 1) + l : -1);
+  const int d = lanes1(), e = lanesl();
+  const int k = t == 0 ? (l < d ? l : -1) : (l < e ? d + e * (t - 1) + l : -1);
   return k >= 0 && k < K ? k : -1;
 }
 
@@ -449,6 +482,7 @@ static std::vector<uint8_t> tile_a(const Lin& L) {
         const int k = kidx(t, l, L.K);
         int v = k >= 0 ? L.A[(size_t)i * L.K + k] : 0;
         if (g_tag && t == 0 && l >= 24 && l < 28) v = tag_of(i, l - 24);
+        if (g_blc && t > 0 && l >= 28 && l < 31) v = 1;
         o[((size_t)(i >> 6) * L.S + t) * TA + kmaj_off(i & 63, l, KB)] = (uint8_t)(int8_t)v;
       }
   return o;
@@ -495,22 +529,30 @@ static long long coin_blocks(int m, int S, int n) { return ((long long)m * coin_
 
 template <int BN, bool EXPORT>
 static void gemm_bn(const uint8_t* A, const uint8_t* B, const int* beta, int m, int n, int S, uint4* W, int* out, Clk* clk,
-                    cudaStream_t st) {
+                    cudaStream_t st, const u32* cv) {
   constexpr int smem = STAGES * (TA + BN * KB);
   static bool init = false;
   if (!init) {
     CK(cudaFuncSetAttribute(ssn_k<BN, EXPORT>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem));
     init = true;
   }
-  ssn_k<BN, EXPORT><<<dim3(n / BN, m / 64), 128, smem, st>>>(A, B, beta, S, n, W, out, clk);
+  ssn_k<BN, EXPORT><<<dim3(n / BN, m / 64), 128, smem, st>>>(A, B, beta, S, n, W, out, clk, cv);
   CK(cudaGetLastError());
 }
 static void gemm(int BN, bool ex, const uint8_t* A, const uint8_t* B, const int* beta, int m, int n, int S, uint4* W, int* out,
-                 Clk* clk, cudaStream_t st) {
-  if (BN == 256 && ex) gemm_bn<256, true>(A, B, beta, m, n, S, W, out, clk, st);
-  else if (BN == 256) gemm_bn<256, false>(A, B, beta, m, n, S, W, out, clk, st);
-  else if (ex) gemm_bn<128, true>(A, B, beta, m, n, S, W, out, clk, st);
-  else gemm_bn<128, false>(A, B, beta, m, n, S, W, out, clk, st);
+                 Clk* clk, cudaStream_t st, const u32* cv = nullptr) {
+  if (BN == 256 && ex) gemm_bn<256, true>(A, B, beta, m, n, S, W, out, clk, st, cv);
+  else if (BN == 256) gemm_bn<256, false>(A, B, beta, m, n, S, W, out, clk, st, cv);
+  else if (ex) gemm_bn<128, true>(A, B, beta, m, n, S, W, out, clk, st, cv);
+  else gemm_bn<128, false>(A, B, beta, m, n, S, W, out, clk, st, cv);
+}
+// blc4a-t64-e7's lane coins as the certifier streams them: a word a (64-row tile, step t >= 1, column), its bytes three
+// coins odd and uniform in [-127, 127] and lane 31's public weight 1
+static u32 lane_word(u64 x) {
+  const u64 r = mix64(x);
+  u32 w = 0x01000000u;
+  for (int e = 0; e < 3; e++) w |= (u32)(uint8_t)(int8_t)(2 * (int)((r >> (8 * e)) & 127) - 127) << (8 * e);
+  return w;
 }
 // a call's coins (parts & 1), forming (parts & 2) and, under the tag layout, G (parts & 4)
 enum { COINS = 1, FORM = 2, GDRAW = 4 };
@@ -632,14 +674,16 @@ static int check_l1() {
     // L1=2 at both least CTA sizes: its seed against the reference, and l1_nf_k's coin words, A' and B' against l1_coins_k's
     // blocks with coins_form's G and forming, over A' and B' as their producer writes them, in both layouts
     const int keep_cta = g_l1_cta;
-    const bool keep_tag = g_tag;
+    const bool keep_tag = g_tag, keep_blc = g_blc;
     for (int cta : {64, 128}) {
       g_l1_cta = cta;
       const L1Dev d2 = l1_dev(w, c.call, a.size());
-      for (int tag = 0; tag < 2; tag++) {
+      for (int lay = 0; lay < 3; lay++) {
+        const bool tag = lay > 0;
         g_tag = tag;
+        g_blc = lay == 2;
         Lin L{(int)c.rows, 256, (int)c.K, steps_of((int)c.K), 256, {}, {}};
-        fill(L, 0, sd * 31 + tag);
+        fill(L, 0, sd * 31 + lay);
         const auto ta = tile_a(L), tb = tile_b(L);
         const int m = L.m, n = L.n, S = L.S;
         const long long nb = coin_blocks(m, S, n), nw = (long long)m * coin_words(S) + (tag ? n : 0);
@@ -673,7 +717,7 @@ static int check_l1() {
                "\"coin_word_mismatches\": %zu, \"a_bytes\": %zu, \"a_bytes_formed\": %zu, \"a_byte_mismatches\": %zu, "
                "\"b_bytes\": %zu, \"b_byte_mismatches\": %zu}\n",
                (unsigned long long)c.rows, (unsigned long long)c.K, (unsigned long long)c.call, c.zero ? "zero" : "random",
-               d2.cta2, d2.nct2, tag ? "ssn_1l_tag" : "ssn_1l", ok2 ? "true" : "false", nw, dw, ta.size(), formed, da,
+               d2.cta2, d2.nct2, layout_name(), ok2 ? "true" : "false", nw, dw, ta.size(), formed, da,
                tb.size(), db);
         fflush(stdout);
         bad += !ok2 || dw || da || db;
@@ -683,6 +727,7 @@ static int check_l1() {
     }
     g_l1_cta = keep_cta;
     g_tag = keep_tag;
+    g_blc = keep_blc;
     CK(cudaFree(dA)); CK(cudaFree(dc));
     l1_free(d);
   }
@@ -956,8 +1001,12 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   CK(cudaMalloc(&dout, (size_t)m * n * 4));
   CK(cudaMemset(dW, 0xA5, words * 4));
   CK(cudaMemset(dout, 0xA5, (size_t)m * n * 4));
+  std::vector<u32> lc;
+  if (g_blc)
+    for (size_t x = 0; x < (size_t)(m / 64) * (S - 1) * n; x++) lc.push_back(lane_word(seed * 0x9E3779B97F4A7C15ull + x));
+  u32* dlc = lc.empty() ? nullptr : up(lc);
   coins_form(dmsg, dcoins, dA, dB, m, n, S, BN, 0);
-  gemm(BN, true, dA, dB, dbeta, m, n, S, dW, dout, nullptr, 0);
+  gemm(BN, true, dA, dB, dbeta, m, n, S, dW, dout, nullptr, 0, dlc);
   CK(cudaDeviceSynchronize());
   std::vector<u32> coins(nb * 16);
   std::vector<int> W(words), out((size_t)m * n);
@@ -1011,11 +1060,18 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
         int v = k >= 0 ? L.A[(size_t)i * K + k] : 0;
         if (g_tag && t == 0 && l >= 24 && l < 28) v = tag_of(i, l - 24);
         if (t == 0 && l >= 28) v = bit(i, l - 28);
+        if (g_blc && t > 0 && l >= 28 && l < 31) v = 1;
         if (t > 0 && l == 31) v = (g_tag ? 1 : 0) + bit(i, t + 3);
         bad_form += (int8_t)fa[((size_t)(i >> 6) * S + t) * TA + kmaj_off(i & 63, l, KB)] != v;
       }
   // every word against word (i, j, t) = D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i], and
-  // under the tag layout + sum_e T(i)[e] G[e, j] and 1 + a_t'[i] for a_t'[i]
+  // under the tag layout + sum_e T(i)[e] G[e, j] and 1 + a_t'[i] for a_t'[i], under blc4a-t64-e7 also + the three lane coins
+  // of (i / 64, t', j) at each step t'
+  auto lane_sum = [&](int i, int t, int j) {
+    if (!g_blc) return 0;
+    const u32 w = lc[((size_t)(i / 64) * (S - 1) + t - 1) * n + j];
+    return (int)(int8_t)w + (int)(int8_t)(w >> 8) + (int)(int8_t)(w >> 16);
+  };
   size_t bad_w = 0, bad_o = 0, ones = 0;
   long long maxabs = 0;
   std::vector<int> code(4 * (size_t)n);
@@ -1031,9 +1087,9 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
       long long acc = -beta[j];
       for (int e = 0; e < 4; e++) acc += bit(i, e) * code[4 * j + e] + T[e] * G[4 * j + e];
       for (int t = 0; t < S; t++) {
-        const int lo = t == 0 ? 0 : d1 + 31 * (t - 1), hi = std::min(K, t == 0 ? d1 : lo + 31);
+        const int lo = t == 0 ? 0 : d1 + lanesl() * (t - 1), hi = std::min(K, t == 0 ? d1 : lo + lanesl());
         for (int k = lo; k < hi; k++) acc += (int)a[k] * (int)b[k];
-        if (t > 0) acc += (g_tag ? 1 : 0) + bit(i, t + 3);
+        if (t > 0) acc += (g_tag ? 1 : 0) + bit(i, t + 3) + lane_sum(i, t, j);
         maxabs = std::max(maxabs, acc < 0 ? -acc : acc);
         bad_w += W[word_at(i, j, t, S, n, BN)] != acc;
       }
@@ -1044,10 +1100,11 @@ static int check_one(int m, int n, int K, int BN, int kind, u64 seed) {
   printf("{\"check\": \"%s\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, \"BN\": %d, \"data\": \"%s\", \"words\": %zu, "
          "\"word_mismatches\": %zu, \"final_mismatches\": %zu, \"formed_mismatches\": %zu, \"b_mismatches\": %zu, "
          "\"max_abs_word\": %lld, \"step_bits_set\": %zu, \"step_bits\": %zu, \"coin_blocks\": %lld, "
-         "\"coin_word_mismatches\": %zu}\n",
-         g_tag ? "ssn_1l_tag" : "ssn_1l", m, n, K, S, BN, kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : "zero",
-         words, bad_w, bad_o, bad_form, bad_g, maxabs, ones, (size_t)m * (S - 1), nb, bad_coin);
+         "\"coin_word_mismatches\": %zu, \"lane_coin_words\": %zu}\n",
+         layout_name(), m, n, K, S, BN, kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : "zero",
+         words, bad_w, bad_o, bad_form, bad_g, maxabs, ones, (size_t)m * (S - 1), nb, bad_coin, lc.size());
   fflush(stdout);
+  if (dlc) CK(cudaFree(dlc));
   CK(cudaFree(dA)); CK(cudaFree(dB)); CK(cudaFree(dbeta)); CK(cudaFree(dmsg)); CK(cudaFree(dcoins));
   CK(cudaFree(dW)); CK(cudaFree(dout));
   return bad_w || bad_o || bad_form || bad_g || bad_coin;
@@ -1081,11 +1138,13 @@ static int check() {
     }
   }
   int bad = 0;
-  for (int tag = 0; tag < 2; tag++) {
-    g_tag = tag;
+  for (int lay = 0; lay < 3; lay++) {
+    g_tag = lay > 0;
+    g_blc = lay == 2;
     u64 seed = 1;
     for (const C& c : cs) bad += check_one(c.m, c.n, c.K, c.BN, c.kind, seed++);
   }
+  g_tag = g_blc = false;
   bad += check_l1();
   return bad ? 1 : 0;
 }
@@ -1161,6 +1220,30 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     max_chunk_words = std::max(max_chunk_words, (size_t)d.chunk * s.n * L.S);
     lins.push_back(d);
   }
+  // BLC=1: the certifier's link on a copy stream. A call sends A_j (M K bytes, device to host) once A_j is ready, and its lane
+  // coins come back a chunk at a time (host to device) ahead of the chunk's GEMM, into one of two buffers by call parity.
+  // The certifier's own hash of A_j and the network's latency aren't modelled.
+  size_t lc_max = 0;
+  for (const LinDev& d : lins) lc_max = std::max(lc_max, (size_t)(M / 64) * (d.S - 1) * d.n);
+  u32 *hlc = nullptr, *dlc[2] = {nullptr, nullptr};
+  uint8_t* hA = nullptr;
+  cudaStream_t sc = nullptr;
+  cudaEvent_t ev_a = nullptr, ev_c = nullptr;
+  if (g_blc) {
+    CK(cudaMallocHost(&hlc, lc_max * 4));
+    for (size_t x = 0; x < lc_max; x++) hlc[x] = lane_word(x);
+    for (u32*& p : dlc) {
+      CK(cudaMalloc(&p, lc_max * 4));
+      CK(cudaMemcpy(p, hlc, lc_max * 4, cudaMemcpyHostToDevice));
+    }
+    CK(cudaMallocHost(&hA, (size_t)M * 8192));
+    CK(cudaStreamCreateWithFlags(&sc, cudaStreamNonBlocking));
+    CK(cudaEventCreateWithFlags(&ev_a, cudaEventDisableTiming));
+    CK(cudaEventCreateWithFlags(&ev_c, cudaEventDisableTiming));
+  }
+  auto lane_at = [&](const LinDev& d, int par, int r0) -> const u32* {
+    return g_blc ? dlc[par] + (size_t)(r0 / 64) * (d.S - 1) * d.n : nullptr;
+  };
   // L1=1: root(A_j) and the seed by L1 + (a)'s seed path (l1_path; ROOT_A and the call's seed message unused), call 4 l + i
   // the forward's linear i in layer l; L1=2 by l1_path2 (CTAs of at least L1_CTA threads)
   const int l1_mode = getenv("L1") ? atoi(getenv("L1")) : 0;
@@ -1265,14 +1348,14 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     const double macs = (double)M * d.n * d.K, words = (double)M * d.n * d.S;
     line("plain_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A0, d.B0, nullptr, M, d.n, d.K / KB, nullptr, nullptr, nullptr, 0); }),
          macs, 0, 0);
-    line("ssn_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A, d.B, d.beta, M, d.n, d.S, nullptr, nullptr, nullptr, 0); }),
+    line("ssn_gemm", &d, T.ms(reps, [&] { gemm(d.BN, false, d.A, d.B, d.beta, M, d.n, d.S, nullptr, nullptr, nullptr, 0, lane_at(d, 0, 0)); }),
          macs, 0, 0);
     double ex = 0;
     std::vector<double> hsh(rbs.size(), 0.0), tre(rbs.size(), 0.0);
     for (int r0 = 0; r0 < M; r0 += d.chunk) {
       const int mc = std::min(d.chunk, M - r0);
       const uint8_t* A = d.A + (size_t)(r0 / 64) * d.S * TA;
-      ex += T.ms(reps, [&] { gemm(d.BN, true, A, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, 0); });
+      ex += T.ms(reps, [&] { gemm(d.BN, true, A, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, 0, lane_at(d, 0, r0)); });
       const long long blocks = (long long)(mc / 64) * (d.n / d.BN) * d.S;
       for (size_t h = 0; h < rbs.size(); h++) {
         Hasher& hs = hsv[nbuf * h];
@@ -1282,6 +1365,13 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       }
     }
     line("ssn_gemm_export", &d, ex, macs, words, d.chunk);
+    if (g_blc) {
+      const size_t lb = (size_t)(M / 64) * (d.S - 1) * d.n * 4;
+      line("lane_link", &d, T.ms(reps, [&] {
+             CK(cudaMemcpyAsync(hA, d.A0, (size_t)M * d.K, cudaMemcpyDeviceToHost, 0));
+             CK(cudaMemcpyAsync(dlc[1], hlc, lb, cudaMemcpyHostToDevice, 0));
+           }), macs, words, (double)lb);
+    }
     for (hi = 0; hi < (int)rbs.size(); hi++) line("hash_pass", &d, hsh[hi], macs, words, d.chunk);
     for (hi = 0; hi < (int)rbs.size(); hi++) line("hash_tree", &d, tre[hi], macs, words, d.chunk);
     hi = -1;
@@ -1332,15 +1422,36 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
       coins_form(d.msg, d.coins, d.A, d.B, M, d.n, d.S, d.BN, st);
     }
   };
+  // BLC=1: A_j to the certifier once A_j is ready (s1's work so far), then each chunk's lane coins back ahead of its GEMM
+  auto link_a = [&](const LinDev& d) {
+    if (!g_blc) return;
+    CK(cudaEventRecord(ev_a, s1));
+    CK(cudaStreamWaitEvent(sc, ev_a));
+    CK(cudaMemcpyAsync(hA, d.A0, (size_t)M * d.K, cudaMemcpyDeviceToHost, sc));
+  };
+  auto link_c = [&](const LinDev& d, int par, int r0, int mc, bool copy) -> const u32* {
+    const u32* p = lane_at(d, par, r0);
+    if (p && copy) {
+      const size_t off = (size_t)(r0 / 64) * (d.S - 1) * d.n;
+      CK(cudaMemcpyAsync(dlc[par] + off, hlc + off, (size_t)(mc / 64) * (d.S - 1) * d.n * 4, cudaMemcpyHostToDevice, sc));
+      CK(cudaEventRecord(ev_c, sc));
+      CK(cudaStreamWaitEvent(s1, ev_c));
+    }
+    return p;
+  };
   auto fwd_serial = [&] {
+    int call = 0;
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
+        link_a(d);
         pre(d, l, s1);
         for (int r0 = 0; r0 < M; r0 += d.chunk) {
           const int mc = std::min(d.chunk, M - r0);
-          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1);
+          const u32* cv = link_c(d, call & 1, r0, mc, true);
+          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[0], nullptr, nullptr, s1, cv);
           hsv[nbuf * hi].run(Wb[0], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s1, 0, words_tree);
         }
+        call++;
       }
   };
   std::vector<cudaEvent_t> done(nbuf), full(nbuf);
@@ -1348,23 +1459,29 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
     CK(cudaEventCreateWithFlags(&done[b], cudaEventDisableTiming));
     CK(cudaEventCreateWithFlags(&full[b], cudaEventDisableTiming));
   }
-  // BARE=1 also times beside with nothing ahead of each call's GEMM (no root(A_j), coins, G or forming): the schedule's floor
+  // BARE=1 also times beside with nothing ahead of each call's GEMM (no root(A_j), coins, G, forming or BLC's link; the GEMM
+  // still reads lane coins): the schedule's floor
   const bool bare = getenv("BARE") && atoi(getenv("BARE"));
   auto fwd_beside_of = [&](bool with_pre) {
-    int c = 0;
+    int c = 0, call = 0;
     for (int b = 0; b < nbuf; b++) CK(cudaEventRecord(done[b], s2[b]));
     for (int l = 0; l < 16; l++)
       for (const LinDev& d : lins) {
-        if (with_pre) pre(d, l, s1);
+        if (with_pre) {
+          link_a(d);
+          pre(d, l, s1);
+        }
         for (int r0 = 0; r0 < M; r0 += d.chunk, c++) {
           const int mc = std::min(d.chunk, M - r0), b = c % nbuf;
+          const u32* cv = link_c(d, call & 1, r0, mc, with_pre);
           CK(cudaStreamWaitEvent(s1, done[b]));
-          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1);
+          gemm(d.BN, true, d.A + (size_t)(r0 / 64) * d.S * TA, d.B, d.beta, mc, d.n, d.S, Wb[b], nullptr, nullptr, s1, cv);
           CK(cudaEventRecord(full[b], s1));
           CK(cudaStreamWaitEvent(s2[b], full[b]));
           hsv[nbuf * hi + b].run(Wb[b], (long long)(mc / 64) * (d.n / d.BN) * d.S, 64 * d.BN * 4, s2[b], hash_cap, words_tree);
           CK(cudaEventRecord(done[b], s2[b]));
         }
+        call++;
       }
     for (int b = 0; b < nbuf; b++) CK(cudaStreamWaitEvent(s1, done[b]));
   };
@@ -1378,7 +1495,7 @@ static int time_all(int reps, int M, double budget_gb, const std::vector<int>& r
          "\"sz_finish\", \"prio\": %d, \"layout\": \"%s\", \"l1\": %d, \"l1_cta\": %d, \"small_threads\": %d, "
          "\"small_rows_max\": %llu}\n",
          f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree, (int)prio,
-         g_tag ? "ssn_1l_tag" : "ssn_1l", l1_mode, g_l1_cta,
+         layout_name(), l1_mode, g_l1_cta,
 #ifdef SSN_SMALL_ROWS
          SSN_SMALL_ROWS, (unsigned long long)small_rows_max()
 #else
@@ -1398,7 +1515,8 @@ int main(int argc, char** argv) {
   }
   if (argc == 2 && !strcmp(argv[1], "check")) return check();
   if (argc >= 4 && !strcmp(argv[1], "time")) {
-    g_tag = getenv("TAG") && atoi(getenv("TAG"));
+    g_blc = getenv("BLC") && atoi(getenv("BLC"));
+    g_tag = g_blc || (getenv("TAG") && atoi(getenv("TAG")));
     std::vector<int> rbs;
     for (int a = 5; a < argc; a++) rbs.push_back(atoi(argv[a]));
     if (rbs.empty()) rbs = {0, 65536, 16384};

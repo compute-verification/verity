@@ -15,6 +15,8 @@
 #   the leaves of any launch of fewer than SMALL_ROWS_MAX rows), TAG (0; 1 times the ssn-1l-tag layout; the check runs both),
 #   L1 (0; 1 puts L1 + (a)'s seed path, root(A_j) through the seed and noise blocks, before each call's forming; 2 the same
 #   path shaped for latency, its noise blocks, G and forming in one launch), L1_CTA (64; L1=2's least CTA size, 64 or 128),
+#   BLC (0; 1 times blc4a-t64-e7: the tag layout with three lane coins a 64-row tile in each later step, streamed after A_j;
+#   the check runs all three layouts),
 #   BARE (0; 1 also times beside with nothing ahead of each call's GEMM, the schedule's floor), VARIANTS (unset; else
 #   passes of the timings, each a comma-separated NAME=VALUE list over the environment above, e.g. "L1=1 L1=2,PRIO=1":
 #   time_m<M>_<the list with = as - and , as _>.jsonl).

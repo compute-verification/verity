@@ -58,6 +58,8 @@ def summarize(rows: list[dict], stock: dict | None) -> dict:
             "l1_root2_us": 1e3 * r["ms"] if (r := g("l1_root2", "l1")) else None,
             "l1_seed_path2_us": 1e3 * r["ms"] if (r := g("l1_seed_path2", "l1")) else None,
             "l1_cta2": int(r["extra"]) if (r := g("l1_root2", "l1")) else None,
+            "lane_link_us": 1e3 * r["ms"] if (r := g("lane_link")) else None,
+            "lane_coin_bytes": int(r["extra"]) if (r := g("lane_link")) else None,
         }
     fwd = {"plain_gemm": by.get(("fwd_plain_gemm", "all", "none"))}
     for h in hashers:
@@ -138,6 +140,9 @@ def main() -> None:
             if x["l1_root2_us"] is not None:
                 print(f"- L1 + (a) for latency (CTAs of {x['l1_cta2']}), {n}: root(A_j) through the seed "
                       f"{x['l1_root2_us']:.1f} µs; with the noise blocks, G and forming {x['l1_seed_path2_us']:.1f} µs")
+            if x["lane_link_us"] is not None:
+                print(f"- blc4a-t64-e7's link, {n}: A_j to the host and the call's {x['lane_coin_bytes'] / 1e6:.2f} MB of lane "
+                      f"coins back, {x['lane_link_us']:.1f} µs")
         print(f"- layout {r['layout']}")
         if r["l1"] == 2:
             print(f"- the forwards below run L1 + (a)'s seed path for latency (CTAs of at least {r['l1_cta']}), its noise "
