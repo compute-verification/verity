@@ -18,7 +18,8 @@ disk() {
 for arm in ${ARMS:-base new noprover newspy}; do
   tree=$NEW
   case $arm in
-    base) tree=$B/tree; set -- H1_PROVER=1 PYSPY=0 GPU_TESTS= ;;
+    # the collector holds every package's tree to RESEARCH_SOURCE_SHA, the shipped commit's (this tree's) unless declared
+    base) tree=$B/tree; set -- H1_PROVER=1 PYSPY=0 GPU_TESTS= RESEARCH_SOURCE_SHA="$(git -C "$B/tree" rev-parse HEAD)" ;;
     new) set -- H1_PROVER=1 PYSPY=0 ;;
     noprover) set -- H1_PROVER=0 PYSPY=0 GPU_TESTS= ;;
     newspy) set -- H1_PROVER=1 PYSPY=1 GPU_TESTS= ;;
