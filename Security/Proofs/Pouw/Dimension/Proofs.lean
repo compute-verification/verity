@@ -492,7 +492,7 @@ theorem sanity_h16_needed (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fi
       cost P = U.card * (m * n) * (3 * k / 16 - 1) :=
   ⟨honest k m n N R A B U 1, honest_outputs, by rw [honest_cost, one_mul]⟩
 
-/-! ## A1 and A2 -/
+/-! ## A1 -/
 
 /-- **A1's witness.** -/
 theorem a1Witness : A1Witness := by
@@ -513,47 +513,6 @@ theorem a1Witness : A1Witness := by
   have hd : (Module.finrank ℚ V : ℝ) ≤ r := by exact_mod_cast hdim
   have h0 : (0 : ℝ) ≤ Module.finrank ℚ V := Nat.cast_nonneg _
   nlinarith
-
-/-- **A2's witness** (a trivial model). -/
-theorem a2Witness : A2Witness := by
-  intro N m n k W q
-  exact ⟨coords N m n k, q.1, coords_V0, q.2, fun φ hφ _ => hφ, by simp [algMachine]⟩
-
-/-- **TT_NCP from A2 into AlgM_16.** -/
-theorem ttNCPOfA2 : TTNCPOfA2 := by
-  intro k m n N R A B U M q γ₀ γ₂ h16 hk hind hU hA2 hout hγ₂ hγ₀ hγ hev
-  obtain ⟨L, P, hL, hH, hPout, hcost⟩ := hA2 q
-  have hb := algBound k m n N R A B U L P hind hU hL hH
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩)
-  obtain ⟨k', rfl⟩ := h16
-  have hk' : 1 ≤ k' := by omega
-  have h3 : 3 * (16 * k') / 16 - 1 = 3 * k' - 1 := by omega
-  rw [h3] at hb
-  have hbR : (16 : ℝ) * (U.card * (m * n) * (3 * k' - 1)) ≤ cost P := by
-    have : ((16 * (U.card * (m * n) * (3 * k' - 1)) : ℕ) : ℝ) ≤ cost P := by exact_mod_cast hb
-    push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at this
-    linarith
-  rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
-  rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have hk'R : (0 : ℝ) < k' := by exact_mod_cast hk'
-  have hid : (1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')) = 16 * (3 * k' - 1) := by
-    field_simp
-  have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
-  have step1 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (1 - γ₀) ≤
-      (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) :=
-    mul_le_mul_of_nonneg_left hγ (by positivity)
-  have step2 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      (1 - γ₂) * (16 * (U.card * (m * n) * (3 * k' - 1))) := by
-    rw [show (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      (1 - γ₂) * (U.card * (m * n) * ((1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')))) by ring, hid]
-    ring
-  have step3 : (1 - γ₂) * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ (1 - γ₂) * cost P :=
-    mul_le_mul_of_nonneg_left hbR (by linarith)
-  have e1 : (U.card : ℝ) * (3 * (m * (16 * k') * n)) = U.card * (m * n) * (3 * (16 * (k' : ℝ))) := by ring
-  rw [e1] at hev
-  linarith
 
 /-- **Theorem D for the protocol's checked values.** -/
 theorem algBoundWrapped : AlgBoundWrapped := by
