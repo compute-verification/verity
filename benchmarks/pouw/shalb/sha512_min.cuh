@@ -6,8 +6,8 @@
 // - Each round is four 64-bit adds of at most three terms: U = h + W_t + K_t, T1 = U + S1(e) + Ch(e,f,g), e' = d + T1,
 //   a' = T1 + S0(a) + Maj(a,b,c). Each schedule word is one four-term add, two IADD3 pairs.
 // - e_80 is read only by the feed-forward, so H4 = T1 + d + cv4 is one three-term add.
-// - CVC = 1: the chaining value is the IV, a compile-time constant (any block after a block-aligned constant prefix has
-//   a constant chaining value), so round 0 folds to two adds of W_0 to constants.
+// - CVC = 1: the chaining value is a compile-time constant, CVS's (the IV, or the state after a block-aligned constant
+//   prefix), so round 0 folds to two adds of W_0 to constants.
 // - PAD_BITS: the block is a block-aligned message's padding block, a constant, so its schedule is K_t + W_t immediates
 //   and a round is 28: 80 × 28 + 14 = 2,254. nvcc doesn't fold the funnel shifts of a schedule over constant words, so
 //   a constant block is hashed this way, in a chain too.
@@ -70,6 +70,34 @@ struct PadBlock {
   }
 };
 
+// A compile-time chaining value for CVC: the IV, or (RowV2Mid) the state after a constant prefix block.
+struct IVConst {
+  uint64_t h[8];
+  __host__ __device__ constexpr IVConst() : h{IVt(0), IVt(1), IVt(2), IVt(3), IVt(4), IVt(5), IVt(6), IVt(7)} {}
+};
+
+// The state after sha512/row/v2's prefix block P(BITS) = ("verity/sha512-row/v2\0" ‖ u64be BITS) zero-padded to
+// 128 bytes, compressed from the IV at compile time.
+template <uint64_t BITS>
+struct RowV2Mid {
+  uint64_t h[8];
+  __host__ __device__ constexpr RowV2Mid() : h{} {
+    uint64_t w[80] = {0x7665726974792f73ull, 0x68613531322d726full, 0x772f763200000000ull | BITS >> 40, BITS << 24};
+    for (int t = 16; t < 80; ++t) {
+      const uint64_t x = w[t - 2], y = w[t - 15];
+      w[t] = (r64(x, 19) ^ r64(x, 61) ^ x >> 6) + w[t - 7] + (r64(y, 1) ^ r64(y, 8) ^ y >> 7) + w[t - 16];
+    }
+    uint64_t s[8] = {IVt(0), IVt(1), IVt(2), IVt(3), IVt(4), IVt(5), IVt(6), IVt(7)};
+    for (int t = 0; t < 80; ++t) {
+      const uint64_t e = s[4], a = s[0];
+      const uint64_t t1 = s[7] + (r64(e, 14) ^ r64(e, 18) ^ r64(e, 41)) + ((e & s[5]) ^ (~e & s[6])) + Kt(t) + w[t];
+      const uint64_t t2 = (r64(a, 28) ^ r64(a, 34) ^ r64(a, 39)) + ((a & s[1]) | (s[2] & (a | s[1])));
+      s[7] = s[6]; s[6] = s[5]; s[5] = s[4]; s[4] = s[3] + t1; s[3] = s[2]; s[2] = s[1]; s[1] = s[0]; s[0] = t1 + t2;
+    }
+    for (int i = 0; i < 8; ++i) h[i] = IVt(i) + s[i];
+  }
+};
+
 SHAMIN_HD uint64_t pack(uint32_t lo, uint32_t hi) { return (uint64_t)hi << 32 | lo; }
 
 // The 32-bit window of hi:lo starting at bit m: one SHF.R.W.U32 on the device.
@@ -112,13 +140,14 @@ SHAMIN_HD uint64_t maj(uint64_t a, uint64_t b, uint64_t c) { return (a & b) | (c
 // block is the padding block of a PAD_BITS-bit block-aligned message, w is not read, and there is no schedule. CHAIN 1
 // and 2 compress a pair of blocks of a chain in chain form, pend[] carrying H3's and H7 + K_0's second terms between
 // them.
-template <int CVC, uint64_t PAD_BITS = 0, int CHAIN = 0>
+template <int CVC, uint64_t PAD_BITS = 0, int CHAIN = 0, class CVS = IVConst>
 SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
   static_assert(CHAIN != 2 || !CVC, "only a chain's first block has a constant chaining value");
   constexpr PadBlock pad(PAD_BITS);
+  constexpr CVS k{};
   uint64_t a, b, c, d, e, f, g, h;
   if constexpr (CVC) {
-    a = IVt(0); b = IVt(1); c = IVt(2); d = IVt(3); e = IVt(4); f = IVt(5); g = IVt(6); h = IVt(7);
+    a = k.h[0]; b = k.h[1]; c = k.h[2]; d = k.h[3]; e = k.h[4]; f = k.h[5]; g = k.h[6]; h = k.h[7];
   } else {
     a = cv[0]; b = cv[1]; c = cv[2]; d = cv[3]; e = cv[4]; f = cv[5]; g = cv[6]; h = cv[7];
   }
@@ -158,9 +187,9 @@ SHAMIN_HD void compress(uint64_t* cv, uint64_t* w, uint64_t* pend = nullptr) {
     t1 = u + S1(e) + ch(e, f, g);
     t2 = S0(a) + maj(a, b, c);
   }
-  const uint64_t cv0 = CVC ? IVt(0) : cv[0], cv1 = CVC ? IVt(1) : cv[1], cv2 = CVC ? IVt(2) : cv[2];
-  const uint64_t cv3 = CVC ? IVt(3) : cv[3], cv4 = CVC ? IVt(4) : cv[4], cv5 = CVC ? IVt(5) : cv[5];
-  const uint64_t cv6 = CVC ? IVt(6) : cv[6], cv7 = CVC ? IVt(7) : cv[7];
+  const uint64_t cv0 = CVC ? k.h[0] : cv[0], cv1 = CVC ? k.h[1] : cv[1], cv2 = CVC ? k.h[2] : cv[2];
+  const uint64_t cv3 = CVC ? k.h[3] : cv[3], cv4 = CVC ? k.h[4] : cv[4], cv5 = CVC ? k.h[5] : cv[5];
+  const uint64_t cv6 = CVC ? k.h[6] : cv[6], cv7 = CVC ? k.h[7] : cv[7];
   cv[0] = t1 + t2 + cv0; cv[1] = cv1 + a; cv[2] = cv2 + b;
   cv[4] = t1 + d + cv4; cv[5] = cv5 + e; cv[6] = cv6 + f;
   if constexpr (CHAIN == 1) {
