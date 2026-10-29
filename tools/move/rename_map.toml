@@ -1,7 +1,6 @@
-# The rename move: what `tools/move/rename.py` renames (Daniel's ruling, 5 Oct 2026 10:45 PM PDT: the network certifier,
-# network certificates, memory challenger, firewall, challenger, verifier and workers; "gateway" is retired). The owners'
-# maps: note:network-accounting/20261006T0625Z-draft-certifier-rename-map (the certifier), memory-accounting's
-# pous-rename-map.json of 6 Oct 05:59Z (the memory challenger).
+# The rename move: what `tools/move/rename.py` renames (the network certifier, network certificates, memory challenger,
+# firewall, challenger, verifier and workers; "gateway" is retired). The certifier's and the memory challenger's rows come
+# from their owners' maps.
 #
 # [words] are applied in the order written, each where it stands as a word or as one part of an identifier: an old word
 # that starts in lower case is not preceded by a letter or digit (`network_warden`, `I.warden`), one that starts in upper
@@ -80,7 +79,7 @@
 "test_the_verifier_enforces_the_certificate" = "test_the_memory_challenger_enforces_the_certificate"
 "test_the_verifier_audits_at_two_or_one_rounds_when_asked" = "test_the_memory_challenger_audits_at_two_or_one_rounds_when_asked"
 
-# The network certifier's program (#1268's `warden_program`, network-accounting's section 4): its Lean library and
+# The network certifier's program (`warden_program`): its Lean library and
 # namespace `Warden` become `NetworkCertifier`, in its own files and the four that speak of it ...
 [[words_in]]
 files = ["verity/protocols/accounting/communication/warden/lean/*.lean",
@@ -155,7 +154,7 @@ exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/f
            "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
            "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
            "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
-           # the active warden (24 Oct), a new device that reuses the word after this move was done
+           # the active warden, a new device that reuses the word after this move was done
            "benchmarks/network_traces/*warden*", "benchmarks/network_traces/**/*warden*",
            "verity/core/protocols/certifier/*warden*", "verity/core/protocols/certifier/**/*warden*",
            "benchmarks/network_e2e/*warden*", "benchmarks/network_e2e/**/*warden*", "benchmarks/live_challenger/*warden*",

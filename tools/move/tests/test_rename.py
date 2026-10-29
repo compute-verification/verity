@@ -47,8 +47,8 @@ def test_what_is_kept_stands():
     s = WORDS.sub
     tags = 'ROW_TAG = b"verity-network-warden/row/v1"; RECORD_TAG = b"verity-network-warden/record/v1"'
     assert s(tags) == tags
-    assert s("see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234") == \
-        "see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234"
+    ids = "see note:20261001T0000Z-warden-x and art:0123abcd, cursor/warden-fix-1234"
+    assert s(ids) == ids
     statement = "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"
     assert s(f'"use": "{statement}"') == f'"use": "{statement}"'
     assert s("node.gateway.id", "tools/check/guard/x.py") == "node.gateway.id"
