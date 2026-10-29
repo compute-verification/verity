@@ -8,7 +8,7 @@
 # operand passes) at NCU_VEC_SHAPES (out/ncu/, read by eps_profile.py, whose profile and TOML end the run). A shape
 # NAME:H:HKV:T:qk is Q K^T with Q and K dithered (qkgate, qkbench, NCU_QK through qkone). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=D2S-KERNEL \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/d2srun.sh
 set -uo pipefail
 export O=${OUT:?}

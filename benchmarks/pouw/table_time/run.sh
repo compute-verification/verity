@@ -4,7 +4,7 @@
 # From a pushed commit:
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=compute-accounting -- bash benchmarks/pouw/table_time/run.sh [M,K,N ...]
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/table_time/run.sh [M,K,N ...]
 #
 # The default shapes are 2048,14336,4096 4096,14336,4096 8192,14336,4096 (the M sweep for H1's build charge and A's
 # per-instance builds). TT_ARMS (comma-separated) limits the arms of the shape loop; TT_SWEEPS picks the co2 sweeps
