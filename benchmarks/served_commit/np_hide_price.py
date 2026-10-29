@@ -45,7 +45,10 @@ ShaSpeed's precision δ is the T1 budget over the hash's W1 a useful MAC. The ha
 which the hash alone, at the bar, fits in T2 stock steps overlapped (where the serial part fits) or T2 − 1 serially, at
 T2's bar (T2_BAR) and at 2 and 1.1. The V4-like layers (`v4`) get the hiding term under each layout and the seed path. Hashing before the noise is A's commitment: under L0 a
 row-seg row with its hm96 leaf and tree share (its salt is in the hiding term); under L1 a row-seg or flat SHA-512 row and its
-tree share.
+tree share, or segments as frame-v3 leaves of the call's own domain. A row digest is a function of the row alone, so a
+repeated A_j or row reuses it whatever hides it; only the segment leaves read a per-call value (the domain id, rank and
+position), so only their hashing is distinct in every call. Tree costs are frame-v3-sha512's (FRAME_LEAF_PREFIX, NODE),
+whose node is binary.
 """
 from __future__ import annotations
 
@@ -70,13 +73,20 @@ MASK_REGS = 16 * (12 * (20 + 10 + 3) + 37 + 32)
 # each of 32 lanes, y's fragments (2 registers a k-step in each of eight warps), and two instructions an output bit for parity
 MASK_REGS_B1 = 24 * 4 * 32 + 8 * 6 * 2 * 32 // 8 + 2 * 512
 PRICE_REG = {"floor": 32.0, "alone": S.PRICE["alone"]}
-TREE_LEAF = 3                                       # sw_hash_price's tree: compressions a leaf beside the row digest
+# a frame-v3-sha512 leaf's message before its value: the frame string, the tag, the 64-byte domain id, rank and position
+# (3 bytes each), a schema as long as hm96-sha512/row-seg/v1's, and the value's length, each part length-framed. Its first
+# block holds the rank, so no midstate skips it
+FRAME_LEAF_PREFIX = 33 + 4 + 4 + (8 + 64) + 2 * (8 + 3) + (8 + 22) + 8
 HM96_LEAF = 2                                       # H(leaf_prefix ‖ b ‖ c): 128 bytes and the padding block
-NODE = {2: 2, 4: 3}                                 # a tree node's compressions: its children's digests, prefix and padding
+# a tree node's compressions past its (domain, level) midstate: the index, the children's digests and the padding. frame-v3's
+# node is binary; a 4-ary node is a frame change
+NODE = {2: 2, 4: 3}
+TREE_LEAF = S.blocks(FRAME_LEAF_PREFIX + 64) + NODE[2]   # a row digest's frame leaf and its share of the binary nodes
 # the seed path's layouts: A's leaves (row-seg rows, flat rows, or segments of so many bytes) and the subtree's arity
-CHAINS = {"row-seg rows, binary (L1)": ("row-seg", 2), "flat rows, binary": ("flat", 2), "row-seg rows, 4-ary": ("row-seg", 4),
-          "1 KiB segments as leaves, 4-ary": (1024, 4), "256 B segments as leaves, 4-ary": (256, 4),
-          "256 B segments as leaves, binary": (256, 2)}
+CHAINS = {"row-seg rows, binary (L1)": ("row-seg", 2), "flat rows, binary": ("flat", 2),
+          "1 KiB segments as leaves, binary": (1024, 2), "256 B segments as leaves, binary": (256, 2),
+          "row-seg rows, 4-ary (a frame change)": ("row-seg", 4), "1 KiB segments as leaves, 4-ary (a frame change)": (1024, 4),
+          "256 B segments as leaves, 4-ary (a frame change)": (256, 4)}
 WINDOW_STEP_S = 0.1
 HASH_ALONE = {16384: (2043, 2159), 65536: (1928, 2010)}   # hm96 rows hashed alone, units a byte (low, high readings)
 STEP_BESIDE = 981                                   # beside the served step's GEMM, units a byte, while the step runs
@@ -166,6 +176,11 @@ def opening_ands(layout: str, b: dict, rows: int, R: int, forced: bool) -> dict:
     return {"path depth": depth, "path and gadget": 2 * depth * S.ANDS_COMPRESSION + extra}
 
 
+def frame_leaf(n: int) -> int:
+    """A frame-v3-sha512 leaf's compressions over an n-byte value."""
+    return S.blocks(FRAME_LEAF_PREFIX + n)
+
+
 def levels(leaves: int, arity: int) -> int:
     n, d = 1, 0
     while n < max(2, leaves):
@@ -180,11 +195,11 @@ def seed_path(rows: int, k: int, row: str | int = "row-seg", arity: int = 2) -> 
     the merge with the words' root, the instance's leaf (its salt, c and M_key·y precomputed), the seed past its fixed
     prefix, and one noise block."""
     if row == "row-seg":
-        leaf, leaves = 9 + -(-(64 * -(-k // 1024) + 17) // 128) + 1, rows
+        leaf, leaves = 9 + -(-(64 * -(-k // 1024) + 17) // 128) + frame_leaf(64), rows
     elif row == "flat":
-        leaf, leaves = S.blocks(k) + 1, rows
+        leaf, leaves = S.blocks(k) + frame_leaf(64), rows
     else:
-        leaf, leaves = S.blocks(row), rows * -(-k // row)
+        leaf, leaves = frame_leaf(row), rows * -(-k // row)
     return leaf + NODE[arity] * levels(leaves, arity) + NODE[2] + HM96_LEAF + 2 + 1
 
 
@@ -350,15 +365,22 @@ def main() -> None:
                                   "of_stock_a_register_a_compression_floor": b["bpm"] * comps_byte[k] * PRICE_REG["floor"],
                                   "committer_excess_of_stock": {p: b["bpm"] * comps_byte[k] * excess[p] for p in ("floor", "alone")}}
                               for k, v in hash_w1.items()}
-            a_comps = {"L0 (row-seg, a leaf a row)": sum(segs(k) + HM96_LEAF + TREE_LEAF for _, k in N.LINEARS.values()),
-                       "L1 (row-seg rows in the call's subtree)": sum(segs(k) + TREE_LEAF for _, k in N.LINEARS.values()),
-                       "L1 (flat SHA-512 rows in the call's subtree)": sum(S.blocks(k) + TREE_LEAF for _, k in N.LINEARS.values())}
+            # each layout's compressions an activation row a layer, and whether its bulk hashing reads a per-call value: a row
+            # digest reads only the row, so a repeated A_j (or row) reuses it whatever wraps it; a frame-v3 leaf reads its
+            # domain id, rank and position, so leaves of the call's own domain (bound to pouw.salt, the forward and the call)
+            # differ in every call and every row
+            a_comps = {"L0 (row-seg, a leaf a row)": (sum(segs(k) + HM96_LEAF + TREE_LEAF for _, k in N.LINEARS.values()), False),
+                       "L1 (row-seg rows in the call's subtree)": (sum(segs(k) + TREE_LEAF for _, k in N.LINEARS.values()), False),
+                       "L1 (flat SHA-512 rows in the call's subtree)": (sum(S.blocks(k) + TREE_LEAF for _, k in N.LINEARS.values()), False),
+                       **{f"L1 ({seg} B frame-v3 segment leaves of the call's domain)":
+                          (sum(-(-k // seg) * (frame_leaf(seg) + NODE[2]) for _, k in N.LINEARS.values()), True)
+                          for seg in (1024, 256)}}
             stock = N.ENGINES.get(pname, {}).get("sync", (None,))[0]
             pre = {}
-            for lay, c_layer in a_comps.items():
+            for lay, (c_layer, per_call) in a_comps.items():
                 comps = N.LAYERS * c_layer
                 ms = comps * real * r16["c_ns"] * 1e-6
-                pre[lay] = {"compressions_token": comps,
+                pre[lay] = {"compressions_token": comps, "reads a per-call value": per_call,
                             "w1": {p: comps * w / MACS_TOKEN for p, w in (("floor", sass["w1_floor"]), ("alone", sass["w1_alone"]))},
                             "ands_of_stock": comps * S.ANDS_COMPRESSION / MACS_TOKEN / S.ANDS_MAC,
                             "ms": ms, "of_stock_step": ms / stock if stock else None,
@@ -382,7 +404,9 @@ def main() -> None:
     pt = out["designs"]["ssn_1l"]["points"]["T 8,192"]
     for name, share in (("committer's SHA-512 build over the best, L1 16 KiB chunks",
                          pt["shaspeed"]["L1 16 KiB chunks"]["committer_excess_of_stock"]),
-                        ("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"])):
+                        ("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"]),
+                        ("hashing before the noise, L1 1 KiB segment leaves of the call's domain",
+                         pt["pre_noise"]["L1 (1024 B frame-v3 segment leaves of the call's domain)"]["w1"])):
         pooled[name] = {sc: {p: {"w1_floor": mac * share["floor"], "w1_alone": mac * share["alone"]} for p, mac in ps.items()}
                         for sc, ps in scopes.items()}
     out["periods"] = pooled
@@ -421,7 +445,8 @@ def main() -> None:
                       f"{v['of_stock_a_register_a_compression_floor']:.2%} of stock; committer's excess "
                       f"{v['committer_excess_of_stock']['floor']:.1%} / {v['committer_excess_of_stock']['alone']:.1%}")
             for k, v in pt["pre_noise"].items():
-                print(f"    pre-noise {k}: W1 {v['w1']['floor']:.3f} / {v['w1']['alone']:.3f} of stock, ANDs {v['ands_of_stock']:.4%}"
+                print(f"    pre-noise {k}{'' if v['reads a per-call value'] else ', replayable'}: W1 {v['w1']['floor']:.3f} / "
+                      f"{v['w1']['alone']:.3f} of stock, ANDs {v['ands_of_stock']:.4%}"
                       + (f", {v['ms']:.2f} ms ({v['of_stock_step']:.1%} of the stock step)" if v["of_stock_step"] else ""))
             for k, v in pt.get("seed_path", {}).items():
                 print(f"    seed path, {k}: {v['compressions_a_forward']} compressions a forward one after another "
