@@ -65,9 +65,11 @@ certifier, which commits them, so the prover hashes nothing (the module drops th
 the bytes over `price.link` in hashing's place. Its check (b) (`distinct_loss`, N-RED) credits only an entry's
 distinct values: it closes the attacks that list it in `closed_by` and costs the honest its chance revisits.
 
-T1 is priced under model P, the coordinator's default, where a coin lane's step repeats a word with its coin's chance
-p*; model C (CopyGrain(4): a copy needs four entries' coins to agree) leaves those steps nothing, and `t1_model_c`
-prices T1 so (`branch_rows_c`, the rows whose branch survives under C; the ranking reads model P).
+T1's copy model is model P with N-FLOOR's measured floors (`select-floor`, `copy-floor`, in the base; NIGHT §7's
+default): a coin lane's step repeats a word with its coin's chance p*, and masked cross-row copies cost more than they
+save. `t1_bare_p` is T1 without the floors, adding a noise's `masked_p` share (N-ADAPT's masked channel) where it is
+priced; `t1_model_c` is T1 under CopyGrain(4), where a copy needs four entries' coins to agree, so a coin lane's steps
+leave nothing (`branch_rows_c`, the rows whose branch survives under C). The ranking reads the default.
 
 Hashing is priced at the best known SHA-512 compression's register count per form (N-SHALB): a chained compression
 (`price.hash_work`, 3,532), the bulk of every hm96 row, and a row digest's first, from the constant chaining value
@@ -676,6 +678,7 @@ def call_units(card: dict, d: dict, m: float, n: float, K: float, g: float = 1.0
             "macs_per_coin_bit": m * n * K / coin_bits if coin_bits else math.inf,
             "macs_per_salt_bit": min(row, word_b) / WORD_BYTES * stock / nwords / SALT_BITS, "coin_branch_c": branch_c,
             "macs_per_word_bit": stock / nwords / 32 if off else math.inf, "link_ms": link_s * 1e3,
+            "masked": f["masked_p"] * stock if f["masked_p"] >= 0 else math.nan,
             "coinform_ms": sum(coinsncp_ms(card, b * g, table) for table, bs in xof.items() for b in bs) / g,
             "a_ms": max(a_chain_s, a_bulk_s) / g * 1e3, "a_chain": chain / g, "bulk_hash_ms": bulk * 1e3,
             "sts_ms": nwords * sts * 1e3, "stg_ms": nwords * stg * 1e3, "hiding_closed": hiding_closed,
@@ -721,7 +724,7 @@ SUM_KEYS = ("stock", "credited_bytes", "bound_bytes", "hashed_bytes", "word_byte
             "x_entries", "y_entries", "noise_y", "mK", "nK", "words", "word_units", "coinform_ms", "a_ms", "a_chain",
             "bulk_hash_ms",
             "sts_ms", "stg_ms", "extra_macs", "hiding_closed", "hiding_a", "hiding_words", "hiding_operands", "salts",
-            "coin_branch_c", "link_ms")
+            "coin_branch_c", "link_ms", "masked")
 
 
 def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
@@ -796,6 +799,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
     rest = sum(v for k, v in terms.items() if k != "hashing_slack")
     t1 = rest + terms["hashing_slack"]
     t1_model_c = t1 - terms["coin_branch"] + agg["coin_branch_c"] / stock
+    t1_bare_p = None if math.isnan(agg["masked"]) else t1 + agg["masked"] / stock
     delta_star = max(0.0, TARGET["t1"] - rest) / hash_share if hash_share else math.inf
     committer_gap = agg["credited_bytes"] * (card["price"]["hash_work_floor"]["value"] - hw) / stock
     t2 = t2_of(card, point, agg, r, bool(wide_measured))
@@ -825,7 +829,7 @@ def evaluate(card: dict, d: dict, point: str, delta: float = 0.0) -> dict:
             "network_alt": None if network is None else network * alt, "egress_cap_alt": egress["alt"],
             "macs_per_salt_bit": salt_macs, "certifier_salted": salted,
             "network_bound": None if network is None else bound_by, "macs_per_word_bit": word_macs,
-            "t1_model_c": t1_model_c, "t1_model_c_pass": t1_model_c <= TARGET["t1"],
+            "t1_model_c": t1_model_c, "t1_model_c_pass": t1_model_c <= TARGET["t1"], "t1_bare_p": t1_bare_p,
             "row_bound_share": agg["bound_bytes"] / agg["credited_bytes"] if agg["credited_bytes"] else 0.0,
             "t2": t2, "t2_pass": t2["judged"] <= TARGET["t2"],
             "t3": t3, "t3_worst": t3w, "t3_pass": t3w is not None and t3w <= TARGET["t3"], "ranks": rk,
@@ -964,9 +968,14 @@ def needs(row: dict) -> list[str]:
                       f"{row['macs_per_word_bit']:.3f} MACs a bit, so the term is {row['network']:.1e} (N-ALT final; "
                       f"the word stream ends at the certifier and is excluded from E)"
                       if row["network_bound"] == "words" else ""))
+    if row["t1_bare_p"] is not None:
+        out.append(f"under bare model P, without select-floor and copy-floor, masked cross-row copies are credited and "
+                   f"unpaid: T1 {row['t1_bare_p']:.2%} (N-ADAPT final, checked at toy shapes); T1 rests on P with the "
+                   f"two measured floors (NIGHT §7, 11:30Z), under which that channel is 0 by argument")
     if row["t1_model_c"] != row["t1"]:
-        out.append(f"under model C (CopyGrain(4)) T1 is {row['t1_model_c']:.3%} against model P's {row['t1']:.3%}: the "
-                   f"coin branch is {row['terms']['coin_branch']:.3%} under P (the coordinator's default)")
+        out.append(f"under model C (CopyGrain(4)) T1 would be {row['t1_model_c']:.3%} against P's {row['t1']:.3%}, the "
+                   f"coin branch {row['terms']['coin_branch']:.3%} under P; CopyGrain(4) is false on sm_90 (N-FLOOR), so "
+                   f"on the H200 C reduces to P with copy-floor")
     if not row["t1_pass"]:
         big = max(((k, v) for k, v in row["terms"].items()), key=lambda kv: kv[1])
         out.append(f"T1 {row['t1']:.2%} > 1%: its largest term is {big[0]} {big[1]:.2%}")
@@ -1140,7 +1149,7 @@ def t2s(row: dict) -> str:
 def row_line(i, row: dict) -> str:
     t = row["terms"]
     return (f"| {i} | {row['design']} | {rk(row)} | {rk(row, True)} | **{pct(row['t1'])}** "
-            f"{'pass' if row['t1_pass'] else 'fail'} | {model_c(row)} | {pct(row['t1_coins_uncredited'])} | {pct(t['final_word'])} | "
+            f"{'pass' if row['t1_pass'] else 'fail'} | {copy_models(row)} | {pct(row['t1_coins_uncredited'])} | {pct(t['final_word'])} | "
             f"{pct(t['uncommitted_steps'])} | {pct(t['coin_branch'])} | {pct(t['forming'])} | {pct(t['lane_fix'])} | "
             f"{pct(t['noise_derivation'])} | "
             f"{pct(t['denoise'])} | {pct(t['hiding'])} ({pct(row['hiding_closed'])}) | {pct(t['host'])} "
@@ -1161,11 +1170,12 @@ def net(row: dict) -> str:
     return f"unbounded, seeded ({two(row['network_streamed'], row['network_streamed_alt'])} if streamed)"
 
 
-def model_c(row: dict) -> str:
-    return f"{pct(row['t1_model_c'])} {'pass' if row['t1_model_c_pass'] else 'fail'}"
+def copy_models(row: dict) -> str:
+    """T1 under bare model P (no measured floors: N-ADAPT's masked cross-row copies, where priced) and under model C."""
+    return f"{pct(row['t1_bare_p'])} / {pct(row['t1_model_c'])}"
 
 
-HEADER = ["| # | design | rank m/h (overall) | effective | T1 (model P) | T1 model C | +coins | final word | uncommitted | "
+HEADER = ["| # | design | rank m/h (overall) | effective | T1 (P + floors) | bare P / model C | +coins | final word | uncommitted | "
           "coin branch | forming | lane fix | derivation | de-noise | hiding (closed) | host (route H) | "
           "T2 sync / async (unfused) | T3 | delta* | network, cap 32 / 320 (not in T1) | open (matmul) | open attacks |",
           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -1204,14 +1214,14 @@ def render(card: dict, results: dict, space_info: dict) -> str:
             continue
         for key, what in (("rank_effective", "effective rank (open premises at 5)"), ("rank", "nominal rank (open premises settled at their own rank)")):
             lines += [f"Pareto frontier of the T1-passing designs over (T1, T2, T3), at each {what}:", "",
-                      "| up to rank | design | rank m/h (overall) | T1 (model P) | T1 model C | +coins | "
+                      "| up to rank | design | rank m/h (overall) | T1 (P + floors) | bare P / model C | +coins | "
                       "network, cap 32 / 320 (not in T1) | T2 sync / async | T3 | open |",
                       "|---|---|---|---|---|---|---|---|---|---|"]
             frs = res["frontier_effective" if key == "rank_effective" else "frontier_nominal"]
             for lv, fr in frs:
                 for r in sorted(fr, key=lambda r: r["t2"]["judged"])[:FRONTIER_SHOWN]:
                     lines.append(f"| {LABEL[lv]} | {r['design']} | {rk(r, key == 'rank_effective')} | {pct(r['t1'])} | "
-                                 f"{model_c(r)} | {pct(r['t1_coins_uncredited'])} | {net(r)} | {t2s(r)} | "
+                                 f"{copy_models(r)} | {pct(r['t1_coins_uncredited'])} | {net(r)} | {t2s(r)} | "
                                  f"{pct(r['t3_worst'])} | {opened(r)} |")
                 if len(fr) > FRONTIER_SHOWN:
                     lines.append(f"| {LABEL[lv]} | ({len(fr) - FRONTIER_SHOWN} more on the frontier; the JSON has them) | | | | | | | | |")
@@ -1887,7 +1897,7 @@ def main() -> int:
     with (out / "ranking.csv").open("w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["point", "position", "design", *(f"{a}.{s}" for a, s in card["space"]["slots"]), "rank_matmul",
-                    "rank_hashing", "rank", "rank_effective", "t1", "t1_model_c", "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
+                    "rank_hashing", "rank", "rank_effective", "t1", "t1_bare_p", "t1_model_c", "t1_coins_uncredited", *TERMS, "hiding_closed", "t2_sync", "t2_async", "t2_unfused", "t3_worst", "delta_star",
                     "hash_bytes_per_mac", "network", "network_alt", "network_bound", "network_streamed",
                     "network_streamed_alt", "coins_streamed", "open", "attacks"])
         for p, res in results.items():
@@ -1898,7 +1908,8 @@ def main() -> int:
                 ch = r["choice"]
                 w.writerow([p, i, r["design"], *(ch[s] for _, s in card["space"]["slots"]),
                             LABEL[r["ranks"]["matmul"]], LABEL[r["ranks"]["hashing"]], LABEL[r["rank"]],
-                            LABEL[r["rank_effective"]], f"{r['t1']:.6g}", f"{r['t1_model_c']:.6g}",
+                            LABEL[r["rank_effective"]], f"{r['t1']:.6g}",
+                            "" if r["t1_bare_p"] is None else f"{r['t1_bare_p']:.6g}", f"{r['t1_model_c']:.6g}",
                             f"{r['t1_coins_uncredited']:.6g}",
                             *(f"{r['terms'][k]:.6g}" for k in TERMS), f"{r['hiding_closed']:.6g}",
                             f"{e['sync']['ratio']:.4g}", f"{e['async']['ratio']:.4g}", f"{r['t2']['unfused']:.4g}",
