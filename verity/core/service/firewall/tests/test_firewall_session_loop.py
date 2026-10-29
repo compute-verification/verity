@@ -1,4 +1,4 @@
-"""`core-firewall session` (`Core.Firewall.Loop`): the release side around C-Flock's session loop, on the firewall's state
+"""`core-firewall session` (`Core.Firewall.Loop`): the release side around Flock's session loop, on the firewall's state
 directory, with a scripted auditor on the far side and files no statement sets up from (the loop starts; a `Hello` would
 be refused at its setup). A session's `Ping`s are the loop's to answer until its first other request, which is admitted
 or refused on the record before anything of the session reaches the auditor; a refused session reaches nothing of it.
