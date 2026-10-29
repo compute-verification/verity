@@ -48,7 +48,6 @@
     {"file": "benchmarks/network_traces/record.py", "count": 3},
     {"file": "benchmarks/network_traces/tests/test_chain_record.py", "count": 1},
     {"file": "benchmarks/network_traces/tests/test_warden_serve_phase10.py", "count": 1},
-    {"file": "benchmarks/network_traces/transfer_zk.py", "count": 1},
     {"file": "benchmarks/network_traces/warden_serve.py", "count": 3},
     {"file": "benchmarks/network_traces/warden_zk.py", "count": 1},
     {"file": "benchmarks/numerical/python/verity_numerical/bench/cell.py", "count": 2},
