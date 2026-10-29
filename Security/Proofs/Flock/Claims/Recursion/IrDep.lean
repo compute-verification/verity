@@ -327,7 +327,7 @@ theorem pair_getElem!_zero (a b : ℕ) : (#[a, b] : Array ℕ)[0]! = a := rfl
 theorem pair_getElem!_one (a b : ℕ) : (#[a, b] : Array ℕ)[1]! = b := rfl
 
 /-- **A dense statement's inner `m` has a `fast100` schedule**, table 0's at the inner statement (`schAt`). -/
-theorem fast100_dense {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st)
+theorem fast100_dense {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) :
     ∃ sch, fast100 r.shape.m = some sch ∧ OpenLower.schAt (xIOf x) 0 = sch := by
   obtain ⟨r', hr', -, rfl⟩ := parse_read hx
@@ -358,7 +358,7 @@ theorem fast100_dense {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = som
 
 /-- **The deployed inner prover's openings fit V\*'s levels** (`IrShaped`) at every dense statement, tape and history
 holding both reps' stream rounds, where the reps' tops differ at each later level (`hTops`, the tape exception). -/
-theorem irShaped_dep {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st)
+theorem irShaped_dep {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : parse x = some st)
     (hf : Claims.Recursion.Form.Dense st.form) {w : Claims.Flock.Wit} {ρ : ((IrDep x).fit x).Tape}
     {hist : List (Msg × Msg)}
     (hH : ∀ r rs, readX x = some r → repSched r.shape = some rs → 2 * rs.size ≤ hist.length)
