@@ -12,7 +12,8 @@ each table's leaf, the value's tree as before and the call table's a level at a 
 `device_commit` copies the rows to the device in chunks of at most `CHUNK_BYTES` (rows already there, as a call's z/y
 records are, it reads in place), hashes each row (its ``sha512/row/v2`` digest, salt, hm96-sha512 string, tree leaf and
 frame leaf) and then the pads and levels, on a stream of its own, and returns the strings and levels as `Registered`
-holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches the same and returns at once, its
+holds them (`Strings`: 128-byte strings and each level's 64-byte nodes, each table one array as the device wrote it, an
+item's bytes made on read, so no Python object is made a row). `device_hash` launches the same and returns at once, its
 `Hashing` reading them out once the stream is done; a public table's salts it derives on that stream, in the buffer it
 hashes from, and rows written there (under `hashing`) it reads with no wait. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
@@ -26,7 +27,7 @@ import ctypes
 import shutil
 import subprocess
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from functools import cache
 from typing import Any
@@ -39,9 +40,9 @@ from verity.ml.kernels import ROW_COMMIT, SHA512
 
 from verity_vllm.commit import row_tables_device as RTD
 
-__all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "ZyArgs", "available", "device_commit", "device_hash", "device_lib",
-           "device_public_salts", "hashing", "host_commit", "host_lib", "host_public_salts", "host_zy", "nvcc", "pub",
-           "table", "zy_args", "zy_available", "zy_device_lib", "zy_fits", "zy_host_lib"]
+__all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Strings", "Table", "ZyArgs", "available", "device_commit", "device_hash",
+           "device_lib", "device_public_salts", "hashing", "host_commit", "host_lib", "host_public_salts", "host_zy", "nvcc",
+           "pub", "table", "zy_args", "zy_available", "zy_device_lib", "zy_fits", "zy_host_lib"]
 
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "registered_rows.cuh", "registered_rows_host.cpp")
@@ -225,7 +226,7 @@ def _root(words: np.ndarray) -> bytes:
 
 
 def host_zy(words: np.ndarray, key: bytes, nonce: int, domain_id: bytes, also: tuple[bytes, int]
-            ) -> tuple[bytes, tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+            ) -> tuple[bytes, Strings, tuple[Strings, ...]]:
     """`device_hash`'s ``also`` on the CPU, the device path's twin: the call table ``also`` ``(domain id, nonce)``'s root,
     then the value's ``b || c`` strings and tree levels, of ``words`` ``(n, W)`` u16."""
     rows = _rows(words)
@@ -250,21 +251,60 @@ def _salts(row_salts: bytes, n: int) -> np.ndarray:
     return np.frombuffer(row_salts, np.uint8).copy()
 
 
-def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
-    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``."""
-    nodes = levels.byteswap().view("V64").tolist()
+class Strings(Sequence):
+    """Byte strings of ``size`` bytes, item j the j-th, from the device's big-endian u64 words (``words``, each word's value
+    as the host reads it, ``size / 8`` a string) held as one array, a string's bytes made on read: `Registered`'s ``bcs``
+    and each of its ``levels``. Equal to any sequence of the same strings, a tuple of bytes among them."""
+
+    def __init__(self, words: np.ndarray, size: int) -> None:
+        if size % 8 or len(words) % (size // 8):
+            raise ValueError(f"{len(words)} u64 words are not strings of {size} bytes")
+        self.words, self.size = words, size
+
+    def __len__(self) -> int:
+        return 8 * len(self.words) // self.size
+
+    def __getitem__(self, j: Any) -> Any:
+        if isinstance(j, slice):
+            return tuple(self[i] for i in range(*j.indices(len(self))))
+        n, w = len(self), self.size // 8
+        if not -n <= j < n:
+            raise IndexError(j)
+        j %= n
+        return self.words[w * j:w * (j + 1)].astype(">u8").tobytes()
+
+    def __iter__(self) -> Iterator[bytes]:
+        b, s = self.words.astype(">u8").tobytes(), self.size
+        return (b[i:i + s] for i in range(0, len(b), s))
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Strings):
+            return self.size == other.size and np.array_equal(self.words, other.words)
+        if isinstance(other, Sequence) and not isinstance(other, (str, bytes, bytearray)):
+            return len(other) == len(self) and all(a == b for a, b in zip(self, other))
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(tuple(self))
+
+    def __repr__(self) -> str:
+        return f"Strings({len(self)} of {self.size} bytes)"
+
+
+def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[Strings, tuple[Strings, ...]]:
+    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``, each level a view of ``levels``."""
     out, off, w = [], 0, W
     while True:
-        out.append(tuple(nodes[off:off + w]))
+        out.append(Strings(levels[8 * off:8 * (off + w)], 64))
         off += w
         if w == 1:
             break
         w //= 2
-    return tuple(bcs.byteswap().view("V128").tolist()), tuple(out)
+    return Strings(bcs, 128), tuple(out)
 
 
 def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
-                domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+                domain_id: bytes) -> tuple[Strings, tuple[Strings, ...]]:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 by the kernels' functions on the CPU: the device
     path's twin."""
     rows = _rows(words)
@@ -379,10 +419,11 @@ class Hashing:
     def ready(self) -> bool:
         return bool(self.done.query())
 
-    def result(self) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+    def result(self) -> tuple[Strings, tuple[Strings, ...]]:
+        """The strings and levels, copied off the pinned buffers they were read into, which go back to the allocator."""
         self.done.synchronize()
         self.held = ()
-        return _out(self.bcs.numpy().view(np.uint64), self.levels.numpy().view(np.uint64), self.W)
+        return _out(self.bcs.numpy().view(np.uint64).copy(), self.levels.numpy().view(np.uint64).copy(), self.W)
 
     def also(self) -> bytes:
         """The root of the table `device_hash`'s ``also`` named, waited for."""
@@ -393,7 +434,7 @@ class Hashing:
 
 
 def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
-                  domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+                  domain_id: bytes) -> tuple[Strings, tuple[Strings, ...]]:
     """`device_hash`'s strings and levels, waited for."""
     return device_hash(words, key, nonce, row_salts, domain_id).result()
 

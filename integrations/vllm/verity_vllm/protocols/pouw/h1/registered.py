@@ -14,8 +14,9 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   (`Salts`, or a public table's `PublicSalts`), and the rows are kept only with ``keep_rows`` (`Rows`), or stand for
   themselves (``rows``, a public table's, built again on read): a window's call tables and its own ``b/<K>`` are
   rebuilt by the prover from what it keeps (`pouw_h1_prover.keep_call`, its weights), so `Served` keeps none of their
-  rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
-  Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
+  rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes: as Python bytes here, as
+  one array a table on the GPU path, `pouw_h1_registered_device.Strings`), where Python ints held some 36 bytes a word.
+  The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
 * **On the GPU**: where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
   (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
@@ -312,7 +313,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     if rows is not None and len(rows) != n:
         raise ValueError(f"{len(rows)} rows held for a value of {n}")
 
-    def made(bcs: tuple[bytes, ...], levels: tuple[tuple[bytes, ...], ...]) -> G.Registered:
+    def made(bcs: Sequence[bytes], levels: Sequence[Sequence[bytes]]) -> G.Registered:
         held = rows if rows is not None else Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n)
         salts = public if public is not None else Salts(key, nonce, n) if fixed is None else fixed
         return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS, rows=held, salts=salts,
