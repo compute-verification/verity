@@ -105,4 +105,40 @@ def GroupedDrawMisses : Prop :=
         eps * C ≤ ((∑ b ∈ Bb, w b : ℕ) : ℚ) →
           prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ b ∈ Bb, leafOf b ∉ d) ≤ (δ : ℝ)
 
+/-! ## A window of leaves proved as their lanes and combines
+
+The instances `GroupedDrawMisses`'s two lemmas read (`Proofs.Pouw.Credit`). Its honest lemma: a served H1 window of
+sixteen 32 × 32 leaves at K = 2048, past the block cap, each proved as its 32 lanes (its 4 × 8 tiles, each doing
+4·8·2048 of its MACs) and their combine (doing none), drawn under `work:8` at ε = 1/2 and δ = 1/256, where `K′ = 8`.
+Its nontrivial lemma: a law that accepts everything may hand the draw no strata, and then every block escapes. -/
+
+/-- The window: one call of one linear `w`, K = 2048 and n = 512 columns, at 32 × 32 tiles and a 32-row A slot, so
+sixteen leaves of 32·32·2048 MACs each. -/
+def lanesLayout : Json :=
+  Json.mkObj [("calls", Json.arr #[Json.arr #[Json.str "w", toJson (0 : ℕ)]]),
+    ("linears", Json.arr #[Json.arr #[Json.str "w", toJson (2048 : ℕ), toJson (512 : ℕ)]]),
+    ("m", toJson (32 : ℕ)), ("tile", Json.arr #[toJson (32 : ℕ), toJson (32 : ℕ)])]
+
+/-- Its strata (`PouwCheck.Credit.strata`): K = 2048's, its sixteen leaves at 32·32·2048 each. -/
+def lanesStrata : Array Flock.Draw.WorkStratum :=
+  #[{ template := "k2048", units := #[(0, 16)], k := 0, work := 32 * 32 * 2048, floor := 1 }]
+
+/-- The K its period committed. -/
+def lanesK : ℕ := 8
+
+/-- Its strata under `work:8` (`PouwCheck.Credit.law`): eight draws from K = 2048's sixteen leaves. -/
+def lanesLaw : Array Flock.Draw.Stratum := #[{ template := "k2048", units := #[(0, 16)], k := 8 }]
+
+/-- The blocks: leaf `u`'s are `33u, …, 33u + 32`, its 32 lanes and then their combine. -/
+def lanesBlocks : Finset ℕ := Finset.range (16 * 33)
+
+/-- A block's leaf. -/
+def lanesLeaf (b : ℕ) : ℕ := b / 33
+
+/-- A block's work: a lane's 4·8·2048 MACs, and none for a combine. -/
+def lanesWork (b : ℕ) : ℕ := if b % 33 < 32 then 4 * 8 * 2048 else 0
+
+/-- The strata a law that accepts everything may give: none. -/
+def idleLaw : Array Flock.Draw.Stratum := #[]
+
 end Properties.Pouw.Credit
