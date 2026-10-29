@@ -3,7 +3,8 @@
 # against the minimal compression (sha512_min_probe.cu: a variable chaining value, the IV as a constant, a constant
 # padding block, and a chain in chain form, two blocks a trip), an L1 leaf (sha512_l1_probe.cu: ten blocks a trip),
 # what an L1 call computes once for its leaves (sha512_l1_call_probe.cu) and a bound row-seg segment
-# (sha512_rowseg_probe.cu: ten blocks a trip), each built, disassembled and counted by shalb_sass.py; then the minimal
+# (sha512_rowseg_probe.cu: ten blocks a trip, and its block 1 alone), each built, disassembled and counted by
+# shalb_sass.py; then the minimal
 # compression's, the L1 leaf's and the segment's host builds checked against hashlib. CPU only: nothing is launched. The CUDA wheels go into a scratch venv outside the run dir.
 # cwd: the source tree's root. Output: $OUT/{*.sass, *.ptxas, counts.json, summary.txt, check_*.txt, tools.txt}.
 set -euo pipefail
@@ -31,8 +32,9 @@ build min_chain "$HERE/sha512_min_probe.cu" -DSHA_CHAIN=1
 build l1_leaf "$HERE/sha512_l1_probe.cu"
 build l1_call "$HERE/sha512_l1_call_probe.cu"
 build rowseg_segment "$HERE/sha512_rowseg_probe.cu"
+build rowseg_block1 "$HERE/sha512_rowseg_probe.cu" -DSEG_BLOCK1=1
 args=()
-for n in committer_straight committer_rolled min_variable min_constant_cv min_padding_block l1_call; do
+for n in committer_straight committer_rolled min_variable min_constant_cv min_padding_block l1_call rowseg_block1; do
   args+=("$n=$OUT/$n.sass")
 done
 args+=("min_chain=$OUT/min_chain.sass:2" "l1_leaf=$OUT/l1_leaf.sass:10" "rowseg_segment=$OUT/rowseg_segment.sass:10")
