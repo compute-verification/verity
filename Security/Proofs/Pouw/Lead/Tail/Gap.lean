@@ -92,37 +92,31 @@ theorem fixedServed_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c 
   rw [gapFixedServed, div_le_iff₀ hpos, hg, hsv]
   exact h p L.K S ch n hp (by exact_mod_cast hK) hS' hch hpn
 
-/-- The fixed bound at one point, over `p ≥ 512` and `K ≥ 4,096`: `Statement.products`, then `linarith`. -/
-local macro "fixed_bound" : term =>
-  `(fun p K S ch hp hK hS hch => by
-      obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
-      push_cast at hch ⊢
-      simp only [gapFixedExpr]
-      linarith)
-
-/-- The fixed served bound at one point: `fixed_bound` with `(8 p − 7) K ≤ n K`. -/
-local macro "fixed_unpadded_bound" : term =>
-  `(fun p K S ch u hp hK hS hch hu => by
+/-- **The tail's fixed gap at the three points and decode** (`Pouw.Guarantees.Lead.GapFixedAt`): rational
+arithmetic over `n, K ≥ 4,096`, as `Statement.gapAt`: at each point, over `p ≥ 512` and `K ≥ 4,096`,
+`Statement.products` (and at decode `(8 p − 7) K ≤ n K`), then `linarith`. -/
+theorem gapFixedAt : GapFixedAt := fun T n K hn hK => by
+  refine ⟨fun C hC => fixedShare_le C n 4 64 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => fixedShare_le C n 32 512 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => fixedShare_le C n 512 8192 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => fixedShare_le C n 4 64 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => fixedShare_le C n 32 512 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => fixedShare_le C n 512 8192 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => ⟨fixedServed_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK hC ?_,
+      fixedShare_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_⟩,
+    fun C hC => ⟨fixedServed_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK hC ?_,
+      fixedShare_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_⟩⟩
+  all_goals first
+    | intro p K S ch u hp hK hS hch hu
       obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
       have h₅ : (8 * p - 7) * K ≤ u * K := by nlinarith
       push_cast at hch ⊢
       simp only [gapFixedExpr]
-      linarith)
-
-/-- **The tail's fixed gap at the three points and decode** (`Pouw.Guarantees.Lead.GapFixedAt`): rational
-arithmetic over `n, K ≥ 4,096`, as `Statement.gapAt`. -/
-theorem gapFixedAt : GapFixedAt := fun T n K hn hK =>
-  ⟨fun C hC => fixedShare_le C n 4 64 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound,
-    fun C hC => fixedShare_le C n 32 512 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound,
-    fun C hC => fixedShare_le C n 512 8192 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound,
-    fun C hC => fixedShare_le C n 4 64 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound,
-    fun C hC => fixedShare_le C n 32 512 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound,
-    fun C hC => fixedShare_le C n 512 8192 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound,
-    fun C hC => ⟨fixedServed_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK hC
-        fixed_unpadded_bound,
-      fixedShare_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound⟩,
-    fun C hC => ⟨fixedServed_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK hC
-        fixed_unpadded_bound,
-      fixedShare_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fixed_bound⟩⟩
+      linarith
+    | intro p K S ch hp hK hS hch
+      obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
+      push_cast at hch ⊢
+      simp only [gapFixedExpr]
+      linarith
 
 end Pouw.SecurityProofs.Lead.Tail
