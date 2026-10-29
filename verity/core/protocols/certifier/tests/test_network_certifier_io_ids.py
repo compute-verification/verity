@@ -363,7 +363,7 @@ def _chain_ands(CB: int, D2: int) -> int:
 
 def _chains(rng, CB: int, D2: int, count: int) -> list[list[list[int]]]:
     """Runs of 2^D2 members (class, kind, value): the even ones valid chains (sorted classes, each class but the sink one
-    value and a slot first), the odd ones a valid chain with one member's class, kind or value redrawn."""
+    value and a slot first), the odd ones a valid chain with one member's class, kind or value resampled."""
     n, sink = 1 << D2, (1 << CB) - 1
     out = []
     for c in range(count):
@@ -410,7 +410,7 @@ def test_the_batched_chain_is_the_flat_one():
                     reason="the flat trace of 1.2M ANDs, a few GB and minutes: VERITY_CERTIFIER_HEAVY=1")
 def test_the_batched_chain_is_the_flat_one_at_the_served_sort():
     """`IoTieIdsChain{13, 14}`, IoTieRequestIds{4096, 16, 1, 512, 6}'s, against its flat trace on random runs, valid and
-    with a member redrawn: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""
+    with a member resampled: what the default test's D2 <= 8 can't show is the batch's wiring at 16,383 links."""
     rng = random.Random(14)
     chains = _chains(rng, 13, 14, 8)
     want = [_chain_reference(ms, (1 << 13) - 1) for ms in chains]

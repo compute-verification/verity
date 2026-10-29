@@ -11,6 +11,7 @@ import hashlib
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
 from verity.core.protocols.remote_bandwidth.audit import Params, Session
@@ -23,28 +24,6 @@ CAP = 256
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(label: bytes) -> bytes:
@@ -77,7 +56,7 @@ def pages(first: int, count: int) -> list[bytes]:
 
 
 class Run:
-    """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
+    """One session over `store`, the verifier's side and the prover's in step, every receipt sampled by default.  The
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
     under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
@@ -97,7 +76,7 @@ class Run:
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
-        self.prover = audit.Prover(prover_store or store, None, self.s.commitment, entropy=Entropy(b"receipt salts"))
+        self.prover = audit.Prover(prover_store or store, None, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
@@ -187,7 +166,7 @@ def honest() -> tuple[Run, list[audit.Verdict]]:
 
 
 def test_an_honest_session_over_appended_and_released_pages_is_accepted(honest) -> None:
-    """Every receipt is drawn, the appended pages' among them, each opened with its payload's digest and its path to
+    """Every receipt is sampled, the appended pages' among them, each opened with its payload's digest and its path to
     its append's root, and every window is accepted.  The record counts each pass's post-seed reads, the blocks
     appended and those released."""
     r, verdicts = honest
@@ -702,7 +681,7 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
 
 @pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
 def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
-    """No session draws nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
     empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
     doesn't decode, read as no openings, is refused on every window."""
     r = Run(store(), windows=1)

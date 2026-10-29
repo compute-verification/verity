@@ -1,6 +1,6 @@
-"""The opt-in serving rows (`ml.windows.rows`): C-Flock's circuit prover's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
+"""The opt-in serving rows (`ml.windows.rows`): Flock's circuit prover's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
 reference on the batch and parallel paths for a two-member population, ChaCha20 salts, core's served-domain rule, the registration
-(core's v1 record, accepted by `registration.check` against the verifier's own copies) and C-Flock's circuit prover's per-member file layout, every output
+(core's v1 record, accepted by `registration.check` against the verifier's own copies) and Flock's circuit prover's per-member file layout, every output
 a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
 flock-netlist/serving-row-leaf-vector.json, sha256 92aa7f77...)."""
 
@@ -198,7 +198,7 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
 
 
 def test_a_members_public_file_alone_then_its_provers_file_are_the_files_its_circuits_text_gives(tmp_path):
-    """The audit stages every member's public file before the draw and a drawn member's prover's file after it, from the
+    """The audit stages every member's public file before the sample and a drawn member's prover's file after it, from the
     circuit read and hashed once (`flock_circuit`) and the window's files read once: byte for byte what the circuit's text gives."""
     w = window(4, 3)
     c = SR.commit(w, data(w), salt_key=bytes(32))

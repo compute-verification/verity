@@ -4,7 +4,7 @@ run's coins opened after that run's root; the verifier holds them to the one cha
 for the Commit's root (`challenger.ledger_head`, `challenger.pinned_session`), run from a commit the host's pins log
 records on the verifier's first-parent history of main, ended closed, and to the roots the challenger's signed release log shows it received.
 
-A Commit whose openings come from the challenge phase opened on its own root passes. Refused: openings drawn before their run's
+A Commit whose openings come from the challenge phase opened on its own root passes. Refused: openings sampled before their run's
 root, a challenge phase opened on another Commit's root, a second challenge phase for the Commit's root, coins held in the Commit's
 process, a ledger cut before the challenge phase's end, and a challenge phase read with no pins log or one that doesn't record its
 tree, or with no first-parent history of main or one without its pin."""
@@ -39,7 +39,7 @@ def _root(name: str) -> bytes:
 
 class _Auditor:
     """The challenger gate (`challenger_host.Gate`) and the auditor host's challenger in this process: `run` answers the Commit's
-    gate requests (`CC.Gate`'s argv, one shell word after the command) as the gate's forced command does, refusing a
+    gate requests (`CC.ChallengerGate`'s argv, one shell word after the command) as the gate's forced command does, refusing a
     second open for a root; an open starts that challenge phase's challenger, signed under `KEY` at the gate's next leaves, which
     the Commit reaches over a socket pair. `end` appends the challenge phase's end entry once its client closed it, and `heads`
     writes the ledger (or the lines given) where a verifier reads it."""
@@ -240,8 +240,8 @@ def test_a_ledger_cut_before_the_sessions_end_is_refused(tmp_path, monkeypatch):
 
 def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     """The gate and the peer go together, the gate is one source of the C2 replay's challenge, a Commit with no
-    instrumented run reserves nothing, a vllm-v1 root draws no coins, the challenge phase draws one coin of each family a run
-    and no more, a run's draws read only coins drawn after its own root, and a gate refusal names itself. The gate's
+    instrumented run reserves nothing, a vllm-v1 root draws no coins, the challenge phase flips one coin of each family a run
+    and no more, a run's samples read only coins flipped after its own root, and a gate refusal names itself. The gate's
     ``ledger`` reads as its lines."""
     for kw, match in (({"challenger_peer": None}, "go together"), ({"challenger_gate": None}, "go together"),
                       ({"replay_challenge": "ab"}, "two sources")):
@@ -252,12 +252,12 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="--challenger-gate: the challenger gate refused reserve \\(exit 3\\): busy"):
         CC.of_options(_options(), 1, gate_run=lambda argv: (3, json.dumps({"refused": "busy"})))
     with pytest.raises(CoinError, match="refused status \\(exit 255\\): ssh: connect"):
-        CC.Gate(GATE, lambda argv: (255, "ssh: connect to host auditor")).call("status", "s")
+        CC.ChallengerGate(GATE, lambda argv: (255, "ssh: connect to host auditor")).call("status", "s")
     lines, asked = ['{"kind":"period-open"}', '{"kind":"reserve"}'], []
-    assert CC.Gate(GATE, lambda argv: asked.append(argv) or (0, "".join(f"{x}\n" for x in lines))).ledger() == lines
+    assert CC.ChallengerGate(GATE, lambda argv: asked.append(argv) or (0, "".join(f"{x}\n" for x in lines))).ledger() == lines
     assert asked[0][-1] == "ledger"
     with pytest.raises(CoinError, match="refused ledger \\(exit 3\\)"):
-        CC.Gate(GATE, lambda argv: (3, json.dumps({"refused": "no such verb"}))).ledger()
+        CC.ChallengerGate(GATE, lambda argv: (3, json.dumps({"refused": "no such verb"}))).ledger()
     auditor = _Auditor(tmp_path, monkeypatch)
     coins = CC.of_options(_options(), 1, gate_run=auditor.run)
     with pytest.raises(CoinError, match="not this run's 32-byte root \\(vllm-v1\\)"):

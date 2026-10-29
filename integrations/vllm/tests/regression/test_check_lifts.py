@@ -49,7 +49,7 @@ def test_the_partition_recomputed_from_the_record_lifts_to_the_record(world, see
     doc = RP.recompute(rep, _programs(world))
     exp, act = RP.lift(rep), RP.lift(doc)
     assert resolver.diff(exp, act) == []
-    # the draw is the seed's: another seed moves the per-(request, step) picks (the strata sizes stay)
+    # the sample is the seed's: another seed moves the per-(request, step) picks (the strata sizes stay)
     other = RP.recompute(dict(rep, sample=dict(rep["sample"], seed=seed + 1)), _programs(world))
     d = resolver.diff(exp, RP.lift(other))
     assert d and all(".sample." in x or ".lifetime.sampled" in x for x in d), d
