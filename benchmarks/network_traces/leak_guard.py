@@ -1,7 +1,8 @@
 """The record's leak guard: before custody publishes a run dir, every file in it that holds a gate run's witness is moved
 out of it, so no run record takes one. chain_record.sh runs it on its way out, whatever the exit.
 
-    python3 leak_guard.py RUN_DIR QUARANTINE [--gates DIR]... [--declared FILE] [--report FILE] [--dry]
+    python3 leak_guard.py RUN_DIR QUARANTINE [--gates DIR]... [--public GLOB]... [--declared FILE] [--report FILE]
+        [--dry]
 
 A gate run is a directory holding witness/ under a --gates directory (chain_record's unpacked gates), and its public files
 are the rest of it. Its pieces are each witness file's aligned pieces of at least `DISTINCT` distinct bytes, `TEXT` bytes
@@ -13,7 +14,10 @@ Every regular file under RUN_DIR (symlinks not followed, as custody's `run_files
 (tar, zip, and gzip, bzip2 or xz streams), and it is a find when
 * its path, or an archive member's, is a witness's: under a ``witness`` directory, or a name the declared data lists;
 * it holds a piece at any offset that no entry of the allowlist excuses; or
-* it is a file the guard can't read through (`UNREAD`, a damaged archive, an archive inside another).
+* it is a file the guard can't read through (`UNREAD`, a damaged archive, an archive inside another); or
+* with ``--public``, its path matches no ``--public`` glob (fnmatch on the run-dir-relative path): a record that
+  declares what is public holds nothing else, whatever it holds, so the counts and lengths no witness piece shows
+  (a window's requests, steps and outputs, its advice's bits) stay out by being undeclared.
 The declared data (`DECLARED`, leak_guard.json beside this file) holds the witness file names (``names``: the gates'
 witness files whose names no other file has) and the allowlist (``allow``): each entry a piece's sha256, the name of the
 witness file it is cut from, the record paths it may lie in (fnmatch globs on the run-dir-relative path, an archive
@@ -345,9 +349,9 @@ def excused(entry: dict, sha: str, origin: tuple[str, int], where: str) -> bool:
 
 
 def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow: list[dict],
-          dry: bool = False) -> tuple[dict, dict]:
+          dry: bool = False, public: list[str] | None = None) -> tuple[dict, dict]:
     """The guard on `run`, its finds moved under `quarantine` (unless `dry`): (the report, counts and paths only; the
-    quarantine's, with each find's pieces)."""
+    quarantine's, with each find's pieces). With `public`, a file whose path matches none of its globs is a find."""
     runs = gate_runs(gates)
     got, dropped, unparsed = pieces(runs)
     raw = {nd: x for x in got for nd in forms(x)}
@@ -370,8 +374,10 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
             else:
                 bad.append((nd, piece, member))
         n = len({x for _, x, _ in bad})
+        undeclared = public is not None and not any(fnmatch.fnmatchcase(rel, g) for g in public)
         why = (["a witness path"] * bool(r.get("path")) + [f"a witness-named member, {r['named']}"] * bool(r["named"])
-               + [r["unread"]] * bool(r["unread"]) + [f"{n} witness pieces"] * bool(n))
+               + [r["unread"]] * bool(r["unread"]) + [f"{n} witness pieces"] * bool(n)
+               + ["not declared public (--public)"] * undeclared)
         if not why:
             continue
         doc = {"path": rel, "bytes": size[p], "why": why, "pieces": n}
@@ -397,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("run", type=Path)
     ap.add_argument("quarantine", type=Path)
     ap.add_argument("--gates", type=Path, action="append", default=[])
+    ap.add_argument("--public", action="append", metavar="GLOB",
+                    help="a path the record may hold (fnmatch, run-dir relative); with any, every other file is a find")
     ap.add_argument("--declared", type=Path, default=DECLARED)
     ap.add_argument("--report", type=Path)
     ap.add_argument("--dry", action="store_true")
@@ -415,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
     names, allow = load_declared(a.declared)
     q.mkdir(parents=True, exist_ok=True)
     q.chmod(0o700)
-    report, held = guard(run, q, [g.resolve() for g in a.gates], names, allow, a.dry)
+    report, held = guard(run, q, [g.resolve() for g in a.gates], names, allow, a.dry, a.public)
     (q / "leak-guard.json").write_text(json.dumps(held, indent=1) + "\n")
     if a.report is not None:
         a.report.parent.mkdir(parents=True, exist_ok=True)

@@ -1,10 +1,11 @@
 """`leak_guard`: before custody publishes a run dir, each file in it that holds a gate run's witness (under a witness/
 directory or by a declared witness name, a witness piece raw or as hex at any offset, an archive member that does, or an
-archive the guard can't read) is moved to the quarantine outside the run dir, and the report names it by path alone; the
-gate's public files, their JSON written again and a witness file equal to a public one are no finds, and a declared
-allowlist entry excuses its piece (with ``*``, any piece of its witness file) only in the records it names. chain_record.sh moves a gate sent under inputs/ to the
-quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/ and
-the logs whole on a signal or when the guard can't run."""
+archive the guard can't read, and with ``--public`` a file of a path the record doesn't declare public) is moved to the
+quarantine outside the run dir, and the report names it by path alone; the gate's public files, their JSON written
+again and a witness file equal to a public one are no finds, and a declared allowlist entry excuses its piece (with
+``*``, any piece of its witness file) only in the records it names. chain_record.sh moves a gate sent under inputs/ to
+the quarantine once unpacked, runs the guard on every exit and is refused by it (exit 3), and withholds out/, inputs/
+and the logs whole on a signal or when the guard can't run."""
 from __future__ import annotations
 
 import gzip
@@ -199,6 +200,29 @@ def test_a_wildcard_entry_excuses_every_piece_of_its_witness_file_in_its_records
     rc, report, held = _guard(tmp_path, run, "--declared", str(tmp_path / "star.json"), "--dry")
     assert rc == 3 and [d["path"] for d in report["found"]] == ["resources.jsonl"] and report["excused"][0]["pieces"] == 1
     assert [p["witness"] for p in held["found"][0]["pieces_found"]] == [f"{GATE}/witness/cells.salts"]
+
+
+def test_a_record_that_declares_what_is_public_holds_nothing_else(tmp_path):
+    """With ``--public``, a file whose path no glob declares is a find whatever it holds (here a window's counts, which
+    no witness piece shows), and a declared one is still read for the witness; without it, the counts are no find."""
+    _gate(tmp_path / "G" / "g1")
+    piece, _ = _sig_piece()
+    run = tmp_path / "run"
+    files = {"answer.json": b'{"verdict": "accept"}', "chain/report/report.json": b'{"verdict": "accepted"}',
+             "chain/endpoint/report.json": b'{"requests": 3, "steps": 9, "outputs": 12}',
+             "chain/scan/answers.json": piece}
+    _put(run, files)
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 3 and [d["path"] for d in report["found"]] == ["chain/scan/answers.json"]
+    rc, report, _ = _guard(tmp_path, run, "--public", "answer.json", "--public", "chain/report/*", "--public",
+                           "chain/scan/answers.json")
+    assert rc == 3 and {d["path"]: d["why"] for d in report["found"]} == {
+        "chain/endpoint/report.json": ["not declared public (--public)"],
+        "chain/scan/answers.json": ["1 witness pieces"]}
+    assert sorted(p.relative_to(run).as_posix() for p in run.rglob("*") if p.is_file()) == [
+        "answer.json", "chain/report/report.json"]
+    assert (tmp_path / "q" / "files" / "chain" / "endpoint" / "report.json").read_bytes() == files[
+        "chain/endpoint/report.json"]
 
 
 def test_the_guard_refuses_a_quarantine_the_record_would_take(tmp_path):
