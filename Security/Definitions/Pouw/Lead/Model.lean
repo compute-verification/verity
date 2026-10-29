@@ -17,13 +17,14 @@ an execution (`Exec`), so it may branch on the coins anywhere.
     free, from the pre-coin tables (within the node's memory) and the certifier's coin stream (`init`);
   - `shaRegs`: the registers its SHA-512 compressions write, and `hashed`, the messages it hashes;
   - `egress`: the bits it exchanges with machines outside the node, other than the certifier's coin stream;
-  - `root`: the words' commitment it registers, and `holds`, the tiles it holds whole at some point.
+  - `root`: the words' commitment it registers.
 * **The certifier's coin stream** (`CoinStream`): raw coins in a fixed arrangement, each coin once at most.
 * **The commitment format** (`Commit`): the messages the honest commitment of a call's words hashes (leaves and
   nodes), its root, and their SHA-512 compressions.
-* **Accepted** (`Accepted`): the execution holds every MMA tile of committed words whole at some point (the leaves
-  hash whole chunks of them), registers the honest commitment's root, and exchanges at most the call's bits
-  (`Layout.callBits`), which the network certifier counts and refuses past.
+* **Accepted** (`Accepted`): what the verifier sees. The execution registers the honest commitment's root and
+  exchanges at most the call's bits (`Layout.callBits`), which the network certifier counts and refuses past. How it
+  computed the words is not part of acceptance: that its run produces each committed tile is the copy model's premise
+  (`Pouw.Assumptions.Lead.TileGrain`).
 * **The break** (`Break`): a SHA-512 collision among what the execution hashed and what the honest commitment hashes.
 -/
 
@@ -51,8 +52,6 @@ structure Exec where
   egress : ℕ
   /-- The words' commitment it registers. -/
   root : Hash.Digest
-  /-- The tiles it holds whole, in some slot at some point, wherever they came from. -/
-  holds : (Fin tileWords → ℤ) → Prop
 
 /-- A coin's index: a tag bit, a step-1 bit, a tag weight or a coin lane. -/
 abbrev CoinIdx (L : Layout) : Type :=
@@ -161,12 +160,11 @@ noncomputable def tableHits (L : Layout) (κ : Fin L.m → Fin L.S → Fin L.n �
   ((tileIdx L).filter fun x =>
     (∃ a, σ.pre a = tileOf L κ ω x.1 x.2.1 x.2.2) ∨ ∃ c, stream.val ω c = tileOf L κ ω x.1 x.2.1 x.2.2).card
 
-/-- **The execution at `ω` is accepted**: it holds every MMA tile of committed words whole at some point, registers
-the honest root, and exchanges at most the call's bits (the network certifier refuses a call past them). -/
+/-- **The execution at `ω` is accepted**: it registers the honest root and exchanges at most the call's bits (the
+network certifier refuses a call past them). Both are what the verifier sees. -/
 def Accepted (L : Layout) (H : Hash.Msg → Hash.Digest) (C : Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (σ : Strategy L) (ω : Coins L) : Prop :=
-  (∀ rb < L.rowBlocks, ∀ cb < L.colBlocks, ∀ t : Fin L.S, (σ.exec ω).holds (tileOf L κ ω rb cb t)) ∧
-    (σ.exec ω).root = C.root H (word L κ ω) ∧ ((σ.exec ω).egress : ℚ) ≤ L.callBits
+  (σ.exec ω).root = C.root H (word L κ ω) ∧ ((σ.exec ω).egress : ℚ) ≤ L.callBits
 
 /-- The break a statement ends in: two different messages with one SHA-512 digest, both among what the execution at
 `ω` hashed and what the honest commitment of its words hashes (the verifier's check hashes those). -/

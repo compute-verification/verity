@@ -11,7 +11,8 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   or one of those values' executions hashed a SHA-512 collision with the honest commitment. With `O` every coin value,
   it is the average: `E_ω[work] ≥ honest − gap`. The gap is `gapRegs`, a defined function of the layout. An
   accepted call exchanges at most its share of its forward's egress cap (`Layout.callBits`), so a forward's network
-  terms sum to at most its cap's.
+  terms sum to at most its cap's. Acceptance is what the verifier sees, the honest root registered within the call's
+  bits, so `G` is conditional on the registered root being the honest one.
 * `GapAt`: the gap's share of stock at T 512 × 64, T 512 × 512 and T 8,192, for every call of `n, K ≥ 4,096`, at cap
   32: at most 0.190%, 0.168% and 0.165%. `GapAt320`: at cap 320, at most 0.513%, 0.491% and 0.488%.
 * `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), at most 0.231% of the padded stock and 3.71% of the
@@ -39,7 +40,7 @@ def G : Prop :=
     (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K))
     (isA : Hash.Msg → Bool) (can Real : Strategy (lead T m n K) → Prop),
     CommitL1w H C isA κ →
-    H32 pr → W1 pr Real → TileGrain stream Real → OneInstructionMinimal Real → CardWithinAccelW1 can Real →
+    H32 pr → W1 pr Real → TileGrain H C κ stream Real → OneInstructionMinimal Real → CardWithinAccelW1 can Real →
     ShaWrites isA Real → HonestHashRuled H C κ Real →
     OutsourceWithinEgressLead pr (betaLead (lead T m n K) C) H C κ Real →
     ∀ σ, can σ → ∀ O : Finset (Coins (lead T m n K)), (∀ ω ∈ O, Accepted (lead T m n K) H C κ σ ω) →
@@ -84,7 +85,7 @@ def Honest : Prop :=
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ),
     ∃ (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
       (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
-      CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain stream Real ∧
+      CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain H C κ stream Real ∧
       OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧ HonestHashRuled H C κ Real ∧
       OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) C) H C κ Real ∧ Real σ ∧
       ∀ ω, Accepted (lead T m n K) H C κ σ ω

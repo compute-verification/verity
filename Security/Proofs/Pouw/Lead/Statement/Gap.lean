@@ -188,7 +188,7 @@ theorem nontrivial : Nontrivial := by
     fun C hC => gap_lt_honest C ((h8192 C hC).trans (by norm_num))
       (pos C 512 8192 32 rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) rfl hC) hS, ?_⟩
   intro L pr
-  refine ⟨⟨fun _ _ => 0, fun _ _ => rfl, fun _ => ⟨[], [], 0, [], 0, fun _ => 0, fun _ => False⟩⟩, fun _ => ?_⟩
+  refine ⟨⟨fun _ _ => 0, fun _ _ => rfl, fun _ => ⟨[], [], 0, [], 0, fun _ => 0⟩⟩, fun _ => ?_⟩
   exact ⟨rfl, rfl⟩
 
 end Pouw.SecurityProofs.Lead.Statement
