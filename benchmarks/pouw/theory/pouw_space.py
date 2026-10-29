@@ -930,9 +930,10 @@ def if_refuted(card: dict, rows: list[dict]) -> list[tuple[str, dict | None]]:
 
 
 def alternates(rows: list[dict]) -> dict[str, dict | None]:
-    """The best row that meets T1 and T2 at any rank, and the best if every unmeasured T3 came in under its target."""
+    """The best row free of open attacks that meets T1 and T2 at any rank, and the best if every unmeasured T3 came in
+    under its target."""
     hopeful = sorted(rows, key=lambda r: rank_key(r | {"t3_pass": r["t3_pass"] or r["t3_worst"] is None}))
-    return {"t1_t2_any_rank": next((r for r in rows if r["t1_pass"] and r["t2_pass"]), None),
+    return {"t1_t2_any_rank": next((r for r in rows if r["t1_pass"] and r["t2_pass"] and not r["attacks"]), None),
             "if_unmeasured_t3_passes": hopeful[0] if hopeful else None}
 
 
