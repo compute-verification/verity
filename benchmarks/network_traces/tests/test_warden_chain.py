@@ -11,6 +11,7 @@ whose input is a certifier rehearsal's or another warden run's."""
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import re
@@ -27,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_scan_zk import published, sz  # noqa: E402
 
+import round_coins as RC  # noqa: E402
 import warden_chain as WC  # noqa: E402
 
 
@@ -39,6 +41,9 @@ def _load(name: str):
 
 cr, n2 = _load("chain_record"), _load("n2_zk")
 PUBLIC = ("deployment.json", "cells.jsonl")
+#: the scan's base `chain_record.scan_base` gives these steps, whose scan summary has no registrations behind it
+#: (test_scan_zk holds the real one to the network certifier's signed registrations)
+BASE = hashlib.sha512(b"the network certifier's signed registrations").hexdigest()
 
 
 def gate_run(d: Path) -> Path:
@@ -164,20 +169,22 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
             "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]}}}),
         tie=put("tie.json", {"class": "warden", "warden_run": rid, "ok": True, "link": {"T": 32, "unit": "u"},
                              "tie": {"honest": [True, True], "forged": [False, True]}}),
-        n2=put("n2.json", {"ok": True, "warden_run": rid, "members": {
+        n2=put("n2.json", {"ok": True, "warden_run": rid, "draw": {"selection": "all"}, "members": {
             "honest": {"windows": [window, window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}, window], "network": {"accepted": False},
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
             "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}},
-            "coins": {"challenger": "local", "rounds": {r: {"source": "challenger:local", "root": f"{i:02x}" * 64,
-                                                            "session": r, "ok": True}
-                                                        for i, r in enumerate(("honest", "forged"))}}}),
+            "coins": {"challenger": "local", "rounds": {r: {"source": "challenger:local", "session": r, "ok": True,
+                                                            "root": RC.root(BASE, "scan", r)}
+                                                        for r in ("honest", "forged")}}}),
         job=put("job.json", {"path": cr.WARDEN, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
 
 
 def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_certifier_rehearsals(tmp_path,
-                                                                                                certifier_run):
+                                                                                                certifier_run,
+                                                                                                monkeypatch):
+    monkeypatch.setattr(cr, "scan_base", lambda answers, run: {"root": BASE, "why": None})
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.WARDEN_STUBBED)
