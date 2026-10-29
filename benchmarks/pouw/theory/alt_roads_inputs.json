@@ -1,0 +1,70 @@
+{
+  "h200": {
+    "sms": 132,
+    "tensor_units_per_sm_clk": 4096,
+    "tensor_clk_hz": 1.83e9,
+    "fmax_hz": 1.98e9,
+    "hbm_bytes_per_s": 4.8e12,
+    "hbm_bytes": 151397597184,
+    "l2_bytes": 52428800,
+    "source": "Security/Definitions/Core/Accel/H200.lean (data sheet: 1,979 dense INT8 TOPS over 2 x 132 SMs at 1830 MHz; HBM3e 141 GiB, 4.8 TB/s; L2 50 MiB)"
+  },
+  "w1": {
+    "h32_units_per_write": 32,
+    "scalar_coissue_units_per_write": 21.542,
+    "l1_lookup_units_per_word": 128,
+    "l2_lookup_units_per_word": 472,
+    "lane_useful_share_of_tensor": 0.0484,
+    "source": "CORE-H32 final (h200Measured = h100Floor, run r20261029-021534-a5a3; L1/L2 lookup prices); CORE-TIME's side words beside the tensor pipe (IDP4A 4.10 + DFMA 2.11 against 127.99 k32 words an SM-clock, estimate)"
+  },
+  "sha512": {
+    "floor_units_per_byte": 908,
+    "bar_units_per_byte": 1774.85,
+    "sm_clk_per_compression": 58.1,
+    "measured_alone_units_per_byte": 2010,
+    "measured_beside_units_per_byte": 981,
+    "export_units_per_word": 848,
+    "source": "SW-HASH (H32 floor), SW-PRICE (HASH-38's bar), H200.lean (IMAD-balanced SHA-512, 58.1 SM-clocks a compression), SW-GPU (hm96 rows alone at 64 KiB, best beside the served step, STG export at L 32; runs r20261029-045936-22a0, -050641-3a03, -050431-e695)"
+  },
+  "ssn_1l": {
+    "alpha": 1.044,
+    "t1_credited_coins": 0.00048,
+    "t1_uncredited_coins": 0.00297,
+    "t2_t8192": [62.9, 34.2],
+    "t2_t64": [6.5, 4.0],
+    "coin_latency_s": 0.0006,
+    "source": "SW-NOISE final (note compute-research/20261029T0551Z-report-sw-noise; run r20261029-065659-8f24, art:63ed96b1...)"
+  },
+  "ncp3": {
+    "alpha": 3.0,
+    "source": "CORE-NCP / SW-NOISE (0.375 B a useful MAC)"
+  },
+  "points": {
+    "t8192": {"m": 8192, "t_stock_s": 0.03777, "t_gemm_s": 0.01249, "label": "T 8,192 (measured, CORE-NCP r20261029-013634-94e5)"},
+    "t64": {"m": 64, "t_stock_s": 0.00342, "t_gemm_s": 0.000571, "label": "T 512 = the demo's 64 real tokens (stock an estimate, CORE-NCP)"},
+    "decode1": {"m": 1, "t_stock_s": 0.001, "t_stock_band_s": [0.0003, 0.003], "t_gemm_s": 0.000203, "label": "decode, 1 row (estimate: GEMM at HBM rate for the linears' int8 weights; step band 0.3-3 ms)"}
+  },
+  "llama_3_2_1b": {
+    "layers": 16,
+    "linears": [[2048, 3072], [2048, 2048], [2048, 16384], [8192, 2048]],
+    "heads": 32,
+    "head_dim": 64,
+    "source": "Llama-3.2-1B config: hidden 2048, intermediate 8192, 32 q heads, 8 kv heads, head dim 64; fused qkv and gate-up as served"
+  },
+  "links": {
+    "census_reference_bytes_per_s": 12.5e9,
+    "per_gpu_400g_bytes_per_s": 50e9,
+    "source": "benchmarks/census/networks.json dc-1ms-100gbps (reference); 400 Gb/s a GPU is an HGX H200's compute-fabric NIC (sensitivity, not a census entry)"
+  },
+  "accounting": {
+    "and_per_int8_mac": 129.9375,
+    "window_s": 600,
+    "week_s": 604800,
+    "month_s": 2592000,
+    "year_s": 31536000,
+    "dc_gpus": 100000,
+    "world_flop_per_year": 9.36e30,
+    "co_run_rate_beside_hash": 0.11,
+    "source": "SW-PREMISES section 5 (2,079/16 ANDs an int8 MAC); benchmarks/census/deployments.json dc-12500-machines-600s; adversary.json world-inference-2027; C26's one co-run (GEMMs beside the hash at 11% of their rate, power-limited, not a bound)"
+  }
+}
