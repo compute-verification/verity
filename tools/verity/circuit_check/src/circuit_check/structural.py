@@ -1,4 +1,4 @@
-"""``circuit-check --structural UNIT.tmpl TARGET``: a ``flock-ir-tmpl`` template (`verity_flock.tmpl`) accepted as the C-Flock
+"""``circuit-check --structural UNIT.tmpl TARGET``: a ``flock-ir-tmpl`` template (`verity_flock.tmpl`) accepted as the Flock
 lowering of the Definition TARGET, which `verity_flock.ir_lower.lower` lowers flat.
 
 **Syntactic.** Both sides are read into one table of canonical gates: a bit is a GF(2) form over the inputs and the table's

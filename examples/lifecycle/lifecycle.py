@@ -23,7 +23,7 @@ The phases, each a function here:
    period's, its pooled bound, and its credit against the compute the layout holds: each subprotocol's accounting is a
    projection of the layout (`Layout.accounting`).
 
-`prove` and `verify` are a stand-in for C-Flock behind the firewall: the proof is the drawn unit's opening, which `verify`
+`prove` and `verify` are a stand-in for Flock behind the firewall: the proof is the drawn unit's opening, which `verify`
 checks against the commitments and re-evaluates in the clear. It is sound for the example and not zero-knowledge.
 """
 
@@ -831,12 +831,12 @@ class Statement:
 
 
 def prove(statement: Statement, witness: Mapping[str, Any]) -> dict[str, Any]:
-    """STAND-IN for C-Flock behind the firewall: the proof is the unit's opening."""
+    """STAND-IN for Flock behind the firewall: the proof is the unit's opening."""
     return dict(witness)
 
 
 def verify(statement: Statement, proof: Mapping[str, Any]) -> dict[str, str | None]:
-    """STAND-IN for C-Flock's verifier: each opening against its commitment, then the unit's circuit evaluated in the
+    """STAND-IN for Flock's verifier: each opening against its commitment, then the unit's circuit evaluated in the
     clear on the opened inputs and held to the opened outputs; onsite, the opened I/O held to the frames the certifier
     committed to. The reason for each failure, by check (`values`, `io`), None where it holds."""
     out: dict[str, str | None] = {"values": None, "io": None}

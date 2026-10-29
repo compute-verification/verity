@@ -91,12 +91,12 @@ held to its request's slot through ``map``.
   - With their own rows there, the unit accepts them, and the native ``srv`` b‖c check refuses them.
 
 **In zero knowledge** (`benchmarks/network_traces/compile_slice_zk.py --slice w212`, and `--slice demo`), each unit is
-proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
+proved by Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
 holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
 - The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `benchmarks/network_traces/leak_scan.py`). It
   replaces the phase-18 attack's rule.
-  - A find of a witness piece or carry row counts only if it lies inside one field: one read C-Flock's proof format
+  - A find of a witness piece or carry row counts only if it lies inside one field: one read Flock's proof format
     makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message
     (`rounds[*].msg`, as `transcript_check.T` frames them). A match across two fields doesn't count, and neither does
     hex a nibble off.

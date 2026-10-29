@@ -1846,7 +1846,7 @@ def _registered_sha256(server, name: str) -> str:
 
 
 def test_the_gelu_table_is_the_pinned_one(server):
-    """The Lean evaluator's `gelu_tanh_bf16` (the activation word of every bf16 gate) has the SHA-256 C-Flock pins
+    """The Lean evaluator's `gelu_tanh_bf16` (the activation word of every bf16 gate) has the SHA-256 Flock pins
     (`tail_pieces.TABLE_SHA256`), and a table that is not a registered one is refused."""
     from verity_flock.tail_pieces import TABLE_SHA256
 
@@ -1857,7 +1857,7 @@ def test_the_gelu_table_is_the_pinned_one(server):
 @pytest.mark.slow
 def test_the_tanh_rn_table_is_the_pinned_one(server):
     """The Lean evaluator's `tanh_rn` (`TanhF32Rn_v1` on all 2^27 words of its region, by their low 27 bits) has the SHA-256
-    C-Flock pins: the host's `math.tanh` on 123 million words, which no grid reaches (about 30 s)."""
+    Flock pins: the host's `math.tanh` on 123 million words, which no grid reaches (about 30 s)."""
     from verity_flock.tail_pieces import TABLE_SHA256
 
     assert _registered_sha256(server, "tanh_rn") == TABLE_SHA256["tanh_rn"]
