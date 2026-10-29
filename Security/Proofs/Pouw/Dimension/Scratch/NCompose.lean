@@ -22,7 +22,9 @@ in a lock, and nothing imports it.
   target plus a constant on `S` (a `wgmma` with a constant accumulator), and encodes it when each is a function of the
   other on `S` (a byte swap, a rotation, a float conversion). The count holds with either, under the matching
   separation (`SepBy`). `CarriedWords` (a named premise) is that every admissible program writes a carrier of each
-  committed word; with it, only carriers leave the hash's count (`hashCompose_of_carriedWords`).
+  committed word; with it, only carriers leave the hash's count (`hashCompose_of_carriedWords`). The pair gives the
+  joint count, `ShaWrites` with only the free values excluded at `|T| + R` (`jointWrites_of_carriedWords`), which
+  doesn't say which registers are the words.
   `sepShift_needed`: targets that differ by a constant share one carrier. The byte swap
   (`bswap32`, little-endian rows read by SHA-512's big-endian words): a carrier `w + s` with `s ≠ 0` does not survive
   the swap up to a constant (`bswap32_shift_not_const`), and the swapped word is no carrier of the word
@@ -174,16 +176,14 @@ theorem shaWrites_floor {c : ℕ} {pr : Prices100} (hpr : Floor c pr) {Adm : Lis
   obtain ⟨H, hR, hD, hO⟩ := hsha L P hL hP hA hOD
   exact le_trans (Nat.mul_le_mul_left c hR) (distinctWritesMH100Floor c pr hpr G X hconst S fpSem L P H hL hP hD hO)
 
-/-- **hash-compose with any relation** (rank 0 given `ShaWrites`): under `Floor c`, an admissible well-formed
-program on free inputs that writes a register in `Rel` to each separated target, and outputs the digests, costs at
-least `c·(|T| + R)`, when every register in `Rel` to a target is excluded from the hash's count (`hRX`). -/
-theorem hashCompose_by {c : ℕ} {pr : Prices100} (hpr : Floor c pr) {Adm : List (Op100 G) → List (G → ℚ) → Prop}
-    {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G} {F X : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ F)
-    (hFX : F ⊆ X) {Rel : (G → ℚ) → (G → ℚ) → Prop} (hS : OnS S Rel) {T Dig : Finset (G → ℚ)} {R : ℕ}
-    (hRX : RelOf Rel T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X Dig R) {L : List (G → ℚ)} {P : List (Op100 G)}
-    (hL : ∀ f ∈ L, f ∈ F) (hP : ∀ o ∈ P, o.WFw pr F) (hA : Adm P L) (hsep : SepBy Rel F T)
-    (hw : WritesBy Rel fpSem P L T) (hOD : OutputsOn fpSem S P L Dig) :
-    c * (T.card + R) ≤ cost100 pr P := by
+/-- **The composed set**: under the hypotheses of `hashCompose_by` the program writes at least `|T| + R` registers,
+pairwise distinct on `S`, none free: one related register a target and the hash's `R`. -/
+theorem composed_set {Adm : List (Op100 G) → List (G → ℚ) → Prop} {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {pr : Prices100}
+    {S : Set G} {F X : Set (G → ℚ)} (hFX : F ⊆ X) {Rel : (G → ℚ) → (G → ℚ) → Prop} (hS : OnS S Rel)
+    {T Dig : Finset (G → ℚ)} {R : ℕ} (hRX : RelOf Rel T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X Dig R)
+    {L : List (G → ℚ)} {P : List (Op100 G)} (hL : ∀ f ∈ L, f ∈ F) (hP : ∀ o ∈ P, o.WFw pr F) (hA : Adm P L)
+    (hsep : SepBy Rel F T) (hw : WritesBy Rel fpSem P L T) (hOD : OutputsOn fpSem S P L Dig) :
+    ∃ H' : Finset (G → ℚ), T.card + R ≤ H'.card ∧ DistinctOn S F H' ∧ OutputsOn fpSem S P L H' := by
   classical
   obtain ⟨H, hR, hDX, hOH⟩ :=
     hsha L P (fun f hf => hFX (hL f hf)) (fun o ho => wfw_mono hFX o (hP o ho)) hA hOD
@@ -199,12 +199,25 @@ theorem hashCompose_by {c : ℕ} {pr : Prices100} (hpr : Floor c pr) {Adm : List
     intro r hr
     obtain ⟨t, ht, rfl⟩ := Finset.mem_image.1 hr
     exact ⟨ρ t, hρR t ht, fun _ _ => rfl⟩
-  have hb := distinctWritesMH100Floor c pr hpr G F hconst S fpSem L P (T.image ρ ∪ H) hL hP
-    (distinctOn_union hDC hDH hx) (outputsOn_union hO hOH)
   have hdisj : Disjoint (T.image ρ) H :=
     Finset.disjoint_left.2 fun r h₁ h₂ => hx r h₁ r h₂ fun _ _ => rfl
-  rw [Finset.card_union_of_disjoint hdisj, hcard] at hb
-  exact le_trans (Nat.mul_le_mul_left c (Nat.add_le_add_left hR _)) hb
+  refine ⟨T.image ρ ∪ H, ?_, distinctOn_union hDC hDH hx, outputsOn_union hO hOH⟩
+  rw [Finset.card_union_of_disjoint hdisj, hcard]
+  exact Nat.add_le_add_left hR _
+
+/-- **hash-compose with any relation** (rank 0 given `ShaWrites`): under `Floor c`, an admissible well-formed
+program on free inputs that writes a register in `Rel` to each separated target, and outputs the digests, costs at
+least `c·(|T| + R)`, when every register in `Rel` to a target is excluded from the hash's count (`hRX`). -/
+theorem hashCompose_by {c : ℕ} {pr : Prices100} (hpr : Floor c pr) {Adm : List (Op100 G) → List (G → ℚ) → Prop}
+    {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G} {F X : Set (G → ℚ)} (hconst : ∀ q : ℚ, (fun _ : G => q) ∈ F)
+    (hFX : F ⊆ X) {Rel : (G → ℚ) → (G → ℚ) → Prop} (hS : OnS S Rel) {T Dig : Finset (G → ℚ)} {R : ℕ}
+    (hRX : RelOf Rel T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X Dig R) {L : List (G → ℚ)} {P : List (Op100 G)}
+    (hL : ∀ f ∈ L, f ∈ F) (hP : ∀ o ∈ P, o.WFw pr F) (hA : Adm P L) (hsep : SepBy Rel F T)
+    (hw : WritesBy Rel fpSem P L T) (hOD : OutputsOn fpSem S P L Dig) :
+    c * (T.card + R) ≤ cost100 pr P := by
+  obtain ⟨H', hcard, hD, hO⟩ := composed_set hFX hS hRX hsha hL hP hA hsep hw hOD
+  exact le_trans (Nat.mul_le_mul_left c hcard)
+    (distinctWritesMH100Floor c pr hpr G F hconst S fpSem L P H' hL hP hD hO)
 
 /-- Equality on `S`: the register is the target there. -/
 def EqOn' (S : Set G) (t r : G → ℚ) : Prop := ∀ g ∈ S, r g = t g
@@ -501,6 +514,16 @@ theorem hashCompose_of_carriedWords {c : ℕ} {pr : Prices100} (hpr : Floor c pr
     {P : List (Op100 G)} (hL : ∀ f ∈ L, f ∈ F) (hP : ∀ o ∈ P, o.WFw pr F) (hA : Adm P L)
     (hOD : OutputsOn fpSem S P L Dig) : c * (T.card + R) ≤ cost100 pr P :=
   hashCompose_carried hpr hconst hFX hRX hsha hL hP hA hsep (hcw L P hA hOD) hOD
+
+/-- **The joint count follows from the pair** (rank 0 given `ShaWrites` and `CarriedWords`): `ShaWrites` with only
+the free values excluded, at `|T| + R` registers. The joint form counts the registers that hashing the words costs, not
+which of them are the words, so a program that folds a word into the hash's adds, which `CarriedWords` excludes, may
+still meet it; under `Floor c` it gives `c·(|T| + R)` by `shaWrites_floor`. -/
+theorem jointWrites_of_carriedWords {pr : Prices100} {Adm : List (Op100 G) → List (G → ℚ) → Prop}
+    {fpSem : ℕ → ℚ → ℚ → ℚ → ℚ} {S : Set G} {F X : Set (G → ℚ)} (hFX : F ⊆ X) {T Dig : Finset (G → ℚ)} {R : ℕ}
+    (hRX : RelOf (Carries S) T ⊆ X) (hsha : ShaWrites pr Adm fpSem S X Dig R) (hcw : CarriedWords Adm fpSem S T Dig)
+    (hsep : SepBy (Carries S) F T) : ShaWrites pr Adm fpSem S F Dig (T.card + R) := fun L P hL hP hA hOD =>
+  composed_set hFX (onS_carries S) hRX hsha hL hP hA hsep (hcw L P hA hOD) hOD
 
 /-- **Committed words need not be materialized in `MH100w`**: one `int` a digest word outputs the digests and no
 register that carries, or even encodes, a target, when no digest word encodes one. -/
@@ -908,6 +931,8 @@ end Pouw.Dimension.NCompose
 #print axioms Pouw.Dimension.NCompose.hashCompose_carried
 #print axioms Pouw.Dimension.NCompose.hashCompose_encoded
 #print axioms Pouw.Dimension.NCompose.hashCompose_of_carriedWords
+#print axioms Pouw.Dimension.NCompose.jointWrites_of_carriedWords
+#print axioms Pouw.Dimension.NCompose.composed_set
 #print axioms Pouw.Dimension.NCompose.words_not_forced
 #print axioms Pouw.Dimension.NCompose.bswap32_bswap32
 #print axioms Pouw.Dimension.NCompose.bswap32_shift_not_const
