@@ -1,5 +1,5 @@
-"""FPX-G1H: FP8-g1's and W4A8-g1's committed values through H1's own transcript construction (co32c-u16, decision 82,
-the RTX PRO 6000's record).
+"""FP8-g1's and W4A8-g1's committed values through H1's own transcript construction (co32c-u16, the RTX PRO 6000's
+record).
 
 g1 serves each operand as its nearest level R plus a fair coin, centred: (R_x + b - 1/2)(R_w + c - 1/2), b and c H1's
 own coins (its activation dither and weight coin). It is credited at H1's ε when the one int8 GEMM of R_x + b and
@@ -13,7 +13,7 @@ this checks:
   next one up with the operand that leaves;
 - the transcript: tiles of 128 x 128 at k = 4096 and 14336, the operands at the grids' extremes (every level at the
   top, at the bottom, of opposite signs) and at random levels, keyed as cgemm.cu keys a call (b, c, U and z from one
-  key, `cgemm_ref.py`'s draws), through CHECKED-STRIP's `co32c_words`: X, W' and P_A in H1's ranges, the served word
+  key, `cgemm_ref.py`'s draws), through checked_strip's `co32c_words`: X, W' and P_A in H1's ranges, the served word
   O = O' - sum_d 128^d D_d equal to (R_w + c) X (`O_is_served`), and g1's served output from O and its rank-one
   terms equal to the exact centred product;
 - the controls: E4M3 weights to 112 and block scales to 10 at the top, refused by the same range checks (W' to 129;

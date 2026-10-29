@@ -1,5 +1,5 @@
-// H-FALSIFY: can an adversary that knows A* = B* = 0 produce the zero instance's tiled transcript faster than the honest
-// dense int8 kernel? (note:20261017T0028Z-draft-h-falsify). Every arm folds every 32-step prefix word T_ℓ[i, j] into one
+// h_falsify: can an adversary that knows A* = B* = 0 produce the zero instance's tiled transcript faster than the honest
+// dense int8 kernel? Every arm folds every 32-step prefix word T_ℓ[i, j] into one
 // duo receipt (receipt_folds.cuh rf_duo_word, a chain per (i, j) over ℓ), so the output path is identical and the time
 // ratio isolates the compute. ref.py is the reference each arm's receipt is checked against, bit for bit.
 //

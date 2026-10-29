@@ -1,13 +1,12 @@
-"""The served design's compute-accounting headline (ε and γ) for H1 + fx1 on the RTX PRO 6000 (sm_120), from the machine
+"""The served design's accounting headline (ε and γ) for H1 + fx1 on the RTX PRO 6000 (sm_120), from the machine
 model's own API (benchmarks/pouw/machine_model). The audit's verdict surfaces these: ε the fraction of a committed word a
 cheater can skip under 100% checking, γ honest's time a useful MMA over a plain GEMM's.
 
-The served design is CALC's `dither-c-peel` (co32c linears, cohalf QKᵀ, Dither-2S's P·V, duo at L = 32) folded with fx1 and
-measured as c-fx1 (decision 83; `machine_model/data/honest/c-fx1.toml`). CALC r10's headline (#2325) is ε_core 0.472%
-(ε_skip 0.347 + the operand floor 0.125) and γ 2.14; ε_skip is 0.347 only once P·V's peel sums are folded by vfold
-(decision 91, #2325). On a tree without #2325 the sums are priced higher and ε_skip reads ≈ 0.39%. CALC r12 is to add an
-sm_120 H1 + fx1 design file so this reads from data; until then it is built here from `dither-c-peel` with fold fx1 and
-honest c-fx1, exactly as CALC r10 evaluated it by hand.
+The served design is `dither-c-peel` (co32c linears, cohalf QKᵀ, Dither-2S's P·V, duo at L = 32) folded with fx1 and
+measured as c-fx1 (`machine_model/data/honest/c-fx1.toml`). Its headline is ε_core 0.472% (ε_skip 0.347 + the operand
+floor 0.125) and γ 2.14; ε_skip is 0.347 only once P·V's peel sums are folded by vfold, and without that fold the sums
+are priced higher and ε_skip reads ≈ 0.39%. No sm_120 H1 + fx1 design file exists yet, so this is built here from
+`dither-c-peel` with fold fx1 and honest c-fx1.
 """
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ if str(MM) not in sys.path:
 
 from verity_machine_model import eps as E   # noqa: E402
 
-#: CALC r10 / RT-FACET's census and q* for the sm_120 headline
+#: facet_break's census and q* for the sm_120 headline
 VECTOR = "VF3r-16"
 Q_STAR = 1.22
 
@@ -42,7 +41,7 @@ class Headline:
 
 
 def headline(vector: str = VECTOR, q: float = Q_STAR) -> Headline:
-    """H1 + fx1's ε (100% checking) and γ from the machine model, the free-operand reading at q* (decision 89)."""
+    """H1 + fx1's ε (100% checking) and γ from the machine model, the free-operand reading at q*."""
     import eps_budget as EB     # noqa: E402  (benchmarks/pouw/eps_budget.py, the suite's own)
 
     pi = E.machine(vector)

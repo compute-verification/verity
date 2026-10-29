@@ -1,4 +1,4 @@
-"""RT2-FP-12 and -13: read `mma_joint120.cu`'s rows and say whether #2755's (M) holds on sm_120 beside DMMA and QMMA.
+"""Read `mma_joint120.cu`'s rows and say whether (M) holds on sm_120 beside DMMA and QMMA.
 
 (M) (`Accounting.Assumptions.TS.SlotStep`) charges each warp instruction max(MACs / (peak / 4), slots x step) SMSP-cycles,
 summed over every class, and asks the sum to be at most the run's cycles. On sm_120 the step is 1/8: an IMMA.16832 s8 is
