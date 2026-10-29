@@ -6,7 +6,8 @@ import Proofs.Pouw.Dimension.PointwiseProofs
 
 * **Chunk provenance** (`run_chunks_le`). By `good_prefix`, every slot after every prefix holds an initial chunk value
   or one of `writes P` new ones; so the target chunk values no initial chunk holds number at most `writes P`.
-* **The lift** (`adaptiveDW_chunks`): the pointwise bound, summed over the draws.
+* **The lifts** (`adaptiveDW_chunks`, `adaptiveDW_ball`): the pointwise bounds (`run_chunks_le`, `run_ball_le`),
+  summed over the draws.
 * **The obstruction** (`holds_flat`, `not_adaptiveDW`, `card_levels_le`, `not_adaptiveDW_levels`). Writing each
   distinct target value once into one slot (`fill`) holds them all at `w` writes a value. Row-step chunks
   `base i + c i t · 1` number at most `Σ_i |{c i t}|`, so adaptive-dw fails above `w` times that.
@@ -57,6 +58,15 @@ open Classical in
 theorem adaptiveDW_chunks [DecidableEq V] [Inhabited V] (Ω : Type) [Fintype Ω] (m₀ : A → Fin w → V)
     (Y : Ω → Finset (Fin w → V)) : AdaptiveDW Ω m₀ Y (∑ g, ((Y g).filter fun y => ∀ a, m₀ a ≠ y).card) :=
   fun P hP => sum_le_sum fun g _ => run_chunks_le m₀ (P g) (Y g) (hP g)
+
+/-- **The balls' lift**: when each draw's targets sit further than `r g y` from every initial chunk and pairwise
+further apart than the sum of their radii, adaptive-dw holds at `Σ_g Σ_y (r g y + 1)`. -/
+theorem adaptiveDW_ball [DecidableEq V] [Inhabited V] (Ω : Type) [Fintype Ω] (m₀ : A → Fin w → V)
+    (Y : Ω → Finset (Fin w → V)) (r : Ω → (Fin w → V) → ℕ)
+    (hI : ∀ g, ∀ y ∈ Y g, ∀ a, r g y < hammingDist (m₀ a) y)
+    (hYY : ∀ g, ∀ y ∈ Y g, ∀ y' ∈ Y g, y ≠ y' → r g y + r g y' < hammingDist y y') :
+    AdaptiveDW Ω m₀ Y (∑ g, ∑ y ∈ Y g, (r g y + 1)) :=
+  fun P hP => sum_le_sum fun g _ => run_ball_le m₀ (P g) (Y g) (hP g) (r g) (hI g) (hYY g)
 
 theorem fill_aux (a₀ : A) (y : Fin w → V) (ps : List (Fin w)) (m : A → Fin w → V) (p : Fin w) :
     ((ps.map fun q => (Step.write a₀ q (y q) : Step A V w)).foldl (fun m st => st.apply m) m) a₀ p =
