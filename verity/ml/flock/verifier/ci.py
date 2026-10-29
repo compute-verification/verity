@@ -4,7 +4,7 @@
         [--seed S] [--fuzz N] [--sets I,J] [--out DIR]
     python ci.py --live --lean BIN --work DIR [--sets I,J] ...    `vectors.json`'s `live.sets`, against the live verdicts
 
-For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
+For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
   (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
   own K (`statement.stratified`, `agree.py --stratified`) for sessions drawn by the stratified law, and a plain session's

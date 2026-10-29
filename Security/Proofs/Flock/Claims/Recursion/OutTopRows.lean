@@ -248,7 +248,7 @@ theorem outRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
-    {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0) (hdn : Claims.Recursion.Form.Dense st0.form)
+    {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0) (hdn : Claims.Recursion.Form.Dense st0.form)
     (hlev : s < (OpenLower.schAt (xIOf x) 0).levels.size)
     {i : RecIns} {lk : RecVStar.InnerLink} (hi : insO xO = some i) (hlk : i.link = some lk)
     {qo : ℕ} (hqo : c.ports.findIdx? (·.name == "out") = some qo)
@@ -595,7 +595,7 @@ theorem levelCap_get {sh : VStar.Algebra.Shape} {K : Array VStar.Stmt} (h : VSta
 `l ≠ 0` is V\*'s later cap at level `l` (`FlockC3.Reps.list_ok`, the list's parts holding no cap), holding
 `2 · 2^cap` nodes (`VStar.levelCapStatements`), twice the schedule's `(l − 1)`-th top's (`RecVStar.checkTopsListed`),
 at table 0's schedule (`inner_m`). -/
-theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0)
+theorem laterCap_size {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hdn : Claims.Recursion.Form.Dense st0.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {s' l N : ℕ} (hsv : ss[s']? = some (.cap l N)) (hl : l ≠ 0)
     {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) :
@@ -695,7 +695,7 @@ than its low `HH` bits): at a staged level part whose check 5 loads the inner se
 `LANES` lanes and `HH` siblings and both reps, a piece `ownQR` gives the part is at level `l`, one of its `q`
 queries of rep 0 or 1, and its rep's position there is `posAt`'s. -/
 theorem posRaw_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
-    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : PiecesInRangeR pieces)
     (hI : InnerCoinsR untr b Bk s x c) {xO : Msg} (hsh : showsPart untr b s x xO c) {i : RecIns}
     {spec : SessionSpec} {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (ht : 0 < sts.size)
