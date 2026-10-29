@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Remote's and onsite's Lean verdicts (`remote check`, `onsite check`) on a served run's kept records, through
 # composite.py. Run in the tree, on a CPU node (the Lean builds), with OUT set:
-#     bash benchmarks/one_stage/served_composite.sh SRC [K]
+#     bash benchmarks/one_stage/kept_composite.sh SRC [K]
 # SRC is the served run's out/ (`served_verdicts.sh`'s $OUT), or a .tgz of the part of it read here: serve/windows.jsonl
 # and serve/h1/, sampled-proofs/served/window/, and pieces/NAME/ for each kept piece. K is the window (default 0).
 # It builds remote, onsite, pouw-check, pouw-period and sampled-proofs-one-stage-zk, then writes each case private in
@@ -14,7 +14,7 @@
 #  - every kept piece directory pieces/NAME/ holding a case (case.json, or NAME.case.json as the wipe writes it) beside its
 #    own answer.json (the wipe's, PoUS's once served_case.sh has written its case), entered as kept, onsite only.
 # composite.py then composes and checks each product; $OUT/remote and $OUT/onsite get only its public output (verdict
-# lines, commitments, params digests), and $OUT/served_composite.txt every line printed here.
+# lines, commitments, params digests), and $OUT/kept_composite.txt every line printed here.
 set -uo pipefail
 OUT=${OUT:?set OUT}
 SRC=${1:?SRC: the served run out/ dir or a .tgz of it}
@@ -22,7 +22,7 @@ K=${2:-0}
 TREE=$PWD
 export PATH=$HOME/.elan/bin:$HOME/.local/bin:$PATH
 mkdir -p "$OUT"
-say() { echo "$*" | tee -a "$OUT/served_composite.txt"; }
+say() { echo "$*" | tee -a "$OUT/kept_composite.txt"; }
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 if [ -f "$SRC" ]; then mkdir -p "$W/src" && tar xzf "$SRC" -C "$W/src" && SRC=$W/src; fi
 PY=${PYTHON:-}
@@ -49,7 +49,7 @@ REMOTE=$TREE/verity/core/protocols/remote/$B/remote ONSITE=$TREE/verity/core/pro
 POUW=$TREE/verity/core/protocols/pouw/lean/check/$B/pouw-check PERIOD=$TREE/verity/core/protocols/pouw/lean/check/$B/pouw-period
 V2=$TREE/verity/core/service/sampled_proofs/$B/sampled-proofs-one-stage-zk
 P=$W/cases
-log() { "$@" 2>&1 | tee -a "$OUT/served_composite.txt"; return "${PIPESTATUS[0]}"; }
+log() { "$@" 2>&1 | tee -a "$OUT/kept_composite.txt"; return "${PIPESTATUS[0]}"; }
 log "$PY" benchmarks/one_stage/pouw_piece.py v1 --serve-run "$SRC/serve" --window "$K" --out "$P/remote/pouw" --exe "$POUW"
 PERIOD_IN=()
 if [ -d "$SRC/pieces/pouw" ]; then
