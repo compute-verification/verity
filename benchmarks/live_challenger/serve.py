@@ -229,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if ended is None else 1
 
 
-def run(args: argparse.Namespace, out: Path, ssh: list[str] | None, session: remote.Session,
+def run(args: argparse.Namespace, out: Path, ssh: list[str] | None, session: remote.ChallengePhase,
         secret: bytes | None) -> str | None:
     """Listen, open the tunnel, serve the first client whose hello carries `secret` and close the session: None when its
     client closed it, else why it ended."""
