@@ -264,7 +264,7 @@ Some words keep a different, narrower sense:
 
 - A protocol's **ε_skip**, in Dither's `PROTOCOL.md` and the Credit statement, is that protocol's own skipped share of
   what it credits, the Notation's ε_W; the fleet's ε_skip is ε_W(1 − ε_undecl) plus the wrong certificates.
-- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout, a `GateSelection` a set of its gates, and its query `Family` an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both serialized names stay. Its gates, like the Lean model's in `Security/Definitions/Core/` (`Verity.Circuit`), are word-level, each a `Value<w>` of w bits; the Boolean profile is width 1.
+- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout and a `GateSelection` is a selected set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both names are serialized and stay. `verity.ml.circuits`'s gates are word-level: each outputs one `Value<w>` of w bits, not one bit, and so are the gates of the Lean model in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
 - A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
 - A **universal unit** (`verity.ml.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
   runs any **private circuit** of the class, whose description (its gates and wiring) is given as a value. Circuit hiding is
@@ -337,17 +337,17 @@ Vocabulary that one area uses:
   (weights, request inputs, randomness). It is certified by checking each input's commitment root against its external
   anchor (the declared weights root, the client's request commitment, the randomness source), always, never sampled.
 - **Pinned**, as an instruction's status (`verity.ml.circuits.silicon.instructions`): its silicon model matched every
-  hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records; the other statuses are
-  hypothesis and unprobed. A pinned value or root is one fixed before the run, which a check compares to.
-- **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of the steps whose role is served
+  hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
+  unprobed). A pinned value or root is one fixed before the run, which a check compares to.
+- **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of its served steps
   (`Accounting.Gates.Census.servedMacs`, the census's `served_macs`). It is not size, which counts AND gates.
 - **Binding unit** (circuit-check's cache, `circuit_check.cache` and `targets.BINDINGS`): one unit of a binding file, a
   root function, a `_model_roots` entry or a `TEMPLATE_PARAMS` entry; a target's cached pass holds the digest of each
   binding unit whose roots reach it.
 - **Transformer sublayer**: one of a transformer layer's two halves, its attention or its FFN (MLP or MoE), each with its
-  residual add; in DeepSeek-V4, each is wrapped by the hyper-connections' pre and post mixes.
+  residual add; in DeepSeek-V4, each sits inside the hyper-connections' pre and post mixes.
 - **Value acquisition** and **native tap** (`integrations/vllm`'s `acquire/`): value acquisition takes a required value's
-  bytes where vLLM computes it, through a Python hook or a native tap, a capture compiled into a kernel. A tap is never
+  bytes where vLLM computes it, by a Python hook or a native tap (a capture compiled into a kernel). A tap is never
   the network certifier (Older names).
 - **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
   clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`WardenParams.grid`), proved as its own proof
