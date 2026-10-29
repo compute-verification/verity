@@ -129,7 +129,7 @@ T1 = forming(N, F) − forced(C) + de-noise(D) + final word(D, P) + uncommitted 
   Never "locked" unless the lock has it.
 - **Red-team every lead.** N-RED and N-ATTACK attack whatever leads at each interim.
 - **Per monitoring period:** state any new bound per window, week, month and year at one H200, the reference datacenter
-  and the world (SW-PREMISES §5's convention, and say which basis).
+  and the world, on the one basis N-CARD fixes in its card format (SW-SMELL: five bases were in use, up to 4.5× apart).
 
 ## 6. Rules (every worker)
 
