@@ -17,6 +17,7 @@ inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "b
           "verity/core/protocols/bandwidth/__init__.py", "verity/core/protocols/bandwidth/tags.py",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",
+          "verity/hardware",  # kv_bench.py reads the RTX PRO 6000's card
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/ml/__init__.py", "verity/ml/crypto",
           "verity/ml/commitments", "verity/ml/randomness"]
