@@ -67,7 +67,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | PoUW (its period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
 | PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
-| sampled proofs (the one-stage audit; v2, the audit on the proofs themselves, joins once its check reads the challenger's signed coins) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
+| sampled proofs (one-stage v1's audit, or the recursive audit on the proofs themselves, which it reads as blobs, as the params' `form` names it; v2 joins once its check reads the challenger's signed coins) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
 | the inference-only policy (its check: the declared circuit's division into inference blocks within their gate and fresh-input budgets, and the provenance of the registered information) | yes | yes | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/inference-only/v0` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
@@ -110,10 +110,10 @@ all commit to the first one's digest reject it whatever the subprotocols answer 
 committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Both
 products are one:
 
-- remote, `sameB "verity/remote/v0" [verity/inference-only/v0, verity/pouw/v1, verity/sampled-proofs/one-stage/v1]
-  components`, whose policy, PoUW window and one-stage audit each commit to the window record;
-- onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/one-stage/v1] [store]
-  components`, whose policy and one-stage audit each commit to the run's registration record.
+- remote, `sameB "verity/remote/v0" [verity/inference-only/v0, verity/pouw/v1, verity/sampled-proofs/v1]
+  components`, whose policy, PoUW window and sampled proofs each commit to the window record;
+- onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/v1] [store]
+  components`, whose policy and sampled proofs each commit to the run's registration record (in either form, v1's).
 
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's PoUW period and
 network certification name one record a window, in their evidence and their period commitment, so they join the check
@@ -137,8 +137,9 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 Lean to:
 
 - PoUW: `core_check.case`, and for its period `period_check.case`;
-- sampled proofs: the one-stage difftest's `answer`, `one_stage` behind the decoders `OneStage` reads, on audits that
-  drew nothing and audits with one or two changes;
+- sampled proofs: its form's split (`sampled_proofs`) over the one-stage difftest's `check`, `one_stage` behind the
+  decoders `OneStage` reads, on audits that drew nothing and audits with one or two changes under the form `one-stage`,
+  and the recursive form refused where the case names none of its files;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
 - the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_baseline`) behind

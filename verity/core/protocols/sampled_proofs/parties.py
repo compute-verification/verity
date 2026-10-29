@@ -16,8 +16,8 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   whose coins are its own, never the verifier's or the prover's, answering a session's open and finish at ``address``
   and pinned on main's first-parent commit ``pin``;
 - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
-  drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product, or
-  None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
+  drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product
+  (`COMPOSED`'s, in its one-stage form), or None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
   digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
   remote or onsite).
 
@@ -66,18 +66,21 @@ from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 from .one_stage import registration as R
 
 ID = R.PROTOCOL
+#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): `ID`'s audit or the recursive audit, as its
+#: params' and evidence's ``form`` names it
+COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
-#: remote's PoUW its window check, and both audit sampled proofs with the one-stage audit (`ID`, one-stage v1)
+#: remote's PoUW its window check, and both compose sampled proofs as `COMPOSED`
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
-                         "pouw": "verity/pouw/period/v1", "sampled-proofs": ID,
+                         "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED,
                          "wipe": "verity/wipe/v0"},
     "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/v1",
-                         "sampled-proofs": ID},
+                         "sampled-proofs": COMPOSED},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
 IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0",
@@ -299,6 +302,6 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, FIREWALL: Firewall, WO
 PROTOCOLS = {ID: PROTOCOL}
 
 
-__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "FIREWALL", "ID", "IDS", "MANIFEST", "NO_CASE", "PROTOCOL",
-           "PROTOCOLS", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall", "Unavailable",
-           "Verifier", "Workers", "ids_of", "params_of"]
+__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "FIREWALL", "ID", "IDS", "MANIFEST", "NO_CASE",
+           "PROTOCOL", "PROTOCOLS", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall",
+           "Unavailable", "Verifier", "Workers", "ids_of", "params_of"]

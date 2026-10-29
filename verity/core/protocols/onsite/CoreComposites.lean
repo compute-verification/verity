@@ -67,14 +67,16 @@ private def remoteIds : List String := Core.Remote.components.map (·.id)
 #guard idOf [] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v1"] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v2"] == none
-#guard idOf ["verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"] == none
+#guard idOf ["verity/sampled-proofs/v1", "verity/certifier/v0"] == none
 #guard idOf (onsiteIds.drop 1) == none
 #guard idOf ["verity/wipe/v0"] == none
-#guard idOf ["verity/pouw/v1", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"] == none
+#guard idOf ["verity/pouw/v1", "verity/pouw/v1", "verity/sampled-proofs/v1"] == none
 #guard idOf (remoteIds ++ ["verity/pouw/period/v1"]) == none
 #guard idOf (onsiteIds ++ ["verity/pouw/v1"]) == none
-#guard contains (match ofIds ["verity/sampled-proofs/one-stage/v1"] with | .error e => e | .ok _ => "")
+#guard contains (match ofIds ["verity/sampled-proofs/v1"] with | .error e => e | .ok _ => "")
   "protocol soundness covers only those composites"
+#guard contains (match ofIds ["verity/sampled-proofs/one-stage/v1"] with | .error e => e | .ok _ => "")
+  "is no composite's subprotocol"
 #guard contains (match ofIds ["verity/sampled-proofs/one-stage/v2"] with | .error e => e | .ok _ => "")
   "is no composite's subprotocol"
 

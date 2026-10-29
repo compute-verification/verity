@@ -889,10 +889,10 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
 
 
 IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
-       "bandwidth": parties.SUBPROTOCOLS["verity/onsite/v0"]["bandwidth"]}
-"""Each subprotocol's id as the composites run it (`products`): integrity is the one-stage audit (`SampledProofs.OneStage`)
-in both, onsite's work is PoUW's period, its PoUB the one over PoUS's P2 store, and onsite's memory challenger also runs a
-wipe."""
+       **{n: parties.SUBPROTOCOLS["verity/onsite/v0"][n] for n in ("bandwidth", "sampled-proofs")}}
+"""Each subprotocol's id as the composites run it (`products`): integrity is sampled proofs (`VStar.Recursive.Sampled`,
+`verity/sampled-proofs/v1`, one-stage v1's audit or the recursive audit) in both, onsite's work is PoUW's period, its
+PoUB the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
 
 
 def label(seed: str, i: int) -> str:

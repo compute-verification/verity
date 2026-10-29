@@ -6,9 +6,10 @@ certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Py
 certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
-`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs' one-stage audit
-(`verity/sampled-proofs/one-stage/v1`) its difftest's `answer`, `one_stage` behind the decoders `OneStage` reads
-(`verity/core/service/sampled_proofs/tests/test_difftest.py`), the wipe's
+`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
+`sampled_proofs`: its form's split over one-stage v1's audit (`verity/sampled-proofs/one-stage/v1`), its difftest's
+`check`, `one_stage` behind the decoders `OneStage` reads (`verity/core/service/sampled_proofs/tests/test_difftest.py`),
+and the recursive form refused where the case names none of its files, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
@@ -143,6 +144,52 @@ class Recorded:
         raise KeyError(f"{self.id}: no answer recorded for this case")
 
 
+SAMPLED_PROOFS_V1 = "verity/sampled-proofs/v1"
+
+
+def _form(j: Any, what: str) -> tuple[str, dict]:
+    """`VStar.Recursive.Sampled`'s split: the object's ``form`` and the rest."""
+    if not isinstance(j, dict):
+        raise Reject(f"the {what} is not an object")
+    if not isinstance(j.get("form"), str):
+        raise Reject(f"the {what} names no form")
+    return j["form"], {k: v for k, v in j.items() if k != "form"}
+
+
+def _recursive(rest: dict, what: str):
+    """The recursive form on a case that names no ``recursive`` (`VStar.Recursive.paramsOfJson`, `evidenceOf`), which
+    it refuses; any other is outside the mirror."""
+    if "recursive" in rest:
+        raise ValueError(f"outside the mirror: the recursive audit's {what}")
+    raise Reject(f"the {what} name no recursive")
+
+
+def _form_params(j: Any) -> dict:
+    form, rest = _form(j, "parameters")
+    if form == "one-stage":
+        return ONE_STAGE.decode_params(rest)
+    if form == "recursive":
+        _recursive(rest, "parameters")
+    raise Reject(f"the parameters' form {form} is not one-stage or recursive")
+
+
+def _form_evidence(b: bytes) -> dict:
+    form, rest = _form(P.canonical_json(b), "evidence")
+    if form == "one-stage":
+        return ONE_STAGE.decode_evidence(canonical(rest).encode())
+    if form == "recursive":
+        _recursive(rest, "evidence")
+    raise Reject(f"the evidence's form {form} is not one-stage or recursive")
+
+
+def sampled_proofs(case: Any) -> dict:
+    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v1 (`SampledProofs.OneStage`, its
+    difftest's `check`, the live check at the coins the evidence reads) when its params and evidence name the form
+    ``one-stage``, a refusal of any other form on the cases the mirror decides."""
+    return P.answer(SAMPLED_PROOFS_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
+                    evidence=_form_evidence, digest=lambda c: c[1], check=ONE_STAGE.check)
+
+
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
 INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
@@ -156,8 +203,9 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: component's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Integrity: the one-stage audit (`SampledProofs.OneStage`).
-SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
+#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v1's audit (`SampledProofs.OneStage`) or the
+#: recursive audit, as the params' form names it.
+SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
@@ -379,7 +427,7 @@ class TiedSame(Same):
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: remote's three
-#: committing to one window record, onsite's policy and integrity to one registration record, and onsite's PoUS
+#: committing to one window record, onsite's policy and sampled proofs to one registration record, and onsite's PoUS
 #: and PoUB-P2 on one store.
 REMOTE = Same("verity/remote/v0", (INFERENCE_ONLY, POUW, SAMPLED_PROOFS), (INFERENCE_ONLY.id, POUW.id, SAMPLED_PROOFS.id))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
