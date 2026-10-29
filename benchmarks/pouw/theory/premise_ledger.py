@@ -49,7 +49,12 @@ calculator (`noise_sweep.gap_terms`: forming, de-noise, the final word, duplicat
   CopyGrain(4) leaves free) and single words (which CopyGrain(4) prices; CopyGrain(row) prices the tiles too).
   Requests add copy-and-patch across a call's repeated rows (`cross_row_patch`): a tile sharing k words with an
   earlier row's tile at the same columns and step is copied at c_a words and its other words written, saving
-  k − c_a; T1 takes c_a = 1 (N-ADAPT's chunk model), and the verdict is also given at c_a = 2 and 3.
+  k − c_a; T1 takes c_a = 1 (N-ADAPT's chunk model) over any earlier row (decisions free, an upper bound), and the
+  verdict is also given at c_a = 0 (model P), 2 and 3, over the rows within two coefficients of a row's own (one
+  lookup a column predicts each equality) and over one held partner a row (its tile still in the thread's registers,
+  stored again at no write), both constructive. Copy-floor prices reuse from memory, not a held tile, so it bounds
+  the term by the held reading; select-floor puts c_a at 1 or more. The new lead, the tag with `blc4a-t64-e7`'s lanes,
+  is the tag within each 64-row tile (`ssn_1l_tag_t64`).
 
 Other sections: ShaSpeed's precision at each point and what Daniel's 02:01Z ruling covers, what rank ≤ 3 overall would
 take, G1 against advice, energy as a pricing (excluded by AGENTS.md; reported only as what it would change), per-period
@@ -333,7 +338,8 @@ LEDGER = [
      "3", "open (a ruling: credit only public checkpoints)", "5",
      "— (a protocol rule and an equality proof of the committed weights; false for a private model)", "Daniel / N-CARD",
      "crafted increments: with its own weights a self-dealer cancels a later lane's public weight (N-RED's A2c, "
-     "α(S − 1)/(2S)) or walks it (N-ADAPT, ssn_1l, the tag and AorB's side A: 89–95% of α), or rewrites fix2's "
+     "α(S − 1)/(2S)) or walks it (N-ADAPT, ssn_1l, the tag and AorB's side A: 89–95% of α; hw column by column, "
+     "N-RED's A2r), or rewrites fix2's "
      "likeliest entries (N-RED's A8, p*·α); α/8 for per2 and os2 with one-hot weight blocks (estimate)"),
     ("rows-reachable", "Through a public model no request makes a linear's input row zero or crafted, and padding "
      "rows (a size class's, a CUDA graph's) are not credited; identical rows and massive-activation rows (one-hot "
@@ -344,15 +350,35 @@ LEDGER = [
     ("CopyGrain", "CopyGrain(4): a copy moves aligned 4-word (16 B) chunks, TMA's and LDGSTS.128's grain, at c_a ≥ 1 "
      "word (its source address); anything finer (LDGSTS.32, LDS then STS, a scatter by a column pattern) costs a "
      "priced write a word, so a copied tile's wrong words are patched at a write each", "3",
-     "open (W1 as stated prices every copy 0)", "5",
+     "open (W1 as stated prices every copy 0); its 16 B grain is false on sm_90 (N-FLOOR: cp.async of size 4 moves "
+     "4 B a lane, at ≥ a write a word: copy-floor); on the prover route it states the hasher's own gather, one "
+     "address an aligned 16 B load", "5",
      "time per-word copies with immediate offsets beside a saturated wgmma on the H200 (opcode_probe's gate); "
      "shared-memory words beside wgmma are issue-bound; c_a, the copy and its address", "N-RED (attack) / N-FLOOR "
      "(measure)", "a zero or massive-activation row's single-word equalities (equal columns, a column's returns); not "
      "its repeating aligned 4-word tiles, nor row-level copies, nor copy-and-patch across a call's repeated rows "
      "(k − c_a words a tile sharing k)"),
     ("CopyGrain-row", "CopyGrain at a row's grain: only whole-row copies are free", "3",
-     "open (likely false: TMA moves 16 B boxes)", "5", "a 16 B TMA box or LDGSTS.128 copy of a tile within a row",
+     "open (likely false: TMA moves 16 B boxes, and a thread stores a word it still holds again at no write)", "5",
+     "a 16 B TMA box or LDGSTS.128 copy of a tile within a row",
      "N-PREM", "every within-row coin-branch term, tiles included"),
+    ("copy-floor", "A coin-addressed copy, load or gather of a word from memory costs at least one register write "
+     "(32) a word it moves: LDGSTS at any size, LDS then STS, LDG, TMA, the copy engines, and the port's gather (a "
+     "16 B descriptor, or a batched copy's entry, a contiguous run)", "1",
+     "measured on the H200's GPU routes (N-FLOOR: ≥ 156 a word alone on every route; beside honest ≥ 48.7 on the "
+     "lane routes and 108 on TMA, its poll included); open: the copy engines beside honest, the port's gather", "5",
+     "a route moving a coin-addressed word under 32: TMA beside honest without its poll (N-FLOOR's time3), the copy "
+     "engines beside a saturated wgmma, a GPUDirect gather list of 16 B runs", "N-FLOOR (measure) / N-ALT (the port)",
+     "no T1 term alone: it prices reuse from memory (another thread's words, rows no longer held), not a word a "
+     "thread still holds, which it stores again at no write; so it bounds copy-and-patch by the rows a thread "
+     "holds (the held reading), and with hashing on the prover the hasher's own loads gather anyway"),
+    ("select-floor", "A coin-dependent selection (a copy source, a branch target, the register a store reads, a "
+     "predicate fed by a word's value or a coin) costs at least one register write (32) a lane", "1",
+     "measured in time (N-FLOOR: ≥ 1.93 writes a lane a two-way selection beyond its arms, ≥ 2.23 for the predicated "
+     "and branching forms W1 prices at 0, 10.3 an 8-bit lookup); not in W1, whose model P prices those forms 0",
+     "1", "a selection form under 32 a lane outside N-FLOOR's census", "N-ADAPT (statement) / N-FLOOR (measure)",
+     "copy-and-patch's decisions: a tile's mask of matching words is a selection, so c_a ≥ 1 (≥ 2 with its "
+     "predicates charged); model P's c_a is 0"),
     ("adaptive-dw", "The lifted DistinctWrites bound holds pointwise in the coins for a prover that reads them as "
      "they arrive (the lift needs no premise; a design supplies the pointwise count, here on data a public model "
      "reaches)", "0", "open", "5",
@@ -386,7 +412,7 @@ LEDGER = [
 ]
 FIELDS = ["id", "statement", "rank", "status", "rank_today", "falsify", "owner", "closes"]
 #: other lanes' names for a ledger row (or the row it generalizes)
-ALIASES = {"forced-PRF": ("salt-forced",), "CopyGrain": ("copy-floor", "CopyGrain(w₀) at w₀ = 4"),
+ALIASES = {"forced-PRF": ("salt-forced",), "CopyGrain": ("CopyGrain(w₀) at w₀ = 4", "model C"),
            "CopyGrain-row": ("copy-priced",),
            "LaneSemantics": ("lane-semantics",), "OneInstructionMinimal": ("one-instruction-minimal",),
            "PeriodInventory": ("period-inventory", "PeriodInventoryT1"), "CarriedWords": ("carried-words",),
@@ -595,11 +621,13 @@ def coin_branch_terms(data: dict) -> dict:
             if x == "aorb_a":
                 vals = {suffix: patch_terms(x, shapes, rows, steps_aorb, design("ssn_1l").alpha, w,
                                             side_a_only=suffix == "aorb") for suffix in ("aorb", "aorbA")}
+            elif x == "ssn_1l_tag_t64":
+                vals = {x: patch_terms("ssn_1l_tag", shapes, min(rows, BLC_TILE), steps, design(name).alpha, w)}
             else:
                 vals = {x: patch_terms(x, shapes, rows, steps, design(name).alpha, w)}
             for key, v in vals.items():
-                for c, share in v.items():
-                    e[f"patch_ca{c}_{key}"] = share
+                for (reading, c), share in v.items():
+                    e[f"patch_{reading}_ca{c}_{key}"] = share
         out[point] = e
     return out
 
@@ -1071,9 +1099,18 @@ def walk_words_check(variant: str = "ssn_1l_tag", n: int = 64, s: int = 67, salt
 #: it leaves wrong a priced write, so a tile sharing k words with an earlier row's tile saves k − c_a; T1 takes c_a = 1
 PATCH_CA = 1
 PATCH_CAS = (0, 1, 2, 3)
+#: the reading T1 takes: `any` (every earlier row, decisions free), an upper bound; `table` (neighbours within two
+#: coefficients) and `held` (the nearest neighbour, still in registers) are constructive lower bounds. c_a = 0 is model
+#: P's reading (moves and decisions free), c_a = 1 select-floor's (one write a coin-dependent selection, a tile's mask)
+PATCH_READING = "any"
+PATCH_READINGS = ("any", "table", "held")
+#: the new lead's tile (`blc4a-t64-e7`): its coin lanes' offsets are equal across a tile's rows and differ across
+#: tiles (N-RED), so copy-and-patch on it is the tag's within a call of this many rows
+BLC_TILE = 64
 #: designs whose call of repeated rows is simulated for copy-and-patch; `ssn_1l_tag8` is the lead with G drawn as
 #: bytes, [−127, 127]⁴ (one coin byte a lane)
-PATCH_VARIANTS = ("ssn_1l_tag", "ssn_1l_tag8", "aorb_a", "ssn_1l_hw", "ssn_1l_fix2", "ssn_1l_fix2m", "ssn_1l_tele4m")
+PATCH_VARIANTS = ("ssn_1l_tag", "ssn_1l_tag8", "aorb_a", "ssn_1l_hw", "ssn_1l_fix2", "ssn_1l_fix2m", "ssn_1l_tele4m",
+                  "ssn_1l_tag_t64")
 _SUBSETS = tuple(c for r in (4, 3, 2, 1) for c in itertools.combinations(range(4), r))
 
 
@@ -1083,18 +1120,20 @@ def _call_rows(variant: str, n: int, m: int, s: int, cols: np.ndarray, rng: np.r
     dropped. Coins are each row's own; G, fix2's w and the public codes and signs are shared by the call."""
     nc = len(cols)
     if variant == "ssn_1l_tele4m":
-        base = rng.integers(-128, 128, (m, 4)) @ _tele_code(n, 4)[:, cols]
+        coef = rng.integers(-128, 128, (m, 4))
+        base = coef @ _tele_code(n, 4)[:, cols]
         wts = np.zeros((s, nc), np.int64)
         wts[1:s - 1] = _pos_weights(s - 2, n)[:, cols]
         lane, last = 1 + rng.integers(0, 2, (s, m)), True
     elif variant == "ssn_1l_hw":
-        base = rng.integers(0, 16, (m, 4)) @ _code(n, n_full=n)[:, cols]
+        coef = rng.integers(0, 16, (m, 4))
+        base = coef @ _code(n, n_full=n)[:, cols]
         wts, lane, last = _hw_signs(s, n)[:, cols], 1 + 2 * rng.integers(0, 2, (s, m)), False
     else:
         g_max = 127 if variant == "ssn_1l_tag8" else 3
         code = _sv_code(n)[:, cols] if variant == "aorb_a" else _code(n, n_full=n)[:, cols]
-        tags = np.stack([_row_tag(i) for i in range(m)])
-        base = rng.integers(0, 2, (m, 4)) @ code + tags @ rng.integers(-g_max, g_max + 1, (4, nc))
+        coef = np.concatenate([rng.integers(0, 2, (m, 4)), np.stack([_row_tag(i) for i in range(m)])], axis=1)
+        base = coef @ np.concatenate([code, rng.integers(-g_max, g_max + 1, (4, nc))])
         lane = (1 + 2 * rng.integers(0, 2, (s, m))) if variant == "aorb_a" else 1 + rng.integers(0, 2, (s, m))
         wts = (rng.choice(np.array([-1, 1]), (s, nc)) if variant == "ssn_1l_fix2" else
                rng.integers(1, 3, (s, nc)) if variant == "ssn_1l_fix2m" else np.ones((s, nc), np.int64))
@@ -1102,20 +1141,46 @@ def _call_rows(variant: str, n: int, m: int, s: int, cols: np.ndarray, rng: np.r
     lane[0] = 0
     if last:
         lane[s - 1] = 0
-    return base, lambda t0, t1: lane[t0:t1, :, None] * wts[t0:t1, None, :], last
+    return base, lambda t0, t1: lane[t0:t1, :, None] * wts[t0:t1, None, :], last, coef
+
+
+def _neighbours(coef: np.ndarray, radius: int = 2, cap: int = 64) -> np.ndarray:
+    """Each row's earlier rows whose step-1 coefficients (a₁, and the tag's digits) differ from its own in at most
+    `radius` coordinates, nearest first and at most `cap`, padded with −1: their words differ in a column by those
+    coefficients times the column's public or G entries plus the pair's walk difference, so one lookup a column on
+    those entries predicts every equality."""
+    nb = [dict() for _ in range(len(coef))]
+    for r in range(1, radius + 1):
+        for js in itertools.combinations(range(coef.shape[1]), r):
+            groups = {}
+            for i, key in enumerate(map(bytes, np.delete(coef, js, axis=1))):
+                for i2 in groups.get(key, ()):
+                    nb[i].setdefault(i2)
+                groups.setdefault(key, []).append(i)
+    out = np.full((len(coef), cap), -1, np.int64)
+    for i, d in enumerate(nb):
+        lst = list(d)[:cap]
+        out[i, :len(lst)] = lst
+    return out
 
 
 @functools.lru_cache(maxsize=None)
-def cross_row_patch(variant: str, n: int, m: int, s: int, tiles: int = 16, seed: int = 3, chunk: int = 8) -> tuple:
+def cross_row_patch(variant: str, n: int, m: int, s: int, tiles: int = 16, seed: int = 3, chunk: int = 8) -> dict:
     """A call of m repeated-token rows (identical data, reachable through any model): for each row, step and sampled
-    aligned 4-word tile, the most words it shares with an earlier row's tile at the same columns and step (k, 0 to 4).
-    Returns k's distribution. Equal words across rows are what a program reading the coins and G can predict; a copy
-    of the best earlier tile and a write of each word it leaves wrong is copy-and-patch (N-ADAPT)."""
+    aligned 4-word tile, the most words it shares with an earlier row's tile at the same columns and step (k, 0 to 4),
+    over every earlier row (`any`: W1 alone, an upper bound, since finding that row from the coins generally means
+    computing the words), over its neighbours within two coefficients (`table`: a program that predicts each
+    equality by one lookup) and over its nearest one alone (`held`: a schedule that computes each row beside that
+    partner, so the partner's tile is still in the thread's registers and is stored again at no write; copy-floor
+    leaves this one). Returns k's distribution under each. A copy of the chosen tile and a write of each word it leaves
+    wrong is copy-and-patch (N-ADAPT)."""
     rng = np.random.default_rng(seed)
     tiles = min(tiles, n // 4)
     cols = ((rng.choice(n // 4, tiles, replace=False) * 4)[:, None] + np.arange(4)[None]).ravel()
-    base, inc, last = _call_rows(variant, n, m, s, cols, rng)
-    hist = np.zeros(5, np.int64)
+    base, inc, last, coef = _call_rows(variant, n, m, s, cols, rng)
+    nbr = _neighbours(coef)
+    valid = nbr >= 0
+    hist, hist_nb, hist_held = np.zeros(5, np.int64), np.zeros(5, np.int64), np.zeros(5, np.int64)
     run = np.zeros((m, len(cols)), np.int64)
     for t0 in range(0, s, chunk):
         t1 = min(s, t0 + chunk)
@@ -1136,7 +1201,16 @@ def cross_row_patch(variant: str, n: int, m: int, s: int, tiles: int = 16, seed:
             np.put_along_axis(hit, order, dup, axis=1)
             best = np.where(hit & (best < len(sub)), len(sub), best)
         hist += np.bincount(best.ravel(), minlength=5)
-    return tuple(float(x) for x in hist / hist.sum())
+        best = held = np.zeros_like(best)
+        for slot in range(nbr.shape[1]):
+            if not valid[:, slot].any():
+                break
+            eq = np.where(valid[None, :, slot, None], (w[:, nbr[:, slot].clip(0)] == w).sum(axis=-1), 0)
+            held = eq if slot == 0 else held
+            best = np.maximum(best, eq)
+        hist_nb += np.bincount(best.ravel(), minlength=5)
+        hist_held += np.bincount(held.ravel(), minlength=5)
+    return {r: tuple(float(x) for x in h / h.sum()) for r, h in (("any", hist), ("table", hist_nb), ("held", hist_held))}
 
 
 def patch_saved(hist: tuple, c_a: int) -> float:
@@ -1145,16 +1219,21 @@ def patch_saved(hist: tuple, c_a: int) -> float:
 
 
 def patch_terms(variant: str, shapes: dict, rows: int, steps, alpha, w: float, side_a_only: bool = False) -> dict:
-    """The copy-and-patch term at each copy price: α times the words skipped, weighted by n·K over the point's linears
-    (side A's only, rows ≤ n, for AorB)."""
+    """The copy-and-patch term at each copy price and reading: α times the words skipped, weighted by n·K over the
+    point's linears (side A's only, rows ≤ n, for AorB)."""
     out = {}
-    for c in PATCH_CAS:
-        out[c] = sum(n * k * alpha(k) * patch_saved(cross_row_patch(variant, n, rows, steps(k),
-                                                                      tiles=8 if rows > 1024 else 32), c)
-                     for n, k in shapes.values() if not (side_a_only and rows > n)) / w
+    for reading in PATCH_READINGS:
+        for c in PATCH_CAS:
+            out[(reading, c)] = sum(
+                n * k * alpha(k) * patch_saved(cross_row_patch(variant, n, rows, steps(k),
+                                                               tiles=8 if rows > 1024 else 32)[reading], c)
+                for n, k in shapes.values() if not (side_a_only and rows > n)) / w
     return out
 
 
+#: designs whose later weights are public signs: a per-column cancel picked from the signs walks every column with a
+#: fixed sign (N-RED's A2r; relayed, not simulated here)
+WALK_PER_COLUMN = ("ssn_1l_hw",)
 #: fix2's later lane (1 + a_t)·w_t with w_t drawn after B: the alphabets of the coin factor and of w
 PRIVATE_LATER = {"ssn_1l_fix2": ((1, 2), (-1, 1)), "ssn_1l_fix2m": ((1, 2), (1, 2))}
 
@@ -1166,11 +1245,11 @@ def p_star(variant: str) -> float:
 
 
 def crafted_saved(variant: str, s: int) -> float:
-    """The share of a design's words chosen weights skip. Where the later weight is one public constant, the walk;
-    where it is public, a block dot of minus one of the coin's two products repeats a row-step with probability 1/2,
+    """The share of a design's words chosen weights skip. Where the later weight is one public constant, the walk, and
+    where it is public signs, the walk column by column; where it is otherwise public, a block dot of minus one of the coin's two products repeats a row-step with probability 1/2,
     (S − 1)/(2S); where it is private (fix2), a block dot of −v* leaves each later word equal with probability p*, which
     W1 alone lets a program skip word by word, p*·(S − 1)/S."""
-    if variant in WALK_VARIANTS:
+    if variant in WALK_VARIANTS or variant in WALK_PER_COLUMN:
         return walk_saved(s)
     if variant in PRIVATE_LATER:
         return p_star(variant) * (s - 1) / s
@@ -1292,7 +1371,8 @@ HOST_TAKE = 4.83
 CRAFTED_M1 = {"per2": 1 / 8, "os2": 1 / 8, "ncp3": 0.0}
 
 
-def design_terms(label: str, point: str, data: dict, cb: dict, c_a: int = PATCH_CA) -> dict:
+def design_terms(label: str, point: str, data: dict, cb: dict, c_a: int = PATCH_CA,
+                 reading: str = PATCH_READING) -> dict:
     name, model, c1 = next((n, mo, c) for lab, n, mo, c, _, _ in DESIGNS if lab == label)
     branch = next(b for lab, _, _, _, _, b in DESIGNS if lab == label)
     d = design(name)
@@ -1341,14 +1421,14 @@ def design_terms(label: str, point: str, data: dict, cb: dict, c_a: int = PATCH_
             "coin_branch_requests_tiles": req_tiles, "coin_branch_requests_words": req_words,
             "coin_branch_zero_rows": zero_rows, "coin_branch_zero_tiles": zero_tiles,
             "coin_branch_zero_words": zero_words, "coin_branch_crafted": crafted,
-            "coin_branch_requests_patch": cb[point].get(f"patch_ca{c_a}_{branch}", 0.0),
+            "coin_branch_requests_patch": cb[point].get(f"patch_{reading}_ca{c_a}_{branch}", 0.0),
             "_h_floor": h["h_floor"], "_h_alone": h["h_alone"], "_bytes_mac": h["bytes_mac"], "_hiding": hid,
             "_hiding_big": big}
 
 
-def minimal_sets(label: str, data: dict, cb: dict, c_a: int = PATCH_CA) -> dict:
+def minimal_sets(label: str, data: dict, cb: dict, c_a: int = PATCH_CA, reading: str = PATCH_READING) -> dict:
     base = next(b for lab, _, _, _, b, _ in DESIGNS if lab == label)
-    terms = {p: design_terms(label, p, data, cb, c_a) for p in POINTS}
+    terms = {p: design_terms(label, p, data, cb, c_a, reading) for p in POINTS}
     opts = list(OPTIONS)
     passing = []
     for r in range(len(opts) + 1):
@@ -1508,8 +1588,8 @@ def periods(data: dict, cb: dict) -> dict:
     t = design_terms("ssn_1l", "llama_T8192", data, cb)
     h = hash_terms(design("ssn_1l"), NS.LLAMA, 8192, False)
 
-    def cb_terms(label, *keys):
-        x = design_terms(label, "llama_T8192", data, cb)
+    def cb_terms(label, *keys, reading=PATCH_READING):
+        x = design_terms(label, "llama_T8192", data, cb, reading=reading)
         return sum(x[k] for k in keys)
     req = ("coin_branch_requests_rows", "coin_branch_requests_tiles", "coin_branch_requests_words")
     zero = ("coin_branch_zero_rows", "coin_branch_zero_tiles", "coin_branch_zero_words")
@@ -1535,13 +1615,19 @@ def periods(data: dict, cb: dict) -> dict:
                 cb_terms("A/rgap1/sv4+tag+nz", *req[:2]),
             "coin branch, ssn_1l_hw, zero rows (G1)": cb_terms("ssn_1l_hw", *zero),
             "coin branch, ssn_1l_tele4m (candidate), zero rows (G1)": cb_terms("ssn_1l_tele4m", *zero),
-            f"coin branch, ssn_1l_tag, copy-and-patch on a call's repeated rows (c_a = {PATCH_CA})":
+            f"coin branch, ssn_1l_tag, copy-and-patch on a call's repeated rows (c_a = {PATCH_CA}, any earlier row)":
                 cb_terms("ssn_1l_tag", "coin_branch_requests_patch"),
-            f"coin branch, ssn_1l_tag/G8, copy-and-patch on a call's repeated rows (c_a = {PATCH_CA})":
+            f"coin branch, ssn_1l_tag, copy-and-patch on a call's repeated rows (c_a = {PATCH_CA}, neighbours within "
+            "two coefficients)": cb_terms("ssn_1l_tag", "coin_branch_requests_patch", reading="table"),
+            f"coin branch, ssn_1l_tag/G8, copy-and-patch on a call's repeated rows (c_a = {PATCH_CA}, any earlier row)":
                 cb_terms("ssn_1l_tag/G8", "coin_branch_requests_patch"),
+            "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, a held partner, model P "
+            "(c_a = 0)": cb["llama_T8192"]["patch_held_ca0_ssn_1l_tag_t64"],
+            "coin branch, ssn_1l_tag + blc4a-t64-e7, copy-and-patch within a 64-row tile, a held partner, select-floor "
+            "(c_a = 1)": cb["llama_T8192"]["patch_held_ca1_ssn_1l_tag_t64"],
             "coin branch, ssn_1l_tag, crafted weights without model-public (the walk)":
                 cb_terms("ssn_1l_tag", "coin_branch_crafted"),
-            "coin branch, ssn_1l_hw, crafted weights without model-public (the cancel)":
+            "coin branch, ssn_1l_hw, crafted weights without model-public (the walk column by column)":
                 cb_terms("ssn_1l_hw", "coin_branch_crafted")}
     stock = INT8_MAC_S * MFU_SERVE
     mac_s = {"one H200": stock, "datacenter": stock * NS.DATACENTER}
@@ -1637,20 +1723,42 @@ def checks(rep: dict) -> list[dict]:
                 and all("adaptive-dw" in v[lab][r]["open_today"] and v[lab][r]["rank_today"] == "5" for r in ROUTES))
     ok(f"ssn_1l_tag/G8 passes at c_a = {PATCH_CA} at rank 3 settled through R1 (commit-through-certifier) and at 4a "
        "with hashing on the prover, both 5 today with adaptive-dw open", passes(vd, "ssn_1l_tag/G8"))
-    for lab in ("ssn_1l_tag", "A/rgap1/sv4+tag+nz", "ssn_1l_hw", "AorB/rgap1/sv4+tag+nz"):
+    four = ("ssn_1l_tag", "A/rgap1/sv4+tag+nz", "ssn_1l_hw", "AorB/rgap1/sv4+tag+nz")
+    for lab in four:
         ok(f"{lab} has no passing set at c_a = {PATCH_CA} without CopyGrain(row) or a false premise, on either route",
-           all(vd[lab][r] is None for r in ROUTES) and vd[lab]["otherwise_needs"],
-           str(vd[lab]["otherwise_needs"]))
-    vca = rep["verdict_by_ca"]
-    ok("the tag (G in [−3, 3]) passes again only once a copy costs 3 words: not at c_a = 2, at c_a = 3",
-       not passes(vca["2"], "ssn_1l_tag") and passes(vca["3"], "ssn_1l_tag"))
+           all(vd[lab][r] is None for r in ROUTES) and vd[lab]["otherwise_needs"], str(vd[lab]["otherwise_needs"]))
+    vt = rep["verdict_table"]
+    ok(f"a constructive copy-and-patch (neighbours within two coefficients, one lookup a column) leaves the tag, A-only, "
+       f"hw and AorB without a set at c_a = {PATCH_CA}; G as bytes passes",
+       all(vt[lab][r] is None for lab in four for r in ROUTES) and passes(vt, "ssn_1l_tag/G8"))
+    vh = rep["verdict_held"]
+    ok("with one held partner a row (copy-floor's reading) the tag, A-only, hw and AorB have no set at c_a = 0 (model P) "
+       "and the tag and G as bytes pass at c_a = 1 (select-floor)",
+       all(vh["0"][lab][r] is None for lab in four for r in ROUTES) and passes(vh["1"], "ssn_1l_tag")
+       and passes(vh["1"], "ssn_1l_tag/G8"),
+       str({c: {lab: [bool(v[lab][r]) for r in ROUTES] for lab in v} for c, v in vh.items()}))
+    order = ("held", "table", "any")
+    ok("the readings nest: held ≤ table ≤ any for every design, point and c_a", all(
+        e[k.replace("patch_held_", f"patch_{order[i]}_")] <= e[k.replace("patch_held_", f"patch_{order[i + 1]}_")]
+        + 1e-12 for e in cb.values() for k in e if k.startswith("patch_held_") for i in range(2)))
     t8 = cb["llama_T8192"]
-    ok("copy-and-patch on 8,192 repeated rows: the tag's exceeds 1% of stock at c_a = 1 and 2; G as bytes leaves under "
-       "1% at c_a = 1 and 0 at c_a = 2", t8["patch_ca1_ssn_1l_tag"] > ALLOW and t8["patch_ca2_ssn_1l_tag"] > ALLOW
-       and t8["patch_ca1_ssn_1l_tag8"] < ALLOW and t8["patch_ca2_ssn_1l_tag8"] == 0.0,
-       str({k: round(v, 5) for k, v in t8.items() if k.startswith("patch_ca") and "tag" in k}))
+    ok("the new lead's 64-row tile (blc4a-t64-e7; the tag's equalities within it): a held partner skips over 1% of "
+       "stock at c_a = 0 (model P) and under 1% at c_a = 1 at Llama T 8,192; G as bytes, held, under 0.5% at c_a = 0",
+       t8["patch_held_ca0_ssn_1l_tag_t64"] > ALLOW and t8["patch_held_ca1_ssn_1l_tag_t64"] < ALLOW
+       and t8["patch_held_ca0_ssn_1l_tag8"] < ALLOW / 2,
+       str({k: round(v, 5) for k, v in t8.items() if k.startswith("patch_held_")}))
+    vca = rep["verdict_by_ca"]
+    ok("with hashing on the prover the tag (G in [−3, 3]) passes again only once a copy costs 3 words: not at c_a = 2, "
+       "at c_a = 3", not passes(vca["2"], "ssn_1l_tag") and passes(vca["3"], "ssn_1l_tag"))
+    ok("copy-and-patch on 8,192 repeated rows: the tag's exceeds 1% of stock at c_a = 1 and 2 over any earlier row and "
+       "at c_a = 1 over its neighbours within two coefficients; G as bytes leaves under 1% (any earlier row) and 0.1% "
+       "(neighbours) at c_a = 1, and 0 at c_a = 2",
+       t8["patch_any_ca1_ssn_1l_tag"] > ALLOW and t8["patch_any_ca2_ssn_1l_tag"] > ALLOW
+       and t8["patch_table_ca1_ssn_1l_tag"] > ALLOW and t8["patch_any_ca1_ssn_1l_tag8"] < ALLOW
+       and t8["patch_table_ca1_ssn_1l_tag8"] < ALLOW / 10 and t8["patch_any_ca2_ssn_1l_tag8"] == 0.0,
+       str({k: round(v, 5) for k, v in t8.items() if k.startswith("patch_") and "tag" in k}))
     ok("copy-and-patch's whole-tile reading (c_a = 3, a tile sharing all 4 words) stays under 0.1% for the tag",
-       all(v["patch_ca3_ssn_1l_tag"] < ALLOW / 10 for v in cb.values()))
+       all(v["patch_any_ca3_ssn_1l_tag"] < ALLOW / 10 for v in cb.values()))
     hwset = rep["hitting"]["ssn_1l_hw"]["minimal_sets"]
     def every(lab, *ids):
         return all(any(i in s["premises"] for i in ids) for s in rep["hitting"][lab]["minimal_sets"])
@@ -1680,11 +1788,8 @@ def checks(rep: dict) -> list[dict]:
        all(v["col_table_ssn_1l_tag"] > ALLOW and v["massive_table_ssn_1l_tag"] > ALLOW for v in cb.values()),
        str({k: (round(v["col_table_ssn_1l_tag"], 4), round(v["massive_table_ssn_1l_tag"], 4)) for k, v in cb.items()}))
     for x in ("ssn_1l_tag", "ssn_1l_fix2m"):
-        ok(f"{x} passes with CopyGrain(4), without CopyGrain(row) or inputs-natural", any(
-            "CopyGrain" in s["premises"] and not {"CopyGrain-row", "inputs-natural"} & set(s["premises"])
-            for s in rep["hitting"][x]["minimal_sets"]))
-        ok(f"{x} passes only with inputs-natural (false) or a CopyGrain", every(x, "inputs-natural", "CopyGrain",
-                                                                                "CopyGrain-row"))
+        ok(f"{x} passes only with inputs-natural (false) or a CopyGrain",
+           every(x, "inputs-natural", "CopyGrain", "CopyGrain-row"))
     ok("AorB's side B leaves a call's repeated rows' aligned tiles over 1% at T 8,192 (Llama and V4 dense)",
        all(cb[p]["massive_tiles_aorb"] > ALLOW for p in ("llama_T8192", "v4d_T8192")),
        str({p: round(cb[p]["massive_tiles_aorb"], 4) for p in ("llama_T8192", "v4d_T8192")}))
@@ -1696,9 +1801,12 @@ def checks(rep: dict) -> list[dict]:
     ok("side B's tiles fall under 0.1% of words with G drawn as bytes",
        all(x < ALLOW / 10 for x in rep["side_b_repair"]["127"].values()), str(rep["side_b_repair"]["127"]))
     tset = rep["hitting"]["ssn_1l_tele4m"]["minimal_sets"]
-    ok("ssn_1l_tele4m passes with model-public and prefix-binding alone (zero and massive rows reachable, copies free)",
-       any("model-public" in s["premises"] and not {"rows-reachable", "inputs-natural", "CopyGrain", "CopyGrain-row"}
-           & set(s["premises"]) for s in tset))
+    ok("ssn_1l_tele4m passes with model-public and CopyGrain(4) (zero and massive rows reachable; copy-and-patch on a "
+       "call's repeated rows needs its chunk price), and never with model-public and no copy premise",
+       any("model-public" in s["premises"] and "CopyGrain" in s["premises"]
+           and not {"rows-reachable", "inputs-natural", "CopyGrain-row"} & set(s["premises"]) for s in tset)
+       and not any("model-public" in s["premises"] and not {"rows-reachable", "inputs-natural", "CopyGrain",
+                                                            "CopyGrain-row"} & set(s["premises"]) for s in tset))
     ok("no ssn design and neither per2 nor os2 passes without model-public or inputs-natural (crafted increments)",
        all(every(lab, "model-public", "inputs-natural") for lab in rep["hitting"] if lab.split()[0] in
            ("ssn_1l", "ssn_1l+C1", "ssn_1l_hw", "ssn_1l_tele4", "ssn_1l_tele4m", "ssn_1l_tag", "ssn_1l_fix2",
@@ -1710,8 +1818,9 @@ def checks(rep: dict) -> list[dict]:
     ok("the walk saves ≥ 93% of a row's steps at S 265 (K 8,192)", rep["walk"]["265"] > 0.93, str(rep["walk"]))
     ok("p* is 1/4 for fix2 and 1/2 for fix2m", rep["p_star"] == {"ssn_1l_fix2": 0.25, "ssn_1l_fix2m": 0.5},
        str(rep["p_star"]))
-    ok("the tag's crafted term (the walk) exceeds hw's (the cancel) at every point",
-       all(cb[p]["crafted_ssn_1l_tag"] > cb[p]["crafted_ssn_1l_hw"] for p in cb), "")
+    ok("hw's crafted term (the walk column by column) is within 5% of the tag's at every point",
+       all(abs(cb[p]["crafted_ssn_1l_hw"] / cb[p]["crafted_ssn_1l_tag"] - 1) < 0.05 for p in cb),
+       str({p: round(cb[p]["crafted_ssn_1l_hw"], 4) for p in cb}))
     ok("ssn_1l passes only with inputs-natural (false): identical rows", all("inputs-natural" in s["premises"]
                                                                               for s in lead))
     ok("nsf passes only with inputs-natural (false)",
@@ -1784,7 +1893,10 @@ def report(data_path: str | None) -> dict:
     for c in PATCH_CAS[1:]:
         if c != PATCH_CA:
             rep["verdict_by_ca"][str(c)] = rank_verdict({lab: minimal_sets(lab, data, cb, c_a=c) for lab in VERDICT})
-    rep["patch"] = {p: {k: v for k, v in e.items() if k.startswith("patch_ca")} for p, e in cb.items()}
+    rep["verdict_table"] = rank_verdict({lab: minimal_sets(lab, data, cb, reading="table") for lab in VERDICT})
+    rep["verdict_held"] = {str(c): rank_verdict({lab: minimal_sets(lab, data, cb, c_a=c, reading="held")
+                                                 for lab in VERDICT}) for c in (0, 1)}
+    rep["patch"] = {p: {k: v for k, v in e.items() if k.startswith("patch_")} for p, e in cb.items()}
     rep["side_b_repair"] = side_b_repair()
     rep["walk"] = {str(s): walk_saved(s) for s in (67, 265)}
     rep["walk_words"] = {v: walk_words_check(v) for v in WALK_VARIANTS}
@@ -1887,11 +1999,17 @@ def table(rep: dict) -> str:
             lines.append(f"{lab}: passes only with {', '.join(v['otherwise_needs'])}")
     lines.append("# side B's aligned tiles on 8,192 repeated rows by G's range: " + "; ".join(
         f"[−{g}, {g}] " + ", ".join(f"{k} {x:.3%}" for k, x in v.items()) for g, v in rep["side_b_repair"].items()))
-    lines.append("# copy-and-patch on 8,192 repeated rows (Llama T 8,192), share of stock by c_a: " + "; ".join(
-        f"{x} " + ", ".join(f"{c}: {rep['patch']['llama_T8192'][f'patch_ca{c}_{x}']:.3%}" for c in PATCH_CAS)
-        for x in ("ssn_1l_tag", "ssn_1l_tag8", "aorbA", "ssn_1l_hw", "ssn_1l_tele4m")))
-    for c, v in rep["verdict_by_ca"].items():
-        lines.append(f"# c_a = {c}: " + "; ".join(
+    for reading in PATCH_READINGS:
+        lines.append(f"# copy-and-patch on 8,192 repeated rows (Llama T 8,192), {reading} reading, share of stock by "
+                     "c_a: " + "; ".join(
+                         f"{x} " + ", ".join(f"{c}: {rep['patch']['llama_T8192'][f'patch_{reading}_ca{c}_{x}']:.3%}"
+                                             for c in PATCH_CAS)
+                         for x in ("ssn_1l_tag", "ssn_1l_tag_t64", "ssn_1l_tag8", "aorbA", "ssn_1l_hw",
+                                   "ssn_1l_tele4m")))
+    for name, v in [*((f"c_a = {c}, {PATCH_READING} reading", v) for c, v in rep["verdict_by_ca"].items()),
+                    (f"c_a = {PATCH_CA}, table reading", rep["verdict_table"]),
+                    *((f"c_a = {c}, held reading", v) for c, v in rep["verdict_held"].items())]:
+        lines.append(f"# {name} (R1/prover, settled): " + "; ".join(
             f"{lab} " + "/".join((v[lab][r]["rank_settled"] if v[lab][r] else "—") for r in ROUTES) for lab in v))
     lines.append("# crafted weights: the walk repeats " + ", ".join(f"{x:.1%} at S {s}" for s, x in rep["walk"].items())
                  + "; on the words at S 67 " + ", ".join(f"{k} {v['saved_words']:.1%}" for k, v in
