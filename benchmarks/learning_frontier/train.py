@@ -1,4 +1,4 @@
-"""Train one learning-frontier configuration and record its loss curve against compute, time, novel state and communication.
+"""Train one learning-frontier configuration and record its loss curve against compute, time, fresh input and communication.
 
 Families (`--family`):
 
@@ -6,8 +6,8 @@ Families (`--family`):
 - `lowrank`: per-window low rank. Each window of `--window` optimizer steps trains only a rank-`--rank` factor pair per matrix
   (every attention and MLP matrix, and the tied embedding) and the norms; at the window's end the pairs merge into the frozen
   matrices and fresh pairs are drawn (`model.py`). The factors' AdamW state is reset at each merge (the norms' persists), and the
-  learning rate re-warms linearly over `--rewarm` steps after each merge. No full-rank warmup. Novel bits per window: every value
-  trained in it (factors and norms) at its stored precision, fp32.
+  learning rate re-warms linearly over `--rewarm` steps after each merge. No full-rank warmup. A window's fresh input (the curve's
+  `novel_bits`): every value trained in it (factors and norms) at its stored precision, fp32.
 - `localsgd`: `--replicas` replicas with their own AdamW, each taking a quarter of every global batch (the same sequences, in the
   same order, as dense); every `--sync` steps the outer step: the replicas' mean delta from the global model is an outer gradient
   for SGD with Nesterov momentum (`--outer-lr`, `--outer-momentum`), and every replica restarts from the new global model. Bits

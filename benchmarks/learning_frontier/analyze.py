@@ -14,7 +14,7 @@ its rank or sync interval, and a token budget. At each size a configuration take
 - kappa at each target, the family's cost to reach it over dense's, in FLOPs, tokens and measured training seconds. The step at
   which a curve reaches a target is interpolated between checkpoints (log step, linear in loss, on the curve's running
   minimum); kappa from the fits is written beside it;
-- the implied alpha at each target, dense's restricted quantity to reach it over the family's. Per-window low rank: novel bits,
+- the implied alpha at each target, dense's restricted quantity to reach it over the family's. Per-window low rank: fresh input,
   every value trained in a window at fp32, dense training every parameter in every window of the same length. Local SGD:
   bits communicated, each replica's delta at fp32 per sync, dense as data parallel over as many replicas sending a full
   gradient every step;
@@ -125,7 +125,7 @@ def stock(s: dict, step: float) -> float:
 
 
 def per_step(s: dict, group: str, like: dict) -> float:
-    """The restricted quantity per step: novel bits (every value trained in a window, over the window's steps) for low rank,
+    """The restricted quantity per step: fresh-input bits (every value trained in a window, over the window's steps) for low rank,
     bits communicated (every replica's full state per sync) for local SGD. Window length and replica count are `like`'s, the
     family's, so dense is counted on the same terms."""
     if group == "lowrank":
