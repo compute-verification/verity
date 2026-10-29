@@ -8,3 +8,7 @@ Add to your PR:
 1. In `tools/verity/check/` (check.py's part list, or wherever #6388 enumerates parts), circuit-check `--all` becomes N parts, `circuit-check --all --shard k/N` for k < N, plus a combine step. Then #6388 deals them across its shards, and circuit-check stops being the long pole of one shard.
 2. Use the same `K/N` spelling #6388 uses. Merge #6388's head into your branch if you touch its files, and say so in the body. Your combine must refuse exactly as you planned (missing shard, extra target, list mismatch).
 3. Keep your date: marked Thu 29 Oct 10:30Z.
+
+# 03:58Z addendum: filter by shard BEFORE the prologue
+
+ci's after-landing check waited on one `circuit-check --all --catalog-units --jobs 180` (r20261029-025415-5921, cpu-11) that spent 57+ min in a single-core prologue: the parent builds every target's Definition and descriptor digest (the cache key) before forking any worker, ~8,600 targets, 44 GB RSS. A shard must pick its targets by the stable hash of the target ID *before* that work, so each shard's prologue is ~1/N. Test it: a shard's prologue builds only its own targets' descriptors.
