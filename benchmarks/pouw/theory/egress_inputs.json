@@ -1,0 +1,33 @@
+{
+  "lead": {
+    "name": "ssn-1l-tag",
+    "code_lanes": 4,
+    "t1_credited": 0.0,
+    "t1_coins_uncredited": 0.0042,
+    "source": "pouw_space.toml at N-CARD's f697396586 (cursor/compute-research-np-card-7c2d): ssn-1l-tag's S = 1 + ceil((K - 28)/31) steps and S - 1 + c coin bits a row in whole 32-bit coin words (ssn-1l-hw's S + 15 fill the same words at Llama's K), B' lane 31 a public weight lane; T1 0.000% credited, 0.420% with the coins' XOF hashing uncredited (NIGHT.md section 7)"
+  },
+  "layouts": {
+    "tile_rows": [64, 128],
+    "lane_entropy_bits": [1, 2, 4, 7],
+    "lanes4": {"lanes": 4, "data_lanes": 28},
+    "cinit_n_target": 1024,
+    "source": "B-lane coins: the B' noise lane of every later k32 step holds a nonzero coin value per (row tile, step, column), odd in +-(2^e - 1), streamed raw by the certifier; one lane (blc1, the lead's own lane) is patched into the B tile in shared memory by one 32-bit load a 4 coin bytes and four byte stores; four lanes (blc4, lanes 28-31) take a 4-byte cp.async a column a step, no register written, at 28 data lanes a step. A wgmma's B tile is shared by the CTA tile's rows (64 a warpgroup, 128 for two), so a coin entry is shared by them; a tile with r < T rows carries coins in ceil((S - 1) r / T) of its later steps, spread evenly, and the lead's public lane in the rest. C-init: an accumulator-init coin an output element, e = ceil(K / n_target) bits"
+  },
+  "prices": {
+    "reg_units": 32,
+    "sha_registers_per_compression": {"locked": 3632, "chained": 3532},
+    "answers_units_per_mac": 0.0,
+    "lane_store_bytes_per_sm_clk": 32,
+    "source": "W1 at H32 (a register write 32 units, a MAC 1); the hashing credit at ShaLB's 3,632 registers a 128-byte compression (the alt_roads floor, 908 units a byte) and N-SHALB's 3,532 for chained compressions (NIGHT.md section 7); answers: DitherInstance's W_mac bounds W_mm + W_sha + W_ans, the selected blocks' answers at full weight, which N-CARD prices at none (0 here, a lower estimate); byte stores into shared memory are unpriced in W1 and timed at one a lane a SM-clock (estimate)"
+  },
+  "certifier": {
+    "sha512_bytes_per_s_core": [810e6, 857e6],
+    "source": "SHA-512 counter-mode coins on one AMD EPYC Genoa core (runs r20261029-074951-e66c and r20261029-075358-9963)"
+  },
+  "nkernel_t2": {
+    "t64": [11.1, 30.4],
+    "t512": [36.0, 61.6],
+    "t8192": [57.5, 65.8],
+    "source": "NIGHT.md section 7 (09:40Z): ssn_1l's built kernel measured by N-KERNEL, T2 beside / serial; the tag kernel isn't built"
+  }
+}
