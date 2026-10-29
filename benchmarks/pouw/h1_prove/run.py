@@ -94,7 +94,7 @@ holds 1:
   bit was set and how many record words moved.
 
 Each is proved like the honest statement, whose prover stops on the failing witness before it sends a proof, and again as
-``<tag>-skip`` with ``FC_ZK_SELF_CHECK=skip`` (C-Flock's negative-control prover, which sends its proofs anyway), so the
+``<tag>-skip`` with ``FC_ZK_SELF_CHECK=skip`` (Flock's negative-control prover, which sends its proofs anyway), so the
 in-session verifier and Lean judge a proof. ``summarize`` records which layer refused each (the prover, the in-session
 verifier, Lean) and with what message. A registration of z alone (``z-only-registration``: the window's z table entries
 rows of 2 R C words, no y) is refused by the verifier's own check of the registration (`check_registration`) before any
@@ -820,7 +820,7 @@ def _verdict_word(v: dict | None, err: Path) -> str:
 
 
 def _tagged(p: Path, tag: str) -> dict | None:
-    """The last ``TAG<tab>{json}`` line of a C-Flock output."""
+    """The last ``TAG<tab>{json}`` line of a Flock output."""
     if not p.exists():
         return None
     got = [x.split("\t", 1)[1] for x in p.read_text(errors="replace").splitlines() if x.startswith(tag + "\t")]

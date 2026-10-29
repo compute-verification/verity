@@ -147,7 +147,7 @@ def _sha512_json(x) -> str:
 
 
 def test_gf128mul_lowers_to_the_rows_of_the_karatsuba_lemma():
-    """The recursion (`gf2k.mul_forms`) gives rec-lean's row list, pinned on both sides by one digest; C-Flock's lowering of
+    """The recursion (`gf2k.mul_forms`) gives rec-lean's row list, pinned on both sides by one digest; Flock's lowering of
     `Gf128Mul_v1` gives the same rows and outputs in the IR's canonical gate order, so it is pinned order-free."""
     C = Circuit()
     rows, outs = _rows_and_outputs(C, G.mul_forms(C, C.input("a", 128), C.input("b", 128)))
