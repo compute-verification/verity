@@ -201,4 +201,61 @@ def Design.toBase (D : Design) (d₀ : D.Data) : ToBase D.gen d₀ where
   σ _ _ w := w
   spec d c := congrArg D.words (D.pad_unpad d (D.pad d₀ c))
 
+/-! ## The middle-segment skip (premise-free)
+
+A design that commits every `L`-th accumulator word commits, entry by entry, the prefix sums `pre s j` of its segments'
+products `s t`. `skip_adv`: an adversary that knows the final word `pre s n` (zero at zero data in an exact design)
+computes the words up to segment `k` forward and the rest backward from the total, and so never reads `s k`.
+`skip_words`: given the total, the committed words don't depend on any one segment. -/
+
+/-- Prefix sums of segment values. -/
+def pre (s : Nat → Int) : Nat → Int
+  | 0 => 0
+  | j + 1 => pre s j + s j
+
+/-- The sum of the `d` segments from `j`. -/
+def seg (s : Nat → Int) (j : Nat) : Nat → Int
+  | 0 => 0
+  | d + 1 => seg s j d + s (j + d)
+
+theorem pre_add (s : Nat → Int) (j : Nat) : ∀ d, pre s (j + d) = pre s j + seg s j d
+  | 0 => by simp [seg]
+  | d + 1 => by
+    have h := pre_add s j d
+    show pre s (j + d) + s (j + d) = pre s j + (seg s j d + s (j + d))
+    omega
+
+theorem seg_congr (s s' : Nat → Int) (j : Nat) (h : ∀ t, j ≤ t → s t = s' t) : ∀ d, seg s j d = seg s' j d
+  | 0 => rfl
+  | d + 1 => by
+    show seg s j d + s (j + d) = seg s' j d + s' (j + d)
+    rw [seg_congr s s' j h d, h (j + d) (Nat.le_add_right j d)]
+
+theorem pre_congr (s s' : Nat → Int) (k : Nat) (h : ∀ t, t < k → s t = s' t) : ∀ j, j ≤ k → pre s j = pre s' j
+  | 0, _ => rfl
+  | j + 1, hj => by
+    show pre s j + s j = pre s' j + s' j
+    rw [pre_congr s s' k h j (Nat.le_of_succ_le hj), h j hj]
+
+/-- **The skip adversary is right.** Forward before segment `k`, backward from the total after it. -/
+theorem skip_adv (s : Nat → Int) (n k j : Nat) (hj : j ≤ n) :
+    (if j ≤ k then pre s j else pre s n - seg s j (n - j)) = pre s j := by
+  split
+  · rfl
+  · have h := pre_add s j (n - j)
+    rw [Nat.add_sub_cancel' hj] at h
+    omega
+
+/-- **Given the total, the committed words don't depend on any one segment.** -/
+theorem skip_words (s s' : Nat → Int) (n k : Nat) (hs : ∀ t, t ≠ k → s t = s' t) (htot : pre s n = pre s' n) :
+    ∀ j, j ≤ n → pre s j = pre s' j := by
+  intro j hj
+  by_cases hjk : j ≤ k
+  · exact pre_congr s s' k (fun t ht => hs t (Nat.ne_of_lt ht)) j hjk
+  · have h1 := pre_add s j (n - j)
+    have h2 := pre_add s' j (n - j)
+    rw [Nat.add_sub_cancel' hj] at h1 h2
+    have h3 := seg_congr s s' j (fun t ht => hs t (by omega)) (n - j)
+    omega
+
 end Pouw.SakU
