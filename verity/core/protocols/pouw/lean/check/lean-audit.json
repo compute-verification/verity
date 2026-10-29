@@ -9,17 +9,17 @@
   "PouwCheck.Json": {
    "imports": ["Lean.Data.Json", "Flock.Canon", "PouwWindow.Json"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Tile": {
    "imports": [],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Chunks": {
    "imports": [],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Inputs": {
    "imports": [
@@ -31,7 +31,7 @@
     "PouwWindow.Length"
    ],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Check": {
    "imports": [
@@ -44,17 +44,17 @@
     "PouwCheck.WindowSalt"
    ],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Opening": {
    "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Protocol": {
    "imports": ["CoreProtocol.Cli", "PouwCheck.Check"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Pass": {
    "imports": [
@@ -66,12 +66,12 @@
     "SampledProofs.ChallengerSession"
    ],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.WindowSalt": {
    "imports": ["PouwCheck.Pass"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Credit": {
    "imports": [
@@ -92,12 +92,12 @@
     "SampledProofs.Registered"
    ],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.LeafOwn": {
    "imports": ["PouwCheck.Credit", "PouwWindow.RegFile"],
    "except": [],
-   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Period": {
    "imports": ["CoreProtocol.Cli", "PouwCheck.Credit"],
