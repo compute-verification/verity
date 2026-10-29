@@ -62,7 +62,7 @@ noncomputable def sitesPHJI : SitesH (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x
   B S R u _ := castM (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm
     (tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.twinB
   sat S R u _ := twin_sat_cast (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm
-    ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.sat (tablePHJ_typed dj x₀ ht S _))
+    ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.sat (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _) hrf)
   acc S R u _ := recastAccH ((tablePHJ dj x₀ S (partOf I (dj S) u.val)).2.acc
     (tablePHJ_typed dj x₀ ht S _) (tablePHJ_parse dj x₀ ht hc S _) hrf)
     (congrArg TabSpec.S (tabOfPHJ_eq dj x₀ S R u)).symm

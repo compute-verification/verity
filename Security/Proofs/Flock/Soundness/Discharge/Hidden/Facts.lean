@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 /-!
 # The facts read off `Spec`
 
-What [wave2-hidden-exec] reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags and the drawn public file (its
+What `Discharge/HiddenExec` reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags and the drawn public file (its
 leaf scheme and well-formedness, `setupHidden_hm96` and `setupHidden_wf`, are `Hidden.Commit`'s, on the committed
 circuit); and of `HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows`
 (`parse_untyped`).

@@ -169,6 +169,9 @@ variable {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht
 
 /-- **The public plan's sites** at the session's statement circuit (`sitesShH` at `TableH.accS`). -/
 noncomputable def sitesShHSt : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S _ _ _ := (tableShH dj y₀ S).twinA
+  B S _ _ _ := (tableShH dj y₀ S).twinB
+  sat S _ _ _ := (tableShH dj y₀ S).satS (zkTyped ht) hcS hv1
   acc S _ _ _ := (tableShH dj y₀ S).accS (zkTyped ht) hcS hv1
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
@@ -292,6 +295,13 @@ variable (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hv1 
 
 /-- **The public plan's sites** at `J` tables, at the statement circuit (`sitesShHJ` at `TableH.accS`). -/
 noncomputable def sitesShHJSt : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
+  A S R u _ := HiddenExec.castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinA
+  B S R u _ := HiddenExec.castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
+  sat S R u _ := HiddenExec.twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.satS (tableShHJ_typed dj y₀ ht S _)
+      (tableShHJ_parseStmt dj y₀ ht hcS S _) hv1)
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.accS
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parseStmt dj y₀ ht hcS S _) hv1)
     (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm

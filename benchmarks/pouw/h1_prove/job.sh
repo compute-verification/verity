@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # H1 tile units of one recorded int8 Llama-3.1-8B window through sampled proofs: drawn by the live coin, proved by C-Flock
 # --zk and verified by the Lean verifier against the verifier's own public files (run.py's docstring has the protocol).
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --mem-gb G \
+#   research run --on MACHINE --project verity --source . --cwd source --mem-gb G \
 #     --declared-output 'out/*' --env H1_MEM_GB=G [--env H1_K=64 --env H1_COLS=64] -- bash benchmarks/pouw/h1_prove/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean flock-verify, a venv)
 #   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
@@ -26,7 +26,7 @@
 #      the drawn units' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB)
 #   5. run.py summarize: out/summary.json, with window credit's registration step (credit._registration) on the honest
-#      checks' Lean findings under the window's open root, which every per-window registered value binds (PRF-127)
+#      checks' Lean findings under the window's open root, which every per-window registered value binds
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
 #      H1_FIREWALL (1)  H1_WIRE (0; 1: the selftest's zk_worker_wire, zk_worker_finish and zk_worker_level0 on honest's

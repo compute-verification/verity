@@ -57,9 +57,9 @@ noncomputable def ksD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
 def inStmt : Claims.Flock.Stmt where
   m := 22
   kLog := 6
-  C := ⟨0, [], []⟩
-  inp _ := []
-  out _ := []
+  C := ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩
+  inp _ _ := .pub 0
+  out _ _ := .pub 0
   pub := []
   form :=
     { hm96Rows := true, typed := false, retainedRounds := true, leaf := "hm96-sha512/v1", tables := 1,
@@ -122,7 +122,7 @@ theorem inStmt_inScope : Claims.Flock.InScope false inStmt := by
   refine ⟨by decide, by decide, by decide, by decide, rfl, by decide, rfl, Or.inl rfl, by decide, by decide,
     fun h => absurd h (by decide), Or.inl ⟨rfl, by decide⟩, by decide, rfl, Or.inl rfl, fun h => absurd h (by decide)⟩
 
-theorem inStmt_relS (w : Claims.Flock.Wit) : Claims.Flock.RelS inStmt w := fun _ _ => rfl
+theorem inStmt_relS (w : Claims.Flock.Wit) : Claims.Flock.RelS inStmt w := fun _ _ o => o.elim0
 
 section Numbers
 

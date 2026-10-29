@@ -62,7 +62,7 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
-  and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
   before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
@@ -298,7 +298,7 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
-#: infra's published challenger key, vy-challenger-1's from 2026-10-20T09:45:24Z: a challenger-key/v1 record
+#: the challenger's published key: a challenger-key/v1 record
 CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
 #: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
 CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
@@ -341,7 +341,7 @@ class Deployment:
     coin record and the draw's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
-    # TODO(NET-50): the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
+    # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
     # the caller does.
     certifier_key: Any
     run_id: bytes
@@ -702,7 +702,7 @@ def lean_verdict(path_: Path) -> dict:
 
 
 def rust_verdict(path_: Path | None) -> dict | None:
-    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the verifier of record."""
+    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the Lean verifier."""
     if path_ is None:
         return None
     try:
@@ -865,7 +865,7 @@ class Challenger:
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
         if certifier is not None:
-            # TODO(RT4-INT-7): no Lean statement covers a certified window's timing, and no run measures the commit
+            # TODO: no Lean statement covers a certified window's timing, and no run measures the commit
             # pipeline the certifier's reveal deadline must be sized against.
             if params.get("registration_deadline") is not None or predates_deadline:
                 raise ValueError(CERTIFIED_DEADLINE)
@@ -1431,7 +1431,7 @@ def answer(ch: Challenger, line: str) -> str | None:
 
 
 def cmd_challenger(a) -> int:
-    """The challenger's process: the epoch's coins, drawn now from the Lean verifier of record (`pouw.verifier.coins`) or
+    """The challenger's process: the epoch's coins, drawn now from the Lean verifier (`pouw.verifier.coins`) or
     read from ``--state``, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and

@@ -147,15 +147,13 @@ theorem not_flockZK_leak {Coin Col T N Ω : Type} [Fintype Coin] [Nonempty Coin]
 def toyStmt : Flock.Stmt where
   m := 0
   kLog := 0
-  C := ⟨0, [], []⟩
-  inp _ := []
-  out _ := []
+  C := ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩
+  inp _ _ := .pub 0
+  out _ _ := .pub 0
   pub := []
   form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩
 
-theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := by
-  intro b _
-  rfl
+theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := fun _ _ o => o.elim0
 
 /-- **A masked record whose relation holds at every statement and witness.** -/
 def toyD : Flock.Deploy Unit Unit Unit where

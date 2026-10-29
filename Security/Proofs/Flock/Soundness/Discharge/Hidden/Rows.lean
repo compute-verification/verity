@@ -283,6 +283,21 @@ theorem checkRows_out {c : Circuit} (h : HmOut.checkRows c = .ok ()) {j : ℕ} (
       · exact Or.inr ⟨Or.inr rfl, h16⟩
       · exact Or.inl ⟨h1, hw, hb, rfl⟩
 
+/-- **What `HmOut.checkRows` checks of every output row** (`checkRows_out`). It reads no net, so it holds of a circuit
+with other nets and no template (`HmOut.unrolled`) as of the committed one; `checkRows`' `checkPinned` reads the nets. -/
+def RowsOut (c : Circuit) : Prop :=
+  ∀ j, j < c.outRowPorts.size →
+    HmOut.nIn c + j < c.ports.size ∧
+      (((HmOut.outGroup c j).2.1 = 1 ∧
+          (c.ports.getD (HmOut.nIn c + j) default).words = ((HmOut.outGroup c j).2.2.2 + 63) / 64 * 64 ∧
+          (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (c.ports.getD (HmOut.nIn c + j) default).words ∧
+          (c.ports.getD (HmOut.nIn c + j) default).segs = none) ∨
+        (((c.ports.getD (HmOut.nIn c + j) default).segs.isSome ∨ (c.ports.getD (HmOut.nIn c + j) default).v2) ∧
+          (c.ports.getD (HmOut.nIn c + j) default).bits = 16 * (HmOut.outGroup c j).2.2.2))
+
+theorem rowsOut_of_checkRows {c : Circuit} (h : HmOut.checkRows c = .ok ()) : RowsOut c :=
+  fun _ hj => checkRows_out h hj
+
 /-- `HmOut.checkRows` ends in `HmOut.checkPinned`. -/
 theorem checkPinned_of_checkRows {c : Circuit} (h : HmOut.checkRows c = .ok ()) : HmOut.checkPinned c = .ok () := by
   unfold HmOut.checkRows at h

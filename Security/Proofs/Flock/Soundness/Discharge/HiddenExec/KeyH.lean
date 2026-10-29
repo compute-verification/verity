@@ -67,11 +67,11 @@ theorem outBitRow_spec {u u' : Fin n} {d : ℕ × ℕ × ℕ} {q : Fin c.ports.s
   · exact absurd h (by simp)
 
 /-- **An output word's bit is an output row's**: at an output word of the circuit (`outWords`), in a circuit whose
-output rows hold their ports' words (`HmOut.checkRows`), each of its 16 bits is a bit of an output row. -/
-theorem outBitRow_ne_none (hcr : HmOut.checkRows c = .ok ()) (hrf : Hidden.Any.RowsFitS c) (u : Fin n)
+output rows hold their ports' words (`Hidden.RowsOut`), each of its 16 bits is a bit of an output row. -/
+theorem outBitRow_ne_none_of_rowsOut (hcr : Hidden.RowsOut c) (hrf : Hidden.Any.RowsFitS c) (u : Fin n)
     {d : ℕ × ℕ × ℕ} (hw : outWordOf c d < c.outWords) (ht : d.2.2 < 16) : outBitRow c u d ≠ none := by
   obtain ⟨hjo, -, hk⟩ := outPortOf_spec c hw
-  have hle := checkRows_words hcr hrf.1.1 hrf.bits16 hjo
+  have hle := rowsOut_words hcr hrf.1.1 hrf.bits16 hjo
   have hq := (hrf.1.2 _ hjo).1
   have hpw : portRowW c ⟨_, hq⟩ = 16 * (c.ports.getD (HmOut.nIn c + outPortOf c (outWordOf c d)) default).words := by
     unfold portRowW
@@ -80,6 +80,12 @@ theorem outBitRow_ne_none (hcr : HmOut.checkRows c = .ok ()) (hrf : Hidden.Any.R
   unfold outBitRow
   rw [dite_eq_left hq, dite_eq_left (by rw [hpw]; omega)]
   exact Option.some_ne_none _
+
+/-- **An output word's bit is an output row's**, in a circuit that passes `HmOut.checkRows`
+(`outBitRow_ne_none_of_rowsOut`). -/
+theorem outBitRow_ne_none (hcr : HmOut.checkRows c = .ok ()) (hrf : Hidden.Any.RowsFitS c) (u : Fin n)
+    {d : ℕ × ℕ × ℕ} (hw : outWordOf c d < c.outWords) (ht : d.2.2 < 16) : outBitRow c u d ≠ none :=
+  outBitRow_ne_none_of_rowsOut (Hidden.rowsOut_of_checkRows hcr) hrf u hw ht
 
 /-- **A unit's own column on a gate it computes** is a computed column, of that unit. -/
 theorem unit_wire (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n} (x : Fin ((keyProg c hU n).rows u).w)
@@ -389,7 +395,7 @@ theorem keyProgH_valPinned (hkeys : KeysRow c hU (portRowW c)) :
     obtain ⟨u'', j, t, hoc⟩ := houts u _ hg hm x rfl
     have hno' : outRowOf c hU n outs ((Const.Prog.instC (keyProg c hU n) outs u).wire x) = none := hno
     rw [outRowOf_wire outs x hm (unit_wire outs x hm).2, Layout.outDecode_of hoc] at hno'
-    have hcr : HmOut.checkRows c = .ok () := (si.acc S R u hu).checkRowsU (hparse S R u hu)
+    have hcr : Hidden.RowsOut c := (si.acc S R u hu).checkRowsU (hparse S R u hu)
     have hlo := (si.acc S R u hu).leavesOut_ltU (hparse S R u hu) ho
     obtain ⟨hu', hj, ht, -⟩ := hoc
     have hget : c.leavesOut.getD u'' #[] = c.leavesOut[u'']! := by
@@ -399,7 +405,7 @@ theorem keyProgH_valPinned (hkeys : KeysRow c hU (portRowW c)) :
       refine hlo u'' hu' _ ?_
       rw [← hget]
       exact Array.getElem_mem_toList _
-    exact outBitRow_ne_none hcr hrf u hwlt ht hno'
+    exact outBitRow_ne_none_of_rowsOut hcr hrf u hwlt ht hno'
 
 /-- **`lay` at `keyProg`'s places in hidden-output tables**: the readers' layout (`Layout.Readers.layout`), with
 `bitCode` for the single gates and Δ's copies from `keyProgH_copies`. -/

@@ -121,11 +121,12 @@ def Parses (p : Parsed) : Prop := p.toRead.parse = some p
 by themselves. -/
 def Parsed.only (p : Parsed) (j : ℕ) : Parsed := { p with sts := #[p.sts[j]!] }
 
-/-- The readable relation's fields: the block circuit, each block's inputs and outputs, and the public values. -/
+/-- The readable relation's fields: the block circuit, each block's inputs and outputs at the circuit's gates, and the
+public values. -/
 structure Relation where
-  C : Claims.Circuit
-  inp : ℕ → List Claims.Flock.Src
-  out : ℕ → List Claims.Flock.Src
+  C : FlockSoundness.Audit.Circuit
+  inp : ℕ → ℕ → Claims.Flock.Src
+  out : ℕ → ℕ → Claims.Flock.Src
   pub : List Bool
 
 /-- **The verifier's statement, readable**: `m` and `kLog` of the first table's statement (`Stmt.m`, the circuit's

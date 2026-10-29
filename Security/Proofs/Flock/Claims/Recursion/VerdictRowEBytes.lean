@@ -354,6 +354,7 @@ theorem stagedRecOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
     rw [e]
     exact (oneFull_staged hS hsu).1
   obtain ⟨tags, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   rw [hc0] at P
   have hn : c.unit.name = Flock.RecOpen.unitName LANES HH := by rw [← hc0]; exact (htab 0 h0).1
   have hsc := (staged_scope hS hx h0).1
