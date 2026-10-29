@@ -24,6 +24,10 @@
    4096 times a sum of products of signs, so a b1 AND-popcount instruction (256 products at the price of 32 s8 ones)
    makes each word from the coins' bits and their per-segment popcounts. Checked word for word against the s8 words,
    with both programs' tensor units a dot product.
+6. **Known words at zero activations.** At A = 0 a running word that is 0 for every coin draw is known, like the final
+   word, so N-SAKU's middle-segment skip runs backward from it and skips a segment of L: in RFP-4's order 1, 2, 3, 4 the
+   word at 2K is A·(B+F), so the skip is taken twice; the order 1, 3, 2, 4 (X = [A+E | G−A | −E·π | −G·π′]) leaves only
+   the final word known.
 
     python3 benchmarks/pouw/theory/rfp_stack.py [--seeds 16] [--out PATH]
 """
@@ -212,6 +216,43 @@ def rfp4_zero_data_one_bit(K, L, seed, m=2, n=2):
             "uncredited_share_of_stock": max(0, honest - b1) / K}
 
 
+def rfp4_known_words(K, L, order, draws=2, m=2, n=2):
+    """The running words of RFP-4 in block `order` that are 0 at zero activations (A = 0, B int7) for every draw.
+
+    Each such word, like the final one, ends a chain an adversary runs backward from, so each skips a segment of L
+    (N-SAKU's middle-segment skip): the skip costs (known words)·L/K of stock. In the order 1, 2, 3, 4 the word at 2K is
+    A·(B+F), so 0; in 1, 3, 2, 4 the words at 2K and 3K are E·(B+F) + G·F and G·F."""
+    zero = None
+    for d in range(draws):
+        rng = random.Random(7919 * K + 31 * L + d)
+        E = [[rng.randint(-64, 64) for _ in range(K)] for _ in range(m)]
+        G = [[rng.randint(-64, 64) for _ in range(K)] for _ in range(m)]
+        F = [[rng.randint(-64, 64) for _ in range(n)] for _ in range(K)]
+        B = [[rng.randint(-63, 63) for _ in range(n)] for _ in range(K)]
+        pi, pi2 = list(range(K)), list(range(K))
+        rng.shuffle(pi)
+        rng.shuffle(pi2)
+        for r in range(m):
+            for c in range(n):
+                blocks = {
+                    1: ([E[r][i] for i in range(K)], [B[i][c] + F[i][c] for i in range(K)]),
+                    2: ([-E[r][k] for k in pi], [B[k][c] + F[k][c] for k in pi]),
+                    3: ([G[r][i] for i in range(K)], [F[i][c] for i in range(K)]),
+                    4: ([-G[r][k] for k in pi2], [F[k][c] for k in pi2]),
+                }
+                x = sum((blocks[b][0] for b in order), [])
+                y = sum((blocks[b][1] for b in order), [])
+                run, words = 0, []
+                for t in range(0, 4 * K, L):
+                    run += sum(a * b for a, b in zip(x[t:t + L], y[t:t + L]))
+                    words.append(run)
+                z = {i for i, w in enumerate(words) if w == 0}
+                zero = z if zero is None else zero & z
+    known = sorted((i + 1) * L for i in zero)
+    return {"K": K, "L": L, "order": list(order), "zero_words_at_position": known,
+            "skip_share_of_stock": len(known) * L / K}
+
+
 STACKS = {
     # blocks, X adds per entry of A, Y adds per entry of B, coin entries per entry of A and of B
     "RFP-3": {"blocks": 3, "x_adds": 1, "y_adds": 1, "coins_a": 1, "coins_b": 1},
@@ -262,6 +303,8 @@ def main():
     res = {"purity": purity(), "intersections": intersections(a.seeds), "projection_bounds": projection_bounds(a.seeds),
            "zero_data_one_bit": [rfp4_zero_data_one_bit(K, L, s) for K in (2048, 8192) for L in (64, 128, 256)
                                  for s in range(2)],
+           "zero_activation_known_words": [rfp4_known_words(K, L, order) for K, L in ((2048, 128), (8192, 256))
+                                           for order in ((1, 2, 3, 4), (1, 3, 2, 4))],
            "llama_3_2_1b": llama_terms()}
     text = json.dumps(res, indent=1)
     if a.out:
