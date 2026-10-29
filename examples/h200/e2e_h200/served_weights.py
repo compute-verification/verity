@@ -36,7 +36,7 @@ No torch: memory-accounting's encoder and the H200 demo run it with `examples/h2
   width rounded up to 16 or 32 bits (an f32 scale read as one 32-bit leaf is 1 word of 32 bits, the same row bytes; a
   program named by its digest alone reads each tensor at `Tensor.word_bits`, 16: a Boolean program's one-bit leaves, as
   the served step's Program reads them). Row
-  i's salt is ChaCha20 blocks 3i .. 3i+2 under the prover's 32-byte salt key at the tensor's index as nonce (C-Flock's
+  i's salt is ChaCha20 blocks 3i .. 3i+2 under the prover's 32-byte salt key at the tensor's index as nonce (Flock's
   ``hm96_salt``; the key salts these rows only). At `H200` every tensor's row count is a power of two, so no tree has a
   pad. **The registration digest** (`registration_digest`) is SHA-512 of ``verity/seeded-weights/registration/v1`` and
   ``{program, values}`` (the program's digest, the entries of the tensors it reads in tensor order): the one root the
@@ -355,7 +355,7 @@ def _salt_key(key: bytes) -> bytes:
 
 
 def salts(salt_key: bytes, index: int, first: int, n: int) -> bytes:
-    """Rows ``first .. first + n - 1``'s 192-byte salts of the tensor at `index` (C-Flock's ``hm96_salt``)."""
+    """Rows ``first .. first + n - 1``'s 192-byte salts of the tensor at `index` (Flock's ``hm96_salt``)."""
     return chacha20.keystream(_salt_key(salt_key), index, _SALT_BLOCKS * first, _SALT_BLOCKS * n)
 
 
