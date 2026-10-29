@@ -1,0 +1,172 @@
+// N-W1's lane (sm90_w1.cu): the register writers CORE-H32's run of record left unprobed, on h32.cuh's pattern. 8
+// independent chains of each kind a thread; an op writes its chain from itself and a neighbour, so ptxas can neither
+// fold nor hoist it. A form whose output is a predicate chains it into the next op's predicate input, so every
+// predicate written is read.
+#pragma once
+#include <utility>
+#include "../dc.cuh"
+
+enum : int {
+  // int32 lane forms outside CORE-H32's table
+  W_BREV, W_BMSK, W_SGXT, W_VABSDIFF4, W_VIADDMAX, W_VIADDMIN, W_VIMAX3, W_IABS, W_I2IP, W_IMADW8, W_IMADWS, W_MULWIDE,
+  // predicate writers: LOP3 with a predicate output, ISETP with two, PLOP3, predicates to and from a register
+  W_LOP3P, W_ISETP2, W_PLOP3, W_R2P, W_P2R,
+  // special registers
+  W_CS2R, W_CLK32, W_LANEID,
+  // fp64 conversions
+  W_I2F64, W_F2I64,
+  // other: half conversions, warp-wide
+  W_HADD2F32, W_F2FP_H, W_MOVM, W_REDUX, W_MATCH,
+  // mix partners on the r and d chains (independent of rr, which the IMAD.WIDE forms use)
+  W_LOP3, W_IADD3, W_IMAD, W_FADD, W_DADD, W_HADD2,
+};
+
+struct WLane {
+  uint32_t r[8];
+  double d[8];
+  uint64_t q[8];
+  uint32_t rr[16];
+  uint32_t pm;  // the predicate chain's carrier: its bits are the predicates a form's next op reads
+  DC_DEV explicit WLane(uint32_t tid) {
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      r[i] = (tid * 0x9e3779b9u + i * 0x85ebca6bu) | 1u;
+      d[i] = 1.0 + (double)(r[i] & 0xffffu) * 0x1p-20;
+      q[i] = ((uint64_t)r[i] << 32) ^ (r[i] * 0x27d4eb2fu);
+      rr[2 * i] = r[i] ^ 0x5bd1e995u;
+      rr[2 * i + 1] = r[i] * 3u;
+    }
+    pm = tid;
+  }
+  template <int X>
+  DC_DEV void op(int i) {
+    const int s = i & 7, t = (i + 1) & 7, u = (i + 2) & 7;
+    const bool odd = (i >> 3) & 1;
+    if constexpr (X == W_BREV) asm volatile("{\n.reg .b32 q;\nbrev.b32 q,%0;\nxor.b32 %0,q,%1;\n}" : "+r"(r[s]) : "r"(r[t]));
+    if constexpr (X == W_BMSK) asm volatile("bmsk.clamp.b32 %0,%0,%1;" : "+r"(r[s]) : "r"(r[t]));
+    if constexpr (X == W_SGXT) asm volatile("szext.clamp.s32 %0,%0,%1;" : "+r"(r[s]) : "r"(r[t]));
+    if constexpr (X == W_VABSDIFF4)
+      asm volatile("vabsdiff4.u32.u32.u32.add %0,%0,%1,%2;" : "+r"(r[s]) : "r"(r[t]), "r"(r[u]));
+    if constexpr (X == W_VIADDMAX) r[s] = (uint32_t)__viaddmax_s32((int)r[s], (int)r[t], (int)r[u]);
+    if constexpr (X == W_VIADDMIN) r[s] = (uint32_t)__viaddmin_s32((int)r[s], (int)r[t], (int)r[u]);
+    if constexpr (X == W_VIMAX3) r[s] = (uint32_t)__vimax3_s32((int)r[s], (int)r[t], (int)r[u]);
+    if constexpr (X == W_IABS) {
+      if (odd) asm volatile("abs.s32 %0,%0;" : "+r"(r[s]));
+      else asm volatile("sub.s32 %0,%1,%0;" : "+r"(r[s]) : "r"(r[t]));
+    }
+    if constexpr (X == W_I2IP) asm volatile("cvt.pack.sat.s8.s32.b32 %0,%0,%1,%2;" : "+r"(r[s]) : "r"(r[t]), "r"(r[u]));
+    // mul.wide on 8 independent pairs of 16 registers (IMAD.WIDE with an RZ addend: two sources); W_MULWIDE has 4.
+    // mad.wide with a 64-bit addend lowers to IMAD.WIDE + IADD3 + IADD3.X, as sm90_h32.cu's x_imadw does.
+    if constexpr (X == W_IMADW8) {
+      const int p = 2 * s;
+      asm volatile("{\n.reg .b64 w;\nmul.wide.u32 w,%0,%1;\nmov.b64 {%0,%1},w;\n}" : "+r"(rr[p]), "+r"(rr[p + 1]));
+    }
+    if constexpr (X == W_IMADWS) {
+      const int p = 2 * s;
+      asm volatile("{\n.reg .b64 w;\nmul.wide.s32 w,%0,%1;\nmov.b64 {%0,%1},w;\n}" : "+r"(rr[p]), "+r"(rr[p + 1]));
+    }
+    if constexpr (X == W_LOP3) asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(r[s]) : "r"(r[t]), "r"(0x85EBCA6Bu));
+    if constexpr (X == W_IADD3)
+      asm volatile("{\n.reg .u32 q;\nadd.u32 q,%1,%2;\nadd.u32 %0,%0,q;\n}" : "+r"(r[s]) : "r"(r[t]), "r"(r[u]));
+    if constexpr (X == W_IMAD) asm volatile("mad.lo.u32 %0,%0,%1,%2;" : "+r"(r[s]) : "r"(r[t]), "r"(0x9E3779B9u));
+    if constexpr (X == W_FADD) asm volatile("add.rn.f32 %0,%0,0f3F800000;" : "+r"(r[s]));
+    if constexpr (X == W_DADD) asm volatile("add.rn.f64 %0,%0,0d3FF0000000000000;" : "+d"(d[s]));
+    if constexpr (X == W_HADD2) asm volatile("add.rn.f16x2 %0,%0,%1;" : "+r"(r[s]) : "r"(r[t]));
+    if constexpr (X == W_MULWIDE) {
+      const int p = 2 * (i & 3);
+      asm volatile("{\n.reg .b64 w;\nmul.wide.u32 w,%0,%1;\nmov.b64 {%0,%1},w;\n}" : "+r"(r[p]), "+r"(r[p + 1]));
+    }
+    // LOP3 writing a register and a predicate (PTX 8.2's d|p form): p = (d != 0) OR q, q the last op's predicate
+    if constexpr (X == W_LOP3P)
+      asm volatile("{\n.reg .pred p,q;\nsetp.ne.u32 q,%1,0;\nlop3.or.b32 %0|p,%0,%2,%3,0x96,q;\nselp.u32 %1,1,0,p;\n}"
+                   : "+r"(r[s]), "+r"(pm)
+                   : "r"(r[t]), "r"(r[u]));
+    // ISETP writing two predicates (p|q), the second chained into the next compare
+    if constexpr (X == W_ISETP2)
+      asm volatile("{\n.reg .pred p,q,c;\nsetp.ne.u32 c,%1,0;\nsetp.lt.and.u32 p|q,%0,%2,c;\nselp.u32 %0,%0,%2,p;\n"
+                   "selp.u32 %1,1,0,q;\n}"
+                   : "+r"(r[s]), "+r"(pm)
+                   : "r"(r[t]));
+    if constexpr (X == W_PLOP3)
+      asm volatile("{\n.reg .pred a,b,c,e;\nsetp.ne.u32 a,%1,0;\nsetp.lt.u32 b,%0,%2;\nsetp.lt.u32 c,%2,%3;\n"
+                   "xor.pred e,a,b;\nand.pred e,e,c;\nselp.u32 %1,1,0,e;\n}"
+                   : "+r"(r[s]), "+r"(pm)
+                   : "r"(r[t]), "r"(r[u]));
+    if constexpr (X == W_R2P || X == W_P2R) {
+      // 7 predicates from a register's bits, combined, and packed back: R2P and P2R if ptxas picks them
+      asm volatile("{\n.reg .pred p<7>;\n.reg .b32 b<7>;\n"
+                   "and.b32 b0,%0,1;\nsetp.ne.u32 p0,b0,0;\nand.b32 b1,%0,2;\nsetp.ne.u32 p1,b1,0;\n"
+                   "and.b32 b2,%0,4;\nsetp.ne.u32 p2,b2,0;\nand.b32 b3,%0,8;\nsetp.ne.u32 p3,b3,0;\n"
+                   "and.b32 b4,%0,16;\nsetp.ne.u32 p4,b4,0;\nand.b32 b5,%0,32;\nsetp.ne.u32 p5,b5,0;\n"
+                   "and.b32 b6,%0,64;\nsetp.ne.u32 p6,b6,0;\n"
+                   "selp.u32 b0,1,0,p6;\nselp.u32 b1,2,0,p0;\nselp.u32 b2,4,0,p1;\nselp.u32 b3,8,0,p2;\n"
+                   "selp.u32 b4,16,0,p3;\nselp.u32 b5,32,0,p4;\nselp.u32 b6,64,0,p5;\n"
+                   "or.b32 b0,b0,b1;\nor.b32 b2,b2,b3;\nor.b32 b4,b4,b5;\nor.b32 b0,b0,b2;\nor.b32 b4,b4,b6;\n"
+                   "or.b32 b0,b0,b4;\nadd.u32 %0,b0,%1;\n}"
+                   : "+r"(r[s])
+                   : "r"(r[t]));
+    }
+    if constexpr (X == W_CS2R) {
+      uint64_t c;
+      asm volatile("mov.u64 %0,%%clock64;" : "=l"(c));
+      asm volatile("lop3.b32 %0,%0,%1,%2,0x96;" : "+r"(r[s]) : "r"((uint32_t)c), "r"((uint32_t)(c >> 32)));
+    }
+    if constexpr (X == W_CLK32) {
+      uint32_t c;
+      asm volatile("mov.u32 %0,%%clock;" : "=r"(c));
+      r[s] ^= c;
+    }
+    if constexpr (X == W_LANEID) {
+      uint32_t c;
+      asm volatile("mov.u32 %0,%%globaltimer_lo;" : "=r"(c));
+      r[s] += c;
+    }
+    if constexpr (X == W_I2F64) {
+      if (odd) asm volatile("cvt.rn.f64.s32 %0,%1;" : "=d"(d[s]) : "r"(r[s]));
+      else asm volatile("cvt.rzi.s32.f64 %0,%1;" : "=r"(r[s]) : "d"(d[s]));
+    }
+    if constexpr (X == W_F2I64) {
+      if (odd) asm volatile("{\n.reg .s64 q;\ncvt.rzi.s64.f64 q,%1;\nmov.b64 {%0,%2},q;\n}" : "=r"(r[s]), "+d"(d[s]), "=r"(r[t]));
+      else asm volatile("{\n.reg .s64 q;\nmov.b64 q,{%1,%2};\ncvt.rn.f64.s64 %0,q;\n}" : "=d"(d[s]) : "r"(r[s]), "r"(r[t]));
+    }
+    if constexpr (X == W_HADD2F32) {
+      if (odd) asm volatile("{\n.reg .f32 f;\n.reg .b16 h;\nmov.b32 {h,_},%0;\ncvt.f32.f16 f,h;\nmov.b32 %0,f;\n}" : "+r"(r[s]));
+      else asm volatile("{\n.reg .b16 h;\n.reg .f32 f;\nmov.b32 f,%0;\ncvt.rn.f16.f32 h,f;\nmov.b32 %0,{h,h};\n}" : "+r"(r[s]));
+    }
+    if constexpr (X == W_F2FP_H) {
+      if (odd) asm volatile("{\n.reg .f32 a,b;\nmov.b32 a,%0;\nmov.b32 b,%1;\ncvt.rn.f16x2.f32 %0,a,b;\n}" : "+r"(r[s]) : "r"(r[t]));
+      else asm volatile("{\n.reg .f32 f;\n.reg .b16 h,l;\nmov.b32 {l,h},%0;\ncvt.f32.f16 f,l;\nmov.b32 %0,f;\n}" : "+r"(r[s]));
+    }
+    if constexpr (X == W_MOVM) asm volatile("movmatrix.sync.aligned.m8n8.trans.b16 %0,%0;" : "+r"(r[s]));
+    if constexpr (X == W_REDUX) {
+      uint32_t c;
+      asm volatile("redux.sync.add.u32 %0,%1,0xffffffff;" : "=r"(c) : "r"(r[s]));
+      r[s] = c ^ r[t];
+    }
+    if constexpr (X == W_MATCH) asm volatile("match.any.sync.b32 %0,%0,0xffffffff;" : "+r"(r[s]));
+  }
+  DC_DEV uint32_t fold() const {
+    uint32_t x = pm;
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      x += r[i];
+      const unsigned long long w = (unsigned long long)__double_as_longlong(d[i]);
+      x ^= (uint32_t)w ^ (uint32_t)(w >> 32);
+      x += (uint32_t)q[i] ^ (uint32_t)(q[i] >> 32) ^ rr[2 * i] ^ rr[2 * i + 1];
+    }
+    return x;
+  }
+};
+
+// R ops a trip: the forms X... round-robin, each on its own run of slots (h32.cuh's h32_mix)
+template <int... X, size_t... P>
+DC_DEV void w1_round_(WLane& l, int b, std::index_sequence<P...>) {
+  constexpr int n = sizeof...(X);
+  (l.template op<X>(b * n + (int)P), ...);
+}
+template <int R, int... X>
+DC_DEV void w1_mix(WLane& l) {
+  static_assert(R % sizeof...(X) == 0, "a trip holds whole rounds of the mix");
+#pragma unroll
+  for (int b = 0; b < R / (int)sizeof...(X); b++) w1_round_<X...>(l, b, std::make_index_sequence<sizeof...(X)>{});
+}
