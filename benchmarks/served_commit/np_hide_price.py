@@ -151,6 +151,11 @@ def instance_prices(sass: dict, rows: S.Rows, mask_sass: dict | None = None) -> 
         # and the XOR of x's 16 words, which no hashing premise credits
         "pad, uncredited": {**{p: w + PAD_XOR_REGS * PRICE_REG[p] for p, w in w1c.items()}, "time": r["c_ns"] * mt},
         "pad, credited": {**{p: PAD_XOR_REGS * PRICE_REG[p] for p in w1c}, "time": 0.0},
+        # the keyed digest f(S, pos ‖ x): one compression, no XOR; the keyed leaf hashes x's own last hash from S in
+        # place of the IV, so it adds nothing a digest (S's (domain, level) midstates are once a window)
+        "keyed digest, uncredited": {**w1c, "time": r["c_ns"] * mt},
+        "keyed digest, credited": {"floor": 0.0, "alone": 0.0, "time": 0.0},
+        "keyed leaf": {"floor": 0.0, "alone": 0.0, "time": 0.0},
         **by_best,
         "compression": {**w1c, "time": r["c_ns"] * mt},
     }
@@ -178,18 +183,19 @@ def salts_per_mac(layout: str, rows: int, b: dict, R: int) -> dict:
     return {"forward": 1 / fwd}
 
 
-OPENINGS = ("unforced", "forced (a)", "pad")
+OPENINGS = ("unforced", "forced (a)", "pad", "keyed digest", "keyed leaf")
 
 
 def opening_ands(layout: str, b: dict, rows: int, R: int, mode: str) -> dict:
     """In-circuit ANDs for a drawn unit to open its words and its A rows against their instances, beyond the bytes it
-    reads itself. Each instance costs c (unforced), c and the PRF (forced (a)) or one pad compression (pad); (a) and the
-    pad also open ks once (its inner digest and c; the verifier computes its leaf), (a) computes k_w = SHA-512(ks ‖ salt_w)
-    (two compressions) and the pad the window's midstate (one). Under L1 a call's A rows are one instance and a forward's
-    words another; under L2 both sit in the forward's (or the window's) one tree."""
+    reads itself. Each instance costs c (unforced), c and the PRF (forced (a)), one compression from S (the pad and the
+    keyed digest) or nothing (the keyed leaf, whose root the path computes from S); all but unforced open ks once (its
+    inner digest and c; the verifier computes its leaf), (a) computes k_w = SHA-512(ks ‖ salt_w) (two compressions) and
+    the others the window's midstate S (one). Under L1 a call's A rows are one instance and a forward's words another;
+    under L2 both sit in the forward's (or the window's) one tree."""
     gadget = {"unforced": 2 * S.ANDS_COMPRESSION, "forced (a)": 2 * S.ANDS_COMPRESSION + 3 * S.ANDS_FROM_8,
-              "pad": S.ANDS_COMPRESSION}[mode]
-    once = {"unforced": 0, "forced (a)": 5 * S.ANDS_COMPRESSION, "pad": 4 * S.ANDS_COMPRESSION}[mode]
+              "pad": S.ANDS_COMPRESSION, "keyed digest": S.ANDS_COMPRESSION, "keyed leaf": 0}[mode]
+    once = {"unforced": 0, "forced (a)": 5 * S.ANDS_COMPRESSION}.get(mode, 4 * S.ANDS_COMPRESSION)
     if layout == "L0":
         return {"words row, whole": S.blocks(R) * S.ANDS_COMPRESSION + gadget + once,
                 "words row over the unit's own outputs":
@@ -452,7 +458,7 @@ def main() -> None:
                              "ands_alone": mac * S.ANDS_MAC * h[f]["alone"]}
                          for p, mac in ps.items()} for sc, ps in scopes.items()}
                 for f in ("unforced", "forced (a)", "unforced, unrolled mask", "forced (a), unrolled mask", "pad, uncredited",
-                          "pad, credited")
+                          "pad, credited", "keyed digest, uncredited")
                 if f in h}
     pt = out["designs"]["ssn_1l"]["points"]["T 8,192"]
     for name, share in (("hashing before the noise, L1 flat rows", pt["pre_noise"]["L1 (flat SHA-512 rows in the call's subtree)"]["w1"]),
@@ -470,7 +476,7 @@ def main() -> None:
           f"L1 time a byte {l1_ratio:.4f} of 16 KiB rows'; committer's build over the best {excess['registers']} registers, "
           f"{excess['floor']:,.0f} / {excess['alone']:,.0f} W1 a compression")
     shown = [f for f in ("unforced", "unforced, unrolled mask", "unforced, b1 mask (estimate)", "forced (a)",
-                         "forced (a), unrolled mask", "pad, uncredited", "pad, credited") if f in p]
+                         "forced (a), unrolled mask", "pad, uncredited", "pad, credited", "keyed digest, uncredited") if f in p]
     for design, d in out["designs"].items():
         bb = d["bytes"]
         print(f"\n{design}: α {bb['alpha']:.4f}, words {bb['words_bpm']:.5f} + A {bb['a_bpm']:.6f} = {bb['bpm']:.5f} B a useful MAC")
