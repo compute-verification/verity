@@ -2,7 +2,7 @@
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + ⌈W/g⌉·s/2^64 (δ₀
 the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 the draw term, the session's openings coins at its `samples` s
-each, `LineHeldAtComponent`'s).
+each, `LineHeldAtSubprotocol`'s).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
