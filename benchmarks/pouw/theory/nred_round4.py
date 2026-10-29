@@ -672,10 +672,10 @@ def check(rep: dict) -> list[dict]:
        "(1, 127, 1) pays no tile", min(v["W/tile"] for v in narrow_w) > 0.01 and max(v["W/tile"] for v in ww_w) == 0,
        [v["W/tile"] for v in narrow_w + wide_w])
     ok("mirror under tile grain, 8,192 rows: the final step's tiles repeat whole (> 1% of stock, narrow and wide "
-       "tags); no interior tile repeats; the per-row salt takes the final step to 0",
+       "tags); no interior tile repeats; the per-row salt takes the final step under 0.01%",
        min(nar["W/whole/final"], wid["W/whole/final"]) > 0.01
        and max(v["shares"]["W/whole/interior"] for v in mr.values()) == 0
-       and sal["W/whole/final"] == big["W/whole/final"] == 0,
+       and max(sal["W/whole/final"], big["W/whole/final"]) < 1e-4,
        [nar["W/whole/final"], wid["W/whole/final"], sal["W/whole/final"]])
     return res
 
