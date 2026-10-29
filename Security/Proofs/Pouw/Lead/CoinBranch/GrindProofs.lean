@@ -6,7 +6,7 @@ import Mathlib.Combinatorics.Enumerative.DoubleCounting
 
 **Draft semantics, pending review.** A prover that can't retry the coins may still choose its inputs before them and
 retry the inputs until the coins fall in a set `S` it likes (grinding). A program that reads coin digits and branches
-runs each of its straight-line programs on a cell of the coins (`Pouw.Dimension.H100.adaptive_floor`), of measure
+runs each of its straight-line programs on a cell of the coins (`Pouw.SecurityProofs.Lead.CoinBranch.adaptive_floor`), of measure
 `q^−g` after `g` digits. On such a set alone some target words can coincide or equal a free value, and
 `DistinctWritesMH100Floor` charges only the rest. This file bounds how many are lost against the set's measure.
 

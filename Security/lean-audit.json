@@ -2505,9 +2505,16 @@
    "sealed": true
   },
   "Definitions.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Definitions.Pouw.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Core.Assumptions",
+    "Definitions.Claims",
+    "Definitions.Pouw",
+    "Definitions.Pouw.Assumptions"
+   ],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do",
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do; the lead's trusted-host premise instantiates core's (Definitions.Core.Assumptions), as the inference-only policy's do",
    "sealed": true
   },
   "Definitions.Pouw.Guarantees": {
@@ -2525,7 +2532,7 @@
   },
   "Definitions.Pouw": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs"],
+   "except": ["Definitions.Pouw.PearlC.Defs", "Definitions.Pouw.Lead.Model"],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
   },
   "Definitions.Pouw.Basic": {
@@ -2543,6 +2550,17 @@
    ],
    "except": [],
    "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
+  },
+  "Definitions.Pouw.Lead.Model": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Hash.Basic",
+    "Definitions.Pouw.Lead.Layout",
+    "Definitions.Pouw.Dimension.Pointwise",
+    "Definitions.Pouw.Assumptions.Dimension.H100"
+   ],
+   "except": [],
+   "why": "the lead's strategy model, definitions only: a strategy's trace is MH100's instructions and its price MH100's tables (Op100, Prices100, regs100, cost100, from Definitions.Pouw.Assumptions.Dimension.H100, none of its named assumptions), its run the chunk model's (Definitions.Pouw.Dimension.Pointwise), and a commitment's messages and digests the hash area's (Definitions.Hash.Basic)"
   },
   "Definitions.Pous.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions"],
