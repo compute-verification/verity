@@ -152,10 +152,7 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses. Its flags are
-`tools/verity/check/drive.toml` at `main` alone: a `--config FILE` setting a key to another value, a flag its
-`command_line` doesn't list, or a name that doesn't exist (the landing branch or drive's push to it, a machine, a gate)
-refuses the tick with the fix.
+Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses.
 
 `research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
 one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
