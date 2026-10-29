@@ -40,6 +40,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(1, str(HERE.parents[1]))
 
 import codec as C  # noqa: E402
+import cuda_lib  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/bench/seed").digest()
 TAG_SEED = hashlib.sha256(b"verity/word-codec/bench/tag-seed").digest()
@@ -66,32 +67,36 @@ BATCHES = (1, 2, 4, 8, 16, 32)
 L2_DEFEAT_BYTES = 1 << 30
 
 
+_v, _i, _q, _u, _b = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_uint32, ctypes.c_char_p
+WC = {   # wc.cu's functions (`cuda_lib.load`)
+    "wc_set_key": [_v, _i, _q],
+    "wc_decode": [_v, _v, _q, _q, _i, _v, _i, _v],
+    "wc_encode": [_v, _v, _q, _q, _i, _i, _v],
+    "wc_read": [_v, _q, _v, _i, _v],
+    "wc_tag": [_v, _q, _u, _v, _i, _v],
+    "wc_chain": [_i, _i, _i, _q, _q, _v, _i, _v],
+    "wc_gemm": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _v],
+    "wc_gemm_constants": [_v],
+    "wc_gemm_pipe": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _v, _v],
+    "wc_gemm_ws": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _v, _v],
+    "wc_gemm_ws_tag": [_i, _v, _v, _v, _i, _i, _i, _q, _i, _i, _i, _i, _v, _i, _b, _q, _v, _i, _v, _q, _v, _v],
+    "wc_commit_bytes": ([_q], ctypes.c_size_t),
+    "wc_commit_tags": ([_v, _q], _v),
+    "wc_commit_leaves_at": ([_v, _q], _v),
+    "wc_commit_leaves": [_v, _q, _b, _v],
+    "wc_commit_tree": [_v, _q, _v, _v],
+    "wc_audit_tag": [_v, _q, _b, _q, _v, _i, _v],
+    "wc_audit_commit": [_v, _q, _b, _q, _v, _v, _i, _v],
+    "wc_audit_tree": [_v, _q, _b, _q, _v, _i, _i, _i, _v],
+    "wc_spin": [ctypes.c_longlong, _v],
+    "wc_empty": [_i, _v],
+}
+
+
 class Lib:
     def __init__(self, name: str, path: str) -> None:
-        v, i, q, u = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_uint32
-        self.name, self.path, self.so = name, path, ctypes.CDLL(path)
+        self.name, self.path, self.so = name, path, cuda_lib.load(path, WC)
         so = self.so
-        so.wc_set_key.argtypes = [v, i, q]
-        so.wc_decode.argtypes = [v, v, q, q, i, v, i, v]
-        so.wc_encode.argtypes = [v, v, q, q, i, i, v]
-        so.wc_read.argtypes = [v, q, v, i, v]
-        so.wc_tag.argtypes = [v, q, u, v, i, v]
-        so.wc_chain.argtypes = [i, i, i, q, q, v, i, v]
-        so.wc_gemm.argtypes = [i, v, v, v, i, i, i, q, i, v]
-        so.wc_gemm_constants.argtypes = [v]
-        so.wc_gemm_pipe.argtypes = [i, v, v, v, i, i, i, q, i, i, v, v]
-        so.wc_gemm_ws.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, v]
-        so.wc_gemm_ws_tag.argtypes = [i, v, v, v, i, i, i, q, i, i, i, i, v, i, ctypes.c_char_p, q, v, i, v, q, v, v]
-        so.wc_commit_bytes.argtypes, so.wc_commit_bytes.restype = [q], ctypes.c_size_t
-        so.wc_commit_tags.argtypes, so.wc_commit_tags.restype = [v, q], v
-        so.wc_commit_leaves_at.argtypes, so.wc_commit_leaves_at.restype = [v, q], v
-        so.wc_commit_leaves.argtypes = [v, q, ctypes.c_char_p, v]
-        so.wc_commit_tree.argtypes = [v, q, v, v]
-        so.wc_audit_tag.argtypes = [v, q, ctypes.c_char_p, q, v, i, v]
-        so.wc_audit_commit.argtypes = [v, q, ctypes.c_char_p, q, v, v, i, v]
-        so.wc_audit_tree.argtypes = [v, q, ctypes.c_char_p, q, v, i, i, i, v]
-        so.wc_spin.argtypes = [ctypes.c_longlong, v]
-        so.wc_empty.argtypes = [i, v]
         cs = (ctypes.c_int * 8)()
         so.wc_gemm_constants(cs)
         self.constants = list(cs)
