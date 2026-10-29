@@ -139,6 +139,18 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
+def test_a_prefix_whose_names_move_otherwise_than_under_it_is_left_out(tmp_path):
+    """A private name holds its module twice (`_private.RemoteAudit.Plan.0.RemoteAudit.spans`): its prefix's move would
+    map it back under the wrong old name, which `check.py --moved` refuses, so only the full names move."""
+    words = M.Words({"words": {"RemoteAudit": "PoubCheck"}})
+    names = ("_private.RemoteAudit.Plan.0.RemoteAudit.spans", "_private.RemoteAudit.Line.0.RemoteAudit.Line.sumOver",
+             "RemoteAudit.Plan")
+    (tmp_path / "lean-audit.json").write_text(json.dumps({"reads": {"M": {"definitions": {n: "00" for n in names}}}}))
+    assert M.lock_moves(tmp_path, words, ["lean-audit.json"]) == {
+        "RemoteAudit": "PoubCheck",
+        "_private.RemoteAudit.Line.0.RemoteAudit.Line.sumOver": "_private.PoubCheck.Line.0.PoubCheck.Line.sumOver",
+        "_private.RemoteAudit.Plan.0.RemoteAudit.spans": "_private.PoubCheck.Plan.0.PoubCheck.spans"}
+
 def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
     """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
     quoted string names the module, and everywhere else the name stands."""

@@ -166,7 +166,7 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     """The declaration renames the locks' records need: for each guarantee and read definition whose name the words rename,
     its first renamed prefix, and the full name too when that prefix alone would rename it otherwise; none implied by
-    another."""
+    another, and no prefix whose full names under it move otherwise than under it (`check.py`'s `move_errors`)."""
     want: dict[str, str] = {}
     for p in files:
         if posixpath.basename(p) != POLICY or words.excluded(p):
@@ -185,6 +185,10 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     for old, new in want.items():
         if renamed(old, moves) != new:
             moves[old] = new
+    while unnested := {o for o, n in moves.items() for o2, n2 in moves.items()
+                       if n2.startswith(n + ".") and o2 != o + n2[len(n):]}:
+        moves = {o: n for o, n in moves.items() if o not in unnested}
+        moves |= {old: new for old, new in want.items() if renamed(old, moves) != new}
     for old in sorted(moves, key=lambda k: -k.count(".")):
         rest = {k: v for k, v in moves.items() if k != old}
         if renamed(old, rest) == moves[old]:
