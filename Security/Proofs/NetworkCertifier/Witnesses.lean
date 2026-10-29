@@ -1,5 +1,5 @@
 import Proofs.NetworkCertifier.SampledAuditInstance
-import Proofs.NetworkCertifier.Horizon
+import Proofs.NetworkCertifier.Pooled
 import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.Meets
 import Proofs.Flock.Claims.KS.ZkExtend
@@ -21,7 +21,7 @@ whose verifier accepts everything.
   witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no witness is in `RLeak`.
-* `HorizonWrongUnitsLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
+* `PooledWrongUnitsLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
@@ -353,9 +353,9 @@ theorem SampledLeakRegistered_nontrivial (H : Msg → Msg) :
 
 end Toy
 
-/-! ## The horizon -/
+/-! ## The monitoring period -/
 
-/-- **`HorizonWrongUnitsLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k` units
+/-- **`PooledWrongUnitsLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k` units
 and each `k`-subset with share `1 / C(n, k)`. -/
 theorem uniform_draw (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
@@ -368,17 +368,17 @@ theorem uniform_draw (n k : ℕ) :
     simp [Subtype.ext_iff]
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-- **`HorizonWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
+/-- **`PooledWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
 (`uniform_draw`) with no unit wrong, every acceptance event meets a wrong unit with probability `0`, so `ε = 0`. -/
-theorem HorizonWrongUnitsLe_honest (n k : ℕ) :
+theorem PooledWrongUnitsLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
   simp [Pr]
 
-/-- **`HorizonWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
+/-- **`PooledWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
 that unit wrong, `q = F = 1`. -/
-theorem HorizonWrongUnitsLe_nontrivial :
+theorem PooledWrongUnitsLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) := by

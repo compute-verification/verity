@@ -16,10 +16,12 @@
 * **certs**: the client's kept files (``--client``, by default the certifier rehearsal's own directory ``--run``):
   ``certificates.jsonl`` and ``clocks.jsonl``, each certificate's public part (`certifier_serve.keep_certificates`),
   held again to the certifier's key and session in ``--run``'s ``deployment.json`` by the client's own
-  `check_certificates`. Each window's two certified records (``--run``'s ``certified.jsonl``, their heads and salts)
-  are held by the host audit (`certifier_serve._certified`, N2's audit without its head checks) under the syncs the
-  certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and their
-  certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
+  `check_certificates`, each refusal the Lean's (`client_certificates`: `NetworkCheck.LinkWindow.refusals`,
+  `audit.certificate_refusals` beside it as the reference, ``client_check``'s ``by``). Each window's two certified
+  records (``--run``'s ``certified.jsonl``, their heads and salts) are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
+  audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
+  the syncs the certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and
+  their certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
@@ -35,7 +37,7 @@
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
-  tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
+  tampered run that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each
   window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
   ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``,
   its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
@@ -82,9 +84,11 @@ CLEAR = {
                 "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
                 "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
-                    "certificate's LMS signature under the certifier's key and session (check_certificates); and the "
-                    "host audit of the rehearsal's certified heads and salted clock openings (witness a rehearsal "
-                    "publishes), whose certificates must be exactly the client's",
+                    "certificate's LMS signature under the certifier's key and session, by the Lean "
+                    "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
+                    "audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
+                    "under its salted clock openings (witness a rehearsal publishes), whose certificates must be "
+                    "exactly the client's",
     "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
@@ -135,12 +139,8 @@ WARDEN_SERVED_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
-#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
-#: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
-#: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
-JITTER = "assumed (J)"
-#: what `horizon_k`'s K rests on until its two per-window inputs are discharged
-HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted is conditional: its per-window inputs hesc "
+#: what `pooled_k`'s K rests on until its two per-window inputs are discharged
+POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
@@ -223,6 +223,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
                          "deployed": tuple(dep["certifier_key"]["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W,
                                                                                lms.DEPLOYED.H)},
                  "session": dep["session"], "link": lw.link, "sync_bits": lw.charge,
+                 "window_buckets": setup.egress_params.buckets,
                  "in_the_clear": CLEAR["certificates"]}
     if records is None or out["clocks_file"] is None or not kept.is_file() or not kept_clocks.is_file():
         return out | {"verdict": "refused", "why": f"{client}: the client kept no certificates.jsonl or clocks.jsonl, "
@@ -245,7 +246,8 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
         elif w >= len(signed):
             rows.append({"window": w, "certified": False, "why": "no clock certificate verifies for the window"})
         else:
-            rows.append({"window": w, "certified": bool(cs._certified(lw, lw.commit(w, *pair), signed))})
+            v = cs._certified(lw, lw.commit(w, *pair), signed)
+            rows.append({"window": w, "certified": v["accepted"], "by": v["by"], "reference": v["reference"]})
     out |= {"clock_certificates": len(clocks), "clocks_signed": len(signed),
             "signed_are_declared": signed == declared[:len(signed)] and len(signed) == len(declared),
             "issuer_refused": refused, "certified_windows": sum(r["certified"] for r in rows), "rows": rows}
@@ -263,8 +265,11 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
 def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) -> dict:
     """The client's kept files (`certifier_serve.keep_certificates`: each certificate's public part with its session,
     no head, sync or salt) held again to the deployment's key and session, window by window, by the client's own
-    `check_certificates` on the answer they make up."""
+    `check_certificates` on the answer they make up, each refusal the Lean's (`lean_audit.certificate_refusals`:
+    `NetworkCheck.LinkWindow.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
+    window where the two differ refused whole)."""
     import certifier_serve as cs
+    from verity.core.protocols.certifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
     certs, clocks = lines(kept), lines(kept_clocks)
@@ -276,14 +281,14 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
                   "certificates": [strip(d) for d in certs if "unsigned" not in d and d["window"] == w],
                   "clocks": [strip(d) for d in clocks if d["window"] == w],
                   "unsigned": [d["unsigned"] for d in certs if "unsigned" in d and d["unsigned"][2] == w]}
-        got, synced, unsigned, no = cs.check_certificates(dep, w, answer, seen)
+        got, synced, unsigned, no = cs.check_certificates(dep, w, answer, seen, lean_audit.certificate_refusals)
         refused += no + [f"window {w}: the signer refused {u}" for u in unsigned]
         for c in got:
             by_window[(c.direction.value, c.window)] = json.dumps(cs.certificate_json(c), sort_keys=True)
         kept_clock += [json.dumps(cs.certificate_json(k), sort_keys=True) for k in synced]
     if sessions - {dep["session"]}:
         refused.append(f"certificates of another session: {sorted(sessions - {dep['session']})}")
-    return {"certificates": len(by_window), "clock_certificates": len(kept_clock), "refused": refused,
+    return {"certificates": len(by_window), "clock_certificates": len(kept_clock), "refused": refused, "by": "lean",
             "by_window": by_window, "clocks": kept_clock}
 
 
@@ -576,8 +581,7 @@ def audit_of(d: Path) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its units, the
     units its law draws (a subset law's ``k``, a stratified law's ``Σ k``, as `NetworkCheck.Period` counts them), the
     least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
-    (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
-    within a bucket."""
+    (`free_inputs`). Its jitter term is the link's steps over the period, which `d1_terms` charges."""
     reg = json.loads((d / "registration.json").read_text())
     law, n = reg["law"], reg["population"]
     if law.get("law") == "subset":
@@ -591,16 +595,17 @@ def audit_of(d: Path) -> dict:
         raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
             "units": n, "drawn": drawn, "q": str(q),
-            "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
+            "free": free_inputs(json.loads((d / "circuit.json").read_text()))}
 
 
-def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
-    """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period: the faulty proof blocks paid once over
+def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
+    """`NetTiming.Guarantees.PooledLeakAccepted`'s K over one monitoring period: the faulty proof blocks paid once over
     the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
     least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits,
     and the cells') + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with
-    probability ``δ + Σ_i (e_i + e'_i)``. `HorizonLeakAccepted` is conditional on its per-window inputs, so this K is
-    cited as conditional, and its jitter term as `JITTER` (``jitter_term``)."""
+    probability ``δ + Σ_i (e_i + e'_i)``. `PooledLeakAccepted` is conditional on its per-window inputs, so this K is
+    cited as conditional, and its jitter term as `leak_bounds.JITTER` (``jitter_term``)."""
+    import leak_bounds as LB
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)
@@ -609,7 +614,7 @@ def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     k = sum(terms.values())
     return {"delta": str(delta), "q": str(q), "Fmax": fmax, "units": n, "terms": terms, "K": k,
             "share": k / (OUT_BITS * n), "eps": f"{delta} + Σ_i (e_i + e'_i) over {len(audits)} audits",
-            "conditional": HORIZON_CONDITION, "jitter_term": JITTER}
+            "conditional": POOLED_CONDITION, "jitter_term": LB.JITTER}
 
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
@@ -624,17 +629,23 @@ def network_terms(cert: dict, endpoint: dict) -> dict:
 
 def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
              audits: list[dict] | None = None) -> dict:
+    import leak_bounds as LB
     rows = cert.get("rows") or []
     honest = (n2.get("members") or {}).get("honest") or {}
     acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
     network = network_terms(cert, endpoint or {})
+    steps = len(rows) * (cert.get("window_buckets") or 0)
     if None in network.values():
         k = {"open": f"the network's terms aren't all computed: {network}"}
     elif not audits:
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
                      "inputs and draw the K counts", "network": network}
+    elif not steps:
+        k = {"open": "the certificates step records no link-window's egress buckets (window_buckets), the steps over "
+                     "which K's jitter term charges each audit", "network": network}
     else:
-        k = {f"{d:.3g}": horizon_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
+        audits = [a | {"steps": steps, "jitter": LB.jitter_bits(steps)} for a in audits]
+        k = {f"{d:.3g}": pooled_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
     return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted, KS as hypothesis",
             "K": k,
             "sum": "NetTiming.periodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
@@ -668,7 +679,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
     machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
     (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
-    pooled one (`HorizonLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
+    pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
@@ -722,7 +733,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
-                      "cap_per_request": link.cap, "free": free, "faulty": 0, "jitter": 0, "jitter_term": JITTER,
+                      "cap_per_request": link.cap, "free": free, "faulty": 0,
+                      "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
             "links": links, "weights": weights._asdict(), "rows": rows, "theorems": dict(LB.STATEMENTS),
@@ -732,8 +744,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
                 "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
-                f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
-                "buckets tell a receiver no more than an idle one",
+                f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
                 "per-sampling-block and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
@@ -759,7 +770,7 @@ def leak_markdown(doc: dict) -> str:
     lines = []
     for reading, title in LB.READINGS.items():
         lines += [f"**{title}**, bits, the share of one copy of the weights ({doc['weights']['label']}) and ε, the "
-                  f"scans' δ summed (the jitter term 0, {JITTER}):", "",
+                  f"scans' δ summed (the jitter term one bit a bucket, {LB.JITTER}):", "",
                   "| period | links | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | ε | a sampling block |",
                   "|---|---|---|---|---|---|---|"]
         lines += [f"| {r['period']} | {r['scope']}, {r['links']:,} | {bits(r['pooled'][d1])} "
@@ -998,7 +1009,7 @@ def markdown(r: dict) -> str:
         if isinstance(h, dict) and "K" in h:
             lines.append(f"- K at δ = {delta}: {h['K']} bits, {h['share']:.3g}× the {h['units']} units' "
                          f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}, "
-                         f"the jitter term {JITTER}; {h['conditional']}")
+                         f"the jitter term {h['jitter_term']}; {h['conditional']}")
     lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
     b = r.get("block") or {}
     if b.get("written"):
