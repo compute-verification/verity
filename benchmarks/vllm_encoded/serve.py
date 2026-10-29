@@ -10,7 +10,7 @@ Arms:
             2^521 - 1, 2^256 - 189 or 2^512 - 569, k rounds, k = 0 its plain payloads)
   tensor    the same with the tensor-core codec's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
             decoding in shared memory ahead of one MMA warp, k >= 1 rounds)
-  pstack    the remote bandwidth audit's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
+  pstack    PoUB's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
             the BF16 lm_head as it is, paged.cu's attention and KV append over vLLM's own cache; stack's denominator
   stack     the same kernels over codec words only (`stack.py`, ``--wt-lib`` a WT_RECEIPT build at a full-slot field,
             ``--reader-lib``, ``--paged-lib``): every linear's fused decode + GEMM + sketch-sha512 receipts and each decode

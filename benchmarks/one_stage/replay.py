@@ -2103,7 +2103,7 @@ def a6(run: Run) -> Iterator[Case]:
 A7_OUTSIDE = (
     (r"\((PlanMatches|Carries|L4)\)$|free \(|\(dummy append or re-key\)$",
      "the unit's own clause: a witness the prover keeps consistent everywhere, refused only by the unit's ok row (0)"),
-    (r"\(mapped\)$|^ledger-on-", "the remote bandwidth audit's link and ledger (`UnitsLink.mapped`, `audit.ledger`)"),
+    (r"\(mapped\)$|^ledger-on-", "PoUB's link and ledger (`UnitsLink.mapped`, `audit.ledger`)"),
     (r"\(binding\)$", "A7's bindings of each unit's rows to the canonical commitments (`bindings`), beside R1-R7"),
     (r"\((v0 )?bridge[^)]*\)$", "v0's bridge between the remote session and the canonical rows (`v0_bridge`)"),
     (r"\(opening\)$", "A7's openings of each drawn unit's public and ok rows (`openings`)"),

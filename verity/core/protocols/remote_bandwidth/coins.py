@@ -1,4 +1,4 @@
-"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""PoUB's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), and each opened once, after the root the verifier recorded.
 
