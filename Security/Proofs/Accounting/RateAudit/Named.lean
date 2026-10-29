@@ -1,7 +1,7 @@
 import Mathlib
 import Definitions.Accounting.Guarantees.RateAuditNamed
 import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.Horizon
+import Proofs.Accounting.RateAudit.Pooled
 
 /-!
 # Conservation over tiers with named words: the proof
@@ -18,7 +18,7 @@ A run with at least `k` correct receipts falls in one of three events:
   code is the state, the trace and `k` of the `N` words: `C(N, k)/2^λ` (`card_compress_named_le`).
 
 At every count at once (`RatePaidNamedRO`), the compression is taken at each `k ≤ N` and `∑ₖ C(N, k) = 2^N`
-(`RelayDevice.pr_compress_any_named_le`); the route `Sampled` with it (`RateChainSampledNamedRO`) is `RateHorizon` and
+(`RelayDevice.pr_compress_any_named_le`); the route `Sampled` with it (`RateChainSampledNamedRO`) is `RatePooled` and
 that bound at each pass (`Chain.pr_unpaid_le`).
 -/
 
@@ -494,7 +494,7 @@ theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
 (`Accounting.Guarantees.RateChainSampledNamedRO`). -/
 theorem RateChainSampledNamedRO : Accounting.Guarantees.RateChainSampledNamedRO := by
   intro P N b h ρ S L q r s K lam τ tier A hA
-  have h₁ := Chain.pr_horizon_le A K
+  have h₁ := Chain.pr_pooled_le A K
   have h₂ := Chain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η =>
     (pr_mono (fun _ hx => by omega)).trans (RatePaidNamedRO N b h ρ S L q lam τ tier (A.device j η) (hA j η)))
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ h₂))
