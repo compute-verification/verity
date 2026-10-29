@@ -16,3 +16,8 @@ ci's after-landing check waited on one `circuit-check --all --catalog-units --jo
 
 # 06:30Z: Nebius CPU nodes restarted
 Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on them. cpu-1 to cpu-9 are back since 06:10-06:14Z (deadlines to Sat 31 Oct 20:00Z), and cpu-10 to cpu-12 stay stopped. Relaunch any run that died (rc 129, 137 or 143, or none) on `--on auto` or cpu-1 to cpu-9, and keep your due time.
+
+# 06:45Z: #6501's scope after Daniel's ruling, and its order behind #6388
+- #6501 is out of next only because it carries #6388, which conflicts with next (drive.py, test_drive_review.py, check/tests/test_check.py, train.sh). infra is re-cutting #6388. When #6388 has a new marked head, merge that head into #6501 and re-mark. Don't fix #6388's conflicts in your branch.
+- ci (06:44Z): #6481 (e51066ea7e) takes circuit-check off the landing gate (Daniel's 9:30 PM PDT ruling), and #5888 follows it (~09:30Z). Both go to next's bottom first and touch drive.py, check.py and the check tests. So #6501's check.py registration of N circuit-check parts must apply only to the after-landing circuit-check run, not the gate. Merge #6481's head too if you touch the same lines.
+- The circuit-check side (`--shard K/N`, `--combine`, the filter before the prologue) stays as it is. Keep your 10:30Z date if #6388 allows it, otherwise report the dependency.
