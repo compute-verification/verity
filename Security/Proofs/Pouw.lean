@@ -32,6 +32,7 @@ import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
 import Proofs.Pouw.Dimension.PipeProofs
 import Proofs.Pouw.Dimension.PointwiseProofs
+import Proofs.Pouw.Dimension.AdaptiveProofs
 import Proofs.Pouw.Dimension.Proofs
 import Proofs.Pouw.Dimension.RouteUPipeProofs
 import Proofs.Pouw.Dimension.RouteUProofs
@@ -194,11 +195,12 @@ import Proofs.Pouw.TileBound.Witness
 import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
 import Proofs.Pouw.Writes
+import Proofs.Pouw.Adaptive
 
 /-!
 # PoUW's proofs
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
-named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
+named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Adaptive`, `Barrier`, `Dimension`,
 `Game`, `NCP`, `PearlC`, `Receipt`, `Writes`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
 -/

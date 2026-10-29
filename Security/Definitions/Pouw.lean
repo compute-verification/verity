@@ -11,6 +11,7 @@ import Definitions.Pouw.Dimension.Causal
 import Definitions.Pouw.Dimension.Defs
 import Definitions.Pouw.Dimension.Lift
 import Definitions.Pouw.Dimension.Pointwise
+import Definitions.Pouw.Dimension.Adaptive
 import Definitions.Pouw.Dimension.Ssn
 import Definitions.Pouw.Fp8Atom.Atom
 import Definitions.Pouw.Fp8Atom.E4M3

@@ -1,0 +1,46 @@
+import Definitions.Pouw.Dimension.Adaptive
+
+/-!
+# adaptive-dw: the guarantees (trusted; draft model, pending review)
+
+Each statement is over the chunk model (`Pouw.Dimension.Pointwise`, draft) with `Holds` and `AdaptiveDW`
+(`Pouw.Dimension.Pointwise`, `Adaptive.lean`). Its proof is the theorem
+`Pouw.SecurityProofs.Adaptive.G : Pouw.Guarantees.Adaptive.G`.
+
+* `RunChunks`: a run that holds the target chunk values writes at least the number of them no initial chunk holds.
+* `AdaptiveChunks`: the pointwise lift. Over any finite set of coin draws, adaptive-dw holds at the sum of each draw's
+  new target chunk values.
+* `LevelsObstruction`: when each draw's targets are row-step chunks `base i + c i t · 1` (a column-free increment),
+  adaptive-dw fails above `w · Σ_g Σ_i |{c i t}|`, whatever the initial memory.
+-/
+
+namespace Pouw.Guarantees.Adaptive
+
+open Finset Pouw.Dimension.Pointwise
+
+open Classical in
+/-- **A run writes at least its targets' new chunk values** (chunk model; draft model, pending review). -/
+def RunChunks : Prop :=
+  ∀ (A V : Type) [DecidableEq A] [DecidableEq V] [Inhabited V] (w : ℕ) (m₀ : A → Fin w → V)
+    (P : List (Step A V w)) (Y : Finset (Fin w → V)), Holds m₀ P Y →
+    (Y.filter fun y => ∀ a, m₀ a ≠ y).card ≤ writes P
+
+open Classical in
+/-- **The pointwise lift** (chunk model; draft model, pending review): for every finite set of coin draws `Ω` and
+targets `Y g`, every family of runs, the run at `g` holding `Y g`, writes in total at least the draws' new target chunk
+values. -/
+def AdaptiveChunks : Prop :=
+  ∀ (A V : Type) [DecidableEq A] [DecidableEq V] [Inhabited V] (w : ℕ) (Ω : Type) [Fintype Ω]
+    (m₀ : A → Fin w → V) (Y : Ω → Finset (Fin w → V)),
+    AdaptiveDW Ω m₀ Y (∑ g, ((Y g).filter fun y => ∀ a, m₀ a ≠ y).card)
+
+/-- **Column-free increments refute adaptive-dw** (chunk model; draft model, pending review): when draw `g`'s targets
+are the row-step chunks `base g i + c g i t · 1` over rows and steps, adaptive-dw fails at every bound above
+`w · Σ_g Σ_i |{c g i t : t}|`, from any initial memory with a slot. -/
+def LevelsObstruction : Prop :=
+  ∀ (A V : Type) [DecidableEq A] [DecidableEq V] [Add V] (w : ℕ) (ι T : Type) (Ω : Type) [Fintype Ω] [Nonempty A]
+    (m₀ : A → Fin w → V) (rows : Finset ι) (steps : Finset T) (base : Ω → ι → Fin w → V) (c : Ω → ι → T → V)
+    (B : ℕ), w * ∑ g, ∑ i ∈ rows, (steps.image (c g i)).card < B →
+    ¬ AdaptiveDW Ω m₀ (fun g => (rows ×ˢ steps).image fun it => base g it.1 + fun _ => c g it.1 it.2) B
+
+end Pouw.Guarantees.Adaptive
