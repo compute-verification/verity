@@ -335,12 +335,6 @@
   "Definitions.Pouw.Fp8Atom",
   "Definitions.Pouw.Game.Defs"
  ],
- "witnesses": {
-  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
-   "honest": ["Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"],
-   "nontrivial": "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
-  }
- },
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
@@ -928,17 +922,54 @@
    "assumptions": [],
    "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd"
   },
-  "Proofs.NetworkCertifier.expectedGridCausal": {
-   "owner": "@network-accounting"
-  },
   "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows : Properties.NetworkCertifier.EncardProgramRunsLeWindows"
+   ],
+   "assumptions": [],
+   "type_hash": "f25374afe9cdc911a9205f529c3c530f0c48b25d63452845a40f9e22081cf4d1"
   },
   "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest :",
+    "  Set.instMembership.mem",
+    "    (NetTiming.AccSeqs",
+    "      (NetTiming.constantRate Properties.CertifierNetwork.Instance.config.egress.buckets",
+    "        Properties.CertifierNetwork.Instance.config.windows 1",
+    "        (Properties.NetworkCertifier.programFrames Properties.CertifierNetwork.Instance.config",
+    "          Properties.CertifierNetwork.Instance.oneFrame))",
+    "      (fun x x_1 => Unit.unit) (instHMul.hMul 1 Properties.CertifierNetwork.Instance.config.egress.buckets) 1)",
+    "    Properties.CertifierNetwork.Instance.honestObs"
+   ],
+   "assumptions": [],
+   "type_hash": "8519e9ad29c1be343f31772ce1761dbb4df902d51ccce158d5c910865f279937"
   },
   "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial :",
+    "  Not",
+    "    (instLEENat.le",
+    "      (NetTiming.AccSeqs { rows := fun t x a => a t } (fun x x_1 => Unit.unit)",
+    "          (instHMul.hMul 1 Properties.CertifierNetwork.Instance.config.egress.buckets) 1).encard",
+    "      (instHMul.hMul",
+    "          (instHMul.hMul (Fintype.card Unit)",
+    "            (instHPow.hPow",
+    "              (instHMul.hMul Properties.CertifierNetwork.Instance.config.syncSet.deltas.length",
+    "                Properties.CertifierNetwork.Instance.config.syncSet.rhos.length)",
+    "              (instMinNat.min Properties.CertifierNetwork.Instance.config.windows 1)))",
+    "          (instHPow.hPow 1 (instHMul.hMul 1 Properties.CertifierNetwork.Instance.config.egress.buckets))).cast)"
+   ],
+   "assumptions": [],
+   "type_hash": "48f45b2a11c6bff531d27432a0a660fc0fe0b2bdfaaa8d324e8498705d70d850"
+  },
+  "Proofs.NetworkCertifier.expectedGridCausal": {
+   "owner": "@network-accounting",
+   "signature": ["Proofs.NetworkCertifier.expectedGridCausal : Properties.NetworkCertifier.ExpectedGridCausal"],
+   "assumptions": [],
+   "type_hash": "86eacbbf1d2f91104f28931042647964046cbf759679941baaec4516e865a31e"
   },
   "Properties.CertifierDevice.completeRows": {
    "owner": "@network-accounting",
@@ -3670,6 +3701,9 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
@@ -3816,6 +3850,9 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
@@ -3960,6 +3997,9 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
@@ -3989,6 +4029,9 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
@@ -6264,7 +6307,10 @@
    },
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
-    "Proofs.NetworkCertifier.encardAcceptedObservationsLe"
+    "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Premises": {
@@ -6279,9 +6325,11 @@
    ]
   },
   "Definitions.NetworkCertifier.Run": {
-   "digest": "b51e7781f830375e6040c178724bbf255f3debff04fddde7a3b84dffcac59086",
+   "digest": "71cb8cea2804d7490f43eccffe86639dd2b62be0208665515d89d7d602445388",
    "definitions": {
+    "NetTiming.AccSeqs": "b591e011b7f8812e05bb2403572a002909ebd13b5f6d5c84653647dcebcf487e",
     "NetTiming.Accepted": "37cdec64e608117cac5611dabd35f4224906f64d184ef2dfe8d68ccebc198774",
+    "NetTiming.AcceptedUpTo": "310f208fce13c24995d809d75f36e717d519a690cb6ca0f056a8064689056666",
     "NetTiming.Obs": "fa4dd0c7711bb6a8c130b62f7258c4c34f1df7c2e9c6ea926e0cac038cf2ed9b",
     "NetTiming.Obs.jitter": "4848b10995dcb60cbbd165f4b4379afe368f8acf6d0050a545e01971b8a3fef1",
     "NetTiming.Obs.rows": "d2df4cf42c2650e672894b4e11f57e55e936e6cd1ec9bfdf4e49301279f1e44d",
@@ -6302,7 +6350,10 @@
    },
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
-    "Proofs.NetworkCertifier.encardAcceptedObservationsLe"
+    "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
    ]
   },
   "Definitions.NetworkCertifier.Schedule": {
@@ -6317,7 +6368,11 @@
     "NetTiming.handingFrom": "ea8b12cdc79365bfc7fcf90daba5e8266e1d3ac87d79468cab03a38674253cb3",
     "NetTiming.payloads": "629f7e81bf6e3bc9a64a924267226b9298a3069c46e5d2a8101b6bc9e43f1d87"
    },
-   "guarantees": ["Proofs.NetworkCertifier.acceptedRunsAreProgramRuns"]
+   "guarantees": [
+    "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"
+   ]
   },
   "Definitions.Pous.Accounting.Params": {
    "digest": "5a64fc298f5cb7679b6d07c8c3132766a127bc474dd74ec36b94b5e56ca141f6",
@@ -9105,6 +9160,7 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.expectedGridCausal",
     "Properties.CertifierDevice.completeRows",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
@@ -9171,6 +9227,10 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
+    "Proofs.NetworkCertifier.expectedGridCausal",
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
@@ -9270,6 +9330,10 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
+    "Proofs.NetworkCertifier.expectedGridCausal",
     "Properties.CertifierDevice.completeRows",
     "Properties.CertifierDevice.contentIndependent",
     "Properties.CertifierDevice.failClosed",
@@ -9377,6 +9441,7 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.expectedGridCausal",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
     "Properties.NetworkCertifier.acceptsOneRecordEach",
@@ -11201,8 +11266,15 @@
    ]
   },
   "Properties.CertifierNetwork.Runs": {
-   "digest": "d0144165171c6cc956ee80602a47c06fd9e98d7e3d11ee46c0ac3458bcec614d",
+   "digest": "b72fbcd5c9284f969dbde65a44b2fc3d5e726181cc050ea6bdb0070ad168a93e",
    "definitions": {
+    "Properties.CertifierNetwork.Instance.config": "b655bbd80d62d837e8ec8c8cee97ba4ef3342756dce6da3386d03c335aca2e76",
+    "Properties.CertifierNetwork.Instance.grid": "5ff2f017f4a1caba8a0f543900811117e332bdf881b270d187cfa2e6897d9abd",
+    "Properties.CertifierNetwork.Instance.honestObs": "537782ccfd3fd9311b402ec3ec0609222a5cb2c2bef3e97ee80a59f9b969faa2",
+    "Properties.CertifierNetwork.Instance.oneAdvice": "2bff86b58e14d18b4d14f0c48e4314f6e3949b176380741b186c5ab0e09eae45",
+    "Properties.CertifierNetwork.Instance.oneFrame": "6dffe8818597a5993759087a42264b25331f11bc19081191592dfebbb72bd611",
+    "Properties.CertifierNetwork.Instance.sync": "560e03e6ed474207174f6ea9b5aa45172a41d1fd0e503d5e0f3229bfc3c88c59",
+    "Properties.CertifierNetwork.Instance.syncSet": "9c5a682860273be1c2d6a0d383461fe5408b8fe95a21b36c8eb55ddee1d0950b",
     "Properties.NetworkCertifier.AcceptedObservations": "c164c212598b7d6685fe61081ba7f3d1e1e91a7157eb5b2999e168ce73be40e6",
     "Properties.NetworkCertifier.AcceptedRowsAreProgramRows": "56944992ce5ee37f4aeb1773e220384ad295db0353a7d0d968f543fb95c46313",
     "Properties.NetworkCertifier.AcceptedRun": "8ceb51d70aa9c216a0a6d9067e4928f8672f49a792feb5772294996fc0003a9c",
@@ -11218,6 +11290,8 @@
     "Properties.NetworkCertifier.DeviceOutput.certificates": "978884a379ff4dfa309abd2790837f52d59c6482ab836a19e4e2cdbdb96ff6ee",
     "Properties.NetworkCertifier.DeviceOutput.records": "c6130961a0a8dd46d232c0a3b3acea9e1150e4b495a99489227b71fe5d4d7121",
     "Properties.NetworkCertifier.EncardAcceptedObservationsLe": "a963449a8c106e6949665cbbf81d996322c6488b91dcdf4f1c77554469f9b313",
+    "Properties.NetworkCertifier.EncardProgramRunsLeWindows": "ba2ee5bdcf25919b9311c0e8d6245ae0b5c951c86b1ed41b59c13db26b513cf2",
+    "Properties.NetworkCertifier.ExpectedGridCausal": "1e1ab9e655d2595c4dcfaa82df91630dbd3941bfbfcd34cac8a971dc89a92ead",
     "Properties.NetworkCertifier.ObservationsBounded": "e299fff86de3fa7110ceb2dd722a315d5182d35eba771325920630f33e9c028b",
     "Properties.NetworkCertifier.Observes": "cf8871fd970aed8c724f0998909cad1409e99174b181ae9325777043f42cbab5",
     "Properties.NetworkCertifier.OpensFrames": "6d7f2d8f82159bcfc0ab3607041bb39e188a650c6df04429b570a7a411df01e6",
@@ -11237,6 +11311,10 @@
    "guarantees": [
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest",
+    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial",
+    "Proofs.NetworkCertifier.expectedGridCausal",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows"
    ]
   },
@@ -14355,5 +14433,11 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
+   "honest": ["Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"],
+   "nontrivial": "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
+  }
  }
 }
