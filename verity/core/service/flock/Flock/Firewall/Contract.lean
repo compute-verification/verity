@@ -19,7 +19,7 @@ of three things.
 * (c) A value uniquely fixed by what is already committed or public (`Item.fixed`): by the public schedule (the contract
   derives the value itself, and holds the items to the schedule's order), by the public statement (the value the public
   input names), or by the firewall's own values (its level-0 recheck, its opening, the values it computes from its pads,
-  under names the public input lists). Under D8 (a) the last three are today's Rust, which the transcript reports and
+  under names the public input lists). Under D8 (a) the last three are the current Rust, which the transcript reports and
   this contract does not recompute.
 
 What the contract holds a transcript to is the verifier's public input (`PublicInput`), never the transcript's own
