@@ -1,7 +1,7 @@
-"""PoUW over a served Program, the registered compiler's output: its tiles as an annotation of that Program,
-`tiles(program, scheme, groups)` (Find and Tile, and the seed groups' checks), which reads the Program's description and
-never rewrites it; and `compile(program, scheme, groups)`, the same annotation with each tile then replaced by its unit
-(Replace), PoUW's own Program and not the served one.
+"""PoUW over a served Program, the registered compiler's output (`PROTOCOL.md` §`compile`): its tiles as an annotation of
+that Program, `tiles(program, scheme, groups)` (Find and Tile, and the seed groups' checks), which reads the Program's
+description and never rewrites it; and `compile(program, scheme, groups)`, the same annotation with each tile then replaced
+by its unit (Replace), PoUW's own Program and not the served one.
 
 * **Find.** Every Call of a registered matmul family (`MATMULS`: each family's A and B ports, its (m, k, n) and the arm it is
   registered at) is one dot product, or N of them (`S8Matmul_v1`'s rows). Attention's QKᵀ is `DotBf16`'s, a kind like any
