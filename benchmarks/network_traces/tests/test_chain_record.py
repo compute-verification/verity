@@ -478,6 +478,29 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     assert off["verdict"] == "refused" and off["stubbed"] == []
 
 
+def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_exited_its_finds(tmp_path):
+    ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
+    assert cr.report(_steps(tmp_path, ok))["why"] is None
+    steps = _steps(tmp_path, ok | {"rc": {"n2": "0", "scan": "1"}})
+
+    def found(*k):
+        return {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
+
+    Path(steps.scan).write_text(json.dumps({"ok": False, "T": 1, "rounds": {
+        "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()}}))
+    got = cr.report(steps)
+    why = ("scan_zk exited 1; honest: witness pieces found at the verifier: ['first o1 0 @0']; chain: witness pieces "
+           "found at the verifier: ['first o1 0 @0']; scan_zk's ok is not true")
+    assert (got["verdict"], got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("refused", "failed", why)
+    assert got["why"] == {"scan": f"failed: {why}"}
+    Path(steps.job).write_text(json.dumps(ok | {"rc": {"n2": "0", "scan": "1"}, "why": {"scan": "done: FAILED"}}))
+    assert cr.report(steps)["why"] == {"scan": f"failed: done: FAILED; {why}"}
+    Path(steps.scan).unlink()
+    assert cr.report(steps)["why"] == {"scan": "failed: done: FAILED; scan_zk exited 1"}
+    stand_in = cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))
+    assert stand_in["why"] == {"n2": "stand-in: the simulated link"}
+
+
 def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
     h = cr.horizon_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
                      {"advice": 8, "syncs": 0, "cells": 6})
