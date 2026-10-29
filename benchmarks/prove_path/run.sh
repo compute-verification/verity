@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Prove path (prove_path.py) on a CPU machine: a TP Commit's ranks committed over the stand-in compiler's Programs for the run's
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
-# commitment, drawn through a5's per-rank service.Stream on the verifier's own coins, proved by M0 --zk behind the Lean firewall
-# and verified by Lean, the advice's root then held to the registration the draw followed; then one forged run, a unit whose
+# commitment, drawn through a5's per-rank service.Stream on the verifier's own coins, proved by M0 --zk behind the Lean ZK server
+# and verified by Lean, the advice's root then held to the registration the sample followed; then one forged run, a unit whose
 # committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
 # flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
@@ -33,7 +33,7 @@
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
-#   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
+#   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
 #     draw, until multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
@@ -48,7 +48,8 @@
 #   verifier's own, pinned on main's first-parent history fetched from the clone's origin. PP_CHALLENGER=gate:USER@HOST:
 #   the auditor host's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
 #   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
-#   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY).
+#   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY). PP_MAIN (a
+#   file, `git rev-list --first-parent` of the gate's pin) is that history instead, for a gate pinned on `next`.
 # From a clone of the tree, with 64 GB of memory, the outputs in $OUT (default $RESEARCH_RUN_DIR/out):
 #   PP_LLAMA=DIR bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
@@ -87,11 +88,16 @@ for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic
 done
 TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
 CH=()
-if [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
+if [ -n "${PP_CHALLENGER:-}" ] && [ -n "${PP_MAIN:-}" ]; then   # the run's first-parent list, which holds the gate's pin
+  [ -s "$PP_MAIN" ] || { echo "PP_MAIN $PP_MAIN is missing or empty"; exit 4; }
+  [ "$PP_MAIN" -ef $O/main.txt ] || cp "$PP_MAIN" $O/main.txt
+elif [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
   UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
   git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
     && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
+fi
+if [ -n "${PP_CHALLENGER:-}" ]; then
   CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
   case $PP_CHALLENGER in gate:*)
     [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
