@@ -19,7 +19,7 @@ the first tile's columns (`colsOf`, 8 for a whole column block by `colsOf_card`)
 * **Only the step differs**: the step-0 tag term cancels, and the later step's coin lane `s` in each column moves one
   word under `-rot`'s weight and not the other (`agreeU_card_le`), a `2^−e` share a column.
 
-Each is a count through a block of coins (`Block.card_le`): rewriting the block leaves every other coin, so over each
+Each is a count through a block of coins (`TileBlock.card_le`): rewriting the block leaves every other coin, so over each
 value of the others the block's values meeting every column's condition are counted column by column.
 -/
 
@@ -31,7 +31,7 @@ open Finset Pouw.Lead Pouw.Dimension.Tag
 
 /-- A block `J` of coins on a finite space `X`: `get x j` reads the block's coin `j`, and `upd x v` sets the block to
 `v` and leaves every other coin. -/
-structure Block (X ι B : Type) (J : Finset ι) where
+structure TileBlock (X ι B : Type) (J : Finset ι) where
   get : X → ι → B
   upd : X → (ι → B) → X
   get_upd : ∀ x v, ∀ j ∈ J, get (upd x v) j = v j
@@ -39,13 +39,13 @@ structure Block (X ι B : Type) (J : Finset ι) where
   upd_get : ∀ x, upd x (get x) = x
   upd_congr : ∀ x v w, (∀ j ∈ J, v j = w j) → upd x v = upd x w
 
-section Block
+section TileBlock
 
 variable {X ι B : Type} [Fintype X] [DecidableEq X] [Fintype B] [DecidableEq ι] {J : Finset ι}
 
 /-- **A count through a block**: if, whatever the other coins, each coin `j` of the block meets its condition at at
 most `M` of its `|B|` values, the points meeting every condition are at most an `(M/|B|)^|J|` share. -/
-theorem Block.card_le (β : Block X ι B J) (b₀ : B) (P : ι → X → B → Prop) [∀ j r, DecidablePred (P j r)]
+theorem TileBlock.card_le (β : TileBlock X ι B J) (b₀ : B) (P : ι → X → B → Prop) [∀ j r, DecidablePred (P j r)]
     [DecidablePred fun x => ∀ j ∈ J, P j (β.upd x fun _ => b₀) (β.get x j)] {M : ℕ} (hP : ∀ j ∈ J, ∀ r, (univ.filter (P j r)).card ≤ M) :
     (univ.filter fun x => ∀ j ∈ J, P j (β.upd x fun _ => b₀) (β.get x j)).card * Fintype.card B ^ J.card ≤
       Fintype.card X * M ^ J.card := by
@@ -94,14 +94,14 @@ theorem Block.card_le (β : Block X ι B J) (b₀ : B) (P : ι → X → B → P
         ring
     _ ≤ Fintype.card X * M ^ J.card := Nat.mul_le_mul_right _ hX
 
-end Block
+end TileBlock
 
 /-! ## The lead's two blocks: a column block's tag weights and a coin lane -/
 
 variable {L : Pouw.Lead.Layout}
 
 /-- The tag weights of the columns `J`: column `j`'s four digits. -/
-def blockG (L : Pouw.Lead.Layout) (J : Finset (Fin L.n)) : Block (Coins L) (Fin L.n) (Fin 4 → Fin 7) J where
+def blockG (L : Pouw.Lead.Layout) (J : Finset (Fin L.n)) : TileBlock (Coins L) (Fin L.n) (Fin 4 → Fin 7) J where
   get ω j q := ω.2.2.1 q j
   upd ω v := (ω.1, ω.2.1, fun q j => if j ∈ J then v j q else ω.2.2.1 q j, ω.2.2.2)
   get_upd ω v j hj := by funext q; simp [hj]
@@ -115,7 +115,7 @@ def blockG (L : Pouw.Lead.Layout) (J : Finset (Fin L.n)) : Block (Coins L) (Fin 
 
 /-- The coin lane `ℓ₀` of step `t₀` in coin tile `k₀`, at the columns `J`. -/
 def blockU (L : Pouw.Lead.Layout) (t₀ : Fin L.S) (k₀ : Fin L.tiles) (ℓ₀ : Fin 3) (J : Finset (Fin L.n)) :
-    Block (Coins L) (Fin L.n) (Fin (2 ^ L.e)) J where
+    TileBlock (Coins L) (Fin L.n) (Fin (2 ^ L.e)) J where
   get ω j := ω.2.2.2 t₀ k₀ ℓ₀ j
   upd ω v := (ω.1, ω.2.1, ω.2.2.1,
     fun t k ℓ j => if t = t₀ ∧ k = k₀ ∧ ℓ = ℓ₀ ∧ j ∈ J then v j else ω.2.2.2 t k ℓ j)
