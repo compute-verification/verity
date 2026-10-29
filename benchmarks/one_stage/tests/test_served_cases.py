@@ -274,7 +274,7 @@ def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, 
     assert [c["verdict"] for c in cases if c["protocol"] == V1] == [verdict]
     got = json.loads((tmp_path / "private" / "sampled-proofs-v1" / "answer.json").read_text())
     assert got["protocol"] == V1 and got["commitment"] == digest_of(v1), got
-    assert got["reason"] is None if accepted else got["reason"].split(":")[0] == "verdict", got
+    assert got["reason"] == (None if accepted else "verdict lean did not accept"), got
 
 
 @lean
