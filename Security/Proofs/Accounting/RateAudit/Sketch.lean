@@ -11,7 +11,7 @@ An accepted run whose compute is within `F` and whose footprint is short of the 
 - the signs' fiber exceeds `g`: the signs' chance, `Pr_σ[g < fib_σ]`;
 - a correct query for a tile one of whose sectors, or one of the stream's, the run never obtained: at most `g/|X|` per
   query index (`card_bad_le`), because resampling the unobtained sector leaves the run as it is
-  (`Prover.obtained_congr`) and at most `g` of its values give the query's digest (`card_resample`);
+  (`Device.obtained_congr`) and at most `g` of its values give the query's digest (`card_resample`);
 - fewer than `k` tiles queried, and every sampled tile among them: `((k − 1)/N)^s`;
 - a sampled tile never queried, with the right tag anyway: `2^-h` per sampled tile (`card_guess_le`).
 
@@ -87,12 +87,12 @@ theorem card_reads_le (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (c : Chip N m
 
 end Chip
 
-namespace Prover
+namespace Device
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
 /-- Changing the data off the positions a run obtained changes neither its queries nor what it obtained. -/
-theorem obtained_congr (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
+theorem obtained_congr (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D D' : Data N m ρ X) (hD : ∀ p ∈ A.obtained σ O D, D' p = D p) :
     (A.prog σ D').queries O D' = (A.prog σ D).queries O D ∧ A.obtained σ O D' = A.obtained σ O D := by
   have hp : A.prog σ D' = A.prog σ D := by
@@ -105,7 +105,7 @@ theorem obtained_congr (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Or
   exact ⟨by rw [hp]; exact h2, by unfold obtained; rw [hp, h3]⟩
 
 /-- What a run obtained, in bits: at most its on-chip state, its footprint, the link and its rebuilt sectors. -/
-theorem card_obtained (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
+theorem card_obtained (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) :
     (A.obtained σ O D).card * w ≤ S + A.footprint σ O D + L + (A.prog σ D).rebuilds O D * w := by
   have h1 := Chip.card_reads_le O D (A.prog σ D) ∅
   simp only [Finset.map_empty, Finset.union_empty] at h1
@@ -120,7 +120,7 @@ theorem card_obtained (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Ora
   change (A.prog σ D).linkSteps O D * w ≤ L at h5
   omega
 
-end Prover
+end Device
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
@@ -131,20 +131,20 @@ def relevant (t : Fin N) : Pos N m ρ → Prop
 
 open Classical in
 /-- The tiles whose digest the device queried the oracle at, under the certified stream. -/
-noncomputable def queried (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+noncomputable def queried (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) : Finset (Fin N) :=
   Finset.univ.filter (fun t => (D.stream, t, dig σ (D.tile t)) ∈ (A.prog σ D).queries O D)
 
 open Classical in
 /-- The positions the `i`-th query's tile reads that the run never obtained. -/
-noncomputable def unobtained (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
+noncomputable def unobtained (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D : Data N m ρ X) (i : ℕ) : Finset (Pos N m ρ) :=
   Finset.univ.filter (fun p => p ∉ A.obtained σ O D ∧
     ∃ y, ((A.prog σ D).queries O D)[i]? = some y ∧ relevant y.2.1 p)
 
 /-- The `i`-th query is correct for its tile, a position that tile's tag reads was never obtained, and the signs'
 fiber is at most `g`. -/
-def Bad [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] (A : Prover N m ρ h S L q w X Sig Dg)
+def Bad [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] (A : Device N m ρ h S L q w X Sig Dg)
     (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (i g : ℕ) : Prop :=
   fib dig σ ≤ g ∧ (unobtained A σ O D i).Nonempty ∧
     ∃ y, ((A.prog σ D).queries O D)[i]? = some y ∧ y = (D.stream, y.2.1, dig σ (D.tile y.2.1))
@@ -203,7 +203,7 @@ theorem card_resample {P X : Type} [Fintype P] [DecidableEq P] [Fintype X] [Deci
     _ ≤ g * Fintype.card (P → X) := Nat.mul_le_mul_left g (Finset.card_le_univ G)
 
 theorem card_bad_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
-    (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
+    (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (i g : ℕ) [DecidablePred (fun D : Data N m ρ X => Bad A dig σ O D i g)] :
     (Finset.univ.filter (fun D : Data N m ρ X => Bad A dig σ O D i g)).card * Fintype.card X ≤
       g * Fintype.card (Data N m ρ X) := by
@@ -227,7 +227,7 @@ theorem card_bad_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
     intro D hne a
     have hp := hdir D hne
     simp only [unobtained, Finset.mem_filter, Finset.mem_univ, true_and] at hp
-    obtain ⟨hq, ho⟩ := Prover.obtained_congr A σ O D (Function.update D (dir D) a)
+    obtain ⟨hq, ho⟩ := Device.obtained_congr A σ O D (Function.update D (dir D) a)
       (fun p hp' => by rw [Function.update_of_ne]; rintro rfl; exact hp.1 hp')
     refine ⟨hq, ?_⟩
     unfold unobtained
@@ -281,7 +281,7 @@ theorem card_bad_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
 
 /-! ## A guessed tag -/
 
-theorem card_guess_le (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+theorem card_guess_le (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (D : Data N m ρ X) (j : Fin N) [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
     [DecidablePred (fun O : Oracle N ρ h X Dg =>
       j ∉ queried A dig σ O D ∧ A.tags σ O D j = O (D.stream, j, dig σ (D.tile j)))] :
@@ -305,7 +305,7 @@ theorem card_guess_le (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin
 
 /-! ## Every queried tile obtained whole -/
 
-theorem floor_le_of_complete (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+theorem floor_le_of_complete (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) {k F cTag cEnc : ℕ} (hk : 0 < k)
     (hkq : k ≤ (queried A dig σ O D).card)
     (hcomp : ∀ t ∈ queried A dig σ O D, ∀ p, relevant t p → p ∈ A.obtained σ O D)
@@ -333,7 +333,7 @@ theorem floor_le_of_complete (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig �
       simpa using this
     · intro t₁ _ t₂ _ he
       exact (Prod.mk.inj (Prod.mk.inj he).2).1
-  unfold Prover.compute at hc
+  unfold Device.compute at hc
   unfold floor
   generalize ((A.prog σ D).queries O D).length = Qn at hQ hc
   generalize (A.prog σ D).rebuilds O D = G at hc hob

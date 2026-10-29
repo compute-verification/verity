@@ -32,7 +32,7 @@ device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its 
 
 What stays assumed: SHA-512's keys at the candidate seeds are within `ε_ro` of uniform (`SketchHashRandom`, claim
 `random-oracle`), the
-store is uniform (the outcome's coins), the devices obtain sectors whole and verbatim (`RateSketch.Prover`, claim
+store is uniform (the outcome's coins), the devices obtain sectors whole and verbatim (`RateSketch.Device`, claim
 `rate-sketch-verbatim`), the signs' rank tail (`SketchRank`, evaluated outside Lean), the hash budget (`KeyBudget`), and
 the model's receipts and obtained blocks are the trace's (`Receipted`, `Present`).
 -/

@@ -25,7 +25,7 @@ is the four partials' sum, so the bound is on the unit.
 `SketchBoundLine` is at every `m`, so the memory line's `SketchBoundAt T O δs` at P2's units is `SketchBoundLine` at
 `X = Outcome β Hs N 257` under `SketchBoundP2`: no new assumption. What stays assumed is `SketchBoundDeployed`'s, at
 `m = 257`: `SketchHashRandom` (claim `random-oracle`), the devices obtaining sectors whole and verbatim
-(`RateSketch.Prover`, claim `rate-sketch-verbatim`, here a sector of a decoded block's bytes), the signs' rank tail at 257
+(`RateSketch.Device`, claim `rate-sketch-verbatim`, here a sector of a decoded block's bytes), the signs' rank tail at 257
 sectors (`SketchRank 16 257 12`), the hash budget (`KeyBudget`), and `Receipted`, `Present`, and the store uniform (the
 outcome's coins). P2's `C*` is the encode of the public `W`, so a uniform store is the ideal encoding model: a sector the
 device never held, read, took in or rebuilt is uniform to it. A device that rebuilds a unit obtains it (`Present`

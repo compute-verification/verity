@@ -8,7 +8,7 @@ import Proofs.Accounting.RateAudit.DeployedSketch
 
 `RemoteSessionConservationSketch`'s receipt term is `n·P·G·(N/2^h + q/2^(8r))`: the unknown-sector query term
 `q/2^(8r)` is charged once per grinding candidate, because the model gives each of a pass's `G` candidate devices its
-own cap of `q` oracle queries (`Prover.bounded`), and `pr_unpaid_good_le` unions `Prover.pr_unpaid_rank_le`'s
+own cap of `q` oracle queries (`Device.bounded`), and `pr_unpaid_good_le` unions `Device.pr_unpaid_rank_le`'s
 per-device `Fin q` union over all `P·G` candidates. When the deployed cap reads `q` as the prover's total hash budget,
 that charges the same budget `G` times over, and at `q = G = 2^55`, `r = 12` the term is `2^14`: vacuous.
 
@@ -24,9 +24,9 @@ At the deployed parameters (`h = 512`, `r = 12`) and the same caps `G = qtot = 2
 `n·P·2^-41` (`sketchQueryTermCapsSum`), non-vacuous where the product form's `2^14` was vacuous, and the guess term
 `n·P·G·N/2^512` stays negligible.
 
-The chain: `card_resample_ground` (the resampling count against its ground set), `Prover.card_bad_ground_le` (one
-query index's bad data, counted against the data where that index exists), `Prover.card_bad_family_le` (the budgeted
-union over a candidate family's query indices), `Prover.pr_unpaid_rank_family_le` (one pass, all candidates),
+The chain: `card_resample_ground` (the resampling count against its ground set), `Device.card_bad_ground_le` (one
+query index's bad data, counted against the data where that index exists), `Device.card_bad_family_le` (the budgeted
+union over a candidate family's query indices), `Device.pr_unpaid_rank_family_le` (one pass, all candidates),
 `SketchDeployedWindow.pr_unpaid_good_sum_le` and `pr_unpaid_sum_le` (the window),
 `Accounting.SecurityProofs.RemoteSessionConservationSketchSum` (the session, at every parameter), and
 `Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed` (the deployed guarantee,
@@ -90,7 +90,7 @@ theorem card_resample_ground {P X : Type} [Fintype P] [DecidableEq P] [Fintype X
         rw [Finset.card_product, Finset.card_univ]
     _ ≤ g * G.card := h1
 
-namespace Prover
+namespace Device
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
@@ -99,7 +99,7 @@ variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 each data point is charged once per query it actually answers, which is what lets a shared budget replace the
 per-candidate cap. -/
 theorem card_bad_ground_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
-    (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
+    (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (i g : ℕ) [DecidablePred (fun D : Data N m ρ X => Bad A dig σ O D i g)] :
     (Finset.univ.filter (fun D : Data N m ρ X => Bad A dig σ O D i g)).card * Fintype.card X ≤
       g * (Finset.univ.filter (fun D : Data N m ρ X => i < ((A.prog σ D).queries O D).length)).card := by
@@ -123,7 +123,7 @@ theorem card_bad_ground_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq
     intro D hne a
     have hp := hdir D hne
     simp only [unobtained, Finset.mem_filter, Finset.mem_univ, true_and] at hp
-    obtain ⟨hq, ho⟩ := Prover.obtained_congr A σ O D (Function.update D (dir D) a)
+    obtain ⟨hq, ho⟩ := Device.obtained_congr A σ O D (Function.update D (dir D) a)
       (fun p hp' => by rw [Function.update_of_ne]; rintro rfl; exact hp.1 hp')
     refine ⟨hq, ?_⟩
     unfold unobtained
@@ -191,7 +191,7 @@ family the queries total at most `qtot` on every data point, then the data on wh
 digest query without an obtained sector is at most a `qtot·g/|X|` fraction. The union is over the queries actually
 made, not over `C` per-candidate caps. -/
 theorem card_bad_family_le [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg] {C : ℕ}
-    (A : Fin C → Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+    (A : Fin C → Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Fin C → Oracle N ρ h X Dg) (g qtot : ℕ)
     (hq : ∀ D : Data N m ρ X, ∑ c, (((A c).prog σ D).queries (O c) D).length ≤ qtot)
     [DecidablePred (fun D : Data N m ρ X => ∃ c, ∃ i : Fin q, Bad (A c) dig σ (O c) D i g)] :
@@ -260,7 +260,7 @@ variable {ks : ℕ}
 made a correct digest query without an obtained sector. Factored out of `pr_unpaid_rank_le` so the family bound can
 reuse it per candidate. -/
 theorem unpaid_split
-    (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (g X : ℕ)
     (hfib : fib (sketch (k := ks) (m := m)) σ ≤ g)
     (hX : ∀ O D, (A.prog σ D).rebuilds O D * 256 ≤ X)
@@ -315,10 +315,10 @@ theorem unpaid_split
       _ ≤ S + A.footprint σ O D + L + X := by omega
   omega
 
-/-- The per-candidate cap `Prover.bounded` gives the trivial budget `G·q`: the sum form at the worst budget is the
+/-- The per-candidate cap `Device.bounded` gives the trivial budget `G·q`: the sum form at the worst budget is the
 product form, so the budgeted bound generalizes `pr_unpaid_good_le`'s. -/
 theorem budget_of_bounded {G : ℕ}
-    (A : Fin G → Prover N m ρ h S L q w X Sig Dg) (σ : Sig)
+    (A : Fin G → Device N m ρ h S L q w X Sig Dg) (σ : Sig)
     (Os : Fin G → Oracle N ρ h X Dg) (D : Data N m ρ X) :
     ∑ c, (((A c).prog σ D).queries (Os c) D).length ≤ G * q :=
   (Finset.sum_le_sum fun c _ => ((A c).bounded σ _ (Os c) D).2).trans
@@ -344,7 +344,7 @@ variable {ks : ℕ} in
 /-- A correct receipt whose tag was never queried: `1/2^h` per tile, over one pass's data and oracle. The `ht` step of
 `pr_unpaid_rank_le`, factored out so the family bound can take it per candidate. -/
 theorem pr_guess_le
-    (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (t : Fin N) :
     pr (fun z : Data N m ρ Sector × Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
       t ∈ A.correct sketch σ z.2 z.1 ∧ t ∉ queried A sketch σ z.2 z.1)
@@ -361,7 +361,7 @@ theorem pr_guess_le
     (Ω := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
     (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
     (2 ^ h) 1 (by positivity)
-    (by simpa [Prover.correct, and_comm] using card_guess_le A sketch σ D t)
+    (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
   push_cast at hbound
   simpa using hbound
 
@@ -370,7 +370,7 @@ unpaid with probability at most `G·N/2^h + qtot/2^(8r)`: grinding pays the tag-
 query term once for the shared budget `qtot`. Compare `pr_unpaid_rank_le`, whose union over candidates pays
 `G·(N/2^h + q/2^(8r))`. -/
 theorem pr_unpaid_rank_family_le {G : ℕ}
-    (A : Fin G → Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (A : Fin G → Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (r X qtot : ℕ)
     (hr32 : r ≤ 32)
     (hr : ∀ u, r ≤ ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank)
@@ -440,7 +440,7 @@ theorem pr_unpaid_rank_family_le {G : ℕ}
         2 ^ (256 - 8 * r) * (qtot : ℝ≥0∞) / (2 ^ (256 - 8 * r) * 2 ^ (8 * r)) by ring_nf]
     exact ENNReal.mul_div_mul_left _ _ (by positivity) (ENNReal.pow_ne_top ENNReal.ofNat_ne_top)
 
-end Prover
+end Device
 
 namespace SketchDeployedWindow
 
@@ -515,7 +515,7 @@ theorem pr_unpaid_good_sum_le (A : SketchDeployedWindow P N m ρ h S L q ks G) (
         ∃ c, UnpaidAt A σ (S + (L - ρ * 256) + X) j c x) := pr_exists_le _
     _ ≤ ∑ _j : Fin P, ε := Finset.sum_le_sum fun j _ =>
       pr_unpaidPass_le A σ _ ε j fun η =>
-        Prover.pr_unpaid_rank_family_le (fun c => A.device j η c) σ r X qtot hr32 hr
+        Device.pr_unpaid_rank_family_le (fun c => A.device j η c) σ r X qtot hr32 hr
           (fun c => hX j η c) (hq j η)
     _ = (P : ℝ≥0∞) * ε := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
@@ -697,7 +697,7 @@ assumption — across each pass's `G` candidate oracles the queries total at mos
   `(n·P·G)·N/2^h + (n·P)·qtot/2^(8r)`
 
 in place of `n·P·G·(N/2^h + q/2^(8r))`: queries add across a pass's grinding candidates, and grinding multiplies only
-the tag-guess term. By `Prover.budget_of_bounded` the assumption holds at `qtot = G·q`, where this bound recovers the
+the tag-guess term. By `Device.budget_of_bounded` the assumption holds at `qtot = G·q`, where this bound recovers the
 product form. -/
 theorem RemoteSessionConservationSketchSum :
     ∀ (n P N m ρ h S L q ks G d r X qtot : ℕ) (ε : ℝ≥0∞)

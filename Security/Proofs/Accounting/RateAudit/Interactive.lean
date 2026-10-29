@@ -17,7 +17,7 @@ relay device's. The bounds are then `RelayDevice.audit`'s, `RateAudit`'s, when t
 What the sends carry never enters the bounds, because the compression behind both encodes the bits the chip read, not
 what its sources hold: a source addressed by everything sent may be as large as it likes.
 
-The class is not vacuous: a `Prover` is an interactive prover that never sends (`Prover.toInteractive`), with the same
+The class is not vacuous: a `Device` is an interactive device that never sends (`Device.toInteractive`), with the same
 tags, ingress, footprint and compute, so every run that realizes `RateAudit`'s game realizes this one
 (`RealizesRate.toInteractive`), with side sources that ignore the oracle; `Proofs/Accounting/Sanity.lean` applies it to
 its honest rate run.
@@ -266,12 +266,12 @@ theorem toIChip_queries (c : Chip N b h ρ α) (w : IWorld N b h ρ) (v : List B
 
 end Chip
 
-namespace Prover
+namespace Device
 
 variable {N b h ρ S L q : ℕ}
 
 /-- A device as an interactive device that never sends: its side sources answer every read as the device's do. -/
-def toInteractive (A : Prover N b h ρ S L q) : InteractiveProver N b h ρ S L q where
+def toInteractive (A : Device N b h ρ S L q) : InteractiveProver N b h ρ S L q where
   state := A.state
   mem := A.mem
   side E _ _ _ := A.side E
@@ -280,24 +280,24 @@ def toInteractive (A : Prover N b h ρ S L q) : InteractiveProver N b h ρ S L q
     rw [Chip.toIChip_linkBits, Chip.toIChip_queries]
     exact A.bounded st (w.atSent [])
 
-theorem toInteractive_tags (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toInteractive_tags (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toInteractive.tags E R O = A.tags E R O :=
   Chip.toIChip_run _ _ _
 
-theorem toInteractive_ingress (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem toInteractive_ingress (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toInteractive.ingress E R O = A.ingress E R O :=
   Chip.toIChip_ingressBits _ _ _
 
-theorem toInteractive_compute (A : Prover N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
+theorem toInteractive_compute (A : Device N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ)
     (O : Oracle N b h ρ) : A.toInteractive.compute cTag cEnc E R O = A.compute cTag cEnc E R O := by
-  simp only [InteractiveProver.compute, Prover.compute, toInteractive, Chip.toIChip_queries, Chip.toIChip_rebuilds]
+  simp only [InteractiveProver.compute, Device.compute, toInteractive, Chip.toIChip_queries, Chip.toIChip_rebuilds]
   rfl
 
-theorem toInteractive_accepts {s : ℕ} (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
+theorem toInteractive_accepts {s : ℕ} (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ)
     (I : Fin s → Fin N) : A.toInteractive.Accepts E R O I ↔ A.Accepts E R O I := by
-  simp only [InteractiveProver.Accepts, Prover.Accepts, toInteractive_tags]
+  simp only [InteractiveProver.Accepts, Device.Accepts, toInteractive_tags]
 
-end Prover
+end Device
 
 end Accounting.Rate
 
@@ -311,9 +311,9 @@ def RealizesRate.toInteractive {p : Price} {cTag cEnc N b h ρ s : ℕ} {ι : Ty
     {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS}
     (real : RealizesRate p cTag cEnc r) : RealizesRateInteractive p cTag cEnc r where
   dev z := (real.dev z).toInteractive
-  accepts_iff x y s' := (real.accepts_iff x y s').trans (Rate.Prover.toInteractive_accepts _ _ _ _ _).symm
-  ingress_le x y s' := (Rate.Prover.toInteractive_ingress _ _ _ _).trans_le (real.ingress_le x y s')
-  compute_le x y s' := (Rate.Prover.toInteractive_compute _ _ _ _ _ _).trans_le (real.compute_le x y s')
+  accepts_iff x y s' := (real.accepts_iff x y s').trans (Rate.Device.toInteractive_accepts _ _ _ _ _).symm
+  ingress_le x y s' := (Rate.Device.toInteractive_ingress _ _ _ _).trans_le (real.ingress_le x y s')
+  compute_le x y s' := (Rate.Device.toInteractive_compute _ _ _ _ _ _).trans_le (real.compute_le x y s')
 
 theorem RealizesRate.toInteractive_side {p : Price} {cTag cEnc N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
     {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS}

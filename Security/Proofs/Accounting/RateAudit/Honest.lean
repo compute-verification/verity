@@ -137,7 +137,7 @@ theorem chip_eq (w : World N b h ρ) :
 
 /-- The honest device: no on-chip state and no free side sources; device memory holds the store as it is, and the
 chip reads the stream, then every word once, and tags it under the stream. -/
-def honest (N b h ρ : ℕ) : Prover N b h ρ 0 ρ N where
+def honest (N b h ρ : ℕ) : Device N b h ρ 0 ρ N where
   state _ := Fin.elim0
   mem := Bandwidth.Completeness.layout
   side _ _ := false
@@ -159,12 +159,12 @@ theorem honest_accepts (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Orac
     exact Bandwidth.Completeness.layout_block E j i
   refine ⟨fun i => ?_, ?_, ?_, ?_⟩
   · have := congrFun h1 (I i)
-    simp only [Prover.tags, honest, Prover.world] at this ⊢
+    simp only [Device.tags, honest, Device.world] at this ⊢
     rw [this, hw]
-  · simp only [Prover.footprint, honest] at h3 ⊢
+  · simp only [Device.footprint, honest] at h3 ⊢
     rw [h3, Finset.card_range]
-  · simpa [Prover.ingress, honest] using h2
-  · simp only [Prover.compute, honest] at h5 h6 ⊢
+  · simpa [Device.ingress, honest] using h2
+  · simp only [Device.compute, honest] at h5 h6 ⊢
     rw [h5, h6, zero_mul, add_zero]
 
 end Accounting.Rate.Completeness

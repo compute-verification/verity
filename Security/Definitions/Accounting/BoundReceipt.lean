@@ -15,7 +15,7 @@ the GPU, the audited location, which holds the tile outputs natively and reads t
 node, the memory side (host DRAM, a box outside), which holds all of the store and, before the window, nothing about
 the tile outputs. The links between them carry at most `L` bits to the GPU and `Lz` bits from it per window.
 
-- The GPU is a `Rate.Prover` with no certified stream, for each value of the tile outputs: its layout, its chip and
+- The GPU is a `Rate.Device` with no certified stream, for each value of the tile outputs: its layout, its chip and
   what the rest answers it may be any function of the store and the tile outputs. Its chip reaches the mix at the tile
   outputs it holds (`atZ`): a query names a block and contents. Its side reads are what came in from the rest, at most
   `L` bits; its rebuilds are the codec's inverse at `c_enc`, as in `RateAudit`.
@@ -39,7 +39,7 @@ named assumptions), read in the generic model.
 namespace Accounting.BoundReceipt
 
 open Pous (Bits)
-open Accounting.Rate (Store Oracle Chip World Prover)
+open Accounting.Rate (Store Oracle Chip World Device)
 
 /-- The mix at the window's fresh challenge: block `j`'s receipt is `Mix(j, E_j, z_j)`, an `h`-bit receipt of the
 block's index, its encoded contents (`b` bits) and the tile output its receipt binds (`a` bits). -/
@@ -86,7 +86,7 @@ end Rest
 
 /-- A node: the GPU at each value of the tile outputs, and the rest at each store. -/
 structure Node (N a b h S L q Lz qz : ℕ) where
-  gpu : Store N a → Prover N b h 0 S L q
+  gpu : Store N a → Device N b h 0 S L q
   rest : Store N b → Rest N a h Lz qz
 
 namespace Node

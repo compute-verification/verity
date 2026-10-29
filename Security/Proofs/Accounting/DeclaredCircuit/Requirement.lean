@@ -12,7 +12,7 @@ appended tiles, and its tiles of `W` are appended tiles. Each window's reads in 
 pass's tiles short of the store counted as read, against the window's correct receipts: a window short by more than a
 pass's slack, `k` tiles more, has a pass unpaid on its tiles of `W` (`SketchDeployedWindow.exists_unpaid_tiles`), which
 at signs of rank 12 holds a guessed tag or `k + 1` correct digests behind unobtained positions
-(`Prover.unpaid_tiles_split`), priced at each pass's prefix (`pr_session_le`). The draws then bound the windows' and the
+(`Device.unpaid_tiles_split`), priced at each pass's prefix (`pr_session_le`). The draws then bound the windows' and the
 session's reads so counted (`SketchDeployedSession.pr_deployed_of_unpaid_causal`), and a pass's credit is at most a
 tile's bits for each of its tiles of `W` (`Requirement.credit_le_tiles`), so the shortfall against the credit is the
 shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_credit`).
@@ -255,7 +255,7 @@ theorem DeclaredCircuitRequirement : Accounting.Guarantees.DeclaredCircuitRequir
       le_trans (Nat.mul_le_mul_right 256 (RateSketch.Chip.rebuildsIn_mono (htiles x w j) _ _ _))
         (hX (SketchPrefix.of x.2 w j) x.1 ((win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
           ((x.2 w).2.1 j).1 (((x.2 w).2.1 j).2 ((win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)))
-    rcases RateSketch.Prover.unpaid_tiles_split ((win x w).dev j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
+    rcases RateSketch.Device.unpaid_tiles_split ((win x w).dev j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
         RateSketch.sketch (x.2 w).1 ((win x w).oracle j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
         (Data.ofParts (store x.1 x.2 w j) ((x.2 w).2.1 j).1) (tiles x w j) (Xr * τ + C) k (by norm_num) hXp hj
       with ⟨t, ht⟩ | ⟨ι, hb⟩

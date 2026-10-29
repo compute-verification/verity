@@ -36,16 +36,16 @@ commitment before the deadline enforces. A program remembers every answer it has
 the window is unbounded: `S` bounds only what is on chip when the seed arrives.
 
 **Compute.** A tag costs `c_tag` and a rebuilt word `c_enc`, in one unit of work; a run's compute is its queries times
-`c_tag` plus its rebuilt words times `c_enc` (`Prover.compute`). Rebuilding is the codec's inverse: the device knows
+`c_tag` plus its rebuilt words times `c_enc` (`Device.compute`). Rebuilding is the codec's inverse: the device knows
 the weights the store encodes (the worst case, as with weights from a PRG), so it never needs to decode, and a word it
 neither holds nor reads it can still recompute at `c_enc`. The model has no other way to produce a word, which is the
 codec's work-hardness (claim `rate-codec-work`): the inverse costs `c_enc` per word, with no amortization across
 words. The honest device decodes each word it reads, at `c_dec`, but decoding is the useful work, charged to the compute
 account; the game does not charge it.
 
-**Residency and bandwidth.** A run's footprint (`Prover.footprint`) is the number of distinct device-memory addresses
+**Residency and bandwidth.** A run's footprint (`Device.footprint`) is the number of distinct device-memory addresses
 it read: device memory held at least that many bits, laid out before the seed, that the window depended on. Its
-ingress (`Prover.ingress`) counts every read, so it is at least the footprint, and is the bits that crossed from device
+ingress (`Device.ingress`) counts every read, so it is at least the footprint, and is the bits that crossed from device
 memory to the chip.
 
 **What is a parameter.** `S`, `L`, `q`, `c_tag`, `c_enc` and the compute budget are bounds the device class is drawn
@@ -156,48 +156,46 @@ def queries (w : World N b h ρ) : Chip N b h ρ α → List (Bits ρ × Fin N �
 
 end Chip
 
-/-- A prover: its strategy on a device of the device model (`Accounting.Device`), bounded by that device's figures. It
-lays out on-chip state (`S` bits, the device's `chip`), device memory and free side sources, each from the store before
-the seed and the stream, and runs its chip program from that state. In every world the program takes in at most `L`
-bits over the side link (free side sources and the certified stream together: its `cap` over the window) and makes at
-most `q` oracle queries. -/
-structure Prover (N b h ρ S L q : ℕ) where
+/-- A device: its on-chip state (`S` bits), device memory and free side sources, each laid out from the store before
+the seed and the stream, and its chip program from that state. In every world the program takes in at most `L` bits
+over the side link (free side sources and the certified stream together) and makes at most `q` oracle queries. -/
+structure Device (N b h ρ S L q : ℕ) where
   state : Store N b → Bits S
   mem : Store N b → ℕ → Bool
   side : Store N b → ℕ → Bool
   chip : Bits S → Chip N b h ρ (Fin N → Bits h)
   bounded : ∀ (st : Bits S) (w : World N b h ρ), (chip st).linkBits w ≤ L ∧ ((chip st).queries w).length ≤ q
 
-namespace Prover
+namespace Device
 
 variable {N b h ρ S L q : ℕ}
 
 /-- The world a device's chip runs in, for store `E`, certified stream `R` and oracle `O`. -/
-def world (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : World N b h ρ :=
+def world (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : World N b h ρ :=
   ⟨O, A.mem E, A.side E, R, E⟩
 
 /-- The tags the device commits to. -/
-def tags (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
+def tags (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : Fin N → Bits h :=
   (A.chip (A.state E)).run (A.world E R O)
 
 /-- The device's ingress in the window: every bit it read from device memory, in bits. -/
-def ingress (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def ingress (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).ingressBits (A.world E R O)
 
 /-- The device's footprint in the window: the distinct device-memory addresses it read, in bits. -/
-def footprint (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def footprint (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   ((A.chip (A.state E)).addrs (A.world E R O)).card
 
 /-- The device's compute in the window, at `c_tag` per oracle query and `c_enc` per rebuilt word. -/
-def compute (A : Prover N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def compute (A : Device N b h ρ S L q) (cTag cEnc : ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   ((A.chip (A.state E)).queries (A.world E R O)).length * cTag + (A.chip (A.state E)).rebuilds (A.world E R O) * cEnc
 
 /-- The verifier accepts: every sampled word's committed tag is the oracle's tag of that word under the stream. -/
-def Accepts {s : ℕ} (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (I : Fin s → Fin N) :
+def Accepts {s : ℕ} (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (I : Fin s → Fin N) :
     Prop :=
   ∀ i, A.tags E R O (I i) = O (R, I i, E (I i))
 
-end Prover
+end Device
 
 /-- **The rate audit's floor**, in bits times `c_enc`: `k·b·c_enc − (S + (L − ρ) + λ)·c_enc − (F − k·c_tag)·b`.
 Divided by `c_enc` it is `k·b − S − c_free − λ − (F − k·c_tag)·b/c_enc` bits, where `c_free = L − ρ` is the link's
@@ -207,11 +205,11 @@ def floor (b ρ S L F cTag cEnc k lam : ℕ) : ℕ := k * b * cEnc - ((S + (L - 
 
 /-- `n` windows on one store: window `i`'s device, a function of every other window's coins. -/
 abbrev Windows (n N b h ρ S L q s : ℕ) : Type :=
-  (i : Fin n) → ({j : Fin n // j ≠ i} → Coins N b h ρ s) → Prover N b h ρ S L q
+  (i : Fin n) → ({j : Fin n // j ≠ i} → Coins N b h ρ s) → Device N b h ρ S L q
 
 /-- Window `i`'s device at the windows' coins `ω`: it reads every coin but its own. -/
 def Windows.dev {n N b h ρ S L q s : ℕ} (A : Windows n N b h ρ S L q s) (i : Fin n) (ω : Fin n → Coins N b h ρ s) :
-    Prover N b h ρ S L q :=
+    Device N b h ρ S L q :=
   A i (fun j => ω j.1)
 
 end Accounting.Rate

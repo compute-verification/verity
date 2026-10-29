@@ -86,7 +86,7 @@ def rebuilds (addr : List Bool → Pos N m ρ) (O : Oracle N ρ h X Dg) (D : Dat
 end IChip
 
 /-- A prover whose side sources answer what its chip sent, on a device of the device model (`Accounting.Device`)
-and bounded by its figures as `Prover` is: the store sectors it holds on chip (`w` bits each, at most
+and bounded by its figures as the game's `Device` is: the store sectors it holds on chip (`w` bits each, at most
 `S` bits), side sources that pick each read's address from the bits sent so far, and a chip program from the signs and
 the held sectors. In every run, starting from nothing sent, the program takes in at most `L` bits over the side link and
 makes at most `q` oracle queries. -/

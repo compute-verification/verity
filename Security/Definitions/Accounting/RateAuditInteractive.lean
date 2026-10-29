@@ -111,7 +111,7 @@ def queries (w : IWorld N b h ρ) : List Bool → IChip N b h ρ α → List (Bi
 end IChip
 
 /-- A prover whose side sources answer what its chip sent, on a device of the device model (`Accounting.Device`)
-and bounded by its figures as `Prover` is: on-chip state (`S` bits) and device memory laid out from the
+and bounded by its figures as the game's `Device` is: on-chip state (`S` bits) and device memory laid out from the
 store before the seed and the stream, side sources that answer as any function of the store, the certified stream, the
 oracle and the bits sent so far, and a chip program from the state. In every world, starting from nothing sent, the
 program takes in at most `L` bits over the side link (side sources and the certified stream together) and makes at most

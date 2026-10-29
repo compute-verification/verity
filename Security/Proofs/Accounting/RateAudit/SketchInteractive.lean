@@ -5,7 +5,7 @@ import Proofs.Accounting.RateAudit.Sketch
 /-!
 # The sketch rate audit with interactive side sources that ignore the oracle
 
-An interactive device is a `RateSketch.Prover`: its chip keeps the bits it sent, and at each side read takes in over
+An interactive device is a `RateSketch.Device`: its chip keeps the bits it sent, and at each side read takes in over
 the link the sector at the address the side sources would pick from them (`IChip.toChip`). Its tags, footprint, compute,
 link sectors and queries are the interactive device's (`IChip.toChip_eq`), so `RateAuditSketch`'s bound is the
 interactive device's (`Accounting.SecurityProofs.RateAuditSketchInteractiveRO`).
@@ -66,8 +66,8 @@ namespace InteractiveProver
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
-/-- The interactive device as a `Prover`: the same held sectors, and its chip program as a `Chip` from nothing sent. -/
-def toProver (A : InteractiveProver N m ρ h S L q w X Sig Dg) : Prover N m ρ h S L q w X Sig Dg where
+/-- The interactive device as a `Device`: the same held sectors, and its chip program as a `Chip` from nothing sent. -/
+def toDevice (A : InteractiveProver N m ρ h S L q w X Sig Dg) : Device N m ρ h S L q w X Sig Dg where
   held := A.held
   held_le := A.held_le
   chip σ v := IChip.toChip A.addr [] (A.chip σ v)
@@ -76,20 +76,20 @@ def toProver (A : InteractiveProver N m ρ h S L q w X Sig Dg) : Prover N m ρ h
     rw [h2, h4]
     exact A.bounded σ v O D
 
-theorem toProver_eq (A : InteractiveProver N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg)
+theorem toDevice_eq (A : InteractiveProver N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg)
     (cTag cEnc : ℕ) (σ : Sig) (O : Oracle N ρ h X Dg) (D : Data N m ρ X) {s : ℕ} (I : Fin s → Fin N) :
-    (A.toProver.Accepts dig σ O D I ↔ A.Accepts dig σ O D I) ∧
-      A.toProver.compute cTag cEnc σ O D = A.compute cTag cEnc σ O D ∧
-      A.toProver.footprint σ O D = A.footprint σ O D := by
+    (A.toDevice.Accepts dig σ O D I ↔ A.Accepts dig σ O D I) ∧
+      A.toDevice.compute cTag cEnc σ O D = A.compute cTag cEnc σ O D ∧
+      A.toDevice.footprint σ O D = A.footprint σ O D := by
   obtain ⟨h1, h2, h3, -, h5⟩ := IChip.toChip_eq A.addr O D (A.prog σ D) []
-  have ht : A.toProver.tags σ O D = A.tags σ O D := h1
-  have hq : (A.toProver.prog σ D).queries O D = (A.prog σ D).queries A.addr O D [] := h2
-  have hm : (A.toProver.prog σ D).mems O D = (A.prog σ D).mems A.addr O D [] := h3
-  have hr : (A.toProver.prog σ D).rebuilds O D = (A.prog σ D).rebuilds A.addr O D [] := h5
+  have ht : A.toDevice.tags σ O D = A.tags σ O D := h1
+  have hq : (A.toDevice.prog σ D).queries O D = (A.prog σ D).queries A.addr O D [] := h2
+  have hm : (A.toDevice.prog σ D).mems O D = (A.prog σ D).mems A.addr O D [] := h3
+  have hr : (A.toDevice.prog σ D).rebuilds O D = (A.prog σ D).rebuilds A.addr O D [] := h5
   refine ⟨?_, ?_, ?_⟩
-  · simp only [Prover.Accepts, Accepts, ht]
-  · simp only [Prover.compute, compute, hq, hr]
-  · simp only [Prover.footprint, footprint, hm]
+  · simp only [Device.Accepts, Accepts, ht]
+  · simp only [Device.compute, compute, hq, hr]
+  · simp only [Device.footprint, footprint, hm]
 
 end InteractiveProver
 
@@ -103,10 +103,10 @@ theorem Accounting.SecurityProofs.RateAuditSketchInteractiveRO :
   have hev : (fun x : Accounting.RateSketch.Data N m ρ X × Accounting.RateSketch.Coins N ρ h s X Sig Dg =>
       A.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
         A.footprint x.2.1 x.2.2.1 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k) =
-      fun x => A.toProver.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.toProver.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
-        A.toProver.footprint x.2.1 x.2.2.1 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k := by
+      fun x => A.toDevice.Accepts dig x.2.1 x.2.2.1 x.1 x.2.2.2 ∧ A.toDevice.compute cTag cEnc x.2.1 x.2.2.1 x.1 ≤ F ∧
+        A.toDevice.footprint x.2.1 x.2.2.1 x.1 * cEnc < Accounting.RateSketch.floor m w ρ S L F cTag cEnc k := by
     funext x
-    obtain ⟨e1, e2, e3⟩ := A.toProver_eq dig cTag cEnc x.2.1 x.2.2.1 x.1 x.2.2.2
+    obtain ⟨e1, e2, e3⟩ := A.toDevice_eq dig cTag cEnc x.2.1 x.2.2.1 x.1 x.2.2.2
     rw [e2, e3, propext e1]
   rw [hev]
-  exact Accounting.SecurityProofs.RateAuditSketch N m ρ h S L q w s k F cTag cEnc g X Sig Dg dig A.toProver
+  exact Accounting.SecurityProofs.RateAuditSketch N m ρ h S L q w s k F cTag cEnc g X Sig Dg dig A.toDevice

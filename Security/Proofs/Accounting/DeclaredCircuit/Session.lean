@@ -65,12 +65,12 @@ theorem pr_blocks_le {N m ρ h ks G : ℕ}
   rw [hdata] at hD
   exact hD
 
-namespace Prover
+namespace Device
 
 variable {N m ρ h S L q ks : ℕ}
 
 /-- A correct tag of a tile the run never queried has probability at most `1/2^h` over the oracle, at every data. -/
-theorem pr_guess_at_le (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+theorem pr_guess_at_le (A : Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (D : Data N m ρ Sector) (t : Fin N) :
     pr (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
       t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D) ≤ (1 : ℝ≥0∞) / 2 ^ h := by
@@ -78,11 +78,11 @@ theorem pr_guess_at_le (A : Prover N m ρ h S L q 256 Sector (SketchSigns ks m) 
   have hbound := pr_le_of_card
     (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
       t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
-    (2 ^ h) 1 (by positivity) (by simpa [Prover.correct, and_comm] using card_guess_le A sketch σ D t)
+    (2 ^ h) 1 (by positivity) (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
   push_cast at hbound
   simpa using hbound
 
-end Prover
+end Device
 
 section Passes
 
@@ -92,7 +92,7 @@ variable {Y : Type} [Fintype Y]
 devices and the store may read, some candidate holds a correct tag of a tile it never queried with probability at most
 `G·N/2^h`. -/
 theorem pr_guess_family_le {N m ρ h S L q ks G : ℕ}
-    (dv : Y → Fin G → Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
+    (dv : Y → Fin G → Device N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (σ : SketchSigns ks m) (st : Y → SketchStore N m) :
     pr (fun a : Y × SketchPassCoins N ρ h ks G => ∃ g t,
       t ∈ (dv a.1 g).correct sketch σ (a.2.2 g) (Data.ofParts (st a.1) a.2.1) ∧
@@ -112,7 +112,7 @@ theorem pr_guess_family_le {N m ρ h S L q ks G : ℕ}
         (1 : ℝ≥0∞) / 2 ^ h :=
       fun t => pr_le_of_fiber_fst _ _ fun y => pr_le_of_fiber_fst _ _ fun R =>
         pr_family_coord_le g (fun O => t ∈ (dv y g).correct sketch σ O (Data.ofParts (st y) R) ∧
-          t ∉ queried (dv y g) sketch σ O (Data.ofParts (st y) R)) (Prover.pr_guess_at_le (dv y g) σ _ t)
+          t ∉ queried (dv y g) sketch σ O (Data.ofParts (st y) R)) (Device.pr_guess_at_le (dv y g) σ _ t)
     refine (Finset.sum_le_sum fun t _ => ht t).trans (le_of_eq ?_)
     simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, div_eq_mul_inv]
   refine (Finset.sum_le_sum fun g _ => hg g).trans (le_of_eq ?_)
@@ -183,7 +183,7 @@ variable {n P N ρ S L q G T M a : ℕ} {Ω Ca Ch : Type}
 abbrev passDev (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (c : SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) (g : Fin G) :
-    Prover N 128 ρ 512 S L q 256 Sector (SketchSigns 16 128) (Fin 16 → ZMod (2 ^ 32)) :=
+    Device N 128 ρ 512 S L q 256 Sector (SketchSigns 16 128) (Fin 16 → ZMod (2 ^ 32)) :=
   ((A.session (steer c y)).window c.w c.windows).device c.j c.passes g
 
 /-- **A guessed tag** at pass `c.j` of window `c.w`, on its store and its coins `pc`: some candidate holds a correct
@@ -216,7 +216,7 @@ abbrev PassBadK (k : ℕ) (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 
 the pass's own coins, some candidate of the pass made `k + 1` correct digest queries behind unobtained positions, at
 signs of rank 12, with probability at most `2^a·(q_tot/2^96)^(k+1) + δ`: key binding at the layout `slot c` of the
 summary, the union over the `2^a` summaries inside the uniform blocks (`KeyBinding.pr_steered_le`), and on uniform
-blocks `Prover.pr_badK_family_le` at each summary's devices. -/
+blocks `Device.pr_badK_family_le` at each summary's devices. -/
 theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0∞}
     {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector)}
     (hKB : Assumptions.KeyBinding T M δ enc)
@@ -249,7 +249,7 @@ theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0�
         (fun D Os => ∃ g, ∃ ι : Fin (k + 1) → Fin q,
           BadK (((A.session s).window c.w c.windows).device c.j c.passes g) sketch c.signs (Os g) D
             fun i => (ι i : ℕ))
-        fun Os => Prover.pr_badK_family_le (k := k)
+        fun Os => Device.pr_badK_family_le (k := k)
           (fun g => ((A.session s).window c.w c.windows).device c.j c.passes g) c.signs Os 12 qtot (by norm_num) hr
           fun D => hq s c.w c.windows c.j c.passes c.signs Os D
       rw [show 8 * 12 = 96 from rfl] at h2

@@ -33,7 +33,7 @@ accounts' work over the compute window covers. -/
 structure RealizesRate (p : Price) (cTag cEnc : ℕ) {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
     {α ΩW ΩS : Type} [Fintype α] [DecidableEq α] (r : Run d α ΩW (RateCoins N b h ρ s) ΩS) where
   /-- the device of the game at the other audits' coins -/
-  dev : ΩW × ΩS → Rate.Prover N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
+  dev : ΩW × ΩS → Rate.Device N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
     (d.rate .oracle * (r.win .bandwidth).len)
   /-- the bandwidth audit's verdict is the game's -/
   accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1 y.2.2.1 y.2.2.2

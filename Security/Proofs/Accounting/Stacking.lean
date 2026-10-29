@@ -763,7 +763,7 @@ theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r
   refine Rate.pr_le_of_fiber _ _ (fun sd => ?_)
   by_cases hr : RankGood r sd.1
   · exact (pr_mono fun z hz => hz.2).trans (pr_unpaidPass_le A sd.1 _ _ j fun η =>
-      Prover.pr_unpaid_rank_family_le (fun c => A.device j η c) sd.1 r X qtot hr32 hr
+      Device.pr_unpaid_rank_family_le (fun c => A.device j η c) sd.1 r X qtot hr32 hr
         (fun c => hX j η c sd.1) (hq j η sd.1))
   · calc _ ≤ pr (fun _ : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) => False) :=
           pr_mono fun _ hz => hr hz.1

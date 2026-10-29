@@ -113,7 +113,7 @@ theorem chip_eq [Inhabited X] {Sig : Type} (dig : Sig → (Fin m → X) → Dg) 
 
 /-- The honest device: nothing on chip; it takes in the stream, reads every sector once, and tags every tile. -/
 def honest (N m ρ h w : ℕ) (X Sig Dg : Type) [Inhabited X] (dig : Sig → (Fin m → X) → Dg) :
-    Prover N m ρ h 0 (ρ * w) N w X Sig Dg where
+    Device N m ρ h 0 (ρ * w) N w X Sig Dg where
   held := ∅
   held_le := by simp
   chip σ _ := chip dig σ
@@ -130,11 +130,11 @@ theorem honest_accepts (w : ℕ) {Sig : Type} [Inhabited X] (dig : Sig → (Fin 
       (honest N m ρ h w X Sig Dg dig).compute cTag cEnc σ O D = N * cTag := by
   obtain ⟨h1, h2, h3, -, h5⟩ := chip_eq (h := h) dig σ O D
   refine ⟨fun i => ?_, ?_, ?_⟩
-  · simp only [Prover.tags, Prover.prog, honest]
+  · simp only [Device.tags, Device.prog, honest]
     rw [h1]
-  · simp only [Prover.footprint, Prover.prog, honest]
+  · simp only [Device.footprint, Device.prog, honest]
     rw [h3, Finset.card_univ, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin]
-  · simp only [Prover.compute, Prover.prog, honest]
+  · simp only [Device.compute, Device.prog, honest]
     rw [h2, h5, zero_mul, add_zero]
 
 end Accounting.RateSketch.Completeness

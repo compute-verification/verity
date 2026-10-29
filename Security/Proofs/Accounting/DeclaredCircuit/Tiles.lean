@@ -8,9 +8,9 @@ import Proofs.Accounting.RateAudit.DeployedSketchSum
 The pieces of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that count one pass on a set `U` of its tiles. The
 positions a run read in `U`'s tiles and the stream are at most its distinct memory reads there, its link steps and its
 rebuilds there (`Chip.card_reads_tiles_le`), so what a device obtained there is at most its on-chip state, those reads,
-the link and those rebuilds (`Prover.card_obtained_tiles`). A pass whose memory reads in `U` plus the slack fall short of
+the link and those rebuilds (`Device.card_obtained_tiles`). A pass whose memory reads in `U` plus the slack fall short of
 `U`'s correct receipts by `k` tiles more than the slack pays has a correct tag it never queried, or `k + 1` positions it
-never obtained behind correct digest queries, at most one sector a tile (`Prover.unpaid_tiles_split`, `BadK`): each
+never obtained behind correct digest queries, at most one sector a tile (`Device.unpaid_tiles_split`, `BadK`): each
 tile short of a sector gives one, and each stream sector short gives one.
 -/
 
@@ -112,13 +112,13 @@ theorem rebuildsIn_mono {U V : Finset (Fin N)} (hUV : U ⊆ V) (O : Oracle N ρ 
 
 end Chip
 
-namespace Prover
+namespace Device
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
 /-- **What a run obtained in the tiles `U` and the stream**, in bits: at most its on-chip state, its distinct memory
 reads in `U`, the link and its rebuilt sectors of `U`. -/
-theorem card_obtained_tiles (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
+theorem card_obtained_tiles (A : Device N m ρ h S L q w X Sig Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D : Data N m ρ X) (U : Finset (Fin N)) :
     (A.obtained σ O D ∩ tilePos U m ρ).card * w ≤
       S + (((A.prog σ D).mems O D).filter fun p => p.1 ∈ U).card * w + L +
@@ -143,7 +143,7 @@ theorem card_obtained_tiles (A : Prover N m ρ h S L q w X Sig Dg) (σ : Sig) (O
   simp only [add_mul] at h3
   omega
 
-end Prover
+end Device
 
 variable {N m ρ h S L q w : ℕ} {X Sig Dg : Type}
 
@@ -162,7 +162,7 @@ def Unobtained {K : ℕ} (Q : List ((Fin ρ → X) × Fin N × Dg)) (Ob : Finset
 /-- **`K` unobtained positions behind correct digest queries**: the device's queries at the indices `ι` are at the
 digests of their tiles, and `K` positions their tiles' tags read were never obtained, at most one sector of each tile.
 At `K = 1` it is `Bad` with the signs' fiber left out. -/
-def BadK {K : ℕ} (A : Prover N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
+def BadK {K : ℕ} (A : Device N m ρ h S L q w X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig)
     (O : Oracle N ρ h X Dg) (D : Data N m ρ X) (ι : Fin K → ℕ) : Prop :=
   (∃ p, Unobtained ((A.prog σ D).queries O D) (A.obtained σ O D) ι p) ∧
     ∀ i, ∃ y, ((A.prog σ D).queries O D)[ι i]? = some y ∧ y = (D.stream, y.2.1, dig σ (D.tile y.2.1))
@@ -173,8 +173,8 @@ correct tag it never queried, or it made correct digest queries behind `k + 1` p
 sector a tile. The positions it obtained in `U`'s tiles and the stream are at most its state, those reads, the link and
 those rebuilds, so more than `k·m` of them are missing; at most `m` of them in each tile, so `k + 1` tiles or stream
 sectors are short. -/
-theorem Prover.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
-    (A : Prover N m ρ h S L q 256 X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
+theorem Device.unpaid_tiles_split [Fintype X] [DecidableEq X] [Fintype Dg] [DecidableEq Dg]
+    (A : Device N m ρ h S L q 256 X Sig Dg) (dig : Sig → (Fin m → X) → Dg) (σ : Sig) (O : Oracle N ρ h X Dg)
     (D : Data N m ρ X) (U : Finset (Fin N)) (Xr k : ℕ) (hm : 0 < m)
     (hX : (A.prog σ D).rebuildsIn U O D * 256 ≤ Xr)
     (hunpaid : (((A.prog σ D).mems O D).filter fun p => p.1 ∈ U).card * 256 +
