@@ -1,0 +1,10 @@
+# The challenger's client: what `tools/move/rename.py --map tools/move/challenger_names_map.toml` renames. "Remote" names
+# only the remote protocol, so the client of a challenger on another host (`sampled_proofs/remote.py`) is `ChallengerClient`,
+# beside the network certifier's `CertifierClient`.
+
+[words]
+"RemoteChallenger" = "ChallengerClient"
+
+[rewrite]
+# the moves' own maps are records
+exclude = ["tools/move/**"]
